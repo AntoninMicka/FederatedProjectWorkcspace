@@ -91,8 +91,10 @@ daného adaptéru. Obecný happy path tedy nezakrývá odlišné crash boundarie
 ## Reuse rozhodnutí
 
 **Reuse/adapt:** shared artifact editor a jeho draft guard, bezpečné DOM
-vykreslování, `ArtifactActions`, prezentační editor, Julia editor po doručení
-`COMP-03` a jejich existující validační/zápisové služby. **Reject:** nový UI
+vykreslování, `ArtifactActions`, prezentační editor a existující
+validační/zápisové služby. Sdílený widget a Julia adaptér se implementují
+před obnovením přerušené `COMP-03`; ta je následně zapojí do Julia editoru.
+**Reject:** nový UI
 framework, executable template engine, druhý projektový store a univerzální
 save endpoint. Soukromá inventura neposkytla doložený komponent s odpovídající
 Git autoritou, recovery a lossless round-trip kontraktem; žádný její kód ani

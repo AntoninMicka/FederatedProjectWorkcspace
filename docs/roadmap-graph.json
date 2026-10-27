@@ -17,8 +17,9 @@
     {"id": "DEV-ROADMAP-GRAPH-01", "milestone": "DEV", "depends_on": []},
     {"id": "PLAN-TASK-GRAPH-01", "milestone": "DEV", "depends_on": ["DEV-ROADMAP-GRAPH-01"]},
     {"id": "DOC-EDITOR-CONTRACTS-01", "milestone": "DEV", "depends_on": ["PLAN-TASK-GRAPH-01", "COMP-02"]},
+    {"id": "DOC-DEPENDENCY-FIX-01", "milestone": "DEV", "depends_on": ["DOC-EDITOR-CONTRACTS-01"]},
     {"id": "PLAN-FILE-HIERARCHY-01", "milestone": "DEV", "depends_on": ["DOC-EDITOR-CONTRACTS-01", "PLAN-TASK-GRAPH-01"]},
-    {"id": "DOC-PATTERN-CATALOG-01", "milestone": "DEV", "depends_on": ["DOC-EDITOR-CONTRACTS-01", "COMP-03"]},
+    {"id": "DOC-PATTERN-CATALOG-01", "milestone": "DEV", "depends_on": ["DOC-EDITOR-CONTRACTS-01"]},
     {"id": "PLAN-TASK-EDITOR-01", "milestone": "DEV", "depends_on": ["DOC-PATTERN-CATALOG-01", "PLAN-FILE-HIERARCHY-01"]},
     {"id": "DEV-IDE-TODO-01", "milestone": "DEV", "depends_on": ["PLAN-TASK-GRAPH-01"]},
     {"id": "DEV-01", "milestone": "DEV", "depends_on": ["PLAN-TASK-GRAPH-01"]},
@@ -28,7 +29,7 @@
 
     {"id": "COMP-01", "milestone": "M6-COMPUTE", "depends_on": []},
     {"id": "COMP-02", "milestone": "M6-COMPUTE", "depends_on": ["COMP-01"]},
-    {"id": "COMP-03", "milestone": "M6-COMPUTE", "depends_on": ["COMP-02"]},
+    {"id": "COMP-03", "milestone": "M6-COMPUTE", "depends_on": ["COMP-02", "DOC-PATTERN-CATALOG-01"]},
 
     {"id": "ER-00", "milestone": "RELATIONS", "depends_on": []},
     {"id": "ER-01", "milestone": "RELATIONS", "depends_on": ["ER-00"]},

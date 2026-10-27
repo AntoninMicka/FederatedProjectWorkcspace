@@ -95,14 +95,17 @@ evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
 commit `507c232`; evidence je ve WORK_LOG a backlog ji nedrží jako druhý
 stavový záznam.
 
-`COMP-03` probíhá na samostatné větvi. Po jeho doručení lze paralelně
-realizovat `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01`;
-`PLAN-TASK-EDITOR-01` závisí na obou. Teprve poté následují podle uživatelem
-aktualizovaného pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka zůstává
-samostatnou feature dávkou a vlastním PR; paralelní realizace neznamená
-společnou větev ani stacked PR bez dalšího výslovného rozhodnutí.
+Práce na `COMP-03` byla rozhodnutím uživatele 27. 10. 2026 přerušena:
+Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou,
+ale až nad implementovaným sdíleným raw editorem. Nyní lze paralelně
+realizovat `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01`. Doručení první
+z nich odblokuje obnovení `COMP-03`; dokončení obou odblokuje
+`PLAN-TASK-EDITOR-01`. Teprve poté následují podle uživatelem aktualizovaného
+pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka zůstává samostatnou
+feature dávkou a vlastním PR; paralelní realizace neznamená společnou
+větev ani stacked PR bez dalšího výslovného rozhodnutí.
 
-- [ ] [planned] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
+- [ ] [blocked] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
   PoC validated; větev `feature/comp-03-julia-workspace`).** Nad doručeným
   `COMP-02` zpřístupnit v otevřeném projektu první řízený výpočet bez druhého
   runneru nebo zápisové cesty. Workspace načte pouze validovanou verzovanou
@@ -116,21 +119,25 @@ společnou větev ani stacked PR bez dalšího výslovného rozhodnutí.
   parametrů nic nespouštějí; local-only a RBAC se znovu ověří před dispatch i
   publikací. Rozsah zahrnuje shared desktop/web UI a fyzický průchod na
   podporovaném ARM64 runtime. Uživatelské rozšíření na téže větvi přidává
-  editor Julia modelu pod Nástroje; pozdější migraci jeho textových ploch na
-  společný raw widget drží `DOC-PATTERN-CATALOG-01`. Mimo rozsah zůstává
-  Pluto/Jupyter, automatický scheduler, síťové/GPU výpočty a instalace balíčků.
+  editor Julia modelu pod Nástroje. Rozpracovaná větev zůstává zachovaná,
+  ale práce a fyzická akceptace se obnoví až po doručení
+  `DOC-PATTERN-CATALOG-01`; `COMP-03` pak použije jeho widget a Julia adaptér
+  bez paralelní jednorázové textové plochy. Mimo rozsah zůstává Pluto/Jupyter,
+  automatický scheduler, síťové/GPU výpočty a instalace balíčků.
 
 - [ ] [planned] **DOC-PATTERN-CATALOG-01 — katalog textových vzorů a sdílený
   raw editor (cílová úroveň: implemented; větev
-  `feature/doc-pattern-catalog-raw-editor`).** Závisí na doručení `COMP-03`
-  kvůli migraci Julia authoringu. Implementovat jeden storage-agnostic raw
-  widget, uzavřený registr typových adaptérů a vestavěný katalog pro obecný
-  Markdown, úkol/plán, prezentaci a Julia. Typ filtruje vzory; komentářové
+  `feature/doc-pattern-catalog-raw-editor`).** Implementovat jeden
+  storage-agnostic raw widget, uzavřený registr typových adaptérů a
+  vestavěný katalog pro obecný Markdown, úkol/plán, prezentaci a Julia. Typ
+  filtruje vzory; komentářové
   výplně se použijí jen v syntaxích, které komentář podporují. Vložení nic
   neukládá ani nespouští. Adaptér zachová existující Workspace/journal
   operaci, expected HEAD, privacy, read-only a retry/receipt. Akceptace zahrne
-  dirty guard, validaci, bezpečné zobrazení, klávesnici/mobil, raw režim
-  prezentace a nahrazení textových ploch Julia editoru bez přesunu z Nástrojů.
+  dirty guard, validaci, bezpečné zobrazení, klávesnici/mobil a raw režim
+  prezentace. Dávka dodá i Julia adaptér/kontrakt; jeho zapojení do
+  rozpracovaného Julia editoru a odstranění jednorázové textové plochy dokončí
+  po odblokování `COMP-03`.
 
 - [ ] [planned] **PLAN-FILE-HIERARCHY-01 — profilovaný souborový plán
   (cílová úroveň: implemented; větev
