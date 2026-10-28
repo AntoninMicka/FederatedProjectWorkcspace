@@ -847,7 +847,8 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 
 **Stav: read-only roadmapový i obecný projektový graf PoC validated;
 profilovaný souborový plán, editor a milestone/batch pohled jsou implemented;
-DEV-IDE-TODO-01 a DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace
+DEV-IDE-TODO-01 je PoC validated v lokálním Linux/VSCodium profilu a webovém UI;
+DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace
 má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a
 evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual
 Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci
@@ -889,12 +890,14 @@ mezi zdrojové soubory implementačního repozitáře.
 
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.
-- [ ] První úzký IDE bridge `DEV-IDE-TODO-01` zobrazí zvolený workspace TODO a
-  jeho revizi v Code/VSCodium jako read-only virtuální dokument. Zpětné akce
-  nebudou editovat tento dokument: explicitně navrhnou dokončení úkolu nebo
-  odešlou připomínku/poznatek z implementace pro upřesnění zadání. Transport
-  Code/VSCodium → Workspace je otevřené návrhové rozhodnutí; musí mít stale
-  kontrolu, autorizaci, preview/receipt a jedinou Workspace zápisovou cestu.
+- [x] První úzký IDE bridge `DEV-IDE-TODO-01` zpřístupňuje zvolený TODO,
+  instrukce a přesnou revizi jako obyčejné lokální soubory mimo Git.
+  Zpětná schránka přijímá návrhy dokončení, dotazy a zprávy s idempotentními
+  receipts; sama nemění stav úkolu. Instalátor a párování jsou ve sdílené
+  web/desktop aplikaci, rozšíření běží v lokálním Code/VSCodium. Transport,
+  stale kontrolu, autorizaci a recovery vymezuje ADR 0060; evidence a fyzicky
+  neověřené profily jsou ve WORK_LOG. Předání PR drží TODO. FileSystemProvider
+  ani FUSE se nepoužívají.
 - [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
 - [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu. Vazba na oddělený zdrojový repozitář musí připnout jeho identitu a revizi bez přesunu autoritativního projektového řízení do zdrojového stromu.
 - [ ] Distribuci rozšíření navrhnout pro ověřené kanály obou IDE a offline instalovatelný balíček; dostupnost konkrétního marketplace, API a značky ověřit v době implementace. Rozdíly VS Code/VSCodium nesmějí měnit doménový kontrakt ani bezpečnostní policy.
@@ -903,7 +906,7 @@ mezi zdrojové soubory implementačního repozitáře.
 - [ ] Workspace označí úkol za dokončený až po validaci deklarovaných důkazů a lidském nebo explicitně schváleném policy rozhodnutí. Text reportu agenta, úspěšný exit code ani existence commitu samy nejsou důkazem splnění akceptace.
 - [ ] Ošetřit stale vstupní commit, souběžnou změnu roadmapy/úkolu, opakované předání, restart, duplicitní výsledek a částečně provedené externí akce. Každý export i import výsledku musí mít stabilní operation/run ID a idempotentní receipt.
 
-Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Dokončený plánovací základ drží WORK_LOG `PLAN-TASK-GRAPH-01`; navazující rozpad drží BACKLOG DEV-01 až DEV-04 a `DEV-IDE-TODO-01`.
+Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Dokončený plánovací základ drží WORK_LOG `PLAN-TASK-GRAPH-01`; navazující rozpad drží BACKLOG DEV-01 až DEV-04; dokončený `DEV-IDE-TODO-01` drží WORK_LOG.
 
 ---
 

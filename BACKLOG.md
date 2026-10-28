@@ -94,12 +94,12 @@ evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
 `b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako merge
 commit `507c232`; evidence je ve WORK_LOG. `COMP-03` byla po kontrole
 sidebarového rozvržení uživatelem uzavřena; její evidence je ve WORK_LOG a
-feature čeká na doručení jednoho PR.
+feature byla doručena PR #111 jako merge commit `6eb8614`.
 Editorové a plánovací závislosti byly doručeny PR #107–#110; jejich evidence
-je ve WORK_LOG a `COMP-03` po jejich začlenění pokračuje na původní větvi.
+je ve WORK_LOG; následná `COMP-03` byla doručena PR #111.
 
-Po dokončení a doručení `COMP-03` následují podle uživatelem aktualizovaného pořadí
-`DEV-IDE-TODO-01` a `DEV-01`.
+Po doručení akceptované `DEV-IDE-TODO-01` následují podle uživatelem
+aktualizovaného pořadí `DEV-01`, `DEV-02` a `DEV-03`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
 
@@ -161,10 +161,12 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
-- [ ] [planned] **DEV-IDE-TODO-01 — VS Code/VSCodium bridge pro workspace TODO (cílová úroveň: PoC validated).** Po `PLAN-TASK-GRAPH-01` dodat malé rozšíření pro společný podporovaný průnik obou IDE. Směr Workspace → Code/VSCodium zpřístupní explicitně vybraný TODO a jeho revizi jako read-only virtuální dokument. Oddělené explicitní příkazy mohou navrhnout označení úkolu za splněný a odeslat připomínku či implementační poznatek pro upřesnění zadání; zpětný transport je před návrhem otevřený a žádná akce nesmí obejít standardní Workspace lifecycle, kontrolu stale revize ani lidskou akceptaci. První řez nespouští coding agenta. Projektové řízení zůstává ve Workspace oddělené od zdrojových souborů; propojení nese identitu repozitáře a přesnou revizi, ne druhou kopii plánu.
+`DEV-IDE-TODO-01` je akceptována a archivována ve [WORK_LOG](WORK_LOG.md#dev-ide-todo-01--lokální-souborový-ide-bridge--2026-10-28);
+předání jejího dosud nevytvořeného PR drží [TODO](TODO.md).
+
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
-- [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 vytvořit IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.
+- [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 rozšířit souborový bridge DEV-IDE-TODO-01 (ADR 0060) na IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.
 - [ ] [planned] **DEV-04 — Codex adaptér pro implementaci (cílová úroveň: PoC validated).** Nad DEV-02/DEV-03 ověřit v době implementace podporované oficiální rozhraní Codexu a připojit je jako vyměnitelný coding-agent adaptér, nikoli jako hostitele pluginu. Akceptace: export jednoho schváleného úkolu z IDE, implementace v izolované feature větvi, návrat diffu, změněných souborů a skutečných testů, vazba na původní task/revizi, odmítnutí nepovoleného kontextu/akce a lidské rozhodnutí před aktualizací autoritativního plánu. První end-to-end kandidát může být vlastní repozitář workspace, ale bez jakékoli privilegované výjimky.
 
 ## Externí vztahy a disclosure — navazující strategický backlog

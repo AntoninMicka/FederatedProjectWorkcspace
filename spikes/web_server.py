@@ -145,6 +145,8 @@ class WebHandler(DesktopHandler):
         return super()._do_POST()
 
     def authorized(self, auth):
+        if self.path == '/v1/ide-bridge/exchange':
+            return DesktopHandler.authorized(self, auth)
         if hmac.compare_digest(auth.encode(), ('Bearer ' + self.server.token).encode()):
             self.actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
             return True
@@ -208,6 +210,12 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        if self.path.startswith('/v1/ide-bridge/'):
+            if self.path == '/v1/ide-bridge/exchange':
+                return self.dispatch_ide_bridge(request)
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
+            return self.dispatch_ide_bridge(request)
         if self.path.startswith('/v1/projects/repair/'):
             return self.send_error(404)
         if self.path.startswith('/v1/julia/'):

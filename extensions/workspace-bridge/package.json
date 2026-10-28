@@ -1,0 +1,21 @@
+{
+  "name": "workspace-file-bridge",
+  "displayName": "Workspace file bridge",
+  "description": "Local TODO, instructions and durable messages for Federated Workspace",
+  "version": "0.1.0",
+  "publisher": "federated-workspace",
+  "license": "MPL-2.0",
+  "engines": {"vscode": "^1.85.0"},
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "extensionKind": ["workspace"],
+  "activationEvents": ["onStartupFinished"],
+  "capabilities": {"untrustedWorkspaces": {"supported": false}, "virtualWorkspaces": false},
+  "contributes": {"commands": [
+    {"command": "workspaceBridge.connect", "title": "Workspace: Propojit projekt"},
+    {"command": "workspaceBridge.sync", "title": "Workspace: Synchronizovat zprávy"},
+    {"command": "workspaceBridge.open", "title": "Workspace: Otevřít komunikační soubory"},
+    {"command": "workspaceBridge.message", "title": "Workspace: Odeslat výsledek nebo dotaz"},
+    {"command": "workspaceBridge.disconnect", "title": "Workspace: Odpojit lokální bridge"}
+  ]}
+}

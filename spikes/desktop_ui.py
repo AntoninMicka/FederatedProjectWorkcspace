@@ -263,6 +263,15 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0" hidden><h2>Hlavní seznam úkolů</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
+<details id="ide-bridge-panel"><summary>Propojení s VS Code / VSCodium</summary>
+<p>TODO a instrukce se uloží na počítači s IDE mimo Git. Zprávy jsou návrhy k lidskému posouzení. Obsah local-only se neexportuje.</p>
+<form id="ide-bridge-form"><label>Identita zdrojového repozitáře (přesná URL origin nebo absolutní lokální cesta)<input id="ide-bridge-repository" required maxlength="1024"></label>
+<label>Instrukce pro tuto relaci<textarea id="ide-bridge-instructions" maxlength="12000"></textarea></label>
+<label>IDE<select id="ide-bridge-editor"><option value="code">VS Code</option><option value="codium">VSCodium</option></select></label>
+<button type="submit">Připravit instalaci a propojení</button></form>
+<p>Web: stáhněte VSIX, v IDE zvolte Extensions → Install from VSIX a poté Workspace: Propojit projekt. Balíček obsahuje přístupový údaj; uložte ho mimo repozitář a po instalaci smažte.</p>
+<button id="ide-bridge-refresh" type="button">Načíst propojení a zprávy</button>
+<p id="ide-bridge-status" role="status"></p><div id="ide-bridge-sessions"></div></details>
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-plan" role="tabpanel" aria-labelledby="plan-tab" tabindex="0" hidden><h2>Plán</h2>
 <p id="sidebar-plan-status" role="status">Otevřete projekt.</p>
@@ -4017,6 +4026,26 @@ document.querySelector('#open-main-plan').addEventListener('click',()=>openTaskP
 document.querySelector('#plan-tab').addEventListener('click',()=>openTaskPlan(taskPlanSelection));
 document.querySelector('#plan-state-filter').addEventListener('change',renderTaskPlan);
 document.querySelector('#plan-export').addEventListener('click',()=>{if(taskPlanProjection?.status!=='ready')return;const blob=new Blob([taskPlanProjection.svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`plan-${taskPlanProjection.revision.slice(0,12)}.svg`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);});
+
+async function loadIdeBridge(){
+ const target=document.querySelector('#ide-bridge-sessions'),status=document.querySelector('#ide-bridge-status');target.replaceChildren();
+ try{if(!activeProject)throw new Error('Nejprve otevřete projekt.');const result=await projectRequest('/v1/ide-bridge/status',{project_id:activeProject.id});
+ for(const session of result.sessions){const card=document.createElement('section'),title=document.createElement('p');title.textContent=`${session.repository} · ${session.session_id} · ${session.revoked?'odvoláno':'aktivní'} · revize ${session.revision.slice(0,12)}`;card.append(title);
+ if(!session.revoked){const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Odvolat propojení';revoke.addEventListener('click',async()=>{try{await projectRequest('/v1/ide-bridge/revoke',{project_id:activeProject.id,session_id:session.session_id});await loadIdeBridge();}catch(error){status.textContent=error.message;}});card.append(revoke);}
+ for(const entry of session.messages){const message=document.createElement('pre');message.textContent=`${entry.message.kind} · ${entry.message.task_id} · ${entry.receipt.status} · čeká na lidské posouzení\n${entry.message.body}\nZdrojový commit: ${entry.message.repository_commit}`;card.append(message);}target.append(card);}
+ status.textContent=`${result.sessions.length} propojení. Přijatá zpráva sama nemění stav úkolu; po ověření upravte autoritativní TODO v editoru.`;
+ }catch(error){status.textContent=error.message;}
+}
+document.querySelector('#ide-bridge-refresh').addEventListener('click',loadIdeBridge);
+document.querySelector('#ide-bridge-form').addEventListener('submit',async event=>{
+ event.preventDefault();const status=document.querySelector('#ide-bridge-status'),button=event.submitter||event.currentTarget.querySelector('button[type=submit]');button.disabled=true;
+ try{if(!activeProject)throw new Error('Nejprve otevřete projekt.');const result=await projectRequest('/v1/ide-bridge/create',{project_id:activeProject.id,expected_head:activeProject.head,repository:document.querySelector('#ide-bridge-repository').value.trim(),instructions:document.querySelector('#ide-bridge-instructions').value});
+ if(document.body.dataset.runtime==='server'){const bytes=Uint8Array.from(atob(result.package_base64),c=>c.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'})),link=document.createElement('a');link.href=url;link.download=result.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ else{window.workspaceBridgeInstall={package_base64:result.package_base64,editor:document.querySelector('#ide-bridge-editor').value};location.hash='install-ide-bridge?nonce='+crypto.randomUUID();}
+ status.textContent='Instalační balíček připraven. Po instalaci potvrďte propojení v IDE.';
+ }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+});
+
 async function loadRoadmap(){
  const status=document.querySelector('#roadmap-status');status.textContent='Načítám a validuji roadmapu…';document.querySelector('#roadmap-export').disabled=true;
  try{roadmapProjection=await projectRequest('/v1/roadmap/graph',{format:'json'});const select=document.querySelector('#roadmap-lane-filter'),selected=select.value;select.replaceChildren();const all=document.createElement('option');all.value='';all.textContent='Všechny';select.append(all);for(const lane of roadmapProjection.lanes){const option=document.createElement('option');option.value=lane;option.textContent=lane;select.append(option);}select.value=roadmapProjection.lanes.includes(selected)?selected:'';renderRoadmap();document.querySelector('#roadmap-export').disabled=false;}
@@ -7271,7 +7300,8 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
+    post_paths = Handler.post_paths | {'/v1/ide-bridge/create', '/v1/ide-bridge/status',
+        '/v1/ide-bridge/revoke', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
         '/v1/projects/repair/check', '/v1/projects/repair/preview',
         '/v1/projects/repair/confirm', '/v1/projects/repair/receipt',
@@ -7351,6 +7381,40 @@ class DesktopHandler(Handler):
         '/v1/publication-cms/deployment/configure', '/v1/publication-cms/deployment/status',
         '/v1/publication-cms/deployment/preview', '/v1/publication-cms/deployment/confirm'}
 
+    def ide_bridge(self):
+        from spikes.ide_bridge import IdeBridge
+        projects = self.server.projects
+        return IdeBridge(projects.node_path, network=getattr(projects, 'network', False))
+
+    def authorized(self, auth):
+        if self.path == '/v1/ide-bridge/exchange':
+            try:
+                if not auth.startswith('Bearer '):
+                    return False
+                self.bridge_session = self.ide_bridge().session(auth[7:])
+                return True
+            except (ValueError, OSError, sqlite3.Error):
+                return False
+        return super().authorized(auth)
+
+    def dispatch_ide_bridge(self, request):
+        try:
+            service = self.ide_bridge()
+            if self.path == '/v1/ide-bridge/exchange':
+                return self.reply(200, service.exchange(self.bridge_session, request))
+            if self.path == '/v1/ide-bridge/create':
+                return self.reply(200, service.create(request, getattr(self, 'actor', None),
+                    self.request_origin(self.request_authority())))
+            if (self.path == '/v1/ide-bridge/status' and isinstance(request, dict)
+                    and set(request) == {'project_id'}):
+                return self.reply(200, service.status(request['project_id']))
+            if (self.path == '/v1/ide-bridge/revoke' and isinstance(request, dict)
+                    and set(request) == {'project_id', 'session_id'}):
+                return self.reply(200, service.revoke(**request))
+            return self.send_error(400)
+        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+            return self.reply(422, {'error': str(exc)})
+
     def backend_catalog_status(self):
         states = {}
         media = getattr(self.server, 'media_service', None)
@@ -7390,6 +7454,8 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
+        if self.path.startswith('/v1/ide-bridge/'):
+            return self.dispatch_ide_bridge(request)
         if self.path == '/v1/counter':
             return super().dispatch(request)
         if self.path == '/v1/document-patterns' and isinstance(request, dict):

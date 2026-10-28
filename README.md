@@ -428,3 +428,6 @@ Probe vyžaduje Btrfs; nesouhlas filesystemu odmítne před vytvořením projekt
 Výstup obsahuje prostředí, tři měření zápisu a 12 přerušení vlastního procesu na hranicích ADR 0003. Kontroluje pending čtení, zachování kandidáta, přesné bajty, jediný commit operace, opakovanou recovery a rebuild smazaného indexu. `process_s` zahrnuje start Pythonu, inicializaci dočasného Git projektu a apply; `apply_s` jen apply; `recovery_s` jednu recover operaci v řídicím procesu. `python_peak_rss_kib` je peak RSS Python workeru, nezahrnuje součet Git podprocesů ani paměť kontejneru. Nejde o benchmark velkých dat, trvalou službu ani výpadek napájení.
 
 Úspěch končí `target probe: PASS; 3 measured runs, 12 crash boundaries; temporary data removed`. Výstup pošlete k vyhodnocení M0-05; lokální test tohoto nástroje sám neuzavírá cílové ověření. Volba `--expected-fstype` slouží pro explicitní ověření na jiném filesystemu, například v lokálních testech; na Omnii ponechte výchozí Btrfs.
+
+Propojení lokálního VS Code/VSCodium s webovým i desktopovým Workspace přes
+obyčejné soubory mimo Git popisuje [IDE file bridge](docs/ide-file-bridge.md).
