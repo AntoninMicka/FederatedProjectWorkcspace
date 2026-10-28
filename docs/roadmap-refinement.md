@@ -52,11 +52,15 @@ Pro jednorázové interaktivní review lze nad stejnou queue spustit stdlib
 python3 -m scripts.roadmap_refinement --project "$PROJECT" tui --limit 5
 ```
 
-Klávesy: `j`/`k` nebo šipky mění výběr, `s` explicitně spustí bounded scan,
-`a` přijme pending návrh, `r` jej zamítne, `p` připraví apply a teprve následné
-`y` jej provede; jiná klávesa apply zruší. `q` rozhraní ukončí. TUI nemá vlastní
-storage ani writer: pouze volá stejné `list`, `scan`, `decide` a `apply` hranice.
-Ollama scan probíhá synchronně a během něj se zobrazuje stav běhu.
+Klávesy: `j`/`k` nebo šipky mění vybraný řádek, `Tab` přepíná fokus tabulky a
+detailu a `PgUp`/`PgDn` stránkuje aktivní panel. `Home`/`End` skočí na začátek
+nebo konec tabulky. `h` přepíná skrytí již rozhodnutých stavů (`accepted`,
+`rejected`, `dismissed`, `applied`); `pending`, `failed` a `unknown` zůstávají
+viditelné. `s` explicitně spustí bounded scan, `a` přijme pending návrh, `r` jej
+zamítne, `p` připraví apply a teprve následné `y` jej provede; jiná klávesa
+apply zruší. `q` rozhraní ukončí. TUI nemá vlastní storage ani writer: pouze
+volá stejné `list`, `scan`, `decide` a `apply` hranice. Ollama scan probíhá
+synchronně a během něj se zobrazuje stav běhu.
 
 Levý panel má pojmenované sloupce stav, návrh a `zdroj → cíl`; místo samotných
 UUID načítá názvy z přesné revize návrhu. Pravý panel vysvětluje navrženou akci,

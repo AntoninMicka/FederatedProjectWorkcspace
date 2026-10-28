@@ -6,8 +6,9 @@ import textwrap
 from uuid import uuid4
 
 
-HELP = ('j/k nebo sipky: vyber | PgUp/PgDn: detail | s: scan | '
-        'a: prijmout | r: zamitnout | p: zapsat | q: konec')
+HELP = ('Tab: panel | j/k: radek | PgUp/PgDn: stranka | Home/End | '
+        'h: hotove | s: scan | a/r: rozhodnout | p: zapsat | q: konec')
+DECIDED = {'accepted', 'rejected', 'dismissed', 'applied'}
 
 
 def _lines(value, width):
@@ -20,8 +21,12 @@ class RefinementTUI:
         self.service = service
         self.scan_limit = scan_limit
         self.operation_factory = operation_factory or (lambda: str(uuid4()))
+        self.all_rows = []
         self.rows = []
         self.selected = 0
+        self.hide_decided = False
+        self.focus = 'table'
+        self.table_page = 10
         self.confirm_apply = False
         self.message = ''
         self.detail_offset = 0
@@ -29,16 +34,28 @@ class RefinementTUI:
         self.refresh()
 
     def refresh(self):
-        self.rows = self.service.list()
-        self.selected = min(self.selected, max(0, len(self.rows) - 1))
-        active = {row['proposal_id'] for row in self.rows}
+        selected_id = self.current()['proposal_id'] if self.current() else None
+        self.all_rows = self.service.list()
+        self._filter(selected_id)
+        active = {row['proposal_id'] for row in self.all_rows}
         self.contexts = {key: value for key, value in self.contexts.items() if key in active}
-        for row in self.rows:
+        for row in self.all_rows:
             if row['proposal_id'] not in self.contexts:
                 try:
                     self.contexts[row['proposal_id']] = self.service.review_context(row)
                 except Exception as exc:
                     self.contexts[row['proposal_id']] = {'context_error': str(exc)}
+
+    def _filter(self, selected_id=None):
+        self.rows = [row for row in self.all_rows
+                     if not self.hide_decided or row['state'] not in DECIDED]
+        if selected_id:
+            match = next((index for index, row in enumerate(self.rows)
+                          if row['proposal_id'] == selected_id), None)
+            if match is not None:
+                self.selected = match
+                return
+        self.selected = min(self.selected, max(0, len(self.rows) - 1))
 
     def current(self):
         return self.rows[self.selected] if self.rows else None
@@ -71,15 +88,38 @@ class RefinementTUI:
                 self.message = 'Apply zrusen.'
             return True
         if key in (ord('j'), curses.KEY_DOWN):
+            self.focus = 'table'
             self.selected = min(self.selected + 1, max(0, len(self.rows) - 1))
             self.detail_offset = 0
         elif key in (ord('k'), curses.KEY_UP):
+            self.focus = 'table'
             self.selected = max(0, self.selected - 1)
             self.detail_offset = 0
+        elif key == 9:
+            self.focus = 'detail' if self.focus == 'table' else 'table'
         elif key == curses.KEY_NPAGE:
-            self.detail_offset += 8
+            if self.focus == 'table':
+                self.selected = min(self.selected + self.table_page, max(0, len(self.rows) - 1))
+                self.detail_offset = 0
+            else:
+                self.detail_offset += 8
         elif key == curses.KEY_PPAGE:
-            self.detail_offset = max(0, self.detail_offset - 8)
+            if self.focus == 'table':
+                self.selected = max(0, self.selected - self.table_page)
+                self.detail_offset = 0
+            else:
+                self.detail_offset = max(0, self.detail_offset - 8)
+        elif key == curses.KEY_HOME:
+            self.focus = 'table'; self.selected = 0; self.detail_offset = 0
+        elif key == curses.KEY_END:
+            self.focus = 'table'; self.selected = max(0, len(self.rows) - 1); self.detail_offset = 0
+        elif key == ord('h'):
+            selected_id = self.current()['proposal_id'] if self.current() else None
+            self.hide_decided = not self.hide_decided
+            self._filter(selected_id)
+            hidden = len(self.all_rows) - len(self.rows)
+            self.message = (f'Skryto {hidden} rozhodnutych polozek.' if self.hide_decided
+                            else 'Zobrazeny vsechny polozky.')
         elif key == ord('s'):
             self.message = 'Ollama scan bezi; projekt se nemeni...'
             try:
@@ -102,7 +142,7 @@ class RefinementTUI:
                     self.message = 'Rozhodnuti selhalo: ' + str(exc)
                 self.refresh()
         elif key == ord('p'):
-            accepted = sum(row['state'] == 'accepted' for row in self.rows)
+            accepted = sum(row['state'] == 'accepted' for row in self.all_rows)
             if accepted:
                 self.confirm_apply = True
                 self.message = f'Zapsat {accepted} prijatych navrhu? y = ano, jina klavesa = ne'
@@ -132,6 +172,12 @@ def draw(screen, ui):
         return
     split = max(38, min(64, width * 45 // 100))
     visible = height - 7
+    ui.table_page = max(1, visible)
+    filter_label = 'jen otevrene' if ui.hide_decided else 'vsechny'
+    table_focus = ' [AKTIVNI]' if ui.focus == 'table' else ''
+    detail_focus = ' [AKTIVNI]' if ui.focus == 'detail' else ''
+    _put(screen, 3, 0, f'TABULKA — {filter_label}{table_focus}', split - 1, curses.A_BOLD)
+    _put(screen, 3, split + 1, 'DETAIL' + detail_focus, width - split - 2, curses.A_BOLD)
     _put(screen, 4, 0, '#   STAV      NAVRH          ZDROJ  ->  CIL', split - 1, curses.A_BOLD)
     _put(screen, 5, 0, '-' * (split - 1), split - 1)
     start = max(0, min(ui.selected - visible // 2, max(0, len(ui.rows) - visible)))
@@ -144,6 +190,10 @@ def draw(screen, ui):
         label = f"{position + 1:>3} {row['state']:<9} {decision:<13} {source} -> {target}"
         _put(screen, 6 + position - start, 0, label, split - 1,
              curses.A_REVERSE if position == ui.selected else 0)
+    if ui.rows:
+        _put(screen, height - 1, 0,
+             f'Radek {ui.selected + 1}/{len(ui.rows)}; zobrazeno {len(ui.rows)}/{len(ui.all_rows)}',
+             split - 1, curses.A_BOLD)
     row = ui.current()
     if row:
         proposal = row['proposal']

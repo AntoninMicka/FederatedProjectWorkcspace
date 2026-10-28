@@ -76,6 +76,42 @@ class RefinementTUITests(unittest.TestCase):
         self.assertFalse(self.ui.handle(ord('q')))
         self.assertEqual(self.ui.current()['state'], 'pending')
 
+    def test_table_pages_and_detail_scroll_have_separate_focus(self):
+        for number in range(100, 124):
+            row = dict(self.service.rows[0])
+            row['proposal_id'] = f'00000000-0000-0000-0000-{number:012d}'
+            self.service.rows.append(row)
+        self.ui.refresh()
+        self.ui.table_page = 6
+        self.ui.handle(__import__('curses').KEY_NPAGE)
+        self.assertEqual(self.ui.selected, 6)
+        self.ui.handle(9)
+        self.ui.handle(__import__('curses').KEY_NPAGE)
+        self.assertEqual(self.ui.selected, 6)
+        self.assertEqual(self.ui.detail_offset, 8)
+        self.ui.handle(__import__('curses').KEY_END)
+        self.assertEqual(self.ui.selected, 24)
+        self.ui.handle(__import__('curses').KEY_HOME)
+        self.assertEqual(self.ui.selected, 0)
+
+    def test_hide_decided_filters_rows_but_keeps_accepted_apply_visible_to_service(self):
+        rejected = dict(self.service.rows[0],
+                        proposal_id='00000000-0000-0000-0000-000000000004', state='rejected')
+        dismissed = dict(self.service.rows[0],
+                         proposal_id='00000000-0000-0000-0000-000000000005', state='dismissed')
+        self.service.rows.extend((rejected, dismissed))
+        self.ui.refresh()
+        self.ui.handle(ord('h'))
+        self.assertTrue(self.ui.hide_decided)
+        self.assertEqual([row['state'] for row in self.ui.rows], ['pending'])
+        self.ui.handle(ord('a'))
+        self.assertEqual(self.ui.rows, [])
+        self.ui.handle(ord('p'))
+        self.assertTrue(self.ui.confirm_apply)
+        self.ui.handle(ord('n'))
+        self.ui.handle(ord('h'))
+        self.assertEqual(len(self.ui.rows), 3)
+
     def test_unsupported_cursor_visibility_does_not_block_startup(self):
         class Screen:
             def keypad(self, enabled): pass
