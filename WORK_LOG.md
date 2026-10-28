@@ -12,8 +12,15 @@ propojení desktopu s VSCodiem, načtení zadání a doručení testovací zprá
 Dosažená úroveň je **PoC validated** pro lokální Linux/VSCodium profil.
 Zachována je větev `feature/dev-ide-todo-01-file-bridge`, základ `develop`
 `6eb8614`, implementační commity `f072f50`, `7ea37df` a oprava `b92deb7`.
-Cíl jediného PR je `develop`; push/otevření PR/merge agent neprovedl,
-doručení PR zůstává neuzavřené a merge není doložen.
+Při předchozím předání byl cílem jediného PR `develop`; agent
+push/otevření PR/merge neprovedl a doručení tehdy zůstávalo neuzavřené.
+Doplnění při zahájení DEV-01: PR #112 byl sloučen do `develop` jako
+`83d882dbee39803bcb07790e237fd4d400819b16`, ověřeno v lokální Git historii.
+Doručení této feature je tím uzavřené. Čekací TODO bylo uklizeno jako první
+administrativní krok nové větve `feature/dev-01-roadmap-migration`, protože
+uživatel oznámil merge a požádal o zahájení migrace. Jde o povolené předání
+po již sloučené feature; původní stav před merge výše zůstává historický.
+
 Původní rozsah a podúkoly A–D i jejich historické důkazy jsou níže zachované.
 
 Rozšíření akceptace: plnohodnotná stránka Nastavení → IDE a editory,

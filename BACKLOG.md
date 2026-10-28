@@ -98,8 +98,10 @@ feature byla doručena PR #111 jako merge commit `6eb8614`.
 Editorové a plánovací závislosti byly doručeny PR #107–#110; jejich evidence
 je ve WORK_LOG; následná `COMP-03` byla doručena PR #111.
 
-Po doručení akceptované `DEV-IDE-TODO-01` následují podle uživatelem
-aktualizovaného pořadí `DEV-01`, `DEV-02` a `DEV-03`.
+`DEV-IDE-TODO-01` byla doručena PR #112 (`83d882d`); DEV-01 je aktivní
+v TODO. Nejbližší navazující požadavky jsou `DEV-02`, `DEV-03` a `DEV-04`.
+DEV-03 je před aktivací nutné zúžit na samostatný UI/review řez podle
+uživatelského doplnění níže.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
 
@@ -162,11 +164,14 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
 `DEV-IDE-TODO-01` včetně rozšířené akceptace je archivována ve [WORK_LOG](WORK_LOG.md#dev-ide-todo-01--lokální-souborový-ide-bridge--2026-10-28);
-uživatel fázi uzavřel po fyzickém ověření obou směrů. Neuzavřené doručení
-PR drží [TODO](TODO.md). Následující doplnění z 28. 10. 2026 jsou plánované
+uživatel fázi uzavřel po fyzickém ověření obou směrů. Doručení PR #112
+(`83d882d`) je doložené v [WORK_LOG](WORK_LOG.md). Následující doplnění
+z 28. 10. 2026 jsou plánované
 požadavky, nikoli rozšíření uzavřené transportní fáze.
 
-- [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty. Uživatelské doplnění 28. 10. 2026: migrovat také vložené moduly a doplňkové roadmapy s jejich úkoly a popisy; zachovat hierarchii, include vazby, stabilní ID a provenance. Před migrací určit kanonický zdroj každé definice, ověřit úplnost vložených modulů a stanovit přechod autority do Workspace bez konkurenčního živého plánu ve zdrojovém repozitáři.
+DEV-01 je aktivována v [TODO](TODO.md); její návrh migrace drží
+[plán migrace](docs/roadmap-migration.md). Jediný aktuální stav je v TODO.
+
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
   Doplnění 28. 10. 2026: formalizovat zprávy i návrhy změn checklistů tak, aby
   byly strojově zpracovatelné, s task/checklist identitou, zdrojovou revizí,
