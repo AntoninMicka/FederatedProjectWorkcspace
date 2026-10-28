@@ -232,3 +232,59 @@ změnách zdroje; pořadí řádků není stabilní identita pro opakovaný impo
 Tato fáze nevolá Workspace API ani nepoužívá credentials, nevytváří commity
 ani index/journal a neprovádí skutečnou migraci. Stav konkrétního ověření
 patří pouze do TODO; zde je postup, nikoli druhý stavový záznam.
+
+## Read-only náhled hierarchie a cílového diffu
+
+Nad uloženou inventurou lze nyní sestavit kandidátní profilovaný plán:
+
+```bash
+python3 -m scripts.roadmap_migration_plan \
+  --inventory /tmp/dev-01-inventory/inventory.json \
+  --source-root REPOSITORY_ID REPOSITORY_PATH \
+  --output /tmp/dev-01-hierarchy
+```
+
+Zadejte `--source-root` pro každý repozitář v inventuře, včetně hostitele
+`federated-workspace`. Přesné source bajty se znovu ověří vůči zaznamenaným
+revizím a hashům. Výstupem jsou TODO návrhy, katalogy požadavků/historie,
+zdrojové archivy a `mapping.json` se všemi lokátory i plnými původními bloky.
+Žádný report nepředstavuje autoritativní plán nebo výsledek importu.
+
+Výchozí pravidlo do profilované části zařazuje aktuální feature a historicky
+completed feature dávky ze stávajícího autoritativního katalogu. Široké
+backlogové body zůstávají požadavky; samotný grafový uzel není důkaz jedné
+reviewovatelné feature. Pokud kandidát závisí na nezahrnutém požadavku,
+nesmí se hrana vynechat a uzel vydávat za ready. Uzel i původní hrana zůstanou
+v podpůrném katalogu a report ohlásí dependency hranici k review. Checkbox
+konflikt v různých zdrojích se automaticky nevyřeší.
+
+Tasky se odvozují jen z explicitních ID uvnitř známé batch sekce; checklist
+podmínka patří tasku a nevytváří duplicitní requirement uzel. Všechny
+popisy a neznámé konstrukce zůstávají v úplných zdrojových blocích a přesných
+archivech; první profilovaný náhled u uzlů odkazuje na zdrojový dokument.
+Pokud původní označení obsahuje jen ID a úroveň výsledku, titulek může být
+výtahem prvního původního popisného řádku; mapping to výslovně označuje
+`title_is_excerpt` a zachovává celý popis. Validační výsledek zatím dokládá
+jen task graf, nikoli schéma metadat, typované registry požadavků/rizik,
+kompletní artefaktový diff nebo připravenost skutečného apply.
+
+Pro modul použijte `--module-placements PLACEMENTS_JSON`: explicitní seznam
+objektů s `repository_id`, `batch_id`, `milestone_id`, `milestone_title`,
+`source` a `heading`. `source` je klíč z inventury a `heading` přesný řádek
+připnuté roadmapy; titul musí odpovídat tomuto nadpisu. Přiřazení nesmí
+vzniknout jen z místní přítomnosti modulu. Nezaškrtnutý batch nadpis se
+nepřepne na completed pouze proto, že jsou zaškrtnuté všechny jeho tasky.
+
+Volitelné `--target NODE_CONFIG PROJECT_ID` načte skutečný registrovaný
+projekt přes read-only Git cestu, bez inicializace journalu/indexu. Přidá
+původní hlavní TODO, jeho hash a metadata, expected HEAD a `target.diff`.
+Report ukáže původní ID, která v návrhu nejsou, a požadavek na archivování
+původní revize a zachování zpráv. Neodvozuje jejich nové aliasy a nic neukládá
+do projektu. Cílový HEAD musí skutečný apply později znovu ověřit.
+
+`--reuse-mapping MAPPING_JSON` znovu použije zmrazené identity a rozhodnutí
+nad stejnou inventurou; neslučuje se s novými module placements. Změna
+inventurního digestu vyžaduje explicitní rebase a review, nikoli nové ID
+odvozené z posunutého řádku. Bez nového `--target` jde o replay původního
+cílového náhledu, nikoli nové ověření aktuálního cílového HEAD. Všechna
+rozhodnutí zůstávají návrhem a flag `import_ready` je false.

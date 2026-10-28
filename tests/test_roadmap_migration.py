@@ -15,7 +15,7 @@ from spikes.storage import Git
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class RoadmapMigrationTests(unittest.TestCase):
+class MigrationFixture:
     def repository(self, name='host'):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -43,6 +43,7 @@ class RoadmapMigrationTests(unittest.TestCase):
                 {'id': 'DEV-01', 'depends_on': []}, {'id': 'V-01', 'depends_on': []}]}))
         return git
 
+class RoadmapMigrationTests(MigrationFixture, unittest.TestCase):
     def test_formats_unicode_offsets_comments_and_examples(self):
         raw = ('# TODO — DEV-01\r\n'
                '- [ ] **[planned] V-01 — Žluťoučký**\r\n'

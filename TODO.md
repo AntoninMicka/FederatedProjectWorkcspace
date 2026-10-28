@@ -59,9 +59,39 @@ za implementované místo jejich zachování v podpůrných dokumentech.
   ověření existujícího roadmapového grafu. Žádná síťová volání ani zápis
   do projektu, Gitu, SQLite indexu či journalu. Pád inventury cílová data
   nemění; neúplný lokální report lze vytvořit znovu v novém adresáři.
-- [ ] [planned] **DEV-01-C — import preview a stabilní identity (implemented).**
+- [ ] [in progress] **DEV-01-C — import preview a stabilní identity (implemented).**
   Deterministický náhled, přesné source bajty, provenance, mapování existujících
   a nových ID, validace úplného bundle a kontrola limitů před zápisem.
+  Pokračování: `/tmp/dev-01-hierarchy-reviewed/summary.md` a `mapping.json`.
+  Aktualizovaná inventura čte host commit `f55c0ec`, stejný modulový commit
+  `446d980`; zdrojové bajty jsou součástí privátního reportu. Pokryto je všech
+  1456 výskytů včetně nadpisových definic, nikoli jen 1361 checkboxů.
+  Profilovaná podmnožina prošla stávajícím task-graph validátorem: hlavní
+  projekt 3 milestone / 16 batch / 82 task, modul 1 milestone / 1 batch / 8 task.
+  Strategické požadavky a nezahrnuté historické položky zůstávají v katalogu
+  s původními ID/provenance; nejsou automaticky povýšeny na feature dávky.
+  Checklist podmínky mají vlastníka v tasku, nikoli duplicitní požadavek.
+  Celková akceptace dávky se neodvozuje z počtu zaškrtnutých podúkolů.
+  Dva historicky completed uzly `F-M5-CHAT-HISTORY-01` a
+  `F-M5-SYNC-CONTROLS-01` mají dependency hranici proti plánovanému rozsahu;
+  rozporné hrany i původní stavy se zachovaly, do nové profilované části se
+  bez rozhodnutí nepromítají. Nejde o nové rozhodnutí jejich stav změnit.
+  Read-only načtení skutečného cíle potvrdilo HEAD `c36af3e` a čistý strom.
+  Report obsahuje původní hlavní TODO a konkrétní `federated-workspace/target.diff`.
+  Původní ukázkové MILESTONE-01/02/03, BATCH-01 a TASK-01 nejsou v novém návrhu:
+  před skutečným nahrazením se musí archivovat původní obsah/metadatový kontext
+  a zachovat zprávy s původní task/revision vazbou; aliasy se nevymýšlejí.
+  Zmrazený mapping je svázán s inventory SHA-256; replay dal totožný výsledek,
+  změněný zdroj vyžaduje explicitní rebase. Návrhy ID a definic nejsou tímto
+  uživatelsky schválené a `import_ready` zůstává false.
+  Zbývá úplný náhled metadat/operace přes všechny artefakty, review širokých
+  požadavků, potvrzení modulového cíle a zdrojové identity při změně revize;
+  samotný validní task graf není validací celého importu.
+  Reuse/adapt: existující source katalog `_catalog`, profilovaný task graph,
+  Projects.repository (bez inicializace indexu/journalu). Zápisový lifecycle
+  ADR 0003 se nemění; tento krok zapisuje jen nový privátní report do /tmp.
+  Pád při vytváření reportu nemění zdroj ani cílový projekt a není receipt
+  importu. Další report používá nový adresář, původní se nepřepisuje.
 - [ ] [planned] **DEV-01-D — bezpečný apply a opakovaný import (implemented).**
   Stávající autorizovaný writer, expected HEAD/digest, víceartefaktová
   transakce, receipts, idempotence, třícestné porovnání, rename/removal review
@@ -80,12 +110,14 @@ za implementované místo jejich zachování v podpůrných dokumentech.
 
 ## Ověření aktuálního kroku
 
-`python3 -m unittest tests.test_roadmap_migration tests.test_roadmap_graph tests.test_spdx -v`:
-17 testů OK, z toho 10 testů inventury. Pokryté jsou připnuté bajty při
-změně pracovního stromu, stabilita náhledu, Unicode byte offsety, ignorování
-příkladů/komentářů, neukončené bloky, symlink/missing/nadlimitní zdroj,
-konfliktní checkbox stavy bez automatického výběru, scoped module ID,
-nevybraný/neshodný modul, podadresář bez vlastního repozitáře, neplatné
-hrany/cykly a kolize navrhovaných ID. Skutečný read-only běh nad uvedenými
-revizemi vytvořil report bez zápisu do Workspace. Celá finální runtime brána
-bude spuštěna po poslední relevantní změně před dokončením celé dávky.
+`python3 -m unittest tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:
+37 testů OK. Nové testy ověřují celé source coverage, profil a checklist,
+zachování originálů, explicitní modulové přiřazení, nevymyšlenou akceptaci,
+source-state konflikt, dependency hranici bez falešného ready stavu, integritu
+zmrazené mapy a odmítnutí neřešeného rename, plné zdrojové bloky i víceřádkové
+názvy a skutečný read-only target diff bez inicializace Workspace stavu.
+Skutečný běh nad připnutými zdroji a cílovým hlavním TODO prošel; následný
+CLI replay souhlasil s uloženým mappingem beze změny. Předchozí inventurní
+ověření 17 testů je rozšířeno tímto cíleným během. Celá finální runtime brána
+zbývá před dokončením dávky. Žádný projektový zápis ani fyzická migrace
+neproběhly.
