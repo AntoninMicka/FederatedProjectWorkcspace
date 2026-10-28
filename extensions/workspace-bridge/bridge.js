@@ -43,11 +43,14 @@ async function atomic(file, data) {
   await fs.rename(temporary, file);
 }
 function validatePairing(pairing) {
-  if (!pairing || pairing.schema_version !== 1 || !UUID.test(pairing.session_id)
-      || !UUID.test(pairing.project_id) || !/^[A-Za-z0-9_-]{43}$/.test(pairing.token)
-      || typeof pairing.repository !== 'string' || !pairing.repository
+  if (!pairing || ![1, 2].includes(pairing.schema_version) || !/^[A-Za-z0-9_-]{43}$/.test(pairing.token)
       || !Number.isInteger(pairing.expires_at) || pairing.expires_at * 1000 <= Date.now())
     throw new Error('Neplatné nebo expirované propojení.');
+  if (pairing.schema_version === 2 && (!UUID.test(pairing.connection_id) || typeof pairing.name !== 'string'))
+    throw new Error('Neplatné připojení k Workspace.');
+  if ((pairing.schema_version === 1 || pairing.session_id) &&
+      (!UUID.test(pairing.session_id) || !UUID.test(pairing.project_id) || typeof pairing.repository !== 'string' || !pairing.repository))
+    throw new Error('Neplatné propojení projektu.');
   const url = new URL(pairing.endpoint);
   if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || !url.port
       || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))))
@@ -62,9 +65,9 @@ async function repository(root, identity) {
   if (identity !== actual && identity !== remote) throw new Error('Identita repozitáře nesouhlasí s propojením.');
   return {root: actual, commit: await git(actual, 'rev-parse', 'HEAD')};
 }
-function request(pairing, body, ca) {
+function httpRequest(pairing, route, body, ca) {
   validatePairing(pairing);
-  const url = new URL('/v1/ide-bridge/exchange', pairing.endpoint);
+  const url = new URL(route, pairing.endpoint);
   const data = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? https : http;
@@ -83,6 +86,13 @@ function request(pairing, body, ca) {
     req.setTimeout(10000, () => req.destroy(new Error('Workspace neodpovídá.')));
     req.on('error', reject); req.end(data);
   });
+}
+function connectionRequest(pairing, body, ca) {
+  return httpRequest(pairing, '/v1/ide-bridge/connection/exchange', {...body, connection_id: pairing.connection_id}, ca);
+}
+function request(pairing, body, ca) {
+  return pairing.connection_id ? connectionRequest(pairing, {action: 'exchange', request: body}, ca)
+    : httpRequest(pairing, '/v1/ide-bridge/exchange', body, ca);
 }
 async function sync(root, pairing, repoRoot, ca, transport = request) {
   validatePairing(pairing);
@@ -123,4 +133,4 @@ async function sync(root, pairing, repoRoot, ca, transport = request) {
   await atomic(path.join(root, 'STATUS.json'), JSON.stringify({stale: result.stale, synchronized_at: new Date().toISOString()}, null, 2));
   return result;
 }
-module.exports = {git, outsideGit, safeDirectory, read, atomic, validatePairing, repository, request, sync};
+module.exports = {git, outsideGit, safeDirectory, read, atomic, validatePairing, repository, request, connectionRequest, sync};

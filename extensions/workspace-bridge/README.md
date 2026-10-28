@@ -2,24 +2,32 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 # Workspace file bridge
 
-Rozšíření pro desktopové VS Code / VSCodium. Aplikace Workspace připraví
-projektově omezený VSIX. Po instalaci spusťte `Workspace: Propojit projekt`,
-potvrďte server a vyberte odpovídající zdrojový Git repozitář.
+Připojte lokální VS Code/VSCodium k webovému nebo desktopovému Workspace.
+Aplikace připraví VSIX v **Nastavení → IDE a editory**. Po instalaci spusťte
+**Workspace: Připojit Workspace**. Tento krok ještě nevyžaduje projekt.
 
-`Workspace: Otevřít komunikační soubory` otevře TODO a zkopíruje cestu ke
-složce mimo Git. Složka obsahuje TODO.md, INSTRUCTIONS.md, snapshot.json,
-inbox/ a receipts/. Zprávy lze vytvářet příkazem nebo obyčejným zápisem JSON.
-Synchronizace probíhá každých 10 sekund, také po restartu IDE. Dokončení je
-návrh; o akceptaci rozhoduje člověk ve Workspace. Změna zadání vyžaduje nové
-propojení. Odvolání přístupu je v aplikaci Workspace.
+**Workspace: Nastavení projektů** vybere projekty, které chcete propagovat,
+a přiřadí jim lokální složku či `.code-workspace` a Git repozitář.
+**Workspace: Přiřadit projekt v IDE** změní cíl jednotlivého projektu.
+Přiřazení lze spravovat také v tabulce na stránce Workspace; lokální cíl
+potvrdíte v IDE. Jeden editor synchronizuje více samostatných projektů.
+Nastavení **Workspace bridge → Auto Sync** umožní vypnout automatický sync.
 
-VSIX obsahuje přístupový údaj: nesdílejte jej ani nevkládejte do Gitu.
-Po instalaci jej odstraňte z Downloads. Pro soukromou certifikační autoritu
-vyberte CA při propojení; TLS ověření se nevypíná. Credentials se ukládají do
-SecretStorage editoru. Linux a Windows používají stejný Node adaptér;
-fyzická podpora jednotlivých OS a IDE vyžaduje samostatné ověření.
+**Workspace: Otevřít komunikační soubory** nabídne projekt, otevře jeho TODO
+a zkopíruje cestu ke složce mimo Git. Ta obsahuje TODO.md, INSTRUCTIONS.md,
+snapshot.json, inbox/ a receipts/. Zprávy vytvoří příkaz **Workspace: Odeslat
+výsledek nebo dotaz** nebo obyčejný zápis JSON podle instrukcí. Dokončení je
+návrh k posouzení ve Workspace. Automatický sync běží po 10 sekundách
+u všech lokálně přiřazených projektů a obnoví se po restartu IDE.
 
-Webový Workspace podporován přes HTTPS. Rozšíření samo běží v lokálním IDE,
-nikoli v prohlížeči. První verze nepodporuje Remote SSH, WSL ani Codespaces.
-Soubory poskytují kontext dalším pluginům; bridge nespouští coding agenta
-ani automaticky nerozšiřuje jeho oprávnění na cestu mimo pracovní adresář.
+VSIX obsahuje přístupový údaj: nesdílejte jej ani nevkládejte do Gitu,
+po instalaci ho smažte. Přístup lze ve Workspace odvolat pro celý editor
+nebo pro jednotlivé mapování. Credentials jsou v SecretStorage. Soukromou
+CA lze vybrat při připojení; TLS validace se nevypíná. Starší projektové
+VSIX schema-v1 zůstávají podporované. V jednom profilu je aktivní jedno
+připojení Workspace, obsahující více projektových mapování.
+
+První fyzicky ověřený profil je Linux/VSCodium. Windows a VS Code vyžadují
+samostatné ověření. Webový Workspace funguje přes HTTPS, rozšíření běží
+v lokálním IDE. Remote SSH, WSL a browser-only IDE nejsou podporované.
+Bridge nespouští coding agenta ani mu automaticky nepřidává práva k souborům.

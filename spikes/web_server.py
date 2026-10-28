@@ -145,7 +145,7 @@ class WebHandler(DesktopHandler):
         return super()._do_POST()
 
     def authorized(self, auth):
-        if self.path == '/v1/ide-bridge/exchange':
+        if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
             return DesktopHandler.authorized(self, auth)
         if hmac.compare_digest(auth.encode(), ('Bearer ' + self.server.token).encode()):
             self.actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
@@ -211,7 +211,9 @@ class WebHandler(DesktopHandler):
 
     def dispatch(self, request):
         if self.path.startswith('/v1/ide-bridge/'):
-            if self.path == '/v1/ide-bridge/exchange':
+            if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
+                return self.dispatch_ide_bridge(request)
+            if self.path in {'/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create', '/v1/ide-bridge/connection/revoke'}:
                 return self.dispatch_ide_bridge(request)
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)

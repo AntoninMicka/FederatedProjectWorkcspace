@@ -847,7 +847,8 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 
 **Stav: read-only roadmapový i obecný projektový graf PoC validated;
 profilovaný souborový plán, editor a milestone/batch pohled jsou implemented;
-DEV-IDE-TODO-01 je PoC validated v lokálním Linux/VSCodium profilu a webovém UI;
+DEV-IDE-TODO-01 včetně odděleného připojení Workspace a projektových mapování
+na plné stránce Nastavení je PoC validated v Linux/VSCodium a webovém profilu;
 DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace
 má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a
 evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual
@@ -895,8 +896,10 @@ mezi zdrojové soubory implementačního repozitáře.
   Zpětná schránka přijímá návrhy dokončení, dotazy a zprávy s idempotentními
   receipts; sama nemění stav úkolu. Instalátor a párování jsou ve sdílené
   web/desktop aplikaci, rozšíření běží v lokálním Code/VSCodium. Transport,
-  stale kontrolu, autorizaci a recovery vymezuje ADR 0060; evidence a fyzicky
-  neověřené profily jsou ve WORK_LOG. Předání PR drží TODO. FileSystemProvider
+  Na plné stránce Nastavení → IDE a editory se odděluje připojení Workspace
+  od tabulky propagovaných projektů a jejich cílů v IDE; stejné mapování lze
+  nastavit v rozšíření. Stale kontrolu, autorizaci a recovery vymezuje ADR 0060.
+  Akceptovanou evidenci a neověřené profily drží WORK_LOG, předání PR TODO. FileSystemProvider
   ani FUSE se nepoužívají.
 - [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
 - [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu. Vazba na oddělený zdrojový repozitář musí připnout jeho identitu a revizi bez přesunu autoritativního projektového řízení do zdrojového stromu.

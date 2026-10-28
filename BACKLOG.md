@@ -161,7 +161,7 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
-`DEV-IDE-TODO-01` je akceptována a archivována ve [WORK_LOG](WORK_LOG.md#dev-ide-todo-01--lokální-souborový-ide-bridge--2026-10-28);
+`DEV-IDE-TODO-01` včetně rozšířené akceptace je archivována ve [WORK_LOG](WORK_LOG.md#dev-ide-todo-01--lokální-souborový-ide-bridge--2026-10-28);
 předání jejího dosud nevytvořeného PR drží [TODO](TODO.md).
 
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty.

@@ -52,3 +52,78 @@ test('rejects unsafe pairing URLs and expired credentials', () => {
   assert.throws(() => bridge.validatePairing(pairing), /adresa/);
   assert.throws(() => bridge.validatePairing({...pairing, endpoint: 'http://127.0.0.1:8888', expires_at: 0}), /expirované/);
 });
+test('plugin settings map multiple projects and restore them after restart', async t => {
+  const first = await fixture(t), second = await fixture(t);
+  const Module = require('node:module');
+  const load = Module._load;
+  const commands = new Map(), state = new Map(), secrets = new Map();
+  const pairing = {schema_version: 2, connection_id: crypto.randomUUID(), token: 'a'.repeat(43),
+    name: 'Work IDE', endpoint: 'http://127.0.0.1:9999', expires_at: Math.floor(Date.now()/1000)+1000};
+  const projects = [first, second].map((f, index) => ({project_id: f.pairing.project_id,
+    title: 'Project ' + index, expected_head: 'b'.repeat(40)}));
+  let mappings = [], folderPick = 0, selection = 'both';
+  const synchronizations = [];
+  const originalRequest = bridge.connectionRequest, originalSync = bridge.sync;
+  bridge.connectionRequest = async (_pairing, request) => {
+    if (request.action === 'status') return {connection_id: pairing.connection_id, name: pairing.name, projects, mappings};
+    if (request.action === 'map') {
+      const previous = mappings.find(item => item.project_id === request.mapping.project_id);
+      assert.equal(request.mapping.expected_mapping, previous?.session_id || null);
+      mappings = mappings.filter(item => item.project_id !== request.mapping.project_id);
+      if (!request.mapping.enabled) return {enabled: false, session_id: null};
+      const item = {...request.mapping, session_id: crypto.randomUUID(), bound: false,
+        title: projects.find(p => p.project_id === request.mapping.project_id).title};
+      mappings.push(item);return {enabled: true, session_id: item.session_id};
+    }
+    if (request.action === 'bind') {
+      const item = mappings.find(m => m.session_id === request.session_id);item.bound = true;
+      return item;
+    }
+    throw new Error('Unexpected request');
+  };
+  bridge.sync = async (root, child, repository) => {
+    synchronizations.push({root, session: child.session_id, repository}); return {stale: false};
+  };
+  const vscode = {env: {}, StatusBarAlignment: {Left: 1},
+    commands: {registerCommand: (name, callback) => {commands.set(name, callback);return {dispose(){}};}},
+    workspace: {isTrusted: true, workspaceFolders: [first, second].map((f, index) => ({name: 'Local '+index, uri: {fsPath: f.repo}})),
+      getConfiguration: () => ({get: () => false})},
+    window: {createOutputChannel: () => ({appendLine(){},dispose(){}}),
+      createStatusBarItem: () => ({show(){},dispose(){}}),
+      showInformationMessage: async () => undefined,
+      showErrorMessage: message => {throw new Error(message);},
+      showWarningMessage: async () => 'Přiřadit',
+      showQuickPick: async (items, options) => options.canPickMany ? (selection==='both' ? items : []) : items[folderPick++]}}
+  ;
+  Module._load = function(name, parent, isMain) {return name === 'vscode' ? vscode : load.call(this, name, parent, isMain);};
+  const extensionPath = require.resolve('../extensions/workspace-bridge/extension');
+  delete require.cache[extensionPath];
+  const extension = require(extensionPath);
+  const contexts = [];
+  function context() {
+    const result = {subscriptions: [], globalStorageUri: {fsPath: path.join(first.base, 'storage')},
+      globalState: {get: key => state.get(key), update: async (key,value) => state.set(key,value)},
+      secrets: {get: async key => secrets.get(key), store: async (key,value) => secrets.set(key,value), delete: async key => secrets.delete(key)}};
+    contexts.push(result);return result;
+  }
+  t.after(() => {
+    for (const ctx of contexts) for (const disposable of ctx.subscriptions) disposable.dispose();
+    Module._load = load;bridge.connectionRequest = originalRequest;bridge.sync = originalSync;
+    delete require.cache[extensionPath];
+  });
+  state.set('connection',pairing.connection_id);
+  secrets.set('connection:'+pairing.connection_id,JSON.stringify({pairing,mappings:{}}));
+  await extension.activate(context());
+  await commands.get('workspaceBridge.configure')();
+  const stored = JSON.parse(secrets.get('connection:'+pairing.connection_id));
+  assert.equal(Object.keys(stored.mappings).length,2);
+  assert.equal(new Set(synchronizations.map(item=>item.root)).size,2);
+  assert.deepEqual(new Set(synchronizations.map(item=>item.repository)),new Set([first.repo,second.repo]));
+  synchronizations.length=0;
+  await extension.activate(context());
+  assert.equal(synchronizations.length,2,'restart must restore both mappings');
+  selection='none';
+  await commands.get('workspaceBridge.configure')();
+  assert.deepEqual(mappings,[]);
+  assert.deepEqual(JSON.parse(secrets.get('connection:'+pairing.connection_id)).mappings,{});
+});

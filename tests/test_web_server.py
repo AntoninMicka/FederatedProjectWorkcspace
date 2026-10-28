@@ -79,6 +79,50 @@ class WebTests(unittest.TestCase):
         from tests.ide_bridge_browser import run
         run(self)
 
+    def test_ide_workspace_connection_and_project_mapping_use_live_account_scope(self):
+        code, data, _ = self.create_project('IDE connection scope')
+        self.assertEqual(200, code, data); project_id = json.loads(data)['id']
+        view = self.server.projects.open(project_id)
+        head = Artifacts(self.root/'node.json').save(dict(project_id=project_id,
+            artifact_id=main_todo_id(project_id), base_head=view['commit_id'],
+            title='Tasks', body='- [ ] [TASK-01] Implement\n', new=True), str(uuid4()))['commit_id']
+        def post(path, body, token=None):
+            code, data, _ = self.request(path=path, body=json.dumps(body),
+                headers={'Authorization': 'Bearer ' + (token or self.token)})
+            return code, json.loads(data)
+        def admin(body):
+            code, value = post('/v1/administration', body); self.assertEqual(200, code, value); return value
+        state = admin({'action': 'list'})
+        state = admin({'action': 'create-user', 'expected_commit': state['commit_id'],
+                       'name': 'IDE owner', 'node_role': 'member'})
+        user, key = state['users'][0], state['access_key']
+        code, value = post('/v1/ide-bridge/connection/create', {'name': 'Work IDE'}, key)
+        self.assertEqual(200, code, value); pairing = value['pairing']; token = pairing['token']
+        self.assertNotIn('project_id', pairing)
+        status_request = dict(connection_id=pairing['connection_id'], action='status')
+        code, status = post('/v1/ide-bridge/connection/exchange', status_request, token)
+        self.assertEqual(200, code, status); self.assertEqual([], status['projects'])
+        mapping = dict(connection_id=pairing['connection_id'], project_id=project_id, enabled=True,
+            expected_head=head, repository='', editor_workspace='', instructions='', expected_mapping=None)
+        self.assertEqual(422, post('/v1/ide-bridge/connection/exchange',
+            dict(status_request, action='map', mapping=mapping), token)[0])
+        state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {project_id: 'editor'}})
+        code, status = post('/v1/ide-bridge/connection/exchange', status_request, token)
+        self.assertEqual(200, code, status); self.assertEqual([project_id], [p['project_id'] for p in status['projects']])
+        code, assigned = post('/v1/ide-bridge/connection/exchange', dict(status_request, action='map', mapping=mapping), token)
+        self.assertEqual(200, code, assigned)
+        for path in ('/v1/projects', '/v1/ide-bridge/connections', '/v1/ide-bridge/exchange'):
+            self.assertEqual(401, post(path, {}, token)[0])
+        code, other = post('/v1/ide-bridge/connection/create', {'name': 'Admin IDE'})
+        self.assertEqual(200, code, other)
+        self.assertEqual(422, post('/v1/ide-bridge/connection/revoke',
+            {'connection_id':other['connection_id']}, key)[0])
+        state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': user['id'], 'active': False, 'node_role': 'member', 'memberships': {project_id:'editor'}})
+        self.assertEqual(401, post('/v1/ide-bridge/connection/exchange', status_request, token)[0])
+        self.assertEqual(head, self.server.projects.open(project_id)['commit_id'])
+
     def test_ide_bridge_scoped_transport_rbac_and_live_revocation(self):
         code, data, _ = self.create_project('IDE bridge')
         self.assertEqual(200, code, data)

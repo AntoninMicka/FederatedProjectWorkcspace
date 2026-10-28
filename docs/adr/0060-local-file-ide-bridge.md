@@ -25,31 +25,47 @@ synchronizaci se Git-contained storage odmítne.
 
 ## Propojení, privacy a instalace
 
-Sdílené web/desktop UI připraví projektově omezený VSIX s konkrétní relací.
-Desktop spustí vybrané dostupné code/codium CLI bez shellu po nativním
-potvrzení; web stáhne VSIX pro lokální instalaci. Po instalaci rozšíření
-znovu potvrdí server/projekt a uživatel vybere repozitář odpovídající přesné
-URL origin nebo absolutní cestě. Přihlašovací klíč není v URI/argumentech CLI,
-ale pouze v generovaném VSIX a SecretStorage. VSIX je citlivý lokální
-instalační soubor; uživatel ho po instalaci odstraní. Reinstalace rozšíření
-nepřepíná existující relaci bez explicitního příkazu Propojit projekt.
+Uživatelské upřesnění z 28. 10. 2026 znovu otevřelo akceptaci feature.
+Ve verzi 0.2 je plnohodnotná stránka Nastavení → IDE a editory nezávislá na
+otevřeném projektu. Rozlišuje připojení editoru k Workspace a tabulku
+propagovaných projektů s konkrétní složkou či .code-workspace.
 
-Token má náhodných 32 bajtů, backend ukládá jen SHA-256. Platí 30 dní, lze jej
-odvolat a autentizuje výhradně `/v1/ide-bridge/exchange`, nikoli obecné API.
-Web při každém přístupu znovu kontroluje aktivitu účtu, credential_ref a
-aktuální právo editora k danému projektu. Bootstrap admin relaci odvolává
-explicitně; změna bootstrap tokenu sama není odvoláním vydaných relací.
+Nový generovaný VSIX schema-v2 nese připojení k Workspace, nikoli projekt.
+Připojení samo nezpřístupní žádný projektový obsah: dovolí katalog aktuálně
+oprávněných projektů a explicitní vytvoření/odvolání jejich mapování také
+z nastavení rozšíření. Je to rozšíření původního credential scope schválené
+uživatelem; token nesmí obsloužit obecné API. Každé mapování má vlastní
+immutable projektový snapshot a schránku. Propagace bez vybraného lokálního
+cíle zůstává unbound; před prvním exportem musí IDE potvrdit konkrétní cíl.
+Repozitář a editor_workspace jsou oddělené údaje: .code-workspace může nést
+více složek, jeho konkrétní Git root uživatel zvolí zvlášť.
+
+Desktop instaluje přes potvrzené code/codium CLI bez shellu, web stáhne VSIX
+pro lokální instalaci. Přihlašovací klíč není v URI ani argumentech CLI, ale
+v citlivém generovaném VSIX a SecretStorage. Uživatel balíček po instalaci
+odstraní. Jeden profil editoru používá jedno aktivní připojení a více mapování;
+přepnutí připojení odstraní starý aktivní credential, zachová soubory.
+Původní schema-v1 projektové relace i jejich zprávy/odvolání zůstávají dostupné.
+
+Token má náhodných 32 bajtů, backend ukládá jen SHA-256. Platí 30 dní a je
+odvolatelný. Schema-v2 autentizuje pouze `/v1/ide-bridge/connection/exchange`,
+schema-v1 pouze původní `/v1/ide-bridge/exchange`. Web při každém přístupu
+znovu kontroluje aktivní účet a credential_ref. Katalog nabízí jen aktuální
+RW projekty editora; mapování i exchange navíc ověří projektová oprávnění,
+read-only replikaci a privacy. Cizí připojení nesmí běžný člen spravovat.
+Bootstrap admin připojení odvolává explicitně; změna bootstrap tokenu sama
+není odvoláním vydaných credentialů. Odvolání rodiče blokuje všechny potomky;
+odvolání mapování neodpojí ostatní projekty.
+
 Standardní Host/Origin/JSON/no-CORS ochrany zůstávají. Síťový server vyžaduje
-HTTPS, plaintext je dovolen pouze na loopback desktopu. Soukromá CA se vybírá
-lokálně; TLS validace se nevypíná. Obsah local-only se neexportuje ani přes
-lokální desktop pairing. Instrukce a vybraný plán se zobrazují explicitně;
-bridge sám nevolá externího LLM a neposkytuje mu automatická oprávnění.
+HTTPS, plaintext je dovolen jen na loopback desktopu. Soukromá CA se vybírá
+lokálně, TLS validace se nevypíná. Local-only obsah se neexportuje ani přes
+desktop. Bridge sám nevolá externí LLM a nepřidává mu oprávnění k cestám.
 
 První profil je lokální desktopové IDE napojené na desktop či web Workspace.
 Browser-only rozšíření, Remote SSH, WSL a Codespaces nejsou podporované.
-Windows používá tentýž Node adaptér, ale fyzické ověření Windows je samostatná
-akceptace. Codex není hostitelem rozšíření: soubory mu lze explicitně předat
-podle jeho povolených cest; orchestrace a automatické spouštění patří DEV-02/04.
+Windows používá tentýž Node adaptér, fyzické ověření Windows je samostatná
+akceptace. Codex není hostitelem rozšíření; orchestrace a spuštění patří DEV-02/04.
 
 ## Revize, zprávy a recovery
 
@@ -89,6 +105,25 @@ Crash boundaries:
 6. Odvolání a zveřejnění receipt sdílejí SQLite writer transakci. Již přijatá
    data zůstávají zachována. Odpojení v IDE zastaví sync a odstraní aktivní
    SecretStorage klíč, nemaže lokální zprávy; server se odvolává v aplikaci.
+
+Doplněné crash boundaries mapování (stejná SQLite autorita, žádný Git zápis):
+
+7. Tabulka connections vznikne přes CREATE TABLE IF NOT EXISTS, původní
+   sessions/messages se nemění. Pád při inicializaci lze opakovat bez migrace
+   původních credentialů. DDL a provozní zápisy používají uzavřené connection.
+8. Změna cíle/revize odvolá předchozí session a vloží novou v jediné SQLite
+   writer transakci. Pád či chyba mezi těmito kroky vrátí původní mapování;
+   po commitu je aktivní pouze nové. Historické messages/receipts se nemažou.
+   expected_mapping blokuje stale přepsání, stejný payload po ztrátě odpovědi
+   vrátí aktuální relaci. Opakované vypnutí pozná odpovídající tombstone.
+9. Bind přiřadí ověřený lokální repo/editor workspace a bound flag společně.
+   Pád před commitem ponechá unbound, po commitu lze přesný bind opakovat.
+   Klient uloží lokální přiřazení do SecretStorage až po potvrzení serveru;
+   po ztrátě odpovědi konfigurace zopakuje map/bind bez ztráty zpráv.
+10. Parent revokace, výměna mapování a receipt commit sdílejí SQLite writer
+    hranici. Před přijetím zprávy se znovu ověří aktivní child i parent.
+    Zpráva dokončená před revokací zůstane historickým přijetím, další
+    zápis je odmítnut. Selhání jednoho lokálního projektu neblokuje sync jiných.
 
 SQLite bridge journal není obnovitelný projektový index ani náhrada
 Workspace journalu. Nevzniká operace zapisující současně Git a bridge SQLite;

@@ -5,10 +5,12 @@ import io
 import json
 from pathlib import Path
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 import unittest
 from uuid import uuid4
+from unittest.mock import patch
 import zipfile
 
 from spikes.artifacts import Artifacts, main_todo_id
@@ -122,6 +124,109 @@ class IdeBridgeTests(unittest.TestCase):
         target = self.root / 'foreign'; target.mkdir()
         self.service.root.symlink_to(target)
         with self.assertRaises(ValidationError): self.create()
+
+    def parent(self, name='Workstation'):
+        created = self.service.connection_create({'name': name}, None, 'http://127.0.0.1:9999')
+        return created, self.service.connection(created['pairing']['token'])
+
+    def mapping(self, parent, **changes):
+        return dict(dict(connection_id=parent['connection_id'], project_id=self.project,
+            enabled=True, expected_head=self.head, repository='', editor_workspace='',
+            instructions='Use focused tests.', expected_mapping=None), **changes)
+
+    def test_workspace_connection_without_project_and_legacy_compatibility(self):
+        created, parent = self.parent()
+        self.assertEqual(2, created['pairing']['schema_version'])
+        self.assertNotIn('project_id', created['pairing'])
+        self.assertNotIn('repository', created['pairing'])
+        catalog = self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'], action='status'))
+        self.assertEqual([], catalog['mappings'])
+        self.assertEqual([self.project], [p['project_id'] for p in catalog['projects']])
+        with self.assertRaises(ValidationError): self.service.session(created['pairing']['token'])
+        legacy = self.create()
+        self.assertEqual(self.project, self.service.session(legacy['pairing']['token'])['project_id'])
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+
+    def test_mapping_can_be_created_by_ide_bound_and_replaced_without_losing_messages(self):
+        created, parent = self.parent()
+        request = self.mapping(parent)
+        result = self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'], action='map', mapping=request))
+        self.assertEqual(result, self.service.configure_mapping(None, request))
+        child = dict(session_id=result['session_id'], messages=[])
+        with self.assertRaisesRegex(ValidationError, 'not bound'):
+            self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'], action='exchange', request=child))
+        bind = dict(connection_id=parent['connection_id'], action='bind', session_id=result['session_id'],
+                    repository=str(self.root/'project'), editor_workspace=str(self.root/'dev.code-workspace'))
+        bound = self.service.connection_exchange(parent, bind)
+        self.assertEqual(bound, self.service.connection_exchange(parent, bind))
+        mappings = self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'], action='status'))['mappings']
+        self.assertTrue(mappings[0]['bound'])
+        message = self.message(dict(revision=mappings[0]['revision']))
+        child['messages'] = [message]
+        first = self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'], action='exchange', request=child))
+        self.assertEqual('received', first['receipts'][0]['status'])
+        updated = dict(request, repository='new-repository', expected_mapping=result['session_id'])
+        second = self.service.configure_mapping(None, updated)
+        self.assertNotEqual(result['session_id'], second['session_id'])
+        with self.assertRaisesRegex(ValidationError, 'no longer active'):
+            self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'], action='exchange', request=child))
+        self.assertEqual(1, len(next(s for s in self.service.status(self.project)['sessions'] if s['session_id']==result['session_id'])['messages']))
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+
+    def test_multiple_projects_have_independent_mappings(self):
+        _, parent = self.parent(); first = self.service.configure_mapping(None, self.mapping(parent))
+        other = ProjectCreation(self.node).create('Other project', str(self.root/'other'), str(uuid4()))['id']
+        head = Projects(self.node).open(other)['commit_id']
+        head = Artifacts(self.node).save(dict(project_id=other, artifact_id=main_todo_id(other),
+            base_head=head, title='Tasks', body='- [ ] [TASK-01] Other task\n', new=True), str(uuid4()))['commit_id']
+        second = self.service.configure_mapping(None, self.mapping(parent, project_id=other, expected_head=head))
+        actor = {'id':None, 'node_role':'federation-admin'}
+        self.assertEqual({first['session_id'],second['session_id']},
+            {m['session_id'] for m in self.service.connection_mappings(parent['connection_id'],actor)})
+        self.service.configure_mapping(None, self.mapping(parent, enabled=False, expected_mapping=first['session_id']))
+        self.assertEqual([other], [m['project_id'] for m in self.service.connection_mappings(parent['connection_id'],actor)])
+        with self.assertRaisesRegex(ValidationError, 'another account'):
+            self.service.revoke(other,second['session_id'],actor={'id':str(uuid4()),'node_role':'member'})
+        self.assertEqual(head,Projects(self.node).open(other)['commit_id'])
+
+    def test_mapping_replacement_rolls_back_between_revoke_and_insert(self):
+        _, parent = self.parent(); request = self.mapping(parent)
+        first = self.service.configure_mapping(None, request)
+        with self.service.database() as db:
+            db.execute("CREATE TRIGGER abort_mapping BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT, 'swap interrupted'); END")
+        with self.assertRaisesRegex(sqlite3.IntegrityError, 'interrupted'):
+            self.service.configure_mapping(None, dict(request, repository='changed', expected_mapping=first['session_id']))
+        restarted = IdeBridge(self.node)
+        active = restarted.connection_mappings(parent['connection_id'], {'node_role':'federation-admin'})
+        self.assertEqual([first['session_id']], [m['session_id'] for m in active])
+        with restarted.database() as db:
+            db.execute('DROP TRIGGER abort_mapping')
+        second = restarted.configure_mapping(None, dict(request, repository='changed', expected_mapping=first['session_id']))
+        self.assertNotEqual(first['session_id'], second['session_id'])
+
+    def test_connection_and_mapping_revocation_wrong_owner_and_stale_settings(self):
+        created, parent = self.parent(); _, other = self.parent('Other editor')
+        request = self.mapping(parent); mapping = self.service.configure_mapping(None, request)
+        with self.assertRaisesRegex(ValidationError, 'another connection'):
+            self.service.connection_exchange(other, dict(connection_id=other['connection_id'], action='bind',
+                session_id=mapping['session_id'], repository='repo', editor_workspace='editor'))
+        with self.assertRaisesRegex(ValidationError, 'changed'):
+            self.service.configure_mapping(None, dict(request, repository='wrong stale overwrite'))
+        disabled = dict(request, enabled=False, expected_mapping=mapping['session_id'])
+        self.assertEqual(self.service.configure_mapping(None, disabled), self.service.configure_mapping(None, disabled))
+        self.service.connection_revoke(None, parent['connection_id'])
+        with self.assertRaisesRegex(ValidationError, 'revoked'):
+            self.service.connection(created['pairing']['token'])
+        with self.assertRaisesRegex(ValidationError, 'unavailable'):
+            self.service.configure_mapping(None, dict(request, expected_mapping=None))
+        stranger = {'id': str(uuid4()), 'node_role': 'member', 'memberships': {}}
+        with self.assertRaisesRegex(ValidationError, 'another account'):
+            self.service.managed_connection(stranger, other['connection_id'])
+        self.assertEqual([], self.service.connections_status(stranger)['connections'])
+        view = self.service.projects.open(self.project)
+        with patch.object(self.service.projects, 'open', return_value=dict(view, read_only=True)):
+            with self.assertRaisesRegex(ValidationError, 'read-only'):
+                self.service.configure_mapping(None, self.mapping(other))
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required for extension transport tests')
     def test_extension_files_recovery_and_transport(self):

@@ -7,14 +7,66 @@ SPDX-License-Identifier: MPL-2.0
 
 ## DEV-IDE-TODO-01 — lokální souborový IDE bridge — 2026-10-28
 
+Akceptace byla znovu otevřena 28. 10. 2026 uživatelským upřesněním a rozšíření
+dosáhlo úrovně **PoC validated**. Zachována je
+stejná větev `feature/dev-ide-todo-01-file-bridge`, základ `develop` `6eb8614`,
+první implementace commit `f072f50`, jediný PR cíl `develop`. GitHub při
+závěrečném předání neobsahoval žádný PR pro tuto větev. Změny této rozšířené
+akceptace zůstávají necommitnuté; push/PR/merge nebyl proveden.
+Původní rozsah a podúkoly A–D i jejich historické důkazy jsou níže zachované.
+
+Rozšíření akceptace: plnohodnotná stránka Nastavení → IDE a editory,
+odvolatelné propojení Workspace ↔ IDE bez nutnosti projektu, tabulka
+propagovaných projektů a jejich přiřazení ke konkrétní složce / .code-workspace.
+Mapování je dostupné také v nastavení rozšíření. Běžné soubory zůstávají mimo
+Git, lidská akceptace a jediný Workspace writer beze změny.
+
+- [x] [completed] **DEV-IDE-TODO-01-E — propojení Workspace a projektová mapování (implemented).**
+  Oddělit credential/lifecycle připojení od immutable projektových relací;
+  odvolání rodiče zablokuje potomky, změna mapování zachová staré receipts.
+- [x] [completed] **DEV-IDE-TODO-01-F — samostatná stránka a nastavení rozšíření (implemented).**
+  Sidebar Nastavení, plná stránka, tabulka projektů, více mapování v IDE,
+  konfigurace z obou stran a kompatibilita původních projektových relací.
+- [x] [completed] **DEV-IDE-TODO-01-G — nové recovery/RBAC/UI ověření (PoC validated).**
+  Cílené testy vrstev propojení a mapování, skutečný extension/browser smoke,
+  úplná finální sada, dokumentace a předání. Windows neoznačit jako ověřené.
+
+### Ověření rozšířené verze 0.2.0
+
+- Cíleně prošlo 18 testů: backend relace/mapování, dvě HTTPS scope cesty,
+  A4 inventura. Node test ověřuje dva projekty v nastavení pluginu a jejich
+  obnovu po restartu. Samostatně prošlo připojení bez jakéhokoli registrovaného
+  projektu i konfigurace node.json.
+- Skutečný VSCodium 1.105.17075 Linux arm64: instalace 0.2.0, aktivace,
+  schema-v2 Workspace connection bez projektu, následné map/bind, soubory,
+  zpráva/receipt a retry bez změny Git prošly v izolovaném profilu.
+- Skutečný browser test prošel za 2,415 s: Nastavení → IDE a editory bez
+  otevřeného projektu, stažení VSIX bez project_id, přiřazení projektu do
+  tabulky a odvolání celého připojení. Dodatečný ad-hoc screenshot běh skončil
+  chybějícím download souborem a nevytvořil screenshot; nejde o další úspěšný
+  browser nebo vizuální důkaz.
+- Atomický swap mapování je ověřen abortem mezi revoke a insert: po restartu
+  zůstane původní aktivní relace, historie/receipts se nemažou. Parent token
+  nedává přístup k obecnému API, cizím připojením ani read-only projektům.
+- Python compile, generated UI i extension node --check a diff --check prošly.
+  Úplná finální unittest brána prošla: **973 testů, 935 úspěšných,
+  38 volitelných skipů, bez selhání**, 240,616 s. Log:
+  `/tmp/ide-project-mapping-final2-tests.log`. Předchozí úplný běh nad
+  novou logikou rovněž prošel; poslední běh zahrnuje i sjednocený název
+  příkazu v nativním instalátoru. Historické výsledky níže nejsou náhrada
+  nové brány.
+- Fyzický Windows/VS Code a nativní Qt instalační klikání zůstávají neověřené.
+
+### Historické ověření první verze f072f50
+
 Původ: DEV-IDE-TODO-01, návaznost M6 / vlastní rozvoj produktu a požadavek
 uživatele 28. 10. 2026 na obyčejné neverzované soubory, obousměrné zprávy,
 instalátor v aplikaci a propojení webu i desktopu. Dávka vznikla na větvi
 `feature/dev-ide-todo-01-file-bridge` z aktuálního `develop` `6eb8614` po
 ověření merge COMP-03 v PR #111. Dosažená úroveň je **PoC validated** pro
-lokální Linux/VSCodium profil a webové UI; jediný PR do `develop` dosud není
-vytvořen. Feature akceptace a doručení PR jsou oddělené. Žádný commit,
-push, PR ani merge této dávky nebyl proveden.
+lokální Linux/VSCodium profil a webové UI; uživatel změnu následně commitnul jako `f072f50`. Akceptace byla znovu otevřena
+požadavkem na oddělení propojení Workspace a projektových mapování; tyto výsledky
+nejsou samy ověřením nové verze. Nové výsledky jsou uvedeny výše.
 
 Rozsah: lokální souborová schránka mimo Git, přesný TODO/instrukce snapshot,
 zprávy completed/clarification/message, idempotentní receipts, instalace a
@@ -43,7 +95,7 @@ Neprovádí se spuštění coding agenta ani automatická změna autoritativníh
   packaging, extension host a webový browser průchod jsou ověřeny.
   Návod je v docs/ide-file-bridge.md, hranice v ADR 0060.
 
-### Ověření, recovery a omezení
+#### Ověření, recovery a omezení první verze
 
 Po poslední relevantní změně aplikačního kódu a konfigurace prošla úplná
 brána `python3 -m unittest discover -s tests -v`: **967 testů, 929 úspěšných,

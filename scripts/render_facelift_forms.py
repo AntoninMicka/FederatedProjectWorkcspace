@@ -63,7 +63,7 @@ SHEETS = [
     sheet("project", "Projekt — vytvoření a bezpečná akce",
           ("#create-project", "#project-delete-panel", "#project-registration-remove-dialog"),
           ("create-project",), scale=.82),
-    sheet("ide-bridge", "Úkoly — propojení s IDE", ("#ide-bridge-panel",),
+    sheet("ide-bridge", "Nastavení — IDE a editory", ("#ide-bridge-panel",),
           ("ide-bridge-form",), scale=.85),
     sheet("notebooklm", "Import celého projektu z NotebookLM", ("#notebooklm-import",), scale=.72),
     sheet("ollama", "Nastavení — lokální AI backend", ("#chat-backend-form",), ("chat-backend-form",), scale=.9),

@@ -2,25 +2,57 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 # IDE bridge přes běžné lokální soubory
 
-V projektu otevřete **Úkoly → Propojení s VS Code / VSCodium**. Vyplňte
-přesnou URL `git remote get-url origin` zdrojového repozitáře nebo jeho
-absolutní lokální cestu a instrukce pro relaci. Plán musí mít stabilní task ID
-podle [plánovacího kontraktu](task-planning.md). Žádný agent se nespustí.
+## Připojení editoru k Workspace
 
-Klikněte na **Připravit instalaci a propojení**. Desktop po nativním potvrzení
-použije dostupné `code` / `codium --install-extension`. Web stáhne VSIX;
-nainstalujte jej lokálně přes Extensions → Install from VSIX. Uložte jej mimo
-Git a po instalaci smažte: obsahuje projektově omezený token s platností 30 dní.
-Při reinstalaci existujícího rozšíření spusťte příkaz Propojit projekt ručně.
+Otevřete **Nastavení → IDE a editory** v levém panelu. Jde o samostatnou
+stránku, dostupnou i bez otevřeného projektu. Pojmenujte připojení, vyberte
+VS Code nebo VSCodium a použijte **Nainstalovat a připojit editor**.
 
-V IDE potvrďte **Workspace: Propojit projekt**, server/projekt a vyberte
-zdrojový repozitář. Jeho identita musí přesně souhlasit se zadáním. Pro HTTPS
-se standardně použije systémová důvěra, vlastní CA lze vybrat ze souboru.
-Žádná volba nevypíná ověření certifikátu. Obsah local-only se neexportuje;
-to platí i pro desktop. Přístupové údaje jsou v SecretStorage, ne ve schránce.
+Desktop po nativním potvrzení použije `code` / `codium --install-extension`.
+Web stáhne VSIX; v lokálním IDE zvolte Extensions → Install from VSIX.
+Balíček uložte mimo Git a po instalaci smažte, obsahuje přístupový údaj
+s platností 30 dní. V IDE spusťte **Workspace: Připojit Workspace** a potvrďte
+server a připojení. Žádný projekt ani repozitář při tom nemusíte vybrat.
+Pro soukromou CA lze vybrat certifikát; TLS ověření se nevypíná.
 
-Příkaz **Workspace: Otevřít komunikační soubory** otevře TODO a zkopíruje
-absolutní cestu ke složce. Je v globalStorage editoru, mimo zdrojový repozitář:
+Připojení dovoluje zobrazit katalog aktuálně oprávněných projektů a výslovně
+nastavit jejich propagaci. Nezpřístupňuje obecné API ani automaticky
+neexportuje obsah všech projektů. Obsah local-only a read-only repliky se
+v novém mapování odmítají. Credentials jsou v SecretStorage editoru.
+
+## Projekty a jejich přiřazení
+
+Na stránce **IDE a editory** vyberte připojený editor. Tabulka obsahuje:
+
+- projekt Workspace a přepínač **Propagovat**;
+- **Projekt v IDE** — konkrétní složku nebo cestu k `.code-workspace`;
+- volitelnou identitu repozitáře (přesná URL origin nebo absolutní cesta)
+  a instrukce pro tento projekt;
+- stav přiřazení, akce **Uložit přiřazení** a **Zprávy**.
+
+Cesty označují počítač s IDE, nikoli filesystem webového serveru. Cíl lze
+ponechat prázdný a dokončit jej v rozšíření. Změna mapování založí novou
+připnutou relaci a odvolá starou; zprávy a receipts staré relace se neztratí.
+Stejný editor může mít současně přiřazeno více projektů. Každý má vlastní
+souborovou schránku a vlastní revizi zadání.
+
+V IDE nabídne **Workspace: Nastavení projektů** výběr propagovaných projektů.
+Novým projektům přiřadíte otevřenou složku, jinou složku nebo `.code-workspace`
+a jeho Git repozitář. **Workspace: Přiřadit projekt v IDE** umožní změnit cíl
+již nastaveného projektu. Potvrzené změny uvidíte také v tabulce Workspace
+po obnovení. Přidání ze stránky aplikace vyžaduje v IDE potvrdit lokální cíl;
+server nemůže sám otevřít libovolnou lokální složku.
+
+Nastavení rozšíření **Workspace bridge → Auto Sync** řídí automatickou
+synchronizaci. Výběr projektů a cíle spravují uvedené dva příkazy. Otevření
+TODO a odeslání zprávy nabídne při více přiřazeních výběr konkrétního projektu.
+Rozšíření v jednom profilu používá jedno aktivní připojení Workspace; přepnutí
+na nové připojení odstraní starý aktivní credential, soubory ponechá.
+
+## Soubory, zprávy a obnova
+
+**Workspace: Otevřít komunikační soubory** otevře TODO vybraného projektu
+a zkopíruje cestu ke složce v privátním globalStorage editoru mimo Git:
 
 ```text
 sessions/<session-id>/
@@ -32,13 +64,13 @@ sessions/<session-id>/
   receipts/<message-id>.json
 ```
 
-TODO/instrukce jsou export a lokální úpravy se při sync nahradí. Zdrojové
-kanonické definice i z included dokumentů drží snapshot.json. Nejde o další
-verzovaný plán. Soubory lze explicitně předat coding agentovi, pokud jeho
-oprávnění dovolují přístup k této cestě; bridge mu práva automaticky nepřidává.
+TODO/instrukce jsou export připnuté revize a lokální úpravy se při sync
+nahradí. Kanonické definice i z included dokumentů drží snapshot.json.
+Nevzniká další verzovaný plán. Soubory lze výslovně předat coding agentovi,
+pokud má oprávnění k této cestě; bridge mu oprávnění automaticky nepřidává.
 
 Výsledek nebo dotaz odešlete přes **Workspace: Odeslat výsledek nebo dotaz**.
-Jiný plugin může napsat JSON do `inbox/` s novým UUID jako názvem souboru:
+Další plugin může zapsat JSON do `inbox/` s novým UUID jako názvem souboru:
 
 ```json
 {
@@ -51,31 +83,36 @@ Jiný plugin může napsat JSON do `inbox/` s novým UUID jako názvem souboru:
 }
 ```
 
-Povolené kind jsou completed, clarification a message. Zpráva má nejvýše
-16 KiB textu. Zapisujte do dočasného `.tmp` a hotový soubor zveřejněte
-přejmenováním. Již odeslané ID a payload neměňte; opravná zpráva dostane nové
-ID. Plugin prochází schránku každých 10 sekund i po restartu IDE; ruční
+Povolené kind jsou completed, clarification a message. Text má nejvýše
+16 KiB. Zapisujte do dočasného `.tmp` a hotový soubor zveřejněte
+přejmenováním. Odeslané ID a payload neměňte, oprava dostane nové ID.
+Synchronizace každých 10 sekund i po restartu IDE projde všechna lokálně
+přiřazená mapování; chyba jednoho projektu nezastaví ostatní. Ruční příkaz
 **Workspace: Synchronizovat zprávy** provede totéž ihned.
 
-`received` v receipts potvrzuje trvalé přijetí, nikoli splnění úkolu. Aplikace
-načte zprávy akcí **Načíst propojení a zprávy**. Člověk posoudí uvedené důkazy
-a výsledek a případně upraví TODO existujícím editorem. Změna projektového
-HEAD označí relaci jako stale a nové zprávy mají stale receipt. Vytvořte nové
-propojení nad aktuálním zadáním; stará zpráva se nepřenese automaticky.
+`received` v receipts potvrzuje trvalé přijetí, nikoli splnění úkolu. Zprávy
+otevřete tlačítkem **Zprávy** u projektu v tabulce. Člověk posoudí důkazy
+a případně upraví autoritativní TODO existujícím editorem Workspace.
+Změna projektového HEAD označí relaci jako stale. Uložte nové přiřazení
+nad aktuální revizí a potvrďte je v IDE; staré zprávy se nepřenesou automaticky.
 
-**Odvolat propojení** v aplikaci zneplatní serverový přístup. Příkaz
-**Workspace: Odpojit lokální bridge** zastaví lokální synchronizaci a odstraní
-aktivní credential; soubory i zprávy ponechá. Pro úplné odpojení proveďte obojí.
-Při ztrátě odpovědi bridge bezpečně opakuje stejnou zprávu, backend nezdvojí
-její přijetí. Při ztrátě instalační odpovědi může vzniknout nepoužitá relace;
-odvolejte ji v přehledu a připravte novou.
+Vypnutí propagace odvolá jen dané mapování. **Odvolat připojení** zablokuje
+celý editor včetně všech jeho mapování. **Workspace: Odpojit lokální bridge**
+zastaví lokální sync a odstraní aktivní credential; pro úplné odpojení
+odvolejte přístup také na serveru. Soubory a zprávy zůstávají zachovány.
+Ztráta odpovědi při zápisu mapování, bind nebo zprávy je bezpečně opakovatelná.
+Při ztrátě instalační odpovědi může zůstat nepoužité připojení; odvolejte je
+v přehledu a připravte nové.
 
-První verze je pro lokální desktopové IDE s webovým nebo desktopovým
-Workspace. Remote SSH, WSL, Codespaces a browser-only IDE nejsou podporované.
-Windows adaptér je připravený, fyzická instalace a Windows ACL nejsou ověřeny.
-Nespouští se Codex ani jiný coding agent a nepřidává se MCP/FUSE/virtuální FS.
+Původní projektové balíčky schema-v1 fungují i po aktualizaci rozšíření.
+Jejich zprávy a akci odvolání najdete pod **Zprávy** u odpovídajícího projektu.
+Nové propojení se vytváří ve dvou úrovních (schema-v2).
 
-Reprodukovatelný skutečný smoke v izolovaném profilu (vyžaduje dostupné GUI):
-`python3 -m scripts.ide_bridge_smoke --editor codium`.
-Výsledky ověření jsou v TODO, po uzavření dávky ve WORK_LOG.
-Recovery a autoritu podrobně popisuje [ADR 0060](adr/0060-local-file-ide-bridge.md).
+První profil je lokální Linux/VSCodium s webovým nebo desktopovým Workspace.
+Windows, VS Code a nativní Qt instalační klikání vyžadují samostatnou fyzickou
+akceptaci. Remote SSH, WSL, Codespaces a browser-only IDE nejsou podporované.
+Bridge nespouští Codex ani jiného agenta a nepřidává MCP/FUSE/virtuální FS.
+
+Skutečný izolovaný smoke: `python3 -m scripts.ide_bridge_smoke --editor codium`.
+Výsledky drží TODO, po uzavření WORK_LOG. Recovery a autoritu vymezuje
+[ADR 0060](adr/0060-local-file-ide-bridge.md).

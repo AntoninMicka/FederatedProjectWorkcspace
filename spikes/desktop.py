@@ -536,7 +536,7 @@ def main():
                     def finished(code, _status):
                         temporary.cleanup()
                         QMessageBox.information(window, 'IDE bridge',
-                            'Instalace dokončena. V IDE spusťte Workspace: Propojit projekt.'
+                            'Instalace dokončena. V IDE spusťte Workspace: Připojit Workspace.'
                             if code == 0 else 'Instalace selhala. Ověřte dostupnost IDE a opakujte propojení.')
                         process.deleteLater()
                     process.finished.connect(finished)

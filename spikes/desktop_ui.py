@@ -263,15 +263,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0" hidden><h2>Hlavní seznam úkolů</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
-<details id="ide-bridge-panel"><summary>Propojení s VS Code / VSCodium</summary>
-<p>TODO a instrukce se uloží na počítači s IDE mimo Git. Zprávy jsou návrhy k lidskému posouzení. Obsah local-only se neexportuje.</p>
-<form id="ide-bridge-form"><label>Identita zdrojového repozitáře (přesná URL origin nebo absolutní lokální cesta)<input id="ide-bridge-repository" required maxlength="1024"></label>
-<label>Instrukce pro tuto relaci<textarea id="ide-bridge-instructions" maxlength="12000"></textarea></label>
-<label>IDE<select id="ide-bridge-editor"><option value="code">VS Code</option><option value="codium">VSCodium</option></select></label>
-<button type="submit">Připravit instalaci a propojení</button></form>
-<p>Web: stáhněte VSIX, v IDE zvolte Extensions → Install from VSIX a poté Workspace: Propojit projekt. Balíček obsahuje přístupový údaj; uložte ho mimo repozitář a po instalaci smažte.</p>
-<button id="ide-bridge-refresh" type="button">Načíst propojení a zprávy</button>
-<p id="ide-bridge-status" role="status"></p><div id="ide-bridge-sessions"></div></details>
+
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-plan" role="tabpanel" aria-labelledby="plan-tab" tabindex="0" hidden><h2>Plán</h2>
 <p id="sidebar-plan-status" role="status">Otevřete projekt.</p>
@@ -301,6 +293,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <ul id="sidebar-settings-list" aria-label="Seznam nastavení">
 <li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-models-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-models-tab">Modely</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení modelů">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-models-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-ide-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-ide-tab">IDE a editory</button></li>
 <li class="sidebar-list-row" data-settings-item="settings-roadmap-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-roadmap-tab">Roadmapa</button><details class="sidebar-item-menu"><summary aria-label="Akce roadmapy">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-roadmap-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-access-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-access-tab">Dostupnost aplikace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení dostupnosti aplikace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-access-tab">Otevřít</button></div></details></li>
@@ -538,6 +531,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
 <button id="settings-models-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-models-panel" tabindex="-1">Modely</button>
+<button id="settings-ide-tab" type="button" role="tab" aria-selected="false" aria-controls="ide-bridge-panel" tabindex="-1">IDE a editory</button>
 <button id="settings-roadmap-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-roadmap-panel" tabindex="-1">Roadmapa</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
 <button id="settings-access-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-access-panel" tabindex="-1" hidden>Dostupnost</button>
@@ -673,6 +667,20 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="settings-models-status" role="status" aria-live="polite">Načítám modelový katalog…</p>
 <div class="settings-table-wrap"><table id="settings-models-table"><thead><tr><th>Model</th><th>Backendy</th><th>Schopnosti</th><th>Dostupnost</th></tr></thead><tbody></tbody></table></div>
 <dialog id="settings-model-detail" aria-labelledby="settings-model-detail-title"><h2 id="settings-model-detail-title">Detail modelu</h2><pre></pre><button type="button" class="secondary-button">Zavřít</button></dialog>
+</section>
+<section id="ide-bridge-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-ide-tab" hidden>
+<h2>IDE a editory</h2><p>Připojte VS Code nebo VSCodium k Workspace. Potom vyberte projekty, které chcete v IDE zpřístupnit.</p>
+<h3>Připojení k Workspace</h3>
+<form id="ide-bridge-form"><label>Název připojení<input id="ide-bridge-name" required maxlength="120" placeholder="Pracovní VSCodium"></label>
+<label>Editor<select id="ide-bridge-editor"><option value="code">VS Code</option><option value="codium">VSCodium</option></select></label>
+<button type="submit">Nainstalovat a připojit editor</button></form>
+<p>Ve webové aplikaci se stáhne instalační balíček VSIX. V IDE zvolte Install from VSIX a potvrďte připojení k Workspace. Balíček po instalaci smažte.</p>
+<button id="ide-bridge-refresh" type="button">Obnovit připojení a projekty</button>
+<p id="ide-bridge-status" role="status"></p><div id="ide-bridge-connections"></div>
+<h3>Projekty v IDE</h3><label>Připojený editor<select id="ide-bridge-connection"><option value="">Nejprve připojte editor</option></select></label>
+<p>Zapněte propagaci projektu a přiřaďte mu složku nebo soubor .code-workspace. Přiřazení můžete dokončit také příkazem Workspace: Nastavení projektů v IDE.</p>
+<div class="settings-table-wrap"><table id="ide-bridge-projects"><thead><tr><th>Projekt Workspace</th><th>Propagovat</th><th>Projekt v IDE</th><th>Repozitář a instrukce</th><th>Stav</th><th>Akce</th></tr></thead><tbody></tbody></table></div>
+<h3>Zprávy z IDE</h3><p>Výsledky a dotazy čekají na vaše posouzení. Přijetí zprávy samo nemění stav úkolu.</p><div id="ide-bridge-sessions"></div>
 </section>
 <section id="settings-roadmap-panel" class="settings-card roadmap-card" role="tabpanel" aria-labelledby="settings-roadmap-tab" hidden>
 <div class="roadmap-heading"><div><h2>Roadmapa a závislosti</h2><p>Read-only projekce autoritativní roadmapy, TODO, backlogu a pracovního logu.</p></div>
@@ -4027,22 +4035,49 @@ document.querySelector('#plan-tab').addEventListener('click',()=>openTaskPlan(ta
 document.querySelector('#plan-state-filter').addEventListener('change',renderTaskPlan);
 document.querySelector('#plan-export').addEventListener('click',()=>{if(taskPlanProjection?.status!=='ready')return;const blob=new Blob([taskPlanProjection.svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`plan-${taskPlanProjection.revision.slice(0,12)}.svg`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);});
 
+let ideBridgeState={connections:[],projects:[]};
 async function loadIdeBridge(){
- const target=document.querySelector('#ide-bridge-sessions'),status=document.querySelector('#ide-bridge-status');target.replaceChildren();
- try{if(!activeProject)throw new Error('Nejprve otevřete projekt.');const result=await projectRequest('/v1/ide-bridge/status',{project_id:activeProject.id});
- for(const session of result.sessions){const card=document.createElement('section'),title=document.createElement('p');title.textContent=`${session.repository} · ${session.session_id} · ${session.revoked?'odvoláno':'aktivní'} · revize ${session.revision.slice(0,12)}`;card.append(title);
- if(!session.revoked){const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Odvolat propojení';revoke.addEventListener('click',async()=>{try{await projectRequest('/v1/ide-bridge/revoke',{project_id:activeProject.id,session_id:session.session_id});await loadIdeBridge();}catch(error){status.textContent=error.message;}});card.append(revoke);}
- for(const entry of session.messages){const message=document.createElement('pre');message.textContent=`${entry.message.kind} · ${entry.message.task_id} · ${entry.receipt.status} · čeká na lidské posouzení\n${entry.message.body}\nZdrojový commit: ${entry.message.repository_commit}`;card.append(message);}target.append(card);}
- status.textContent=`${result.sessions.length} propojení. Přijatá zpráva sama nemění stav úkolu; po ověření upravte autoritativní TODO v editoru.`;
+ const status=document.querySelector('#ide-bridge-status'),select=document.querySelector('#ide-bridge-connection');
+ try{const previous=select.value;ideBridgeState=await projectRequest('/v1/ide-bridge/connections',{});select.replaceChildren();
+ const connections=document.querySelector('#ide-bridge-connections');connections.replaceChildren();
+ for(const connection of ideBridgeState.connections){const option=document.createElement('option');option.value=connection.connection_id;option.textContent=connection.name+(connection.revoked?' (odvoláno)':'');select.append(option);
+ const row=document.createElement('p'),label=document.createElement('span');label.textContent=`${connection.name} · ${connection.revoked?'odvoláno':Date.now()/1000>=connection.expires_at?'platnost vypršela':'připojení připraveno'}`;row.append(label);
+ if(!connection.revoked){const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Odvolat připojení';revoke.addEventListener('click',async()=>{try{await projectRequest('/v1/ide-bridge/connection/revoke',{connection_id:connection.connection_id});await loadIdeBridge();}catch(error){status.textContent=error.message;}});row.append(revoke);}connections.append(row);}
+ if(ideBridgeState.connections.some(item=>item.connection_id===previous))select.value=previous;
+ renderIdeBridgeProjects();status.textContent=ideBridgeState.connections.length?'Vyberte připojení a nastavte projekty pro IDE.':'Zatím není připojený žádný editor.';
  }catch(error){status.textContent=error.message;}
 }
+async function showIdeBridgeMessages(projectId){
+ const target=document.querySelector('#ide-bridge-sessions');target.replaceChildren();
+ try{const result=await projectRequest('/v1/ide-bridge/status',{project_id:projectId});
+ for(const session of result.sessions){if(!session.connection_id&&!session.revoked){const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Odvolat starší projektové propojení';revoke.addEventListener('click',async()=>{try{await projectRequest('/v1/ide-bridge/revoke',{project_id:projectId,session_id:session.session_id});await showIdeBridgeMessages(projectId);}catch(error){target.textContent=error.message;}});target.append(revoke);}for(const entry of session.messages){const message=document.createElement('pre');message.textContent=`${entry.message.kind} · ${entry.message.task_id} · ${entry.receipt.status}\n${entry.message.body}\nZdrojový commit: ${entry.message.repository_commit}`;target.append(message);}}
+ if(!target.children.length)target.textContent='Projekt zatím nemá žádné přijaté zprávy.';
+ }catch(error){target.textContent=error.message;}
+}
+function renderIdeBridgeProjects(){
+ const connection=ideBridgeState.connections.find(item=>item.connection_id===document.querySelector('#ide-bridge-connection').value),body=document.querySelector('#ide-bridge-projects tbody');body.replaceChildren();document.querySelector('#ide-bridge-sessions').replaceChildren();
+ for(const project of ideBridgeState.projects){const mapping=connection?.mappings.find(item=>item.project_id===project.project_id),row=document.createElement('tr');row.dataset.projectId=project.project_id;
+ const title=document.createElement('td');title.textContent=project.title;
+ const enabled=document.createElement('input');enabled.type='checkbox';enabled.checked=Boolean(mapping);enabled.setAttribute('aria-label',`Propagovat ${project.title}`);
+ const editor=document.createElement('input');editor.value=mapping?.editor_workspace||'';editor.placeholder='Složka nebo .code-workspace';editor.setAttribute('aria-label',`Projekt v IDE pro ${project.title}`);
+ const repository=document.createElement('input');repository.value=mapping?.repository||'';repository.placeholder='URL origin nebo cesta (volitelné)';repository.setAttribute('aria-label',`Repozitář pro ${project.title}`);
+ const instructions=document.createElement('textarea');instructions.value=mapping?.instructions||'';instructions.placeholder='Instrukce pro tento projekt';instructions.setAttribute('aria-label',`Instrukce pro ${project.title}`);
+ const flag=document.createElement('td');flag.textContent=!mapping?'Nepropaguje se':mapping.expected_head!==project.expected_head?'Zadání se změnilo':mapping.bound?'Přiřazeno v IDE':'Čeká na přiřazení v IDE';
+ const actions=document.createElement('td'),save=document.createElement('button'),messages=document.createElement('button');save.type=messages.type='button';save.textContent='Uložit přiřazení';messages.textContent='Zprávy';save.disabled=!connection||connection.revoked||Date.now()/1000>=connection.expires_at;
+ save.addEventListener('click',async()=>{save.disabled=true;try{await projectRequest('/v1/ide-bridge/connection/map',{connection_id:connection.connection_id,project_id:project.project_id,enabled:enabled.checked,expected_head:project.expected_head,repository:repository.value.trim(),editor_workspace:editor.value.trim(),instructions:instructions.value,expected_mapping:mapping?.session_id||null});await loadIdeBridge();}catch(error){document.querySelector('#ide-bridge-status').textContent=error.message;save.disabled=false;}});
+ messages.addEventListener('click',()=>showIdeBridgeMessages(project.project_id));actions.append(save,messages);
+ function cell(...elements){const td=document.createElement('td');td.append(...elements);return td;}
+ row.append(title,cell(enabled),cell(editor),cell(repository,instructions),flag,actions);body.append(row);
+ }
+}
+document.querySelector('#ide-bridge-connection').addEventListener('change',renderIdeBridgeProjects);
 document.querySelector('#ide-bridge-refresh').addEventListener('click',loadIdeBridge);
 document.querySelector('#ide-bridge-form').addEventListener('submit',async event=>{
  event.preventDefault();const status=document.querySelector('#ide-bridge-status'),button=event.submitter||event.currentTarget.querySelector('button[type=submit]');button.disabled=true;
- try{if(!activeProject)throw new Error('Nejprve otevřete projekt.');const result=await projectRequest('/v1/ide-bridge/create',{project_id:activeProject.id,expected_head:activeProject.head,repository:document.querySelector('#ide-bridge-repository').value.trim(),instructions:document.querySelector('#ide-bridge-instructions').value});
+ try{const result=await projectRequest('/v1/ide-bridge/connection/create',{name:document.querySelector('#ide-bridge-name').value.trim()});
  if(document.body.dataset.runtime==='server'){const bytes=Uint8Array.from(atob(result.package_base64),c=>c.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'})),link=document.createElement('a');link.href=url;link.download=result.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  else{window.workspaceBridgeInstall={package_base64:result.package_base64,editor:document.querySelector('#ide-bridge-editor').value};location.hash='install-ide-bridge?nonce='+crypto.randomUUID();}
- status.textContent='Instalační balíček připraven. Po instalaci potvrďte propojení v IDE.';
+ await loadIdeBridge();document.querySelector('#ide-bridge-connection').value=result.connection_id;renderIdeBridgeProjects();status.textContent='Instalační balíček připraven. V IDE potvrďte připojení k Workspace a nastavte projekty.';
  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
 });
 
@@ -4065,6 +4100,7 @@ function selectSettingsTab(selected){
  if(selected.id==='settings-backend-tab')loadBackendCatalog();
  if(selected.id==='settings-models-tab')loadModelSelection();
  if(selected.id==='settings-roadmap-tab')loadRoadmap();
+ if(selected.id==='settings-ide-tab')loadIdeBridge();
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -7300,7 +7336,8 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/ide-bridge/create', '/v1/ide-bridge/status',
+    post_paths = Handler.post_paths | {'/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+        '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
         '/v1/projects/repair/check', '/v1/projects/repair/preview',
@@ -7387,11 +7424,14 @@ class DesktopHandler(Handler):
         return IdeBridge(projects.node_path, network=getattr(projects, 'network', False))
 
     def authorized(self, auth):
-        if self.path == '/v1/ide-bridge/exchange':
+        if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
             try:
                 if not auth.startswith('Bearer '):
                     return False
-                self.bridge_session = self.ide_bridge().session(auth[7:])
+                if self.path == '/v1/ide-bridge/connection/exchange':
+                    self.bridge_connection = self.ide_bridge().connection(auth[7:])
+                else:
+                    self.bridge_session = self.ide_bridge().session(auth[7:])
                 return True
             except (ValueError, OSError, sqlite3.Error):
                 return False
@@ -7400,6 +7440,18 @@ class DesktopHandler(Handler):
     def dispatch_ide_bridge(self, request):
         try:
             service = self.ide_bridge()
+            actor = getattr(self, 'actor', None)
+            if self.path == '/v1/ide-bridge/connections' and request == {}:
+                return self.reply(200, service.connections_status(actor))
+            if self.path == '/v1/ide-bridge/connection/create':
+                return self.reply(200, service.connection_create(request, actor,
+                    self.request_origin(self.request_authority())))
+            if self.path == '/v1/ide-bridge/connection/map':
+                return self.reply(200, service.configure_mapping(actor, request))
+            if self.path == '/v1/ide-bridge/connection/revoke' and isinstance(request, dict) and set(request) == {'connection_id'}:
+                return self.reply(200, service.connection_revoke(actor, request['connection_id']))
+            if self.path == '/v1/ide-bridge/connection/exchange':
+                return self.reply(200, service.connection_exchange(self.bridge_connection, request))
             if self.path == '/v1/ide-bridge/exchange':
                 return self.reply(200, service.exchange(self.bridge_session, request))
             if self.path == '/v1/ide-bridge/create':
@@ -7410,7 +7462,7 @@ class DesktopHandler(Handler):
                 return self.reply(200, service.status(request['project_id']))
             if (self.path == '/v1/ide-bridge/revoke' and isinstance(request, dict)
                     and set(request) == {'project_id', 'session_id'}):
-                return self.reply(200, service.revoke(**request))
+                return self.reply(200, service.revoke(**request, actor=actor))
             return self.send_error(400)
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
             return self.reply(422, {'error': str(exc)})

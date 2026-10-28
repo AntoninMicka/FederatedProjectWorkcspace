@@ -31,8 +31,7 @@ def main():
             base_head=head, title='Tasks', body='- [ ] [TASK-01] Smoke test\n', new=True), str(uuid4()))['commit_id']
         with running_api('http', handler=DesktopHandler, projects=Projects(node)) as server:
             service = IdeBridge(node)
-            result = service.create(dict(project_id=project, expected_head=head,
-                repository=str(repo), instructions='Smoke'), None, server.origin)
+            result = service.connection_create({'name': 'Smoke IDE'}, None, server.origin)
             package = root / result['filename']; package.write_bytes(base64.b64decode(result['package_base64']))
             common = ['--user-data-dir', str(root / 'profile'), '--extensions-dir', str(root / 'extensions')]
             installed = subprocess.run([args.editor, *common, '--install-extension', str(package), '--force'],
@@ -42,7 +41,7 @@ def main():
             extension = next((root / 'extensions').glob('federated-workspace.workspace-file-bridge-*'))
             fixture = root / 'fixture.json'; output = root / 'result.json'
             fixture.write_text(json.dumps(dict(pairing=result['pairing'], repository=str(repo),
-                                               mailbox=str(root / 'mailbox'), result=str(output))))
+                                               mailbox=str(root / 'mailbox'), result=str(output), project_id=project, head=head)))
             fixture.chmod(0o600)
             env = dict(os.environ, WORKSPACE_BRIDGE_SMOKE=str(fixture))
             process = subprocess.run([args.editor, *common, '--disable-workspace-trust',
@@ -56,7 +55,7 @@ def main():
             assert evidence['active'] and evidence['receipt']['status'] == 'received'
             assert Projects(node).open(project)['commit_id'] == head
             assert len(service.status(project)['sessions'][0]['messages']) == 1
-            print('VSIX installed; extension host active; ordinary files and receipt/retry verified; project Git unchanged.')
+            print('VSIX installed; Workspace connection and project mapping verified; extension host active; ordinary files and receipt/retry verified; project Git unchanged.')
     return 0
 
 

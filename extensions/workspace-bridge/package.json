@@ -2,20 +2,69 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace file bridge",
   "description": "Local TODO, instructions and durable messages for Federated Workspace",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
-  "engines": {"vscode": "^1.85.0"},
-  "categories": ["Other"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "main": "./extension.js",
-  "extensionKind": ["workspace"],
-  "activationEvents": ["onStartupFinished"],
-  "capabilities": {"untrustedWorkspaces": {"supported": false}, "virtualWorkspaces": false},
-  "contributes": {"commands": [
-    {"command": "workspaceBridge.connect", "title": "Workspace: Propojit projekt"},
-    {"command": "workspaceBridge.sync", "title": "Workspace: Synchronizovat zprávy"},
-    {"command": "workspaceBridge.open", "title": "Workspace: Otevřít komunikační soubory"},
-    {"command": "workspaceBridge.message", "title": "Workspace: Odeslat výsledek nebo dotaz"},
-    {"command": "workspaceBridge.disconnect", "title": "Workspace: Odpojit lokální bridge"}
-  ]}
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "workspaceBridge.connect",
+        "title": "Workspace: Připojit Workspace"
+      },
+      {
+        "command": "workspaceBridge.sync",
+        "title": "Workspace: Synchronizovat zprávy"
+      },
+      {
+        "command": "workspaceBridge.open",
+        "title": "Workspace: Otevřít komunikační soubory"
+      },
+      {
+        "command": "workspaceBridge.message",
+        "title": "Workspace: Odeslat výsledek nebo dotaz"
+      },
+      {
+        "command": "workspaceBridge.disconnect",
+        "title": "Workspace: Odpojit lokální bridge"
+      },
+      {
+        "command": "workspaceBridge.configure",
+        "title": "Workspace: Nastavení projektů"
+      },
+      {
+        "command": "workspaceBridge.assign",
+        "title": "Workspace: Přiřadit projekt v IDE"
+      }
+    ],
+    "configuration": {
+      "title": "Workspace bridge",
+      "properties": {
+        "workspaceBridge.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "markdownDescription": "Automaticky synchronizovat přiřazené projekty. Pro výběr propagovaných projektů spusťte **Workspace: Nastavení projektů**; pro změnu cíle **Workspace: Přiřadit projekt v IDE**."
+        }
+      }
+    }
+  }
 }

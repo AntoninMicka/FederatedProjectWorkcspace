@@ -39,17 +39,17 @@ def finished(value):
  if value!='ready':return
  phase+=1
  if phase==1:page.runJavaScript("document.querySelector('#access-key').value="+json.dumps(os.environ['BRIDGE_KEY'])+";document.querySelector('#login-form').requestSubmit();")
- elif phase==2:page.runJavaScript("document.querySelector('.project-card').click()")
- elif phase==3:page.runJavaScript("window.__bridgeNetwork=[];const originalBridgeFetch=window.fetch;window.fetch=async(...args)=>{try{const response=await originalBridgeFetch(...args);if(String(args[0]).includes('ide-bridge'))window.__bridgeNetwork.push([args[0],response.status]);return response;}catch(error){if(String(args[0]).includes('ide-bridge'))window.__bridgeNetwork.push([args[0],error.message,location.href]);throw error;}};document.querySelector('#todo-tab').click();document.querySelector('#ide-bridge-panel').open=true;document.querySelector('#ide-bridge-repository').value='https://example.invalid/source.git';document.querySelector('#ide-bridge-instructions').value='Browser smoke';document.querySelector('#ide-bridge-form').requestSubmit();")
- elif phase==4:page.runJavaScript("document.querySelector('#ide-bridge-refresh').click()")
- elif phase==5:page.runJavaScript("document.querySelector('#ide-bridge-sessions button').click()")
- elif phase==6:print('Browser bridge form, VSIX download, session list and revocation OK',flush=True);app.exit(0)
+ elif phase==2:page.runJavaScript("document.querySelector('#settings-sidebar-tab').click();document.querySelector('[data-settings-tab=\"settings-ide-tab\"]').click()")
+ elif phase==3:page.runJavaScript("document.querySelector('#ide-bridge-name').value='Browser IDE';document.querySelector('#ide-bridge-form').requestSubmit()")
+ elif phase==4:page.runJavaScript("(()=>{const row=document.querySelector('#ide-bridge-projects tbody tr');row.querySelector('input[type=checkbox]').checked=true;const inputs=row.querySelectorAll('input');inputs[1].value='/local/project.code-workspace';inputs[2].value='https://example.invalid/source.git';row.querySelector('button').click();})()")
+ elif phase==5:page.runJavaScript("document.querySelector('#ide-bridge-connections button').click()")
+ elif phase==6:print('Browser settings page, Workspace connection, project mapping, VSIX download and revocation OK',flush=True);app.exit(0)
 def poll():
  global ticks
  ticks+=1
  if ticks>300:
   page.runJavaScript("JSON.stringify({status:document.querySelector('#ide-bridge-status')?.textContent,sessions:document.querySelector('#ide-bridge-sessions')?.textContent,network:window.__bridgeNetwork,url:location.href})",lambda value:(print('timeout phase',phase,value,flush=True),app.exit(1)));return
- checks={0:"document.querySelector('#login-form')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",2:"!document.querySelector('#project-view').hidden?'ready':'waiting'",3:"document.querySelector('#ide-bridge-status').textContent.startsWith('Instalační balíček připraven')?'ready':'waiting'",4:"document.querySelector('#ide-bridge-sessions button')?'ready':'waiting'",5:"document.querySelector('#ide-bridge-sessions').textContent.includes('odvoláno')?'ready':'waiting'"}
+ checks={0:"document.querySelector('#login-form')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",2:"!document.querySelector('#ide-bridge-panel').hidden&&activeProject===null?'ready':'waiting'",3:"document.querySelector('#ide-bridge-status').textContent.startsWith('Instalační balíček připraven')&&document.querySelector('#ide-bridge-projects tbody tr')?'ready':'waiting'",4:"document.querySelector('#ide-bridge-projects tbody').textContent.includes('Čeká na přiřazení')?'ready':'waiting'",5:"document.querySelector('#ide-bridge-connections').textContent.includes('odvoláno')?'ready':'waiting'"}
  page.runJavaScript(checks[phase],finished)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100);view.load(QUrl(os.environ['BRIDGE_URL']));view.show();sys.exit(app.exec())
 '''
@@ -61,6 +61,8 @@ timer=QTimer();timer.timeout.connect(poll);timer.start(100);view.load(QUrl(os.en
     assert result.returncode==0,result.stdout+result.stderr
     package=fixture.root/'bridge.vsix';assert package.exists(),'download missing'
     import zipfile
-    with zipfile.ZipFile(package) as archive:assert 'extension/pairing.json' in archive.namelist()
+    with zipfile.ZipFile(package) as archive:
+        pairing = json.loads(archive.read('extension/pairing.json'))
+        assert pairing['schema_version'] == 2 and 'project_id' not in pairing
     assert fixture.server.projects.open(project)['commit_id']==head
     print(result.stdout.strip())
