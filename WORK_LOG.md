@@ -5,6 +5,76 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## COMP-03 — Workspace řízení Julia výpočtu — 2026-10-28
+
+Dávka vznikla na větvi `feature/comp-03-julia-workspace` z `develop`
+`507c232`, byla přerušena do doručení společného raw editoru a po PR #107–#110
+obnovena sloučením `develop` `fd79dd8` do původní feature větve; finální
+sidebarová implementace je v commitu `9aa10fe`. Uživatel před doručením dvakrát
+rozšířil akceptaci: nejprve o evidenci modelových nástrojů a
+poté o její sidebarové rozvržení podle vzoru katalogu projektů. Finální podobu
+28. 10. 2026 přijal. Cílová úroveň je **PoC validated**; push ani PR do
+`develop` dosud nebyly vytvořeny a feature není sloučená.
+
+- [x] [completed] **COMP-03-A — projektová projekce definic a přesný preview
+  (implemented).** Shared servis načítá pouze validované definice z přesného
+  Git HEAD a preview nic nespouští.
+- [x] [completed] **COMP-03-B — potvrzený běh a lifecycle (implemented).**
+  Explicitně potvrzený exact preview reuse Julia journal a executor; cancel,
+  restart a reconcile zachovávají `unknown` bez automatického retry.
+- [x] [completed] **COMP-03-C — výstupy a explicitní publikace
+  (implemented).** Bounded náhled a samostatně potvrzená idempotentní publikace
+  znovu ověřují HEAD, oprávnění a privacy.
+- [x] [completed] **COMP-03-D — shared desktop/web UI (implemented).**
+  Otevření, import, změna parametru a čtení stavu nemají výpočetní ani
+  publikační účinek; authoring je v Nástrojích a běh ve Výpočtech.
+- [x] [completed] **COMP-03-F — editor Julia modelu a šablony
+  (implemented).** Specializovaný editor atomicky spravuje `.jl`,
+  `Project.toml`, manifest a hashovanou definici a reuse společný raw widget,
+  filtrované vzory, nápovědu a vyplněné příklady.
+- [x] [completed] **COMP-03-G — evidence modelových nástrojů
+  (implemented).** Bezpečný import `.jl` končí v lokálním konceptu. Validovaná
+  projekce modelů má akce Zobrazit, Editovat, Spustit a potvrzené atomické
+  Smazat; MATLAB je pouze označený budoucí směr.
+- [x] [completed] **COMP-03-H — sidebarová evidence nástrojů
+  (implemented).** Ikonové akce Nový nástroj a Import, počet i seznam Julia
+  modelů s třítečkovou nabídkou používají levý panel podle vzoru Projektů.
+  Hlavní plocha zůstává pro detail a editor bez duplicitní lišty a katalogu;
+  finální rozvržení uživatel přijal.
+- [x] [completed] **COMP-03-E — regrese, dokumentace a akceptace
+  (PoC validated).** Fail-closed lifecycle, recovery, web wiring, editor,
+  evidence modelů a podporovaný fyzický runtime byly ověřeny; nové navazující
+  požadavky byly odděleny do backlogu.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu a testů prošla úplná sada
+`python3 -m unittest discover -s tests -v`: **957 testů, 920 úspěšných a 37
+volitelných skipů, bez selhání**, 229,911 s. Samostatně prošlo všech 50
+desktopových testů (45 úspěšných, 5 skipů), Python compile, generovaný
+JavaScript přes `node --check`, roadmapová projekce a `git diff --check`.
+
+Skutečný Qt/WebEngine smoke nového sidebaru byl spuštěn třikrát, ale lokální
+TLS handshake skončil `net_error -202` při přihlášení nebo API otevření editoru;
+není proto vydáván za úspěšný. Předchozí skutečný smoke editoru a fyzická Julia
+1.10.12 Linux glibc aarch64 akceptace exact preview, potvrzeného izolovaného
+běhu, zákazu sítě a explicitní publikace zůstávají platné; finální rozvržení
+navíc přijal uživatel.
+
+Import zůstává v paměti editoru do explicitního save. Uložení, publikace a
+smazání používají Workspace/Journal/Git/index transakci: před commitem je
+autoritou journal, po commitu lze index obnovit z HEAD a stejné operation ID je
+idempotentní. Delete preview je read-only a confirm znovu ověří HEAD, digest,
+úplnost i vztahy; Git historie zůstává zachovaná. Běh má samostatný Julia
+journal a neurčitý stav po dispatch zůstává `unknown` bez retry.
+
+Zbývající omezení odpovídají rozsahu: nejde o obecné IDE, Pluto/Jupyter,
+scheduler, instalátor balíčků ani síťové/GPU/distribuované výpočty. MATLAB
+konverze není implementovaná. Budoucí zapojení popsaných Julia skriptů do
+orchestrace, datový transport a CSV/JSON/XML datasety byly předány do backlogu
+jako `COMP-ORCH-DATASET-01`; první Code/VSCodium TODO bridge byl zpřesněn pod
+existujícím `DEV-IDE-TODO-01`.
+
 ## PLAN-ROADMAP-MILESTONE-VIEW-01 — Strom a víceúrovňový pohled roadmapy — 2026-10-28
 
 Dávka vznikla na větvi `feature/plan-roadmap-milestone-view` z `develop`
