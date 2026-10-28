@@ -155,10 +155,18 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   Nový balík `/tmp/dev-01-import-operation-v3` má SHA-256
   `ae0df1d730259fa233ef87f6a253969674d96e6b2e08c7bc080a0476fa558e99`;
   `/tmp/dev-01-prewrite-review-v3-host` hlásí 11 passed / 0 blocked /
-  3 needs-review.
-  Review vyžaduje klasifikace privacy všech 13 zdrojů a devět externích
-  odkazů, jejichž dostupnost nebyla síťově ověřena. Validátor je uzavřený,
-  nic nevytváří v projektu ani state a neoznačuje tyto nálezy za prošlé.
+  3 needs-review. Tyto review body jsou nyní uzavřené manifestem
+  `docs/roadmap-migration-source-review.json`, který je svázaný s bundle SHA,
+  hashem každého zdroje a přesnou množinou URL/výskytů. Všech 13 zdrojů je
+  po obsahové kontrole `project`: nejsou v nich credentials, privátní klíče,
+  osobní e-maily ani domácí cesty; interní testovací IP a popisy secret
+  lifecycle nejsou hodnotami tajemství. Osm unikátních externích URL
+  (devět výskytů) bylo dohledáno na oficiálních cílech; OpenAI Help URL má
+  doložené přesměrování a GitHub API potvrdilo sloučený PR #68.
+  `/tmp/dev-01-prewrite-review-v4-host` hlásí 14 passed / 0 blocked /
+  0 needs-review a `prewrite_checks_passed: true`. Validátor je uzavřený,
+  nic nevytváří v projektu ani state a neakceptuje nesvázané nebo neúplné
+  review vstupy.
   Writer/recovery a fyzický import zůstávají otevřené.
   `import_ready` je false. Vznik balíku nepoužívá projektový journal ani
   zapisující Workspace: pád před finálním manifestem zanechá jen neúplný
@@ -187,8 +195,8 @@ ponechání chybějící cesty/privacy jako otevřených stavů a rozlišení
 relativního a neexistujícího artifact odkazu. Skutečný report nad aktuálním
 balíkem potvrdil nezměněný živý HEAD a nulový rozpracovaný journal.
 Společný cílený běh validačních, bundle, mapping, inventory, task-graph,
-roadmap-graph a SPDX testů po poslední změně: 52 testů OK. Log:
-`/tmp/dev-01-blocker-tests.log`. Celá finální unittest brána zůstává pro
+roadmap-graph a SPDX testů po poslední změně: 53 testů OK. Log:
+`/tmp/dev-01-source-review-tests.log`. Celá finální unittest brána zůstává pro
 uzavření dávky.
 
 `python3 -m unittest tests.test_roadmap_bundle tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:

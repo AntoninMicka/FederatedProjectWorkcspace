@@ -456,3 +456,30 @@ Prověrka `/tmp/dev-01-prewrite-review-v3-host` má 11 kontrol `passed`, nula
 externích URL není tímto krokem automaticky schválené. Zápis stále
 neproběhl a `import_ready` zůstává false do jejich rozhodnutí a implementace
 writeru/recovery.
+
+### Privacy zdrojů a externí URL
+
+Review manifest
+[`roadmap-migration-source-review.json`](roadmap-migration-source-review.json)
+je svázaný s bundle SHA-256 a se SHA-256 každého ze 13 zdrojů. Všechny
+zdroje jsou klasifikované jako `project`: jde o projektové plány, historii,
+ADR, graf a modulový kontrakt. Obsahová kontrola nenašla credential, privátní
+klíč, osobní e-mail ani domácí cestu. BACKLOG a WORK_LOG obsahují interní
+testovací IP adresy a popis zacházení s credentials/secrets, nikoli jejich
+hodnoty; proto nevyžadují `confidential` ani `local-only`. Cílová privacy
+`project` je nezlehčuje.
+
+Manifest eviduje osm unikátních externích URL a jejich devět výskytů.
+Oficiální dokumentace Google, Google Cloud, OpenAI a W3C byla 28. 10. 2026
+dohledána; GitHub API potvrdilo PR #68 jako existující a sloučený. Původní
+OpenAI Help URL legitimně přesměrovává na aktuální slug a manifest ukládá
+oba cíle. Jde o bodovou kontrolu dostupnosti, nikoli příslib budoucí
+dostupnosti externí služby.
+
+Validátor přijímá manifest přes `--source-review`. Odmítne jiný bundle,
+změněný source hash, neúplnou klasifikaci, neznámou URL nebo odlišný počet
+výskytů. Prověrka `/tmp/dev-01-prewrite-review-v4-host` tak uzavřela všech
+14 kontrol: 14 `passed`, 0 `blocked`, 0 `needs-review` a
+`prewrite_checks_passed: true`. `import_ready` zůstává `false`, protože
+bezpečný writer, journal recovery a idempotentní apply jsou samostatný další
+krok.

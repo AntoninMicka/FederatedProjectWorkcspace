@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: MPL-2.0
 """Read-only roadmap review closes bundle and live-context checks."""
 import tempfile
+from collections import Counter
 from pathlib import Path
 import unittest
 
 from spikes.roadmap_bundle import assemble_bundle, project_files, write_bundle
 from spikes.roadmap_validation import _actor, _links, load_bundle, validate_bundle
+from spikes.metadata import ValidationError, parse_json
 from tests import test_roadmap_bundle as bundle_tests
 from tests.test_roadmap_mapping import MappingFixture
 
@@ -22,6 +24,22 @@ class RoadmapValidationTests(MappingFixture, unittest.TestCase):
         classifications = {source['key']: 'project' for source in value['sources']}
         module = next(project for project in operation['projects'] if project['mode'] == 'create-seeded-project')
         return operation, blobs, bundle, service.node_path, classifications, roots, module, base
+
+    def source_review(self, operation, blobs):
+        sources, links = [], Counter()
+        for project in operation['projects']:
+            files = project_files(project, blobs)
+            links.update(item['target'] for item in _links(files, project)[2])
+            for path, raw in files.items():
+                if path.endswith('/sources.json'):
+                    sources += [dict(key=item['key'], sha256=item['sha256'], privacy='project',
+                                     rationale='Test fixture contains project planning data.')
+                                for item in parse_json(raw)['sources']]
+        return dict(schema='fpw-roadmap-source-review-v1', bundle_sha256=operation['bundle_sha256'],
+                    reviewed_at='2026-10-28T00:00:00Z', source_classifications=sources,
+                    external_links=[dict(url=url, occurrences=count, status='reachable',
+                                         final_url=url, evidence='Fixture URL review.')
+                                    for url, count in sorted(links.items())])
 
     def test_complete_review_merges_live_snapshot_without_writing(self):
         operation, blobs, bundle, node, classifications, roots, module, base = self.reviewed_fixture()
@@ -45,6 +63,17 @@ class RoadmapValidationTests(MappingFixture, unittest.TestCase):
         self.assertTrue(any(code.endswith(':source-privacy') and status == 'needs-review'
                             for code, status in statuses.items()))
         self.assertFalse(report['prewrite_checks_passed'])
+
+    def test_bundle_bound_source_review_closes_privacy_and_external_links(self):
+        operation, blobs, bundle, node, _, roots, module, base = self.reviewed_fixture()
+        report = validate_bundle(bundle, node, locations={module['repository_id']:base/'module'},
+                                 source_roots=roots.values(), source_review=self.source_review(operation, blobs))
+        self.assertTrue(report['prewrite_checks_passed'])
+        self.assertEqual(report['summary']['needs_review'], 0)
+        wrong = self.source_review(operation, blobs); wrong['bundle_sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValidationError, 'another bundle'):
+            validate_bundle(bundle, node, locations={module['repository_id']:base/'module'},
+                            source_roots=roots.values(), source_review=wrong)
 
     def test_generated_relative_link_is_not_mistaken_for_an_artifact_link(self):
         operation, blobs, *_ = self.reviewed_fixture()

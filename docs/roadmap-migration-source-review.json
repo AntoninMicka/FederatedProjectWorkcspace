@@ -1,0 +1,143 @@
+{
+  "schema": "fpw-roadmap-source-review-v1",
+  "bundle_sha256": "ae0df1d730259fa233ef87f6a253969674d96e6b2e08c7bc080a0476fa558e99",
+  "reviewed_at": "2026-10-28T00:00:00Z",
+  "source_classifications": [
+    {
+      "key": "cz.proofofidea.publication-experiment-registry:ROADMAP.md",
+      "sha256": "b725af67023e9b844c1e143d20999edb8e2a331b602a996b12df03faf2bf0e83",
+      "privacy": "project",
+      "rationale": "Projektová roadmapa modulu; bez credentials, osobních dat a local-only cest."
+    },
+    {
+      "key": "cz.proofofidea.publication-experiment-registry:TODO.md",
+      "sha256": "1fa36022b64e4b24aa348c0170a6799923c135b47129cdfadf6f92792f915d69",
+      "privacy": "project",
+      "rationale": "Projektové pracovní úkoly modulu; bez credentials, osobních dat a local-only cest."
+    },
+    {
+      "key": "cz.proofofidea.publication-experiment-registry:module.json",
+      "sha256": "9c8ef53218df585736cc7ac35bab8cd5c7fc63817ea042453df806670b694366",
+      "privacy": "project",
+      "rationale": "Veřejný modulový kontrakt a identita; neobsahuje tajemství ani lokální vazbu."
+    },
+    {
+      "key": "federated-workspace:BACKLOG.md",
+      "sha256": "cce3acad67fe4ffaf5eca1eddc2ddea8e9adba8f84fff13afafb0933e75dc6d2",
+      "privacy": "project",
+      "rationale": "Projektový backlog. Obsahuje interní testovací IP a popis správy credentials, nikoli hodnotu tajemství."
+    },
+    {
+      "key": "federated-workspace:Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md",
+      "sha256": "27026cbd4e733f77f2e73748ab74a2580605f83475d56f3b85bbcf197cc3c280",
+      "privacy": "project",
+      "rationale": "Produktová roadmapa a katalog požadavků; bez credentials, osobních dat a local-only cest."
+    },
+    {
+      "key": "federated-workspace:TODO.md",
+      "sha256": "cd49022beaea8c4897817db389c586a68703396a0fbb4a3f97136c7c939c23f0",
+      "privacy": "project",
+      "rationale": "Aktivní projektová dávka; bez credentials, osobních dat a local-only cest."
+    },
+    {
+      "key": "federated-workspace:WORK_LOG.md",
+      "sha256": "6f09540c8a1b26d3e173ff5c608ea2ee70cf1a24bc2925b4f7cdba56b43c27c0",
+      "privacy": "project",
+      "rationale": "Historické projektové důkazy. Obsahuje interní testovací IP a tvrzení, že secrets jsou mimo Git, nikoli secret hodnoty."
+    },
+    {
+      "key": "federated-workspace:docs/adr/0026-module-unified-api.md",
+      "sha256": "7ce4ddc7d9fc0fde3b7abc49844757c03006294fa61260e8921a49810dd5eddb",
+      "privacy": "project",
+      "rationale": "Architektonický kontrakt modulů; bez credentials, osobních dat a lokální konfigurace."
+    },
+    {
+      "key": "federated-workspace:docs/adr/0055-project-task-plan.md",
+      "sha256": "6ba9fa7cc2f3df6a3657aee3c9d8b8f888d7f12949ac0b02dca38330d3dd6547",
+      "privacy": "project",
+      "rationale": "Architektonický task-plan kontrakt; bez credentials, osobních dat a lokální konfigurace."
+    },
+    {
+      "key": "federated-workspace:docs/adr/0059-file-plan-hierarchy-and-task-editor.md",
+      "sha256": "bc7633b2a94d69ab74efe2bc80d5bd9c3d6b34c4cb76217c919f5dc2da2f851e",
+      "privacy": "project",
+      "rationale": "Architektonický kontrakt hierarchie; bez credentials, osobních dat a lokální konfigurace."
+    },
+    {
+      "key": "federated-workspace:docs/adr/0060-local-file-ide-bridge.md",
+      "sha256": "84af286d36c63fa8f570f148b1bf7667bf3de4f850afd89842ddb5abf612d88a",
+      "privacy": "project",
+      "rationale": "Architektonický kontrakt IDE bridge; bez credentials, osobních dat a konkrétních lokálních cest."
+    },
+    {
+      "key": "federated-workspace:docs/roadmap-graph.json",
+      "sha256": "9ddc21b6477c0649bd9e10ef01edcf80c198ff57ede7f9ed9d17c0bab0084023",
+      "privacy": "project",
+      "rationale": "Strojový projektový graf ID a závislostí; bez credentials, osobních dat a lokální konfigurace."
+    },
+    {
+      "key": "federated-workspace:modules/publication-experiment-registry.module.json",
+      "sha256": "9c8ef53218df585736cc7ac35bab8cd5c7fc63817ea042453df806670b694366",
+      "privacy": "project",
+      "rationale": "Hostitelská kopie veřejného modulového kontraktu; neobsahuje tajemství ani lokální vazbu."
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/68",
+      "occurrences": 2,
+      "status": "reachable",
+      "final_url": "https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/68",
+      "evidence": "GitHub API: PR 68 exists, state MERGED, mergedAt 2026-10-16T03:59:38Z."
+    },
+    {
+      "url": "https://developers.google.com/workspace/drive/api/guides/manage-downloads",
+      "occurrences": 1,
+      "status": "reachable",
+      "final_url": "https://developers.google.com/workspace/drive/api/guides/manage-downloads",
+      "evidence": "Official Google Drive API page opened with title Download and export files."
+    },
+    {
+      "url": "https://support.google.com/accounts/answer/3024190?hl=en",
+      "occurrences": 1,
+      "status": "reachable",
+      "final_url": "https://support.google.com/accounts/answer/3024190?hl=en",
+      "evidence": "Official Google Account Help search result returned How to download your Google data."
+    },
+    {
+      "url": "https://developers.google.com/data-portability/user-guide/overview",
+      "occurrences": 1,
+      "status": "reachable",
+      "final_url": "https://developers.google.com/data-portability/user-guide/overview",
+      "evidence": "Official Google Developers page opened with title Data Portability API Overview."
+    },
+    {
+      "url": "https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks",
+      "occurrences": 1,
+      "status": "reachable",
+      "final_url": "https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks",
+      "evidence": "Official Google Cloud page opened with title Create and manage notebooks API."
+    },
+    {
+      "url": "https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data",
+      "occurrences": 1,
+      "status": "redirected-reachable",
+      "final_url": "https://help.openai.com/en/articles/7260999-exporting-your-chatgpt-history-and-data",
+      "evidence": "Official OpenAI Help page redirected to the current Exporting your ChatGPT history and data slug."
+    },
+    {
+      "url": "https://support.google.com/gemini/answer/16920332?hl=en",
+      "occurrences": 1,
+      "status": "reachable",
+      "final_url": "https://support.google.com/gemini/answer/16920332?hl=en",
+      "evidence": "Official Gemini Apps Help page opened with title Download your Gemini Apps data."
+    },
+    {
+      "url": "https://www.w3.org/WAI/ARIA/apg/patterns/treeview/",
+      "occurrences": 1,
+      "status": "reachable",
+      "final_url": "https://www.w3.org/WAI/ARIA/apg/patterns/treeview/",
+      "evidence": "Official W3C WAI ARIA Authoring Practices page opened with title Tree View Pattern."
+    }
+  ]
+}

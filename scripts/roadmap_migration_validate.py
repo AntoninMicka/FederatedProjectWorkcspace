@@ -26,12 +26,15 @@ def main(argv=None):
     parser.add_argument('--output', required=True)
     parser.add_argument('--location', action='append', default=[], metavar='SCOPE=PATH')
     parser.add_argument('--source-privacy', action='append', default=[], metavar='SOURCE=CLASS')
+    parser.add_argument('--source-review', help='Bundle-bound privacy and external-link review JSON')
     parser.add_argument('--source-root', action='append', default=[])
     args = parser.parse_args(argv)
     output = Path(args.output)
     output.mkdir(mode=0o700)
+    source_review = json.loads(Path(args.source_review).read_text(encoding='utf-8')) if args.source_review else None
     report = validate_bundle(args.bundle, args.node, locations=pairs(args.location),
-                             source_privacy=pairs(args.source_privacy), source_roots=args.source_root)
+                             source_privacy=pairs(args.source_privacy), source_roots=args.source_root,
+                             source_review=source_review)
     (output / 'review.json').write_text(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2)+'\n', encoding='utf-8')
     lines = ['# Předzápisová prověrka roadmapy', '',
              f'Bundle: `{report["bundle_sha256"]}`', '',

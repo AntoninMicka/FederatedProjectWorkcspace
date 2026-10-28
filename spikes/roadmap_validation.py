@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Closed, read-only validation of an assembled roadmap import bundle."""
+from collections import Counter
 from contextlib import closing
 import hashlib
 import json
@@ -11,7 +12,7 @@ import sqlite3
 
 from spikes.configuration import local_path, overlap, parse_node, parse_project, read_config
 from spikes.administration import Administration
-from spikes.metadata import MAX_FILE, parse_json, require, safe_path, uuid, validate_snapshot, validate_transition
+from spikes.metadata import MAX_FILE, parse_json, require, safe_path, timestamp, uuid, validate_snapshot, validate_transition
 from spikes.project_creation import ProjectCreation, regular
 from spikes.projects import Projects
 from spikes.roadmap_bundle import SCHEMA, digest, project_files
@@ -141,7 +142,7 @@ def _new_location(project, location, node, source_roots):
                    root=str(path), state_dir=str(state))
 
 
-def validate_bundle(bundle, node, *, locations=None, source_privacy=None, source_roots=()):
+def validate_bundle(bundle, node, *, locations=None, source_privacy=None, source_roots=(), source_review=None):
     """Validate current live context without constructing Workspace or Journal."""
     operation, blobs = load_bundle(bundle)
     node = Path(node).resolve(strict=True)
@@ -150,13 +151,55 @@ def validate_bundle(bundle, node, *, locations=None, source_privacy=None, source
     locations = locations or {}; source_privacy = source_privacy or {}
     require(set(locations) <= {project['repository_id'] for project in operation['projects']},
             'Location supplied for an unknown scope')
-    source_keys = set()
+    source_hashes, external_counts = {}, Counter()
     for project in operation['projects']:
         incoming = project_files(project, blobs)
         for path in incoming:
             if path.endswith('/sources.json'):
-                source_keys.update(item['key'] for item in parse_json(incoming[path])['sources'])
-    require(set(source_privacy) <= source_keys
+                for item in parse_json(incoming[path])['sources']:
+                    require(item['key'] not in source_hashes, 'Duplicate reviewed source key')
+                    source_hashes[item['key']] = item['sha256']
+        external_counts.update(item['target'] for item in _links(incoming, project)[2])
+    reviewed_external = set()
+    if source_review is not None:
+        require(isinstance(source_review, dict) and set(source_review) == {
+            'schema', 'bundle_sha256', 'reviewed_at', 'source_classifications', 'external_links'},
+            'Invalid source review fields')
+        require(source_review['schema'] == 'fpw-roadmap-source-review-v1'
+                and source_review['bundle_sha256'] == operation['bundle_sha256'],
+                'Source review belongs to another bundle')
+        timestamp(source_review['reviewed_at'])
+        source_rows = source_review['source_classifications']
+        require(isinstance(source_rows, list) and len(source_rows) == len(source_hashes),
+                'Source review coverage differs')
+        reviewed_privacy = {}
+        for row in source_rows:
+            require(isinstance(row, dict) and set(row) == {'key', 'sha256', 'privacy', 'rationale'}
+                    and row['key'] not in reviewed_privacy and isinstance(row['rationale'], str)
+                    and bool(row['rationale'].strip()), 'Invalid source review row')
+            require(source_hashes.get(row['key']) == row['sha256'], 'Reviewed source hash differs')
+            reviewed_privacy[row['key']] = row['privacy']
+        require(not set(source_privacy) & set(reviewed_privacy), 'Duplicate source privacy decision')
+        source_privacy.update(reviewed_privacy)
+        link_rows = source_review['external_links']
+        require(isinstance(link_rows, list) and len(link_rows) == len(external_counts),
+                'External link review coverage differs')
+        for row in link_rows:
+            require(isinstance(row, dict) and set(row) == {
+                'url', 'occurrences', 'status', 'final_url', 'evidence'}
+                and row['url'] not in reviewed_external
+                and row['status'] in {'reachable', 'redirected-reachable'}
+                and isinstance(row['final_url'], str)
+                and isinstance(row['evidence'], str) and bool(row['evidence'].strip()),
+                'Invalid external link review row')
+            # URL.fullmatch is intentionally not used as a URL parser; require
+            # the same absolute scheme check used by Markdown link discovery.
+            require(URL.match(row['url']) and URL.match(row['final_url'])
+                    and external_counts.get(row['url']) == row['occurrences'],
+                    'Reviewed external link differs')
+            reviewed_external.add(row['url'])
+        require(reviewed_external == set(external_counts), 'External link review is incomplete')
+    require(set(source_privacy) <= set(source_hashes)
             and all(value in {'public', 'project', 'confidential', 'local-only'}
                     for value in source_privacy.values()), 'Invalid source privacy classification')
     results = [_result('bundle-integrity', 'passed', 'Manifest, blobs a payload mirror jsou shodné.',
@@ -191,8 +234,12 @@ def validate_bundle(bundle, node, *, locations=None, source_privacy=None, source
                                    relative_targets=sorted({row['target'] for row in relative}), examples=(relative+broken)[:20]))
         else:
             results.append(_result(prefix+'source-links', 'passed', 'Interní odkazy v odvozených dokumentech jsou uzavřené.'))
-        results.append(_result(prefix+'external-links', 'needs-review' if external else 'passed',
-                               'Externí odkazy nebyly síťově ověřeny.' if external else 'Odvozené dokumenty nemají externí odkazy.', count=len(external)))
+        unreviewed_external = [item for item in external if item['target'] not in reviewed_external]
+        results.append(_result(prefix+'external-links', 'needs-review' if unreviewed_external else 'passed',
+                               'Externí odkazy nebyly síťově ověřeny.' if unreviewed_external
+                               else ('Externí odkazy jsou svázané s review manifestem.' if external
+                                     else 'Odvozené dokumenty nemají externí odkazy.'),
+                               count=len(external), unreviewed=len(unreviewed_external)))
         if project['mode'] == 'create-seeded-project':
             entities = validate_snapshot(incoming)
             graph = project_task_graph(incoming, entities, project['project_id'], '0' * 40)
