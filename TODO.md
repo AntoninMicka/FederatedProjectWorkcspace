@@ -171,10 +171,24 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   `import_ready` je false. Vznik balíku nepoužívá projektový journal ani
   zapisující Workspace: pád před finálním manifestem zanechá jen neúplný
   report, který není importním receiptem. Retry použije zmrazené payloady.
-- [ ] [planned] **DEV-01-D — bezpečný apply a opakovaný import (implemented).**
+- [ ] [in progress] **DEV-01-D — bezpečný apply a opakovaný import (implemented).**
   Stávající autorizovaný writer, expected HEAD/digest, víceartefaktová
   transakce, receipts, idempotence, třícestné porovnání, rename/removal review
   a crash recovery podle plánu. Žádné přímé SQL nebo obcházení Workspace.
+  Implementace používá `ProjectCreation.create` pro přesný seeded modul a
+  jednu `Workspace.transact` operaci pro všechny hostitelské cesty. Vyžaduje
+  exact bundle SHA a bundle-bound review; create/replace kolize i expected HEAD
+  se znovu kontrolují pod nativními zámky. Stabilní operation ID a request
+  digest vracejí nativní receipts při lost-response retry. Mezi projekty není
+  předstíraná atomicita: dokončený modul se nerollbackuje, navazující host
+  operace se bezpečně dokončí při retry. Souhrnný receipt není nový store.
+  Izolovaně ověřen normální apply/replay bez druhého commitu, pád mezi
+  projekty, recovery hostu od `prepared` a odmítnutí nesprávného explicitního
+  bundle SHA před zápisem. Fyzický apply na skutečný projekt patří DEV-01-F
+  a zatím spuštěn nebyl. Pro uzavření D ještě zbývá doložit navazující
+  import nové source revize: ruční změnu proti novému mappingu, explicitní
+  rename/removal review a odmítnutí tichého přepsání. Aktuální one-shot
+  balík žádné deletion akce neobsahuje, takže je nelze vydávat za ověřené.
 - [ ] [planned] **DEV-01-E — izolovaná zkouška a export (PoC validated).**
   Reálné připnuté zdroje a modulový vzorek, Markdown/strojový task export,
   konflikty, změny revizí, limity a injektované pády. Po poslední relevantní
@@ -195,8 +209,8 @@ ponechání chybějící cesty/privacy jako otevřených stavů a rozlišení
 relativního a neexistujícího artifact odkazu. Skutečný report nad aktuálním
 balíkem potvrdil nezměněný živý HEAD a nulový rozpracovaný journal.
 Společný cílený běh validačních, bundle, mapping, inventory, task-graph,
-roadmap-graph a SPDX testů po poslední změně: 53 testů OK. Log:
-`/tmp/dev-01-source-review-tests.log`. Celá finální unittest brána zůstává pro
+roadmap-graph a SPDX testů po poslední změně: 57 testů OK. Log:
+`/tmp/dev-01-writer-tests.log`. Celá finální unittest brána zůstává pro
 uzavření dávky.
 
 `python3 -m unittest tests.test_roadmap_bundle tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:

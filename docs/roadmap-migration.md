@@ -483,3 +483,49 @@ výskytů. Prověrka `/tmp/dev-01-prewrite-review-v4-host` tak uzavřela všech
 `prewrite_checks_passed: true`. `import_ready` zůstává `false`, protože
 bezpečný writer, journal recovery a idempotentní apply jsou samostatný další
 krok.
+
+## Bod 3 — recoverable a idempotentní writer
+
+`spikes.roadmap_importer.RoadmapImporter` aplikuje pouze kompletní balík,
+jehož SHA-256 volající zopakuje v `expected_bundle_sha256` a který projde
+bundle-bound source review i celou aktuální předzápisovou prověrkou. Nepřidává
+nový storage mechanismus:
+
+1. Modulový projekt vytváří existující `ProjectCreation.create` jako seeded
+   projekt s přesným project ID, operation ID, created_at, request digestem a
+   validovanými payload bajty.
+2. Hostitelský payload zapisuje jedinou `Workspace.transact` operací pod
+   existujícím writer lockem a expected HEAD. `create` cesty nesmějí existovat,
+   `replace` cesty musí existovat a nepřepisované entity se zachovají.
+3. Pořadí je odvozené z dependency grafu operace. Každý projekt má vlastní
+   nativní receipt; souhrnný JSON je pouze odvozené předání, nikoli třetí
+   transakční autorita.
+
+Crash boundaries:
+
+- před modulem není nic změněno;
+- přerušený seeded create obnovuje `ProjectCreation` z jeho lokální operace;
+- po dokončeném modulu a před hostem zůstává validní modul a nezměněný
+  host, retry replayuje module receipt a pokračuje;
+- přerušený host zápis obnovuje `Workspace` podle ADR 0003; validátor povolí
+  pouze pending operaci se stejným operation ID a vlastní recovery následně
+  znovu kontroluje request digest, větev, HEAD, staging i cizí změny;
+- po obou commitech replay vrátí stejné receipts a nevytvoří druhý commit.
+
+Mezi projekty není atomicita ani automatický rollback. To je záměrné:
+dokončený modul je platný stav a host na něj naváže při retry. CLI vyžaduje
+explicitní digest a novou cestu pro odvozený receipt:
+
+```bash
+python3 -m scripts.roadmap_migration_apply \
+  --bundle /tmp/dev-01-import-operation-v3 \
+  --source-review docs/roadmap-migration-source-review.json \
+  --expected-bundle-sha256 ae0df1d730259fa233ef87f6a253969674d96e6b2e08c7bc080a0476fa558e99 \
+  --source-root /home/antonin/Projects/FederatedProjectWorkcspace \
+  --source-root /home/antonin/Projects/FederatedProjectWorkcspace/modules.local/publication-experiment-registry \
+  --receipt /tmp/dev-01-import-receipt.json
+```
+
+Tento příkaz je fyzický zápis a v rámci přípravy writeru nebyl spuštěn
+nad živým projektem. Izolované testy ověřují normální průchod, replay,
+pád mezi projekty, pending host recovery a odmítnutí jiného potvrzeného SHA.

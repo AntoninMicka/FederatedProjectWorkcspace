@@ -97,6 +97,20 @@ def _journal_state(binding):
     return {'present': True, 'pending_files': pending, 'unfinished_operations': unfinished}
 
 
+def _operation_record(binding, operation_id):
+    database = Path(binding['state_dir']) / 'journal.sqlite'
+    if not database.exists():
+        return None
+    regular(database)
+    uri = database.resolve().as_uri() + '?mode=ro'
+    with closing(sqlite3.connect(uri, uri=True)) as connection:
+        row = connection.execute('SELECT record, done FROM operations WHERE id=?',
+                                 (operation_id,)).fetchone()
+    if row is None:
+        return None
+    return dict(record=json.loads(row[0]), done=bool(row[1]))
+
+
 def _links(files, project):
     artifacts = project['artifacts']
     generated_roles = {'main-todo', 'free-description', 'module-links'}
@@ -245,8 +259,22 @@ def validate_bundle(bundle, node, *, locations=None, source_privacy=None, source
             graph = project_task_graph(incoming, entities, project['project_id'], '0' * 40)
             require(graph['status'] == 'ready', graph.get('error', 'Invalid new project graph'))
             results.append(_result(prefix+'full-candidate', 'passed', 'Seed snapshot a task graph jsou validní.', files=len(incoming)))
-            results.append(_new_location(project, locations.get(scope, project.get('target_location')),
-                                         node, source_roots))
+            location = locations.get(scope, project.get('target_location'))
+            if project['project_id'] in bindings:
+                binding = bindings[project['project_id']]
+                require(location is not None and Path(binding['root']).resolve() == Path(location).resolve(),
+                        'Completed module registration differs from reviewed location')
+                repository = Projects(node).repository(project['project_id'])
+                require(repository.snapshot(repository.head()) == incoming,
+                        'Completed module snapshot differs from reviewed seed')
+                state = _journal_state(binding)
+                require(not state['pending_files'] and not state['unfinished_operations'],
+                        'Completed module has unfinished journal state')
+                results.append(_result('new-project-location', 'passed',
+                                       'Modulový projekt je již registrovaný s přesným seed snapshotem.',
+                                       root=str(Path(location).resolve()), replay=True))
+            else:
+                results.append(_new_location(project, location, node, source_roots))
             continue
         git = Projects(node).repository(project['project_id'])
         administration = Administration(node, deployment='desktop')
@@ -267,24 +295,38 @@ def validate_bundle(bundle, node, *, locations=None, source_privacy=None, source
         status = git.run('status', '--porcelain=v1', env_extra={'GIT_OPTIONAL_LOCKS': '0'}).stdout
         unmerged = git.run('ls-files', '-u').stdout
         branch = git.run('symbolic-ref', '-q', 'HEAD', check=False)
-        context_ok = head == project['expected_head'] and not status and not unmerged and branch.returncode == 0
-        results.append(_result(prefix+'live-git-context', 'passed' if context_ok else 'blocked',
-                               'Živý Git odpovídá připnutému čistému HEAD.' if context_ok else 'Živý Git se liší od připnutého kontextu.',
-                               expected_head=project['expected_head'], observed_head=head,
-                               dirty=bool(status), unmerged=bool(unmerged), detached=branch.returncode != 0))
-        journal = _journal_state(bindings[project['project_id']])
-        idle = not journal['pending_files'] and not journal['unfinished_operations']
-        results.append(_result(prefix+'journal', 'passed' if idle else 'blocked',
-                               'Journal nemá rozpracovanou operaci.' if idle else 'Journal obsahuje rozpracovanou operaci.', **journal))
-        base = git.snapshot(head); candidate = dict(base)
+        base = git.snapshot(project['expected_head']); candidate = dict(base)
         collision = []
         for entry in project['files']:
-            path = entry['path']; raw = incoming[path]
+            path, raw = entry['path'], incoming[entry['path']]
             if entry['action'] == 'create' and path in base and base[path] != raw:
                 collision.append(path)
             elif entry['action'] == 'replace' and path not in base:
                 collision.append(path)
             candidate[path] = raw
+        operation_state = _operation_record(bindings[project['project_id']], project['operation_id'])
+        replay = bool(operation_state and operation_state['done']
+                      and operation_state['record'].get('commit_id') == head
+                      and git.snapshot(head) == candidate)
+        pending_replay = bool(operation_state and not operation_state['done'])
+        context_ok = (((head == project['expected_head']) or replay)
+                      and (not status or pending_replay) and not unmerged and branch.returncode == 0)
+        results.append(_result(prefix+'live-git-context', 'passed' if context_ok else 'blocked',
+                               ('Hotový import odpovídá receipt a přesnému kandidátu.' if replay
+                                else 'Živý Git odpovídá připnutému čistému HEAD.') if context_ok
+                               else 'Živý Git se liší od připnutého kontextu.',
+                               expected_head=project['expected_head'], observed_head=head,
+                               dirty=bool(status), unmerged=bool(unmerged), detached=branch.returncode != 0,
+                               replay=replay, pending_replay=pending_replay))
+        journal = _journal_state(bindings[project['project_id']])
+        idle = not journal['pending_files'] and not journal['unfinished_operations']
+        owned_pending = bool(operation_state and not operation_state['done']
+                             and journal['unfinished_operations'] == 1)
+        results.append(_result(prefix+'journal', 'passed' if idle or owned_pending else 'blocked',
+                               ('Journal obsahuje vlastní obnovitelnou importní operaci.' if owned_pending
+                                else 'Journal nemá rozpracovanou operaci.') if idle or owned_pending
+                               else 'Journal obsahuje cizí rozpracovanou operaci.',
+                               owned_pending=owned_pending, **journal))
         if collision:
             results.append(_result(prefix+'full-candidate', 'blocked', 'Akce payloadu kolidují s živým snapshotem.', paths=collision))
         else:
