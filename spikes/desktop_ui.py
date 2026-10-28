@@ -1026,10 +1026,17 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <input id="image-title" maxlength="200" value="Vygenerovaný obrázek">
 <button id="image-publish" type="button">Uložit do projektu</button></section></div>
 <div id="tools-panel" role="tabpanel" aria-labelledby="tools-main-tab" hidden>
-<header><span class="dashboard-kicker">NÁSTROJE PROJEKTU</span><h2>Julia editor</h2>
-<p>Editor spravuje připnutý Julia model, prostředí a kontrakt výstupů. Uložení samo kód nespouští.</p></header>
-<label>Uložený Julia model <select id="julia-editor-definition"></select></label>
-<div class="form-actions"><button id="julia-editor-new" type="button">Nový Julia model…</button><button id="julia-editor-edit" class="secondary-button" type="button" disabled>Upravit vybraný…</button></div>
+<header><span class="dashboard-kicker">NÁSTROJE PROJEKTU</span><h2>Evidence modelových nástrojů</h2>
+<p>Jednotný přehled projektových modelů, jejich prostředí a bezpečných akcí. Otevření, import ani zobrazení nic nespouští.</p></header>
+<div class="tool-command-bar" aria-label="Příkazy nástrojů">
+<details id="julia-new-menu" class="tool-command-menu"><summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 11v6M9 14h6"/></svg><span>Nový nástroj</span></summary><div role="menu"><button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button></div></details>
+<details id="julia-import-menu" class="tool-command-menu"><summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 3v11M8.5 10.5 12 14l3.5-3.5"/></svg><span>Import</span></summary><div role="menu"><button id="julia-import-file-button" type="button" role="menuitem">Julia soubor (.jl)</button><button type="button" role="menuitem" disabled title="Převod zatím nemá schválený kontrakt">MATLAB (.m) · převod připravován</button></div></details>
+<input id="julia-import-file" type="file" accept=".jl,text/x-julia" hidden>
+</div>
+<p id="julia-tools-status" role="status" aria-live="polite"></p>
+<section class="tool-library" aria-labelledby="julia-model-list-title"><div class="tool-library-heading"><div><span class="dashboard-kicker">MODELOVÉ SOUBORY</span><h3 id="julia-model-list-title">Julia modely</h3></div><span id="julia-model-count" class="badge">0</span></div>
+<ul id="julia-model-list" aria-label="Julia modelové soubory"></ul></section>
+<section id="julia-model-detail" class="tool-model-detail" hidden aria-labelledby="julia-model-detail-title"><div class="julia-editor-heading"><h3 id="julia-model-detail-title"></h3><button id="julia-model-detail-close" class="secondary-button" type="button">Zavřít detail</button></div><dl></dl></section>
 <form id="julia-editor" class="julia-editor" hidden>
 <div class="julia-editor-heading"><h3>Editor Julia modelu</h3><button id="julia-editor-close" class="secondary-button" type="button">Zavřít editor</button></div>
 <p>Uložení vytvoří nebo aktualizuje čtyři připnuté projektové artefakty v jednom Git commitu. Samo kód nespustí.</p>
@@ -1051,6 +1058,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Execution policy (JSON objekt) <textarea name="execution_policy" rows="12" spellcheck="false" required></textarea></label></details>
 <div class="form-actions"><button type="submit">Uložit model do projektu</button></div>
 <p id="julia-editor-status" role="status" aria-live="polite"></p></form>
+<dialog id="julia-delete-dialog" aria-labelledby="julia-delete-title"><form method="dialog"><h3 id="julia-delete-title">Odstranit Julia model</h3><p id="julia-delete-description"></p><p>Odstraní se model, definice i připnuté Project.toml a Manifest.toml. Git historie zůstane zachovaná.</p><label class="confirm"><input id="julia-delete-confirm" type="checkbox"> Potvrzuji odstranění celého modelového balíčku.</label><div class="form-actions"><button id="julia-delete-run" class="danger-button" type="button" disabled>Odstranit model</button><button id="julia-delete-cancel" class="secondary-button" type="button">Zrušit</button></div></form></dialog>
 </div>
 <div id="julia-panel" role="tabpanel" aria-labelledby="julia-tab" hidden>
 <header><span class="dashboard-kicker">PŘIPNUTÝ LOKÁLNÍ RUNTIME</span><h2>Julia výpočet</h2>
@@ -1314,7 +1322,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #autonomy-queue{margin:16px 0;border:1px solid #bfcdc9;border-radius:12px;padding:12px;background:#f8fbfc}#autonomy-queue>summary{font-weight:700;color:#176b60}.autonomy-plan-editor{margin:10px 0}.autonomy-plan-editor textarea,.autonomy-revision-editor textarea{width:100%;font-family:monospace;font-size:12px}#autonomy-list{display:grid;gap:10px;margin-top:12px}.autonomy-card{border:1px solid #dce3e9;border-left:5px solid #8aa1ad;border-radius:10px;padding:12px;background:#fff}.autonomy-card[data-state="completed"]{border-left-color:#2d8a62}.autonomy-card[data-state="paused"],.autonomy-card[data-state="awaiting-approval"],.autonomy-card[data-state="proposed"]{border-left-color:#c69224}.autonomy-card[data-state="failed"],.autonomy-card[data-state="unknown"]{border-left-color:#b74435}.autonomy-card h3{margin:0 0 5px}.autonomy-card progress{width:100%;accent-color:#176b60}.autonomy-card ol{padding-left:22px}.autonomy-card li{margin:5px 0}.autonomy-card details pre{max-height:220px;font-size:11px}.autonomy-card .form-actions{display:flex;gap:7px;flex-wrap:wrap}.autonomy-card .danger-button{background:#9b3f35}.autonomy-revision{margin:10px 0;padding:10px;border:1px solid #dfbd72;border-radius:8px;background:#fff8e8}.autonomy-revision p{margin:4px 0}.autonomy-revision-history{font-size:13px;color:#526575}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
-#julia-panel>label,#tools-panel>label,#julia-parameters label,#julia-output label,.julia-editor label{display:block;margin:10px 0 5px}#julia-panel input,#julia-panel select,#julia-panel textarea,#tools-panel input,#tools-panel select,#tools-panel textarea{box-sizing:border-box;padding:9px;max-width:100%}#julia-definition,#julia-editor-definition,#julia-parameters input:not([type="checkbox"]),#julia-parameters textarea,.julia-editor input,.julia-editor select,.julia-editor textarea{width:100%}#julia-preview-value,#julia-output-value{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;border-radius:12px;padding:12px}#julia-status{min-height:20px;color:#315f58}#julia-output,.julia-editor{margin-top:16px;padding:14px;border:1px solid #dce3e9;border-radius:12px;background:#fff}#julia-output fieldset{margin-top:14px;border:1px solid #dce3e9}#julia-output fieldset input:not([type="checkbox"]),#julia-output fieldset select{width:100%}.julia-editor textarea{font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4}.julia-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.julia-editor-heading h3{margin:0}.julia-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#julia-panel>label,#tools-panel>label,#julia-parameters label,#julia-output label,.julia-editor label{display:block;margin:10px 0 5px}#julia-panel input,#julia-panel select,#julia-panel textarea,#tools-panel input,#tools-panel select,#tools-panel textarea{box-sizing:border-box;padding:9px;max-width:100%}#julia-definition,#julia-parameters input:not([type="checkbox"]),#julia-parameters textarea,.julia-editor input,.julia-editor select,.julia-editor textarea{width:100%}#julia-preview-value,#julia-output-value{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;border-radius:12px;padding:12px}#julia-status,#julia-tools-status{min-height:20px;color:#315f58}#julia-output,.julia-editor,.tool-model-detail{margin-top:16px;padding:14px;border:1px solid #dce3e9;border-radius:12px;background:#fff}#julia-output fieldset{margin-top:14px;border:1px solid #dce3e9}#julia-output fieldset input:not([type="checkbox"]),#julia-output fieldset select{width:100%}.julia-editor textarea{font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4}.julia-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.julia-editor-heading h3{margin:0}.julia-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tool-command-bar{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin:18px 0 8px}.tool-command-menu{position:relative}.tool-command-menu>summary{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;background:#176b60;color:#fff;font-weight:700;cursor:pointer;list-style:none}.tool-command-menu>summary::-webkit-details-marker{display:none}.tool-command-menu>summary svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8}.tool-command-menu>div{position:absolute;z-index:20;display:grid;min-width:230px;margin-top:6px;padding:7px;border:1px solid #b9c8d0;border-radius:9px;background:#fff;box-shadow:0 12px 30px #172b3a2e}.tool-command-menu>div button{text-align:left;background:transparent;color:#213746}.tool-command-menu>div button:hover:not(:disabled){background:#e8f4f0}.tool-command-menu>div button:disabled{color:#84909b}.tool-library{margin-top:18px;border:1px solid #c8d5dc;border-radius:12px;background:#f8fbfc;overflow:hidden}.tool-library-heading{display:flex;align-items:center;justify-content:space-between;padding:15px 17px;border-bottom:1px solid #d6e0e5}.tool-library-heading h3{margin:2px 0 0}.tool-library>ul{list-style:none;margin:0;padding:0}.tool-model-row{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:16px;align-items:center;padding:14px 17px;border-top:1px solid #dce3e9;background:#fff}.tool-model-row:first-child{border-top:0}.tool-model-row strong,.tool-model-row small{display:block;overflow-wrap:anywhere}.tool-model-row small{margin-top:4px;color:#607481}.tool-model-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.tool-model-actions button{padding:7px 10px}.tool-model-empty{padding:20px 17px;color:#607481}.tool-model-detail dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px}.tool-model-detail dt{font-weight:700}.tool-model-detail dd{margin:0;overflow-wrap:anywhere}#julia-delete-dialog{width:min(560px,calc(100vw - 32px));border:1px solid #9babb7;border-radius:14px}#julia-delete-dialog::backdrop{background:#07131fa8}
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.editor-mode-switch{display:flex;gap:6px}.editor-mode-switch button[aria-pressed="true"]{box-shadow:0 0 0 2px #79c9ac inset}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-raw-panel{margin-top:14px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 .raw-editor-widget{display:block;margin:12px 0;padding:12px;border:1px solid #c8d5dc;border-radius:10px;background:#f8fbfc}.raw-editor-layout{display:grid;grid-template-columns:minmax(0,820px) minmax(260px,320px);gap:14px;align-items:start}.raw-editor-main{min-width:0}#artifact-raw-widget{width:min(1174px,calc(100vw - 388px));max-width:none}.raw-editor-toolbar{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.raw-editor-toolbar label{display:grid!important;gap:4px;min-width:min(280px,100%);margin:0!important}.raw-editor-toolbar select{width:100%;padding:8px}.raw-editor-widget textarea{box-sizing:border-box;width:100%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.45;resize:vertical}.raw-editor-help-panel{min-width:0;border-left:3px solid #79c9ac;border-radius:8px;padding:10px 12px;background:#edf5f2;color:#304657}.raw-editor-help-panel h3{margin:0 0 7px;font-size:14px}.raw-editor-help-panel h4{margin:12px 0 5px;font-size:12px}.raw-editor-help-panel p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.45}.raw-editor-help-example{margin-top:12px;padding-top:1px;border-top:1px solid #b9d7ce}.raw-editor-status{min-height:18px;margin:7px 0;color:#456276;font-size:12px}.raw-editor-widget[data-dirty="true"]{border-color:#c69224}.raw-editor-widget[data-invalid="true"]{border-color:#b74435}.raw-editor-widget[data-read-only="true"]{background:#edf2f5}.raw-editor-widget[data-read-only="true"] textarea{background:#e7ecef}
 .task-plan-editor{margin:12px 0;padding:12px;border:1px solid #b9cec8;border-radius:10px;background:#f5faf8}.task-plan-mode,.task-plan-insert{display:flex;gap:7px;flex-wrap:wrap}.task-plan-mode button[aria-selected="true"]{background:#176b60;color:#fff}.task-plan-insert{margin:10px 0;align-items:end}.task-plan-insert label{display:grid!important;gap:4px;margin:0!important}.task-plan-insert select{padding:8px;max-width:320px}.task-plan-insert button{background:#e5efec;color:#244d47}.task-plan-blocks{display:grid;gap:10px}.task-plan-block{display:grid;grid-template-columns:auto minmax(115px,.55fr) minmax(130px,.65fr) minmax(220px,2fr);gap:8px;align-items:end;padding:10px 12px;border-left:4px solid #6aa298;border-radius:8px;background:#fff}.task-plan-block label{margin:0!important}.task-plan-block small{grid-column:2/-1;color:#566d78}.task-plan-block[data-depth="1"]{margin-left:18px}.task-plan-block[data-depth="2"]{margin-left:36px}.task-plan-block[data-depth="3"]{margin-left:54px}
@@ -1375,6 +1383,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
 @media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}}
 @media(max-width:700px){.julia-editor-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.tool-model-row{grid-template-columns:1fr}.tool-model-actions{justify-content:flex-start}.tool-command-menu{width:100%}.tool-command-menu>summary{justify-content:center}.tool-command-menu>div{position:static;min-width:0}.tool-model-detail dl{grid-template-columns:1fr}.tool-model-detail dd{margin-bottom:7px}}
 @media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.raw-editor-layout{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}.raw-editor-toolbar{display:grid;grid-template-columns:1fr}.raw-editor-toolbar label{min-width:0}.raw-editor-toolbar button{width:100%}.raw-editor-widget textarea{font-size:16px}.raw-editor-help-panel{border-left:0;border-top:3px solid #79c9ac}.task-plan-block{grid-template-columns:1fr;margin-left:0!important}.task-plan-block small{grid-column:auto}.task-plan-insert button{width:100%}}
 @media(max-width:1250px){#artifact-raw-widget{width:100%}.raw-editor-layout{grid-template-columns:1fr}.raw-editor-help-panel{border-left:0;border-top:3px solid #79c9ac}}
 @media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}.conflict-code,.conflict-editor-stack{height:300px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
@@ -3347,13 +3356,17 @@ for(const tab of mainTabs){
  });
 }
 const juliaDefinition=document.querySelector('#julia-definition');
-const juliaEditorDefinition=document.querySelector('#julia-editor-definition');
 const juliaParameters=document.querySelector('#julia-parameters');
 const juliaStatus=document.querySelector('#julia-status');
 const juliaEditor=document.querySelector('#julia-editor');
 const juliaEditorStatus=document.querySelector('#julia-editor-status');
+const juliaToolsStatus=document.querySelector('#julia-tools-status');
+const juliaModelList=document.querySelector('#julia-model-list');
+const juliaModelDetail=document.querySelector('#julia-model-detail');
+const juliaDeleteDialog=document.querySelector('#julia-delete-dialog');
 let juliaCatalog=[],juliaPrepared=null,juliaRun=null,juliaPoll=null;
 let juliaEditorModel=null,juliaEditorBaseline=null,juliaEditorDirty=false,juliaEditorAttempt=null;
+let juliaDeletePreview=null,juliaDeleteOperation=null;
 const juliaSourceRawWidget=createRawEditorWidget(document.querySelector('#julia-source-raw-widget'),{textarea:juliaEditor.elements.julia_code,onInput:()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;}});
 function juliaEditorState(){return JSON.stringify(Object.fromEntries(new FormData(juliaEditor).entries()));}
 function canLeaveJuliaEditor(){
@@ -3371,17 +3384,16 @@ async function fillJuliaEditor(model){
  juliaEditorStatus.textContent=model.new?'Šablona je pouze v editoru; vznikne až po uložení.':'Načtena přesná uložená revize modelu.';
  fields.title.focus();
 }
-async function openJuliaEditor(create){
- if(!activeProject||activeProject.readOnly||(!juliaEditor.hidden&&!canLeaveJuliaEditor()))return;
+async function openJuliaEditor(create,definitionPath=null){
+ if(!activeProject||activeProject.readOnly||(!juliaEditor.hidden&&!canLeaveJuliaEditor()))return false;
  const request={project_id:activeProject.id,expected_head:activeProject.head};
- if(!create){const selected=selectedJuliaEditor();if(!selected||!selected.editable)return;request.definition_path=selected.definition.path;}
+ if(!create){const selected=juliaCatalog.find(item=>item.definition.path===definitionPath);if(!selected||!selected.editable)return;request.definition_path=selected.definition.path;}
  juliaEditorStatus.textContent='Načítám editor…';juliaEditor.hidden=false;
- try{const model=await projectRequest('/v1/julia/editor/open',request);await fillJuliaEditor(model);}
- catch(error){juliaEditorStatus.textContent=error.message;}
+ try{const model=await projectRequest('/v1/julia/editor/open',request);await fillJuliaEditor(model);return true;}
+ catch(error){juliaEditorStatus.textContent=error.message;return false;}
 }
-document.querySelector('#julia-editor-new').addEventListener('click',()=>openJuliaEditor(true));
-document.querySelector('#julia-editor-edit').addEventListener('click',()=>openJuliaEditor(false));
-document.querySelector('#open-julia-tool').addEventListener('click',()=>{if(!activeProject)return;selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));juliaEditorDefinition.focus();});
+document.querySelector('#julia-editor-new').addEventListener('click',()=>{document.querySelector('#julia-new-menu').open=false;openJuliaEditor(true);});
+document.querySelector('#open-julia-tool').addEventListener('click',()=>{if(!activeProject)return;selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));document.querySelector('#julia-new-menu summary').focus();});
 document.querySelector('#julia-editor-close').addEventListener('click',event=>{event.preventDefault();if(canLeaveJuliaEditor()){juliaEditor.hidden=true;juliaEditorModel=null;juliaEditorDirty=false;juliaEditorAttempt=null;}});
 juliaEditor.addEventListener('input',()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;});
 juliaEditor.addEventListener('submit',async event=>{
@@ -3396,18 +3408,40 @@ juliaEditor.addEventListener('submit',async event=>{
 });
 function clearJulia(){
  if(juliaPoll){clearTimeout(juliaPoll);juliaPoll=null;}
- juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaEditorDefinition.replaceChildren();juliaParameters.replaceChildren();
+ juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();juliaModelList.replaceChildren();
+ document.querySelector('#julia-model-count').textContent='0';juliaModelDetail.hidden=true;juliaModelDetail.querySelector('dl').replaceChildren();
+ juliaDeletePreview=null;juliaDeleteOperation=null;document.querySelector('#julia-delete-confirm').checked=false;document.querySelector('#julia-delete-run').disabled=true;
  document.querySelector('#julia-preview-value').hidden=true;document.querySelector('#julia-preview-value').textContent='';
  document.querySelector('#julia-run-confirm-row').hidden=true;document.querySelector('#julia-run-confirm').checked=false;document.querySelector('#julia-run').disabled=true;
  document.querySelector('#julia-cancel').hidden=true;document.querySelector('#julia-reconcile').hidden=true;document.querySelector('#julia-output').hidden=true;
- document.querySelector('#julia-editor-edit').disabled=true;
  juliaStatus.textContent='Otevřete projekt.';
+ juliaToolsStatus.textContent='Otevřete projekt.';
  document.querySelector('#sidebar-tools-status').textContent='Otevřete projekt.';
 }
 function selectedJulia(){return juliaCatalog.find(item=>item.definition.path===juliaDefinition.value);}
-function selectedJuliaEditor(){return juliaCatalog.find(item=>item.definition.path===juliaEditorDefinition.value);}
-function renderJuliaEditorSelection(){
- const selected=selectedJuliaEditor(),edit=document.querySelector('#julia-editor-edit');edit.disabled=!selected||!selected.editable||activeProject?.readOnly;edit.title=selected&&!selected.editable?'Importovaná nebo starší definice je neměnná; vytvořte nový projektově spravovaný model.':'';
+function showJuliaModelDetail(model){
+ const title=juliaModelDetail.querySelector('h3'),list=juliaModelDetail.querySelector('dl');title.textContent=model.computation.title;list.replaceChildren();
+ const fields=[['Typ','Julia model'],['Definice',model.definition.path],['Zdroj',model.computation.entrypoint.path],['Project.toml',model.computation.environment.project_path],['Manifest.toml',model.computation.environment.manifest_path],['Parametry',String(model.computation.parameters.length)],['Výstupy',String(model.computation.outputs.length)],['Úpravy',model.editable?'Projektově spravovaný model':'Jen pro čtení']];
+ for(const [label,value] of fields){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=label;description.textContent=value;list.append(term,description);}
+ juliaModelDetail.hidden=false;document.querySelector('#julia-model-detail-close').focus();
+}
+function prepareJuliaRun(model){
+ juliaDefinition.value=model.definition.path;renderJuliaParameters();selectMainTab(document.querySelector('#julia-tab'));juliaStatus.textContent=`${model.computation.title}: připravte read-only náhled; nic nebylo spuštěno.`;document.querySelector('#julia-preview').focus();
+}
+async function requestJuliaDelete(model){
+ if(!activeProject||activeProject.readOnly||!model.editable)return;
+ juliaToolsStatus.textContent='Připravuji přesný náhled odstranění…';
+ try{juliaDeletePreview=await projectRequest('/v1/julia/editor/delete/preview',{project_id:activeProject.id,expected_head:activeProject.head,definition_path:model.definition.path});juliaDeleteOperation=crypto.randomUUID();document.querySelector('#julia-delete-description').textContent=`Model „${juliaDeletePreview.title}“ bude odstraněn z aktuální revize projektu.`;document.querySelector('#julia-delete-confirm').checked=false;document.querySelector('#julia-delete-run').disabled=true;juliaDeleteDialog.showModal();juliaToolsStatus.textContent='Odstranění čeká na výslovné potvrzení.';}
+ catch(error){juliaToolsStatus.textContent=error.message;}
+}
+function renderJuliaModelList(){
+ juliaModelList.replaceChildren();document.querySelector('#julia-model-count').textContent=String(juliaCatalog.length);
+ if(!juliaCatalog.length){const empty=document.createElement('li');empty.className='tool-model-empty';empty.textContent='Projekt zatím neobsahuje žádný validovaný Julia model.';juliaModelList.append(empty);return;}
+ for(const model of juliaCatalog){const row=document.createElement('li'),identity=document.createElement('div'),title=document.createElement('strong'),path=document.createElement('small'),actions=document.createElement('div');row.className='tool-model-row';title.textContent=model.computation.title;path.textContent=`Julia · ${model.computation.entrypoint.path}`;identity.append(title,path);actions.className='tool-model-actions';
+  const commands=[['Zobrazit',()=>showJuliaModelDetail(model),false,''],['Editovat',()=>openJuliaEditor(false,model.definition.path),!model.editable||activeProject?.readOnly,model.editable?'':'Starší nebo importovaná definice je dostupná jen pro čtení.'],['Spustit',()=>prepareJuliaRun(model),Boolean(activeProject?.readOnly),'Spuštění vždy začíná read-only náhledem.'],['Smazat',()=>requestJuliaDelete(model),!model.editable||activeProject?.readOnly,'Odstraní celý projektově spravovaný balíček po potvrzení.']];
+  for(const [label,handler,disabled,hint] of commands){const button=document.createElement('button');button.type='button';button.textContent=label;button.className=label==='Smazat'?'danger-button':'secondary-button';button.disabled=disabled;button.title=hint;button.addEventListener('click',handler);actions.append(button);}
+  row.append(identity,actions);juliaModelList.append(row);
+ }
 }
 function renderJuliaParameters(){
  juliaPrepared=null;document.querySelector('#julia-run-confirm-row').hidden=true;document.querySelector('#julia-run').disabled=true;
@@ -3435,15 +3469,31 @@ function juliaParameterValues(){
 async function loadJuliaWorkspace(){
  if(!activeProject)return;clearJulia();juliaStatus.textContent='Načítám definice výpočtů…';
  try{const catalog=await projectRequest('/v1/julia/definitions',{project_id:activeProject.id,expected_head:activeProject.head});juliaCatalog=catalog.definitions;
-  for(const item of juliaCatalog){const option=document.createElement('option');option.value=item.definition.path;option.textContent=item.computation.title;juliaDefinition.append(option);const editorOption=option.cloneNode(true);editorOption.textContent+=item.editable?'':' · jen pro čtení';juliaEditorDefinition.append(editorOption);}
-  renderJuliaParameters();renderJuliaEditorSelection();juliaStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} dostupných definic. Připravte read-only náhled.`:'Aktuální revize neobsahuje validovanou Julia definici.';
+  for(const item of juliaCatalog){const option=document.createElement('option');option.value=item.definition.path;option.textContent=item.computation.title;juliaDefinition.append(option);}
+  renderJuliaParameters();renderJuliaModelList();juliaStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} dostupných definic. Připravte read-only náhled.`:'Aktuální revize neobsahuje validovanou Julia definici.';
+  juliaToolsStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} validovaných Julia modelů v aktuální revizi.`:'Založte nový model nebo načtěte Julia soubor do editoru.';
   document.querySelector('#sidebar-tools-status').textContent=juliaCatalog.length?`Julia modely: ${juliaCatalog.length}`:'Julia editor je připravený pro nový model.';
   document.querySelector('#julia-preview').disabled=!juliaCatalog.length||activeProject.readOnly;
   const history=await projectRequest('/v1/julia/status',{project_id:activeProject.id});if(history.runs.length)renderJuliaRun(history.runs[0]);
  }catch(error){juliaStatus.textContent=error.message;}
 }
 juliaDefinition.addEventListener('change',renderJuliaParameters);
-juliaEditorDefinition.addEventListener('change',renderJuliaEditorSelection);
+document.querySelector('#julia-model-detail-close').addEventListener('click',()=>{juliaModelDetail.hidden=true;});
+document.querySelector('#julia-import-file-button').addEventListener('click',()=>{document.querySelector('#julia-import-menu').open=false;document.querySelector('#julia-import-file').click();});
+document.querySelector('#julia-import-file').addEventListener('change',async event=>{
+ const input=event.currentTarget,file=input.files&&input.files[0];input.value='';if(!file||!activeProject||activeProject.readOnly)return;
+ if(!file.name.toLowerCase().endsWith('.jl')){juliaToolsStatus.textContent='Import podporuje zatím pouze Julia soubory .jl.';return;}
+ if(file.size>1048576){juliaToolsStatus.textContent='Julia soubor je větší než povolený 1 MiB.';return;}
+ try{const source=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());if(source.includes('\\u0000'))throw new Error('Julia soubor obsahuje nepovolený NUL znak.');const opened=await openJuliaEditor(true);if(!opened||!juliaEditorModel)return;const title=file.name.replace(/\\.jl$/i,'').slice(0,200)||'Importovaný Julia model';juliaEditor.elements.title.value=title;juliaEditor.elements.julia_code.value=source;juliaEditor.elements.julia_code.dispatchEvent(new Event('input',{bubbles:true}));juliaEditorDirty=true;juliaToolsStatus.textContent='Julia soubor je načten pouze v lokálním konceptu editoru. Do projektu se zapíše až po uložení a nebyl spuštěn.';}
+ catch(error){juliaToolsStatus.textContent=error.message||'Julia soubor není platný UTF-8 text.';}
+});
+document.querySelector('#julia-delete-confirm').addEventListener('change',event=>{document.querySelector('#julia-delete-run').disabled=!(event.currentTarget.checked&&juliaDeletePreview);});
+document.querySelector('#julia-delete-cancel').addEventListener('click',event=>{event.preventDefault();juliaDeleteDialog.close();juliaDeletePreview=null;juliaDeleteOperation=null;juliaToolsStatus.textContent='Odstranění bylo zrušeno.';});
+document.querySelector('#julia-delete-run').addEventListener('click',async event=>{
+ if(!juliaDeletePreview||!juliaDeleteOperation)return;event.currentTarget.disabled=true;
+ try{const result=await projectRequest('/v1/julia/editor/delete/confirm',{operation_id:juliaDeleteOperation,project_id:juliaDeletePreview.project_id,base_head:juliaDeletePreview.base_head,definition_path:juliaDeletePreview.definition_path,preview_sha256:juliaDeletePreview.preview_sha256},120000);juliaDeleteDialog.close();juliaDeletePreview=null;juliaDeleteOperation=null;const projectId=activeProject.id;await openRegisteredProject(projectId);selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));juliaToolsStatus.textContent=`Julia model byl odstraněn v commitu ${result.commit_id||'projektu'}; Git historie zůstala zachovaná.`;}
+ catch(error){juliaToolsStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
 document.querySelector('#julia-preview').addEventListener('click',async event=>{
  const selected=selectedJulia();if(!selected)return;event.currentTarget.disabled=true;
  try{const prepared=await projectRequest('/v1/julia/preview',{operation_id:crypto.randomUUID(),project_id:activeProject.id,expected_head:activeProject.head,definition_path:selected.definition.path,parameters:juliaParameterValues()});
@@ -7260,7 +7310,8 @@ class DesktopHandler(Handler):
         '/v1/julia/definitions', '/v1/julia/preview', '/v1/julia/execute',
         '/v1/julia/status', '/v1/julia/cancel', '/v1/julia/reconcile',
         '/v1/julia/output', '/v1/julia/publish', '/v1/julia/editor/open',
-        '/v1/julia/editor/save',
+        '/v1/julia/editor/save', '/v1/julia/editor/delete/preview',
+        '/v1/julia/editor/delete/confirm',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
@@ -7385,6 +7436,15 @@ class DesktopHandler(Handler):
                                                  request.get('definition_path'))
                 elif self.path == '/v1/julia/editor/save':
                     result = service.editor_save(request, user_id=user_id)
+                elif (self.path == '/v1/julia/editor/delete/preview'
+                      and isinstance(request, dict)
+                      and set(request) == {'project_id', 'expected_head',
+                                           'definition_path'}):
+                    result = service.editor_delete_preview(
+                        request['project_id'], request['expected_head'],
+                        request['definition_path'])
+                elif self.path == '/v1/julia/editor/delete/confirm':
+                    result = service.editor_delete(request, user_id=user_id)
                 elif self.path == '/v1/julia/preview':
                     result = service.prepare(request, user_id=user_id)
                 elif self.path == '/v1/julia/execute':

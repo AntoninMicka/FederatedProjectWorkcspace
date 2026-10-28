@@ -805,3 +805,11 @@ artefakty záměrně odmítá. Externí IDE/editor framework ani syntax-highligh
 knihovna nejsou pro bounded šablony potřeba. Druhý runner, nový job store, kopie
 recovery logiky, automatický retry po restartu a přímý zápis výsledku do Gitu
 jsou **reject**.
+
+Rozšířená evidence modelů dále **reuse/adaptuje** stejnou validovanou projekci,
+bezpečný DOM a Workspace writer. Import `.jl` zůstává před uložením pouze v
+lokálním editorovém draftu; nevzniká druhý importní store. Odstranění adaptuje
+exact-preview a idempotentní Workspace transakci na celý čtyřartefaktový
+balíček a odmítá cizí vztahy. Obecný filesystem picker backend, automatická
+konverze MATLABu a samostatný katalog modelů mimo Git jsou **reject** pro tuto
+dávku.

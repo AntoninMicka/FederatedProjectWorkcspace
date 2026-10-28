@@ -10,13 +10,15 @@ SPDX-License-Identifier: MPL-2.0
 Dávka vznikla na větvi `feature/comp-03-julia-workspace` z `develop`
 `507c232`, byla přerušena do doručení společného raw editoru a po PR #107–#110
 obnovena sloučením aktuálního `develop` `fd79dd8` do původní feature větve.
-Dosáhla cílové úrovně **PoC validated**. Akceptovaná evidence je uzavřená;
-push ani PR do `develop` dosud nebyly vytvořeny a feature není sloučená.
+Po prvním uzavření uživatel ještě před doručením rozšířil akceptaci o
+uspořádanou evidenci modelových nástrojů; evidence byla znovu otevřena a
+dokončena ve stejné feature a jediném plánovaném PR. Cílová úroveň je **PoC
+validated**. Push ani PR do `develop` dosud nebyly vytvořeny a feature není
+sloučená.
 
 - [x] [completed] **COMP-03-A — projektová projekce definic a přesný preview
-  (implemented).** Shared servis načítá pouze validované
-  `fpw-julia-computation-v1` definice z přesného Git HEAD, váže typované
-  parametry, vstupy, privacy, runtime a limity a preview nic nespouští.
+  (implemented).** Shared servis načítá pouze validované definice z přesného
+  Git HEAD a preview nic nespouští.
 - [x] [completed] **COMP-03-B — potvrzený běh a lifecycle (implemented).**
   Explicitně potvrzený exact preview reuse Julia journal a executor; stavy,
   cancel, restart a reconcile zachovávají `unknown` bez automatického retry.
@@ -29,44 +31,49 @@ push ani PR do `develop` dosud nebyly vytvořeny a feature není sloučená.
   publikační účinek; authoring zůstává v Nástrojích a běh ve Výpočtech.
 - [x] [completed] **COMP-03-F — editor Julia modelu a šablony
   (implemented).** Specializovaný editor ukládá `.jl`, `Project.toml`, přesný
-  manifest a hashovanou definici jednou serializovanou Workspace transakcí.
-  Julia zdroj reuse společný raw widget a adaptér s filtrovanými vzory,
-  kontextovou nápovědou, vyplněnými příklady, vložením na kurzor a bounded
-  neexekuční validací; importované immutable zdroje se nepřepisují.
+  manifest a hashovanou definici jednou serializovanou Workspace transakcí a
+  reuse společný raw widget, filtrované vzory, nápovědu a vyplněné příklady.
+- [x] [completed] **COMP-03-G — evidence modelových nástrojů
+  (implemented).** Příkazová lišta nabízí Nový nástroj a bezpečný import `.jl`
+  pouze do lokálního konceptu. Validovaná projekce Julia modelů má akce
+  Zobrazit, Editovat, Spustit a Smazat; spuštění jen přechází k exact preview.
+  Mazání vyžaduje potvrzený digest a jednou Workspace transakcí odstraní celý
+  čtyřartefaktový balíček. MATLAB je pouze označený budoucí převod a byl předán
+  do backlogu jako `COMP-MATLAB-CONVERSION-01`.
 - [x] [completed] **COMP-03-E — regrese, dokumentace a fyzická akceptace
-  (PoC validated).** Fail-closed lifecycle, recovery, web wiring, editor a
-  fyzický podporovaný runtime byly ověřeny a dokumentace sjednocena.
+  (PoC validated).** Fail-closed lifecycle, recovery, web wiring, editor,
+  evidence modelů a fyzický podporovaný runtime byly ověřeny a dokumentace
+  sjednocena.
 
 ### Ověření, recovery a omezení
 
 Po poslední změně kódu a testů prošla úplná sada
 `python3 -m unittest discover -s tests -v`: **957 testů, 920 prošlo a 37
-volitelných bylo přeskočeno, bez selhání**, 235,848 s. Cílená Julia/katalog/UI
-sada měla 41 úspěšných testů a dva environmentálně podmíněné skipy; dva
-socketové API testy po zopakování mimo omezený sandbox prošly. Python compile,
-generovaný JavaScript přes `node --check` a oba skutečné Qt/WebEngine smoke
-testy prošly. Nový smoke otevřel Julia authoring v Nástrojích a ověřil výchozí
-i vzorovou nápovědu, vyplněný příklad, vložení funkce na kurzor, bounded
-validaci, ochranu rozepsaného draftu a nulový projektový zápis při zavření.
+volitelných bylo přeskočeno, bez selhání**, 239,419 s. Cílený Julia modul měl
+28 úspěšných testů a dva environmentální skipy. Python compile, generovaný
+JavaScript přes `node --check`, cílené desktop/API/roadmapové testy a skutečný
+Qt/WebEngine smoke prošly. Smoke ověřil lištu a prázdnou evidenci, import `.jl`
+do konceptu bez projektového zápisu, Julia nápovědu/vzory, validaci a ochranu
+rozepsaného draftu. Backendový test ověřil atomicitu mazání, idempotentní retry,
+tampered preview a blokování cizího vztahu.
 
 Fyzická akceptace na oficiálním Julia 1.10.12 Linux glibc aarch64 runtime byla
-provedena dříve v téže feature větvi: exact preview, potvrzený bubblewrap běh,
-zákaz sítě, výstup `real-julia=42;network=denied`, explicitní Workspace
-publikace a editorová šablona prošly. Aktuální závěrečný host neměl proměnné
-`M0_JULIA_RUNTIME_ROOT`/`M0_JULIA_ARCHIVE`, proto fyzický runtime test v poslední
-plné sadě zůstal mezi volitelnými skipy; předchozí fyzický důkaz se nezměnil.
+provedena dříve v téže feature: exact preview, potvrzený bubblewrap běh, zákaz
+sítě, výstup `real-julia=42;network=denied`, explicitní Workspace publikace a
+editorová šablona prošly. Aktuální závěrečný host neměl runtime proměnné, proto
+fyzický test zůstal mezi volitelnými skipy; předchozí důkaz se nezměnil.
 
-Crash hranice zůstávají beze změny: preview je read-only; před durable dispatch
-nic neběží, neurčitý stav po dispatch je `unknown` bez retry, exact materializace
-se pouze reconciliuje. Publikace i čtyřartefaktový editor používají existující
-Workspace/Journal/Git/index transakci: před commitem je autoritou journal, po
-commitu lze index obnovit z HEAD a stejné operation ID nevytvoří duplicitní
-artefakt ani balíček. Raw widget nemá vlastní save endpoint a vložení či
-validace nikdy Julia kód nespouštějí.
+Import zůstává v paměti editoru do explicitního save. Uložení, publikace a
+smazání používají Workspace/Journal/Git/index transakci: před commitem je
+autoritou journal, po commitu lze index obnovit z HEAD a stejné operation ID je
+idempotentní. Delete preview je read-only a confirm znovu ověří HEAD, digest,
+úplnost i vztahy; Git historie zůstává zachovaná. Běh má samostatný Julia
+journal a neurčitý stav po dispatch zůstává `unknown` bez retry.
 
 Zbývající omezení odpovídají rozsahu: nejde o obecné IDE, Pluto/Jupyter,
-scheduler, instalátor balíčků ani síťové/GPU/distribuované výpočty. Cíl pluginu
-pro Code/VSCodium zůstává samostatnou následující dávkou `DEV-IDE-TODO-01`.
+scheduler, instalátor balíčků ani síťové/GPU/distribuované výpočty. MATLAB
+konverze není implementovaná. Cíl pluginu pro Code/VSCodium zůstává samostatnou
+následující dávkou `DEV-IDE-TODO-01`.
 
 ## PLAN-ROADMAP-MILESTONE-VIEW-01 — Strom a víceúrovňový pohled roadmapy — 2026-10-28
 

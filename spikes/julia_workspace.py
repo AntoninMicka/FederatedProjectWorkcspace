@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import threading
@@ -310,6 +311,61 @@ class JuliaWorkspaceService:
                                      expected_head=request['base_head'])
         return {'schema': 'fpw-julia-editor-result-v1', 'project_id': request['project_id'],
                 'definition_path': definition_path,
+                'commit_id': receipt.get('commit_id') or receipt.get('result', {}).get('commit_id')}
+
+    def editor_delete_preview(self, project_id, expected_head, definition_path):
+        model = self.editor_open(project_id, expected_head, definition_path)
+        preview = {'schema': 'fpw-julia-editor-delete-preview-v1',
+            'project_id': project_id, 'base_head': expected_head,
+            'definition_path': definition_path, 'title': model['title'],
+            'artifact_ids': model['artifact_ids']}
+        preview['preview_sha256'] = digest(canonical(preview))
+        return preview
+
+    def editor_delete(self, request, *, user_id=None):
+        required = {'operation_id', 'project_id', 'base_head', 'definition_path',
+                    'preview_sha256'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid Julia model deletion request')
+        uuid(request['operation_id']); uuid(request['project_id'])
+        require(isinstance(request['base_head'], str)
+                and isinstance(request['definition_path'], str)
+                and isinstance(request['preview_sha256'], str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', request['preview_sha256'])),
+                'Invalid Julia model deletion preview')
+        workspace = self.projects.workspace(request['project_id'])
+        actor = user_id or ProjectCreation(self.node_path).author_id(); uuid(actor)
+
+        def prepare(ws):
+            head = ws.git.head()
+            require(head == request['base_head'],
+                    'Project changed; prepare Julia model deletion again')
+            preview = self.editor_delete_preview(
+                request['project_id'], head, request['definition_path'])
+            require(preview['preview_sha256'] == request['preview_sha256'],
+                    'Julia model deletion preview changed')
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            ids = set(preview['artifact_ids'].values())
+            require(not any(item['id'] not in ids and any(
+                relation.get('target_id') in ids for relation in item.get('relations', []))
+                for item in entities.values()),
+                'Another artifact references this Julia model bundle')
+            changes = {path: None for path in files
+                       if len(safe_path(path)) >= 2 and safe_path(path)[0] == 'artifacts'
+                       and safe_path(path)[1] in ids}
+            require(changes and all(any(path.startswith(f'artifacts/{identifier}/')
+                                        for path in changes) for identifier in ids),
+                    'Julia model bundle is incomplete')
+            candidate = {path: data for path, data in files.items() if path not in changes}
+            validate_snapshot(candidate)
+            return changes, 'Workspace Julia editor', actor + '@local.invalid', (
+                'Delete Julia computation')
+
+        receipt = workspace.transact(request['operation_id'], request, prepare,
+                                     expected_head=request['base_head'])
+        return {'schema': 'fpw-julia-editor-delete-result-v1',
+                'project_id': request['project_id'],
+                'definition_path': request['definition_path'],
                 'commit_id': receipt.get('commit_id') or receipt.get('result', {}).get('commit_id')}
 
     def prepare(self, request, *, user_id=None):

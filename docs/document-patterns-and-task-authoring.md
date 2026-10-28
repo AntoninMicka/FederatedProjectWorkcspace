@@ -25,6 +25,30 @@ speciální task editor jsou implementované v `PLAN-TASK-EDITOR-01`. Architektu
 4. **Souborový plán** určuje typy uzlů, hierarchii, vztahy, zahrnuté soubory a
    podgrafy. Git soubory zůstávají autoritou.
 
+## Evidence Julia modelů v Nástrojích
+
+Hlavní panel **Nástroje** začíná příkazovou lištou **Nový nástroj** a
+**Import**. První nabídka zatím vytváří Julia model. Import podporuje `.jl` do
+lokálního konceptu editoru: kontroluje příponu, velikost, UTF-8 a NUL znaky,
+ale nic nezapisuje ani nespouští, dokud uživatel model výslovně neuloží.
+Konverze MATLAB `.m` je pouze viditelný budoucí směr; tato dávka nemá
+kompatibilitní ani reprodukovatelnostní kontrakt a převod neprovádí.
+
+Pod lištou je seznam všech validovaných Julia definic aktuálního Git HEAD.
+Každá položka má akce **Zobrazit**, **Editovat**, **Spustit** a **Smazat**.
+Zobrazení používá bezpečný textový DOM. Spustit jen vybere definici v panelu
+Výpočty, kde je stále nutný exact preview a samostatné potvrzení. Starší nebo
+importované immutable definice lze zobrazit a připravit ke spuštění, ale editor
+je nepřepisuje ani nemaže.
+
+Projektově spravovaný model tvoří čtyři svázané dokumentové artefakty: `.jl`,
+`Project.toml`, `Manifest.toml` a computation definice. Mazání proto nejprve
+připraví read-only náhled přesného HEAD a až po potvrzení odstraní celý balíček
+jednou Workspace transakcí. Stale nebo pozměněný náhled, neúplný balíček a
+vztah z jiného artefaktu se odmítnou. Před Git commitem je recovery autoritou
+Workspace journal, po commitu se index obnoví z HEAD; Git historie odstraněných
+souborů zůstává dostupná.
+
 ## Jak funguje vzor
 
 Katalog se nejprve filtruje podle typu otevřeného dokumentu. Uživatel může

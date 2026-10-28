@@ -375,6 +375,15 @@ class DesktopTests(unittest.TestCase):
             '<div id="outputs-overview-panel"', 1)[0]
         self.assertIn('id="julia-editor"', tools_panel)
         self.assertNotIn('id="julia-editor"', julia_panel)
+        self.assertIn('id="julia-new-menu"', tools_panel)
+        self.assertIn('id="julia-import-menu"', tools_panel)
+        self.assertIn('id="julia-import-file" type="file" accept=".jl,text/x-julia"',
+                      tools_panel)
+        self.assertIn('MATLAB (.m) · převod připravován', tools_panel)
+        self.assertIn('id="julia-model-list"', tools_panel)
+        self.assertIn('id="julia-delete-dialog"', tools_panel)
+        for action in ('Zobrazit', 'Editovat', 'Spustit', 'Smazat'):
+            self.assertIn(action, JS)
         self.assertIn('id="julia-definition"', julia_panel)
         self.assertIn('id="julia-parameters"', HTML)
         self.assertIn('id="julia-editor"', HTML)
@@ -391,12 +400,17 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="julia-run-confirm"', HTML)
         self.assertIn('id="julia-publish-confirm"', HTML)
         for path in ('definitions', 'preview', 'execute', 'status', 'cancel',
-                     'reconcile', 'output', 'publish', 'editor/open', 'editor/save'):
+                     'reconcile', 'output', 'publish', 'editor/open', 'editor/save',
+                     'editor/delete/preview', 'editor/delete/confirm'):
             self.assertIn(f"projectRequest('/v1/julia/{path}'", JS)
             self.assertIn(f'/v1/julia/{path}', DesktopHandler.post_paths)
         self.assertIn('textContent=JSON.stringify(shown,null,2)', JS)
         self.assertIn("selectMainTab(document.querySelector('#tools-main-tab'))", JS)
         self.assertIn("adapterId:'julia',format:'text/x-julia'", JS)
+        self.assertIn("new TextDecoder('utf-8',{fatal:true})", JS)
+        self.assertIn('načten pouze v lokálním konceptu editoru', JS)
+        self.assertIn('Git historie zůstala zachovaná', JS)
+        self.assertNotIn('juliaEditorDefinition', JS)
         self.assertNotIn('julia-output-value.innerHTML', JS)
 
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):

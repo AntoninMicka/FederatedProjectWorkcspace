@@ -92,11 +92,12 @@ commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
 evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
 `b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako merge
-commit `507c232`; evidence je ve WORK_LOG. Aktivní `COMP-03` drží pouze TODO.
+commit `507c232`; evidence je ve WORK_LOG. Akceptovaná `COMP-03` čeká v TODO na
+doručení PR a její dokončená evidence je ve WORK_LOG.
 Editorové a plánovací závislosti byly doručeny PR #107–#110; jejich evidence
-je ve WORK_LOG a `COMP-03` je po jejich začlenění obnovená na původní větvi.
+je ve WORK_LOG a `COMP-03` byla po jejich začlenění dokončena na původní větvi.
 
-Po aktivní `COMP-03` následují podle uživatelem aktualizovaného pořadí
+Po doručení `COMP-03` následují podle uživatelem aktualizovaného pořadí
 `DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
@@ -138,6 +139,13 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 - [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle ADR 0008: manifest přesných bajtů, revalidace před odesláním, zákaz implicitního fallbacku a recovery unknown běhů.
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
+- [ ] [planned] **COMP-MATLAB-CONVERSION-01 — import a převod MATLAB modelu
+  (cílová úroveň: designed → implemented → PoC validated).** Uživatelský námět
+  z rozšíření `COMP-03`: posoudit `.m` jako budoucí vstup do evidence
+  modelových nástrojů. Před implementací vymezit podporovaný podmnožinový
+  formát, sémantické rozdíly, bezpečnost importu, reprodukovatelnost prostředí,
+  provenance a explicitní review vygenerované Julie. Současné UI směr pouze
+  označuje a žádnou konverzi netvrdí ani neprovádí.
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 

@@ -227,6 +227,55 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
         self.assertTrue(all(entities[value]['kind'] == 'document'
                             for value in template['artifact_ids'].values()))
 
+        input_metadata_path = f'artifacts/{self.ids["input"]}/metadata.json'
+        workspace = Projects(self.node).workspace(self.project_id)
+        def write_input_relations(relations):
+            metadata = json.loads(self.git.snapshot(self.git.head())[input_metadata_path])
+            if relations:
+                metadata['relations'] = relations
+            else:
+                metadata.pop('relations', None)
+            workspace.transact(str(uuid4()), {'relations': relations,
+                'base_head': self.git.head()}, lambda _: ({input_metadata_path:
+                    (json.dumps(metadata, sort_keys=True) + '\n').encode()},
+                    'Test author', self.author + '@local.invalid',
+                    'Change Julia test relation'), expected_head=self.git.head())
+
+        write_input_relations([{'type': 'references',
+            'target_id': template['artifact_ids']['model']}])
+        blocked_preview = service.editor_delete_preview(
+            self.project_id, self.git.head(), saved['definition_path'])
+        with self.assertRaisesRegex(ValueError, 'references this Julia model bundle'):
+            service.editor_delete({'operation_id': str(uuid4()),
+                'project_id': self.project_id,
+                'base_head': blocked_preview['base_head'],
+                'definition_path': blocked_preview['definition_path'],
+                'preview_sha256': blocked_preview['preview_sha256']}, user_id=self.author)
+        write_input_relations([])
+        preview = service.editor_delete_preview(
+            self.project_id, self.git.head(), saved['definition_path'])
+        self.assertEqual(template['artifact_ids'], preview['artifact_ids'])
+        unchanged = self.git.head()
+        invalid_deletion = {'operation_id': str(uuid4()), 'project_id': self.project_id,
+            'base_head': preview['base_head'],
+            'definition_path': preview['definition_path'],
+            'preview_sha256': '0' * 64}
+        with self.assertRaisesRegex(ValueError, 'preview changed'):
+            service.editor_delete(invalid_deletion, user_id=self.author)
+        self.assertEqual(unchanged, self.git.head())
+        deletion = {'operation_id': str(uuid4()), 'project_id': self.project_id,
+            'base_head': preview['base_head'],
+            'definition_path': preview['definition_path'],
+            'preview_sha256': preview['preview_sha256']}
+        removed = service.editor_delete(deletion, user_id=self.author)
+        self.assertEqual(self.git.head(), removed['commit_id'])
+        self.assertEqual(removed, service.editor_delete(deletion, user_id=self.author))
+        self.assertEqual([], service.definitions(
+            self.project_id, self.git.head())['definitions'])
+        remaining = self.git.snapshot(self.git.head())
+        self.assertFalse(any(path.split('/')[1] in template['artifact_ids'].values()
+                             for path in remaining if path.startswith('artifacts/')))
+
     def test_open_prepare_and_status_never_dispatch(self):
         executor, prepared = self.prepare()
         self.assertEqual('prepared', executor.status(

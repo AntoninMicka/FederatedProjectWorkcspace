@@ -118,6 +118,15 @@ class WebTests(unittest.TestCase):
                 inner.calls.append(('editor-save', request, user_id))
                 return {'schema': 'fpw-julia-editor-result-v1',
                         'project_id': request['project_id']}
+            def editor_delete_preview(inner, project, head, definition_path):
+                inner.calls.append(('editor-delete-preview', project, head,
+                                    definition_path))
+                return {'schema': 'fpw-julia-editor-delete-preview-v1',
+                        'preview_sha256': 'd' * 64}
+            def editor_delete(inner, request, *, user_id=None):
+                inner.calls.append(('editor-delete', request, user_id))
+                return {'schema': 'fpw-julia-editor-delete-result-v1',
+                        'project_id': request['project_id']}
 
         service = Service(); self.server.julia_workspace = service
         head = Projects(self.root/'node.json').open(project_id)['commit_id']
@@ -140,7 +149,17 @@ class WebTests(unittest.TestCase):
         code, data, _ = self.request(path='/v1/julia/editor/save', body=json.dumps({
             'operation_id': operation_id, 'project_id': project_id, 'privacy': 'project'}))
         self.assertEqual(200, code, data)
-        self.assertEqual(['definitions', 'preview', 'execute', 'editor-open', 'editor-save'],
+        code, data, _ = self.request(path='/v1/julia/editor/delete/preview',
+            body=json.dumps({'project_id': project_id, 'expected_head': head,
+                             'definition_path': 'artifacts/a/computation.json'}))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/editor/delete/confirm',
+            body=json.dumps({'operation_id': operation_id, 'project_id': project_id,
+                'base_head': head, 'definition_path': 'artifacts/a/computation.json',
+                'preview_sha256': 'd' * 64}))
+        self.assertEqual(200, code, data)
+        self.assertEqual(['definitions', 'preview', 'execute', 'editor-open', 'editor-save',
+                          'editor-delete-preview', 'editor-delete'],
                          [item[0] for item in service.calls])
     def test_document_pattern_catalog_and_validation_are_read_only(self):
         code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
@@ -1138,9 +1157,9 @@ def result(value):
  elif phase==1:
   phase=2;run("document.querySelector('.project-card').click();")
  elif phase==2:
-  phase=3;run("document.querySelector('#tools-tab').click();document.querySelector('#tools-main-tab').click();document.querySelector('#julia-editor-new').click();")
+  phase=3;run("(()=>{document.querySelector('#tools-tab').click();document.querySelector('#tools-main-tab').click();const toolbar=document.querySelector('.tool-command-bar'),list=document.querySelector('#julia-model-list'),input=document.querySelector('#julia-import-file');if(!toolbar||!list.textContent.includes('zatím neobsahuje')||!document.querySelector('#julia-editor-new')){juliaToolsStatus.textContent='FAIL: Julia tool evidence unavailable';return;}const transfer=new DataTransfer();transfer.items.add(new File(['# imported smoke\\nvalue = 7\\n'],'smoke-model.jl',{type:'text/x-julia'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()")
  elif phase==3:
-  phase=4;run("(()=>{const root=document.querySelector('#julia-source-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]'),textarea=root.querySelector('[data-raw-content]');if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor je Julia')||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia file help unavailable';return;}select.value='julia.function';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Julia funkce'||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia pattern help unavailable';return;}textarea.setSelectionRange(textarea.value.length,textarea.value.length);root.querySelector('[data-raw-insert]').click();if(!textarea.value.includes('function model')){juliaEditorStatus.textContent='FAIL: Julia pattern insertion unavailable';return;}root.querySelector('[data-raw-validate]').click();})()")
+  phase=4;run("(()=>{const root=document.querySelector('#julia-source-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]'),textarea=root.querySelector('[data-raw-content]');if(juliaEditor.elements.title.value!=='smoke-model'||!textarea.value.includes('imported smoke')||!juliaToolsStatus.textContent.includes('lokálním konceptu')){juliaEditorStatus.textContent='FAIL: Julia import draft unavailable';return;}if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor je Julia')||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia file help unavailable';return;}select.value='julia.function';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Julia funkce'||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia pattern help unavailable';return;}textarea.setSelectionRange(textarea.value.length,textarea.value.length);root.querySelector('[data-raw-insert]').click();if(!textarea.value.includes('function model')){juliaEditorStatus.textContent='FAIL: Julia pattern insertion unavailable';return;}root.querySelector('[data-raw-validate]').click();})()")
  elif phase==4:
   phase=5;run("window.confirm=()=>false;document.querySelector('#julia-editor-close').click();")
  elif phase==5:
@@ -1154,7 +1173,7 @@ def poll():
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
  2:"!document.querySelector('#project-view').hidden?'ready':'waiting'",
- 3:"(()=>{if(document.querySelector('#julia-source-raw-widget [data-raw-pattern]')?.querySelector('option[value=\\\"julia.function\\\"]')&&!juliaEditor.hidden)return'ready';const s=juliaEditorStatus.textContent;return s&&s!=='Načítám editor…'?'FAIL: Julia editor: '+s:'waiting'})()",
+ 3:"(()=>{if(document.querySelector('#julia-source-raw-widget [data-raw-pattern]')?.querySelector('option[value=\\\"julia.function\\\"]')&&!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('imported smoke'))return'ready';const s=juliaEditorStatus.textContent||juliaToolsStatus.textContent;return s&&s.startsWith('FAIL:')?s:'waiting'})()",
  4:"(()=>{const failure=juliaEditorStatus.textContent;if(failure.startsWith('FAIL:'))return failure;return document.querySelector('#julia-source-raw-widget [data-raw-status]').textContent.startsWith('Obsah je validní')?'ready':'waiting'})()",
  5:"!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('function model')?'ready':'FAIL: Julia draft was discarded without confirmation'",
  6:"juliaEditor.hidden?'ready':'waiting'"}
@@ -1167,7 +1186,8 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
             WORKSPACE_SMOKE_URL='https://'+self.authority+'/'),
             capture_output=True, text=True, timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('Julia pattern editor smoke OK', result.stdout)
+        self.assertIn('Julia pattern editor smoke OK', result.stdout,
+                      result.stdout + result.stderr + f'\nreturncode={result.returncode}')
         opened = Projects(self.root/'node.json').open(project['id'])
         self.assertEqual([], opened['artifacts'])
 

@@ -16,8 +16,9 @@ feature-akceptovaný v `PLAN-ROADMAP-MILESTONE-VIEW-01`.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
 `F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
 #103 a `COMP-02` byla doručena PR #104 s lokálním Julia runnerem a explicitní
-publikací výsledků. Aktivní `COMP-03` realizuje první řízený Julia výpočet a
-authoring ze shared workspace UI na své zachované feature větvi.
+publikací výsledků. `COMP-03` dokončila první řízený Julia výpočet, authoring a
+evidenci modelových nástrojů ve shared workspace UI a čeká na doručení PR ze
+své zachované feature větve.
 Návrhová dávka `DOC-EDITOR-CONTRACTS-01` odděleně popisuje společný raw
 editor a katalog vzorů, souborovou hierarchii plánu a speciální editor úkolů.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
@@ -311,16 +312,19 @@ Dokončený operativní rozpad `COMP-01` a `COMP-02` drží WORK_LOG. Julia runn
 není LLM backend a jeho deterministické nebo numerické výstupy se nesmějí
 evidenčně smíchat s LLM run records.
 
-Navazující dávka `COMP-03` zpřístupní existující runner ze shared workspace UI:
+Navazující dávka `COMP-03` zpřístupňuje existující runner ze shared workspace UI:
 výběr verzované definice, typované parametry, přesný preview a samostatné
 potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automatické
 spouštění ani notebookové prostředí. Na její samostatné feature větvi byl
 rozsah požadavkem uživatele rozšířen o Julia editor umístěný v Nástrojích;
 práce byla 27. 10. 2026 přerušena do doby implementace sdíleného raw editoru
 `DOC-PATTERN-CATALOG-01`. Ta byla doručena PR #107 jako `ac4281a`, takže práci
-lze obnovit. Aktivní `COMP-03` tento widget a Julia adaptér zapojila pro
-zdrojový kód bez změny atomické save operace; fyzickou akceptaci eviduje
-feature větev, nikoli roadmapa.
+lze obnovit. `COMP-03` tento widget a Julia adaptér zapojila pro
+zdrojový kód bez změny atomické save operace. Před doručením byla akceptace
+rozšířena o uspořádanou evidenci modelových nástrojů: vytvoření, bezpečný import
+`.jl` do konceptu, seznam a akce Zobrazit/Editovat/Spustit/Smazat. MATLAB je
+zatím pouze budoucí směr konverze, nikoli podporovaný formát. Fyzickou akceptaci
+eviduje feature větev, nikoli roadmapa.
 
 ---
 
