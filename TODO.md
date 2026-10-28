@@ -224,6 +224,10 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   buňky jsou ohraničené, víceřádkové a vybraný blok se drží uprostřed viewportu.
   Vykreslovací hranice normalizuje newline/tab/CR a další řídicí znaky, takže
   importovaný víceřádkový text nemůže posunem kurzoru rozbít sousední buňky.
+  TUI lze spustit i bez project ID: read-only katalog nabídne lokální projekty
+  názvem a UUID, nedostupný projekt odmítne a po potvrzení otevře jeho oddělenou
+  proposal queue. Přímé `--project` a povinné UUID neinteraktivních příkazů
+  zůstávají zachované.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
@@ -280,19 +284,20 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
 `python3 -m unittest tests.test_roadmap_refinement tests.test_roadmap_importer
 tests.test_roadmap_validation tests.test_roadmap_bundle tests.test_roadmap_mapping
 tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph
-tests.test_spdx -v`: po opravě řídicích znaků 71 testů OK.
+tests.test_spdx -v`: po doplnění projektového selektoru 72 testů OK.
 Původní 4 refinement testy
 ověřují proposal-only scan a deduplikaci, terminální reject, odmítnutí
 vymyšleného cíle a jedinou autorizovanou Workspace transakci po akceptaci.
 Následný cílený běh `python3 -m unittest tests.test_roadmap_refinement -v`:
 5 testů OK; pátý test kryje izolaci jedné lokální queue mezi dvěma projekty.
-`python3 -m unittest tests.test_roadmap_refinement_tui -v`: 9 testů OK;
+`python3 -m unittest tests.test_roadmap_refinement_tui -v`: 10 testů OK;
 ověřeno explicitní spuštění scanu, review přes existující service, zákaz apply
 bez druhého potvrzení, bezpečný quit, terminál bez podpory skrytí kurzoru,
 samostatné stránkování tabulky/detailu, filtr rozhodnutých stavů a živé UI
 po dobu blokovaného background scanu se zákazem předčasného ukončení. Devátý
 test vkládá newline, tab a CR do všech víceřádkových polí a ověřuje, že curses
-nedostane žádný řídicí znak.
+nedostane žádný řídicí znak. Desátý ověřuje výběr dostupného projektu podle
+názvu/UUID a odmítnutí nedostupného projektu.
 Skutečný PTY smoke otevřel TUI nad hostitelským projektem a ukončil jej přes
 `q` s exit 0; scan, rozhodnutí ani apply při smoke spuštěny nebyly.
 `python3 -m py_compile spikes/roadmap_refinement.py

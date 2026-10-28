@@ -6,13 +6,13 @@ import json
 
 from spikes.project_creation import default_node_path
 from spikes.roadmap_refinement import RoadmapRefinement
-from spikes.roadmap_refinement_tui import launch
+from spikes.roadmap_refinement_tui import launch, launch_project_selector
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--node', default=str(default_node_path()))
-    parser.add_argument('--project', required=True)
+    parser.add_argument('--project')
     sub = parser.add_subparsers(dest='command', required=True)
     scan = sub.add_parser('scan'); scan.add_argument('--limit', type=int, default=1)
     sub.add_parser('list')
@@ -21,7 +21,13 @@ def main(argv=None):
     choice.add_argument('--accept', action='store_true'); choice.add_argument('--reject', action='store_true')
     apply = sub.add_parser('apply'); apply.add_argument('--operation-id', required=True)
     tui = sub.add_parser('tui'); tui.add_argument('--limit', type=int, default=5)
-    args = parser.parse_args(argv); service = RoadmapRefinement(args.node, args.project)
+    args = parser.parse_args(argv)
+    if args.command == 'tui' and not args.project:
+        launch_project_selector(args.node, scan_limit=args.limit)
+        return 0
+    if not args.project:
+        parser.error('--project je povinný pro příkaz ' + args.command)
+    service = RoadmapRefinement(args.node, args.project)
     if args.command == 'scan':
         result = service.scan(limit=args.limit)
     elif args.command == 'list':

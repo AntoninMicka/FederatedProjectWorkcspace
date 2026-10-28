@@ -5,7 +5,7 @@ from unittest.mock import patch
 from threading import Event
 import time
 
-from spikes.roadmap_refinement_tui import RefinementTUI, draw, run
+from spikes.roadmap_refinement_tui import ProjectSelector, RefinementTUI, draw, run
 
 
 class FakeService:
@@ -170,6 +170,20 @@ class RefinementTUITests(unittest.TestCase):
         self.assertTrue(screen.values)
         self.assertTrue(all(not any(ord(char) < 32 or ord(char) == 127 for char in value)
                             for value in screen.values))
+
+    def test_project_selector_uses_title_and_refuses_unavailable_project(self):
+        projects = [
+            dict(id='00000000-0000-0000-0000-000000000010', title='Unavailable',
+                 available=False),
+            dict(id='00000000-0000-0000-0000-000000000011', title='Roadmap',
+                 available=True),
+        ]
+        selector = ProjectSelector(projects)
+        self.assertIsNone(selector.handle(10))
+        self.assertIn('neni lokalne dostupny', selector.message)
+        selector.handle(ord('j'))
+        self.assertEqual(selector.handle(10), projects[1]['id'])
+        self.assertEqual(ProjectSelector(projects).handle(ord('q')), 'quit')
 
 
 if __name__ == '__main__':

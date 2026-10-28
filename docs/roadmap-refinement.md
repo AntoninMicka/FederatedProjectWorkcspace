@@ -49,8 +49,17 @@ Pro jednorázové interaktivní review lze nad stejnou queue spustit stdlib
 `curses` TUI:
 
 ```bash
+# Interaktivní výběr dostupného projektu podle názvu a UUID:
+python3 -m scripts.roadmap_refinement tui --limit 5
+
+# Nebo přímé otevření známého projektu:
 python3 -m scripts.roadmap_refinement --project "$PROJECT" tui --limit 5
 ```
+
+Projektový selektor používá `j`/`k` nebo šipky, `Home`/`End`, potvrzení
+`Enter` a ukončení `q`. Nedostupný registrovaný projekt nelze otevřít. Parametr
+`--project` zůstává povinný pro neinteraktivní příkazy `scan`, `list`, `decide`
+a `apply`.
 
 Klávesy: `j`/`k` nebo šipky mění vybraný řádek, `Tab` přepíná fokus tabulky a
 detailu a `PgUp`/`PgDn` stránkuje aktivní panel. `Home`/`End` skočí na začátek

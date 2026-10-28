@@ -7,6 +7,9 @@ import textwrap
 from threading import Thread
 from uuid import uuid4
 
+from spikes.projects import Projects
+from spikes.roadmap_refinement import RoadmapRefinement
+
 
 HELP = ('Tab: panel | j/k: radek | PgUp/PgDn: stranka | Home/End | '
         'h: hotove | s: scan | a/r: rozhodnout | p: zapsat | q: konec')
@@ -25,6 +28,35 @@ def _lines(value, width):
         result.extend(textwrap.wrap(clean, width, replace_whitespace=True,
                                     drop_whitespace=True) or [''])
     return result or ['']
+
+
+class ProjectSelector:
+    """Read-only project chooser shown before the refinement queue."""
+    def __init__(self, projects):
+        self.projects = list(projects)
+        self.selected = 0
+        self.message = '' if self.projects else 'Na uzlu nejsou registrovane projekty.'
+
+    def handle(self, key):
+        if key in (ord('q'), 27):
+            return 'quit'
+        if key in (ord('j'), curses.KEY_DOWN):
+            self.selected = min(self.selected + 1, max(0, len(self.projects) - 1))
+        elif key in (ord('k'), curses.KEY_UP):
+            self.selected = max(0, self.selected - 1)
+        elif key == curses.KEY_HOME:
+            self.selected = 0
+        elif key == curses.KEY_END:
+            self.selected = max(0, len(self.projects) - 1)
+        elif key in (10, 13, curses.KEY_ENTER):
+            if not self.projects:
+                return None
+            project = self.projects[self.selected]
+            if not project.get('available'):
+                self.message = 'Projekt neni lokalne dostupny.'
+                return None
+            return project['id']
+        return None
 
 
 class RefinementTUI:
@@ -212,6 +244,37 @@ def _cell(value, width, lines=2):
     return result + [''] * (lines - len(result))
 
 
+def draw_project_selector(screen, selector):
+    screen.erase()
+    height, width = screen.getmaxyx()
+    _put(screen, 0, 0, 'Roadmap refinement — vyber projektu', width - 1, curses.A_BOLD)
+    _put(screen, 1, 0, 'j/k nebo sipky: vyber | Home/End | Enter: otevrit | q: konec', width - 1)
+    _put(screen, 2, 0, selector.message, width - 1, curses.A_REVERSE if selector.message else 0)
+    visible = max(1, height - 6)
+    start = max(0, min(selector.selected - visible // 2,
+                       max(0, len(selector.projects) - visible)))
+    for position, project in enumerate(selector.projects[start:start + visible], start=start):
+        state = 'dostupny' if project.get('available') else 'nedostupny'
+        label = f"{position + 1:>3}. {project.get('title', 'Projekt')} [{state}]  {project['id']}"
+        _put(screen, 4 + position - start, 0, label, width - 1,
+             curses.A_REVERSE if position == selector.selected else 0)
+    if selector.projects:
+        _put(screen, height - 1, 0,
+             f'Projekt {selector.selected + 1}/{len(selector.projects)}', width - 1, curses.A_BOLD)
+    screen.refresh()
+
+
+def select_project(screen, projects):
+    selector = ProjectSelector(projects)
+    while True:
+        draw_project_selector(screen, selector)
+        result = selector.handle(screen.getch())
+        if result == 'quit':
+            return None
+        if result:
+            return result
+
+
 def draw(screen, ui):
     screen.erase()
     height, width = screen.getmaxyx()
@@ -341,3 +404,19 @@ def run(screen, service, *, scan_limit=5):
 
 def launch(service, *, scan_limit=5):
     return curses.wrapper(run, service, scan_limit=scan_limit)
+
+
+def launch_project_selector(node, *, scan_limit=5, service_factory=RoadmapRefinement):
+    def session(screen):
+        try:
+            curses.curs_set(0)
+        except curses.error:
+            pass
+        screen.keypad(True)
+        projects = Projects(node).catalog()
+        project_id = select_project(screen, projects)
+        if project_id is None:
+            return None
+        screen.clear()
+        return run(screen, service_factory(node, project_id), scan_limit=scan_limit)
+    return curses.wrapper(session)
