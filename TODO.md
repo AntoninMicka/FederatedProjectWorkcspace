@@ -213,6 +213,8 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   Návod a evidence: `docs/roadmap-refinement.md`. Zbývá lidské review první
   dávky, delší crawl a podle jeho nálezů explicitní proposal typy pro
   promotion/split/merge; nejsou součástí aktuálního bezpečného apply.
+  Jednorázové stdlib `curses` TUI nyní poskytuje list/detail, explicitní bounded
+  scan, accept/reject a dvoukrokově potvrzený apply bez druhého storu či writeru.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
@@ -226,12 +228,16 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
 `python3 -m unittest tests.test_roadmap_refinement tests.test_roadmap_importer
 tests.test_roadmap_validation tests.test_roadmap_bundle tests.test_roadmap_mapping
 tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph
-tests.test_spdx -v`: 62 testů OK po doplnění projektové izolace refinement
-queue. Původní 4 testy
+tests.test_spdx -v`: po doplnění TUI 67 testů OK. Původní 4 refinement testy
 ověřují proposal-only scan a deduplikaci, terminální reject, odmítnutí
 vymyšleného cíle a jedinou autorizovanou Workspace transakci po akceptaci.
 Následný cílený běh `python3 -m unittest tests.test_roadmap_refinement -v`:
 5 testů OK; pátý test kryje izolaci jedné lokální queue mezi dvěma projekty.
+`python3 -m unittest tests.test_roadmap_refinement_tui -v`: 5 testů OK;
+ověřeno explicitní spuštění scanu, review přes existující service, zákaz apply
+bez druhého potvrzení, bezpečný quit a terminál bez podpory skrytí kurzoru.
+Skutečný PTY smoke otevřel TUI nad hostitelským projektem a ukončil jej přes
+`q` s exit 0; scan, rozhodnutí ani apply při smoke spuštěny nebyly.
 `python3 -m py_compile spikes/roadmap_refinement.py
 scripts/roadmap_refinement.py`: OK. Celá finální unittest brána zůstává pro
 uzavření dávky.

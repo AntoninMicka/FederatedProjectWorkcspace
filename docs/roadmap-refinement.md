@@ -45,6 +45,19 @@ python3 -m scripts.roadmap_refinement --project "$PROJECT" apply \
   --operation-id NOVÉ_OPERATION_UUID
 ```
 
+Pro jednorázové interaktivní review lze nad stejnou queue spustit stdlib
+`curses` TUI:
+
+```bash
+python3 -m scripts.roadmap_refinement --project "$PROJECT" tui --limit 5
+```
+
+Klávesy: `j`/`k` nebo šipky mění výběr, `s` explicitně spustí bounded scan,
+`a` přijme pending návrh, `r` jej zamítne, `p` připraví apply a teprve následné
+`y` jej provede; jiná klávesa apply zruší. `q` rozhraní ukončí. TUI nemá vlastní
+storage ani writer: pouze volá stejné `list`, `scan`, `decide` a `apply` hranice.
+Ollama scan probíhá synchronně a během něj se zobrazuje stav běhu.
+
 `scan` ani `decide` nemění projekt. `apply` vezme všechny accepted návrhy
 se stejným expected HEAD a zapíše pouze hlavní plán jednou
 `Workspace.transact` operací. Před zápisem znovu ověří existenci dokumentu,

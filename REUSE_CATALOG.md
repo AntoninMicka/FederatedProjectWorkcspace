@@ -75,6 +75,13 @@ existující prezentační encoder/validator a Julia computation validátor pro
 coverage i kontextový help panel; nový help framework, renderer Markdownu,
 template engine ani zápisová služba nejsou potřeba.
 
+DEV-01-E-REFINE-01 **reuse/adaptuje** Python stdlib `curses` pouze jako
+jednorázovou interaktivní vrstvu nad existujícím `RoadmapRefinement`. TUI nemá
+vlastní store, modelový dispatch ani writer; rozhodnutí a dvoukrokově potvrzený
+apply používají tutéž projektově izolovanou node-local queue a jedinou
+`Workspace.transact` hranici. Externí TUI framework se pro tento omezený
+workflow nepřidává.
+
 F-M5-CHAT-HISTORY-01 **reuse/adaptuje** přímo obousměrný podepsaný
 `federation_sync` z ADR 0042, `ChatThreads` a bilaterální mapování ADR 0021.
 Projektová historie je druhý bounded payload téže sync operace a po přesném

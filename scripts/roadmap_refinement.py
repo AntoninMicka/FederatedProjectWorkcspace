@@ -6,6 +6,7 @@ import json
 
 from spikes.project_creation import default_node_path
 from spikes.roadmap_refinement import RoadmapRefinement
+from spikes.roadmap_refinement_tui import launch
 
 
 def main(argv=None):
@@ -19,6 +20,7 @@ def main(argv=None):
     choice = decide.add_mutually_exclusive_group(required=True)
     choice.add_argument('--accept', action='store_true'); choice.add_argument('--reject', action='store_true')
     apply = sub.add_parser('apply'); apply.add_argument('--operation-id', required=True)
+    tui = sub.add_parser('tui'); tui.add_argument('--limit', type=int, default=5)
     args = parser.parse_args(argv); service = RoadmapRefinement(args.node, args.project)
     if args.command == 'scan':
         result = service.scan(limit=args.limit)
@@ -26,6 +28,9 @@ def main(argv=None):
         result = service.list()
     elif args.command == 'decide':
         result = service.decide(args.proposal, 'accept' if args.accept else 'reject')
+    elif args.command == 'tui':
+        launch(service, scan_limit=args.limit)
+        return 0
     else:
         result = service.apply(args.operation_id)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
