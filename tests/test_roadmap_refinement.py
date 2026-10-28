@@ -102,6 +102,53 @@ class RoadmapRefinementTests(unittest.TestCase):
             other_service.decide(proposal['proposal_id'], 'reject')
         self.assertEqual(self.service.get(proposal['proposal_id'])['state'], 'pending')
 
+    def test_deep_check_freezes_source_clusters_into_the_same_proposal_queue(self):
+        source_id = str(uuid4())
+        self.docs.save(dict(project_id=self.project_id, artifact_id=source_id,
+            base_head=self.git.head(), title='Legacy TODO.md',
+            body='- [ ] **TASK-01 — Work** Legacy planned definition.\n', new=True,
+            metadata={'tags': ['roadmap-import', 'original-source']}), str(uuid4()))
+        deep_head = self.git.head()
+        self.response = dict(
+            schema='fpw-roadmap-deep-check-proposal-v1', action='keep-canonical',
+            cluster_id='id:TASK-01', source_ids=[source_id], target_ids=['TASK-01'],
+            confidence='high', summary='Kanonický task odpovídá zdroji.',
+            reason='ID i význam jsou shodné.', changes=[])
+        first = self.service.scan(limit=10, deep_check=True)
+        self.assertEqual(first['mode'], 'deep-check')
+        self.assertEqual(first['total'], 1)
+        self.assertEqual(first['created'][0]['state'], 'pending')
+        self.assertEqual(first['created'][0]['mode'], 'deep-check')
+        self.assertEqual(first['created'][0]['proposal']['action'], 'keep-canonical')
+        self.assertTrue(any(item['artifact_id'] == main_todo_id(self.project_id)
+                            for item in first['created'][0]['input']['current_occurrences']))
+        self.assertEqual(self.git.head(), deep_head)
+        second = self.service.scan(limit=10, deep_check=True)
+        self.assertEqual(second['created'], [])
+        self.assertTrue(second['converged'])
+        proposal = first['created'][0]
+        self.service.decide(proposal['proposal_id'], 'accept')
+        with self.assertRaisesRegex(ValueError, 'future structured reconciliation apply'):
+            self.service.apply(str(uuid4()))
+
+    def test_deep_check_rejects_unknown_structured_targets_without_retry(self):
+        source_id = str(uuid4())
+        self.docs.save(dict(project_id=self.project_id, artifact_id=source_id,
+            base_head=self.git.head(), title='Legacy backlog',
+            body='- [ ] **TASK-01 — Work** Legacy definition.\n', new=True,
+            metadata={'tags': ['original-source']}), str(uuid4()))
+        self.response = dict(
+            schema='fpw-roadmap-deep-check-proposal-v1', action='add-dependency',
+            cluster_id='id:TASK-01', source_ids=[source_id], target_ids=['TASK-01'],
+            confidence='medium', summary='Navrhovana hrana.', reason='Legacy text.',
+            changes=[dict(kind='add-dependency', node_id='TASK-01', target_id='MADE-UP',
+                          title=None, node_type=None, parent_id=None, checked=None,
+                          reason='Neexistujici cil.')])
+        first = self.service.scan(limit=10, deep_check=True)
+        self.assertEqual(first['created'][0]['state'], 'failed')
+        self.assertIn('structured change', first['created'][0]['proposal']['error'])
+        self.assertEqual(self.service.scan(limit=10, deep_check=True)['created'], [])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -75,6 +75,18 @@ class RefinementTUITests(unittest.TestCase):
         self.assertEqual(self.service.scans, [7])
         self.assertIn('zbyva 3', self.ui.message)
 
+    def test_deep_check_tui_dispatches_the_same_service_in_deep_mode(self):
+        calls = []
+        service = FakeService()
+        def deep_scan(*, limit, deep_check=False):
+            calls.append((limit, deep_check))
+            return {'created': [], 'remaining': 0}
+        service.scan = deep_scan
+        ui = RefinementTUI(service, scan_limit=9, deep_check=True,
+                           background=lambda target: target())
+        ui.handle(ord('s'))
+        self.assertEqual(calls, [(9, True)])
+
     def test_real_background_scan_keeps_ui_responsive_and_blocks_early_quit(self):
         started, release = Event(), Event()
         service = FakeService()

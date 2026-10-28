@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # DEV-01 — jednorázová úplná sémantická reconciliation roadmapy
 
-Stav: **designed**, 28. 10. 2026. Jde o jednorázový nástroj pro dokončení
+Stav: **proposal scan implemented**, 28. 10. 2026. Jde o jednorázový nástroj pro dokončení
 migrace, nikoli o cílovou obecnou Workspace feature `PLAN-SEMANTIC-AUDIT-01`.
 Nástroj nejprve deterministicky vytvoří úplnou resumovatelnou frontu a až poté
 jednotlivé položky předává same-node Ollamě. Běh nic nezapisuje do projektu.
@@ -51,10 +51,11 @@ model mechanicky přepsat.
 
 ## Zmrazený úplný pracovní seznam
 
-Příkaz `prepare` načte schválený importní manifest, všechny hostitelské roadmapy,
-TODO/BACKLOG/WORK_LOG, vybrané modulové roadmapy a současný cílový projekt.
-Zdrojové bajty ověří proti manifestu; cíl připne na exact HEAD. V privátní
-node-local SQLite vytvoří konečný seznam před začátkem LLM práce.
+První `scan --deep-check` načte všechny importované source artefakty a současný
+kanonický plán na exact HEAD. V privátní node-local SQLite nejprve založí celý
+konečný seznam a teprve potom odešle nejvýše `--limit` položek modelu. Další
+běhy pokračují nad stejnými fingerprinty; `list`, rozhodnutí a TUI používají
+tutéž frontu jako původní detached scan.
 
 Jednotkou není každý řádek, ale `source cluster`: stabilní ID se všemi výskyty,
 nebo stabilně identifikovaný bez-ID blok se všemi lokátory. Fronta zároveň drží
@@ -118,6 +119,11 @@ původnímu expected HEAD. Pád před commitem obnovuje Workspace journal; po
 commitu je autoritou Git a index se obnoví z HEAD. Pokud se HEAD během nočního
 běhu nebo review změnil, apply se odmítne a návrhy je nutné explicitně rebase
 nebo vytvořit nový run. Proposal queue není druhou autoritou roadmapy.
+
+Aktuální implementační řez končí u společné fronty, striktní validace a human
+accept/reject. `apply` přijatých strukturovaných deep-check návrhů záměrně
+selže před zápisem; skládání více editací, kontrola kolizí/cyklů a jediný
+transakční writer zůstávají otevřenou částí této položky.
 
 Po akceptaci lze do projektu uložit bounded reconciliation report s coverage,
 přijatými/odmítnutými/conflict položkami a run fingerprintem. Privátní queue se

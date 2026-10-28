@@ -45,6 +45,25 @@ python3 -m scripts.roadmap_refinement --project "$PROJECT" apply \
   --operation-id NOVÉ_OPERATION_UUID
 ```
 
+Úplná sémantická kontrola importovaných roadmapových zdrojů používá nový režim
+téže služby a stejný výstupní seznam návrhů:
+
+```bash
+python3 -m scripts.roadmap_refinement --project "$PROJECT" scan \
+  --deep-check --limit 25
+python3 -m scripts.roadmap_refinement --project "$PROJECT" list
+python3 -m scripts.roadmap_refinement --project "$PROJECT" tui \
+  --deep-check --limit 5
+```
+
+První deep-check běh před jediným LLM voláním zmrazí všechny source clustery,
+exact HEAD, nalezené výskyty v nových podpůrných souborech a současný task graph
+do privátní queue. `--limit` omezuje počet requestů jednoho běhu, nikoli počet
+inventarizovaných položek. Opakované spuštění pokračuje pouze položkami
+`queued`; přerušené `running` přejdou fail-closed do `unknown`. Accepted
+strukturované deep-check návrhy zatím nelze aplikovat: bezpečný společný writer
+pro kolize, cykly a jednu Workspace transakci je další otevřený řez.
+
 Pro jednorázové interaktivní review lze nad stejnou queue spustit stdlib
 `curses` TUI:
 

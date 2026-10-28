@@ -15,27 +15,29 @@ def main(argv=None):
     parser.add_argument('--project')
     sub = parser.add_subparsers(dest='command', required=True)
     scan = sub.add_parser('scan'); scan.add_argument('--limit', type=int, default=1)
+    scan.add_argument('--deep-check', action='store_true')
     sub.add_parser('list')
     decide = sub.add_parser('decide'); decide.add_argument('--proposal', required=True)
     choice = decide.add_mutually_exclusive_group(required=True)
     choice.add_argument('--accept', action='store_true'); choice.add_argument('--reject', action='store_true')
     apply = sub.add_parser('apply'); apply.add_argument('--operation-id', required=True)
     tui = sub.add_parser('tui'); tui.add_argument('--limit', type=int, default=5)
+    tui.add_argument('--deep-check', action='store_true')
     args = parser.parse_args(argv)
     if args.command == 'tui' and not args.project:
-        launch_project_selector(args.node, scan_limit=args.limit)
+        launch_project_selector(args.node, scan_limit=args.limit, deep_check=args.deep_check)
         return 0
     if not args.project:
         parser.error('--project je povinný pro příkaz ' + args.command)
     service = RoadmapRefinement(args.node, args.project)
     if args.command == 'scan':
-        result = service.scan(limit=args.limit)
+        result = service.scan(limit=args.limit, deep_check=args.deep_check)
     elif args.command == 'list':
         result = service.list()
     elif args.command == 'decide':
         result = service.decide(args.proposal, 'accept' if args.accept else 'reject')
     elif args.command == 'tui':
-        launch(service, scan_limit=args.limit)
+        launch(service, scan_limit=args.limit, deep_check=args.deep_check)
         return 0
     else:
         result = service.apply(args.operation_id)

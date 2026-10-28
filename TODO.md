@@ -228,8 +228,8 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   názvem a UUID, nedostupný projekt odmítne a po potvrzení otevře jeho oddělenou
   proposal queue. Přímé `--project` a povinné UUID neinteraktivních příkazů
   zůstávají zachované.
-- [ ] [planned] **DEV-01-E-RECONCILE-01 — úplná jednorázová sémantická
-  reconciliation importu (designed).** Uživatelský požadavek 2026-10-28:
+- [ ] [in progress] **DEV-01-E-RECONCILE-01 — úplná jednorázová sémantická
+  reconciliation importu (implemented proposal scan).** Uživatelský požadavek 2026-10-28:
   popsat původní sekvenční workflow TODO → celý batch ve WORK_LOG, význam
   BACKLOGu/Master Checklistu a požadovaný nový kanonický stav; nad všemi
   hostitelskými i vybranými modulovými roadmapami nejprve vytvořit konečnou
@@ -240,9 +240,20 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   složí přijaté návrhy do jednoho kandidáta, celý graf validuje a teprve jedna
   potvrzená `Workspace.transact` operace proti původnímu HEAD může změnit plán.
   Crash boundaries, noční recovery, coverage a akceptace jsou v
-  `docs/roadmap-reconciliation.md`. Implementace, fyzický úplný scan, review a
-  apply zůstávají otevřené; obecná produktová integrace je nadále samostatný
-  `PLAN-SEMANTIC-AUDIT-01` k předání do backlogu.
+  `docs/roadmap-reconciliation.md`. Režim `scan --deep-check` nyní před dispatch
+  zmrazí kompletní source-cluster inventuru proti exact HEAD, dohledá stejné ID
+  v podpůrných Markdown podkladech, dávkově vytváří striktně validované návrhy
+  ve stejné SQLite queue a používá společné list/decide/TUI. Restart pokračuje
+  jen z `queued`, zbylé `running` fail-closed převede na `unknown`; paralelní
+  deep scan blokuje node-local lock. Accepted strukturovaný návrh zatím `apply`
+  odmítne před zápisem. Otevřené zůstává skládání a validace společného
+  kandidáta, transakční writer, fyzický úplný scan a review; obecná produktová
+  integrace je nadále samostatný `PLAN-SEMANTIC-AUDIT-01` k předání do backlogu.
+  Cílené ověření 2026-10-28: `python3 -m unittest
+  tests.test_roadmap_refinement tests.test_roadmap_refinement_tui -v` — 18/18
+  testů prošlo; CLI help potvrzuje `scan --deep-check`, `git diff --check`
+  prošel. Fyzický Ollama běh nad importovaným projektem nebyl v tomto kroku
+  spuštěn.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

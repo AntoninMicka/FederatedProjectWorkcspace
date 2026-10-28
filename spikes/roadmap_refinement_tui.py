@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """One-shot curses review UI for roadmap refinement proposals."""
 import curses
+import json
 from queue import Empty, Queue
 import textwrap
 from threading import Thread
@@ -62,11 +63,12 @@ class ProjectSelector:
 class RefinementTUI:
     """Small interaction controller; durable state remains in the service."""
     def __init__(self, service, *, scan_limit=5, operation_factory=None,
-                 background=None):
+                 background=None, deep_check=False):
         self.service = service
         self.scan_limit = scan_limit
         self.operation_factory = operation_factory or (lambda: str(uuid4()))
         self.background = background or self._thread
+        self.deep_check = deep_check
         self.all_rows = []
         self.rows = []
         self.selected = 0
@@ -87,7 +89,9 @@ class RefinementTUI:
 
     def _scan(self):
         try:
-            self.scan_results.put(('ok', self.service.scan(limit=self.scan_limit)))
+            result = (self.service.scan(limit=self.scan_limit, deep_check=True)
+                      if self.deep_check else self.service.scan(limit=self.scan_limit))
+            self.scan_results.put(('ok', result))
         except Exception as exc:
             self.scan_results.put(('error', str(exc)))
 
@@ -305,8 +309,8 @@ def draw(screen, ui):
     start = max(0, min(ui.selected - visible // 2, max(0, len(ui.rows) - visible)))
     for position, row in enumerate(ui.rows[start:start + visible], start=start):
         proposal = row['proposal']
-        decision = proposal.get('decision', proposal.get('outcome', ''))
-        target = proposal.get('target_id') or '-'
+        decision = proposal.get('decision', proposal.get('action', proposal.get('outcome', '')))
+        target = proposal.get('target_id') or ','.join(proposal.get('target_ids', [])) or '-'
         context = ui.contexts.get(row['proposal_id'], {})
         source = context.get('source_title') or row.get('document_id', '-')[:8]
         state_lines = _cell(f'{position + 1}. {row["state"]}', state_width)
@@ -330,6 +334,7 @@ def draw(screen, ui):
         context = ui.context()
         target = context.get('target') or {}
         decision = proposal.get('decision')
+        action_value = proposal.get('action')
         if decision == 'attach':
             effect = ('Presune odkaz ze sekce neprirazenych podkladu pod vybrany cil. '
                       'Obsah zdrojoveho souboru se nemeni.')
@@ -337,6 +342,12 @@ def draw(screen, ui):
         elif decision == 'keep-detached':
             effect = 'Ponecha podklad samostatne; do projektove roadmapy se nic nezapise.'
             action = 'PONECHAT JAKO SAMOSTATNY PODKLAD'
+        elif row.get('mode') == 'deep-check' and row['state'] == 'queued':
+            effect = 'Zmrazeny source cluster ceka ve stejne proposal queue na bounded Ollama scan.'
+            action = 'CEKA NA DEEP-CHECK'
+        elif action_value:
+            effect = proposal.get('summary') or 'Typovany navrh semanticke reconciliation.'
+            action = action_value.upper()
         else:
             effect = 'Navrh nelze aplikovat; jde o diagnosticky stav modeloveho behu.'
             action = 'BEZ APLIKOVATELNE ZMENY'
@@ -346,6 +357,8 @@ def draw(screen, ui):
             target_label = proposal['target_id']
             if target:
                 target_label += ' — ' + target['title'] + ' (' + target['type'] + ')'
+        elif proposal.get('target_ids'):
+            target_label = ', '.join(proposal['target_ids'])
         detail = [
             context.get('project_title', ui.service.project_id),
             'STAV: ' + row['state'] + '    JISTOTA: ' + str(proposal.get('confidence', '-')),
@@ -358,6 +371,9 @@ def draw(screen, ui):
             '',
             'ODUVODNENI MODELU:',
             proposal.get('reason') or proposal.get('error') or '-',
+            *(['', 'STRUKTUROVANE ZMENY:', json.dumps(
+                proposal.get('changes'), ensure_ascii=False, sort_keys=True)]
+              if proposal.get('changes') else []),
             '',
             'NAHLED ZDROJOVEHO TEXTU:',
             context.get('source_excerpt') or context.get('context_error') or '-',
@@ -384,14 +400,14 @@ def draw(screen, ui):
     screen.refresh()
 
 
-def run(screen, service, *, scan_limit=5):
+def run(screen, service, *, scan_limit=5, deep_check=False):
     try:
         curses.curs_set(0)
     except curses.error:
         pass
     screen.keypad(True)
     screen.timeout(100)
-    ui = RefinementTUI(service, scan_limit=scan_limit)
+    ui = RefinementTUI(service, scan_limit=scan_limit, deep_check=deep_check)
     active = True
     while active:
         ui.poll()
@@ -402,11 +418,12 @@ def run(screen, service, *, scan_limit=5):
     return ui
 
 
-def launch(service, *, scan_limit=5):
-    return curses.wrapper(run, service, scan_limit=scan_limit)
+def launch(service, *, scan_limit=5, deep_check=False):
+    return curses.wrapper(run, service, scan_limit=scan_limit, deep_check=deep_check)
 
 
-def launch_project_selector(node, *, scan_limit=5, service_factory=RoadmapRefinement):
+def launch_project_selector(node, *, scan_limit=5, deep_check=False,
+                            service_factory=RoadmapRefinement):
     def session(screen):
         try:
             curses.curs_set(0)
@@ -418,5 +435,6 @@ def launch_project_selector(node, *, scan_limit=5, service_factory=RoadmapRefine
         if project_id is None:
             return None
         screen.clear()
-        return run(screen, service_factory(node, project_id), scan_limit=scan_limit)
+        return run(screen, service_factory(node, project_id), scan_limit=scan_limit,
+                   deep_check=deep_check)
     return curses.wrapper(session)
