@@ -101,9 +101,11 @@ Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou.
 a byla doručena PR #107 jako squash commit `ac4281a`; její akceptovaná evidence
 je ve WORK_LOG. `PLAN-TASK-EDITOR-01` zahrnula souborový kontrakt
 `PLAN-FILE-HIERARCHY-01` i úplnou task coverage katalogu a byla doručena PR
-#108 jako squash commit `50284d1`. Obecnou šíři vzorů mimo task editor nyní
-realizuje aktivní `DOC-PATTERN-LIBRARY-01` v TODO. Poté následují podle
-uživatelem aktualizovaného pořadí `COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
+#108 jako squash commit `50284d1`. `DOC-PATTERN-LIBRARY-01` byla doručena PR
+#109 jako squash commit `ab09744`. Navazující ad-hoc dávka
+`PLAN-ROADMAP-MILESTONE-VIEW-01` je feature-akceptovaná a její doručení čeká v
+TODO. Poté zůstávají podle uživatelem aktualizovaného pořadí připravené
+`COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
 Každá položka
 zůstává samostatnou feature dávkou a vlastním PR; nevzniká společná větev ani
 stacked PR bez dalšího výslovného rozhodnutí.

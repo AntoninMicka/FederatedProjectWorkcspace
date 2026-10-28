@@ -9,7 +9,8 @@ SPDX-License-Identifier: MPL-2.0
 - Datum: 2026-10-27
 - Dávka: `DOC-EDITOR-CONTRACTS-01`
 - Implementace: `PLAN-TASK-EDITOR-01` (zahrnuje původní souborový rozsah
-  `PLAN-FILE-HIERARCHY-01` a task coverage katalogu)
+  `PLAN-FILE-HIERARCHY-01` a task coverage katalogu), rozšířeno
+  `PLAN-ROADMAP-MILESTONE-VIEW-01`
 
 ## Kontext
 
@@ -77,7 +78,12 @@ Profil `software-development/v1` má přesně:
 2. `batch` — jedna ucelená feature, jedna feature větev a jeden PR, může
    obsahovat `task`;
 3. `task` — nejmenší implementační jednotka, cílená na jednu funkci nebo
-   koherentní změnu a normálně jeden commit; nemá děti.
+   koherentní změnu a normálně jeden commit; nemá další roadmapové uzly.
+
+Task smí po `type: task` obsahovat vnořené checkbox odrážky bez stabilního ID.
+Ty jsou bounded podmínkami splnění se stavem a textem, ne dětmi v hierarchii:
+nemají `parent_id`, vztahy ani samostatné grafové/stromové uzly. Checkbox bez
+ID pod milestone nebo batch je neplatný a sestavení projekce selže uzavřeně.
 
 Task, který je potřeba dále dělit, ještě není leaf task: rozpadne se na více
 sourozeneckých tasků v dávce s explicitními dependency hranami. Opravný commit
@@ -101,6 +107,23 @@ vnoření nebo rodiči odkazovaného souboru. Projekce uloží jediný směr
 `parent_id`. Stávající `depends_on`, `blocks`, `duplicates`,
 `supersedes` a `relates_to` zůstávají ortogonální k hierarchii. Dependency
 cyklus je zakázaný; hierarchie musí být acyklická a odpovídat profilu.
+
+## Popisné odrážky a roadmapový pohled
+
+Obyčejná odrážka vnořená pod milestone, batch nebo task, která nemá
+rozpoznaný metadatový klíč, je řádek popisu nejbližšího uzlu. Rozpoznaná
+metadata (`type`, dependency a další vztahy) zůstávají oddělená. Projekce
+spojuje více popisných odrážek v pořadí souboru, ale raw Markdown neupravuje;
+platí stejný limit a fail-closed sestavení bundle jako pro ostatní data uzlu.
+
+Strom profilu `software-development/v1` má kořen `/`, pod ním milestone a pod
+nimi batch; task ani checklist položka do stromu nevstupují. Kořenový pohled
+materializuje milestone jako vodorovný pruh s ukotveným nadpisem a popisem a
+batch jako kartu s vlastním popisem. Dependency hrana batch není omezena
+hranicí milníku, takže plátno smí růst do šířky a vodorovně se posouvat.
+Výběr milestone materializuje jeho batch jako pruhy a task jako karty; výběr
+batch tento pohled zúží na jeden pruh. Checklist se zobrazuje jen jako souhrn
+na task kartě a plný text v detailu.
 
 ## Speciální editor úkolů
 

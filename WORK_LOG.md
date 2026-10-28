@@ -5,12 +5,65 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## PLAN-ROADMAP-MILESTONE-VIEW-01 — Strom a víceúrovňový pohled roadmapy — 2026-10-28
+
+Dávka vznikla na větvi `feature/plan-roadmap-milestone-view` z `develop`
+`ab09744`; první část je v commitu `f5ab8d8` a uživatelské doplnění stromu,
+task pohledu a checklistu je připravené v pracovním stromu. Dávka dosáhla
+úrovně **implemented** a feature akceptace je dokončená. Push ani PR do
+`develop` dosud nebyly vytvořeny a feature není sloučená.
+
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-A — popisné bloky plánu
+  (implemented).** Milestone, batch a task mají bounded víceřádkový popis v
+  lossless read-only projekci; metadata a vztahy zůstávají oddělené.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-B — hlavní milestone/batch
+  pohled (implemented).** Kořen `/` zachovává milestone pruhy a batch karty s
+  popisy.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-C — závislosti a scroll
+  (implemented).** Batch dependency mohou vést napříč milestone, plátno roste
+  do šířky a milestone nadpis s popisem zůstává ukotvený.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-D — první regrese,
+  dokumentace a předání (implemented).** Task vzory a příklady získaly popisy
+  a první milestone/batch pohled byl ověřený a zdokumentovaný před následným
+  uživatelským rozšířením akceptace.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-E — strom plánu a milestone
+  drill-down (implemented).** Strom obsahuje pouze `/ → milestone → batch`.
+  Milestone přepne plátno na pruhy jeho batch s task kartami a batch pohled
+  zúží na jediný pruh; task není položkou stromu.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-F — task checklist podmínek
+  splnění (implemented).** Vnořené checkboxy bez ID jsou bounded stav a text
+  pod `task`, zobrazují se v kartě/detailu a nevytvářejí grafové ani stromové
+  uzly. Vzory i vyplněné příklady tuto syntax obsahují.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-G — regrese, dokumentace a
+  předání (implemented).** Parser, bezpečný DOM renderer, skutečný browser
+  smoke, ADR 0059, návody a master roadmapa popisují stejný kontrakt.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu, testů a vzorů prošla úplná sada
+`python3 -m unittest discover -s tests -v`: **950 testů, 914 prošlo a 36
+volitelných bylo přeskočeno, bez selhání**, 229,703 s. Cílených 20 testů
+parseru a katalogu a dva API testy prošly. Samostatné skutečné Qt/WebEngine
+smoke testy ověřily obecný plán/podgraf i profilovaný kořen, strom bez tasků,
+milestone task pohled, checklist v kartě/detailu a zúžení na batch. Generovaný
+JavaScript prošel `node --check` a finální `git diff --check` byl bez chyby.
+Úplná sada vypsala existující neblokující `ResourceWarning` pro neuzavřené
+testovací SQLite connection, ale žádný test neselhal.
+
+Jde o read-only projekci committed souborů; nevzniká nový store ani zápisová
+operace. Uložení v task editoru dál používá Workspace/Journal/Git/index:
+před commitem je autoritou journal a po commitu lze index obnovit z HEAD.
+Reuse/adapt zachovalo parser a fail-closed graf ADR 0055/0059, bezpečné
+`textContent`/SVG DOM vykreslování a existující vizuální jazyk roadmapy; nový
+framework ani perzistentní vrstva nevznikly. Checklist zůstává vlastností tasku
+a task nejnižší úrovní roadmapové hierarchie.
+
 ## DOC-PATTERN-LIBRARY-01 — Rozšířená knihovna vzorů a kontextová nápověda — 2026-10-27
 
 Dávka vznikla na větvi `feature/doc-pattern-library` z `develop` `50284d1` a
-dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; větev
-čeká na commit a push poslední akceptační úpravy do otevřeného PR #109 proti
-`develop`. Původní požadavek na obsahově bohatší katalog byl během aktivace
+dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; PR #109
+byla sloučena do `develop` jako squash commit `ab09744`. Původní požadavek na
+obsahově bohatší katalog byl během aktivace
 rozšířen o pravý kontextový panel:
 výchozí stav vysvětluje celý formát souboru a explicitní výběr jej nahradí
 podrobnou nápovědou vzoru. Následná akceptační připomínka zachovala plnou

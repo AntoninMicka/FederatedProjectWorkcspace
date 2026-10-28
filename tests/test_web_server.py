@@ -136,6 +136,33 @@ class WebTests(unittest.TestCase):
                 metadata={'tags':['plan-subgraph']}), str(uuid4()))['commit_id']
         return project
 
+    def create_profiled_roadmap_project(self):
+        _, data, _ = self.create_project('Milníková roadmapa'); project = json.loads(data)['id']
+        artifacts = Artifacts(self.root/'node.json'); head = Projects(self.root/'node.json').open(project)['commit_id']
+        artifacts.save(dict(project_id=project, artifact_id=main_todo_id(project),
+            base_head=head, title='Hlavní TODO', body='''<!-- fpw-plan-profile: software-development/v1 -->
+# TODO
+- [ ] [MILESTONE-01] Import
+  - type: milestone
+  - Importovat původní projektové podklady.
+  - [x] [BATCH-01] Načíst roadmapu
+    - type: batch
+    - Načíst hlavní i doplňkové soubory.
+    - [ ] [TASK-01] Ověřit soubor
+      - type: task
+      - Zachovat původní bajty.
+      - [x] Import zachová původní bajty.
+      - [ ] Náhled nevykreslí aktivní HTML.
+- [ ] [MILESTONE-02] Zobrazení
+  - type: milestone
+  - Zobrazit materializovaný plán.
+  - [ ] [BATCH-02] Vykreslit roadmapu
+    - type: batch
+    - Navázat na import z prvního milníku.
+    - depends_on: BATCH-01
+''', new=True), str(uuid4()))
+        return project
+
     def test_project_open_projects_canonical_task_plan_and_two_subgraphs(self):
         project = self.create_planned_project()
         code, data, _ = self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}))
@@ -1124,6 +1151,47 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
             WORKSPACE_PROJECT=project), capture_output=True, text=True, timeout=45)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('project plan smoke: main graph, subgraph and keyboard detail OK', result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_browser_renders_profiled_milestones_descriptions_and_cross_lane_edge(self):
+        project = self.create_profiled_roadmap_project()
+        import sys
+        code = r"""
+import json, os, sys
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineWidgets import QWebEngineView
+app=QApplication([]);view=QWebEngineView();view.resize(1200,800)
+view.page().certificateError.connect(lambda error:error.acceptCertificate())
+phase=0;ticks=0;key=os.environ['WORKSPACE_SMOKE_KEY'];project=os.environ['WORKSPACE_PROJECT']
+def run(script): view.page().runJavaScript(script)
+def finish(message,code=1): print(message,flush=True);app.exit(code)
+def result(value):
+ global phase
+ if isinstance(value,str) and value.startswith('FAIL:'): finish(value);return
+ if value!='ready': return
+ if phase==0: phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
+ elif phase==1: phase=2;run("[...document.querySelectorAll('#sidebar-project-list button')].find(b=>b.dataset.id==="+json.dumps(project)+").click();")
+ elif phase==2: phase=3;run("document.querySelector('#plan-tab').click();")
+ elif phase==3: phase=4;run("document.querySelector('#sidebar-plan-hierarchy>li>button').click();")
+ elif phase==4: phase=5;run("document.querySelector('.plan-task-card').click();")
+ elif phase==5: phase=6;run("document.querySelector('#sidebar-plan-hierarchy>li>ul button').click();")
+ elif phase==6: finish('profiled roadmap smoke: tree, milestone tasks, checklist and batch narrowing OK',0)
+def poll():
+ global ticks
+ ticks+=1
+ if ticks>350: finish('profiled roadmap timeout at '+str(phase));return
+ checks={0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('#sidebar-project-list button')?'ready':'waiting'",2:"document.querySelector('#project-title').textContent==='Milníková roadmapa'&&!document.querySelector('#project-view').hidden?'ready':'waiting'",3:"(()=>{if(document.querySelector('#plan-panel').hidden)return'waiting';const labels=document.querySelectorAll('.plan-milestone-label'),cards=document.querySelectorAll('.plan-batch-card'),edges=document.querySelectorAll('.plan-roadmap-edges path'),graph=document.querySelector('#plan-graph'),tree=document.querySelector('#sidebar-plan-tree');if(labels.length!==2||cards.length!==2||edges.length!==1)return'FAIL: wrong root roadmap shape';if(!labels[0].textContent.includes('Importovat původní projektové podklady.')||!cards[1].textContent.includes('Navázat na import z prvního milníku.'))return'FAIL: descriptions missing';if(graph.textContent.includes('TASK-01'))return'FAIL: task rendered in root graph';if(!tree.textContent.includes('/')||tree.querySelectorAll('#sidebar-plan-hierarchy>li').length!==2||tree.querySelectorAll('#sidebar-plan-hierarchy>li>ul button').length!==2||tree.textContent.includes('TASK-01'))return'FAIL: wrong roadmap tree';if(getComputedStyle(labels[0]).position!=='sticky')return'FAIL: milestone label is not sticky';if(graph.scrollWidth<=graph.clientWidth)return'FAIL: roadmap is not horizontally scrollable';return'ready'})()",4:"(()=>{const lanes=document.querySelectorAll('.plan-batch-lane'),tasks=document.querySelectorAll('.plan-task-card');return lanes.length===1&&tasks.length===1&&tasks[0].textContent.includes('TASK-01')&&tasks[0].textContent.includes('Podmínky: 1/2')?'ready':'FAIL: milestone task view missing'})()",5:"document.querySelector('#plan-detail h3').textContent.includes('TASK-01')&&document.querySelector('#plan-detail').textContent.includes('☑ Import zachová původní bajty.')&&document.querySelector('#plan-detail').textContent.includes('☐ Náhled nevykreslí aktivní HTML.')?'ready':'waiting'",6:"document.querySelectorAll('.plan-batch-lane').length===1&&document.querySelectorAll('.plan-task-card').length===1?'ready':'FAIL: batch narrowing failed'"}
+ view.page().runJavaScript(checks[phase],result)
+timer=QTimer();timer.timeout.connect(poll);timer.start(100)
+view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
+"""
+        result = subprocess.run([sys.executable, '-c', code], env=dict(os.environ,
+            WORKSPACE_SMOKE_KEY=self.token, WORKSPACE_SMOKE_URL='https://'+self.authority+'/',
+            WORKSPACE_PROJECT=project), capture_output=True, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('profiled roadmap smoke: tree, milestone tasks, checklist and batch narrowing OK',
+                      result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_browser_login_catalog_and_logout(self):
