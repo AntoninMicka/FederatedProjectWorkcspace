@@ -315,9 +315,11 @@ class RoadmapRefinement:
                    for item in graph['nodes']}
         return workspace, head, files, entities, root_id, body, targets
 
-    def scan(self, *, limit=1, deep_check=False):
+    def scan(self, *, limit=1, deep_check=False, forget_previous=False):
+        require(type(forget_previous) is bool, 'Invalid forget-previous flag')
         if deep_check:
-            return self._scan_deep(limit=limit)
+            return self._scan_deep(limit=limit, forget_previous=forget_previous)
+        require(not forget_previous, 'Forget-previous requires deep-check mode')
         require(type(limit) is int and 1 <= limit <= 32, 'Scan limit must be 1..32')
         workspace, head, files, entities, root_id, body, targets = self._snapshot()
         candidates = detached_ids(body); binding = self._binding()
@@ -429,10 +431,18 @@ class RoadmapRefinement:
                             'deep-check', payload.decode()))
         return clusters, graph_catalog, fingerprints
 
-    def _scan_deep(self, *, limit=1):
+    def _scan_deep(self, *, limit=1, forget_previous=False):
         require(type(limit) is int and 1 <= limit <= 100000,
                 'Deep-check limit must be 1..100000')
         with self._deep_lock():
+            forgotten = 0
+            if forget_previous:
+                # This is deliberately scoped to the selected project and
+                # deep-check mode. Detached refinement reviews remain intact.
+                with self._connect() as db, db:
+                    forgotten = db.execute(
+                        "DELETE FROM proposals WHERE project_id=? AND mode='deep-check'",
+                        (self.project_id,)).rowcount
             workspace, head, files, entities, root_id, body, targets = self._snapshot()
             clusters, catalog, fingerprints = self._prepare_deep(head, files, entities, targets)
             with self._connect() as db, db:
@@ -507,6 +517,7 @@ class RoadmapRefinement:
                 counts[state] = counts.get(state, 0) + 1
             return {'project_id': self.project_id, 'mode': 'deep-check',
                     'expected_head': head, 'total': len(fingerprints), 'created': created,
+                    'forgotten': forgotten,
                     'remaining': sum(states.get(value) == 'queued' for value in current),
                     'states': counts, 'converged': bool(current) and
                     all(states.get(value) in done for value in current)}

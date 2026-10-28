@@ -16,6 +16,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest='command', required=True)
     scan = sub.add_parser('scan'); scan.add_argument('--limit', type=int, default=1)
     scan.add_argument('--deep-check', action='store_true')
+    scan.add_argument('--forget-previous', action='store_true')
     sub.add_parser('list')
     decide = sub.add_parser('decide'); decide.add_argument('--proposal', required=True)
     choice = decide.add_mutually_exclusive_group(required=True)
@@ -31,7 +32,10 @@ def main(argv=None):
         parser.error('--project je povinný pro příkaz ' + args.command)
     service = RoadmapRefinement(args.node, args.project)
     if args.command == 'scan':
-        result = service.scan(limit=args.limit, deep_check=args.deep_check)
+        if args.forget_previous and not args.deep_check:
+            parser.error('--forget-previous vyžaduje --deep-check')
+        result = service.scan(limit=args.limit, deep_check=args.deep_check,
+                              forget_previous=args.forget_previous)
     elif args.command == 'list':
         result = service.list()
     elif args.command == 'decide':

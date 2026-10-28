@@ -64,6 +64,19 @@ inventarizovaných položek. Opakované spuštění pokračuje pouze položkami
 strukturované deep-check návrhy zatím nelze aplikovat: bezpečný společný writer
 pro kolize, cykly a jednu Workspace transakci je další otevřený řez.
 
+Pokud je nutné zahodit všechna dosavadní deep-check rozhodnutí daného projektu
+a vytvořit frontu znovu z aktuálního HEAD, použije se explicitní destruktivní
+volba:
+
+```bash
+python3 -m scripts.roadmap_refinement --project "$PROJECT" scan \
+  --deep-check --forget-previous --limit 25
+```
+
+Volba smaže pouze node-local řádky `mode=deep-check` vybraného project ID,
+včetně accepted/rejected/failed/unknown. Detached návrhy ani projektový Git
+nemění. Bez `--deep-check` je odmítnuta.
+
 Pro jednorázové interaktivní review lze nad stejnou queue spustit stdlib
 `curses` TUI:
 

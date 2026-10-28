@@ -149,6 +149,33 @@ class RoadmapRefinementTests(unittest.TestCase):
         self.assertIn('structured change', first['created'][0]['proposal']['error'])
         self.assertEqual(self.service.scan(limit=10, deep_check=True)['created'], [])
 
+    def test_forget_previous_rebuilds_only_this_projects_deep_queue(self):
+        source_id = str(uuid4())
+        self.docs.save(dict(project_id=self.project_id, artifact_id=source_id,
+            base_head=self.git.head(), title='Legacy TODO',
+            body='- [ ] **TASK-01 — Work** Legacy definition.\n', new=True,
+            metadata={'tags': ['original-source']}), str(uuid4()))
+        self.response = dict(
+            schema='fpw-roadmap-deep-check-proposal-v1', action='keep-canonical',
+            cluster_id='id:TASK-01', source_ids=[source_id], target_ids=['TASK-01'],
+            confidence='high', summary='Shoda.', reason='Stejne ID.', changes=[])
+        deep = self.service.scan(limit=10, deep_check=True)['created'][0]
+        self.service.decide(deep['proposal_id'], 'accept')
+        self.response = dict(schema='fpw-roadmap-refinement-proposal-v1', decision='keep-detached',
+                             document_id=self.document_id, target_id=None,
+                             confidence='medium', reason='Samostatny podklad.')
+        detached = self.service.scan()['created'][0]
+        self.response = dict(
+            schema='fpw-roadmap-deep-check-proposal-v1', action='keep-canonical',
+            cluster_id='id:TASK-01', source_ids=[source_id], target_ids=['TASK-01'],
+            confidence='medium', summary='Nova kontrola.', reason='Znovu posouzeno.', changes=[])
+        rebuilt = self.service.scan(limit=10, deep_check=True, forget_previous=True)
+        self.assertEqual(rebuilt['forgotten'], 1)
+        self.assertEqual(len(rebuilt['created']), 1)
+        self.assertEqual(rebuilt['created'][0]['state'], 'pending')
+        self.assertEqual(rebuilt['created'][0]['proposal']['summary'], 'Nova kontrola.')
+        self.assertEqual(self.service.get(detached['proposal_id'])['mode'], 'detached')
+
 
 if __name__ == '__main__':
     unittest.main()
