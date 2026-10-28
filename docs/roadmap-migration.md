@@ -7,7 +7,8 @@ SPDX-License-Identifier: MPL-2.0
 
 Stav: **designed**, 28. 10. 2026. Pracovní plán jediné feature DEV-01,
 nikoli druhá roadmapa produktu. Aktuální stav a úkoly drží [TODO](../TODO.md).
-Implementace importéru, zápis cílových dat a přepnutí autority zatím neproběhly.
+Importér se zápisem a přepnutí autority zatím nejsou implementované.
+Read-only inventuru lze již spustit postupem níže; její výstup je návrh k review.
 
 ## Výstup a hranice
 
@@ -197,3 +198,37 @@ smazání importovaných dat není recovery postup.
   export; izolovaný test nesmí být prezentován jako skutečná migrace.
 - Uživatel akceptuje přenesený obsah i předání autority. DEV-01 se uzavře
   odděleně od DEV-02/DEV-03 a od stavu doručení PR.
+
+## Spustitelná read-only inventura
+
+```bash
+python3 -m scripts.roadmap_migration_preview \
+  --repository . --revision SOURCE_COMMIT \
+  --output /tmp/dev-01-inventory
+```
+
+`SOURCE_COMMIT` nahraďte schválenou Git revizí; výstupní adresář nesmí
+existovat. Bez výslovného výběru externího modulu report ukáže
+`unselected-module` místo tvrzení, že je modul zahrnutý. Pro každý vybraný
+modul přidejte `--module MODULE_ID MODULE_REPOSITORY MODULE_COMMIT`;
+repozitář i revizi zadává uživatel explicitně. Místní cesty modulů se do
+reportu nekopírují a žádné Markdown odkazy se automaticky nenásledují.
+
+`inventory.json` obsahuje source hashe, přesné revize, lokátory výskytů
+včetně byte offsetů, explicitní ID, návrhy mapování anonymních bodů,
+původní checkbox stavy, dependency hints a seznam odkazovaných dokumentů.
+`summary.md` shrnuje pokrytí a opakovaně zmíněná ID. Report není autoritou
+úkolů a vždy uvádí `import_ready: false`, `approval: pending-review`;
+privacy každého zdroje čeká na review, neodvozuje se z místní dostupnosti.
+
+Návrhy definic preferují aktuální TODO, potom BACKLOG, poté historickou
+sekci a nakonec samotný požadavek. To slouží k usnadnění obsahového review,
+nikoli k automatickému řešení rozdílných popisů či ověření akceptace.
+Bez-ID body požadavků dostanou předběžná scoped `MIG-REQ-*` ID bez převodu
+na implementační úkoly; historické důkazy se nepřepisují na nové úkoly.
+Před apply musí být schválená mapa samostatně uložená a znovupoužitá při
+změnách zdroje; pořadí řádků není stabilní identita pro opakovaný import.
+
+Tato fáze nevolá Workspace API ani nepoužívá credentials, nevytváří commity
+ani index/journal a neprovádí skutečnou migraci. Stav konkrétního ověření
+patří pouze do TODO; zde je postup, nikoli druhý stavový záznam.
