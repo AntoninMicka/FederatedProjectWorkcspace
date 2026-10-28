@@ -139,6 +139,12 @@ class RoadmapRefinement:
                    'id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE NOT NULL,project_id TEXT NOT NULL,'
                    'expected_head TEXT NOT NULL,document_id TEXT NOT NULL,document_sha256 TEXT NOT NULL,'
                    'response TEXT NOT NULL,state TEXT NOT NULL,created_at TEXT NOT NULL,receipt TEXT)')
+        # Older local queues stored a globally unique bare digest. Prefixing it
+        # preserves every durable review while making uniqueness project-local.
+        legacy = db.execute("SELECT 1 FROM proposals WHERE instr(fingerprint, ':')=0 LIMIT 1").fetchone()
+        if legacy:
+            db.execute("UPDATE proposals SET fingerprint=project_id || ':' || fingerprint "
+                       "WHERE instr(fingerprint, ':')=0")
         db.commit(); return closing(db)
 
     def _binding(self):
@@ -170,13 +176,15 @@ class RoadmapRefinement:
                              'targets': [dict(id=id_, **item) for id_, item in sorted(targets.items())]})
         require(len(catalog) <= MAX_FILE, 'Refinement target catalog exceeds limit')
         with self._connect() as db:
-            existing = {row[0] for row in db.execute('SELECT fingerprint FROM proposals')}
+            existing = {row[0] for row in db.execute(
+                'SELECT fingerprint FROM proposals WHERE project_id=?', (self.project_id,))}
         candidate_rows = []
         for document_id in candidates:
             require(document_id in entities and entities[document_id]['kind'] == 'document',
                     'Detached evidence document is unavailable')
             raw = _content(files, entities[document_id])
-            fingerprint = hashlib.sha256(raw + b'\0' + catalog + b'\0' + ANALYZER_REVISION.encode()).hexdigest()
+            fingerprint = self.project_id + ':' + hashlib.sha256(
+                raw + b'\0' + catalog + b'\0' + ANALYZER_REVISION.encode()).hexdigest()
             candidate_rows.append((document_id, raw, fingerprint))
         for document_id, raw, fingerprint in candidate_rows:
             if len(created) >= limit:
@@ -227,7 +235,8 @@ class RoadmapRefinement:
         current = {fingerprint for _, _, fingerprint in candidate_rows}
         with self._connect() as db:
             states = {fingerprint: state for fingerprint, state in db.execute(
-                'SELECT fingerprint,state FROM proposals') if fingerprint in current}
+                'SELECT fingerprint,state FROM proposals WHERE project_id=?',
+                (self.project_id,)) if fingerprint in current}
         terminal = {'rejected', 'applied', 'dismissed'}
         return {'project_id': self.project_id, 'expected_head': head, 'detached': len(candidates),
                 'created': created, 'remaining': sum(states.get(value) not in terminal for value in current),
@@ -237,7 +246,8 @@ class RoadmapRefinement:
     def list(self):
         with self._connect() as db:
             rows = db.execute('SELECT id,response,state,expected_head,created_at,receipt FROM proposals '
-                              'ORDER BY created_at,id').fetchall()
+                              'WHERE project_id=? ORDER BY created_at,id',
+                              (self.project_id,)).fetchall()
         return [dict(proposal_id=row[0], proposal=json.loads(row[1]), state=row[2],
                      expected_head=row[3], created_at=row[4], receipt=json.loads(row[5]) if row[5] else None)
                 for row in rows]
@@ -249,10 +259,12 @@ class RoadmapRefinement:
     def decide(self, proposal_id, decision):
         uuid(proposal_id); require(decision in {'accept', 'reject'}, 'Unknown review decision')
         with self._connect() as db, db:
-            row = db.execute('SELECT state FROM proposals WHERE id=?', (proposal_id,)).fetchone()
+            row = db.execute('SELECT state FROM proposals WHERE id=? AND project_id=?',
+                             (proposal_id, self.project_id)).fetchone()
             require(row is not None and row[0] == 'pending', 'Proposal is not pending review')
-            db.execute('UPDATE proposals SET state=? WHERE id=?',
-                       ('accepted' if decision == 'accept' else 'rejected', proposal_id))
+            db.execute('UPDATE proposals SET state=? WHERE id=? AND project_id=?',
+                       ('accepted' if decision == 'accept' else 'rejected',
+                        proposal_id, self.project_id))
         return self.get(proposal_id)
 
     def apply(self, operation_id):
@@ -283,7 +295,9 @@ class RoadmapRefinement:
         receipt = workspace.transact(operation_id, request, prepare, expected_head=expected_head)
         with self._connect() as db, db:
             for row in accepted:
-                db.execute("UPDATE proposals SET state='applied',receipt=? WHERE id=? AND state='accepted'",
-                           (json.dumps(receipt, sort_keys=True, separators=(',', ':')), row['proposal_id']))
+                db.execute("UPDATE proposals SET state='applied',receipt=? "
+                           "WHERE id=? AND project_id=? AND state='accepted'",
+                           (json.dumps(receipt, sort_keys=True, separators=(',', ':')),
+                            row['proposal_id'], self.project_id))
         return {'operation_id': operation_id, 'receipt': receipt,
                 'applied_proposals': [row['proposal_id'] for row in accepted]}

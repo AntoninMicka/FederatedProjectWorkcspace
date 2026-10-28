@@ -15,7 +15,9 @@ artefakt. Interní text modulového projektu se neposílá do hostitelského bě
 
 Proposal queue je privátní node-local SQLite mimo projektový Git. Každý běh
 používá explicitní Context Manifest, přesný project HEAD, samostatný Ollama run
-a fingerprint obsahu, katalogu cílů a revize analyzátoru. Stavy:
+a fingerprint projektu, obsahu, katalogu cílů a revize analyzátoru. Sdílená
+node-local databáze filtruje `list`, rozhodnutí i apply vždy podle project ID.
+Stavy:
 
 - `pending` čeká na lidské rozhodnutí;
 - `accepted` lze zahrnout do apply;
@@ -48,6 +50,10 @@ se stejným expected HEAD a zapíše pouze hlavní plán jednou
 `Workspace.transact` operací. Před zápisem znovu ověří existenci dokumentu,
 cíle, metadata a celý task graph. Přerušený apply je idempotentní podle
 operation ID; lokální označení `applied` navazuje až na Workspace receipt.
+
+Worker vyžaduje hlavní plán a validní executable task graph. Importovaný modul,
+který uchovává pouze původní zdrojové artefakty, lze přes `list` zkontrolovat,
+ale `scan` na něm záměrně skončí `Main plan is unavailable`.
 
 ## První živá evidence
 

@@ -204,7 +204,8 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   obsah, katalog cílů a revizi analyzátoru. Accepted dávka se zapisuje jednou
   `Workspace.transact` operací a znovu prochází task-graph validací.
   Izolovaně ověřen proposal-only scan, deduplikace, terminální reject, odmítnutí
-  vymyšleného cíle a jediný validovaný apply. První živý běh nad 82
+  vymyšleného cíle, jediný validovaný apply a striktní oddělení sdílené lokální
+  queue podle project ID. První živý běh nad 82
   samostatnými podklady: starý velký kontext `unknown`, zmenšený kontext
   uspěl; revize v3 vytvořila 1 dismissed / 1 pending / 1 failed. Pending
   `COMP-01-A` je obsahově chybný a nebyl potvrzen ani aplikován. Failed
@@ -225,9 +226,12 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
 `python3 -m unittest tests.test_roadmap_refinement tests.test_roadmap_importer
 tests.test_roadmap_validation tests.test_roadmap_bundle tests.test_roadmap_mapping
 tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph
-tests.test_spdx -v`: 61 testů OK po doplnění refinement workeru. Nové 4 testy
+tests.test_spdx -v`: 62 testů OK po doplnění projektové izolace refinement
+queue. Původní 4 testy
 ověřují proposal-only scan a deduplikaci, terminální reject, odmítnutí
 vymyšleného cíle a jedinou autorizovanou Workspace transakci po akceptaci.
+Následný cílený běh `python3 -m unittest tests.test_roadmap_refinement -v`:
+5 testů OK; pátý test kryje izolaci jedné lokální queue mezi dvěma projekty.
 `python3 -m py_compile spikes/roadmap_refinement.py
 scripts/roadmap_refinement.py`: OK. Celá finální unittest brána zůstává pro
 uzavření dávky.

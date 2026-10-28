@@ -85,6 +85,18 @@ class RoadmapRefinementTests(unittest.TestCase):
         self.response['target_id'] = self.target_id
         self.assertEqual(self.service.scan()['created'], [])
 
+    def test_shared_local_queue_is_strictly_scoped_to_project(self):
+        proposal = self.service.scan()['created'][0]
+        other_root = self.base/'other-project'
+        other = ProjectCreation(self.node).create('Other', str(other_root), str(uuid4()))
+        other_service = RoadmapRefinement(
+            self.node, other['id'], state_dir=self.state,
+            adapter_factory=self.service.adapter_factory)
+        self.assertEqual(other_service.list(), [])
+        with self.assertRaisesRegex(ValueError, 'not pending review'):
+            other_service.decide(proposal['proposal_id'], 'reject')
+        self.assertEqual(self.service.get(proposal['proposal_id'])['state'], 'pending')
+
 
 if __name__ == '__main__':
     unittest.main()
