@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MPL-2.0
 """One-shot curses review UI for roadmap refinement proposals."""
 import curses
+from queue import Empty, Queue
 import textwrap
+from threading import Thread
 from uuid import uuid4
 
 
@@ -17,10 +19,12 @@ def _lines(value, width):
 
 class RefinementTUI:
     """Small interaction controller; durable state remains in the service."""
-    def __init__(self, service, *, scan_limit=5, operation_factory=None):
+    def __init__(self, service, *, scan_limit=5, operation_factory=None,
+                 background=None):
         self.service = service
         self.scan_limit = scan_limit
         self.operation_factory = operation_factory or (lambda: str(uuid4()))
+        self.background = background or self._thread
         self.all_rows = []
         self.rows = []
         self.selected = 0
@@ -31,7 +35,33 @@ class RefinementTUI:
         self.message = ''
         self.detail_offset = 0
         self.contexts = {}
+        self.scanning = False
+        self.scan_results = Queue()
         self.refresh()
+
+    @staticmethod
+    def _thread(target):
+        Thread(target=target, daemon=True).start()
+
+    def _scan(self):
+        try:
+            self.scan_results.put(('ok', self.service.scan(limit=self.scan_limit)))
+        except Exception as exc:
+            self.scan_results.put(('error', str(exc)))
+
+    def poll(self):
+        try:
+            state, value = self.scan_results.get_nowait()
+        except Empty:
+            return False
+        self.scanning = False
+        if state == 'ok':
+            self.message = ('Scan dokoncen: nove ' + str(len(value['created'])) +
+                            ', zbyva ' + str(value['remaining']))
+        else:
+            self.message = 'Scan selhal: ' + value
+        self.refresh()
+        return True
 
     def refresh(self):
         selected_id = self.current()['proposal_id'] if self.current() else None
@@ -74,6 +104,9 @@ class RefinementTUI:
 
     def handle(self, key):
         if key in (ord('q'), 27):
+            if self.scanning:
+                self.message = 'Scan stale bezi; pockejte na dokonceni pred ukoncenim.'
+                return True
             return False
         if self.confirm_apply:
             self.confirm_apply = False
@@ -121,14 +154,13 @@ class RefinementTUI:
             self.message = (f'Skryto {hidden} rozhodnutych polozek.' if self.hide_decided
                             else 'Zobrazeny vsechny polozky.')
         elif key == ord('s'):
-            self.message = 'Ollama scan bezi; projekt se nemeni...'
-            try:
-                result = self.service.scan(limit=self.scan_limit)
-                self.message = ('Scan: nove ' + str(len(result['created'])) +
-                                ', zbyva ' + str(result['remaining']))
-            except Exception as exc:
-                self.message = 'Scan selhal: ' + str(exc)
-            self.refresh()
+            if self.scanning:
+                self.message = 'Ollama scan uz bezi...'
+            else:
+                self.scanning = True
+                self.message = 'Ollama scan bezi na pozadi; projekt se nemeni...'
+                self.background(self._scan)
+                self.poll()
         elif key in (ord('a'), ord('r')):
             row = self.current()
             if not row or row['state'] != 'pending':
@@ -160,6 +192,14 @@ def _put(screen, y, x, value, width, attr=0):
         pass
 
 
+def _cell(value, width, lines=2):
+    wrapped = _lines(value, width)
+    result = wrapped[:lines]
+    if len(wrapped) > lines and result:
+        result[-1] = result[-1][:max(0, width - 1)] + '…'
+    return result + [''] * (lines - len(result))
+
+
 def draw(screen, ui):
     screen.erase()
     height, width = screen.getmaxyx()
@@ -171,15 +211,22 @@ def draw(screen, ui):
         screen.refresh()
         return
     split = max(38, min(64, width * 45 // 100))
-    visible = height - 7
-    ui.table_page = max(1, visible)
+    row_height = 4
+    visible = max(1, (height - 8) // row_height)
+    ui.table_page = visible
     filter_label = 'jen otevrene' if ui.hide_decided else 'vsechny'
     table_focus = ' [AKTIVNI]' if ui.focus == 'table' else ''
     detail_focus = ' [AKTIVNI]' if ui.focus == 'detail' else ''
     _put(screen, 3, 0, f'TABULKA — {filter_label}{table_focus}', split - 1, curses.A_BOLD)
     _put(screen, 3, split + 1, 'DETAIL' + detail_focus, width - split - 2, curses.A_BOLD)
-    _put(screen, 4, 0, '#   STAV      NAVRH          ZDROJ  ->  CIL', split - 1, curses.A_BOLD)
-    _put(screen, 5, 0, '-' * (split - 1), split - 1)
+    state_width, action_width = 10, 13
+    route_width = max(8, split - state_width - action_width - 5)
+    border = '+' + '-' * state_width + '+' + '-' * action_width + '+' + '-' * route_width + '+'
+    header = ('|' + 'STAV'.ljust(state_width) + '|' + 'NAVRH'.ljust(action_width) + '|' +
+              'ZDROJ -> CIL'.ljust(route_width) + '|')
+    _put(screen, 4, 0, border, split, curses.A_BOLD)
+    _put(screen, 5, 0, header, split, curses.A_BOLD)
+    _put(screen, 6, 0, border, split, curses.A_BOLD)
     start = max(0, min(ui.selected - visible // 2, max(0, len(ui.rows) - visible)))
     for position, row in enumerate(ui.rows[start:start + visible], start=start):
         proposal = row['proposal']
@@ -187,9 +234,17 @@ def draw(screen, ui):
         target = proposal.get('target_id') or '-'
         context = ui.contexts.get(row['proposal_id'], {})
         source = context.get('source_title') or row.get('document_id', '-')[:8]
-        label = f"{position + 1:>3} {row['state']:<9} {decision:<13} {source} -> {target}"
-        _put(screen, 6 + position - start, 0, label, split - 1,
-             curses.A_REVERSE if position == ui.selected else 0)
+        state_lines = _cell(f'{position + 1}. {row["state"]}', state_width)
+        action_lines = _cell(decision, action_width)
+        route_lines = _cell(source + ' -> ' + target, route_width)
+        y = 7 + (position - start) * row_height
+        attr = curses.A_REVERSE if position == ui.selected else 0
+        for line in range(2):
+            value = ('|' + state_lines[line].ljust(state_width) + '|' +
+                     action_lines[line].ljust(action_width) + '|' +
+                     route_lines[line].ljust(route_width) + '|')
+            _put(screen, y + line, 0, value, split, attr)
+        _put(screen, y + 2, 0, border, split, attr)
     if ui.rows:
         _put(screen, height - 1, 0,
              f'Radek {ui.selected + 1}/{len(ui.rows)}; zobrazeno {len(ui.rows)}/{len(ui.all_rows)}',
@@ -260,11 +315,15 @@ def run(screen, service, *, scan_limit=5):
     except curses.error:
         pass
     screen.keypad(True)
+    screen.timeout(100)
     ui = RefinementTUI(service, scan_limit=scan_limit)
     active = True
     while active:
+        ui.poll()
         draw(screen, ui)
-        active = ui.handle(screen.getch())
+        key = screen.getch()
+        if key != -1:
+            active = ui.handle(key)
     return ui
 
 

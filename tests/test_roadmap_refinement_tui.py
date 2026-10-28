@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 import unittest
 from unittest.mock import patch
+from threading import Event
+import time
 
 from spikes.roadmap_refinement_tui import RefinementTUI, run
 
@@ -45,7 +47,8 @@ class RefinementTUITests(unittest.TestCase):
         self.service = FakeService()
         self.ui = RefinementTUI(
             self.service, scan_limit=7,
-            operation_factory=lambda: '00000000-0000-0000-0000-000000000003')
+            operation_factory=lambda: '00000000-0000-0000-0000-000000000003',
+            background=lambda target: target())
 
     def test_review_uses_existing_service_and_refreshes_state(self):
         self.assertEqual(self.ui.context()['source_title'], 'Readable evidence title')
@@ -71,6 +74,27 @@ class RefinementTUITests(unittest.TestCase):
         self.ui.handle(ord('s'))
         self.assertEqual(self.service.scans, [7])
         self.assertIn('zbyva 3', self.ui.message)
+
+    def test_real_background_scan_keeps_ui_responsive_and_blocks_early_quit(self):
+        started, release = Event(), Event()
+        service = FakeService()
+        original = service.scan
+        def blocked(*, limit):
+            started.set(); release.wait(2)
+            return original(limit=limit)
+        service.scan = blocked
+        ui = RefinementTUI(service, scan_limit=4)
+        ui.handle(ord('s'))
+        self.assertTrue(started.wait(1))
+        self.assertTrue(ui.scanning)
+        self.assertTrue(ui.handle(ord('q')))
+        self.assertIn('stale bezi', ui.message)
+        release.set()
+        deadline = time.monotonic() + 2
+        while not ui.poll() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(ui.scanning)
+        self.assertEqual(service.scans, [4])
 
     def test_quit_does_not_change_queue(self):
         self.assertFalse(self.ui.handle(ord('q')))
@@ -119,6 +143,7 @@ class RefinementTUITests(unittest.TestCase):
             def getmaxyx(self): return (24, 100)
             def addnstr(self, *args): pass
             def refresh(self): pass
+            def timeout(self, milliseconds): pass
             def getch(self): return ord('q')
         with patch('spikes.roadmap_refinement_tui.curses.curs_set',
                    side_effect=__import__('curses').error):

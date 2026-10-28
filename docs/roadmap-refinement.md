@@ -60,13 +60,18 @@ viditelné. `s` explicitně spustí bounded scan, `a` přijme pending návrh, `r
 zamítne, `p` připraví apply a teprve následné `y` jej provede; jiná klávesa
 apply zruší. `q` rozhraní ukončí. TUI nemá vlastní storage ani writer: pouze
 volá stejné `list`, `scan`, `decide` a `apply` hranice. Ollama scan probíhá
-synchronně a během něj se zobrazuje stav běhu.
+v background threadu a během něj se zobrazuje stav běhu; tabulka i detail dál
+reagují. TUI nedovolí ukončení, dokud běh neskončí, aby lokální proces
+nezanechal nejasný dispatch outcome pouze kvůli zavření rozhraní.
 
 Levý panel má pojmenované sloupce stav, návrh a `zdroj → cíl`; místo samotných
 UUID načítá názvy z přesné revize návrhu. Pravý panel vysvětluje navrženou akci,
 odkud podklad pochází, jeho skutečnou cestu, cílové ID/název/typ, očekávaný
 dopad, odůvodnění modelu a náhled zdrojového textu. UUID a HEAD jsou až v auditní
 části. Delší detail se posouvá přes `PgUp`/`PgDn`.
+Každý tabulkový řádek je dvouřádkový blok s ohraničenými buňkami. Vybraný blok
+se při pohybu drží uprostřed viditelné stránky, pokud tomu nebrání začátek nebo
+konec seznamu.
 
 `scan` ani `decide` nemění projekt. `apply` vezme všechny accepted návrhy
 se stejným expected HEAD a zapíše pouze hlavní plán jednou
