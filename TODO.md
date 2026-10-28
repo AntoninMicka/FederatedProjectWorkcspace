@@ -193,6 +193,25 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   Reálné připnuté zdroje a modulový vzorek, Markdown/strojový task export,
   konflikty, změny revizí, limity a injektované pády. Po poslední relevantní
   změně spustit celou unittest bránu.
+- [ ] [in progress] **DEV-01-E-REFINE-01 — iterativní lokální dotřídění (implemented).**
+  Ad-hoc doplnění uživatele po fyzickém importu: resumovatelný same-node
+  Ollama crawl, který navrhuje dávky oprav, vyžaduje lidské potvrzení a lze jej
+  opakovat do konvergence. První bezpečný řez umí pouze připojit samostatný
+  podklad pod existující milestone/batch/task nebo jej ponechat samostatně;
+  nemění ID/stavy/text, nemaže a nepovyšuje zachované požadavky na uzly.
+  Proposal queue je privátní node-local SQLite, vstup má Context Manifest a
+  exact HEAD. `unknown`/`failed` se automaticky neopakují; fingerprint zahrnuje
+  obsah, katalog cílů a revizi analyzátoru. Accepted dávka se zapisuje jednou
+  `Workspace.transact` operací a znovu prochází task-graph validací.
+  Izolovaně ověřen proposal-only scan, deduplikace, terminální reject, odmítnutí
+  vymyšleného cíle a jediný validovaný apply. První živý běh nad 82
+  samostatnými podklady: starý velký kontext `unknown`, zmenšený kontext
+  uspěl; revize v3 vytvořila 1 dismissed / 1 pending / 1 failed. Pending
+  `COMP-01-A` je obsahově chybný a nebyl potvrzen ani aplikován. Failed
+  rozpoznání `IMP-03` bezpečně odmítla absence tohoto ID v executable grafu.
+  Návod a evidence: `docs/roadmap-refinement.md`. Zbývá lidské review první
+  dávky, delší crawl a podle jeho nálezů explicitní proposal typy pro
+  promotion/split/merge; nejsou součástí aktuálního bezpečného apply.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
@@ -202,6 +221,16 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   jeden PR do develop; spuštění další feature není součástí této dávky.
 
 ## Ověření aktuálního kroku
+
+`python3 -m unittest tests.test_roadmap_refinement tests.test_roadmap_importer
+tests.test_roadmap_validation tests.test_roadmap_bundle tests.test_roadmap_mapping
+tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph
+tests.test_spdx -v`: 61 testů OK po doplnění refinement workeru. Nové 4 testy
+ověřují proposal-only scan a deduplikaci, terminální reject, odmítnutí
+vymyšleného cíle a jedinou autorizovanou Workspace transakci po akceptaci.
+`python3 -m py_compile spikes/roadmap_refinement.py
+scripts/roadmap_refinement.py`: OK. Celá finální unittest brána zůstává pro
+uzavření dávky.
 
 `python3 -m unittest tests.test_roadmap_validation -v`: 3 nové validační
 testy OK. Pokrývají úspěšné sloučení celého živého snapshotu bez zápisu,
