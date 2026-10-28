@@ -232,6 +232,34 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.
 
+## K předání do backlogu
+
+- [ ] [planned] **PLAN-SEMANTIC-AUDIT-01 — obecný sémantický audit a proposal
+  engine roadmapy (cílová úroveň: implemented).** Uživatelský požadavek
+  2026-10-28 navazuje na fyzické dotřídění importu: integrovat do Workspace
+  opakovatelný scan hlubší logické a sémantické správnosti roadmapy a změněných
+  podkladů. Samostatné striktně validované typy návrhů mají nejprve pokrýt
+  `add/remove-dependency`, `create-task`, `update-description`,
+  `flag-contradiction` a `flag-duplicate/orphan`; `split/merge` zůstane
+  navazující rozšíření podle reálných nálezů. Každý proposal zachová exact HEAD,
+  analyzer revision, zdrojové artefakty/revize a citované úseky, dotčená stabilní
+  ID, strukturovaný before/after náhled, důvod, confidence, rizika a validační
+  dopad. Nový úkol vyžaduje validovaný typ, rodiče, rozsah, akceptaci, provenance
+  a kolizně bezpečné provisional ID; LLM nesmí samo měnit stav dokončení ani
+  obejít katalog/ID validaci. Statické kontroly musí předcházet LLM návrhům:
+  neznámé cíle, cykly, orphan uzly, duplicity ID, neplatná hierarchie a chybějící
+  povinná pole se nemají řešit volným textem modelu. Scan pouze plní projektově
+  izolovanou node-local proposal queue; `unknown` se tiše neopakuje. Human review
+  podporuje jednotlivé i dávkové accept/reject a jasný source → change → target
+  diff. Accepted návrhy se proti nezměněnému expected HEAD aplikují jednou
+  autorizovanou `Workspace.transact` operací, celý kandidát znovu prochází
+  schématem a task-graph validací; stale návrh se neaplikuje a musí být znovu
+  vyhodnocen. Pád před commitem obnovuje Workspace journal, po commitu receipt a
+  projekce z HEAD; proposal queue není druhá autorita roadmapy. Integrace patří
+  do sdíleného Workspace UI a později může být zpřístupněna IDE bridge, nikoli
+  ponechána jako trvalý migrační TUI skript. Jde o samostatnou feature dávku,
+  větev a PR po uzavření `DEV-01`; není součástí akceptace aktuální migrace.
+
 ## Ověření aktuálního kroku
 
 `python3 -m unittest tests.test_roadmap_refinement tests.test_roadmap_importer
