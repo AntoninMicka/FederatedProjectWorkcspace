@@ -59,6 +59,22 @@ validují proti autoritativním Markdown dokumentům. Serverový SVG renderer
 slouží statickému exportu připnutému na tutéž revizi. Rozhodnutí a fail-closed
 hranice popisuje [ADR 0054](docs/adr/0054-read-only-roadmap-graph.md).
 
+DOC-PATTERN-CATALOG-01 podle návrhu DOC-EDITOR-CONTRACTS-01 **reuse/adaptuje**
+shared artifact editor, jeho dirty guard, `ArtifactActions`, bezpečný DOM,
+existující prezentační editor a jedinou Workspace/Journal/Git/index cestu. Nový
+sdílený raw widget je storage-agnostic a typové adaptéry zachovávají doménové
+transakce; Julia authoring jej převezme až při obnovení `COMP-03`. Odmítá se
+nový UI framework, executable template engine, univerzální save endpoint,
+obecný AST rewriter a druhý task store. Soukromá inventura nedoložila
+komponent s odpovídající Git autoritou, recovery a lossless round-trip
+kontraktem; nepřenáší se z ní kód ani neveřejné detaily. Rozhodnutí:
+[ADR 0058](docs/adr/0058-shared-raw-editor-and-pattern-catalog.md) a
+[ADR 0059](docs/adr/0059-file-plan-hierarchy-and-task-editor.md).
+`DOC-PATTERN-LIBRARY-01` přímo adaptuje tentýž widget, bezpečné `textContent`,
+existující prezentační encoder/validator a Julia computation validátor pro
+coverage i kontextový help panel; nový help framework, renderer Markdownu,
+template engine ani zápisová služba nejsou potřeba.
+
 F-M5-CHAT-HISTORY-01 **reuse/adaptuje** přímo obousměrný podepsaný
 `federation_sync` z ADR 0042, `ChatThreads` a bilaterální mapování ADR 0021.
 Projektová historie je druhý bounded payload téže sync operace a po přesném

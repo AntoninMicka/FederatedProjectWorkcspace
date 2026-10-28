@@ -93,6 +93,8 @@ commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
 `b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako merge
 commit `507c232`; evidence je ve WORK_LOG. Aktivní `COMP-03` drží pouze TODO.
+Editorové a plánovací závislosti byly doručeny PR #107–#110; jejich evidence
+je ve WORK_LOG a `COMP-03` je po jejich začlenění obnovená na původní větvi.
 
 Po aktivní `COMP-03` následují podle uživatelem aktualizovaného pořadí
 `DEV-IDE-TODO-01` a `DEV-01`.

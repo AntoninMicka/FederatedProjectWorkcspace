@@ -19,6 +19,7 @@ from spikes.metadata import MAX_FILE, ValidationError
 from spikes.presentation_visual import SLIDE_JS
 from spikes.presentation_documents import public_content
 from spikes.presentation_closing import closing_slide
+from spikes.document_patterns import DocumentPatterns
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
@@ -265,7 +266,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-plan" role="tabpanel" aria-labelledby="plan-tab" tabindex="0" hidden><h2>Plán</h2>
 <p id="sidebar-plan-status" role="status">Otevřete projekt.</p>
-<button id="open-main-plan" type="button">Hlavní graf</button>
+<ul id="sidebar-plan-tree" role="tree" aria-label="Hierarchie roadmapy"><li role="treeitem" aria-expanded="true">
+<button id="open-main-plan" type="button" data-plan-selection="/" aria-label="Hlavní graf /">/</button>
+<ul id="sidebar-plan-hierarchy" role="group"></ul></li></ul>
 <h3>Podgrafy</h3><ul id="sidebar-plan-list" aria-label="Podgrafy projektu"></ul></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
 <h2>Podklady</h2><div class="sidebar-artifact-primary-actions"><button id="new-document" type="button">Nový dokument</button>
@@ -818,7 +821,18 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
-<label>Obsah <textarea name="body" rows="18" maxlength="1048576" required></textarea></label>
+<section id="task-plan-editor" class="task-plan-editor" hidden aria-label="Strukturovaný editor plánu">
+<div class="task-plan-mode" role="tablist" aria-label="Režim editoru plánu"><button id="task-plan-mode-structured" type="button" role="tab" aria-selected="true">Kostky</button><button id="task-plan-mode-raw" type="button" role="tab" aria-selected="false">Raw text</button></div>
+<p id="task-plan-editor-status" role="status" aria-live="polite"></p>
+<div id="task-plan-insert" class="task-plan-insert" aria-label="Vložit vzor"><label>Místo vložení <select id="task-plan-insert-position"><option value="end">Na konec souboru</option></select></label><button type="button" data-task-pattern="task-plan.milestone">Přidat milník</button><button type="button" data-task-pattern="task-plan.batch-inline">Přidat batch s úkoly</button><button type="button" data-task-pattern="task-plan.batch-file">Přidat batch se souborem</button><button type="button" data-task-pattern="task-plan.task">Přidat task</button><button type="button" data-task-pattern="task-plan.dependency">Přidat závislost</button></div>
+<div id="task-plan-blocks" class="task-plan-blocks"></div></section>
+<section id="artifact-raw-widget" class="raw-editor-widget" aria-label="Raw editor dokumentu">
+<div class="raw-editor-layout"><div class="raw-editor-main">
+<div class="raw-editor-toolbar"><label>Vzor <select data-raw-pattern aria-label="Vzor dokumentu"></select></label><label>Místo vložení <select data-raw-insertion-position><option value="cursor">Na pozici kurzoru / výběru</option><option value="end">Na konec textu</option></select></label>
+<button data-raw-insert type="button">Vložit vzor</button><button data-raw-validate class="secondary-button" type="button">Ověřit obsah</button></div>
+<label>Obsah <textarea data-raw-content name="body" rows="18" maxlength="1048576" required spellcheck="true"></textarea></label>
+<p data-raw-status class="raw-editor-status" role="status" aria-live="polite"></p></div>
+<aside class="raw-editor-help-panel" data-raw-help aria-live="polite"><h3 data-raw-help-title>Nápověda k souboru</h3><p data-raw-help-body></p><div class="raw-editor-help-example"><h4>Příklad použití</h4><p data-raw-help-example></p></div></aside></div></section>
 <div class="form-actions"><button type="submit">Uložit</button><button id="artifact-editor-close" class="secondary-button" type="button">Zavřít editor</button></div>
 <p id="artifact-editor-status" role="status" aria-live="polite"></p></form>
 <section id="artifact-delete-preview" class="standalone-form deletion-preview" hidden><h2>Připravit smazání</h2>
@@ -889,10 +903,10 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="project-conflicts-delete" type="button" class="secondary-button">Výsledný soubor smazat</button></div>
 </div></dialog></section></div>
 <div id="plan-panel" role="tabpanel" aria-labelledby="plan-main-tab" hidden>
-<div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Graf projektových úkolů</h1></div>
+<div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Roadmapa projektu</h1></div>
 <p id="plan-status" role="status">Otevřete projekt.</p>
-<div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny úkoly</option><option value="ready">Připravené</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
-<div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite"></div><aside id="plan-detail" class="roadmap-detail"><h3>Detail úkolu</h3><p>Vyberte uzel grafu.</p></aside></div>
+<div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
+<div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite"></div><aside id="plan-detail" class="roadmap-detail"><h3>Detail položky</h3><p>Vyberte milník nebo dávku.</p></aside></div>
 </div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
@@ -1021,9 +1035,13 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p>Uložení vytvoří nebo aktualizuje čtyři připnuté projektové artefakty v jednom Git commitu. Samo kód nespustí.</p>
 <div class="julia-editor-grid"><label>Název výpočtu <input name="title" maxlength="200" required></label>
 <label>Privacy <select name="privacy"><option value="project">V projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen lokálně</option><option value="public">Veřejné</option></select></label></div>
-<label>Julia kód
-<span class="julia-template-actions"><button id="julia-template-minimal" class="secondary-button" type="button">Vložit minimální výpočet</button><button id="julia-template-parameter" class="secondary-button" type="button">Vložit čtení parametru</button></span>
-<textarea name="julia_code" rows="22" spellcheck="false" required></textarea></label>
+<section id="julia-source-raw-widget" class="raw-editor-widget" aria-label="Raw editor Julia zdroje">
+<div class="raw-editor-layout"><div class="raw-editor-main">
+<div class="raw-editor-toolbar"><label>Vzor <select data-raw-pattern aria-label="Vzor Julia zdroje"></select></label><label>Místo vložení <select data-raw-insertion-position><option value="cursor">Na pozici kurzoru / výběru</option><option value="end">Na konec textu</option></select></label>
+<button data-raw-insert type="button">Vložit vzor</button><button data-raw-validate class="secondary-button" type="button">Ověřit obsah</button></div>
+<label>Julia kód <textarea data-raw-content name="julia_code" rows="22" maxlength="1048576" spellcheck="false" required></textarea></label>
+<p data-raw-status class="raw-editor-status" role="status" aria-live="polite"></p></div>
+<aside class="raw-editor-help-panel" data-raw-help aria-live="polite"><h3 data-raw-help-title>Nápověda k souboru</h3><p data-raw-help-body></p><div class="raw-editor-help-example"><h4>Příklad použití</h4><p data-raw-help-example></p></div></aside></div></section>
 <div class="julia-editor-grid"><label>Parametry (JSON pole) <textarea name="parameters" rows="10" spellcheck="false" required></textarea></label>
 <label>Výstupy (JSON pole) <textarea name="outputs" rows="10" spellcheck="false" required></textarea></label></div>
 <details><summary>Pokročilé: přesné prostředí a limity</summary>
@@ -1061,7 +1079,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 </section></div></div>
 <div id="presentation-panel" role="tabpanel" aria-labelledby="presentation-tab" hidden>
 <div class="presentation-editor-head"><div><h2>Prezentace</h2><p>Editor, náhled i spuštění používají stejný deck otevřeného projektu.</p></div>
-<div class="form-actions"><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
+<div class="form-actions"><div class="editor-mode-switch" role="group" aria-label="Režim editoru prezentace"><button id="presentation-editor-mode-special" type="button" aria-pressed="true">Vizuální</button><button id="presentation-editor-mode-raw" class="secondary-button" type="button" aria-pressed="false">Raw</button></div><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
 <div id="presentation-editor-workspace" class="presentation-editor-workspace" hidden>
 <section class="presentation-editor-slides"><label>Název prezentace <input id="presentation-deck-title" maxlength="200"></label><h3>Slidy</h3><ol id="presentation-slide-list"></ol>
 <div class="form-actions"><button id="presentation-add-main" type="button">+ Hlavní</button><button id="presentation-add-backup" type="button">+ Backup</button><button id="presentation-delete-slide" class="danger-button" type="button">Odstranit</button></div>
@@ -1077,6 +1095,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Tapeta PNG <input id="presentation-slide-wallpaper" type="file" accept="image/png"></label><button id="presentation-clear-wallpaper" class="secondary-button" type="button">Odebrat tapetu</button>
 <fieldset><legend>Zařazení a vazby</legend><div class="form-actions"><button id="presentation-slide-up" class="secondary-button" type="button">↑ Dříve</button><button id="presentation-slide-down" class="secondary-button" type="button">↓ Později</button></div><div id="presentation-backup-links"></div></fieldset></section>
 <section class="presentation-editor-preview"><h3>Náhled slidu</h3><div id="presentation-editor-preview" class="presenter-slide-preview"></div><p>Náhled nepřenáší soukromé poznámky do veřejného okna.</p></section></div>
+<section id="presentation-raw-panel" class="presentation-raw-panel" hidden><h3>Raw obsah prezentace</h3><p>Přepnutí ani vložení vzoru nic neukládá. Do vizuálního režimu projde pouze lossless validní deck.</p>
+<div id="presentation-raw-widget" class="raw-editor-widget" aria-label="Raw editor prezentace"><div class="raw-editor-layout"><div class="raw-editor-main"><div class="raw-editor-toolbar"><label>Vzor <select data-raw-pattern aria-label="Vzor prezentace"></select></label><label>Místo vložení <select data-raw-insertion-position><option value="cursor">Na pozici kurzoru / výběru</option><option value="end">Na konec textu</option></select></label><button data-raw-insert type="button">Vložit vzor</button><button data-raw-validate class="secondary-button" type="button">Ověřit obsah</button></div><label>Obsah <textarea id="presentation-raw-content" data-raw-content rows="28" maxlength="1048576" spellcheck="false"></textarea></label><p data-raw-status class="raw-editor-status" role="status" aria-live="polite"></p></div><aside class="raw-editor-help-panel" data-raw-help aria-live="polite"><h3 data-raw-help-title>Nápověda k souboru</h3><p data-raw-help-body></p><div class="raw-editor-help-example"><h4>Příklad použití</h4><p data-raw-help-example></p></div></aside></div></div></section>
 <section id="presentation-session-section" class="presentation-session-section"><div><h3>Uskutečněné relace</h3><p>Každý záznam obsahuje jen skutečně potvrzené veřejné výstupy.</p></div><ul id="presentation-session-list"></ul><p id="presentation-session-status" role="status"></p></section>
 <div class="presentation-editor-footer"><p id="presentation-editor-status" role="status" aria-live="polite">Otevřete editor.</p><div class="form-actions"><button id="presentation-editor-print" class="secondary-button" type="button" disabled>Vytisknout prezentaci</button><button id="presentation-editor-save" type="button" disabled>Uložit do projektu</button><button id="presentation-editor-use" type="button" disabled>Spustit uloženou prezentaci</button><button id="presentation-editor-presenter" class="secondary-button" type="button">Otevřít presenter</button></div></div></div>
 <dialog id="presentation-print-dialog"><form method="dialog"><h2>Export prezentace do PDF</h2><pre id="presentation-print-details"></pre><p id="presentation-print-warning"></p><p id="presentation-print-target">Cíl PDF zatím není vybraný.</p><button id="presentation-print-choose" type="button">Vybrat cílový PDF soubor</button><label class="confirm"><input id="presentation-print-confirm" type="checkbox" disabled> Potvrzuji uvedený režim, zdrojovou revizi, pořadí stran, cíl a případné přepsání.</label><div class="form-actions"><button id="presentation-print-run" type="button" disabled>Vytvořit PDF</button><button value="cancel" class="secondary-button">Zrušit</button></div></form></dialog>
@@ -1217,7 +1237,8 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 .settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}
 .roadmap-card{max-width:none}.roadmap-heading,.roadmap-controls,.roadmap-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.roadmap-heading{justify-content:space-between}.roadmap-heading h2{margin-bottom:4px}.roadmap-heading p{margin-top:0}.roadmap-controls{padding:12px 0}.roadmap-controls label:not(.roadmap-check){display:flex;align-items:center;gap:7px}.roadmap-check{display:flex;align-items:center;gap:7px}.roadmap-legend{margin:10px 0;font-size:12px}.roadmap-legend span{padding:4px 8px;border:2px solid #557384;border-radius:999px;background:#fff}.roadmap-legend .completed{background:#e2f3eb;border-color:#26735e}.roadmap-legend .in-progress{background:#fff2c7;border-color:#9a6900}.roadmap-legend .deferred{background:#eef1f3;border-color:#87939a}.roadmap-legend .critical{border-width:4px}.roadmap-legend .ready{border-color:#176b60;border-style:dashed}.roadmap-graph{min-height:360px;max-height:62vh;overflow:auto;border:1px solid #cbd7de;border-radius:12px;background:#f7fafb;overscroll-behavior:contain}.roadmap-graph svg{display:block;min-width:100%}.roadmap-node{cursor:pointer}.roadmap-node:focus rect,.roadmap-node:hover rect{filter:drop-shadow(0 3px 4px #17334255);stroke:#0d6b5d;stroke-width:4}.roadmap-detail{margin-top:12px;padding:12px 14px;border-left:4px solid #176b60;background:#eff8f5}.roadmap-detail h3{margin:0 0 6px}.roadmap-detail dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;margin:0}.roadmap-detail dt{font-weight:700}.roadmap-detail dd{margin:0;overflow-wrap:anywhere}
-.plan-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px}.plan-layout .roadmap-detail{margin-top:0}#sidebar-plan h3{font-size:13px;margin:16px 0 0}#sidebar-plan>button,#sidebar-plan-list button{width:100%;text-align:left}#sidebar-plan-list button{background:transparent;color:#dce8f1;padding:9px 7px}
+.plan-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px}.plan-layout .roadmap-graph{min-width:0}.plan-layout .roadmap-detail{margin-top:0}.roadmap-detail dd{white-space:pre-line}#sidebar-plan h3{font-size:13px;margin:16px 0 0}#sidebar-plan-list button{width:100%;text-align:left;background:transparent;color:#dce8f1;padding:9px 7px}#sidebar-plan-tree{max-height:55%;overflow:auto}#sidebar-plan-tree,#sidebar-plan-tree ul{list-style:none;padding:0;margin:8px 0}#sidebar-plan-tree ul{margin:2px 0 2px 12px;padding-left:10px;border-left:1px solid #496072}#sidebar-plan-tree button{width:100%;padding:7px 6px;background:transparent;color:#dce8f1;text-align:left;font-size:12px}#sidebar-plan-tree button:hover,#sidebar-plan-tree button[aria-current="true"]{background:#274154}#sidebar-plan-tree button[aria-current="true"]{border-left:3px solid #79c9ac}
+.plan-roadmap-canvas{position:relative;min-width:100%;background:#f7fafb}.plan-milestone-lane{position:absolute;left:0;border-radius:11px;background:#edf3f5}.plan-milestone-lane:nth-of-type(even){background:#f1f5f6}.plan-milestone-label{position:sticky;left:0;z-index:4;box-sizing:border-box;width:220px;height:100%;padding:16px 18px;border:0;border-right:1px solid #cfdae0;border-radius:11px 0 0 11px;background:#edf3f5;color:#18384a;text-align:left}.plan-milestone-label strong,.plan-milestone-label span{display:block}.plan-milestone-label span{margin-top:7px;color:#526b79;font-size:12px;line-height:1.35;white-space:pre-line}.plan-milestone-label:hover,.plan-milestone-label:focus-visible{background:#e2eeeb;outline:2px solid #176b60;outline-offset:-2px}.plan-roadmap-edges{position:absolute;inset:0;z-index:1;pointer-events:none}.plan-batch-card{position:absolute;z-index:2;box-sizing:border-box;width:220px;min-height:70px;padding:10px;border:2px solid #557384;border-radius:10px;background:#fff;color:#152b38;text-align:left}.plan-batch-card strong,.plan-batch-card span,.plan-batch-card small{display:block}.plan-batch-card span{margin-top:4px;color:#385160;font-size:12px}.plan-batch-card small{max-height:2.6em;margin-top:5px;overflow:hidden;color:#607987;font-size:11px;line-height:1.25;white-space:pre-line}.plan-batch-card[data-completed="true"]{background:#e2f3eb}.plan-batch-card[data-blocked="true"]{background:#f8dddd}.plan-batch-card[data-ready="true"]{border-color:#176b60;border-style:dashed}.plan-batch-card[data-critical="true"]{border-width:4px}.plan-batch-card:hover,.plan-batch-card:focus-visible{border-color:#0d6b5d;box-shadow:0 3px 6px #17334233;outline:none}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
 #project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
@@ -1293,8 +1314,10 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #autonomy-queue{margin:16px 0;border:1px solid #bfcdc9;border-radius:12px;padding:12px;background:#f8fbfc}#autonomy-queue>summary{font-weight:700;color:#176b60}.autonomy-plan-editor{margin:10px 0}.autonomy-plan-editor textarea,.autonomy-revision-editor textarea{width:100%;font-family:monospace;font-size:12px}#autonomy-list{display:grid;gap:10px;margin-top:12px}.autonomy-card{border:1px solid #dce3e9;border-left:5px solid #8aa1ad;border-radius:10px;padding:12px;background:#fff}.autonomy-card[data-state="completed"]{border-left-color:#2d8a62}.autonomy-card[data-state="paused"],.autonomy-card[data-state="awaiting-approval"],.autonomy-card[data-state="proposed"]{border-left-color:#c69224}.autonomy-card[data-state="failed"],.autonomy-card[data-state="unknown"]{border-left-color:#b74435}.autonomy-card h3{margin:0 0 5px}.autonomy-card progress{width:100%;accent-color:#176b60}.autonomy-card ol{padding-left:22px}.autonomy-card li{margin:5px 0}.autonomy-card details pre{max-height:220px;font-size:11px}.autonomy-card .form-actions{display:flex;gap:7px;flex-wrap:wrap}.autonomy-card .danger-button{background:#9b3f35}.autonomy-revision{margin:10px 0;padding:10px;border:1px solid #dfbd72;border-radius:8px;background:#fff8e8}.autonomy-revision p{margin:4px 0}.autonomy-revision-history{font-size:13px;color:#526575}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
-#julia-panel>label,#tools-panel>label,#julia-parameters label,#julia-output label,.julia-editor label{display:block;margin:10px 0 5px}#julia-panel input,#julia-panel select,#julia-panel textarea,#tools-panel input,#tools-panel select,#tools-panel textarea{box-sizing:border-box;padding:9px;max-width:100%}#julia-definition,#julia-editor-definition,#julia-parameters input:not([type="checkbox"]),#julia-parameters textarea,.julia-editor input,.julia-editor select,.julia-editor textarea{width:100%}#julia-preview-value,#julia-output-value{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;border-radius:12px;padding:12px}#julia-status{min-height:20px;color:#315f58}#julia-output,.julia-editor{margin-top:16px;padding:14px;border:1px solid #dce3e9;border-radius:12px;background:#fff}#julia-output fieldset{margin-top:14px;border:1px solid #dce3e9}#julia-output fieldset input:not([type="checkbox"]),#julia-output fieldset select{width:100%}.julia-editor textarea{font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4}.julia-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.julia-editor-heading h3{margin:0}.julia-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.julia-template-actions{display:flex;gap:7px;flex-wrap:wrap;margin:5px 0}.julia-template-actions button{padding:6px 9px}
-#presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
+#julia-panel>label,#tools-panel>label,#julia-parameters label,#julia-output label,.julia-editor label{display:block;margin:10px 0 5px}#julia-panel input,#julia-panel select,#julia-panel textarea,#tools-panel input,#tools-panel select,#tools-panel textarea{box-sizing:border-box;padding:9px;max-width:100%}#julia-definition,#julia-editor-definition,#julia-parameters input:not([type="checkbox"]),#julia-parameters textarea,.julia-editor input,.julia-editor select,.julia-editor textarea{width:100%}#julia-preview-value,#julia-output-value{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;border-radius:12px;padding:12px}#julia-status{min-height:20px;color:#315f58}#julia-output,.julia-editor{margin-top:16px;padding:14px;border:1px solid #dce3e9;border-radius:12px;background:#fff}#julia-output fieldset{margin-top:14px;border:1px solid #dce3e9}#julia-output fieldset input:not([type="checkbox"]),#julia-output fieldset select{width:100%}.julia-editor textarea{font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4}.julia-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.julia-editor-heading h3{margin:0}.julia-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.editor-mode-switch{display:flex;gap:6px}.editor-mode-switch button[aria-pressed="true"]{box-shadow:0 0 0 2px #79c9ac inset}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-raw-panel{margin-top:14px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
+.raw-editor-widget{display:block;margin:12px 0;padding:12px;border:1px solid #c8d5dc;border-radius:10px;background:#f8fbfc}.raw-editor-layout{display:grid;grid-template-columns:minmax(0,820px) minmax(260px,320px);gap:14px;align-items:start}.raw-editor-main{min-width:0}#artifact-raw-widget{width:min(1174px,calc(100vw - 388px));max-width:none}.raw-editor-toolbar{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.raw-editor-toolbar label{display:grid!important;gap:4px;min-width:min(280px,100%);margin:0!important}.raw-editor-toolbar select{width:100%;padding:8px}.raw-editor-widget textarea{box-sizing:border-box;width:100%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.45;resize:vertical}.raw-editor-help-panel{min-width:0;border-left:3px solid #79c9ac;border-radius:8px;padding:10px 12px;background:#edf5f2;color:#304657}.raw-editor-help-panel h3{margin:0 0 7px;font-size:14px}.raw-editor-help-panel h4{margin:12px 0 5px;font-size:12px}.raw-editor-help-panel p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.45}.raw-editor-help-example{margin-top:12px;padding-top:1px;border-top:1px solid #b9d7ce}.raw-editor-status{min-height:18px;margin:7px 0;color:#456276;font-size:12px}.raw-editor-widget[data-dirty="true"]{border-color:#c69224}.raw-editor-widget[data-invalid="true"]{border-color:#b74435}.raw-editor-widget[data-read-only="true"]{background:#edf2f5}.raw-editor-widget[data-read-only="true"] textarea{background:#e7ecef}
+.task-plan-editor{margin:12px 0;padding:12px;border:1px solid #b9cec8;border-radius:10px;background:#f5faf8}.task-plan-mode,.task-plan-insert{display:flex;gap:7px;flex-wrap:wrap}.task-plan-mode button[aria-selected="true"]{background:#176b60;color:#fff}.task-plan-insert{margin:10px 0;align-items:end}.task-plan-insert label{display:grid!important;gap:4px;margin:0!important}.task-plan-insert select{padding:8px;max-width:320px}.task-plan-insert button{background:#e5efec;color:#244d47}.task-plan-blocks{display:grid;gap:10px}.task-plan-block{display:grid;grid-template-columns:auto minmax(115px,.55fr) minmax(130px,.65fr) minmax(220px,2fr);gap:8px;align-items:end;padding:10px 12px;border-left:4px solid #6aa298;border-radius:8px;background:#fff}.task-plan-block label{margin:0!important}.task-plan-block small{grid-column:2/-1;color:#566d78}.task-plan-block[data-depth="1"]{margin-left:18px}.task-plan-block[data-depth="2"]{margin-left:36px}.task-plan-block[data-depth="3"]{margin-left:54px}
 .outputs-overview-heading{max-width:760px}.outputs-overview-heading h2{margin:4px 0}.outputs-overview-grid{display:grid;grid-template-columns:minmax(240px,38%) minmax(280px,1fr);gap:16px;margin-top:14px}.outputs-overview-grid>ul{list-style:none;margin:0;padding:0}.outputs-overview-grid>ul button{display:block;width:100%;margin:0 0 8px;padding:12px;text-align:left;background:#edf2f5;color:#213746}.outputs-overview-grid>ul button[aria-current="true"]{background:#176b60;color:#fff}.outputs-overview-grid>ul small{display:block;margin-top:4px;overflow-wrap:anywhere}.outputs-overview-detail{border:1px solid #dce3e9;border-radius:12px;padding:16px;background:#fff}.outputs-overview-detail dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px}.outputs-overview-detail dt{font-weight:700}.outputs-overview-detail dd{margin:0;overflow-wrap:anywhere}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
@@ -1352,6 +1375,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
 @media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}}
 @media(max-width:700px){.julia-editor-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.raw-editor-layout{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}.raw-editor-toolbar{display:grid;grid-template-columns:1fr}.raw-editor-toolbar label{min-width:0}.raw-editor-toolbar button{width:100%}.raw-editor-widget textarea{font-size:16px}.raw-editor-help-panel{border-left:0;border-top:3px solid #79c9ac}.task-plan-block{grid-template-columns:1fr;margin-left:0!important}.task-plan-block small{grid-column:auto}.task-plan-insert button{width:100%}}
+@media(max-width:1250px){#artifact-raw-widget{width:100%}.raw-editor-layout{grid-template-columns:1fr}.raw-editor-help-panel{border-left:0;border-top:3px solid #79c9ac}}
 @media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}.conflict-code,.conflict-editor-stack{height:300px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
 '''
 CSS += ADMIN_CSS + '''
@@ -2230,7 +2255,7 @@ function clearProject(){
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
  todoStatus.textContent='Otevřete projekt.';createTodo.hidden=true;document.querySelector('#todo-help').hidden=true;
- taskPlanProjection=null;taskPlanSelection=null;document.querySelector('#sidebar-plan-list').replaceChildren();document.querySelector('#sidebar-plan-status').textContent='Otevřete projekt.';renderTaskPlan();
+ taskPlanProjection=null;taskPlanSelection=null;document.querySelector('#sidebar-plan-hierarchy').replaceChildren();document.querySelector('#sidebar-plan-list').replaceChildren();document.querySelector('#sidebar-plan-status').textContent='Otevřete projekt.';updateTaskPlanTreeSelection();renderTaskPlan();
  renderProjectOverview(null);renderProjectHistory(null);
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
@@ -2436,9 +2461,104 @@ sourceImportForm.addEventListener('submit',async event=>{
   sidebarArtifactStatus.textContent='Zdroj byl importován beze změny původních bajtů.';
  }catch(error){sourceImportStatus.textContent=error.message;}finally{button.disabled=false;}
 });
+let documentPatternCatalogPromise=null;
+function documentPatternCatalog(){
+ if(!documentPatternCatalogPromise)documentPatternCatalogPromise=projectRequest('/v1/document-patterns',{action:'catalog'}).then(value=>{
+  if(value.schema!=='fpw-document-pattern-catalog-v1'||!Array.isArray(value.adapters)||!Array.isArray(value.patterns)||!Array.isArray(value.coverage))throw new Error('Katalog vzorů má neplatný formát.');return value;
+ }).catch(error=>{documentPatternCatalogPromise=null;throw error;});
+ return documentPatternCatalogPromise;
+}
+function createRawEditorWidget(root,{textarea,onInput}){
+ const patternSelect=root.querySelector('[data-raw-pattern]'),insertionPosition=root.querySelector('[data-raw-insertion-position]'),insertButton=root.querySelector('[data-raw-insert]'),validateButton=root.querySelector('[data-raw-validate]'),helpTitle=root.querySelector('[data-raw-help-title]'),helpBody=root.querySelector('[data-raw-help-body]'),helpExample=root.querySelector('[data-raw-help-example]'),status=root.querySelector('[data-raw-status]');
+ let catalog=null,adapter=null,adapterId='',format='',baseline=textarea.value,disabled=false,configuration=0,lastValidation=null;
+ function selectedPattern(){return catalog?.patterns.find(item=>item.id===patternSelect.value&&item.adapter_ids.includes(adapterId)&&item.formats.includes(format));}
+ function renderHelp(){const pattern=selectedPattern();helpTitle.textContent=pattern?.name||'Nápověda k souboru';helpBody.textContent=pattern?.help||adapter?.format_help?.[format]||'Pro tento typ není dostupná nápověda.';helpExample.textContent=pattern?.example||adapter?.format_examples?.[format]||'Příklad použití není dostupný.';insertionPosition.disabled=disabled||!pattern||pattern.insertion==='document';insertButton.disabled=disabled||!pattern;}
+ function renderPatterns(){
+  patternSelect.replaceChildren();const patterns=catalog?.patterns.filter(item=>item.adapter_ids.includes(adapterId)&&item.formats.includes(format))||[];
+  patternSelect.append(new Option(patterns.length?'Vyberte vzor…':'Žádný dostupný vzor','',true,true));
+  for(const pattern of patterns)patternSelect.append(new Option(`${pattern.name} · v${pattern.version}`,pattern.id));
+  patternSelect.disabled=disabled||!patterns.length;validateButton.disabled=disabled;renderHelp();
+ }
+ function updateDirty(){root.dataset.dirty=String(textarea.value!==baseline);lastValidation=null;root.dataset.invalid='false';status.textContent='';onInput?.(textarea.value,textarea.value!==baseline);}
+ textarea.addEventListener('input',updateDirty);patternSelect.addEventListener('change',renderHelp);
+ function insertPattern(patternId=null){
+  const pattern=patternId?catalog?.patterns.find(item=>item.id===patternId&&item.adapter_ids.includes(adapterId)&&item.formats.includes(format)):selectedPattern();if(!pattern||disabled)return false;
+  if(pattern.insertion==='document'&&textarea.value&&textarea.value!==pattern.text&&!window.confirm('Nahradit rozepsaný raw obsah vybraným vzorem?'))return;
+  const atEnd=insertionPosition.value==='end',start=atEnd?textarea.value.length:(textarea.selectionStart??textarea.value.length),end=atEnd?start:(textarea.selectionEnd??start);let content=pattern.text,selection=start+pattern.text.length;
+  if(pattern.insertion==='cursor'){content=textarea.value.slice(0,start)+pattern.text+textarea.value.slice(end);selection=start+pattern.text.length;}
+  else if(pattern.insertion==='block'){
+   const prefix=textarea.value.slice(0,start),suffix=textarea.value.slice(end),before=prefix&&!prefix.endsWith('\\n\\n')?(prefix.endsWith('\\n')?'\\n':'\\n\\n'):'',after=suffix&&!pattern.text.endsWith('\\n\\n')?(suffix.startsWith('\\n')?'\\n':'\\n\\n'):'';
+   content=prefix+before+pattern.text+after+suffix;selection=(prefix+before+pattern.text).length;
+  }
+  textarea.value=content;textarea.setSelectionRange(selection,selection);textarea.dispatchEvent(new Event('input',{bubbles:true}));textarea.focus();status.textContent='Vzor byl vložen pouze do lokálního draftu.';return true;
+ }
+ insertButton.addEventListener('click',()=>insertPattern());
+ async function validate(){
+  if(disabled)return null;validateButton.disabled=true;status.textContent='Ověřuji raw obsah…';
+  try{lastValidation=await projectRequest('/v1/document-patterns',{action:'validate',adapter_id:adapterId,format,content:textarea.value});root.dataset.invalid='false';status.textContent=`Obsah je validní · ${lastValidation.bytes} B · ${lastValidation.content_sha256.slice(0,12)}.`;return lastValidation;}
+  catch(error){lastValidation=null;root.dataset.invalid='true';status.textContent=error.message;return null;}
+  finally{validateButton.disabled=disabled;}
+ }
+ validateButton.addEventListener('click',validate);
+ return {
+  async configure(options){
+   const token=++configuration;adapter=null;adapterId=options.adapterId;format=options.format;textarea.value=options.content??'';baseline=textarea.value;lastValidation=null;root.dataset.adapter=adapterId;root.dataset.dirty='false';root.dataset.invalid='false';status.textContent='';patternSelect.replaceChildren(new Option('Načítám vzory…',''));helpTitle.textContent='Nápověda k souboru';helpBody.textContent='Načítám nápovědu pro aktivní formát…';helpExample.textContent='Načítám příklad použití…';this.setDisabled(Boolean(options.readOnly));patternSelect.disabled=true;insertButton.disabled=true;
+   try{const value=await documentPatternCatalog();if(token!==configuration)return;catalog=value;adapter=catalog.adapters.find(item=>item.id===adapterId&&item.formats.includes(format));if(!adapter||typeof adapter.format_help?.[format]!=='string'||typeof adapter.format_examples?.[format]!=='string')throw new Error('Neznámý typ nebo formát raw editoru.');renderPatterns();}
+   catch(error){if(token!==configuration)return;catalog=null;adapter=null;patternSelect.replaceChildren(new Option('Katalog není dostupný',''));patternSelect.disabled=true;insertButton.disabled=true;helpTitle.textContent='Nápověda není dostupná';helpBody.textContent=error.message;helpExample.textContent='Příklad použití není dostupný.';status.textContent=error.message;}
+  },
+  validate,
+  insert:insertPattern,
+  markClean(value=textarea.value){baseline=value;root.dataset.dirty=String(textarea.value!==baseline);},
+  setDisabled(value){disabled=value;root.dataset.readOnly=String(value);textarea.readOnly=value;patternSelect.disabled=value||!catalog;insertionPosition.disabled=value||!selectedPattern()||selectedPattern().insertion==='document';insertButton.disabled=value||!selectedPattern();validateButton.disabled=value;},
+  value(){return textarea.value;},
+  get dirty(){return textarea.value!==baseline;},
+  get validation(){return lastValidation;},
+ };
+}
 const artifactEditorForm=document.querySelector('#artifact-editor-form');
 const artifactEditorStatus=document.querySelector('#artifact-editor-status');
 let artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false,artifactDeletePreview=null,artifactDeleteOperation=null;
+const artifactRawWidget=createRawEditorWidget(document.querySelector('#artifact-raw-widget'),{textarea:artifactEditorForm.elements.body,onInput:()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactRawWidget.dirty||artifactEditorState()!==artifactEditorBaseline;}});
+const taskPlanEditor=document.querySelector('#task-plan-editor'),taskPlanBlocks=document.querySelector('#task-plan-blocks'),taskPlanStatus=document.querySelector('#task-plan-editor-status'),artifactRawRoot=document.querySelector('#artifact-raw-widget');
+let taskPlanMode='structured';
+function parseTaskPlanDraft(body){
+ const lines=body.split('\\n'),tasks=[],ancestors=[];let fence=null,pending=null,profile=false,external=false;
+ for(let index=0;index<lines.length;index++){
+  const line=lines[index],marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
+  if(marker){if(!fence)fence=[marker[1][0],marker[1].length];else if(marker[1][0]===fence[0]&&marker[1].length>=fence[1]&&!marker[2].trim())fence=null;continue;}if(fence)continue;
+  if(/^\\s*<!--\\s*fpw-plan-profile:\\s*software-development\\/v1\\s*-->\\s*$/.test(line)){profile=true;continue;}
+  if(/^\\s*<!--\\s*fpw-plan-document:\\s*definitions\\/v1\\s*-->\\s*$/.test(line)){external=true;continue;}
+  const checkbox=line.match(/^(\\s*[-+*]\\s+\\[)([ xX])(\\]\\s+\\[)([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)(\\]\\s+)(.*?)(\\r?)$/);
+  if(/^\\s*[-+*]\\s+\\[[ xX]\\]\\s+/.test(line)&&!checkbox){const checklist=line.match(/^(\\s*[-+*]\\s+\\[)([ xX])(\\]\\s+)(.*?)(\\r?)$/),indent=checklist?checklist[1].match(/^\\s*/)[0].replace(/\\t/g,'    ').length:-1;if(!checklist||!pending||indent<=pending.indent||pending.type!=='task')return {safe:false,error:`Řádek ${index+1} nemá stabilní ID ani platnou task podmínku.`};if(!checklist[4].trim()||checklist[4].trim().length>500||pending.checklist.length>=100)return {safe:false,error:`Task ${pending.parts[4]} má neplatný checklist.`};pending.checklist.push({checked:checklist[2].toLowerCase()==='x',text:checklist[4].trim()});continue;}
+  if(checkbox){const indent=checkbox[1].match(/^\\s*/)[0].replace(/\\t/g,'    ').length;while(ancestors.length&&ancestors.at(-1).indent>=indent)ancestors.pop();pending={line:index,parts:checkbox,indent,depth:ancestors.length,parentId:ancestors.at(-1)?.id||null,type:null,typeLine:null,relations:[],descriptions:[],checklist:[]};tasks.push(pending);ancestors.push({indent,id:checkbox[4]});continue;}
+  const metadata=line.match(/^(\\s*[-+*]\\s+)([^:]{1,32}):(.*?)(\\r?)$/);
+  if(metadata&&pending&&metadata[1].replace(/\\t/g,'    ').length>pending.indent){const key=metadata[2].trim().toLowerCase(),value=metadata[3].trim();if(key==='type'||key==='typ'){if(!['milestone','batch','task'].includes(value)||pending.type)return {safe:false,error:`Uzel ${pending.parts[4]} nemá jednoznačný type.`};pending.type=value;pending.typeLine={line:index,parts:metadata};continue;}else if(['depends_on','blocks','duplicates','supersedes','relates_to','parent_of','závisí na','blokuje','duplikuje','nahrazuje','souvisí s'].includes(key)){pending.relations.push(`${metadata[2].trim()}: ${value}`);continue;}}
+  const description=line.match(/^(\\s*[-+*]\\s+)(.+?)(\\r?)$/);
+  if(description&&pending&&description[1].replace(/\\t/g,'    ').length>pending.indent)pending.descriptions.push(description[2].trim());
+ }
+ if(!profile&&!external)return {safe:false,error:'Dokument nemá podporovanou profilovou značku.'};
+ if(!tasks.length)return {safe:false,error:'Dokument neobsahuje žádný strukturovaný uzel.'};
+ if(tasks.some(item=>!item.type))return {safe:false,error:'Každý uzel musí mít právě jeden rozpoznaný type.'};
+ if(tasks.some(item=>item.checklist.some(value=>value.text.includes('\\0')))||tasks.reduce((count,item)=>count+item.checklist.length,0)>4000)return {safe:false,error:'Dokument obsahuje neplatný nebo příliš velký checklist.'};
+ if(new Set(tasks.map(item=>item.parts[4])).size!==tasks.length)return {safe:false,error:'Dokument obsahuje duplicitní stabilní ID.'};
+ const byId=new Map(tasks.map(item=>[item.parts[4],item]));
+ for(const task of tasks){const parent=task.parentId?byId.get(task.parentId):null,linked=task.parts[6].startsWith('[')&&task.parts[6].includes('](artifacts/')&&task.parts[6].endsWith('.md)');if(profile&&!parent&&task.type!=='milestone')return {safe:false,error:`Kořen ${task.parts[4]} musí být milestone.`};if(external&&(!(!parent&&task.type==='task')))return {safe:false,error:'Externí soubor smí obsahovat pouze kořenové task uzly.'};if(parent&&!({milestone:'batch',batch:'task'}[parent.type]===task.type))return {safe:false,error:`Hierarchie ${parent.type} → ${task.type} není povolená.`};if(linked&&task.type!=='batch')return {safe:false,error:'Odkaz na soubor může nést pouze batch.'};if(linked&&tasks.some(item=>item.parentId===task.parts[4]))return {safe:false,error:`Batch ${task.parts[4]} kombinuje odkaz a inline potomky.`};}
+ return {safe:true,tasks,lines,profile,external};
+}
+function replaceTaskPlanLine(index,value){const lines=artifactEditorForm.elements.body.value.split('\\n');lines[index]=value;artifactEditorForm.elements.body.value=lines.join('\\n');artifactEditorForm.elements.body.dispatchEvent(new Event('input',{bubbles:true}));renderTaskPlanEditor();}
+function renderTaskPlanEditor(){
+ if(taskPlanEditor.hidden)return;const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value),position=document.querySelector('#task-plan-insert-position'),priorPosition=position.value;taskPlanBlocks.replaceChildren();position.replaceChildren(new Option('Na konec souboru','end'));document.querySelector('#task-plan-mode-structured').setAttribute('aria-selected',String(taskPlanMode==='structured'));document.querySelector('#task-plan-mode-raw').setAttribute('aria-selected',String(taskPlanMode==='raw'));artifactRawRoot.hidden=taskPlanMode==='structured';taskPlanBlocks.hidden=taskPlanMode!=='structured';document.querySelector('#task-plan-insert').hidden=taskPlanMode!=='structured';
+ if(!parsed.safe){taskPlanStatus.textContent=`Strukturovaný režim je pouze pro čtení: ${parsed.error} Použijte raw text.`;document.querySelector('#task-plan-insert').hidden=true;return;}
+ for(const task of parsed.tasks)position.append(new Option(`Před ${task.parts[4]} · ${task.parts[6]}`,task.parts[4]));if([...position.options].some(option=>option.value===priorPosition))position.value=priorPosition;
+ taskPlanStatus.textContent=`${parsed.tasks.length} uzlů · změny polí přepisují jen rozpoznané řádky; ostatní text zůstává beze změny.`;
+ for(const task of parsed.tasks){const card=document.createElement('section');card.className='task-plan-block';card.dataset.depth=String(Math.min(task.depth,3));const state=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=task.parts[2].toLowerCase()==='x';state.append(check,document.createTextNode(' Hotovo'));const typeLabel=document.createElement('label'),type=document.createElement('select');for(const value of ['milestone','batch','task'])type.append(new Option(value,value));type.value=task.type;typeLabel.append('Typ',type);const idLabel=document.createElement('label'),id=document.createElement('input');id.value=task.parts[4];id.pattern='[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+';idLabel.append('ID',id);const titleLabel=document.createElement('label'),title=document.createElement('input');title.value=task.parts[6];title.maxLength=500;titleLabel.append('Název nebo odkaz',title);const details=document.createElement('small');details.textContent=`rodič: ${task.parentId||'kořen'}${task.descriptions.length?' · '+task.descriptions.join(' '):''}${task.checklist.length?' · podmínky: '+task.checklist.map(item=>(item.checked?'☑ ':'☐ ')+item.text).join(' · '):''}${task.relations.length?' · '+task.relations.join(' · '):''}`;
+  const update=()=>{if(!id.checkValidity()||!title.value.trim()){taskPlanStatus.textContent='ID a název musí zůstat platné.';return;}replaceTaskPlanLine(task.line,task.parts[1]+(check.checked?'x':' ')+task.parts[3]+id.value.trim()+task.parts[5]+title.value.trim()+task.parts[7]);};check.addEventListener('change',update);id.addEventListener('change',update);title.addEventListener('change',update);type.addEventListener('change',()=>replaceTaskPlanLine(task.typeLine.line,task.typeLine.parts[1]+task.typeLine.parts[2]+': '+type.value+task.typeLine.parts[4]));card.append(state,typeLabel,idLabel,titleLabel,details);taskPlanBlocks.append(card);}
+}
+function configureTaskPlanEditor(enabled){taskPlanEditor.hidden=!enabled;artifactRawRoot.hidden=enabled&&taskPlanMode==='structured';if(enabled)renderTaskPlanEditor();else artifactRawRoot.hidden=false;}
+document.querySelector('#task-plan-mode-structured').addEventListener('click',()=>{taskPlanMode='structured';renderTaskPlanEditor();});
+document.querySelector('#task-plan-mode-raw').addEventListener('click',()=>{taskPlanMode='raw';renderTaskPlanEditor();});
+for(const button of document.querySelectorAll('[data-task-pattern]'))button.addEventListener('click',()=>{const textarea=artifactEditorForm.elements.body,parsed=parseTaskPlanDraft(textarea.value),target=document.querySelector('#task-plan-insert-position').value,task=parsed.safe?parsed.tasks.find(item=>item.parts[4]===target):null,offset=task?parsed.lines.slice(0,task.line).join('\\n').length+(task.line?1:0):textarea.value.length;document.querySelector('#artifact-raw-widget [data-raw-insertion-position]').value='cursor';textarea.setSelectionRange(offset,offset);if(artifactRawWidget.insert(button.dataset.taskPattern))renderTaskPlanEditor();});
+artifactEditorForm.elements.body.addEventListener('input',()=>{if(!taskPlanEditor.hidden&&taskPlanMode==='structured')renderTaskPlanEditor();});
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
 function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
 function canLeaveArtifactEditor(){
@@ -2458,6 +2578,7 @@ function fillArtifactEditor(doc,isNew=false){
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
  artifactEditorBaseline=artifactEditorState();artifactEditorDirty=isNew;artifactEditorAttempt=null;
+ const taskPlan=Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false}).then(()=>configureTaskPlanEditor(taskPlan));
 }
 async function closeArtifactEditor(){
  if(!canLeaveWorkspaceEditors())return;
@@ -2485,7 +2606,7 @@ function openNewArtifactEditor({todo=false}={}){
  artifactEditorItem={id,kind:'document',new:true};hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
  selectSidebarTab(document.querySelector(todo?'#todo-tab':'#artifacts-tab'));
- fillArtifactEditor(todo?{title:'Hlavní seznam úkolů',filename:'content.md',body:'# Hlavní seznam úkolů\\n\\n- [ ] První úkol\\n'}:{title:'',filename:'content.md',body:''},true);
+ fillArtifactEditor(todo?{title:'Hlavní seznam úkolů',filename:'content.md',body:'<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] První milník\\n  - type: milestone\\n'}:{title:'',filename:'content.md',body:''},true);
  artifactEditorStatus.textContent='Dokument vznikne až po uložení.';artifactEditorForm.elements.title.focus();
 }
 function openMainTodoEditor(){
@@ -2495,7 +2616,9 @@ function openMainTodoEditor(){
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
 artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
 artifactEditorForm.addEventListener('submit',async event=>{
- event.preventDefault();if(!activeProject||!artifactEditorItem)return;const fields=new FormData(artifactEditorForm),button=artifactEditorForm.querySelector('button[type="submit"]');
+ event.preventDefault();if(!activeProject||!artifactEditorItem)return;const button=artifactEditorForm.querySelector('button[type="submit"]');
+ if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return;}}}
+ if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return;}const fields=new FormData(artifactEditorForm);
  const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
@@ -2518,7 +2641,7 @@ document.querySelector('#artifact-delete-run').addEventListener('click',async ev
  catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
-window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||juliaEditorDirty||juliaEditorAttempt||conflictDraftChanged()||projectConflictOperation){event.preventDefault();event.returnValue='';}});
+window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||presentationEditorDirty||presentationEditorAttempt||juliaEditorDirty||juliaEditorAttempt||conflictDraftChanged()||projectConflictOperation){event.preventDefault();event.returnValue='';}});
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -3230,18 +3353,20 @@ const juliaStatus=document.querySelector('#julia-status');
 const juliaEditor=document.querySelector('#julia-editor');
 const juliaEditorStatus=document.querySelector('#julia-editor-status');
 let juliaCatalog=[],juliaPrepared=null,juliaRun=null,juliaPoll=null;
-let juliaEditorModel=null,juliaEditorBaseline=null,juliaEditorDirty=false,juliaEditorAttempt=null,juliaEditorTemplate=null;
+let juliaEditorModel=null,juliaEditorBaseline=null,juliaEditorDirty=false,juliaEditorAttempt=null;
+const juliaSourceRawWidget=createRawEditorWidget(document.querySelector('#julia-source-raw-widget'),{textarea:juliaEditor.elements.julia_code,onInput:()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;}});
 function juliaEditorState(){return JSON.stringify(Object.fromEntries(new FormData(juliaEditor).entries()));}
 function canLeaveJuliaEditor(){
  if(juliaEditor.hidden||(!juliaEditorDirty&&!juliaEditorAttempt))return true;
  return window.confirm('Zahodit rozepsané změny Julia modelu? Neuložený kód zůstává pouze v editoru.');
 }
-function fillJuliaEditor(model){
+async function fillJuliaEditor(model){
  juliaEditorModel=model;const fields=juliaEditor.elements;
- fields.title.value=model.title;fields.privacy.value=model.privacy;fields.julia_code.value=model.julia_code;
+ fields.title.value=model.title;fields.privacy.value=model.privacy;
  fields.parameters.value=JSON.stringify(model.parameters,null,2);fields.outputs.value=JSON.stringify(model.outputs,null,2);
  fields.project_toml.value=model.project_toml;fields.manifest_toml.value=model.manifest_toml;
  fields.execution_policy.value=JSON.stringify(model.execution_policy,null,2);
+ await juliaSourceRawWidget.configure({adapterId:'julia',format:'text/x-julia',content:model.julia_code,readOnly:false});
  juliaEditorBaseline=juliaEditorState();juliaEditorDirty=false;juliaEditorAttempt=null;juliaEditor.hidden=false;
  juliaEditorStatus.textContent=model.new?'Šablona je pouze v editoru; vznikne až po uložení.':'Načtena přesná uložená revize modelu.';
  fields.title.focus();
@@ -3251,7 +3376,7 @@ async function openJuliaEditor(create){
  const request={project_id:activeProject.id,expected_head:activeProject.head};
  if(!create){const selected=selectedJuliaEditor();if(!selected||!selected.editable)return;request.definition_path=selected.definition.path;}
  juliaEditorStatus.textContent='Načítám editor…';juliaEditor.hidden=false;
- try{const model=await projectRequest('/v1/julia/editor/open',request);if(create)juliaEditorTemplate=model.julia_code;fillJuliaEditor(model);}
+ try{const model=await projectRequest('/v1/julia/editor/open',request);await fillJuliaEditor(model);}
  catch(error){juliaEditorStatus.textContent=error.message;}
 }
 document.querySelector('#julia-editor-new').addEventListener('click',()=>openJuliaEditor(true));
@@ -3259,12 +3384,6 @@ document.querySelector('#julia-editor-edit').addEventListener('click',()=>openJu
 document.querySelector('#open-julia-tool').addEventListener('click',()=>{if(!activeProject)return;selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));juliaEditorDefinition.focus();});
 document.querySelector('#julia-editor-close').addEventListener('click',event=>{event.preventDefault();if(canLeaveJuliaEditor()){juliaEditor.hidden=true;juliaEditorModel=null;juliaEditorDirty=false;juliaEditorAttempt=null;}});
 juliaEditor.addEventListener('input',()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;});
-function insertJuliaText(text){const target=juliaEditor.elements.julia_code,start=target.selectionStart,end=target.selectionEnd;target.setRangeText(text,start,end,'end');target.dispatchEvent(new Event('input',{bubbles:true}));target.focus();}
-document.querySelector('#julia-template-parameter').addEventListener('click',()=>insertJuliaText('\\nrequest_path = argument("--fpw-request")\\n# Bez balíčku JSON lze request zpracovat vlastním validovaným parserem;\\n# při přidání JSON3 připněte jeho verzi v Project.toml a Manifest.toml.\\n'));
-document.querySelector('#julia-template-minimal').addEventListener('click',async()=>{
- if(!juliaEditorTemplate&&activeProject){try{juliaEditorTemplate=(await projectRequest('/v1/julia/editor/open',{project_id:activeProject.id,expected_head:activeProject.head})).julia_code;}catch(error){juliaEditorStatus.textContent=error.message;return;}}
- if(juliaEditorTemplate){juliaEditor.elements.julia_code.value=juliaEditorTemplate;juliaEditor.elements.julia_code.dispatchEvent(new Event('input',{bubbles:true}));}
-});
 juliaEditor.addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject||!juliaEditorModel)return;const fields=new FormData(juliaEditor),button=juliaEditor.querySelector('button[type="submit"]');
  try{
@@ -3369,9 +3488,26 @@ const presentationEditorUse=document.querySelector('#presentation-editor-use');
 const presentationEditorPrint=document.querySelector('#presentation-editor-print');
 const presentationSessionList=document.querySelector('#presentation-session-list');
 const presentationSessionStatus=document.querySelector('#presentation-session-status');
+const presentationRawPanel=document.querySelector('#presentation-raw-panel');
 let presentationEditorView=null,presentationEditorDeck=null,presentationEditorArtifact=null,presentationEditorSlide=null;
 let presentationEditorNew=false,presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorLoading=false;
+let presentationEditorMode='special';
 let presentationPrintPlan=null,presentationPrintTarget=null;
+const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=true;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
+function setPresentationEditorMode(mode){
+ presentationEditorMode=mode;const raw=mode==='raw';presentationEditorWorkspace.hidden=raw||!presentationEditorDeck;presentationRawPanel.hidden=!raw||!presentationEditorDeck;
+ document.querySelector('#presentation-editor-mode-special').setAttribute('aria-pressed',String(!raw));document.querySelector('#presentation-editor-mode-raw').setAttribute('aria-pressed',String(raw));updatePresentationEditorEnabled();
+}
+async function openPresentationRawEditor(){
+ if(!presentationEditorDeck||presentationEditorAttempt)return;
+ try{const result=await projectRequest('/v1/document-patterns',{action:'serialize',adapter_id:'presentation',format:'application/x-fpw-presentation-markdown',value:structuredClone(presentationEditorDeck)});await presentationRawWidget.configure({adapterId:'presentation',format:'application/x-fpw-presentation-markdown',content:result.normalized_content,readOnly:Boolean(activeProject?.readOnly)});setPresentationEditorMode('raw');document.querySelector('#presentation-raw-content').focus();presentationEditorStatus.textContent=activeProject?.readOnly?'Raw obsah je dostupný pouze pro čtení.':'Raw draft je lokální; přepnutí ani vzor nic neuložily.';}
+ catch(error){presentationEditorStatus.textContent=error.message;}
+}
+async function applyPresentationRaw(){
+ const result=await presentationRawWidget.validate();if(!result)return false;
+ if(!result.lossless){presentationEditorStatus.textContent='Raw obsah nelze beze změny převést do vizuálního editoru. Použijte kanonický formát z validace.';return false;}
+ presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=presentationEditorDirty||presentationRawWidget.dirty;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
+}
 function presentationNewSlide(kind='main',layout='content'){
  const template=presentationEditorDeck?.templates?.find(item=>item.id===layout)||presentationEditorView?.layout_presets?.find(item=>item.id===layout)||{background:'#102b36',foreground:'#ffffff'};
  return {id:crypto.randomUUID(),kind,title:'Nový slide',bullets:[],notes:'',background:template.background,foreground:template.foreground,wallpaper:'',next:null,backups:[],repeat:false,reveal:'all',layout,column_break:0};
@@ -3392,14 +3528,15 @@ function canLeavePresentationEditor(){
  return window.confirm(presentationEditorAttempt?'Výsledek uložení není ověřený. Zahodit rozepsanou relaci editoru?':'Zahodit neuložené změny prezentace?');
 }
 function updatePresentationEditorEnabled(){
- const frozen=Boolean(presentationEditorAttempt),ready=Boolean(presentationEditorDeck);
- for(const control of presentationEditorWorkspace.querySelectorAll('input,textarea,select,button'))control.disabled=frozen||!ready;
- presentationEditorDocuments.disabled=frozen;document.querySelector('#presentation-editor-new').disabled=frozen;
- presentationEditorSave.disabled=!ready||(!presentationEditorDirty&&!presentationEditorAttempt);
+ const frozen=Boolean(presentationEditorAttempt),ready=Boolean(presentationEditorDeck),readOnly=Boolean(activeProject?.readOnly);
+ for(const control of presentationEditorWorkspace.querySelectorAll('input,textarea,select,button'))control.disabled=frozen||readOnly||!ready;
+ presentationEditorDocuments.disabled=frozen;document.querySelector('#presentation-editor-new').disabled=frozen||readOnly;
+ presentationEditorSave.disabled=readOnly||!ready||(!presentationEditorDirty&&!presentationEditorAttempt);
  presentationEditorSave.textContent=presentationEditorAttempt?'Opakovat stejné uložení':'Uložit do projektu';
  presentationEditorUse.disabled=!ready||presentationEditorDirty||presentationEditorNew||Boolean(presentationEditorAttempt);
  presentationEditorPrint.disabled=!ready||presentationEditorDirty||presentationEditorNew||Boolean(presentationEditorAttempt);
  document.querySelector('#presentation-clear-wallpaper').disabled=frozen||!ready||!presentationCurrentSlide()?.wallpaper;
+ presentationRawWidget.setDisabled(frozen||readOnly||!ready);document.querySelector('#presentation-editor-mode-special').disabled=frozen||!ready;document.querySelector('#presentation-editor-mode-raw').disabled=frozen||!ready;
 }
 function presentationEditorChanged(rerender=true){
  if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=true;presentationEditorAttempt=null;
@@ -3413,7 +3550,7 @@ function renderPresentationTemplateForm(preferred=null){
  document.querySelector('#presentation-template-delete').disabled=presentationEditorDeck.templates.length===1;document.querySelector('#presentation-column-break-label').hidden=slideTemplate.preset!=='two-column';document.querySelector('#presentation-column-break').value=current.column_break||0;
 }
 function renderPresentationEditor(){
- const slide=presentationCurrentSlide();presentationEditorLoading=true;presentationEditorWorkspace.hidden=!slide;
+ const slide=presentationCurrentSlide();presentationEditorLoading=true;presentationEditorWorkspace.hidden=!slide||presentationEditorMode==='raw';presentationRawPanel.hidden=!slide||presentationEditorMode!=='raw';
  if(!slide){presentationEditorLoading=false;updatePresentationEditorEnabled();return;}
  document.querySelector('#presentation-deck-title').value=presentationEditorDeck.title;
  const list=document.querySelector('#presentation-slide-list');list.replaceChildren();const order=presentationMainOrder(),byId=new Map(presentationEditorDeck.slides.map(item=>[item.id,item]));
@@ -3466,7 +3603,7 @@ function presentationPdfExportFinished(result){if(!presentationPrintPlan||result
 document.querySelector('#presentation-print-confirm').addEventListener('change',event=>{document.querySelector('#presentation-print-run').disabled=!(event.currentTarget.checked&&presentationPrintTarget&&presentationPrintPlan?.pages.length);});
 document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
- presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;renderPresentationEditor();
+ presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
 }
 function renderOutputsOverview(preferred=null){
  outputsOverviewList.replaceChildren();
@@ -3520,7 +3657,7 @@ function renderPresentationDocuments(preferred=null,openEditor=true){
 async function loadPresentationEditor(preferred=null,openEditor=true){
  if(!activeProject)return;sidebarPresentationStatus.textContent='Načítám prezentace projektu…';presentationEditorStatus.textContent='Načítám prezentace projektu…';
  try{presentationEditorView=await projectRequest('/v1/presentations/open',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments(preferred,openEditor);presentationEditorStatus.textContent=presentationEditorView.documents.length?'Editor používá aktuální uloženou verzi projektu.':'Nová prezentace vznikne až po kliknutí na Uložit do projektu.';}
- catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;presentationEditorDeck=null;presentationEditorWorkspace.hidden=true;updatePresentationEditorEnabled();}
+ catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;presentationEditorDeck=null;presentationEditorMode='special';presentationEditorWorkspace.hidden=true;presentationRawPanel.hidden=true;updatePresentationEditorEnabled();}
 }
 async function openPresentationEditor(preferred=null){
  if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého prezentace patří.';return;}
@@ -3529,13 +3666,15 @@ async function openPresentationEditor(preferred=null){
  selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
 }
 function createPresentationDocument(confirmDiscard=true){
- if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorDocuments.value='';renderPresentationEditor();presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
+ if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
 presentationTab.addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor();else if(!presentationEditorDeck)renderPresentationDocuments();});
 document.querySelector('#presentations-tab').addEventListener('click',()=>{if(document.body.dataset.runtime==='server'){openOutputsOverview();return;}if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor(null,false);else renderSidebarPresentations();});
 presentationEditorDocuments.addEventListener('change',()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
 document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
 document.querySelector('#presentation-editor-reload').addEventListener('click',()=>{if(canLeavePresentationEditor()){presentationEditorView=null;loadPresentationEditor();}});
+document.querySelector('#presentation-editor-mode-raw').addEventListener('click',openPresentationRawEditor);
+document.querySelector('#presentation-editor-mode-special').addEventListener('click',async()=>{if(presentationEditorMode==='raw')await applyPresentationRaw();});
 for(const id of ['presentation-deck-title','presentation-slide-title','presentation-slide-bullets','presentation-slide-notes','presentation-slide-repeat','presentation-slide-reveal','presentation-slide-background','presentation-slide-foreground'])document.querySelector('#'+id).addEventListener('input',()=>{
  if(presentationEditorLoading)return;const slide=presentationCurrentSlide();presentationEditorDeck.title=document.querySelector('#presentation-deck-title').value;slide.title=document.querySelector('#presentation-slide-title').value;slide.bullets=document.querySelector('#presentation-slide-bullets').value.split(/\\r?\\n/).filter(line=>line.trim());slide.column_break=Math.min(slide.column_break||0,slide.bullets.length);slide.notes=document.querySelector('#presentation-slide-notes').value;slide.repeat=document.querySelector('#presentation-slide-repeat').checked;slide.reveal=document.querySelector('#presentation-slide-reveal').value;slide.background=document.querySelector('#presentation-slide-background').value;slide.foreground=document.querySelector('#presentation-slide-foreground').value;presentationEditorChanged(false);
 });
@@ -3560,7 +3699,7 @@ document.querySelector('#presentation-slide-up').addEventListener('click',()=>mo
 document.querySelector('#presentation-clear-wallpaper').addEventListener('click',()=>{presentationCurrentSlide().wallpaper='';presentationEditorChanged();});
 document.querySelector('#presentation-slide-wallpaper').addEventListener('change',async event=>{const file=event.currentTarget.files[0];event.currentTarget.value='';if(!file)return;if(file.type!=='image/png'||file.size>190000){presentationEditorStatus.textContent='Vyberte PNG do 190 KiB.';return;}const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});if(String(value).length>262144){presentationEditorStatus.textContent='Zakódovaná tapeta překračuje limit 256 KiB.';return;}presentationCurrentSlide().wallpaper=String(value);presentationEditorChanged();});
 presentationEditorSave.addEventListener('click',async()=>{
- if(!activeProject||!presentationEditorDeck)return;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
+ if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
  updatePresentationEditorEnabled();presentationEditorStatus.textContent='Ukládám potvrzenou podobu prezentace do projektu…';
  try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;await openRegisteredProject(projectId);await openPresentationEditor(id);presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;}
  catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();}
@@ -3749,27 +3888,76 @@ function showTaskPlanDetail(item){
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title);
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
- for(const [name,value] of [['Stav',item.checked?'dokončeno':item.blocked?'blokováno':item.ready?'připraveno':'plánováno'],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;description.textContent=value;list.append(term,description);}detail.append(list);
+ const checklist=(item.checklist||[]).map(value=>(value.checked?'☑ ':'☐ ')+value.text).join('\\n');
+ for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',item.checked?'dokončeno':item.blocked?'blokováno':item.ready?'připraveno':'plánováno'],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;description.textContent=value;list.append(term,description);}detail.append(list);
+}
+function renderProfiledTaskRoadmap(value,mode,graph,status){
+ const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line);
+ const batches=value.nodes.filter(item=>item.type==='batch'&&(!mode||(mode==='completed'?item.checked:item[mode])));
+ const visibleMilestones=mode?milestones.filter(item=>batches.some(batch=>batch.parent_id===item.id)):milestones;
+ if(!visibleMilestones.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné dávky.';graph.append(empty);status.textContent='0 dávek';return;}
+ const visible=new Set(batches.map(item=>item.id)),labelWidth=220,columnWidth=270,cardWidth=220,cardHeight=96,laneGap=10,lanePadding=18;
+ const positions=new Map(),lanes=[];let top=10,maxDepth=0;
+ for(const milestone of visibleMilestones){const laneBatches=batches.filter(item=>item.parent_id===milestone.id),slots=new Map();let maxSlot=0;
+  for(const batch of laneBatches){const depth=batch.dependency_depth||0,slot=slots.get(depth)||0;slots.set(depth,slot+1);maxSlot=Math.max(maxSlot,slot);maxDepth=Math.max(maxDepth,depth);positions.set(batch.id,{x:labelWidth+28+depth*columnWidth,y:top+lanePadding+slot*(cardHeight+10)});}
+  const height=laneBatches.length?lanePadding*2+(maxSlot+1)*cardHeight+maxSlot*10:96;lanes.push({milestone,top,height});top+=height+laneGap;
+ }
+ const width=Math.max(graph.clientWidth||0,labelWidth+68+(maxDepth+1)*columnWidth),height=top;
+ const canvas=document.createElement('div');canvas.className='plan-roadmap-canvas';canvas.style.width=`${width}px`;canvas.style.height=`${height}px`;
+ for(const lane of lanes){const row=document.createElement('div');row.className='plan-milestone-lane';row.style.top=`${lane.top}px`;row.style.width=`${width}px`;row.style.height=`${lane.height}px`;const label=document.createElement('button');label.type='button';label.className='plan-milestone-label';label.setAttribute('aria-label',`${lane.milestone.id}, ${lane.milestone.title}`);const id=document.createElement('strong'),description=document.createElement('span');id.textContent=`${lane.milestone.id} · ${lane.milestone.title}`;description.textContent=lane.milestone.description||'Bez doplňujícího popisu.';label.append(id,description);label.addEventListener('click',()=>showTaskPlanDetail(lane.milestone));row.append(label);canvas.append(row);}
+ const svg=roadmapElement('svg',{class:'plan-roadmap-edges',viewBox:`0 0 ${width} ${height}`,width,height,'aria-hidden':'true'});
+ for(const batch of batches){const target=positions.get(batch.id);if(!target)continue;for(const parent of batch.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);if(!source)continue;svg.append(roadmapElement('path',{d:`M ${source.x+cardWidth} ${source.y+cardHeight/2} C ${source.x+cardWidth+28} ${source.y+cardHeight/2}, ${target.x-28} ${target.y+cardHeight/2}, ${target.x} ${target.y+cardHeight/2}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
+ canvas.append(svg);
+ for(const batch of batches){const point=positions.get(batch.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.completed=String(batch.checked);card.dataset.blocked=String(batch.blocked);card.dataset.ready=String(batch.ready);card.dataset.critical=String(batch.critical);card.setAttribute('aria-label',`${batch.id}, ${batch.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=batch.id;title.textContent=batch.title;description.textContent=batch.description||'Bez doplňujícího popisu.';card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(batch));canvas.append(card);}
+ graph.append(canvas);status.textContent=`${batches.length}/${value.nodes.filter(item=>item.type==='batch').length} dávek · ${visibleMilestones.length} milníků · ${value.ready.filter(id=>visible.has(id)).length} připravených · hlavní roadmapa`;
+}
+function renderProfiledTaskLevel(value,mode,graph,status,selection){
+ const selectedBatches=value.nodes.filter(item=>item.type==='batch'&&(selection.kind==='milestone'?item.parent_id===selection.id:item.id===selection.id));
+ const batchIds=new Set(selectedBatches.map(item=>item.id));
+ const tasks=value.nodes.filter(item=>item.type==='task'&&batchIds.has(item.parent_id)&&(!mode||(mode==='completed'?item.checked:item[mode])));
+ const visibleBatches=mode?selectedBatches.filter(batch=>tasks.some(task=>task.parent_id===batch.id)):selectedBatches;
+ if(!visibleBatches.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné dávky s odpovídajícími úkoly.';graph.append(empty);status.textContent='0 úkolů';return;}
+ const visibleTasks=tasks.filter(task=>visibleBatches.some(batch=>batch.id===task.parent_id)),visible=new Set(visibleTasks.map(item=>item.id));
+ const labelWidth=220,columnWidth=270,cardWidth=220,cardHeight=104,laneGap=10,lanePadding=18;
+ const minDepth=visibleTasks.length?Math.min(...visibleTasks.map(item=>item.dependency_depth||0)):0;
+ const positions=new Map(),lanes=[];let top=10,maxDepth=0;
+ for(const batch of visibleBatches){const laneTasks=visibleTasks.filter(item=>item.parent_id===batch.id),slots=new Map();let maxSlot=0;
+  for(const task of laneTasks){const depth=(task.dependency_depth||0)-minDepth,slot=slots.get(depth)||0;slots.set(depth,slot+1);maxSlot=Math.max(maxSlot,slot);maxDepth=Math.max(maxDepth,depth);positions.set(task.id,{x:labelWidth+28+depth*columnWidth,y:top+lanePadding+slot*(cardHeight+10)});}
+  const height=laneTasks.length?lanePadding*2+(maxSlot+1)*cardHeight+maxSlot*10:96;lanes.push({batch,top,height});top+=height+laneGap;
+ }
+ const width=Math.max(graph.clientWidth||0,labelWidth+68+(maxDepth+1)*columnWidth),height=top;
+ const canvas=document.createElement('div');canvas.className='plan-roadmap-canvas plan-task-level';canvas.style.width=`${width}px`;canvas.style.height=`${height}px`;
+ for(const lane of lanes){const row=document.createElement('div');row.className='plan-milestone-lane plan-batch-lane';row.style.top=`${lane.top}px`;row.style.width=`${width}px`;row.style.height=`${lane.height}px`;const label=document.createElement('button');label.type='button';label.className='plan-milestone-label plan-batch-label';label.setAttribute('aria-label',`${lane.batch.id}, ${lane.batch.title}`);const id=document.createElement('strong'),description=document.createElement('span');id.textContent=`${lane.batch.id} · ${lane.batch.title}`;description.textContent=lane.batch.description||'Bez doplňujícího popisu.';label.append(id,description);label.addEventListener('click',()=>showTaskPlanDetail(lane.batch));row.append(label);canvas.append(row);}
+ const svg=roadmapElement('svg',{class:'plan-roadmap-edges',viewBox:`0 0 ${width} ${height}`,width,height,'aria-hidden':'true'});
+ for(const task of visibleTasks){const target=positions.get(task.id);if(!target)continue;for(const parent of task.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);if(!source)continue;svg.append(roadmapElement('path',{d:`M ${source.x+cardWidth} ${source.y+cardHeight/2} C ${source.x+cardWidth+28} ${source.y+cardHeight/2}, ${target.x-28} ${target.y+cardHeight/2}, ${target.x} ${target.y+cardHeight/2}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
+ canvas.append(svg);
+ for(const task of visibleTasks){const point=positions.get(task.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card plan-task-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.completed=String(task.checked);card.dataset.blocked=String(task.blocked);card.dataset.ready=String(task.ready);card.dataset.critical=String(task.critical);card.setAttribute('aria-label',`${task.id}, ${task.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=task.id;title.textContent=task.title;const done=(task.checklist||[]).filter(item=>item.checked).length,criteria=(task.checklist||[]).length;description.textContent=(task.description||'Bez doplňujícího popisu.')+(criteria?`\nPodmínky: ${done}/${criteria}`:'');card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(task));canvas.append(card);}
+ graph.append(canvas);status.textContent=`${visibleTasks.length} úkolů · ${visibleBatches.length} dávek · ${selection.title}`;
 }
 function renderTaskPlan(){
  const value=taskPlanProjection,graph=document.querySelector('#plan-graph'),status=document.querySelector('#plan-status');graph.replaceChildren();
  if(!value){status.textContent='Otevřete projekt.';return;}
  if(value.status!=='ready'){status.textContent=value.status==='missing'?'Projekt zatím nemá hlavní seznam úkolů.':`Plán nelze zobrazit: ${value.error||'neplatný formát'}`;return;}
- const mode=document.querySelector('#plan-state-filter').value,scope=taskPlanSelection?new Set(taskPlanSelection.task_ids):null;
+ const mode=document.querySelector('#plan-state-filter').value,scope=taskPlanSelection?.kind==='subgraph'?new Set(taskPlanSelection.task_ids):null;
+ if(value.profile==='software-development/v1'&&!taskPlanSelection){renderProfiledTaskRoadmap(value,mode,graph,status);return;}
+ if(value.profile==='software-development/v1'&&['milestone','batch'].includes(taskPlanSelection?.kind)){renderProfiledTaskLevel(value,mode,graph,status,taskPlanSelection);return;}
  const nodes=value.nodes.filter(item=>(!scope||scope.has(item.id))&&(!mode||(mode==='completed'?item.checked:item[mode]))),visible=new Set(nodes.map(item=>item.id));
  if(!nodes.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné úkoly.';graph.append(empty);status.textContent='0 úkolů';return;}
  const positions=new Map(),slots=new Map();for(const item of nodes){const slot=slots.get(item.depth)||0;slots.set(item.depth,slot+1);positions.set(item.id,{x:28+item.depth*260,y:28+slot*78});}
  const width=280+Math.max(...nodes.map(item=>item.depth))*260,height=90+Math.max(...slots.values())*78,svg=roadmapElement('svg',{viewBox:`0 0 ${width} ${height}`,width,height,role:'img','aria-label':'Plán projektových úkolů'});
  for(const item of nodes){const target=positions.get(item.id);for(const parent of item.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);svg.append(roadmapElement('path',{d:`M ${source.x+220} ${source.y+26} C ${source.x+242} ${source.y+26}, ${target.x-22} ${target.y+26}, ${target.x} ${target.y+26}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
  for(const item of nodes){const point=positions.get(item.id),group=roadmapElement('g',{class:'roadmap-node',tabindex:0,role:'button','aria-label':`${item.id}, ${item.title}`});group.append(roadmapElement('rect',{x:point.x,y:point.y,width:220,height:54,rx:8,fill:item.checked?'#e2f3eb':item.blocked?'#f8dddd':'#fff',stroke:item.ready?'#176b60':'#557384','stroke-width':item.critical?4:2,'stroke-dasharray':item.ready?'6 3':''}));const id=roadmapElement('text',{x:point.x+9,y:point.y+21,fill:'#152b38','font-size':12,'font-weight':700});id.textContent=item.id;const title=roadmapElement('text',{x:point.x+9,y:point.y+41,fill:'#4e6674','font-size':11});title.textContent=item.title.length>32?item.title.slice(0,31)+'…':item.title;group.append(id,title);const select=()=>showTaskPlanDetail(item);group.addEventListener('click',select);group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});svg.append(group);}
- graph.append(svg);status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?taskPlanSelection.title:'Hlavní graf'}`;
+ graph.append(svg);status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
 }
-function openTaskPlan(subgraph=null){taskPlanSelection=subgraph;selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();}
+function updateTaskPlanTreeSelection(){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/'));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
+function openTaskPlan(selection=null){taskPlanSelection=selection;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();}
 function renderTaskPlanSidebar(value){
- taskPlanProjection=value;taskPlanSelection=null;const list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');list.replaceChildren();
- if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;renderTaskPlan();return;}
- status.textContent=`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
- for(const subgraph of value.subgraphs){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.textContent=`${subgraph.title} (${subgraph.task_ids.length})`;button.addEventListener('click',()=>openTaskPlan(subgraph));row.append(button);list.append(row);}renderTaskPlan();
+ taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();
+ if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
+ const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
+ status.textContent=value.profile==='software-development/v1'?`${milestones.length} milníků · ${batches.length} dávek · ${value.nodes.filter(item=>item.type==='task').length} úkolů`:`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
+ for(const milestone of milestones){const row=document.createElement('li'),button=document.createElement('button'),children=document.createElement('ul');row.setAttribute('role','treeitem');row.setAttribute('aria-expanded','true');button.type='button';button.dataset.planSelection=milestone.id;button.textContent=`${milestone.id} · ${milestone.title}`;button.addEventListener('click',()=>openTaskPlan({kind:'milestone',id:milestone.id,title:milestone.title}));children.setAttribute('role','group');for(const batch of batches.filter(item=>item.parent_id===milestone.id)){const child=document.createElement('li'),batchButton=document.createElement('button');child.setAttribute('role','treeitem');batchButton.type='button';batchButton.dataset.planSelection=batch.id;batchButton.textContent=`${batch.id} · ${batch.title}`;batchButton.addEventListener('click',()=>openTaskPlan({kind:'batch',id:batch.id,parent_id:milestone.id,title:batch.title}));child.append(batchButton);children.append(child);}row.append(button,children);hierarchy.append(row);}
+ for(const subgraph of value.subgraphs){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planSubgraph=subgraph.id;button.textContent=`${subgraph.title} (${subgraph.task_ids.length})`;button.addEventListener('click',()=>openTaskPlan({...subgraph,kind:'subgraph'}));row.append(button);list.append(row);}updateTaskPlanTreeSelection();renderTaskPlan();
 }
 document.querySelector('#open-main-plan').addEventListener('click',()=>openTaskPlan());
 document.querySelector('#plan-tab').addEventListener('click',()=>openTaskPlan(taskPlanSelection));
@@ -7042,6 +7230,7 @@ class DesktopHandler(Handler):
         '/v1/projects/conflicts/list', '/v1/projects/conflicts/preview',
         '/v1/projects/conflicts/confirm',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
+        '/v1/artifacts/editor/validate-plan',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
@@ -7066,6 +7255,7 @@ class DesktopHandler(Handler):
         '/v1/backend-catalog/status', '/v1/backend-catalog/reset',
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
+        '/v1/document-patterns',
         '/v1/roadmap/graph',
         '/v1/julia/definitions', '/v1/julia/preview', '/v1/julia/execute',
         '/v1/julia/status', '/v1/julia/cancel', '/v1/julia/reconcile',
@@ -7147,6 +7337,22 @@ class DesktopHandler(Handler):
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/document-patterns' and isinstance(request, dict):
+            service = getattr(self.server, 'document_patterns', None) or DocumentPatterns()
+            try:
+                if request == {'action': 'catalog'}:
+                    return self.reply(200, service.catalog())
+                if set(request) == {'action', 'adapter_id', 'format', 'content'} \
+                        and request['action'] == 'validate':
+                    return self.reply(200, service.validate(
+                        request['adapter_id'], request['format'], request['content']))
+                if set(request) == {'action', 'adapter_id', 'format', 'value'} \
+                        and request['action'] == 'serialize':
+                    return self.reply(200, service.serialize(
+                        request['adapter_id'], request['format'], request['value']))
+                return self.send_error(400)
+            except (ValueError, TypeError, KeyError, UnicodeError, RecursionError) as exc:
+                return self.reply(422, {'error': str(exc) or 'Raw obsah nelze ověřit.'})
         if self.path == '/v1/roadmap/graph' and isinstance(request, dict):
             try:
                 service = getattr(self.server, 'roadmap_graph', None) or RoadmapGraph()
@@ -7753,6 +7959,9 @@ class DesktopHandler(Handler):
                 if (self.path == '/v1/artifacts/editor/open' and isinstance(request, dict)
                         and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
                     return self.reply(200, actions.open(**request))
+                if (self.path == '/v1/artifacts/editor/validate-plan' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'expected_head', 'body'}):
+                    return self.reply(200, actions.validate_task_plan(**request))
                 if (self.path == '/v1/artifacts/editor/save' and isinstance(request, dict)
                         and set(request) == {'operation_id', 'document'}
                         and isinstance(request['document'], dict)):
@@ -7915,7 +8124,9 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error':
                     'Potvrzení prezentace nelze dokončit: návrh, schválení nebo projektová revize '
                     'se změnily. Načtěte aktuální stav; pokud návrh zůstane dostupný, opakování '
-                    'stejného tlačítka zachová identitu operace.'})
+                                       'stejného tlačítka zachová identitu operace.'})
+            if self.path == '/v1/artifacts/editor/validate-plan':
+                return self.reply(422, {'error': str(exc) or 'Plán nelze bezpečně materializovat.'})
             if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/node-telemetry/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '

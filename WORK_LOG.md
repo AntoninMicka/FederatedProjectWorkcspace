@@ -5,11 +5,367 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## COMP-03 — Workspace řízení Julia výpočtu — 2026-10-28
+
+Dávka vznikla na větvi `feature/comp-03-julia-workspace` z `develop`
+`507c232`, byla přerušena do doručení společného raw editoru a po PR #107–#110
+obnovena sloučením aktuálního `develop` `fd79dd8` do původní feature větve.
+Dosáhla cílové úrovně **PoC validated**. Akceptovaná evidence je uzavřená;
+push ani PR do `develop` dosud nebyly vytvořeny a feature není sloučená.
+
+- [x] [completed] **COMP-03-A — projektová projekce definic a přesný preview
+  (implemented).** Shared servis načítá pouze validované
+  `fpw-julia-computation-v1` definice z přesného Git HEAD, váže typované
+  parametry, vstupy, privacy, runtime a limity a preview nic nespouští.
+- [x] [completed] **COMP-03-B — potvrzený běh a lifecycle (implemented).**
+  Explicitně potvrzený exact preview reuse Julia journal a executor; stavy,
+  cancel, restart a reconcile zachovávají `unknown` bez automatického retry.
+- [x] [completed] **COMP-03-C — výstupy a explicitní publikace
+  (implemented).** Deklarovaný výstup má bounded náhled a samostatně
+  potvrzenou idempotentní Workspace publikaci s provenance, revalidací HEAD,
+  oprávnění a privacy.
+- [x] [completed] **COMP-03-D — shared desktop/web UI (implemented).**
+  Otevření projektu, změna parametru a čtení stavu nemají výpočetní ani
+  publikační účinek; authoring zůstává v Nástrojích a běh ve Výpočtech.
+- [x] [completed] **COMP-03-F — editor Julia modelu a šablony
+  (implemented).** Specializovaný editor ukládá `.jl`, `Project.toml`, přesný
+  manifest a hashovanou definici jednou serializovanou Workspace transakcí.
+  Julia zdroj reuse společný raw widget a adaptér s filtrovanými vzory,
+  kontextovou nápovědou, vyplněnými příklady, vložením na kurzor a bounded
+  neexekuční validací; importované immutable zdroje se nepřepisují.
+- [x] [completed] **COMP-03-E — regrese, dokumentace a fyzická akceptace
+  (PoC validated).** Fail-closed lifecycle, recovery, web wiring, editor a
+  fyzický podporovaný runtime byly ověřeny a dokumentace sjednocena.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu a testů prošla úplná sada
+`python3 -m unittest discover -s tests -v`: **957 testů, 920 prošlo a 37
+volitelných bylo přeskočeno, bez selhání**, 235,848 s. Cílená Julia/katalog/UI
+sada měla 41 úspěšných testů a dva environmentálně podmíněné skipy; dva
+socketové API testy po zopakování mimo omezený sandbox prošly. Python compile,
+generovaný JavaScript přes `node --check` a oba skutečné Qt/WebEngine smoke
+testy prošly. Nový smoke otevřel Julia authoring v Nástrojích a ověřil výchozí
+i vzorovou nápovědu, vyplněný příklad, vložení funkce na kurzor, bounded
+validaci, ochranu rozepsaného draftu a nulový projektový zápis při zavření.
+
+Fyzická akceptace na oficiálním Julia 1.10.12 Linux glibc aarch64 runtime byla
+provedena dříve v téže feature větvi: exact preview, potvrzený bubblewrap běh,
+zákaz sítě, výstup `real-julia=42;network=denied`, explicitní Workspace
+publikace a editorová šablona prošly. Aktuální závěrečný host neměl proměnné
+`M0_JULIA_RUNTIME_ROOT`/`M0_JULIA_ARCHIVE`, proto fyzický runtime test v poslední
+plné sadě zůstal mezi volitelnými skipy; předchozí fyzický důkaz se nezměnil.
+
+Crash hranice zůstávají beze změny: preview je read-only; před durable dispatch
+nic neběží, neurčitý stav po dispatch je `unknown` bez retry, exact materializace
+se pouze reconciliuje. Publikace i čtyřartefaktový editor používají existující
+Workspace/Journal/Git/index transakci: před commitem je autoritou journal, po
+commitu lze index obnovit z HEAD a stejné operation ID nevytvoří duplicitní
+artefakt ani balíček. Raw widget nemá vlastní save endpoint a vložení či
+validace nikdy Julia kód nespouštějí.
+
+Zbývající omezení odpovídají rozsahu: nejde o obecné IDE, Pluto/Jupyter,
+scheduler, instalátor balíčků ani síťové/GPU/distribuované výpočty. Cíl pluginu
+pro Code/VSCodium zůstává samostatnou následující dávkou `DEV-IDE-TODO-01`.
+
+## PLAN-ROADMAP-MILESTONE-VIEW-01 — Strom a víceúrovňový pohled roadmapy — 2026-10-28
+
+Dávka vznikla na větvi `feature/plan-roadmap-milestone-view` z `develop`
+`ab09744`; první část vznikla v commitu `f5ab8d8` a uživatelské doplnění
+stromu, task pohledu a checklistu dokončilo cílovou úroveň **implemented**.
+Feature byla doručena PR #110 do `develop` jako commit `fd79dd8`.
+
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-A — popisné bloky plánu
+  (implemented).** Milestone, batch a task mají bounded víceřádkový popis v
+  lossless read-only projekci; metadata a vztahy zůstávají oddělené.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-B — hlavní milestone/batch
+  pohled (implemented).** Kořen `/` zachovává milestone pruhy a batch karty s
+  popisy.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-C — závislosti a scroll
+  (implemented).** Batch dependency mohou vést napříč milestone, plátno roste
+  do šířky a milestone nadpis s popisem zůstává ukotvený.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-D — první regrese,
+  dokumentace a předání (implemented).** Task vzory a příklady získaly popisy
+  a první milestone/batch pohled byl ověřený a zdokumentovaný před následným
+  uživatelským rozšířením akceptace.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-E — strom plánu a milestone
+  drill-down (implemented).** Strom obsahuje pouze `/ → milestone → batch`.
+  Milestone přepne plátno na pruhy jeho batch s task kartami a batch pohled
+  zúží na jediný pruh; task není položkou stromu.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-F — task checklist podmínek
+  splnění (implemented).** Vnořené checkboxy bez ID jsou bounded stav a text
+  pod `task`, zobrazují se v kartě/detailu a nevytvářejí grafové ani stromové
+  uzly. Vzory i vyplněné příklady tuto syntax obsahují.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-G — regrese, dokumentace a
+  předání (implemented).** Parser, bezpečný DOM renderer, skutečný browser
+  smoke, ADR 0059, návody a master roadmapa popisují stejný kontrakt.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu, testů a vzorů prošla úplná sada
+`python3 -m unittest discover -s tests -v`: **950 testů, 914 prošlo a 36
+volitelných bylo přeskočeno, bez selhání**, 229,703 s. Cílených 20 testů
+parseru a katalogu a dva API testy prošly. Samostatné skutečné Qt/WebEngine
+smoke testy ověřily obecný plán/podgraf i profilovaný kořen, strom bez tasků,
+milestone task pohled, checklist v kartě/detailu a zúžení na batch. Generovaný
+JavaScript prošel `node --check` a finální `git diff --check` byl bez chyby.
+Úplná sada vypsala existující neblokující `ResourceWarning` pro neuzavřené
+testovací SQLite connection, ale žádný test neselhal.
+
+Jde o read-only projekci committed souborů; nevzniká nový store ani zápisová
+operace. Uložení v task editoru dál používá Workspace/Journal/Git/index:
+před commitem je autoritou journal a po commitu lze index obnovit z HEAD.
+Reuse/adapt zachovalo parser a fail-closed graf ADR 0055/0059, bezpečné
+`textContent`/SVG DOM vykreslování a existující vizuální jazyk roadmapy; nový
+framework ani perzistentní vrstva nevznikly. Checklist zůstává vlastností tasku
+a task nejnižší úrovní roadmapové hierarchie.
+
+## DOC-PATTERN-LIBRARY-01 — Rozšířená knihovna vzorů a kontextová nápověda — 2026-10-27
+
+Dávka vznikla na větvi `feature/doc-pattern-library` z `develop` `50284d1` a
+dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; PR #109
+byla sloučena do `develop` jako squash commit `ab09744`. Původní požadavek na
+obsahově bohatší katalog byl během aktivace
+rozšířen o pravý kontextový panel:
+výchozí stav vysvětluje celý formát souboru a explicitní výběr jej nahradí
+podrobnou nápovědou vzoru. Následná akceptační připomínka zachovala plnou
+pracovní šířku editoru, přesunula panel do volného prostoru napravo a doplnila
+formátovou i vzorovou nápovědu o konkrétní příklad použití. Druhé upřesnění
+vyžádalo skutečně vyplněný text místo slovního popisu a volitelnou pozici
+vložení v raw i kostkovém editoru.
+
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-A — coverage a katalogový kontrakt
+  (implemented).** Read-only katalog nyní zveřejňuje uzavřenou `coverage` mapu
+  pro obecný Markdown, prezentaci a Julia a adapter-level `format_help` pro
+  každý podporovaný formát. Každý formát i vzor nese samostatnou vyplněnou
+  textovou ukázku bez `DOPLNIT`. Modulová kontrola odmítne duplicitu, chybějící vzor nebo nápovědu
+  bez příkladu i nesoulad adaptéru, formátu a insertion mode; deterministická
+  revize zahrnuje i tato metadata.
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-B — praktické vzory
+  (implemented).** Markdown získal checklist, rozhodovací záznam a zápis ze
+  schůzky. Prezentace nabízí celý one-slide deck, briefing a rozhodovací review
+  s backupem; všechny jsou doménově validní a lossless. Julia má skript,
+  funkci, modul, runner entrypoint s result manifestem, připnutý Project.toml a
+  úplný validní `fpw-julia-computation-v1` s neutrálními hodnotami k nahrazení.
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-C — pravý panel nápovědy
+  (implemented).** Oba shared raw widgety používají přístupný panel vykreslený
+  přes `textContent`. Select začíná prázdnou volbou, panel nejprve ukazuje
+  nápovědu a příklad k celému souboru a po výběru název, detail a příklad
+  vzoru; textarea se změní až explicitním vložením. Na širokém desktopu
+  zůstává editoru jeho dosavadní pracovní šířka 820 px a panel využívá volné
+  místo napravo; při viewportu do 1250 px se skládá pod editor. Raw editor
+  vkládá fragment/blok na kurzor nebo konec a kostkový editor na konec nebo
+  před kterýkoli rozpoznaný uzel.
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-D — regrese, dokumentace a předání
+  (implemented).** Coverage dokument, uživatelský návod, ADR 0058, roadmapa,
+  reuse evidence a pracovní evidence popisují stejný rozsah a hranice. Task
+  coverage zůstala beze změny v `PLAN-TASK-EDITOR-01`; Julia authoring a jeho
+  fyzická ARM64 akceptace zůstávají v `COMP-03`.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu, CSS a testů prošla celá sada
+`python3 -m unittest discover -s tests -v`: **946 testů, 911 prošlo a 35
+volitelných bylo přeskočeno, bez chyb**, 228,374 s. Cílená sada katalogu,
+prezentačních dokumentů, task grafu, HTTP API a mobilního kontraktu prošla;
+Python kompilace, SPDX, roadmap graf a `git diff --check` byly bez chyby.
+Samostatný skutečný Qt/WebEngine smoke s `M0_DESKTOP_TEST=1` prošel výchozí
+nápovědou a příkladem k souboru, přepnutím na detail a příklad vybraného
+vzoru, vložením raw fragmentu na pozici kurzoru i kostky mezi dva existující
+uzly, validací, uložením dokumentu a TODO i dirty guardem. Při ukončení
+preview server zalogoval známý neblokující
+`BrokenPipe`/`SSL BAD_LENGTH`; test a
+následná kontrola uložených dat skončily úspěšně.
+
+Coverage, nápověda, výběr, vložení a validace jsou ephemerální a nevytvářejí
+novou persistentní vrstvu. Uložení dál používá doménový
+Workspace/Journal/Git/index kontrakt dokumentu nebo prezentace; Julia UI ani
+runner tato dávka nevolá. Responzivní složení panelu je pokryté CSS a statickým
+mobilním kontraktem, nikoli samostatnou fyzickou mobilní akceptací. První plný
+běh odhalil pouze nesoulad přesného CSS selektoru v existujícím mobilním testu;
+po zachování původního selektoru a oddělení nového pravidla prošel cílený test
+i opakovaná úplná brána.
+
+## PLAN-TASK-EDITOR-01 — Profilovaný souborový plán a lossless task editor — 2026-10-27
+
+Dávka vznikla na větvi `feature/plan-task-editor` z `develop` `ac4281a` a
+dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; do
+`develop` byla doručena PR #108 jako squash commit `50284d1`. Rozsah na výslovný
+požadavek uživatele zahrnul původní `PLAN-FILE-HIERARCHY-01` a úplnou task
+coverage katalogu; obecné rozšíření ostatních adaptérů zůstává v
+`DOC-PATTERN-LIBRARY-01`.
+
+- [x] [completed] **PLAN-TASK-EDITOR-01-A — souborový profil a materializace
+  (implemented).** Profil `software-development/v1` vynucuje
+  `milestone → batch → task`. Batch může mít potomky jako inline pododrážky,
+  nebo přesný odkaz na jeden označený Markdown document artefakt. Obě
+  reprezentace vytvářejí stejný `parent_id`, typ, hierarchickou hloubku a graf;
+  graf je deterministický materializovaný pohled souborů jednoho commitu.
+- [x] [completed] **PLAN-TASK-EDITOR-01-B — task coverage katalogu
+  (implemented).** Katalog má stabilní vzory pro kořen plánu, externí task
+  dokument, milestone, inline batch, file batch, task a dependency. Všechny
+  operace nabízené task editorem mají odpovídající validovaný vzor a vložení
+  pouze mění lokální draft.
+- [x] [completed] **PLAN-TASK-EDITOR-01-C — lossless editor Kostky / Raw text
+  (implemented).** Shared desktop/web editor materializuje stav, typ, ID,
+  název/odkaz, rodiče a vztahy. Editace přepisuje pouze přesně rozpoznaný
+  checkbox řádek nebo `type` řádek; neznámý obsah, komentáře, pořadí a
+  whitespace zůstávají nedotčené. Nejednoznačný dokument zamkne strukturovaný
+  režim a zachová raw zápisovou cestu.
+- [x] [completed] **PLAN-TASK-EDITOR-01-D — revizně připnutá validace a
+  recovery (implemented).** Read-only endpoint dosadí draft jediného souboru
+  do přesného committed snapshotu a před save materializuje celý bundle.
+  Neznámý soubor, duplicita, smíšená inline/file reprezentace, neplatný profil,
+  hierarchy/dependency cyklus, pending operace a stale HEAD selžou bez zápisu.
+  Vlastní save dál používá jedinou existující Workspace/journal/Git/index
+  operaci.
+- [x] [completed] **PLAN-TASK-EDITOR-01-E — dokumentace a ověření
+  (implemented).** ADR 0059, uživatelský návod, task-planning dokument,
+  roadmapa, backlog a strojový graf používají stejný kontrakt batch odkazu a
+  stejné dependency hrany.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu a testů prošla celá sada
+`python3 -m unittest discover -s tests -v`: **943 testů, 908 prošlo a 35
+volitelných bylo přeskočeno, bez chyb**, 227,167 s. Cílené testy parseru,
+katalogu, ArtifactActions, HTTP a statického UI prošlo; Python kompilace i
+`node --check` browserového JavaScriptu byly bez chyby. Samostatný skutečný
+Qt/WebEngine shared desktop/web smoke s `M0_DESKTOP_TEST=1` prošel vložením
+vzoru, uložením dokumentu, vykreslením profilovaného TODO jako kostky, uložením
+a dirty guardem. Při ukončení náhledu server zalogoval neblokující
+`BrokenPipe`, test i následná kontrola uložených dat skončily úspěšně.
+
+Čtení bundle nic nezapisuje. Editace jednoho souboru zachovává stávající crash
+hranice: před commitem je autoritou journal, po commitu lze index obnovit z
+HEAD. První verze nevytváří externí task dokument a jeho batch odkaz atomicky,
+nepřesouvá uzly mezi soubory a nenabízí nový task store. Fyzický mobilní
+viewport nebyl samostatně akceptován; responzivní pravidla a nativní prvky jsou
+pokryté staticky.
+
+## DOC-PATTERN-CATALOG-01 — Katalog textových vzorů a sdílený raw editor — 2026-10-27
+
+Dávka vznikla na větvi `feature/doc-pattern-catalog-raw-editor` z `develop`
+`8854082` a dosáhla cílové úrovně **implemented**. Feature akceptace je
+dokončená; do `develop` byla doručena PR #107 jako squash commit `ac4281a`.
+
+- [x] [completed] **DOC-PATTERN-CATALOG-01-A — validovaný katalog a typové
+  adaptéry (implemented).** Nový uzavřený registr má stabilní ID/verze,
+  revizi, formáty, insertion mode a platné vestavěné vzory pro Markdown,
+  task/plán, prezentaci a Julia/TOML/JSON. Neznámý typ nebo formát, NUL,
+  obsah nad 1 MiB a neplatný strukturovaný formát selžou bezpečně.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-B — sdílený raw widget
+  (implemented).** Jedna storage-agnostic komponenta spravuje lokální buffer,
+  dirty stav, filtrování, document/block/cursor vložení, explicitní validaci,
+  read-only stav a nativní keyboard/mobile ovládání. Bezpečný DOM používá
+  `textContent`, `Option` a `replaceChildren`; widget nemá save ani execution
+  endpoint.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-C — document/task adaptér
+  (implemented).** Obecný dokument a hlavní TODO používají tentýž widget, ale
+  ukládají dál přes existující `ArtifactActions` operaci s jejím journalem,
+  expected HEAD, operation ID a receiptem.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-D — raw režim prezentace
+  (implemented).** Vizuální editor serializuje skutečný verzovaný deck do raw
+  režimu. Neplatný nebo nekanonický obsah se lossless nepředá zpět ani
+  neuloží; platný obsah dál používá původní prezentační operaci.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-E — Julia adaptér a předání
+  (implemented).** Neexekuční kontrakt a validní Julia, `Project.toml` a JSON
+  vzory jsou připravené pro obnovení `COMP-03`. Tato dávka Julia kód
+  nespouští ani nezapisuje její víceartefaktový model.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-F — regrese a dokumentace
+  (implemented).** Testy pokryly uzavřenost katalogu, kopie/revizi, platné i
+  chybové validace, prezentační round-trip, absenci save/execution callbacku,
+  bezpečné DOM, dvě UI integrace a read-only HTTPS API. ADR, návod, roadmapa,
+  reuse katalog a dependency evidence byly sjednocené.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu a testů prošla celá sada
+`python3 -m unittest discover -s tests -v`: **938 testů, 903 prošlo a 35
+volitelných bylo přeskočeno, bez chyb**, 225,076 s. Samostatný skutečný
+Qt/WebEngine smoke s `M0_DESKTOP_TEST=1` prošel načtením filtrovaného katalogu,
+vložením a validací vzoru, uložením dokumentu a TODO i dirty guardem; spolu s
+HTTPS API testem šlo o 2 úspěšné testy. Osm cílených unit/static testů a
+Python/JavaScript syntaxe rovněž prošly.
+
+Vložení, validace a přepnutí režimu jsou ephemerální; pád může ztratit pouze
+neuložený draft. Persistenční a recovery hranice dokumentu a prezentace se
+nezměnily a nevznikl druhý store ani journal. Fyzický mobilní viewport nebyl
+samostatně přijat uživatelem; responzivní pravidla a nativní ovládací prvky
+jsou ověřené staticky. Julia UI a ARM64 runtime akceptace zůstávají v
+`COMP-03`; po doručení této feature do `develop` ji lze obnovit. První
+vestavěný katalog je záměrně minimální. Rozšíření praktických vzorů je
+samostatná plánovaná dávka `DOC-PATTERN-LIBRARY-01`, aby neměnilo akceptovaný
+rozsah tohoto PR.
+
+## DOC-DEPENDENCY-FIX-01 — Oprava závislostí editorů a COMP-03 — 2026-10-27
+
+Dávka na větvi `feature/comp-03-dependency-fix` z `develop` `e4cf4c6`
+opravila obrácenou závislost zavedenou při návrhu editorů. Dosáhla úrovně
+**designed**; feature akceptace dokumentace je dokončená a do `develop` byla
+doručena PR #106 jako squash commit `8854082`.
+
+- [x] [completed] **DOC-DEPENDENCY-FIX-01-A — skutečné pořadí dávek
+  (designed).** `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01` jsou
+  paralelizovatelné. První dávka odblokuje přerušenou `COMP-03`; obě společně
+  odblokují `PLAN-TASK-EDITOR-01`. Rozpracovaná Julia větev zůstala beze změny.
+- [x] [completed] **DOC-DEPENDENCY-FIX-01-B — konzistence dokumentace
+  (designed).** BACKLOG, ADR 0058, uživatelský návod, roadmapa, reuse záznam
+  a strojový roadmapový graf nesou stejné hrany. Sedm cílených testů
+  `tests.test_spdx` a `tests.test_roadmap_graph` skončilo OK, relativní odkazy
+  v sedmi dotčených dokumentech byly ověřeny a `git diff --check` prošel.
+
+### Omezení a předání
+
+Jde pouze o opravu evidence a návrhového grafu. Neimplementuje raw editor,
+souborovou hierarchii ani Julia integraci a nemění dosavadní kód na
+`feature/comp-03-julia-workspace`. V době feature akceptace zůstávalo doručení
+otevřené do samostatného PR a merge; tento krok následně dokončila PR #106.
+
+## DOC-EDITOR-CONTRACTS-01 — Kontrakty vzorů, raw editoru a souborového plánu — 2026-10-27
+
+Dávka vznikla na větvi `feature/doc-pattern-editor-contracts` z `develop`
+`507c232` a dosáhla cílové úrovně **designed**. Feature akceptace dokumentace
+je dokončená a byla doručena PR #105 jako squash commit `e4cf4c6`. Jde pouze
+o návrh a implementační dávky zůstávají otevřené v BACKLOG.
+
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-A — společný raw editor a
+  katalog vzorů (designed).** ADR 0058 odděluje storage-agnostic textový
+  widget, typové adaptéry, read-only katalog a existující doménové operace.
+  Vzory jsou text, komentářové výplně se použijí jen v platné syntaxi a
+  vložení nic neukládá ani nespouští.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-B — souborová hierarchie
+  roadmapy (designed).** ADR 0059 definuje explicitní include bundle, jedinou
+  kanonickou definici ID, profil `milestone → batch → task`, jiné uzavřené
+  profily a podgrafy jako pouhé selektory.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-C — speciální task editor
+  (designed).** Známé bloky se materializují do „lego“ widgetů pouze při
+  lossless round-trip; raw text zůstává fallback a neznámý obsah se nesmí
+  tiše přepsat.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-D — roadmapa, backlog a reuse
+  (designed).** `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01` jsou
+  samostatné paralelizovatelné dávky; `PLAN-TASK-EDITOR-01` závisí na obou.
+  Roadmapový manifest nese stejné skutečné dependency hrany.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-E — kontrola dokumentace
+  (designed).** Relativní odkazy byly ověřeny, `git diff --check` prošel a 7
+  cílených testů (`tests.test_spdx`, `tests.test_roadmap_graph`) skončilo OK.
+
+### Recovery a omezení
+
+Návrh zachovává existující crash boundaries jednotlivých adaptérů:
+ephemerální práce s draftem nic nezapisuje, dokument/prezentace/Julia použijí
+svou jedinou Workspace/journal operaci a index zůstává obnovitelnou projekcí
+HEAD. Souborový plán je read-only projekce jednoho commitu; vytvoření
+externího dokumentu a jeho include nesmí předstírat atomickou operaci, pokud
+ji implementace skutečně neposkytne. Nebyla změněna aplikace ani spuštěna plná
+testovací sada; fyzická UI akceptace patří do navazujících implementačních
+dávek.
+
 ## COMP-02 — Lokální Julia runner a publikace výsledků — 2026-10-26
 
 Dávka vznikla na větvi `feature/comp-02-julia-runner` z `develop` `b104843`
 a dosáhla cílové úrovně **PoC validated**. Feature akceptace je dokončená;
-byla doručena PR #104 jako merge commit `507c232` do `develop`.
+do `develop` byla doručena PR #104 jako commit `507c232`.
 
 - [x] [completed] **COMP-02-A — kontrakt, runtime inventory a preflight
   (implemented).** Striktní `fpw-julia-computation-v1` váže exact Git HEAD,

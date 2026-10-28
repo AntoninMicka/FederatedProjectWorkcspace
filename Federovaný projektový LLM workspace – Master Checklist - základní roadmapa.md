@@ -10,11 +10,16 @@ Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-01` byl doručen PR #96 a #97 a navazující pinning
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
 Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
+Profilovaný souborový plán a task editor byly doručeny PR #108, rozšířená
+knihovna vzorů PR #109 a milestone/batch pohled obecné roadmapy je
+feature-akceptovaný v `PLAN-ROADMAP-MILESTONE-VIEW-01`.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
 `F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
-#103 a `COMP-02` s lokálním Julia runnerem a explicitní publikací výsledků
-byla doručena PR #104. Aktivní `COMP-03` realizuje první řízený Julia výpočet
-ze shared workspace UI.
+#103 a `COMP-02` byla doručena PR #104 s lokálním Julia runnerem a explicitní
+publikací výsledků. Aktivní `COMP-03` realizuje první řízený Julia výpočet a
+authoring ze shared workspace UI na své zachované feature větvi.
+Návrhová dávka `DOC-EDITOR-CONTRACTS-01` odděleně popisuje společný raw
+editor a katalog vzorů, souborovou hierarchii plánu a speciální editor úkolů.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
@@ -309,9 +314,51 @@ evidenčně smíchat s LLM run records.
 Navazující dávka `COMP-03` zpřístupní existující runner ze shared workspace UI:
 výběr verzované definice, typované parametry, přesný preview a samostatné
 potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automatické
-spouštění ani notebookové prostředí. Na uživatelské doplnění rozsahu zahrnuje
-také bounded editor projektově spravovaného Julia modelu a šablon; importované
-immutable zdroje nepřepisuje a uložení kód nespouští.
+spouštění ani notebookové prostředí. Na její samostatné feature větvi byl
+rozsah požadavkem uživatele rozšířen o Julia editor umístěný v Nástrojích;
+práce byla 27. 10. 2026 přerušena do doby implementace sdíleného raw editoru
+`DOC-PATTERN-CATALOG-01`. Ta byla doručena PR #107 jako `ac4281a`, takže práci
+lze obnovit. Aktivní `COMP-03` tento widget a Julia adaptér zapojila pro
+zdrojový kód bez změny atomické save operace; fyzickou akceptaci eviduje
+feature větev, nikoli roadmapa.
+
+---
+
+## 2H. Vzory dokumentů a společné editory
+
+**Stav: katalog, sdílený raw widget a Markdown/TODO/prezentační adaptéry jsou
+implemented v `DOC-PATTERN-CATALOG-01`; rozšířená coverage a kontextová
+nápověda v `DOC-PATTERN-LIBRARY-01`; souborový plán a speciální task editor
+jsou realizovány v `PLAN-TASK-EDITOR-01` podle [ADR
+0058](docs/adr/0058-shared-raw-editor-and-pattern-catalog.md) a [ADR
+0059](docs/adr/0059-file-plan-hierarchy-and-task-editor.md).** Cílem je jeden
+raw textový widget napříč typy dokumentů, filtrovaný katalog textových vzorů a
+bezpečné specializované editory bez druhé autority dat nebo univerzálního save
+endpointu.
+
+- [x] Implementovat typové adaptéry, které raw widgetu dodají formát,
+  komentářovou syntaxi, validaci, relevantní vzory, limity a existující
+  doménovou operaci uložení. Widget sám nesmí znát Git cesty ani journal.
+- [x] Vestavěný katalog filtrovat podle typu dokumentu; první sada zahrne
+  obecný Markdown, úkol/plán, prezentaci a Julia. Místa k doplnění budou
+  komentářem pouze tam, kde je takový komentář platnou syntaxí.
+- [x] Task editor v `PLAN-TASK-EDITOR-01` pokrývá každý svůj blok a insert
+  operaci stabilním validovaným vzorem. `DOC-PATTERN-LIBRARY-01` rozšířila
+  obecný Markdown, prezentaci a Julia podle reviewované coverage mapy a přidala
+  kontextovou nápovědu k celému souboru i vybranému vzoru.
+- [x] Zachovat raw text jako fallback. Specializovaný editor smí
+  materializovat známé bloky do widgetů jen při lossless round-trip;
+  neznámý obsah nesmí tiše odstranit ani přeformátovat.
+- [x] Reuse prezentačního a Julia editoru provést přes společný widget a
+  adaptéry, nikoli jejich sloučení do jedného datového formátu nebo
+  transakce. Prezentační raw režim i Julia raw authoring jsou implementované;
+  Julia authoring zůstává v Nástrojích, výpočet ve Výpočtech.
+
+Akceptovanou implementační evidenci drží WORK_LOG
+`DOC-PATTERN-CATALOG-01`, `PLAN-TASK-EDITOR-01` a
+`DOC-PATTERN-LIBRARY-01`. Uživatelský kontrakt a příklady jsou v
+[návodu](docs/document-patterns-and-task-authoring.md) a
+[coverage mapě](docs/pattern-library-coverage.md).
 
 ---
 
@@ -779,7 +826,9 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 
 # 11B. Vlastní rozvoj produktu, IDE rozšíření a integrace coding agenta
 
-**Stav: read-only roadmapový i obecný projektový graf PoC validated; DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+**Stav: read-only roadmapový i obecný projektový graf PoC validated;
+profilovaný souborový plán, editor a milestone/batch pohled jsou implemented;
+DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
 
 - [x] Generovat read-only DAG feature dávek z autoritativních Markdown stavů a
   explicitní anotace hran; zobrazit milestone swimlanes, kritickou cestu,
@@ -792,6 +841,25 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   podgrafů bez druhé kopie stavu. V hlavní liště za Úkoly zobrazit Plán se
   záložkami Hlavní graf a Podgrafy — `PLAN-TASK-GRAPH-01`, PoC validated,
   evidence ve WORK_LOG a ADR 0055.
+
+- [x] Rozšířit hlavní TODO o explicitně zahrnutý bundle verzovaných
+  definičních souborů. Každé ID má jedinou kanonickou definici; podgrafy
+  nadále pouze vybírají ID a nikdy nepřebírají stav nebo typ.
+- [x] Zavést uzavřené profily hierarchie. Softwarový profil v1 používá
+  `milestone → batch → task`, kde batch je jedna feature větev/PR a task
+  nejmenší změna normálně cílená na jeden commit. Jiné domény mohou
+  deklarovat jiné uzavřené typy a povolené parent-child hrany.
+- [x] Nad souborovým kontraktem a katalogem vzorů vytvořit speciální editor
+  úkolů. Známé bloky skládá jako widgety, ale raw režim zůstává
+  kanonickým fallbackem a neznámý text se při round-trip neztratí.
+
+- [x] Umožnit milestone, batch a task uzlům obyčejné popisné odrážky a v
+  hlavním profilovaném pohledu zobrazit milestone pruhy a batch karty včetně
+  popisů. Dependency hrany mohou vést mezi milníky, široké plátno scrolluje a
+  nadpis s popisem milníku zůstává ukotvený. Strom `/ → milestone → batch`
+  přepíná milestone na pruhy dávek s task kartami a batch na jediný pruh;
+  vnořené task checklisty jsou podmínky splnění bez vlastních uzlů —
+  `PLAN-ROADMAP-MILESTONE-VIEW-01`, implemented.
 
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.

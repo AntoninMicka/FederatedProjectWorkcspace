@@ -378,7 +378,14 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="julia-definition"', julia_panel)
         self.assertIn('id="julia-parameters"', HTML)
         self.assertIn('id="julia-editor"', HTML)
-        self.assertIn('id="julia-template-minimal"', HTML)
+        self.assertIn('id="julia-source-raw-widget"', HTML)
+        julia_source = HTML.split('id="julia-source-raw-widget"', 1)[1].split(
+            '</section>', 1)[0]
+        self.assertIn('data-raw-pattern', julia_source)
+        self.assertIn('data-raw-insert', julia_source)
+        self.assertIn('data-raw-validate', julia_source)
+        self.assertIn('data-raw-help-example', julia_source)
+        self.assertNotIn('id="julia-template-minimal"', HTML)
         self.assertIn('name="project_toml"', HTML)
         self.assertIn('name="manifest_toml"', HTML)
         self.assertIn('id="julia-run-confirm"', HTML)
@@ -389,6 +396,7 @@ class DesktopTests(unittest.TestCase):
             self.assertIn(f'/v1/julia/{path}', DesktopHandler.post_paths)
         self.assertIn('textContent=JSON.stringify(shown,null,2)', JS)
         self.assertIn("selectMainTab(document.querySelector('#tools-main-tab'))", JS)
+        self.assertIn("adapterId:'julia',format:'text/x-julia'", JS)
         self.assertNotIn('julia-output-value.innerHTML', JS)
 
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
@@ -1223,6 +1231,13 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="artifact-editor-view" hidden', HTML)
         self.assertIn('id="new-document"', HTML)
         self.assertIn("projectRequest('/v1/artifacts/editor/open'", JS)
+        self.assertIn('id="task-plan-editor"', HTML)
+        self.assertIn('function parseTaskPlanDraft(body)', JS)
+        self.assertIn("projectRequest('/v1/artifacts/editor/validate-plan'", JS)
+        self.assertIn('data-task-pattern="task-plan.batch-file"', HTML)
+        self.assertIn('id="task-plan-insert-position"', HTML)
+        self.assertIn('data-raw-insertion-position', HTML)
+        self.assertIn('/v1/artifacts/editor/validate-plan', DesktopHandler.post_paths)
         self.assertIn("projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document}", JS)
         self.assertIn('new:Boolean(artifactEditorItem.new)', JS)
         self.assertIn('function openMainTodoEditor()', JS)

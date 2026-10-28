@@ -1,0 +1,145 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# ADR 0058 — Sdílený raw editor a typovaný katalog vzorů
+
+- Stav: přijaté rozhodnutí, implementováno
+- Datum: 2026-10-27
+- Dávka: `DOC-EDITOR-CONTRACTS-01`
+- Implementace: `DOC-PATTERN-CATALOG-01` na větvi
+  `feature/doc-pattern-catalog-raw-editor`; doručeno PR #107 jako `ac4281a`
+
+## Kontext
+
+Workspace má obecný Markdown editor, strukturovaný editor prezentací a na
+větvi `feature/comp-03-julia-workspace` specializovaný editor Julia modelu.
+Další samostatné textové plochy by duplikovaly ochranu rozepsané práce,
+vkládání vzorů, validaci, přístupnost a stav uložení. Zároveň nelze sjednotit
+zápis dokumentu, prezentačního decku a víceartefaktového Julia modelu do jedné
+generické transakce: každý typ má jinou autoritu, validaci a recovery.
+
+## Rozhodnutí
+
+Vznikne jeden sdílený **raw editor widget**. Widget vlastní pouze editaci
+jednoho textového bufferu, výběr a vložení vzoru, stav dirty, ochranu před
+opuštěním, zobrazení validačních chyb a klávesnicové/mobilní chování. Nezná
+projektové cesty, Git, journal ani endpoint pro uložení.
+
+Konkrétní použití dodá **typový adaptér**, který uzavřeně deklaruje:
+
+- stabilní typ dokumentu a podporované textové formáty;
+- přípustné vzory a místo vložení (`document`, `block`, `cursor`);
+- syntaxi komentářů, pokud ji formát skutečně podporuje;
+- parser/validátor a případnou bezpečnou serializaci;
+- read-only důvod, limity a callback jediné existující zápisové operace;
+- zda lze raw obsah lossless předat specializovanému editoru a zpět.
+
+**Katalog vzorů** je oddělený read-only registr. Každý vzor má stabilní ID,
+verzi, název, cílové typy/formáty, režim vložení, text, stručnou nápovědu
+a samostatný příklad použití. Příklad je vyplněný text v cílovém formátu,
+nikoli slovní instrukce ani text vzoru se zástupnými hodnotami.
+První implementace dodá pouze verzované, reviewované vestavěné vzory pro
+obecný Markdown, úkol/plán, prezentaci a Julia. Projektové, uživatelské nebo
+síťově získané katalogy jsou samostatný budoucí rozsah a nesmějí se tiše
+sloučit s vestavěnými položkami.
+
+Každý adaptér navíc dodává stručnou nápovědu a příklad použití pro každý
+podporovaný formát. Shared widget je ukazuje v pravém kontextovém panelu, dokud
+uživatel explicitně nevybere vzor; potom je nahradí podrobným popisem a
+příkladem zvoleného vzoru. Select nemá implicitně aktivní první vzor a samotný
+výběr nemění buffer. Na širokém desktopu si editor zachová dosavadní pracovní
+šířku a panel využije volné místo napravo; při užším viewportu se skládá
+pod textarea.
+
+Pro `cursor` a `block` insertion mode widget dovoluje zvolit aktuální pozici
+kurzoru/výběru nebo konec textu. Režim `document` nadále nahrazuje celý draft po
+potvrzení a volbu pozice nepoužívá.
+
+Vzor je textový příklad, nikoli makro ani spustitelný plugin. U syntaxí s
+komentáři označuje místa k doplnění platný komentář daného formátu, například
+`<!-- DOPLNIT: ... -->` v Markdownu, `# DOPLNIT: ...` v Julii/TOML nebo
+`// DOPLNIT: ...` jen tam, kde jsou `//` komentáře platné. Formát bez komentářů
+nesmí dostat neplatný pseudokomentář: použije validní neutrální hodnotu a
+instrukci v metadatech vzoru. Vložení vzoru pouze mění lokální draft; nikdy
+automaticky neukládá, nespouští Julia kód ani nepublikuje výstup.
+
+Specializovaný editor může nad stejným bufferem materializovat známé části do
+widgetů. Raw text zůstává kanonickým fallbackem. Přepnutí režimu nesmí
+reformátovat neznámý obsah; pokud adaptér neumí lossless round-trip, nabídne
+strukturovaný režim pouze pro čtení nebo jej odmítne s konkrétní chybou.
+Existující prezentační editor zůstává specializovaným editorem a postupně
+připojí společný raw režim. Julia zůstane pod **Nástroje → Julia**; záložka
+**Výpočty** není editor.
+
+## Persistenční a recovery hranice
+
+Výběr typu, filtrování katalogu, vložení vzoru, změna raw/special režimu a
+validace před uložením jsou ephemerální operace bez zápisu. Pád před uložením
+může ztratit neuložený draft stejně jako současný editor; případná durable
+draft recovery vyžaduje samostatné rozhodnutí.
+
+Po explicitním uložení adaptér předá přesný validovaný draft jediné existující
+doménové operaci:
+
+- běžný dokument použije `ArtifactActions` a Workspace/Journal/Git/index;
+- prezentace použije svou atomickou projektovou operaci;
+- Julia model použije svou víceartefaktovou Workspace transakci;
+- budoucí task editor použije dokumentovou operaci nad autoritativním souborem.
+
+Widget nevytváří společnou databázi, druhý journal ani souběžný zápis. Stale
+HEAD, lost response a opakování se řeší doménovým operation ID a receiptem.
+Po commitu lze index obnovit z HEAD; před commitem rozhoduje existující journal
+daného adaptéru. Obecný happy path tedy nezakrývá odlišné crash boundaries.
+
+## Bezpečnost a důsledky
+
+- Typ a vzor se vybírají z uzavřených registrů; neznámý typ selže bezpečně.
+- Text se vykresluje jako text, nikoli jako HTML nebo executable preview.
+- Vzor nezískává oprávnění, privacy ani zápisový target; ty určuje dokument a
+  adaptér při uložení.
+- Read-only source, replika nebo importovaný immutable vstup zůstává read-only.
+- Jeden widget sníží UI duplicity, ale nepředstírá jednotný datový formát ani
+  jednotnou transakci všech dokumentů.
+
+## Stav implementace
+
+`spikes/document_patterns.py` poskytuje uzavřený verzovaný katalog, čtyři
+typové adaptéry a bounded validaci. Sdílený widget ve
+`spikes/desktop_ui.py` je zapojený do obecného Markdown/TODO editoru a jako
+lossless raw režim existujícího prezentačního editoru. Katalog i validace jsou
+read-only API; neexistuje společný save endpoint ani execution callback.
+
+Julia adaptér a jeho platné Julia/TOML/JSON vzory jsou implementované jako
+neexekuční kontrakt pro `COMP-03`. Zapojení do rozpracovaného Julia authoringu,
+spuštění kódu, víceartefaktové uložení a fyzická ARM64 akceptace zůstávají v
+`COMP-03`. Obecný Markdown používá bounded textovou validaci; specializovaný
+task parser a lossless editor byly následně implementované nad souborovým
+kontraktem v `PLAN-TASK-EDITOR-01`.
+
+První katalog ověřuje kontrakt a integraci, nikoli konečnou obsahovou šíři.
+Reviewovanou coverage mapu a praktické vzory pro realizované scénáře doplní
+samostatná dávka `DOC-PATTERN-LIBRARY-01`. Tím se obsahové rozšíření nemíchá do
+akceptovaného implementačního PR ani do samotného specializovaného editoru.
+
+`DOC-PATTERN-LIBRARY-01` tuto navazující šíři realizuje pro obecný Markdown,
+prezentaci a Julia. Strojová `coverage` mapa váže každý scénář právě na jeden
+stabilní vzor, formát a insertion mode; její lidsky reviewovaný protějšek je v
+[coverage knihovny](../pattern-library-coverage.md). Task/plán coverage zůstává
+beze změny vlastnictvím `PLAN-TASK-EDITOR-01`. Knihovna současně doplnila
+povinné příklady formátů i vzorů; UI je vykresluje stejnou bezpečnou textovou
+cestou jako ostatní nápovědu.
+
+## Reuse rozhodnutí
+
+**Reuse/adapt:** shared artifact editor a jeho draft guard, bezpečné DOM
+vykreslování, `ArtifactActions`, prezentační editor a existující
+validační/zápisové služby. Sdílený widget a Julia adaptér byly implementovány
+před obnovením přerušené `COMP-03`; obnovená dávka je zapojila do editoru
+Julia zdroje a zachovala jeho původní atomickou operaci uložení.
+**Reject:** nový UI
+framework, executable template engine, druhý projektový store a univerzální
+save endpoint. Soukromá inventura neposkytla doložený komponent s odpovídající
+Git autoritou, recovery a lossless round-trip kontraktem; žádný její kód ani
+neveřejný detail se nepřenáší.

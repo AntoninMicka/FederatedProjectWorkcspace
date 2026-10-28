@@ -10,6 +10,7 @@ from spikes.artifacts import Artifacts, main_todo_id
 from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
+from spikes.storage import StaleIndex
 
 
 class ArtifactActionTests(unittest.TestCase):
@@ -59,3 +60,28 @@ class ArtifactActionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'changed'):
             self.actions.save(request, str(uuid4()))
         self.assertEqual(Projects(self.node).open(self.project)['commit_id'], self.head)
+
+    def test_task_plan_draft_validation_is_read_only_and_revision_pinned(self):
+        body = '''<!-- fpw-plan-profile: software-development/v1 -->
+- [ ] [MILESTONE-01] Milník
+  - type: milestone
+  - [ ] [BATCH-01] Dávka
+    - type: batch
+    - [ ] [TASK-01] Úkol
+      - type: task
+'''
+        head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact,
+            base_head=self.head, title='Tasks', body=body, new=False),
+            str(uuid4()))['commit_id']
+        before = Projects(self.node).open(self.project)['commit_id']
+        result = self.actions.validate_task_plan(
+            self.project, self.artifact, head, body.replace('Úkol', 'Upravený úkol'))
+        self.assertTrue(result['valid'])
+        self.assertEqual(3, result['nodes'])
+        self.assertEqual(before, Projects(self.node).open(self.project)['commit_id'])
+        with self.assertRaisesRegex(ValidationError, 'Kořenový uzel'):
+            self.actions.validate_task_plan(
+                self.project, self.artifact, head,
+                body.replace('type: milestone', 'type: task', 1))
+        with self.assertRaises(StaleIndex):
+            self.actions.validate_task_plan(self.project, self.artifact, '0' * 40, body)
