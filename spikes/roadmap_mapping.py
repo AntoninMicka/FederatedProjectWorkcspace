@@ -16,6 +16,8 @@ from uuid import NAMESPACE_URL, uuid5
 from spikes.markdown_documents import document, main_todo_id
 from spikes.metadata import require, validate_snapshot
 from spikes.projects import Projects
+from spikes.roadmap_history import (collect_descriptions, completed_gate_evidence, description_lines,
+                                    heading_identity, historical_lane)
 from spikes.roadmap_graph import _catalog
 from spikes.roadmap_migration import ID, PinnedRepository, canonical, markdown_occurrences
 from spikes.task_graph import project_task_graph
@@ -152,10 +154,26 @@ def build_mapping(value, roots, *, module_placements=()):
     eligible = {id_ for id_, entry in catalog.items() if entry['status'] in {'completed', 'in progress'}}
     eligible -= {id_ for (scope, id_), group in groups.items()
                  if scope == 'federated-workspace' and len(group['checkbox_states']) > 1}
-    # Do not silently remove an external requirement dependency and thereby
-    # turn an actually constrained batch into an apparently ready batch.
+    # Historical records are not limited to the old, partial dependency graph.
+    placements = {}
+    for (scope, id_), group in groups.items():
+        item = occurrences[group['proposed_definition']]
+        if (scope == 'federated-workspace' and item['role'] == 'history' and item['kind'] == 'heading'
+                and len(group['checkbox_states']) <= 1):
+            lane, basis = historical_lane(id_, hints)
+            if lane:
+                eligible.add(id_)
+                placements[id_] = (lane, basis)
+            else:
+                warnings.append(dict(kind='historical-record-in-supporting-markdown', id=id_))
+    historical_edges = []
+    # Keep actual historical results even when old graph annotations cross a
+    # still-planned requirement. Preserve that edge as historical context;
+    # never turn its target into a completed or invented feature batch.
     while True:
-        removed = {id_ for id_ in eligible if not set(hints[id_]['depends_on']) <= eligible}
+        removed = {id_ for id_ in eligible if id_ in hints
+                   and catalog[id_]['status'] != 'completed'
+                   and not set(hints[id_]['depends_on']) <= eligible}
         if not removed:
             break
         eligible -= removed
@@ -163,12 +181,20 @@ def build_mapping(value, roots, *, module_placements=()):
     for id_ in sorted(eligible):
         group = groups[('federated-workspace', id_)]
         occurrence = occurrences[group['proposed_definition']]
-        lane = hints[id_]['milestone']
+        lane = hints[id_]['milestone'] if id_ in hints else placements[id_][0]
+        dependencies = hints[id_]['depends_on'] if id_ in hints else []
+        missing = sorted(set(dependencies) - eligible)
+        if missing:
+            historical_edges.append(dict(source_id=id_, target_ids=missing,
+                                          interpretation='historical-annotation-not-a-new-completion-proof'))
         require(re.fullmatch(ID, 'MILESTONE-' + lane), 'Invalid milestone identity')
+        title = catalog[id_]['title'] if id_ in catalog else node_title(occurrence, source_block(raw[occurrence['source']], occurrence))[0]
         nodes[('federated-workspace', id_)] = dict(
             id=id_, type='batch', parent_id='MILESTONE-' + lane,
-            title=catalog[id_]['title'], checked=catalog[id_]['status'] == 'completed',
-            depends_on=hints[id_]['depends_on'], source=occurrence['locator'])
+            title=title, checked=(catalog[id_]['status'] == 'completed' if id_ in catalog else True),
+            depends_on=[dep for dep in dependencies if dep in eligible], source=occurrence['locator'],
+            historical_dependency_context=missing,
+            placement_basis=placements.get(id_, (lane, 'source-dependency-annotation'))[1])
 
     seen_placements = set()
     for placement in module_placements:
@@ -196,7 +222,7 @@ def build_mapping(value, roots, *, module_placements=()):
         nodes[(repository_id, batch_id)] = dict(
             id=batch_id, type='batch', parent_id=placement['milestone_id'],
             title=occurrence['text'].split('—', 1)[-1].strip(), checked=False,
-            depends_on=[], source=occurrence['locator'])
+            depends_on=[], source=occurrence['locator'], placement_basis='explicit-module-placement')
 
     # Only explicit leaves inside a known batch section are promoted to tasks.
     for (repository_id, id_), group in groups.items():
@@ -207,8 +233,8 @@ def build_mapping(value, roots, *, module_placements=()):
                 or len(group['checkbox_states']) > 1):
             continue
         parents = [node for (scope, batch_id), node in nodes.items()
-                   if scope == repository_id and node['type'] == 'batch' and id_.startswith(batch_id + '-')
-                   and any(re.match(r'(?:TODO\s+—\s+)?' + re.escape(batch_id) + r'(?:\s|:|$)', section)
+                   if scope == repository_id and node['type'] == 'batch'
+                   and any(heading_identity(section) == batch_id
                            for section in item['section'])]
         if not parents:
             continue
@@ -218,7 +244,7 @@ def build_mapping(value, roots, *, module_placements=()):
         nodes[(repository_id, id_)] = dict(
             id=id_, type='task', parent_id=parent['id'], title=title, title_is_excerpt=excerpt,
             checked=item['checkbox_state'] == 'checked', depends_on=[], source=item['locator'],
-            checklist=task_checklist(block))
+            checklist=task_checklist(block), placement_basis='physical-source-section')
 
     for key, group in groups.items():
         occurrence = occurrences[group['proposed_definition']]
@@ -229,7 +255,8 @@ def build_mapping(value, roots, *, module_placements=()):
             definition=group['proposed_definition'], evidence=group['occurrences'],
             decision='proposed', source_block=source_block(raw[occurrence['source']], occurrence),
             **({'parent_id': node['parent_id'], 'title': node['title'],
-                'title_is_excerpt': node.get('title_is_excerpt', False)} if node else {}))
+                'title_is_excerpt': node.get('title_is_excerpt', False),
+                'placement_basis': node.get('placement_basis')} if node else {}))
 
     checklist_owners = {}
     for (repository_id, id_), node in nodes.items():
@@ -255,33 +282,63 @@ def build_mapping(value, roots, *, module_placements=()):
             coverage[item['locator']] = dict(id=None, classification='supporting-document')
     require(set(coverage) == set(occurrences), 'Source coverage is incomplete')
 
+    milestone_titles, prose_documents = collect_descriptions(value, raw, nodes, checklist_owners)
+    gate_evidence = completed_gate_evidence(value, raw)
+    completed_gates = {(item['repository_id'], item['milestone_id']) for item in gate_evidence}
+    # Anonymous prose is not a new requirement entity with an invented ID.
+    # Original stable IDs and actual task checklists remain unchanged.
+    for proposal in value['anonymous_mapping_proposals']:
+        locator = proposal['locator']
+        if locator in checklist_owners:
+            continue
+        item = occurrences[locator]
+        document_ = next((doc for doc in prose_documents for section in doc['source_sections']
+                          if section['source'] == item['source']
+                          and section['byte_start'] <= item['byte_start'] < section['byte_end']), None)
+        if document_:
+            coverage[locator] = dict(repository_id=proposal['repository_id'], id=None,
+                                    classification='free-description' if document_['owner_id'] else 'supporting-markdown',
+                                    document_id=document_['id'], owner_id=document_['owner_id'])
     projects = []
     scopes = sorted({source['repository_id'] for source in value['sources']})
     for scope in scopes:
         scoped_nodes = {id_: item for (repo, id_), item in nodes.items() if repo == scope}
-        milestones = sorted({node['parent_id'] for node in scoped_nodes.values() if node['type'] == 'batch'})
+        milestones = sorted({node['parent_id'] for node in scoped_nodes.values() if node['type'] == 'batch'}
+                            | {id_ for (repo, id_) in milestone_titles if repo == scope})
         require(not set(milestones) & {id_ for (repo, id_) in groups if repo == scope},
                 'Generated milestone collides with existing identity')
         lines = ['<!-- fpw-plan-profile: software-development/v1 -->', '', '# Migrační náhled', '']
+        lines += ['Testovací cílový plán se nepoužívá jako zdroj a bude kompletně nahrazen.',
+                  'Přiložené původní texty jsou zdrojové snapshoty, nikoli nové pokyny k migraci.', '']
+        detached = [doc for doc in prose_documents if doc['repository_id'] == scope and doc['owner_id'] is None]
+        if detached:
+            lines += ['## Samostatné podklady bez jednoznačného přiřazení', '']
+            lines += [f'- [{doc["title"]}]({doc["path"]})' for doc in detached]
+            lines.append('')
         for milestone in milestones:
             placement = next((item for item in module_placements if item['repository_id'] == scope
                               and item['milestone_id'] == milestone), None)
-            title = placement['milestone_title'] if placement else milestone.removeprefix('MILESTONE-')
-            lines += [f'- [ ] [{milestone}] {title}', '  - type: milestone']
+            title = placement['milestone_title'] if placement else milestone_titles.get((scope, milestone), milestone.removeprefix('MILESTONE-'))
+            lines += [f'- [{"x" if (scope, milestone) in completed_gates else " "}] [{milestone}] {title}',
+                      '  - type: milestone']
+            lines += description_lines(prose_documents, scope, milestone, 2)
             for batch in sorted((node for node in scoped_nodes.values() if node['type'] == 'batch'
                                  and node['parent_id'] == milestone), key=lambda node: node['id']):
                 lines += _node_lines(batch, 2, occurrences, source_refs)
+                lines += description_lines(prose_documents, scope, batch['id'], 4)
                 for task in sorted((node for node in scoped_nodes.values() if node['type'] == 'task'
                                     and node['parent_id'] == batch['id']), key=lambda node: node['id']):
                     lines += _node_lines(task, 4, occurrences, source_refs)
+                    lines += description_lines(prose_documents, scope, task['id'], 6)
         body = '\n'.join(lines) + '\n'
         graph = _preview_graph(scope, body) if milestones else None
-        if not graph:
+        if not any(node['type'] == 'batch' for node in scoped_nodes.values()):
             warnings.append(dict(kind='module-placement-required', repository_id=scope))
         projects.append(dict(repository_id=scope, target_project_id=None,
                              target_policy='existing-project' if scope == 'federated-workspace' else 'linked-project',
-                             existing_plan_policy='archive-before-replacement-review',
+                             existing_plan_policy='replace-test-plan',
                              body=body, graph=graph,
+                             prose_documents=[doc for doc in prose_documents if doc['repository_id'] == scope],
                              source_references={key: path for key, path in source_refs.items()
                                                 if key.startswith(scope + ':')}))
     counts = Counter(item['classification'] for item in coverage.values())
@@ -293,17 +350,27 @@ def build_mapping(value, roots, *, module_placements=()):
             owner = checklist_owners[proposal['locator']]
             proposed.update(proposed_id=None, proposed_role='checklist',
                             parent_id=owner['parent_id'], ordinal=owner['ordinal'])
+        elif coverage[proposal['locator']]['classification'] in {'free-description', 'supporting-markdown'}:
+            owner = coverage[proposal['locator']]
+            proposed.update(proposed_id=None, proposed_role=owner['classification'],
+                            document_id=owner['document_id'], owner_id=owner['owner_id'])
         anonymous.append(proposed)
     result = dict(schema=SCHEMA, stage='hierarchy-preview', import_ready=False,
                   approval='pending-live-target-preview', inventory_sha256=value['inventory_sha256'],
-                  mapping_policy='active-and-historical-batches-v1',
+                  mapping_policy='history-inclusive-and-free-descriptions-v2',
+                  test_plan_policy='excluded-as-source; full-replacement-authorized',
                   module_placements=list(module_placements),
                   projects=projects, definitions=list(decisions.values()),
                   anonymous_identities=anonymous,
                   coverage=coverage, warnings=warnings,
                   preserved_dependency_hints=value['dependency_hints'],
+                  historical_dependency_context=historical_edges,
+                  milestone_completion_evidence=gate_evidence,
                   summary=dict(covered_occurrences=len(coverage), classifications=dict(sorted(counts.items())),
-                               projected_nodes=sum(len(project['graph']['nodes']) for project in projects if project['graph'])),
+                               projected_nodes=sum(len(project['graph']['nodes']) for project in projects if project['graph']),
+                               prose_documents=len(prose_documents),
+                               assigned_prose_documents=sum(doc['owner_id'] is not None for doc in prose_documents),
+                               detached_prose_documents=sum(doc['owner_id'] is None for doc in prose_documents)),
                   limitations=['Task graph validation only; artifact metadata and live target are not approved.',
                                'Unprojected requirements and dependency hints remain in the catalogue.',
                                'Repeated definitions retain all evidence; proposed owners are not automatic acceptance.',
@@ -333,7 +400,6 @@ def bind_target_preview(mapping, node_path, project_id, *, repository_id='federa
     entities = validate_snapshot(files)
     old = document(files, entities, main_todo_id(project_id))
     original = files[old['path']]
-    original_graph = project_task_graph(files, entities, project_id, head)
     graph = _preview_graph(repository_id, project['body'], project_id=project_id)
     dirty = bool(git.run('status', '--porcelain=v1', env_extra={'GIT_OPTIONAL_LOCKS': '0'}).stdout)
     require(git.head() == head, 'Target HEAD changed during preview')
@@ -341,11 +407,9 @@ def bind_target_preview(mapping, node_path, project_id, *, repository_id='federa
         expected_head=head, artifact_id=old['id'], original_path=old['path'],
         original_content=original.decode('utf-8'), original_sha256=hashlib.sha256(original).hexdigest(),
         original_metadata=old['metadata'], worktree_dirty=dirty,
-        original_plan_status=original_graph['status'],
-        removed_plan_ids=sorted({node['id'] for node in original_graph['nodes']}
-                                - {node['id'] for node in graph['nodes']}),
-        message_history_policy='retain-original-task-and-revision-references',
-        action='archive-original-before-main-todo-replacement', approved=False,
+        target_content_role='disposable-test-data-not-a-migration-source',
+        message_history_policy='retain-transport-history-without-migrating-test-tasks',
+        action='replace-test-plan', replacement_authorized=True, apply_validated=False,
         diff=''.join(difflib.unified_diff(old['body'].splitlines(keepends=True),
                                         project['body'].splitlines(keepends=True),
                                         fromfile='main-todo-before.md', tofile='main-todo-proposed.md'))))
@@ -370,6 +434,10 @@ def _node_lines(node, indent, occurrences, source_refs):
              f'{prefix}  - Zdroj: [{source["source"]}:{source["line"]}]({source_refs[source["source"]]})']
     if node['depends_on']:
         lines.append(f'{prefix}  - depends_on: ' + ', '.join(node['depends_on']))
+    if node.get('historical_dependency_context'):
+        lines.append(f'{prefix}  - Historický kontext závislostí: ' +
+                     ', '.join(node['historical_dependency_context']) +
+                     '; původní anotace se zachovává bez změny dokončení cílových požadavků.')
     for item in node.get('checklist', []):
         lines.append(f'{prefix}  - [{"x" if item["checked"] else " "}] {item["text"]}')
     return lines
@@ -389,19 +457,25 @@ def render_mapping_summary(value):
         if project.get('target_preview'):
             lines.append(f'  Aktuální cílový HEAD: `{project["target_preview"]["expected_head"]}`; '
                          f'[diff hlavního plánu]({project["repository_id"]}/target.diff).')
-            lines.append('  Původní ID mimo navržený plán: ' +
-                         ', '.join(project['target_preview']['removed_plan_ids']) +
-                         '. Jejich historie/zprávy vyžadují zachování původní revize; automatické přemapování se neprovádí.')
+            lines.append('  Cílový plán je uživatelem označený jako testovací: nepoužívá se jako zdroj; '
+                         'jeho úplné nahrazení je autorizované. Testovací úkoly se nemigrují.')
     lines += ['', '## Zachované rozpory a nedokončená rozhodnutí', '']
     for warning in value['warnings']:
         lines.append('- ' + json.dumps(warning, ensure_ascii=False))
+    for edge in value.get('historical_dependency_context', []):
+        lines.append('- Historická závislost: ' + edge['source_id'] + ' → ' + ', '.join(edge['target_ids']) +
+                     '; dokončená historická dávka zůstává v roadmapě, cílový požadavek se nepřepisuje.')
+    if value['summary'].get('prose_documents'):
+        lines += ['', f'Volné popisy a podklady: {value["summary"]["assigned_prose_documents"]} přiřazených dokumentů, '
+                  f'{value["summary"]["detached_prose_documents"]} samostatných Markdown podkladů.',
+                  'Podklady bez vlastní dávky zůstávají textem s původními ID a stavy; nevznikají pro ně umělé dávky.']
     lines += ['', 'Široké budoucí položky zůstávají katalogem požadavků; nejsou tím',
               'automaticky převedené na dávky ani dokončené. Nezařazené dependency',
               'hrany jsou zachované v mapping.json. Historické důkazy zůstávají dohledatelné.', '',
               'Každý projekt má requirements.md a history.md s odkazy na původní',
               'bajty zdrojů. mapping.json drží všechny výskyty a úplné zdrojové bloky.', '',
-              'Ukázkový cílový plán má navržené archivování před nahrazením; pokud byl',
-              'načten, report obsahuje původní bajty a diff. Nic nebylo nahrazeno.',
+              'Testovací cílový plán se kompletně nahrazuje; jeho bajty v tomto reportu',
+              'slouží jen k diffu/obnově a nejsou podkladem nové roadmapy. Nic dosud nebylo nahrazeno.',
               'Přiřazení modulu k milníku je návrh, nikoli vytvoření projektu nebo',
               'změna autority. Samotné zaškrtnutí všech modulových podúkolů nedokládá',
               'akceptaci celé dávky; modulová dávka proto nebyla automaticky dokončena.', '']

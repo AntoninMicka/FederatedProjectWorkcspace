@@ -26,6 +26,10 @@ def write_preview(output, value, mapping, roots):
             path = folder / relative
             path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             path.write_bytes(raw[source])
+        for doc in project.get('prose_documents', []):
+            path = folder / doc['path']
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            path.write_text(doc['body'], encoding='utf-8')
         for filename, history in [('requirements.md', False), ('history.md', True)]:
             lines = ['# ' + ('Historické důkazy' if history else 'Katalog požadavků'), '',
                      'Náhled mapování; původní zdroje jsou přiloženy beze změny.', '']

@@ -70,10 +70,9 @@ class PinnedRepository:
         return self.git.run('cat-file', 'blob', oid, binary=True).stdout
 
 
-def markdown_occurrences(raw):
-    """Account for checkboxes/headings outside fenced examples and HTML comments."""
+def visible_markdown_lines(raw):
+    """Yield source positions and visible Markdown outside comments/fenced examples."""
     text = raw.decode('utf-8')
-    result, headings, links = [], [], []
     fence, comment = None, False
     offset = 0
     for line_no, original in enumerate(text.splitlines(keepends=True), 1):
@@ -105,6 +104,14 @@ def markdown_occurrences(raw):
         if marker:
             fence = (marker.group(1)[0], len(marker.group(1)))
             continue
+        yield line_no, start, end, line, original
+    require(fence is None and not comment, 'Unclosed fenced example or HTML comment; manual source review required')
+
+
+def markdown_occurrences(raw):
+    """Account for checkboxes/headings outside fenced examples and HTML comments."""
+    result, headings, links = [], [], []
+    for line_no, start, end, line, original in visible_markdown_lines(raw):
         for target in LINK.findall(line):
             target = target.strip('<>')
             if '://' not in target and not target.startswith('#'):
@@ -137,7 +144,6 @@ def markdown_occurrences(raw):
             'section': [item['title'] for item in headings],
             'text': original.rstrip('\r\n'),
         })
-    require(fence is None and not comment, 'Unclosed fenced example or HTML comment; manual source review required')
     return result, links
 
 

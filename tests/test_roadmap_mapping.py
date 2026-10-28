@@ -66,11 +66,15 @@ class RoadmapMappingTests(MigrationFixture, unittest.TestCase):
         self.assertEqual(len(anonymous), 2)
         self.assertTrue(all(row['proposed_id'] is None for row in anonymous))
 
-    def test_unresolved_requirement_edge_cannot_silently_make_batch_ready(self):
+    def test_historical_result_is_included_without_completing_a_future_requirement(self):
         git = self.fixture(conflict=True)
         mapping = build_mapping(inventory(git.root), {'federated-workspace': git.root})
-        self.assertNotIn('DONE-01', [node['id'] for node in mapping['projects'][0]['graph']['nodes']])
-        self.assertIn({'kind': 'unprojected-dependency-boundary', 'id': 'DONE-01'}, mapping['warnings'])
+        nodes = {node['id']: node for node in mapping['projects'][0]['graph']['nodes']}
+        self.assertTrue(nodes['DONE-01']['checked'])
+        self.assertNotIn('FUTURE-01', nodes)
+        self.assertEqual(nodes['DONE-01']['depends_on'], [])
+        self.assertEqual(mapping['historical_dependency_context'][0]['target_ids'], ['FUTURE-01'])
+        self.assertIn('FUTURE-01', nodes['DONE-01']['description'])
         self.assertTrue(any(row['id'] == 'DONE-01' for row in mapping['preserved_dependency_hints']))
 
     def test_pinned_inventory_and_source_tampering_fail_before_any_output(self):
@@ -121,6 +125,8 @@ class RoadmapMappingTests(MigrationFixture, unittest.TestCase):
                 raw = (output/'federated-workspace'/relative).read_bytes()
                 self.assertEqual(hashlib.sha256(raw).hexdigest(), source_meta['sha256'])
             self.assertEqual(json.loads((output/'mapping.json').read_text()), mapping)
+            for doc in mapping['projects'][0]['prose_documents']:
+                self.assertEqual((output/'federated-workspace'/doc['path']).read_text(), doc['body'])
             self.assertEqual(git.run('status', '--porcelain=v1').stdout, before)
             with self.assertRaises(FileExistsError):
                 write_preview(output, value, mapping, roots)
@@ -187,7 +193,11 @@ class RoadmapMappingTests(MigrationFixture, unittest.TestCase):
             self.assertEqual(target['expected_head'], saved['commit_id'])
             self.assertEqual(target['original_content'], '# Původní plán\r\n- [ ] Zachovat\r\n')
             self.assertIn('-# Původní plán', target['diff'])
-            self.assertFalse(target['approved'])
+            self.assertTrue(target['replacement_authorized'])
+            self.assertFalse(target['apply_validated'])
+            self.assertEqual(target['action'], 'replace-test-plan')
+            self.assertNotIn('Původní plán', project['body'])
+            self.assertTrue(all('Původní plán' not in doc['body'] for doc in project['prose_documents']))
             self.assertEqual(Artifacts(node).open(project_id)['commit_id'], saved['commit_id'])
             validate_mapping_binding(bound, value)
 
@@ -199,3 +209,69 @@ class RoadmapMappingTests(MigrationFixture, unittest.TestCase):
         mapping = build_mapping(inventory(git.root), {'federated-workspace':git.root})
         self.assertNotIn('DEV-01-A', [node['id'] for node in mapping['projects'][0]['graph']['nodes']])
         self.assertTrue(any(row['kind'] == 'different-source-states' for row in mapping['warnings']))
+
+    def test_historical_batches_outside_partial_graph_and_physical_adhoc_tasks_are_included(self):
+        git = self.fixture()
+        with (git.root/'WORK_LOG.md').open('a', encoding='utf-8') as stream:
+            stream.write('\n## F-M2-OLD-01 — Historický návrh (designed)\n\n'
+                         'Doložená návrhová dávka, bez tvrzení produkční implementace.\n'
+                         '- [x] [ODD-01] Ad-hoc úkol s jiným prefixem\n')
+        git.commit('Historical feature absent from partial graph')
+        mapping = build_mapping(inventory(git.root), {'federated-workspace':git.root})
+        nodes = {node['id']:node for node in mapping['projects'][0]['graph']['nodes']}
+        self.assertEqual(nodes['F-M2-OLD-01']['parent_id'], 'MILESTONE-M2')
+        self.assertTrue(nodes['F-M2-OLD-01']['checked'])
+        self.assertEqual(nodes['ODD-01']['parent_id'], 'F-M2-OLD-01')
+        self.assertIn('designed', nodes['F-M2-OLD-01']['title'])
+        self.assertIn('bez tvrzení produkční implementace', nodes['F-M2-OLD-01']['description'])
+
+    def test_free_ideas_are_milestone_descriptions_or_separate_markdown_not_fake_tasks(self):
+        git = self.fixture()
+        self.write(git, 'Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md',
+                   '# Roadmapa\n\n## Milestone M1 – Základ\n\n'
+                   'Volná myšlenka bez charakteru úkolu.\n'
+                   '**Gate M1 — splněn (PoC validated).**\n'
+                   '- [ ] Obecný směr, nikoli připravená dávka.\n\n'
+                   '## Nezařazené nápady\n\nZatím bez jednoznačné vazby.\n')
+        git.commit('Free notes')
+        mapping = build_mapping(inventory(git.root), {'federated-workspace':git.root})
+        project = mapping['projects'][0]
+        nodes = {node['id']:node for node in project['graph']['nodes']}
+        self.assertIn('Volná myšlenka bez charakteru úkolu.', nodes['MILESTONE-M1']['description'])
+        self.assertTrue(nodes['MILESTONE-M1']['checked'])
+        self.assertFalse(nodes['MILESTONE-DEV']['checked'])
+        self.assertFalse(any(id_.startswith('MIG-REQ-') for id_ in nodes))
+        anonymous = [item for item in mapping['anonymous_identities']
+                     if item['proposed_role'] in {'free-description', 'supporting-markdown'}]
+        self.assertTrue(anonymous)
+        self.assertTrue(all(item['proposed_id'] is None for item in anonymous))
+        loose = [doc for doc in project['prose_documents'] if doc['owner_id'] is None]
+        self.assertTrue(any('Zatím bez jednoznačné vazby.' in doc['body'] for doc in loose))
+        self.assertTrue(all(doc['path'].endswith('.md') for doc in loose))
+
+    def test_legacy_standalone_task_keeps_id_and_status_without_inventing_a_batch(self):
+        git = self.fixture()
+        with (git.root/'WORK_LOG.md').open('a', encoding='utf-8') as stream:
+            stream.write('\n## Staré samostatné výstupy\n\n- [x] [M0-01] Původní dokončený experiment\n')
+        git.commit('Standalone historical task')
+        mapping = build_mapping(inventory(git.root), {'federated-workspace':git.root})
+        project = mapping['projects'][0]
+        nodes = {node['id']:node for node in project['graph']['nodes']}
+        self.assertNotIn('M0-01', nodes)
+        self.assertIn('M0-01', nodes['MILESTONE-M0']['description'])
+        self.assertTrue(any('- [x] [M0-01]' in doc['body'] for doc in project['prose_documents']))
+
+    def test_oversized_free_prose_stays_complete_in_linked_markdown(self):
+        git = self.fixture()
+        paragraph = 'Souvislý nezkrácený text ' + 'x' * 9000
+        self.write(git, 'Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md',
+                   '## Milestone M1 – Základ\n\n' + paragraph + '\n')
+        git.commit('Long free description')
+        mapping = build_mapping(inventory(git.root), {'federated-workspace':git.root})
+        project = mapping['projects'][0]
+        notes = [doc for doc in project['prose_documents'] if doc['owner_id'] == 'MILESTONE-M1']
+        self.assertTrue(any(paragraph in doc['body'] for doc in notes))
+        milestone = next(node for node in project['graph']['nodes'] if node['id'] == 'MILESTONE-M1')
+        self.assertIn('Podklad:', milestone['description'])
+        self.assertNotIn('x' * 100, milestone['description'])
+        self.assertEqual(project['graph']['status'], 'ready')

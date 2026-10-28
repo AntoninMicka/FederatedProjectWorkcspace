@@ -57,10 +57,12 @@ Neznámý/nedostupný modul, nejasné ID nebo nerozpoznaný blok patří do náh
 jako nevyřešená položka; nesmějí se potichu přeskočit. Symlinky a lokální
 convenience cesty nejsou oprávněním k následování neznámých zdrojů.
 
-Cílový projekt již obsahuje ukázkový plán IMPORT/ADAPTACE/REALIZACE a TASK-01.
-Náhled musí ukázat také jeho zachování, nahrazení či mapování. Existující
-zprávy a receipts se nemažou. Bridge export je připnutý snapshot, nikoli důkaz
-aktuálního serverového HEAD; před zápisem znovu načíst oprávněný cílový stav.
+Uživatel upřesnil, že celý dosavadní cílový plán je pouze testovací.
+Není zdrojem migrace: jeho položky, vztahy ani stavy se nepřebírají.
+Uživatel autorizoval úplné nahrazení. Původní bajty a cílový HEAD se čtou
+pouze kvůli diffu, CAS a případné obnově; nevzniká z nich nový podkladový
+artefakt ani povinné mapování testovacích ID. Transportní historie zpráv
+zůstává oddělená, bez přenosu testovacích úkolů do nové roadmapy.
 
 ## 2. Kanonické ID, typy a úplnost
 
@@ -163,8 +165,10 @@ recovery testy. Nepoužít přímé editace projektového Gitu ani SQL indexu.
 
 Nejprve migrovat připnutý reálný vzorek do izolovaného projektu: obsahující
 hlavní sekci, dávku, checklist, historický důkaz a samostatný modulový plán.
-Potom ověřit celý vybraný rozsah a teprve před skutečným zápisem předložit
-konkrétní náhled aktuálního existujícího projektu k potvrzení.
+Potom ověřit celý vybraný rozsah a před skutečným zápisem dokončit
+konkrétní náhled všech artefaktů existujícího projektu. Úplné nahrazení
+testovacího plánu již uživatel autorizoval; samostatné opakované potvrzení
+tohoto záměru není potřeba. Stále musí projít validace a recovery kontroly.
 
 Předání autority má dva výslovné kroky, nikoli předstíranou transakci mezi
 repozitáři:
@@ -250,12 +254,15 @@ revizím a hashům. Výstupem jsou TODO návrhy, katalogy požadavků/historie,
 zdrojové archivy a `mapping.json` se všemi lokátory i plnými původními bloky.
 Žádný report nepředstavuje autoritativní plán nebo výsledek importu.
 
-Výchozí pravidlo do profilované části zařazuje aktuální feature a historicky
-completed feature dávky ze stávajícího autoritativního katalogu. Široké
+Aktuální pravidlo v2 do profilované části zařazuje aktuální feature a
+historické dávky ze zdrojového WORK_LOG, včetně těch, které starý neúplný
+dependency graf neobsahuje. Široké
 backlogové body zůstávají požadavky; samotný grafový uzel není důkaz jedné
-reviewovatelné feature. Pokud kandidát závisí na nezahrnutém požadavku,
-nesmí se hrana vynechat a uzel vydávat za ready. Uzel i původní hrana zůstanou
-v podpůrném katalogu a report ohlásí dependency hranici k review. Checkbox
+reviewovatelné feature. Pokud historicky dokončená dávka má ve starém grafu hranu k dosud
+plánovanému požadavku, dokončená dávka zůstane v roadmapě a hrana se zachová
+jako viditelný historický kontext a v původním manifestu. Požadavek se tím
+neoznačí za dokončený ani nepovýší na feature dávku. U aktivní práce se
+nevyřešená dependency hranice nadále nesmí vynechat a vydávat uzel za ready. Checkbox
 konflikt v různých zdrojích se automaticky nevyřeší.
 
 Tasky se odvozují jen z explicitních ID uvnitř známé batch sekce; checklist
@@ -278,9 +285,10 @@ nepřepne na completed pouze proto, že jsou zaškrtnuté všechny jeho tasky.
 Volitelné `--target NODE_CONFIG PROJECT_ID` načte skutečný registrovaný
 projekt přes read-only Git cestu, bez inicializace journalu/indexu. Přidá
 původní hlavní TODO, jeho hash a metadata, expected HEAD a `target.diff`.
-Report ukáže původní ID, která v návrhu nejsou, a požadavek na archivování
-původní revize a zachování zpráv. Neodvozuje jejich nové aliasy a nic neukládá
-do projektu. Cílový HEAD musí skutečný apply později znovu ověřit.
+Report označí cílový obsah jako nepotřebná testovací data a uživatelskou
+autorizaci nahrazení eviduje odděleně od technického dokončení apply.
+Testovací ID neřeší jako migrační konflikt ani jim nevyrábí aliasy. Nic
+se tímto read-only krokem do projektu neukládá. Cílový HEAD musí skutečný apply později znovu ověřit.
 
 `--reuse-mapping MAPPING_JSON` znovu použije zmrazené identity a rozhodnutí
 nad stejnou inventurou; neslučuje se s novými module placements. Změna
@@ -288,3 +296,36 @@ inventurního digestu vyžaduje explicitní rebase a review, nikoli nové ID
 odvozené z posunutého řádku. Bez nového `--target` jde o replay původního
 cílového náhledu, nikoli nové ověření aktuálního cílového HEAD. Všechna
 rozhodnutí zůstávají návrhem a flag `import_ready` je false.
+
+## Upřesněný obsah: historie a volné popisy
+
+Politika `history-inclusive-and-free-descriptions-v2` zachovává realizované
+úkoly i návrhové dávky, nikoli jen starou vybranou podmnožinu grafu. Stav
+completed návrhu je dokončení návrhového rozsahu; nevydává se za produkční
+implementaci. Maturity text a původní důkazy zůstávají dohledatelné.
+
+Historické dávky vycházejí z kanonických nadpisových záznamů ve WORK_LOG.
+Přiřazení milníku používá existující anotaci, explicitní namespace ID nebo
+kurátorované mapování hostitelských historických feature v
+`spikes/roadmap_history.py`; důvod je součástí mappingu. Ad-hoc task se přiřadí
+podle doložené fyzické batch sekce, i když má jiný ID prefix. ID, pro které
+není doložená dávka, nepřevádíme na umělý batch: jeho původní text, ID a stav
+zůstávají v podkladu připojeném k milníku, případně v samostatném Markdownu.
+
+Obecné myšlenky a nejednoznačné zdrojové body nejsou automaticky task ani
+batch. Explicitní kontext sekce určí vlastníka popisu (milník nebo dávku).
+Není-li jednoznačný, vytvoří se samostatný `.md` podklad a odkaz v hlavním
+roadmapovém dokumentu. Tyto texty nedostávají v cílové mapě vymyšlená
+MIG-REQ ID; původní stabilní ID konkrétních bodů se naopak neztrácejí.
+
+Podklady jsou v reportu samostatné Markdown soubory s původními zdrojovými
+sekcemi. Krátký volný text se promítne i do popisu vlastníka. Limit popisu
+se neobchází: úplný text je vždy ve zdrojovém podkladu, nadlimitní části se
+neuseknou. Zdroje zůstávají také v přesných bajtech v source archivu.
+Explicitně doložený stav gate z hlavní roadmapy se zachová s odkazem na
+řádek; splnění milníku se neodvozuje z počtu zaškrtnutých podúkolů.
+
+Původní generované náhledy politiky v1 zůstávají historickými diagnostickými
+výstupy, nejsou aktuálním migračním zadáním. Jde stále o náhled před úplným
+artefaktovým apply plánem: metadata, přemapování odkazů a autorizovaný
+zápis/recovery nejsou doloženy samotným validním task grafem.
