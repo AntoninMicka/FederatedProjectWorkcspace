@@ -329,3 +329,64 @@ Původní generované náhledy politiky v1 zůstávají historickými diagnostic
 výstupy, nejsou aktuálním migračním zadáním. Jde stále o náhled před úplným
 artefaktovým apply plánem: metadata, přemapování odkazů a autorizovaný
 zápis/recovery nejsou doloženy samotným validním task grafem.
+
+## Bod 1 — sestavení importního balíku bez zápisu
+
+`spikes/roadmap_bundle.py` nyní skládá konkrétní payload pro každý projekt.
+Reuse/adaptuje existující metadata v1/v2, source import provenance a task-graph
+validátor; nevytváří nový store ani zápisové API. Providerově omezené
+`Sources.import_sources` se jako obecný importér nepoužívá. Pro samostatný
+modul je navrženo seeded vytvoření, které `ProjectCreation.create` již
+podporuje včetně explicitního project UUID a počátečního snapshotu.
+
+```bash
+python3 -m scripts.roadmap_migration_bundle \
+  --inventory INVENTORY_JSON --mapping MAPPING_JSON \
+  --source-root REPOSITORY_ID REPOSITORY_PATH \
+  --author-id LOCAL_AUTHOR_UUID --privacy project \
+  --output /tmp/dev-01-import-operation
+```
+
+Všechny zdrojové repozitáře musí být uvedené explicitně. Autor je durable
+lokální author UUID, nikoli node UUID ani odhad podle autora zdrojového
+souboru. Čas přípravy se uloží do manifestu; volitelné `--created-at` umožní
+reprodukovat balík se stejnými vstupy. Původní neznámé source časy se
+nedoplňují. Navržená privacy ještě nenahrazuje kontrolu kontextu před zápisem.
+
+Balík obsahuje:
+
+- `operation.json`: project/operation ID, výchozí HEAD, navržená metadata,
+  přesné cesty, create/replace akce, SHA-256, velikosti a závislosti operací;
+- `blobs/<sha256>`: přesné bajty každého obsahu i metadat;
+- `payload/<repository-id>/artifacts/...`: stejný obsah v běžné podobě pro
+  review, včetně hlavního plánu a všech Markdown podkladů;
+- `summary.md`: přehled a odkazy na hlavní plány.
+
+Každý projekt má vlastní source manifest a mapování ID v samostatných
+verzovaných source artefaktech. Interní text modulu se nekopíruje do hlavního
+projektu; ten drží pouze propojení na navržený modulový project UUID.
+Původní zdroje zachovávají přesné bajty a Git revize. Generované source
+manifesty mají identitu odvozenou i od jejich obsahu, aby se při nové verzi
+nepřepisoval neměnný source artefakt.
+
+Hlavní TODO zachovává svou stabilní identitu a immutable origin metadata;
+mutable testovací název, popis a tagy se nepřebírají. Jeho obsah se celý
+nahrazuje novým plánem. Ostatní existující entity se implicitně nemažou.
+Modulový root používá main_todo_id navrženého modulového projektu; jeho
+konkrétní filesystem umístění ještě musí určit další validační krok.
+Hostitelská operace závisí na dokončení modulové, ale každá má vlastní
+receipt/transakční hranici podle ADR 0003; nejde o cross-project transakci.
+
+Příprava běží jen v paměti a do nového privátního adresáře mimo projekt.
+Před zápisem manifestu ověří úplnost a hashe blobů. Při přerušení před
+`operation.json` není balík kompletní; lze jej znovu vytvořit v novém
+adresáři. Manifest se publikuje poslední přes dočasný soubor. Není to
+receipt importu ani záruka obnovy po výpadku napájení. Živý Git, index,
+journal a node registrace se nemění.
+
+Intrinsic metadata shape a task graph se při sestavení kontrolují, ale
+`import_ready` zůstává false. Bod 2 teprve řeší aktuální oprávnění/HEAD,
+privacy, celého cílového kandidáta včetně nepozměněných entit, kolize,
+zdrojové odkazy a umístění nového projektu. Retry budoucího writeru použije
+zmrazený balík; nemá jej vytvářet znovu s novým časem. Samotný writer a jeho
+recovery patří do bodů 3/4 a DEV-01-D.

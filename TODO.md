@@ -122,6 +122,26 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   obsah není v source_refs, normalizovaných uzlech ani odvozených podkladech.
   Aktuální report prošel task-graph validací; zůstávají otevřené úplné metadata,
   přemapování zdrojových odkazů, zápis/recovery a skutečné nasazení migrace.
+  Bod 1 požadovaný uživatelem — sestavení celé logické operace — je připraven:
+  `/tmp/dev-01-import-operation/summary.md` a `operation.json`. Zdrojový host
+  commit `06ffda3`, modul `446d980`; inputy jsou připnuté v
+  `/tmp/dev-01-step1-source` a `/tmp/dev-01-step1-mapping`.
+  Hlavní projekt: 196 artefaktů / 392 souborů; modul: 17 / 34.
+  Payload obsahuje hlavní plány, 193 Markdown popisů/podkladů, přesné
+  originální zdroje, sidecar metadata, scoped mapování ID, source manifesty
+  a propojení na navržený modulový projekt. Root ID a immutable metadata
+  hlavního TODO zůstávají zachované; testovací text ani mutable popisky
+  nejsou importovanými zdroji. Interní text modulu zůstává v modulovém payloadu.
+  Manifest obsahuje samostatné operation ID, dependency modul → host,
+  create/replace akce a hashe všech souborů; žádné implicitní mazání ostatních
+  entit. Module project UUID je návrh podporovaný seeded create, fyzická
+  cesta se ještě nezadává ani nevytváří.
+  Základní schema a task graph celých payloadů prošly, včetně zachování
+  ID/typů/rodičů a checkbox stavů. Bod 2 (úplná kontextová předzápisová
+  validace) zůstává otevřený, stejně jako writer/recovery a fyzický import.
+  `import_ready` je false. Vznik balíku nepoužívá projektový journal ani
+  zapisující Workspace: pád před finálním manifestem zanechá jen neúplný
+  report, který není importním receiptem. Retry použije zmrazené payloady.
 - [ ] [planned] **DEV-01-D — bezpečný apply a opakovaný import (implemented).**
   Stávající autorizovaný writer, expected HEAD/digest, víceartefaktová
   transakce, receipts, idempotence, třícestné porovnání, rename/removal review
@@ -140,12 +160,14 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
 
 ## Ověření aktuálního kroku
 
-`python3 -m unittest tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:
-41 testů OK. Nově je pokryta historie mimo neúplný graf, fyzické přiřazení
-ad-hoc tasku bez shodného ID prefixu, zachování maturity, volné popisy,
-samostatný i nadlimitní nezkrácený Markdown, zdrojové gate důkazy, nevymýšlení batch pro osamělý
-historický task a nepoužití testovacího cíle jako zdroje. Dřívější pokrytí
-integrity mapování, přesných bajtů, checklistů, target diffu a validace grafu
-zůstává. Skutečný read-only běh nad revizemi výše vytvořil aktuální report.
-Celá finální runtime brána zbývá před dokončením dávky. Projektový zápis ani
-fyzická migrace zatím neproběhly.
+`python3 -m unittest tests.test_roadmap_bundle tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:
+47 testů OK, z toho 6 balíkových testů. Pokryto je sestavení celých metadat,
+shoda plánu, zachování přesných source bajtů a původní identity rootu,
+nepoužití testovacích dat, izolace modulového obsahu, navržený seed root,
+deterministický rebuild, ochrana proti relaxaci privacy a odmítnutí chybějících,
+změněných či nadbytečných blobů i přepsání existujícího balíku. Dřívější
+historické/grafové testy zůstávají. Skutečný běh vytvořil 213 artefaktů /
+426 souborů (3 589 550 bajtů logických payloadů); z disku byly zpětně
+porovnány přesné bajty všech souborů. Živý projekt se nezměnil.
+Celá finální runtime brána zbývá před dokončením dávky; bod 2 a zápis/recovery
+nejsou těmito shape testy označené za dokončené.

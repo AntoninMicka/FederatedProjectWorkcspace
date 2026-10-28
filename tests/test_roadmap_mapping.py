@@ -18,7 +18,7 @@ from scripts.roadmap_migration_plan import write_preview
 from tests.test_roadmap_migration import MigrationFixture, ROOT
 
 
-class RoadmapMappingTests(MigrationFixture, unittest.TestCase):
+class MappingFixture(MigrationFixture):
     def fixture(self, *, conflict=False):
         git = self.host()
         self.write(git, 'TODO.md', '# TODO — DEV-01\n\n'
@@ -38,6 +38,7 @@ class RoadmapMappingTests(MigrationFixture, unittest.TestCase):
         git.commit('Mapping fixture')
         return git
 
+class RoadmapMappingTests(MappingFixture, unittest.TestCase):
     def test_valid_hierarchy_preserves_requirements_history_and_checklist(self):
         git = self.fixture()
         value = inventory(git.root)
