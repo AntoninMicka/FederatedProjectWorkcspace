@@ -38,6 +38,13 @@ from spikes.journal import sync_dir
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
+# Qt WebEngine does not deliver plain JS objects as Python dictionaries.
+# Transfer JSON, consuming the sensitive payload only once.
+IDE_BRIDGE_INSTALL_REQUEST_JS = """(function(){
+const value=window.workspaceBridgeInstall;
+delete window.workspaceBridgeInstall;
+return JSON.stringify(value);
+})()"""
 NATIVE_ACTIONS = frozenset({'install-ide-bridge', 'register-project-location', 'relocate-project-location',
                             'recover-project-operation',
                             'unregister-missing-project', 'choose-project-location',
@@ -511,6 +518,11 @@ def main():
                     import base64
                     import shutil
                     import tempfile
+                    try:
+                        payload = json.loads(payload)
+                    except (TypeError, ValueError):
+                        QMessageBox.warning(window, 'IDE bridge', 'Nelze převzít instalační balíček. Opakujte propojení.')
+                        return
                     if (not isinstance(payload, dict) or set(payload) != {'package_base64', 'editor'}
                             or payload['editor'] not in {'code', 'codium'}
                             or not isinstance(payload['package_base64'], str)
@@ -542,7 +554,7 @@ def main():
                     process.finished.connect(finished)
                     process.errorOccurred.connect(lambda _error: temporary.cleanup())
                     process.start(executable, ['--install-extension', str(package), '--force'])
-                page.runJavaScript('(function(){const value=window.workspaceBridgeInstall;delete window.workspaceBridgeInstall;return value;})()', install_bridge)
+                page.runJavaScript(IDE_BRIDGE_INSTALL_REQUEST_JS, 0, install_bridge)
             elif action == 'register-project-location':
                 register_project()
             elif action == 'recover-project-operation':

@@ -33,6 +33,39 @@ from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_webengine_transfers_ide_install_payload_once(self):
+        script = r'''
+import json
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage
+from spikes.desktop import IDE_BRIDGE_INSTALL_REQUEST_JS
+app = QApplication([])
+page = QWebEnginePage()
+expected = {'editor': 'codium', 'package_base64': 'dGVzdA=='}
+def loaded(ok):
+    if not ok: return app.exit(3)
+    def consumed(value):
+        assert value == 'undefined'
+        print('IDE install payload delivered and consumed', flush=True)
+        app.exit(0)
+    def received(value):
+        assert json.loads(value) == expected
+        page.runJavaScript('typeof window.workspaceBridgeInstall', 0, consumed)
+    page.runJavaScript('window.workspaceBridgeInstall=' + json.dumps(expected) + ';' +
+                       IDE_BRIDGE_INSTALL_REQUEST_JS, 0, received)
+page.loadFinished.connect(loaded)
+page.setHtml('<html></html>')
+QTimer.singleShot(10000, lambda: app.exit(2))
+raise SystemExit(app.exec())
+'''
+        result = subprocess.run([sys.executable, '-c', script],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('IDE install payload delivered and consumed', result.stdout)
+
     def test_conflict_resolver_exposes_three_panel_diff_and_explicit_publish(self):
         self.assertIn('id="project-conflicts-open"', HTML)
         self.assertIn('id="project-conflicts-raw-panel"', HTML)
