@@ -241,10 +241,25 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   podkladů. Samostatné striktně validované typy návrhů mají nejprve pokrýt
   `add/remove-dependency`, `create-task`, `update-description`,
   `flag-contradiction` a `flag-duplicate/orphan`; `split/merge` zůstane
-  navazující rozšíření podle reálných nálezů. Každý proposal zachová exact HEAD,
-  analyzer revision, zdrojové artefakty/revize a citované úseky, dotčená stabilní
-  ID, strukturovaný before/after náhled, důvod, confidence, rizika a validační
-  dopad. Nový úkol vyžaduje validovaný typ, rodiče, rozsah, akceptaci, provenance
+  navazující rozšíření podle reálných nálezů. Speciální varianta
+  `derive/update-subplan` zpracuje nový nebo změněný podklad do návrhu dílčího
+  plánu a `integrate-subplan` navrhne jeho začlenění do kanonické roadmapy:
+  mapování na existující milestone/batch/task, nové uzly, dependency hrany,
+  rozpory a body, které mají zůstat pouze volným popisem. Dílčí plán je
+  verzovaný projektový artefakt s vlastní stabilní identitou, ale nikoli druhá
+  autorita stavu; jeho uzly nesmějí být současně vydávány za samostatný aktuální
+  plán a za integrované kanonické uzly. Vazba source artifact ID + source digest
+  + analyzer revision + subplan ID umožní opakovaný běh bez duplikace. Změna
+  zdroje se porovnává s předchozí zdrojovou revizí i posledním odvozeným plánem;
+  ruční úpravy dílčího či hlavního plánu se nesmějí tiše přepsat a odstraněný
+  požadavek vznikne jako explicitní removal/deprecation proposal, nikoli jako
+  automatické smazání. Review nejprve potvrdí obsah dílčího plánu a samostatně
+  jeho integrační diff; podle rozsahu lze obě potvrzené části zapsat jednou
+  Workspace transakcí proti témuž expected HEAD. Každý proposal zachová exact
+  HEAD, analyzer revision, zdrojové artefakty/revize a citované úseky, dotčená
+  stabilní ID, strukturovaný before/after náhled, důvod, confidence, rizika a
+  validační dopad. Nový úkol vyžaduje validovaný typ, rodiče, rozsah, akceptaci,
+  provenance
   a kolizně bezpečné provisional ID; LLM nesmí samo měnit stav dokončení ani
   obejít katalog/ID validaci. Statické kontroly musí předcházet LLM návrhům:
   neznámé cíle, cykly, orphan uzly, duplicity ID, neplatná hierarchie a chybějící
