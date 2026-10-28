@@ -895,12 +895,16 @@ mezi zdrojové soubory implementačního repozitáře.
   instrukce a přesnou revizi jako obyčejné lokální soubory mimo Git.
   Zpětná schránka přijímá návrhy dokončení, dotazy a zprávy s idempotentními
   receipts; sama nemění stav úkolu. Instalátor a párování jsou ve sdílené
-  web/desktop aplikaci, rozšíření běží v lokálním Code/VSCodium. Transport,
+  web/desktop aplikaci, rozšíření běží v lokálním Code/VSCodium.
   Na plné stránce Nastavení → IDE a editory se odděluje připojení Workspace
   od tabulky propagovaných projektů a jejich cílů v IDE; stejné mapování lze
   nastavit v rozšíření. Stale kontrolu, autorizaci a recovery vymezuje ADR 0060.
   Akceptovanou evidenci a neověřené profily drží WORK_LOG, předání PR TODO. FileSystemProvider
-  ani FUSE se nepoužívají.
+  ani FUSE se nepoužívají. Uživatel 28. 10. 2026 uzavřel tuto fázi po
+  skutečném propojení desktopu s VSCodiem, načtení zadání a přečtení zpětné
+  testovací zprávy. IDE UI, review úkolů/checklistů a strojově zpracovatelné
+  zprávy zůstávají navazujícím rozsahem DEV-02/DEV-03; migrace roadmapy
+  včetně vložených modulů patří DEV-01.
 - [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
 - [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu. Vazba na oddělený zdrojový repozitář musí připnout jeho identitu a revizi bez přesunu autoritativního projektového řízení do zdrojového stromu.
 - [ ] Distribuci rozšíření navrhnout pro ověřené kanály obou IDE a offline instalovatelný balíček; dostupnost konkrétního marketplace, API a značky ověřit v době implementace. Rozdíly VS Code/VSCodium nesmějí měnit doménový kontrakt ani bezpečnostní policy.

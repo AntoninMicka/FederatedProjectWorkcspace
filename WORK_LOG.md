@@ -7,12 +7,13 @@ SPDX-License-Identifier: MPL-2.0
 
 ## DEV-IDE-TODO-01 — lokální souborový IDE bridge — 2026-10-28
 
-Akceptace byla znovu otevřena 28. 10. 2026 uživatelským upřesněním a rozšíření
-dosáhlo úrovně **PoC validated**. Zachována je
-stejná větev `feature/dev-ide-todo-01-file-bridge`, základ `develop` `6eb8614`,
-první implementace commit `f072f50`, jediný PR cíl `develop`. GitHub při
-závěrečném předání neobsahoval žádný PR pro tuto větev. Změny této rozšířené
-akceptace zůstávají necommitnuté; push/PR/merge nebyl proveden.
+Akceptace této fáze byla uživatelem uzavřena 28. 10. 2026 po skutečném
+propojení desktopu s VSCodiem, načtení zadání a doručení testovací zprávy.
+Dosažená úroveň je **PoC validated** pro lokální Linux/VSCodium profil.
+Zachována je větev `feature/dev-ide-todo-01-file-bridge`, základ `develop`
+`6eb8614`, implementační commity `f072f50`, `7ea37df` a oprava `b92deb7`.
+Cíl jediného PR je `develop`; push/otevření PR/merge agent neprovedl,
+doručení PR zůstává neuzavřené a merge není doložen.
 Původní rozsah a podúkoly A–D i jejich historické důkazy jsou níže zachované.
 
 Rozšíření akceptace: plnohodnotná stránka Nastavení → IDE a editory,
@@ -30,6 +31,39 @@ Git, lidská akceptace a jediný Workspace writer beze změny.
 - [x] [completed] **DEV-IDE-TODO-01-G — nové recovery/RBAC/UI ověření (PoC validated).**
   Cílené testy vrstev propojení a mapování, skutečný extension/browser smoke,
   úplná finální sada, dokumentace a předání. Windows neoznačit jako ověřené.
+
+- [x] [completed] **DEV-IDE-TODO-01-H — předání instalačního balíčku do Qt (PoC validated).**
+  Uživatelské hlášení znovu otevřelo akceptaci: připojení vznikalo, ale
+  instalátor se bez dialogu ukončil. Skutečný Qt WebEngine reprodukoval
+  prázdný řetězec místo JavaScriptového objektu. Oprava `b92deb7` přenáší
+  JSON, explicitně jej dekóduje a jednorázově spotřebuje citlivý payload.
+  Reuse/adaptuje existující same-origin nativní akci a JSON kontrakt ostatních
+  dialogů. Recovery ADR 0060 se nemění: připojení a instalace nejsou jedna
+  transakce; při přerušení lze připojení odvolat, VSIX je dočasný a projektový
+  Git/index/journal tato operace nemění.
+
+### Závěrečné ověření a fyzická akceptace 28. 10. 2026
+
+- Qt regresní test
+  `M0_DESKTOP_TEST=1 QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox python3 -m unittest tests.test_desktop.DesktopTests.test_real_webengine_transfers_ide_install_payload_once -v`
+  prošel: obsah JSON i jednorázové spotřebování payloadu (1 test).
+- Po poslední změně kódu/testů prošla celá sada
+  `python3 -m unittest discover -s tests -v`: **974 testů, 935 úspěšných,
+  39 volitelných skipů, bez selhání**, 246,750 s.
+  Log: `/tmp/workspace-ide-fix-tests.log`. Qt test výše byl navíc skutečně
+  spuštěn samostatně; skip v běžné sadě není jeho runtime ověřením.
+- Uživatel po restartu desktopu potvrdil úspěšné propojení s běžným VSCodiem.
+  Agent přímo přečetl export TODO a snapshot projektu Federated Project
+  Workspace přes bridge mimo Git a odeslal `kind: message` k `TASK-01`.
+  Zpráva `8d0f37e3-cb75-4a0a-8a30-9fff00f6a932` získala receipt
+  `status: received`, `acceptance: pending-human-review`; uživatel následně
+  potvrdil přečtení zprávy v aplikaci. Jde o fyzicky ověřený obousměrný
+  transport, nikoli o ověření automatického dokončování úkolů.
+- Uživatel tuto fázi výslovně uzavřel jako splněnou. Následné požadavky na
+  IDE UI, review dokončení úkolů/checklistů a strukturované zprávy byly předány
+  existujícím DEV-02/DEV-03; migrace roadmapy včetně vložených modulů DEV-01
+  v [BACKLOG](BACKLOG.md#vlastní-rozvoj-produktu-a-coding-agenti--navazuje-na-m6).
+  Další feature nebyla aktivována. Windows/VS Code zůstávají neověřené.
 
 ### Ověření rozšířené verze 0.2.0
 
@@ -55,7 +89,9 @@ Git, lidská akceptace a jediný Workspace writer beze změny.
   novou logikou rovněž prošel; poslední běh zahrnuje i sjednocený název
   příkazu v nativním instalátoru. Historické výsledky níže nejsou náhrada
   nové brány.
-- Fyzický Windows/VS Code a nativní Qt instalační klikání zůstávají neověřené.
+- V době tohoto historického běhu nebyly Windows/VS Code ani nativní Qt
+  instalační klikání ověřeny; následnou Linux/VSCodium akceptaci uvádí
+  závěrečné ověření výše. Windows/VS Code zůstávají neověřené.
 
 ### Historické ověření první verze f072f50
 
