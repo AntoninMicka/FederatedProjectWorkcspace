@@ -228,6 +228,21 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   názvem a UUID, nedostupný projekt odmítne a po potvrzení otevře jeho oddělenou
   proposal queue. Přímé `--project` a povinné UUID neinteraktivních příkazů
   zůstávají zachované.
+- [ ] [planned] **DEV-01-E-RECONCILE-01 — úplná jednorázová sémantická
+  reconciliation importu (designed).** Uživatelský požadavek 2026-10-28:
+  popsat původní sekvenční workflow TODO → celý batch ve WORK_LOG, význam
+  BACKLOGu/Master Checklistu a požadovaný nový kanonický stav; nad všemi
+  hostitelskými i vybranými modulovými roadmapami nejprve vytvořit konečnou
+  resumovatelnou source-cluster queue a poté ji nechat přes noc zpracovat
+  same-node Ollamou. Výstupem jsou pouze typované návrhy keep-history/
+  description/canonical, promote, residual, split/merge, update, dependency a
+  conflict s exact source/target provenance; žádný průběžný zápis. Human review
+  složí přijaté návrhy do jednoho kandidáta, celý graf validuje a teprve jedna
+  potvrzená `Workspace.transact` operace proti původnímu HEAD může změnit plán.
+  Crash boundaries, noční recovery, coverage a akceptace jsou v
+  `docs/roadmap-reconciliation.md`. Implementace, fyzický úplný scan, review a
+  apply zůstávají otevřené; obecná produktová integrace je nadále samostatný
+  `PLAN-SEMANTIC-AUDIT-01` k předání do backlogu.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
