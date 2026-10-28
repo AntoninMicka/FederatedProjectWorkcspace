@@ -115,12 +115,6 @@ class RefinementTUI:
         self._filter(selected_id)
         active = {row['proposal_id'] for row in self.all_rows}
         self.contexts = {key: value for key, value in self.contexts.items() if key in active}
-        for row in self.all_rows:
-            if row['proposal_id'] not in self.contexts:
-                try:
-                    self.contexts[row['proposal_id']] = self.service.review_context(row)
-                except Exception as exc:
-                    self.contexts[row['proposal_id']] = {'context_error': str(exc)}
 
     def _filter(self, selected_id=None):
         self.rows = [row for row in self.all_rows
@@ -312,7 +306,9 @@ def draw(screen, ui):
         decision = proposal.get('decision', proposal.get('action', proposal.get('outcome', '')))
         target = proposal.get('target_id') or ','.join(proposal.get('target_ids', [])) or '-'
         context = ui.contexts.get(row['proposal_id'], {})
-        source = context.get('source_title') or row.get('document_id', '-')[:8]
+        frozen = row.get('input') or {}
+        source = (context.get('source_title') or frozen.get('stable_id')
+                  or frozen.get('cluster_id') or row.get('document_id', '-')[:8])
         state_lines = _cell(f'{position + 1}. {row["state"]}', state_width)
         action_lines = _cell(decision, action_width)
         route_lines = _cell(source + ' -> ' + target, route_width)
@@ -407,6 +403,10 @@ def run(screen, service, *, scan_limit=5, deep_check=False):
         pass
     screen.keypad(True)
     screen.timeout(100)
+    screen.erase()
+    _put(screen, 0, 0, 'Nacitam proposal list; detail se docte az pro vybrany radek...',
+         max(1, screen.getmaxyx()[1] - 1), curses.A_BOLD)
+    screen.refresh()
     ui = RefinementTUI(service, scan_limit=scan_limit, deep_check=deep_check)
     active = True
     while active:

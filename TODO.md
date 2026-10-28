@@ -250,13 +250,16 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   kandidáta, transakční writer, fyzický úplný scan a review; obecná produktová
   integrace je nadále samostatný `PLAN-SEMANTIC-AUDIT-01` k předání do backlogu.
   Cílené ověření 2026-10-28: `python3 -m unittest
-  tests.test_roadmap_refinement tests.test_roadmap_refinement_tui -v` — 19/19
+  tests.test_roadmap_refinement tests.test_roadmap_refinement_tui -v` — 20/20
   testů prošlo; CLI help potvrzuje `scan --deep-check`, `git diff --check`
   prošel. Fyzický Ollama běh nad importovaným projektem nebyl v tomto kroku
   spuštěn.
   Následně přibyla explicitní volba `--forget-previous`: pod node-local lockem
   smaže pouze deep-check queue vybraného projektu a z aktuálního HEAD ji znovu
   vytvoří; detached rozhodnutí ani Git nemění.
+  Ad-hoc oprava pomalého otevření TUI: `refresh()` již nestaví exact-revision
+  snapshot a task graph pro každý řádek fronty. Detail se načítá lazy jen pro
+  vybranou položku, cachuje se v session a úvodní obrazovka oznamuje načítání.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

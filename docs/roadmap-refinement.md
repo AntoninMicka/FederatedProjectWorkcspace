@@ -110,6 +110,10 @@ UUID načítá názvy z přesné revize návrhu. Pravý panel vysvětluje navrž
 odkud podklad pochází, jeho skutečnou cestu, cílové ID/název/typ, očekávaný
 dopad, odůvodnění modelu a náhled zdrojového textu. UUID a HEAD jsou až v auditní
 části. Delší detail se posouvá přes `PgUp`/`PgDn`.
+Seznam při otevření nestaví Git snapshot a task graph zvlášť pro každý řádek.
+Detail z exact proposal HEAD se načte lazy pouze pro právě vybranou položku a
+poté se cachuje po dobu TUI session; úvodní obrazovka během načítání fronty
+výslovně ukazuje, že proces pracuje.
 Každý tabulkový řádek je dvouřádkový blok s ohraničenými buňkami. Vybraný blok
 se při pohybu drží uprostřed viditelné stránky, pokud tomu nebrání začátek nebo
 konec seznamu.

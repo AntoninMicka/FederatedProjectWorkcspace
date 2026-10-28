@@ -56,6 +56,26 @@ class RefinementTUITests(unittest.TestCase):
         self.assertEqual(self.ui.current()['state'], 'accepted')
         self.assertEqual(self.service.applies, [])
 
+    def test_refresh_loads_row_details_only_when_selected(self):
+        calls = []
+        service = FakeService()
+        for number in range(10, 30):
+            row = dict(service.rows[0])
+            row['proposal_id'] = f'00000000-0000-0000-0000-{number:012d}'
+            row['input'] = {'stable_id': f'TASK-{number}'}
+            service.rows.append(row)
+        original = service.review_context
+        def counted(row):
+            calls.append(row['proposal_id'])
+            return original(row)
+        service.review_context = counted
+        ui = RefinementTUI(service)
+        self.assertEqual(calls, [])
+        self.assertEqual(ui.context()['source_title'], 'Readable evidence title')
+        self.assertEqual(len(calls), 1)
+        ui.refresh()
+        self.assertEqual(len(calls), 1)
+
     def test_apply_requires_second_explicit_confirmation(self):
         self.ui.handle(ord('a'))
         self.ui.handle(ord('p'))
