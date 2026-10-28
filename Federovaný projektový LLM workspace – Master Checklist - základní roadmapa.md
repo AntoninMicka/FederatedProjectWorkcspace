@@ -16,9 +16,9 @@ feature-akceptovaný v `PLAN-ROADMAP-MILESTONE-VIEW-01`.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
 `F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
 #103 a `COMP-02` byla doručena PR #104 s lokálním Julia runnerem a explicitní
-publikací výsledků. `COMP-03` dokončila první řízený Julia výpočet, authoring a
-evidenci modelových nástrojů ve shared workspace UI a čeká na doručení PR ze
-své zachované feature větve.
+publikací výsledků. `COMP-03` implementovala první řízený Julia výpočet,
+authoring a evidenci modelových nástrojů ve shared workspace UI; její akceptace
+je před doručením znovu otevřená kvůli kontrole sidebarového rozvržení.
 Návrhová dávka `DOC-EDITOR-CONTRACTS-01` odděleně popisuje společný raw
 editor a katalog vzorů, souborovou hierarchii plánu a speciální editor úkolů.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
@@ -322,9 +322,11 @@ práce byla 27. 10. 2026 přerušena do doby implementace sdíleného raw editor
 lze obnovit. `COMP-03` tento widget a Julia adaptér zapojila pro
 zdrojový kód bez změny atomické save operace. Před doručením byla akceptace
 rozšířena o uspořádanou evidenci modelových nástrojů: vytvoření, bezpečný import
-`.jl` do konceptu, seznam a akce Zobrazit/Editovat/Spustit/Smazat. MATLAB je
-zatím pouze budoucí směr konverze, nikoli podporovaný formát. Fyzickou akceptaci
-eviduje feature větev, nikoli roadmapa.
+`.jl` do konceptu, seznam a akce Zobrazit/Editovat/Spustit/Smazat. Primární akce
+a seznam modelů používají levý panel Nástroje podle vzoru projektového katalogu;
+hlavní plocha je určena detailu a editoru. MATLAB je zatím pouze budoucí směr
+konverze, nikoli podporovaný formát. Fyzickou akceptaci eviduje feature větev,
+nikoli roadmapa.
 
 ---
 

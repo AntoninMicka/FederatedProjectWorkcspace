@@ -276,9 +276,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p id="sidebar-artifact-status" role="status"></p>
 <ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div>
 <div id="sidebar-tools" role="tabpanel" aria-labelledby="tools-tab" tabindex="0" hidden>
-<h2>Nástroje</h2><p>Výpočetní a simulační skripty projektu.</p>
+<h2>Nástroje</h2><div class="sidebar-tool-primary-actions">
+<button id="sidebar-new-tool" type="button" aria-label="Nový nástroj" aria-expanded="false" aria-controls="sidebar-tool-new-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 11v6M9 14h6"/></svg><span class="project-action-label" role="tooltip">Nový nástroj</span></button>
+<button id="sidebar-import-tool" type="button" aria-label="Importovat nástroj" aria-expanded="false" aria-controls="sidebar-tool-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 3v11M8.5 10.5 12 14l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat nástroj</span></button></div>
+<div id="sidebar-tool-new-options" class="sidebar-tool-options" hidden><button id="julia-editor-new" type="button">Nový Julia model</button></div>
+<div id="sidebar-tool-import-options" class="sidebar-tool-options" hidden><button id="julia-import-file-button" type="button">Julia soubor (.jl)</button><button type="button" disabled title="Převod zatím nemá schválený kontrakt">MATLAB (.m) · převod připravován</button></div>
+<input id="julia-import-file" type="file" accept=".jl,text/x-julia" hidden>
 <p id="sidebar-tools-status" role="status">Otevřete projekt.</p>
-<ul id="sidebar-tool-list" aria-label="Nástroje projektu"><li class="sidebar-list-row"><button id="open-julia-tool" class="sidebar-list-main" type="button">Julia editor</button></li></ul></div>
+<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul></div>
 <div id="sidebar-presentations" role="tabpanel" aria-labelledby="presentations-tab" tabindex="0" hidden>
 <h2>Výstupy</h2><h3>Prezentace</h3><p id="sidebar-presentation-status" role="status">Otevřete projekt.</p>
 <ul id="sidebar-presentation-list" aria-label="Prezentace ve výstupech projektu"></ul></div>
@@ -1027,15 +1032,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="image-publish" type="button">Uložit do projektu</button></section></div>
 <div id="tools-panel" role="tabpanel" aria-labelledby="tools-main-tab" hidden>
 <header><span class="dashboard-kicker">NÁSTROJE PROJEKTU</span><h2>Evidence modelových nástrojů</h2>
-<p>Jednotný přehled projektových modelů, jejich prostředí a bezpečných akcí. Otevření, import ani zobrazení nic nespouští.</p></header>
-<div class="tool-command-bar" aria-label="Příkazy nástrojů">
-<details id="julia-new-menu" class="tool-command-menu"><summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 11v6M9 14h6"/></svg><span>Nový nástroj</span></summary><div role="menu"><button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button></div></details>
-<details id="julia-import-menu" class="tool-command-menu"><summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 3v11M8.5 10.5 12 14l3.5-3.5"/></svg><span>Import</span></summary><div role="menu"><button id="julia-import-file-button" type="button" role="menuitem">Julia soubor (.jl)</button><button type="button" role="menuitem" disabled title="Převod zatím nemá schválený kontrakt">MATLAB (.m) · převod připravován</button></div></details>
-<input id="julia-import-file" type="file" accept=".jl,text/x-julia" hidden>
-</div>
+<p>Vyberte model v levém panelu Nástroje. Otevření, import ani zobrazení nic nespouští.</p></header>
 <p id="julia-tools-status" role="status" aria-live="polite"></p>
-<section class="tool-library" aria-labelledby="julia-model-list-title"><div class="tool-library-heading"><div><span class="dashboard-kicker">MODELOVÉ SOUBORY</span><h3 id="julia-model-list-title">Julia modely</h3></div><span id="julia-model-count" class="badge">0</span></div>
-<ul id="julia-model-list" aria-label="Julia modelové soubory"></ul></section>
 <section id="julia-model-detail" class="tool-model-detail" hidden aria-labelledby="julia-model-detail-title"><div class="julia-editor-heading"><h3 id="julia-model-detail-title"></h3><button id="julia-model-detail-close" class="secondary-button" type="button">Zavřít detail</button></div><dl></dl></section>
 <form id="julia-editor" class="julia-editor" hidden>
 <div class="julia-editor-heading"><h3>Editor Julia modelu</h3><button id="julia-editor-close" class="secondary-button" type="button">Zavřít editor</button></div>
@@ -1258,14 +1256,14 @@ button.dashboard-tile:hover,button.project-card:hover{background:#fafffd;border-
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
 #sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#sidebar-federation-list,#sidebar-plan-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
-#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button,#sidebar-federation-list button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
-#sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover,#sidebar-federation-list button:hover{background:#274154}
+#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button,#sidebar-tool-list button,#sidebar-federation-list button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
+#sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover,#sidebar-tool-list button:hover,#sidebar-federation-list button:hover{background:#274154}
 .sidebar-list-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-list-main{min-width:0}.sidebar-list-main[aria-current="true"]{background:#274154!important;border-left:3px solid #79c9ac}.sidebar-item-id{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
 .sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
-.sidebar-project-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.sidebar-project-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
-#sidebar-project-import-options{margin-top:6px}#sidebar-project-import-options button{width:100%;padding:8px 6px;font-size:11px}
+.sidebar-project-primary-actions,.sidebar-tool-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.sidebar-project-primary-actions,.sidebar-tool-primary-actions{overflow:visible}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label,.sidebar-tool-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label,.sidebar-tool-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label,.sidebar-tool-primary-actions button:hover .project-action-label,.sidebar-tool-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:first-child:hover .project-action-label,.sidebar-tool-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:last-child:hover .project-action-label,.sidebar-tool-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
+#sidebar-project-import-options,.sidebar-tool-options{margin-top:6px}#sidebar-project-import-options button,.sidebar-tool-options button{width:100%;padding:8px 6px;font-size:11px}.sidebar-tool-options button{text-align:left}.sidebar-tool-options button:disabled{opacity:.48}
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
 .sidebar-chat-branch[aria-expanded="false"]>[role="group"]{display:none}.sidebar-chat-branch>[role="group"]{margin:2px 0 8px}
@@ -2061,7 +2059,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();return;}if(compactSidebarActive()&&workspaceSidebar.classList.contains('sidebar-menu-open')){event.preventDefault();closeCompactSidebarMenu();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#sidebar-register-project,#resource-monitor-open,#sidebar-project-trash,#new-document,#open-source-import,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread')){closeMobileSidebar();closeCompactSidebarMenu();}});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#sidebar-register-project,#resource-monitor-open,#sidebar-project-trash,#new-document,#open-source-import,#julia-editor-new,#julia-import-file-button,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread')){closeMobileSidebar();closeCompactSidebarMenu();}});
 document.addEventListener('click',event=>{if(!workspaceSidebar.contains(event.target))closeCompactSidebarMenu();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');workspaceSidebar.classList.remove('sidebar-menu-open');syncMobileSidebar();syncCompactSidebar();});
 syncMobileSidebar();
@@ -3361,7 +3359,7 @@ const juliaStatus=document.querySelector('#julia-status');
 const juliaEditor=document.querySelector('#julia-editor');
 const juliaEditorStatus=document.querySelector('#julia-editor-status');
 const juliaToolsStatus=document.querySelector('#julia-tools-status');
-const juliaModelList=document.querySelector('#julia-model-list');
+const juliaModelList=document.querySelector('#sidebar-tool-list');
 const juliaModelDetail=document.querySelector('#julia-model-detail');
 const juliaDeleteDialog=document.querySelector('#julia-delete-dialog');
 let juliaCatalog=[],juliaPrepared=null,juliaRun=null,juliaPoll=null;
@@ -3386,14 +3384,21 @@ async function fillJuliaEditor(model){
 }
 async function openJuliaEditor(create,definitionPath=null){
  if(!activeProject||activeProject.readOnly||(!juliaEditor.hidden&&!canLeaveJuliaEditor()))return false;
+ selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));
  const request={project_id:activeProject.id,expected_head:activeProject.head};
  if(!create){const selected=juliaCatalog.find(item=>item.definition.path===definitionPath);if(!selected||!selected.editable)return;request.definition_path=selected.definition.path;}
  juliaEditorStatus.textContent='Načítám editor…';juliaEditor.hidden=false;
  try{const model=await projectRequest('/v1/julia/editor/open',request);await fillJuliaEditor(model);return true;}
  catch(error){juliaEditorStatus.textContent=error.message;return false;}
 }
-document.querySelector('#julia-editor-new').addEventListener('click',()=>{document.querySelector('#julia-new-menu').open=false;openJuliaEditor(true);});
-document.querySelector('#open-julia-tool').addEventListener('click',()=>{if(!activeProject)return;selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));document.querySelector('#julia-new-menu summary').focus();});
+function toggleToolOptions(button,panel,otherButton,otherPanel){
+ const open=panel.hidden;panel.hidden=!open;button.setAttribute('aria-expanded',String(open));otherPanel.hidden=true;otherButton.setAttribute('aria-expanded','false');
+}
+const sidebarNewTool=document.querySelector('#sidebar-new-tool'),sidebarImportTool=document.querySelector('#sidebar-import-tool');
+const sidebarToolNewOptions=document.querySelector('#sidebar-tool-new-options'),sidebarToolImportOptions=document.querySelector('#sidebar-tool-import-options');
+sidebarNewTool.addEventListener('click',()=>toggleToolOptions(sidebarNewTool,sidebarToolNewOptions,sidebarImportTool,sidebarToolImportOptions));
+sidebarImportTool.addEventListener('click',()=>toggleToolOptions(sidebarImportTool,sidebarToolImportOptions,sidebarNewTool,sidebarToolNewOptions));
+document.querySelector('#julia-editor-new').addEventListener('click',()=>{sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');openJuliaEditor(true);});
 document.querySelector('#julia-editor-close').addEventListener('click',event=>{event.preventDefault();if(canLeaveJuliaEditor()){juliaEditor.hidden=true;juliaEditorModel=null;juliaEditorDirty=false;juliaEditorAttempt=null;}});
 juliaEditor.addEventListener('input',()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;});
 juliaEditor.addEventListener('submit',async event=>{
@@ -3409,7 +3414,7 @@ juliaEditor.addEventListener('submit',async event=>{
 function clearJulia(){
  if(juliaPoll){clearTimeout(juliaPoll);juliaPoll=null;}
  juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();juliaModelList.replaceChildren();
- document.querySelector('#julia-model-count').textContent='0';juliaModelDetail.hidden=true;juliaModelDetail.querySelector('dl').replaceChildren();
+ juliaModelDetail.hidden=true;juliaModelDetail.querySelector('dl').replaceChildren();
  juliaDeletePreview=null;juliaDeleteOperation=null;document.querySelector('#julia-delete-confirm').checked=false;document.querySelector('#julia-delete-run').disabled=true;
  document.querySelector('#julia-preview-value').hidden=true;document.querySelector('#julia-preview-value').textContent='';
  document.querySelector('#julia-run-confirm-row').hidden=true;document.querySelector('#julia-run-confirm').checked=false;document.querySelector('#julia-run').disabled=true;
@@ -3420,6 +3425,7 @@ function clearJulia(){
 }
 function selectedJulia(){return juliaCatalog.find(item=>item.definition.path===juliaDefinition.value);}
 function showJuliaModelDetail(model){
+ selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));
  const title=juliaModelDetail.querySelector('h3'),list=juliaModelDetail.querySelector('dl');title.textContent=model.computation.title;list.replaceChildren();
  const fields=[['Typ','Julia model'],['Definice',model.definition.path],['Zdroj',model.computation.entrypoint.path],['Project.toml',model.computation.environment.project_path],['Manifest.toml',model.computation.environment.manifest_path],['Parametry',String(model.computation.parameters.length)],['Výstupy',String(model.computation.outputs.length)],['Úpravy',model.editable?'Projektově spravovaný model':'Jen pro čtení']];
  for(const [label,value] of fields){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=label;description.textContent=value;list.append(term,description);}
@@ -3435,12 +3441,10 @@ async function requestJuliaDelete(model){
  catch(error){juliaToolsStatus.textContent=error.message;}
 }
 function renderJuliaModelList(){
- juliaModelList.replaceChildren();document.querySelector('#julia-model-count').textContent=String(juliaCatalog.length);
- if(!juliaCatalog.length){const empty=document.createElement('li');empty.className='tool-model-empty';empty.textContent='Projekt zatím neobsahuje žádný validovaný Julia model.';juliaModelList.append(empty);return;}
- for(const model of juliaCatalog){const row=document.createElement('li'),identity=document.createElement('div'),title=document.createElement('strong'),path=document.createElement('small'),actions=document.createElement('div');row.className='tool-model-row';title.textContent=model.computation.title;path.textContent=`Julia · ${model.computation.entrypoint.path}`;identity.append(title,path);actions.className='tool-model-actions';
-  const commands=[['Zobrazit',()=>showJuliaModelDetail(model),false,''],['Editovat',()=>openJuliaEditor(false,model.definition.path),!model.editable||activeProject?.readOnly,model.editable?'':'Starší nebo importovaná definice je dostupná jen pro čtení.'],['Spustit',()=>prepareJuliaRun(model),Boolean(activeProject?.readOnly),'Spuštění vždy začíná read-only náhledem.'],['Smazat',()=>requestJuliaDelete(model),!model.editable||activeProject?.readOnly,'Odstraní celý projektově spravovaný balíček po potvrzení.']];
-  for(const [label,handler,disabled,hint] of commands){const button=document.createElement('button');button.type='button';button.textContent=label;button.className=label==='Smazat'?'danger-button':'secondary-button';button.disabled=disabled;button.title=hint;button.addEventListener('click',handler);actions.append(button);}
-  row.append(identity,actions);juliaModelList.append(row);
+ juliaModelList.replaceChildren();
+ for(const model of juliaCatalog){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),path=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent=model.computation.title;path.className='sidebar-item-id';path.textContent=`Julia · ${model.computation.entrypoint.path}`;open.append(title,path);open.addEventListener('click',()=>showJuliaModelDetail(model));
+  const actions=[{label:'Zobrazit',run:()=>showJuliaModelDetail(model)},{label:'Editovat',run:()=>openJuliaEditor(false,model.definition.path),disabled:!model.editable||activeProject?.readOnly},{label:'Spustit',run:()=>prepareJuliaRun(model),disabled:Boolean(activeProject?.readOnly)},{label:'Smazat',run:()=>requestJuliaDelete(model),disabled:!model.editable||activeProject?.readOnly}];
+  row.append(open,sidebarItemMenu(model.computation.title,actions,'sidebar-tool-menu'));juliaModelList.append(row);
  }
 }
 function renderJuliaParameters(){
@@ -3472,14 +3476,14 @@ async function loadJuliaWorkspace(){
   for(const item of juliaCatalog){const option=document.createElement('option');option.value=item.definition.path;option.textContent=item.computation.title;juliaDefinition.append(option);}
   renderJuliaParameters();renderJuliaModelList();juliaStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} dostupných definic. Připravte read-only náhled.`:'Aktuální revize neobsahuje validovanou Julia definici.';
   juliaToolsStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} validovaných Julia modelů v aktuální revizi.`:'Založte nový model nebo načtěte Julia soubor do editoru.';
-  document.querySelector('#sidebar-tools-status').textContent=juliaCatalog.length?`Julia modely: ${juliaCatalog.length}`:'Julia editor je připravený pro nový model.';
+  document.querySelector('#sidebar-tools-status').textContent=`Počet nástrojů: ${juliaCatalog.length}`;
   document.querySelector('#julia-preview').disabled=!juliaCatalog.length||activeProject.readOnly;
   const history=await projectRequest('/v1/julia/status',{project_id:activeProject.id});if(history.runs.length)renderJuliaRun(history.runs[0]);
  }catch(error){juliaStatus.textContent=error.message;}
 }
 juliaDefinition.addEventListener('change',renderJuliaParameters);
 document.querySelector('#julia-model-detail-close').addEventListener('click',()=>{juliaModelDetail.hidden=true;});
-document.querySelector('#julia-import-file-button').addEventListener('click',()=>{document.querySelector('#julia-import-menu').open=false;document.querySelector('#julia-import-file').click();});
+document.querySelector('#julia-import-file-button').addEventListener('click',()=>{sidebarToolImportOptions.hidden=true;sidebarImportTool.setAttribute('aria-expanded','false');selectMainTab(document.querySelector('#tools-main-tab'));document.querySelector('#julia-import-file').click();});
 document.querySelector('#julia-import-file').addEventListener('change',async event=>{
  const input=event.currentTarget,file=input.files&&input.files[0];input.value='';if(!file||!activeProject||activeProject.readOnly)return;
  if(!file.name.toLowerCase().endsWith('.jl')){juliaToolsStatus.textContent='Import podporuje zatím pouze Julia soubory .jl.';return;}

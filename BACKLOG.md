@@ -92,12 +92,12 @@ commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
 evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
 `b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako merge
-commit `507c232`; evidence je ve WORK_LOG. Akceptovaná `COMP-03` čeká v TODO na
-doručení PR a její dokončená evidence je ve WORK_LOG.
+commit `507c232`; evidence je ve WORK_LOG. `COMP-03` má před doručením znovu
+otevřenou akceptaci sidebarového rozvržení a její aktuální evidence je v TODO.
 Editorové a plánovací závislosti byly doručeny PR #107–#110; jejich evidence
-je ve WORK_LOG a `COMP-03` byla po jejich začlenění dokončena na původní větvi.
+je ve WORK_LOG a `COMP-03` po jejich začlenění pokračuje na původní větvi.
 
-Po doručení `COMP-03` následují podle uživatelem aktualizovaného pořadí
+Po dokončení a doručení `COMP-03` následují podle uživatelem aktualizovaného pořadí
 `DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.

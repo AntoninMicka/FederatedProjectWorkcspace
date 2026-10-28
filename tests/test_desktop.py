@@ -367,20 +367,26 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="julia-panel"', HTML)
         self.assertIn('id="tools-main-tab"', HTML)
         self.assertIn('id="tools-panel"', HTML)
-        self.assertIn('id="open-julia-tool"', HTML)
         self.assertLess(HTML.index('id="tools-panel"'), HTML.index('id="julia-panel"'))
+        sidebar_tools = HTML.split('<div id="sidebar-tools"', 1)[1].split(
+            '<div id="sidebar-presentations"', 1
+        )[0]
         tools_panel = HTML.split('<div id="tools-panel"', 1)[1].split(
             '<div id="julia-panel"', 1)[0]
         julia_panel = HTML.split('<div id="julia-panel"', 1)[1].split(
             '<div id="outputs-overview-panel"', 1)[0]
         self.assertIn('id="julia-editor"', tools_panel)
         self.assertNotIn('id="julia-editor"', julia_panel)
-        self.assertIn('id="julia-new-menu"', tools_panel)
-        self.assertIn('id="julia-import-menu"', tools_panel)
+        self.assertIn('class="sidebar-tool-primary-actions"', sidebar_tools)
+        self.assertIn('id="sidebar-new-tool"', sidebar_tools)
+        self.assertIn('id="sidebar-import-tool"', sidebar_tools)
+        self.assertIn('id="julia-editor-new"', sidebar_tools)
         self.assertIn('id="julia-import-file" type="file" accept=".jl,text/x-julia"',
-                      tools_panel)
-        self.assertIn('MATLAB (.m) · převod připravován', tools_panel)
-        self.assertIn('id="julia-model-list"', tools_panel)
+                      sidebar_tools)
+        self.assertIn('MATLAB (.m) · převod připravován', sidebar_tools)
+        self.assertIn('id="sidebar-tool-list"', sidebar_tools)
+        self.assertNotIn('tool-command-bar', tools_panel)
+        self.assertNotIn('julia-model-list', tools_panel)
         self.assertIn('id="julia-delete-dialog"', tools_panel)
         for action in ('Zobrazit', 'Editovat', 'Spustit', 'Smazat'):
             self.assertIn(action, JS)
@@ -1099,7 +1105,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="open-notebooklm-import"', projects)
         self.assertIn('id="sidebar-tools"', HTML)
         self.assertIn('id="sidebar-tool-list"', HTML)
-        self.assertIn('id="open-julia-tool"', HTML)
+        self.assertIn('id="sidebar-new-tool"', HTML)
+        self.assertIn('id="sidebar-import-tool"', HTML)
         self.assertIn('id="sidebar-federation"', HTML)
         self.assertIn('id="open-federation-sharing"', HTML)
         self.assertIn('id="open-federation-network"', HTML)

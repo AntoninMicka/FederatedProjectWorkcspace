@@ -225,5 +225,6 @@ Katalog/raw editor je implementovaný a doručený; `COMP-03` je tím odblokovan
 Task editor ve své feature dávce dodal úplnou coverage vlastních operací a
 souborový kontrakt. `DOC-PATTERN-LIBRARY-01` doplňuje obecné Markdown,
 prezentační a Julia scénáře i společnou kontextovou nápovědu. Obnovená `COMP-03`
-zapojila sdílený widget i Julia adaptér bez změny umístění Julia editoru v
-Nástrojích; vložení vzoru ani bounded validace zdrojový kód nespouští.
+zapojila sdílený widget i Julia adaptér. Katalog modelů a jeho primární akce
+jsou v levém panelu Nástroje, zatímco specializovaný editor zůstává v hlavní
+ploše; vložení vzoru ani bounded validace zdrojový kód nespouští.
