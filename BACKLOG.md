@@ -170,12 +170,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
-- [ ] [planned] **PLAN-ROADMAP-TASK-VIEW-01 — další vizuální úroveň roadmapy
-  (cílová úroveň: designed).** Po uživatelském zhodnocení milestone/batch
-  pohledu určit způsob zobrazení task úrovně bez změny autority souborového
-  plánu. Neaktivovat před rozhodnutím o požadované podobě a rozsahu; nejde o
-  podmínku doručení `PLAN-ROADMAP-MILESTONE-VIEW-01`.
-
 - [ ] [planned] **DEV-IDE-TODO-01 — VS Code/VSCodium jako zdroj TODO (cílová úroveň: PoC validated).** Po `PLAN-TASK-GRAPH-01` dodat malé rozšíření pro společný podporovaný průnik obou IDE, které zpřístupní explicitně vybraný workspace TODO zdroj a jeho revizi. První řez je read-only zdroj/importní preview bez spouštění coding agenta a bez zápisu mimo standardní Workspace lifecycle; plný handoff zůstává v DEV-02 a DEV-03.
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.

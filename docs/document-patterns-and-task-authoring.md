@@ -115,7 +115,7 @@ Softwarový profil má tři úrovně:
 | --- | --- | --- |
 | Milník (`milestone`) | strategický výsledek nebo gate | dávky |
 | Dávka (`batch`) | jedna feature větev a jeden PR | úkoly |
-| Úkol (`task`) | jedna nejmenší funkce/změna, normálně jeden commit | nic |
+| Úkol (`task`) | jedna nejmenší funkce/změna, normálně jeden commit | checklist podmínek, ne další uzly |
 
 Kanonická definice každého ID je právě v jednom souboru. Batch má task potomky
 buď jako vnořené odrážky, nebo jeho titul odkazuje na přesnou verzovanou cestu
@@ -134,6 +134,8 @@ Příklad:
       - type: task
       - Odmítnout duplicitní ID a nekompatibilní formáty.
       - depends_on: T-ADAPTERS
+      - [x] Duplicitní ID skončí validační chybou.
+      - [ ] Chyba ukáže konfliktní ID.
 
   - [ ] [B-EXTERNAL] [Externí dávka](artifacts/018f.../content.md)
     - type: batch
@@ -146,11 +148,16 @@ na stejné uzly a `parent_id`; není dalším úložištěm stavu.
 
 Obyčejná vnořená odrážka, která není rozpoznaným metadatovým klíčem, je
 popis nejbližšího milestone, batch nebo task uzlu. Více odrážek se v projekci
-zachová jako víceřádkový popis; raw text zůstává beze změny. Hlavní roadmapa
-zatím zobrazuje popisy milníků a dávek. Dávky se rozmisťují podle dependency
+zachová jako víceřádkový popis; raw text zůstává beze změny. Checkbox bez
+stabilního ID je odlišný: pouze pod `task` představuje podmínku splnění a není
+samostatným roadmapovým uzlem.
+
+Strom roadmapy končí úrovní batch. Jeho `/` zobrazí milníkové pruhy s batch
+kartami; milestone zobrazí pruhy svých batch s task kartami a batch pohled
+zúží na jediný pruh. Dávky v kořenovém pohledu se rozmisťují podle dependency
 hloubky i napříč milníky, široké plátno lze vodorovně posouvat a popis milníku
-zůstává při posunu ukotvený. Task vizuální úroveň bude navržena až po kontrole
-tohoto prvního pohledu.
+zůstává při posunu ukotvený. Task karta ukazuje souhrn checklistu a detail jeho
+plné znění, checklist ale nevytváří další vizuální úroveň.
 
 Potřebuje-li se údajný task dále dělit, není ještě nejmenší jednotkou. Vzniknou
 samostatné tasky ve stejné dávce a jejich pořadí se vyjádří vztahy.
@@ -171,7 +178,10 @@ Podgraf tedy může ukázat tým, téma, release nebo jiný řez bez kopírován
 ## Editor úkolů jako lego
 
 Speciální editor nabídne kostku milníku, dávky nebo úkolu podle aktivního
-profilu. Kostka obsahuje stabilní ID, stav, název, popis, rodiče a vztahy.
+profilu. Kostka obsahuje stabilní ID, stav, název, popis, rodiče, vztahy a u
+tasku read-only souhrn rozpoznaných podmínek splnění. Task vzory obsahují
+vyplnitelnou checklist položku; její jemné ruční úpravy zůstávají dostupné v
+raw režimu.
 Nová kostka se vloží přes odpovídající katalogový vzor. Raw režim zůstane vždy
 dostupný pro ruční text a nepodporované konstrukce.
 

@@ -46,7 +46,14 @@ odrážek. Ty tvoří víceřádkový popis uzlu; rozpoznaná metadata jako `typ
     - [ ] [TASK-01] Ověřit vstup
       - type: task
       - Neplatný bundle odmítnout bez částečné projekce.
+      - [x] Neplatný vstup skončí validační chybou.
+      - [ ] Chyba zachová původní soubor beze změny.
 ```
+
+Checkbox odrážky bez stabilního ID jsou v profilovaném plánu povolené pouze
+pod uzlem `task` a až po jeho `type: task`. Jsou bounded podmínkami splnění se
+stavem a textem, nikoli další úrovní hierarchie. Nevstupují do počtu uzlů,
+dependency grafu ani stromu roadmapy; task zůstává leaf typem.
 
 Batch může tasky obsahovat jako vnořené odrážky, nebo jeho titul může být
 přesný Markdown odkaz `artifacts/UUID/content.md`. Odkazovaný dokument začíná
@@ -60,13 +67,14 @@ Kanonická definice ID smí být právě v jednom souboru bundle. Podgraf i poto
 pouze vybírá ID a nepřebírá jejich stav. Uživatelský příklad je v
 [návodu ke vzorům a skládání plánu](document-patterns-and-task-authoring.md).
 
-Položka **Plán** v levé liště zpřístupňuje hlavní roadmapu a seznam podgrafů.
-Hlavní profilovaný pohled zobrazuje milníkové pruhy s jejich popisem a batch
+Položka **Plán** v levé liště zpřístupňuje strom roadmapy a seznam podgrafů.
+Kořen `/` otevírá hlavní profilovaný pohled: milníkové pruhy s popisem a batch
 karty s popisem. Dependency hrany batch mohou vést i mezi různými milníky;
 plátno proto roste do šířky a lze je vodorovně posouvat, zatímco levý nadpis a
-popis milníku zůstávají ukotvené. Samostatná vizuální úroveň tasků je odložená;
-tasky však parser i editor nadále materializují a podgraf je může zobrazit v
-obecném grafu.
+popis milníku zůstávají ukotvené. Pod `/` strom obsahuje milestone a jejich
+batch, ale už ne tasky. Výběr milestone přepne plátno na pruhy jeho batch a
+task karty uvnitř; výběr batch tentýž pohled zúží na jediný pruh. Karta tasku
+shrnuje stav checklistu a detail ukáže jednotlivé podmínky.
 
 Roadmapa je pouze pro čtení. Hlavní TODO a odkazované task soubory lze upravit
 specializovaným editorem **Kostky / Raw text**. Kostky mění jen rozpoznané

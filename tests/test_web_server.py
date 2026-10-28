@@ -151,6 +151,8 @@ class WebTests(unittest.TestCase):
     - [ ] [TASK-01] Ověřit soubor
       - type: task
       - Zachovat původní bajty.
+      - [x] Import zachová původní bajty.
+      - [ ] Náhled nevykreslí aktivní HTML.
 - [ ] [MILESTONE-02] Zobrazení
   - type: milestone
   - Zobrazit materializovaný plán.
@@ -1171,13 +1173,15 @@ def result(value):
  if phase==0: phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
  elif phase==1: phase=2;run("[...document.querySelectorAll('#sidebar-project-list button')].find(b=>b.dataset.id==="+json.dumps(project)+").click();")
  elif phase==2: phase=3;run("document.querySelector('#plan-tab').click();")
- elif phase==3: phase=4;run("const graph=document.querySelector('#plan-graph');graph.scrollLeft=300;document.querySelector('.plan-batch-card').click();")
- elif phase==4: finish('profiled roadmap smoke: descriptions, sticky labels and cross-milestone edge OK',0)
+ elif phase==3: phase=4;run("document.querySelector('#sidebar-plan-hierarchy>li>button').click();")
+ elif phase==4: phase=5;run("document.querySelector('.plan-task-card').click();")
+ elif phase==5: phase=6;run("document.querySelector('#sidebar-plan-hierarchy>li>ul button').click();")
+ elif phase==6: finish('profiled roadmap smoke: tree, milestone tasks, checklist and batch narrowing OK',0)
 def poll():
  global ticks
  ticks+=1
  if ticks>350: finish('profiled roadmap timeout at '+str(phase));return
- checks={0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('#sidebar-project-list button')?'ready':'waiting'",2:"document.querySelector('#project-title').textContent==='Milníková roadmapa'&&!document.querySelector('#project-view').hidden?'ready':'waiting'",3:"(()=>{if(document.querySelector('#plan-panel').hidden)return'waiting';const labels=document.querySelectorAll('.plan-milestone-label'),cards=document.querySelectorAll('.plan-batch-card'),edges=document.querySelectorAll('.plan-roadmap-edges path'),graph=document.querySelector('#plan-graph');if(labels.length!==2||cards.length!==2||edges.length!==1)return'FAIL: wrong profiled roadmap shape';if(!labels[0].textContent.includes('Importovat původní projektové podklady.')||!cards[1].textContent.includes('Navázat na import z prvního milníku.'))return'FAIL: descriptions missing';if(graph.textContent.includes('TASK-01'))return'FAIL: task visual level rendered';if(getComputedStyle(labels[0]).position!=='sticky')return'FAIL: milestone label is not sticky';if(graph.scrollWidth<=graph.clientWidth)return'FAIL: roadmap is not horizontally scrollable';return'ready'})()",4:"document.querySelector('#plan-detail h3').textContent.includes('BATCH-01')?'ready':'waiting'"}
+ checks={0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('#sidebar-project-list button')?'ready':'waiting'",2:"document.querySelector('#project-title').textContent==='Milníková roadmapa'&&!document.querySelector('#project-view').hidden?'ready':'waiting'",3:"(()=>{if(document.querySelector('#plan-panel').hidden)return'waiting';const labels=document.querySelectorAll('.plan-milestone-label'),cards=document.querySelectorAll('.plan-batch-card'),edges=document.querySelectorAll('.plan-roadmap-edges path'),graph=document.querySelector('#plan-graph'),tree=document.querySelector('#sidebar-plan-tree');if(labels.length!==2||cards.length!==2||edges.length!==1)return'FAIL: wrong root roadmap shape';if(!labels[0].textContent.includes('Importovat původní projektové podklady.')||!cards[1].textContent.includes('Navázat na import z prvního milníku.'))return'FAIL: descriptions missing';if(graph.textContent.includes('TASK-01'))return'FAIL: task rendered in root graph';if(!tree.textContent.includes('/')||tree.querySelectorAll('#sidebar-plan-hierarchy>li').length!==2||tree.querySelectorAll('#sidebar-plan-hierarchy>li>ul button').length!==2||tree.textContent.includes('TASK-01'))return'FAIL: wrong roadmap tree';if(getComputedStyle(labels[0]).position!=='sticky')return'FAIL: milestone label is not sticky';if(graph.scrollWidth<=graph.clientWidth)return'FAIL: roadmap is not horizontally scrollable';return'ready'})()",4:"(()=>{const lanes=document.querySelectorAll('.plan-batch-lane'),tasks=document.querySelectorAll('.plan-task-card');return lanes.length===1&&tasks.length===1&&tasks[0].textContent.includes('TASK-01')&&tasks[0].textContent.includes('Podmínky: 1/2')?'ready':'FAIL: milestone task view missing'})()",5:"document.querySelector('#plan-detail h3').textContent.includes('TASK-01')&&document.querySelector('#plan-detail').textContent.includes('☑ Import zachová původní bajty.')&&document.querySelector('#plan-detail').textContent.includes('☐ Náhled nevykreslí aktivní HTML.')?'ready':'waiting'",6:"document.querySelectorAll('.plan-batch-lane').length===1&&document.querySelectorAll('.plan-task-card').length===1?'ready':'FAIL: batch narrowing failed'"}
  view.page().runJavaScript(checks[phase],result)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100)
 view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
@@ -1186,7 +1190,7 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
             WORKSPACE_SMOKE_KEY=self.token, WORKSPACE_SMOKE_URL='https://'+self.authority+'/',
             WORKSPACE_PROJECT=project), capture_output=True, text=True, timeout=45)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('profiled roadmap smoke: descriptions, sticky labels and cross-milestone edge OK',
+        self.assertIn('profiled roadmap smoke: tree, milestone tasks, checklist and batch narrowing OK',
                       result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')

@@ -855,9 +855,10 @@ DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosaž
 - [x] Umožnit milestone, batch a task uzlům obyčejné popisné odrážky a v
   hlavním profilovaném pohledu zobrazit milestone pruhy a batch karty včetně
   popisů. Dependency hrany mohou vést mezi milníky, široké plátno scrolluje a
-  nadpis s popisem milníku zůstává ukotvený —
-  `PLAN-ROADMAP-MILESTONE-VIEW-01`, implemented. Samostatný task pohled čeká
-  na uživatelské zhodnocení první úrovně.
+  nadpis s popisem milníku zůstává ukotvený. Strom `/ → milestone → batch`
+  přepíná milestone na pruhy dávek s task kartami a batch na jediný pruh;
+  vnořené task checklisty jsou podmínky splnění bez vlastních uzlů —
+  `PLAN-ROADMAP-MILESTONE-VIEW-01`, implemented.
 
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.

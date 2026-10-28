@@ -10,9 +10,10 @@ import re
 from spikes.markdown_documents import document, main_todo_id
 from spikes.metadata import ValidationError, require
 
-SCHEMA = 'fpw-project-task-graph-v2'
+SCHEMA = 'fpw-project-task-graph-v3'
 TASK_ID = re.compile(r'[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+')
 TASK = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\]\s+(.+?)\s*$')
+CHECKLIST = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+(.+?)\s*$')
 RELATION = re.compile(r'^(\s*)[-+*]\s+([^:]{1,32}):\s*(.+?)\s*$')
 DESCRIPTION = re.compile(r'^(\s*)[-+*]\s+(.+?)\s*$')
 REFERENCE = re.compile(r'^\s*[-+*]\s+\[[ xX]\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\](?:\s+.*)?$')
@@ -28,6 +29,7 @@ ALIASES = {
     'parent_of': 'parent_of', 'rodič': 'parent_of',
 }
 MAX_TASKS, MAX_RELATIONS, MAX_SUBGRAPHS = 1000, 4000, 100
+MAX_CHECKLIST_PER_TASK, MAX_CHECKLIST_TOTAL = 100, 4000
 MAX_DESCRIPTION_BYTES = 8192
 SOFTWARE_PROFILE = 'software-development/v1'
 CHILD_TYPES = {'milestone': {'batch'}, 'batch': {'task'}, 'task': set()}
@@ -62,7 +64,7 @@ def _targets(value):
 
 
 def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile=False):
-    tasks, pending, relation_count = {}, None, 0
+    tasks, pending, relation_count, checklist_count = {}, None, 0, 0
     profile = None
     ancestors = []
     visible = list(_visible_lines(body))
@@ -75,7 +77,22 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
         checkbox = re.match(r'^\s*[-+*]\s+\[[ xX]\]\s+', line)
         match = TASK.match(line)
         if checkbox and not match:
-            raise ValidationError('Každý úkol v hlavním TODO musí začínat stabilním ID, např. [TASK-01].')
+            checklist = CHECKLIST.match(line)
+            indent_value = len(checklist.group(1).expandtabs(4)) if checklist else -1
+            require(checklist and pending and indent_value > pending['indent'],
+                    'Každý uzel v hlavním TODO musí začínat stabilním ID, např. [TASK-01].')
+            require(pending['type'] == 'task',
+                    'Checklist podmínky splnění lze vnořit pouze pod task.')
+            checked, text = checklist.group(2), checklist.group(3).strip()
+            require(0 < len(text) <= 500 and '\0' not in text,
+                    'Neplatný text podmínky splnění.')
+            require(len(pending['checklist']) < MAX_CHECKLIST_PER_TASK,
+                    f'Task {pending["id"]} přesahuje limit 100 podmínek splnění.')
+            checklist_count += 1
+            require(checklist_count <= MAX_CHECKLIST_TOTAL,
+                    'Plán přesahuje limit 4000 podmínek splnění.')
+            pending['checklist'].append({'checked': checked.lower() == 'x', 'text': text})
+            continue
         if match:
             indent, checked, task_id, title = match.groups()
             require(task_id not in tasks, f'Duplicitní ID úkolu: {task_id}')
@@ -89,6 +106,7 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             pending = {'id': task_id, 'title': title, 'checked': checked.lower() == 'x',
                        'indent': indent_value, 'relations': defaultdict(list),
                        'description_lines': [],
+                       'checklist': [],
                        'type': None, 'parent_id': parent_id,
                        'document_link': link.group(2) if link else None,
                        'source': source, 'line': line_number}
@@ -171,6 +189,9 @@ def _profiled_tasks(files, entities, project_id):
                              for targets in item['relations'].values())
         require(relation_count <= MAX_RELATIONS,
                 'Plánovací bundle přesahuje limit 4000 vztahů.')
+        checklist_count = sum(len(item['checklist']) for item in tasks.values())
+        require(checklist_count <= MAX_CHECKLIST_TOTAL,
+                'Plánovací bundle přesahuje limit 4000 podmínek splnění.')
     _validate_hierarchy(tasks)
     return tasks, profile
 
@@ -275,6 +296,7 @@ def project_task_graph(files, entities, project_id, commit_id):
                          if key != 'depends_on' and values}
             nodes.append({'id': task_id, 'title': task['title'],
                           'description': '\n'.join(task['description_lines']),
+                          'checklist': task['checklist'],
                           'checked': task['checked'],
                           'depends_on': parents, 'relations': relations, 'depth': depths[task_id],
                           'dependency_depth': depths[task_id],

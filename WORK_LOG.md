@@ -5,59 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
-## PLAN-ROADMAP-MILESTONE-VIEW-01 — Popisy plánu a milníkový pohled roadmapy — 2026-10-28
+## PLAN-ROADMAP-MILESTONE-VIEW-01 — Strom a víceúrovňový pohled roadmapy — 2026-10-28
 
 Dávka vznikla na větvi `feature/plan-roadmap-milestone-view` z `develop`
-`ab09744` a dosáhla cílové úrovně **implemented**. Feature akceptace je
-dokončená; commit, push ani PR do `develop` dosud nebyly vytvořeny. Rozsah
-vychází z uživatelského požadavku převzít vizuální jazyk milníků z
-**Nastavení → Roadmapa** do obecného projektového plánu, doplnit popisy
-milníků a dávek a zachovat dependency hrany i napříč milníky.
+`ab09744`; první část je v commitu `f5ab8d8` a uživatelské doplnění stromu,
+task pohledu a checklistu je připravené v pracovním stromu. Dávka dosáhla
+úrovně **implemented** a feature akceptace je dokončená. Push ani PR do
+`develop` dosud nebyly vytvořeny a feature není sloučená.
 
 - [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-A — popisné bloky plánu
-  (implemented).** Obyčejné vnořené odrážky se materializují jako víceřádkový
-  popis nejbližšího milestone, batch nebo task uzlu. Rozpoznaná typová a
-  vztahová metadata zůstávají oddělená, text s neznámým klíčem a dvojtečkou
-  lze použít jako popis a limit 8 KiB na uzel selže uzavřeně. Projekční schéma
-  v2 zachovává zvlášť hierarchickou a dependency hloubku; raw Markdown se
-  nemění.
-- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-B — milestone/batch pohled
-  (implemented).** Hlavní pohled profilu `software-development/v1` používá
-  milníkové pruhy s nadpisem a popisem a batch karty s názvem a popisem.
-  Samostatnou task vizuální úroveň zatím nevykresluje; task data zůstávají v
-  projekci, editoru a obecných podgrafech. Detail bezpečně zobrazuje plný
-  popis, typ, rodiče, stav a vztahy.
+  (implemented).** Milestone, batch a task mají bounded víceřádkový popis v
+  lossless read-only projekci; metadata a vztahy zůstávají oddělené.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-B — hlavní milestone/batch
+  pohled (implemented).** Kořen `/` zachovává milestone pruhy a batch karty s
+  popisy.
 - [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-C — závislosti a scroll
-  (implemented).** Batch karty se vodorovně rozmisťují podle dependency
-  hloubky na společném plátně, takže SVG hrana může spojit dávky v různých
-  milnících. Plátno roste do šířky, jeho kontejner scrolluje a levý nadpis s
-  popisem milníku zůstává sticky. Revizně připnutý SVG export používá stejnou
-  milestone/batch projekci.
-- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-D — regrese, dokumentace a
-  předání (implemented).** Task vzory i jejich vyplněné příklady nyní obsahují
-  popisné odrážky. ADR 0059, oba návody, master roadmapa a pracovní evidence
-  popisují stejný materializovaný pohled a hranici odložené task úrovně.
+  (implemented).** Batch dependency mohou vést napříč milestone, plátno roste
+  do šířky a milestone nadpis s popisem zůstává ukotvený.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-D — první regrese,
+  dokumentace a předání (implemented).** Task vzory a příklady získaly popisy
+  a první milestone/batch pohled byl ověřený a zdokumentovaný před následným
+  uživatelským rozšířením akceptace.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-E — strom plánu a milestone
+  drill-down (implemented).** Strom obsahuje pouze `/ → milestone → batch`.
+  Milestone přepne plátno na pruhy jeho batch s task kartami a batch pohled
+  zúží na jediný pruh; task není položkou stromu.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-F — task checklist podmínek
+  splnění (implemented).** Vnořené checkboxy bez ID jsou bounded stav a text
+  pod `task`, zobrazují se v kartě/detailu a nevytvářejí grafové ani stromové
+  uzly. Vzory i vyplněné příklady tuto syntax obsahují.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-G — regrese, dokumentace a
+  předání (implemented).** Parser, bezpečný DOM renderer, skutečný browser
+  smoke, ADR 0059, návody a master roadmapa popisují stejný kontrakt.
 
 ### Ověření, recovery a omezení
 
-Po poslední změně kódu, CSS a testů prošla celá sada
-`python3 -m unittest discover -s tests -v`: **949 testů, 913 prošlo a 36
-volitelných bylo přeskočeno, bez chyb**, 233,245 s. Cílených 19 testů parseru,
-SVG, katalogu a statického UI prošlo a dva cílené HTTPS testy validace/projekce
-prošly mimo omezený sandbox. Samostatný skutečný Qt/WebEngine smoke s
-`M0_DESKTOP_TEST=1` prošel dvěma milníky a dávkami, jejich popisy, skrytou task
-úrovní, cross-milestone hranou, skutečným vodorovným overflow, sticky CSS i
-výběrem detailu. `git diff --check` byl bez chyby. Úplná sada vypsala existující
-neblokující `ResourceWarning` pro neuzavřené testovací SQLite connection, ale
-neselhal žádný test.
+Po poslední změně kódu, testů a vzorů prošla úplná sada
+`python3 -m unittest discover -s tests -v`: **950 testů, 914 prošlo a 36
+volitelných bylo přeskočeno, bez selhání**, 229,703 s. Cílených 20 testů
+parseru a katalogu a dva API testy prošly. Samostatné skutečné Qt/WebEngine
+smoke testy ověřily obecný plán/podgraf i profilovaný kořen, strom bez tasků,
+milestone task pohled, checklist v kartě/detailu a zúžení na batch. Generovaný
+JavaScript prošel `node --check` a finální `git diff --check` byl bez chyby.
+Úplná sada vypsala existující neblokující `ResourceWarning` pro neuzavřené
+testovací SQLite connection, ale žádný test neselhal.
 
-Jde o read-only projekci committed souborů a změna nepřidává persistentní
-vrstvu ani zápisovou operaci. Uložení v task editoru dál používá existující
-Workspace/Journal/Git/index hranice: před commitem je autoritou journal a po
-commitu lze index obnovit z HEAD. Reuse/adapt rozhodnutí zachovalo parser a
-fail-closed graf ADR 0055/0059 i vizuální jazyk existující roadmapy; nový
-renderer či task store nevznikl. Samostatný způsob zobrazení task úrovně čeká
-na uživatelské zhodnocení tohoto prvního pohledu a je předán do BACKLOG.
+Jde o read-only projekci committed souborů; nevzniká nový store ani zápisová
+operace. Uložení v task editoru dál používá Workspace/Journal/Git/index:
+před commitem je autoritou journal a po commitu lze index obnovit z HEAD.
+Reuse/adapt zachovalo parser a fail-closed graf ADR 0055/0059, bezpečné
+`textContent`/SVG DOM vykreslování a existující vizuální jazyk roadmapy; nový
+framework ani perzistentní vrstva nevznikly. Checklist zůstává vlastností tasku
+a task nejnižší úrovní roadmapové hierarchie.
 
 ## DOC-PATTERN-LIBRARY-01 — Rozšířená knihovna vzorů a kontextová nápověda — 2026-10-27
 
