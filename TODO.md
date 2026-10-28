@@ -138,7 +138,18 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   cesta se ještě nezadává ani nevytváří.
   Základní schema a task graph celých payloadů prošly, včetně zachování
   ID/typů/rodičů a checkbox stavů. Bod 2 (úplná kontextová předzápisová
-  validace) zůstává otevřený, stejně jako writer/recovery a fyzický import.
+  validace) byl proveden read-only validátorem proti celému živému snapshotu;
+  report je `/tmp/dev-01-prewrite-review-3/summary.md` a `review.json`.
+  Devět kontrol prošlo: uzavření manifestu/blobů/payload mirror, lokální
+  autor, modulový seed a jeho task graph, nativní replica policy, čistý
+  očekávaný host HEAD, prázdný journal a celý sloučený snapshot včetně
+  `validate_transition` a task graphu.
+  Zápis nyní blokuje 184 nepřevedených relativních odkazů v odvozených host
+  dokumentech (72 odlišných cílů) a nezvolená fyzická cesta nového modulu.
+  Review vyžaduje klasifikace privacy všech 13 zdrojů a devět externích
+  odkazů, jejichž dostupnost nebyla síťově ověřena. Validátor je uzavřený,
+  nic nevytváří v projektu ani state a neoznačuje tyto nálezy za prošlé.
+  Writer/recovery a fyzický import zůstávají otevřené.
   `import_ready` je false. Vznik balíku nepoužívá projektový journal ani
   zapisující Workspace: pád před finálním manifestem zanechá jen neúplný
   report, který není importním receiptem. Retry použije zmrazené payloady.
@@ -159,6 +170,16 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   jeden PR do develop; spuštění další feature není součástí této dávky.
 
 ## Ověření aktuálního kroku
+
+`python3 -m unittest tests.test_roadmap_validation -v`: 3 nové validační
+testy OK. Pokrývají úspěšné sloučení celého živého snapshotu bez zápisu,
+ponechání chybějící cesty/privacy jako otevřených stavů a rozlišení
+relativního a neexistujícího artifact odkazu. Skutečný report nad aktuálním
+balíkem potvrdil nezměněný živý HEAD a nulový rozpracovaný journal.
+Společný cílený běh validačních, bundle, mapping, inventory, task-graph,
+roadmap-graph a SPDX testů po poslední změně: 50 testů OK. Log:
+`/tmp/dev-01-review-tests.log`. Celá finální unittest brána zůstává pro
+uzavření dávky.
 
 `python3 -m unittest tests.test_roadmap_bundle tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:
 47 testů OK, z toho 6 balíkových testů. Pokryto je sestavení celých metadat,

@@ -385,8 +385,49 @@ receipt importu ani záruka obnovy po výpadku napájení. Živý Git, index,
 journal a node registrace se nemění.
 
 Intrinsic metadata shape a task graph se při sestavení kontrolují, ale
-`import_ready` zůstává false. Bod 2 teprve řeší aktuální oprávnění/HEAD,
+`import_ready` zůstává false. Bod 2 řeší aktuální oprávnění/HEAD,
 privacy, celého cílového kandidáta včetně nepozměněných entit, kolize,
 zdrojové odkazy a umístění nového projektu. Retry budoucího writeru použije
 zmrazený balík; nemá jej vytvářet znovu s novým časem. Samotný writer a jeho
 recovery patří do bodů 3/4 a DEV-01-D.
+
+## Bod 2 — read-only prověrka celého výsledku
+
+Sestavený balík se před implementací writeru kontroluje proti celému
+aktuálnímu snapshotu projektu, nikoli jen jako izolovaný payload:
+
+```bash
+python3 -m scripts.roadmap_migration_validate \
+  --bundle /tmp/dev-01-import-operation \
+  --output /tmp/dev-01-prewrite-review
+```
+
+Kontrola znovu uzavře manifest, content-addressed blobs i jejich čitelné
+payload mirror, ověří lokálního autora, připnutý čistý HEAD a stav
+journalu. U existujícího projektu sloučí payload s celým Git snapshotem a
+nad výsledkem spustí `validate_transition`, `validate_snapshot` a task-graph
+validaci. Tím se zachytí kolize i dangling vazby v nepřepisovaných datech.
+Nový modul validuje jako seed; fyzickou cestu lze dodat opakovaným
+`--location SCOPE=/absolutni/cesta`. Validátor cestu nevytváří a odmítne
+překryv s node konfigurací, runtime, registrovanými projekty, jejich state
+adresáři a explicitně zadanými `--source-root`.
+
+Privacy zdrojů se nepotvrzuje odhadem. Jednotlivé klasifikace se předávají
+jako `--source-privacy SOURCE=CLASS`; chybějící klasifikace zůstane
+`needs-review` a příliš nízká cílová privacy je blokátor. Odkazy v odvozených
+Markdown dokumentech musí směřovat na konkrétní `artifacts/...` v kandidátu.
+Původní source snapshoty se nemění; jejich historické relativní odkazy jsou
+součástí původních bajtů, nikoli aktivní navigace Workspace. Externí odkazy
+jsou pouze evidovány, bez síťového tvrzení o dostupnosti.
+
+Konkrétní prověrka balíku
+`1d52f1c3ece9c18c276434f84f5888f4fecc3d46e328392cfa6ba040c91561d0`
+je v `/tmp/dev-01-prewrite-review-3`: devět kontrol prošlo, dvě blokují a tři
+vyžadují review. Prošla integrita balíku, lokální autor, modulový seed,
+nativní replica policy, živý HEAD, prázdný journal i celý sloučený host
+snapshot. Zápis blokuje 184 relativních odkazů v odvozených host dokumentech
+(72 různých cílů) a
+nezvolená fyzická cesta nového modulového projektu. Obsahové review zbývá
+pro privacy 13 zdrojů a dostupnost devíti externích odkazů. `import_ready`
+proto zůstává `false`; i po opravě těchto nálezů chybí writer, jeho
+journal recovery a idempotentní retry.
