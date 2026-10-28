@@ -813,3 +813,18 @@ exact-preview a idempotentní Workspace transakci na celý čtyřartefaktový
 balíček a odmítá cizí vztahy. Obecný filesystem picker backend, automatická
 konverze MATLABu a samostatný katalog modelů mimo Git jsou **reject** pro tuto
 dávku.
+
+DEV-IDE-TODO-01 **reuse/adaptuje** Projects/ArtifactActions, validovaný plán
+ADR 0055/0059, stdlib SQLite, existující Host/Origin/JSON HTTP kontrakt,
+sdílený web/desktop UI a nativní capability. Nové malé Code/VSCodium rozšíření
+používá Node filesystem/HTTP, Git CLI a stabilní Extension API; nevytváří
+projektový writer. Soukromá inventura neposkytla ekvivalent se stejnou
+autoritou a recovery, žádný externí kód není přenesen. FUSE,
+FileSystemProvider, povinné MCP a message broker jsou **reject** pro tuto
+dávku. Kontrakt a primární zdroje: [ADR 0060](docs/adr/0060-local-file-ide-bridge.md).
+
+Upřesnění DEV-IDE-TODO-01 **adaptuje** existující settings sidebar, plné
+settings panely a tabulky; parent connection a projektová mapování zůstávají
+v témže node-local SQLite journalu. Reuse původních sessions/messages
+zachovává receipts a schema-v1 kompatibilitu. Nepřidává se další server,
+framework ani projektový writer; změnu scope a atomické recovery drží ADR 0060.

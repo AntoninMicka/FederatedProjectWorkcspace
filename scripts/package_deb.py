@@ -33,6 +33,9 @@ def build(output, version=None):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             path.chmod(mode)
+        for name in ('package.json', 'extension.js', 'bridge.js', 'README.md', 'LICENSE'):
+            write(f'usr/lib/{NAME}/extensions/workspace-bridge/{name}',
+                  (ROOT / 'extensions/workspace-bridge' / name).read_bytes())
         for source in sorted((ROOT / 'spikes').glob('*.py')):
             if source.is_symlink() or not source.is_file():
                 raise ValueError('Expected regular source')

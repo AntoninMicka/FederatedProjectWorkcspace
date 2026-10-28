@@ -5,6 +5,180 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## DEV-IDE-TODO-01 — lokální souborový IDE bridge — 2026-10-28
+
+Akceptace této fáze byla uživatelem uzavřena 28. 10. 2026 po skutečném
+propojení desktopu s VSCodiem, načtení zadání a doručení testovací zprávy.
+Dosažená úroveň je **PoC validated** pro lokální Linux/VSCodium profil.
+Zachována je větev `feature/dev-ide-todo-01-file-bridge`, základ `develop`
+`6eb8614`, implementační commity `f072f50`, `7ea37df` a oprava `b92deb7`.
+Cíl jediného PR je `develop`; push/otevření PR/merge agent neprovedl,
+doručení PR zůstává neuzavřené a merge není doložen.
+Původní rozsah a podúkoly A–D i jejich historické důkazy jsou níže zachované.
+
+Rozšíření akceptace: plnohodnotná stránka Nastavení → IDE a editory,
+odvolatelné propojení Workspace ↔ IDE bez nutnosti projektu, tabulka
+propagovaných projektů a jejich přiřazení ke konkrétní složce / .code-workspace.
+Mapování je dostupné také v nastavení rozšíření. Běžné soubory zůstávají mimo
+Git, lidská akceptace a jediný Workspace writer beze změny.
+
+- [x] [completed] **DEV-IDE-TODO-01-E — propojení Workspace a projektová mapování (implemented).**
+  Oddělit credential/lifecycle připojení od immutable projektových relací;
+  odvolání rodiče zablokuje potomky, změna mapování zachová staré receipts.
+- [x] [completed] **DEV-IDE-TODO-01-F — samostatná stránka a nastavení rozšíření (implemented).**
+  Sidebar Nastavení, plná stránka, tabulka projektů, více mapování v IDE,
+  konfigurace z obou stran a kompatibilita původních projektových relací.
+- [x] [completed] **DEV-IDE-TODO-01-G — nové recovery/RBAC/UI ověření (PoC validated).**
+  Cílené testy vrstev propojení a mapování, skutečný extension/browser smoke,
+  úplná finální sada, dokumentace a předání. Windows neoznačit jako ověřené.
+
+- [x] [completed] **DEV-IDE-TODO-01-H — předání instalačního balíčku do Qt (PoC validated).**
+  Uživatelské hlášení znovu otevřelo akceptaci: připojení vznikalo, ale
+  instalátor se bez dialogu ukončil. Skutečný Qt WebEngine reprodukoval
+  prázdný řetězec místo JavaScriptového objektu. Oprava `b92deb7` přenáší
+  JSON, explicitně jej dekóduje a jednorázově spotřebuje citlivý payload.
+  Reuse/adaptuje existující same-origin nativní akci a JSON kontrakt ostatních
+  dialogů. Recovery ADR 0060 se nemění: připojení a instalace nejsou jedna
+  transakce; při přerušení lze připojení odvolat, VSIX je dočasný a projektový
+  Git/index/journal tato operace nemění.
+
+### Závěrečné ověření a fyzická akceptace 28. 10. 2026
+
+- Qt regresní test
+  `M0_DESKTOP_TEST=1 QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox python3 -m unittest tests.test_desktop.DesktopTests.test_real_webengine_transfers_ide_install_payload_once -v`
+  prošel: obsah JSON i jednorázové spotřebování payloadu (1 test).
+- Po poslední změně kódu/testů prošla celá sada
+  `python3 -m unittest discover -s tests -v`: **974 testů, 935 úspěšných,
+  39 volitelných skipů, bez selhání**, 246,750 s.
+  Log: `/tmp/workspace-ide-fix-tests.log`. Qt test výše byl navíc skutečně
+  spuštěn samostatně; skip v běžné sadě není jeho runtime ověřením.
+- Uživatel po restartu desktopu potvrdil úspěšné propojení s běžným VSCodiem.
+  Agent přímo přečetl export TODO a snapshot projektu Federated Project
+  Workspace přes bridge mimo Git a odeslal `kind: message` k `TASK-01`.
+  Zpráva `8d0f37e3-cb75-4a0a-8a30-9fff00f6a932` získala receipt
+  `status: received`, `acceptance: pending-human-review`; uživatel následně
+  potvrdil přečtení zprávy v aplikaci. Jde o fyzicky ověřený obousměrný
+  transport, nikoli o ověření automatického dokončování úkolů.
+- Uživatel tuto fázi výslovně uzavřel jako splněnou. Následné požadavky na
+  IDE UI, review dokončení úkolů/checklistů a strukturované zprávy byly předány
+  existujícím DEV-02/DEV-03; migrace roadmapy včetně vložených modulů DEV-01
+  v [BACKLOG](BACKLOG.md#vlastní-rozvoj-produktu-a-coding-agenti--navazuje-na-m6).
+  Další feature nebyla aktivována. Windows/VS Code zůstávají neověřené.
+
+### Ověření rozšířené verze 0.2.0
+
+- Cíleně prošlo 18 testů: backend relace/mapování, dvě HTTPS scope cesty,
+  A4 inventura. Node test ověřuje dva projekty v nastavení pluginu a jejich
+  obnovu po restartu. Samostatně prošlo připojení bez jakéhokoli registrovaného
+  projektu i konfigurace node.json.
+- Skutečný VSCodium 1.105.17075 Linux arm64: instalace 0.2.0, aktivace,
+  schema-v2 Workspace connection bez projektu, následné map/bind, soubory,
+  zpráva/receipt a retry bez změny Git prošly v izolovaném profilu.
+- Skutečný browser test prošel za 2,415 s: Nastavení → IDE a editory bez
+  otevřeného projektu, stažení VSIX bez project_id, přiřazení projektu do
+  tabulky a odvolání celého připojení. Dodatečný ad-hoc screenshot běh skončil
+  chybějícím download souborem a nevytvořil screenshot; nejde o další úspěšný
+  browser nebo vizuální důkaz.
+- Atomický swap mapování je ověřen abortem mezi revoke a insert: po restartu
+  zůstane původní aktivní relace, historie/receipts se nemažou. Parent token
+  nedává přístup k obecnému API, cizím připojením ani read-only projektům.
+- Python compile, generated UI i extension node --check a diff --check prošly.
+  Úplná finální unittest brána prošla: **973 testů, 935 úspěšných,
+  38 volitelných skipů, bez selhání**, 240,616 s. Log:
+  `/tmp/ide-project-mapping-final2-tests.log`. Předchozí úplný běh nad
+  novou logikou rovněž prošel; poslední běh zahrnuje i sjednocený název
+  příkazu v nativním instalátoru. Historické výsledky níže nejsou náhrada
+  nové brány.
+- V době tohoto historického běhu nebyly Windows/VS Code ani nativní Qt
+  instalační klikání ověřeny; následnou Linux/VSCodium akceptaci uvádí
+  závěrečné ověření výše. Windows/VS Code zůstávají neověřené.
+
+### Historické ověření první verze f072f50
+
+Původ: DEV-IDE-TODO-01, návaznost M6 / vlastní rozvoj produktu a požadavek
+uživatele 28. 10. 2026 na obyčejné neverzované soubory, obousměrné zprávy,
+instalátor v aplikaci a propojení webu i desktopu. Dávka vznikla na větvi
+`feature/dev-ide-todo-01-file-bridge` z aktuálního `develop` `6eb8614` po
+ověření merge COMP-03 v PR #111. Dosažená úroveň je **PoC validated** pro
+lokální Linux/VSCodium profil a webové UI; uživatel změnu následně commitnul jako `f072f50`. Akceptace byla znovu otevřena
+požadavkem na oddělení propojení Workspace a projektových mapování; tyto výsledky
+nejsou samy ověřením nové verze. Nové výsledky jsou uvedeny výše.
+
+Rozsah: lokální souborová schránka mimo Git, přesný TODO/instrukce snapshot,
+zprávy completed/clarification/message, idempotentní receipts, instalace a
+párování ze sdílené web/desktop aplikace, přehled návrhů a odvolání přístupu.
+Web znamená webový Workspace s lokálním IDE, nikoli browser-only rozšíření.
+Neprovádí se spuštění coding agenta ani automatická změna autoritativního TODO.
+
+- [x] [completed] **DEV-IDE-TODO-01-A — kontrakt a recovery (designed).**
+  ADR 0060 zachovává Workspace/Git autoritu, vymezuje privacy, projektově
+  omezené tokeny, immutable revize a šest crash boundaries. Reuse:
+  Projects/ArtifactActions, same-origin HTTP, stdlib SQLite a sdílené UI.
+- [x] [completed] **DEV-IDE-TODO-01-B — backend a návratové zprávy
+  (implemented).** Odvolatelné propojení s 30denní platností, export nejvýše
+  1 MiB, kontrola stable ID, stale HEAD, deduplikace a trvalé receipts. Web
+  znovu kontroluje aktuální účet, credential_ref a právo editora. Zpráva
+  completed zůstává pending-human-review a nemění projektový Git.
+- [x] [completed] **DEV-IDE-TODO-01-C — rozšíření a instalátor
+  (implemented).** Projektový VSIX nese propojení bez kopírování klíče;
+  desktop instaluje přes potvrzené code/codium CLI, web poskytuje download.
+  Rozšíření potvrdí endpoint/projekt i identitu zdrojového repozitáře,
+  používá SecretStorage a privátní běžné soubory mimo libovolný Git worktree.
+  Timer i explicitní sync obnoví nevyřízené zprávy. Zahrnuto source/.deb
+  balení a stávající A4 inventura formulářů.
+- [x] [completed] **DEV-IDE-TODO-01-D — ověření a dokumentace
+  (PoC validated).** Backend, transport, failure/retry, RBAC/privacy,
+  packaging, extension host a webový browser průchod jsou ověřeny.
+  Návod je v docs/ide-file-bridge.md, hranice v ADR 0060.
+
+#### Ověření, recovery a omezení první verze
+
+Po poslední relevantní změně aplikačního kódu a konfigurace prošla úplná
+brána `python3 -m unittest discover -s tests -v`: **967 testů, 929 úspěšných,
+38 volitelných skipů, bez selhání**, 233,852 s. Výstup finálního běhu byl
+uložen do `/tmp/dev-ide-todo-01-final-tests.log`. Nové testy pokrývají i restart
+po ztracené odpovědi a přijatý prefix neúplné dávky. Předchozí běh odhalil
+chybějící inventuru nového formuláře, packaging fixtures a kanonický záznam
+roadmapy; tyto chyby byly opraveny před úspěšnou závěrečnou bránou.
+
+Samostatně prošly cílené backend/extension/HTTPS kontroly a packaging/legal
+kontroly. Skutečný VSCodium 1.105.17075 Linux arm64 smoke prošel dvakrát:
+instalace generovaného VSIX v izolovaném profilu, aktivace extension hostu,
+HTTP export TODO, běžné soubory, zpráva, receipt a retry bez duplikace;
+projektový Git zůstal beze změny. Reprodukce:
+`python3 -m scripts.ide_bridge_smoke --editor codium`.
+
+Skutečný Qt/WebEngine browser průchod
+`M0_DESKTOP_TEST=1 python3 -m unittest tests.test_web_server.WebTests.test_real_browser_installs_ide_bridge_and_revokes_session -v`
+prošel: formulář, VSIX download, přehled relací a odvolání. Dřívější pokusy
+odhalily null submitter chybu (opravena) a lokální testovací TLS/fetch chyby.
+Finální browser fixture důvěřuje pouze přesnému dočasnému testovacímu
+certifikátu přes CA/SPKI; produkční TLS se nevypíná. Diagnostické doplnění
+fixture po startu úplné sady změnilo pouze výpis chyb volitelného browser testu,
+nikoli aplikaci nebo kontroly standardní sady; finální fixture byla následně
+samostatně úspěšně spuštěna.
+
+Prošly Python compile, node --check pro rozšíření i generované shared UI,
+roadmapová projekce a git diff --check. Není nakonfigurovaný samostatný lint.
+
+SQLite bridge je autoritou přijetí zpráv, nikoli projektovým indexem. Pád
+před transakcí nic nepřijme, pád po commitu před odpovědí vrátí při retry
+stejný receipt; přijatý prefix dávky se neduplikuje. Klient publikuje zprávy
+a receipts přes dočasný soubor/fsync/rename. Snapshot je v relaci immutable,
+pád uprostřed lokální materializace opraví další sync. Při změně HEAD jsou
+nové zprávy stale a vyžadují nové propojení. Při ztrátě odpovědi instalátoru
+může zůstat nepoužitá relace, kterou lze v přehledu odvolat. Není zde operace
+zapisující současně Git a bridge SQLite; stávající Workspace recovery se nemění.
+
+Samotné klikání nativním Qt instalátorem nebylo fyzicky ověřeno; jeho wiring
+je implementovaný a skutečná CLI instalace VSIX byla ověřena izolovaně.
+VS Code, Windows instalace/ACL a Windows pairing nejsou fyzicky ověřené.
+Remote SSH, WSL, Codespaces a browser-only IDE jsou mimo první profil.
+Nejde o production-ready stav, test výpadku napájení ani automatickou Codex
+integraci. DEV-03/DEV-04 nadále drží širší IDE workflow a coding-agent adaptéry;
+nevznikl duplicitní navazující úkol. FUSE/FileSystemProvider se nepoužívají.
+
+
 ## COMP-03 — Workspace řízení Julia výpočtu — 2026-10-28
 
 Dávka vznikla na větvi `feature/comp-03-julia-workspace` z `develop`
@@ -13,8 +187,8 @@ obnovena sloučením `develop` `fd79dd8` do původní feature větve; finální
 sidebarová implementace je v commitu `9aa10fe`. Uživatel před doručením dvakrát
 rozšířil akceptaci: nejprve o evidenci modelových nástrojů a
 poté o její sidebarové rozvržení podle vzoru katalogu projektů. Finální podobu
-28. 10. 2026 přijal. Cílová úroveň je **PoC validated**; push ani PR do
-`develop` dosud nebyly vytvořeny a feature není sloučená.
+28. 10. 2026 přijal. Cílová úroveň je **PoC validated**. Následné doručení ověřeno 28. 10. 2026 při zahájení
+DEV-IDE-TODO-01: PR #111 sloučen do `develop` jako `6eb8614`.
 
 - [x] [completed] **COMP-03-A — projektová projekce definic a přesný preview
   (implemented).** Shared servis načítá pouze validované definice z přesného

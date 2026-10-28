@@ -30,6 +30,7 @@ class DebianPackageTests(unittest.TestCase):
             self.assertIn('Version: 0.1.0\n', control)
             self.assertNotIn('noreply@example.invalid', control)
             self.assertTrue((tree / f'usr/lib/{NAME}/spikes/artifact_preview.py').exists())
+            self.assertTrue((tree / f'usr/lib/{NAME}/extensions/workspace-bridge/extension.js').exists())
             self.assertEqual((tree / f'usr/lib/{NAME}/VERSION').read_text(), '0.1.0\n')
             self.assertEqual((tree / f'usr/share/doc/{NAME}/VERSION').read_text(), '0.1.0\n')
             self.assertIn('0.1.0', (tree / f'usr/share/doc/{NAME}/CHANGELOG.md').read_text())

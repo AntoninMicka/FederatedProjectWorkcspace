@@ -38,7 +38,14 @@ from spikes.journal import sync_dir
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
-NATIVE_ACTIONS = frozenset({'register-project-location', 'relocate-project-location',
+# Qt WebEngine does not deliver plain JS objects as Python dictionaries.
+# Transfer JSON, consuming the sensitive payload only once.
+IDE_BRIDGE_INSTALL_REQUEST_JS = """(function(){
+const value=window.workspaceBridgeInstall;
+delete window.workspaceBridgeInstall;
+return JSON.stringify(value);
+})()"""
+NATIVE_ACTIONS = frozenset({'install-ide-bridge', 'register-project-location', 'relocate-project-location',
                             'recover-project-operation',
                             'unregister-missing-project', 'choose-project-location',
                             'choose-notebooklm-archive',
@@ -250,7 +257,7 @@ def main():
     if args.screenshot and not args.smoke:
         parser.error('--screenshot requires --smoke')
     try:
-        from PySide6.QtCore import Qt, QTimer, QUrl, QMarginsF, QSizeF
+        from PySide6.QtCore import Qt, QTimer, QUrl, QMarginsF, QSizeF, QProcess
         from PySide6.QtGui import QDesktopServices, QPageLayout, QPageSize
         from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow,
                                        QFileDialog)
@@ -506,7 +513,49 @@ def main():
                 return
             action = request['action']
             page.runJavaScript("history.replaceState(null, '', '/');")
-            if action == 'register-project-location':
+            if action == 'install-ide-bridge':
+                def install_bridge(payload):
+                    import base64
+                    import shutil
+                    import tempfile
+                    try:
+                        payload = json.loads(payload)
+                    except (TypeError, ValueError):
+                        QMessageBox.warning(window, 'IDE bridge', 'Nelze převzít instalační balíček. Opakujte propojení.')
+                        return
+                    if (not isinstance(payload, dict) or set(payload) != {'package_base64', 'editor'}
+                            or payload['editor'] not in {'code', 'codium'}
+                            or not isinstance(payload['package_base64'], str)
+                            or len(payload['package_base64']) > 2 * 1024 * 1024):
+                        return
+                    executable = shutil.which(payload['editor'])
+                    if not executable:
+                        QMessageBox.information(window, 'IDE bridge', 'IDE není v PATH. Nainstalujte VS Code / VSCodium a opakujte propojení.')
+                        return
+                    if QMessageBox.question(window, 'Instalace IDE bridge',
+                            'Nainstalovat Workspace bridge do ' + payload['editor'] + '? Propojení potvrdíte také v IDE.') != QMessageBox.StandardButton.Yes:
+                        return
+                    temporary = tempfile.TemporaryDirectory(prefix='workspace-ide-')
+                    package = Path(temporary.name) / 'workspace-bridge.vsix'
+                    try:
+                        package.write_bytes(base64.b64decode(payload['package_base64'], validate=True))
+                        package.chmod(0o600)
+                    except (ValueError, OSError):
+                        temporary.cleanup()
+                        return
+                    process = QProcess(window)
+                    # Keep the private package until the installer process exits.
+                    def finished(code, _status):
+                        temporary.cleanup()
+                        QMessageBox.information(window, 'IDE bridge',
+                            'Instalace dokončena. V IDE spusťte Workspace: Připojit Workspace.'
+                            if code == 0 else 'Instalace selhala. Ověřte dostupnost IDE a opakujte propojení.')
+                        process.deleteLater()
+                    process.finished.connect(finished)
+                    process.errorOccurred.connect(lambda _error: temporary.cleanup())
+                    process.start(executable, ['--install-extension', str(package), '--force'])
+                page.runJavaScript(IDE_BRIDGE_INSTALL_REQUEST_JS, 0, install_bridge)
+            elif action == 'register-project-location':
                 register_project()
             elif action == 'recover-project-operation':
                 controller.recover()
