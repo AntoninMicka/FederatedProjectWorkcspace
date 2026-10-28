@@ -6,7 +6,8 @@ import textwrap
 from uuid import uuid4
 
 
-HELP = 'j/k nebo sipky: vyber | s: scan | a: accept | r: reject | p: apply | q: konec'
+HELP = ('j/k nebo sipky: vyber | PgUp/PgDn: detail | s: scan | '
+        'a: prijmout | r: zamitnout | p: zapsat | q: konec')
 
 
 def _lines(value, width):
@@ -23,14 +24,36 @@ class RefinementTUI:
         self.selected = 0
         self.confirm_apply = False
         self.message = ''
+        self.detail_offset = 0
+        self.contexts = {}
         self.refresh()
 
     def refresh(self):
         self.rows = self.service.list()
         self.selected = min(self.selected, max(0, len(self.rows) - 1))
+        active = {row['proposal_id'] for row in self.rows}
+        self.contexts = {key: value for key, value in self.contexts.items() if key in active}
+        for row in self.rows:
+            if row['proposal_id'] not in self.contexts:
+                try:
+                    self.contexts[row['proposal_id']] = self.service.review_context(row)
+                except Exception as exc:
+                    self.contexts[row['proposal_id']] = {'context_error': str(exc)}
 
     def current(self):
         return self.rows[self.selected] if self.rows else None
+
+    def context(self):
+        row = self.current()
+        if not row:
+            return {}
+        key = row['proposal_id']
+        if key not in self.contexts:
+            try:
+                self.contexts[key] = self.service.review_context(row)
+            except Exception as exc:
+                self.contexts[key] = {'context_error': str(exc)}
+        return self.contexts[key]
 
     def handle(self, key):
         if key in (ord('q'), 27):
@@ -49,8 +72,14 @@ class RefinementTUI:
             return True
         if key in (ord('j'), curses.KEY_DOWN):
             self.selected = min(self.selected + 1, max(0, len(self.rows) - 1))
+            self.detail_offset = 0
         elif key in (ord('k'), curses.KEY_UP):
             self.selected = max(0, self.selected - 1)
+            self.detail_offset = 0
+        elif key == curses.KEY_NPAGE:
+            self.detail_offset += 8
+        elif key == curses.KEY_PPAGE:
+            self.detail_offset = max(0, self.detail_offset - 8)
         elif key == ord('s'):
             self.message = 'Ollama scan bezi; projekt se nemeni...'
             try:
@@ -101,36 +130,75 @@ def draw(screen, ui):
         _put(screen, 4, 0, 'Terminal musi mit alespon 60x12.', width - 1)
         screen.refresh()
         return
-    split = max(28, min(48, width // 2))
-    visible = height - 5
+    split = max(38, min(64, width * 45 // 100))
+    visible = height - 7
+    _put(screen, 4, 0, '#   STAV      NAVRH          ZDROJ  ->  CIL', split - 1, curses.A_BOLD)
+    _put(screen, 5, 0, '-' * (split - 1), split - 1)
     start = max(0, min(ui.selected - visible // 2, max(0, len(ui.rows) - visible)))
     for position, row in enumerate(ui.rows[start:start + visible], start=start):
         proposal = row['proposal']
         decision = proposal.get('decision', proposal.get('outcome', ''))
         target = proposal.get('target_id') or '-'
-        label = f"{position + 1:>3} {row['state']:<9} {decision:<13} {target}"
-        _put(screen, 4 + position - start, 0, label, split - 1,
+        context = ui.contexts.get(row['proposal_id'], {})
+        source = context.get('source_title') or row.get('document_id', '-')[:8]
+        label = f"{position + 1:>3} {row['state']:<9} {decision:<13} {source} -> {target}"
+        _put(screen, 6 + position - start, 0, label, split - 1,
              curses.A_REVERSE if position == ui.selected else 0)
     row = ui.current()
     if row:
         proposal = row['proposal']
+        context = ui.context()
+        target = context.get('target') or {}
+        decision = proposal.get('decision')
+        if decision == 'attach':
+            effect = ('Presune odkaz ze sekce neprirazenych podkladu pod vybrany cil. '
+                      'Obsah zdrojoveho souboru se nemeni.')
+            action = 'PRIPOJIT PODKLAD K EXISTUJICIMU CILI'
+        elif decision == 'keep-detached':
+            effect = 'Ponecha podklad samostatne; do projektove roadmapy se nic nezapise.'
+            action = 'PONECHAT JAKO SAMOSTATNY PODKLAD'
+        else:
+            effect = 'Navrh nelze aplikovat; jde o diagnosticky stav modeloveho behu.'
+            action = 'BEZ APLIKOVATELNE ZMENY'
+        source_title = context.get('source_title', row.get('document_id', '-'))
+        target_label = '-'
+        if proposal.get('target_id'):
+            target_label = proposal['target_id']
+            if target:
+                target_label += ' — ' + target['title'] + ' (' + target['type'] + ')'
         detail = [
-            'Proposal: ' + row['proposal_id'],
-            'Stav: ' + row['state'],
-            'HEAD: ' + row['expected_head'],
-            'Dokument: ' + str(proposal.get('document_id', '-')),
-            'Cil: ' + str(proposal.get('target_id', '-')),
-            'Confidence: ' + str(proposal.get('confidence', '-')),
+            context.get('project_title', ui.service.project_id),
+            'STAV: ' + row['state'] + '    JISTOTA: ' + str(proposal.get('confidence', '-')),
             '',
-            proposal.get('reason') or proposal.get('error') or '',
+            'NAVRH: ' + action,
+            'ODKUD: ' + source_title,
+            'SOUBOR: ' + context.get('source_path', '-'),
+            'KAM: ' + target_label,
+            'DOPAD: ' + effect,
+            '',
+            'ODUVODNENI MODELU:',
+            proposal.get('reason') or proposal.get('error') or '-',
+            '',
+            'NAHLED ZDROJOVEHO TEXTU:',
+            context.get('source_excerpt') or context.get('context_error') or '-',
+            '',
+            'AUDIT: proposal ' + row['proposal_id'],
+            'HEAD: ' + row['expected_head'],
         ]
-        y = 4
+        rendered = []
         for value in detail:
             for line in _lines(value, width - split - 2):
-                if y >= height - 1:
-                    break
-                _put(screen, y, split + 1, line, width - split - 2)
-                y += 1
+                rendered.append(line)
+        max_offset = max(0, len(rendered) - (height - 5))
+        ui.detail_offset = min(ui.detail_offset, max_offset)
+        y = 4
+        for line in rendered[ui.detail_offset:ui.detail_offset + height - 5]:
+            _put(screen, y, split + 1, line, width - split - 2)
+            y += 1
+        if max_offset:
+            _put(screen, height - 1, split + 1,
+                 f'Detail {ui.detail_offset + 1}-{min(len(rendered), ui.detail_offset + height - 5)} '
+                 f'z {len(rendered)} (PgUp/PgDn)', width - split - 2, curses.A_BOLD)
     else:
         _put(screen, 4, split + 1, 'Queue je prazdna; s spusti scan.', width - split - 2)
     screen.refresh()

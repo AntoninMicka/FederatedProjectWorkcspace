@@ -58,6 +58,12 @@ Klávesy: `j`/`k` nebo šipky mění výběr, `s` explicitně spustí bounded sc
 storage ani writer: pouze volá stejné `list`, `scan`, `decide` a `apply` hranice.
 Ollama scan probíhá synchronně a během něj se zobrazuje stav běhu.
 
+Levý panel má pojmenované sloupce stav, návrh a `zdroj → cíl`; místo samotných
+UUID načítá názvy z přesné revize návrhu. Pravý panel vysvětluje navrženou akci,
+odkud podklad pochází, jeho skutečnou cestu, cílové ID/název/typ, očekávaný
+dopad, odůvodnění modelu a náhled zdrojového textu. UUID a HEAD jsou až v auditní
+části. Delší detail se posouvá přes `PgUp`/`PgDn`.
+
 `scan` ani `decide` nemění projekt. `apply` vezme všechny accepted návrhy
 se stejným expected HEAD a zapíše pouze hlavní plán jednou
 `Workspace.transact` operací. Před zápisem znovu ověří existenci dokumentu,

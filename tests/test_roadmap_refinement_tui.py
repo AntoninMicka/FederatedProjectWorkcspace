@@ -21,6 +21,11 @@ class FakeService:
     def list(self):
         return [dict(row, proposal=dict(row['proposal'])) for row in self.rows]
 
+    def review_context(self, row):
+        return dict(project_title='Project', source_title='Readable evidence title',
+                    source_path='artifacts/doc/evidence.md', source_excerpt='# Evidence\nContext.',
+                    target=dict(id='TASK-01', title='Readable target title', type='task'))
+
     def decide(self, proposal_id, decision):
         self.rows[0]['state'] = 'accepted' if decision == 'accept' else 'rejected'
         return self.rows[0]
@@ -43,6 +48,7 @@ class RefinementTUITests(unittest.TestCase):
             operation_factory=lambda: '00000000-0000-0000-0000-000000000003')
 
     def test_review_uses_existing_service_and_refreshes_state(self):
+        self.assertEqual(self.ui.context()['source_title'], 'Readable evidence title')
         self.assertTrue(self.ui.handle(ord('a')))
         self.assertEqual(self.ui.current()['state'], 'accepted')
         self.assertEqual(self.service.applies, [])

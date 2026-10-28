@@ -14,7 +14,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from spikes.backend_contract import ROLES
 from spikes.backend_contract import BackendUnknown
-from spikes.configuration import parse_node, read_config
+from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ProjectInput, TaskInstruction)
 from spikes.markdown_documents import main_todo_id
@@ -245,12 +245,39 @@ class RoadmapRefinement:
 
     def list(self):
         with self._connect() as db:
-            rows = db.execute('SELECT id,response,state,expected_head,created_at,receipt FROM proposals '
+            rows = db.execute('SELECT id,response,state,expected_head,created_at,receipt,document_id FROM proposals '
                               'WHERE project_id=? ORDER BY created_at,id',
                               (self.project_id,)).fetchall()
         return [dict(proposal_id=row[0], proposal=json.loads(row[1]), state=row[2],
                      expected_head=row[3], created_at=row[4], receipt=json.loads(row[5]) if row[5] else None)
+                     | {'document_id': row[6]}
                 for row in rows]
+
+    def review_context(self, row):
+        """Resolve human review labels from the exact proposal revision."""
+        require(isinstance(row, dict) and row.get('state') in {
+            'pending', 'accepted', 'rejected', 'applied', 'dismissed',
+            'running', 'unknown', 'failed'}, 'Invalid refinement review row')
+        proposal_id = row.get('proposal_id'); uuid(proposal_id)
+        require(self.get(proposal_id) is not None, 'Proposal is unavailable for this project')
+        head = row.get('expected_head')
+        workspace = Projects(self.node).workspace(self.project_id, blocking=False)
+        files = workspace.git.snapshot(head); entities = validate_snapshot(files)
+        document_id = row.get('document_id') or row['proposal'].get('document_id')
+        require(document_id in entities, 'Proposal source document is unavailable')
+        meta = entities[document_id]; raw = _content(files, meta).decode('utf-8')
+        target_id = row['proposal'].get('target_id'); target = None
+        if target_id:
+            graph = project_task_graph(files, entities, self.project_id, head)
+            target = next((item for item in graph['nodes'] if item['id'] == target_id), None)
+        project = committed_project(workspace.git, head, self.project_id)
+        return {
+            'project_title': project['title'],
+            'source_title': meta['title'],
+            'source_path': 'artifacts/' + document_id + '/' + meta['file'],
+            'source_excerpt': raw[:4096],
+            'target': target,
+        }
 
     def get(self, proposal_id):
         uuid(proposal_id)

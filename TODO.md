@@ -215,6 +215,9 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   promotion/split/merge; nejsou součástí aktuálního bezpečného apply.
   Jednorázové stdlib `curses` TUI nyní poskytuje list/detail, explicitní bounded
   scan, accept/reject a dvoukrokově potvrzený apply bez druhého storu či writeru.
+  Review z přesného proposal HEAD doplňuje čitelný název a cestu zdroje,
+  `zdroj → cíl`, název/typ cíle, popis dopadu a náhled zdrojového textu;
+  technická UUID a HEAD zůstávají v auditní části.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
