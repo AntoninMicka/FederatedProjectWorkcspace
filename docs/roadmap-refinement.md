@@ -72,6 +72,9 @@ dopad, odůvodnění modelu a náhled zdrojového textu. UUID a HEAD jsou až v 
 Každý tabulkový řádek je dvouřádkový blok s ohraničenými buňkami. Vybraný blok
 se při pohybu drží uprostřed viditelné stránky, pokud tomu nebrání začátek nebo
 konec seznamu.
+Importované názvy a náhledy se před vykreslením dělí na fyzické řádky a řídicí
+znaky se převádějí na mezery. Newline, tab ani carriage return proto nemohou
+pohnout curses kurzorem a přepsat sousední buňky.
 
 `scan` ani `decide` nemění projekt. `apply` vezme všechny accepted návrhy
 se stejným expected HEAD a zapíše pouze hlavní plán jednou

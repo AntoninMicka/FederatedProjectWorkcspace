@@ -14,7 +14,17 @@ DECIDED = {'accepted', 'rejected', 'dismissed', 'applied'}
 
 
 def _lines(value, width):
-    return textwrap.wrap(str(value), max(8, width), replace_whitespace=False) or ['']
+    width = max(8, width)
+    physical = str(value).replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    result = []
+    for line in physical:
+        # Curses treats embedded controls as cursor movement. Only draw plain
+        # display text; preserve paragraph boundaries as explicit rows.
+        clean = ''.join((' ' if ord(char) < 32 or ord(char) == 127 else char)
+                        for char in line)
+        result.extend(textwrap.wrap(clean, width, replace_whitespace=True,
+                                    drop_whitespace=True) or [''])
+    return result or ['']
 
 
 class RefinementTUI:
@@ -186,6 +196,8 @@ class RefinementTUI:
 def _put(screen, y, x, value, width, attr=0):
     if y < 0 or width <= 0:
         return
+    value = ''.join((' ' if ord(char) < 32 or ord(char) == 127 else char)
+                    for char in str(value))
     try:
         screen.addnstr(y, x, value, width, attr)
     except curses.error:

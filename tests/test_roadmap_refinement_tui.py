@@ -5,7 +5,7 @@ from unittest.mock import patch
 from threading import Event
 import time
 
-from spikes.roadmap_refinement_tui import RefinementTUI, run
+from spikes.roadmap_refinement_tui import RefinementTUI, draw, run
 
 
 class FakeService:
@@ -149,6 +149,27 @@ class RefinementTUITests(unittest.TestCase):
                    side_effect=__import__('curses').error):
             result = run(Screen(), self.service)
         self.assertEqual(result.current()['state'], 'pending')
+
+    def test_render_never_sends_embedded_controls_to_curses_cells(self):
+        self.service.rows[0]['proposal']['reason'] = 'first\nsecond\tcolumn\rthird'
+        def context(row):
+            return dict(project_title='Project\nInjected',
+                        source_title='Long title\nthat used to move the cursor',
+                        source_path='artifacts/doc/content.md',
+                        source_excerpt='line one\nline two\tvalue',
+                        target=dict(id='TASK-01', title='Target\nName', type='task'))
+        self.service.review_context = context
+        ui = RefinementTUI(self.service, background=lambda target: target())
+        class Screen:
+            def __init__(self): self.values = []
+            def erase(self): pass
+            def getmaxyx(self): return (28, 120)
+            def addnstr(self, y, x, value, width, attr=0): self.values.append(value)
+            def refresh(self): pass
+        screen = Screen(); draw(screen, ui)
+        self.assertTrue(screen.values)
+        self.assertTrue(all(not any(ord(char) < 32 or ord(char) == 127 for char in value)
+                            for value in screen.values))
 
 
 if __name__ == '__main__':
