@@ -210,6 +210,20 @@ class WebHandler(DesktopHandler):
     def dispatch(self, request):
         if self.path.startswith('/v1/projects/repair/'):
             return self.send_error(404)
+        if self.path.startswith('/v1/julia/'):
+            if not isinstance(request, dict):
+                return self.send_error(400)
+            if self.path in {'/v1/julia/publish', '/v1/julia/editor/save'} \
+                    and request.get('privacy') == 'local-only':
+                return self.reply(422, {'error': 'Webová operace nepovoluje local-only obsah.'})
+            project_id = request.get('project_id')
+            read_only = {'/v1/julia/definitions', '/v1/julia/status',
+                         '/v1/julia/output', '/v1/julia/editor/open'}
+            allowed = (self.server.administration.allowed(self.actor, project_id)
+                       if self.path in read_only else self._can_write(project_id))
+            if not allowed:
+                return self.send_error(403)
+            return super().dispatch(request)
         if self.path.startswith('/v1/autonomy/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -658,6 +672,8 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     server.metadata_suggestion_service = MetadataSuggestionService(node, server.projects,
         state_dir=server.chat_service.state_dir,
         chat_state_dir=server.chat_service.state_dir)
+    from spikes.julia_workspace import JuliaWorkspaceService
+    server.julia_workspace = JuliaWorkspaceService(node, server.projects)
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
     server.notebooklm_import_actions = NotebookLMImportActions(
         node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')

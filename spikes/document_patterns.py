@@ -179,7 +179,7 @@ ADAPTERS = (
         'formats': ['text/x-julia', 'application/toml', 'application/json'],
         'comment_prefix': '#', 'comment_suffix': None, 'max_bytes': MAX_TEXT,
         'supports_special': False, 'save_operation': 'julia-model-bundle',
-        'integration': 'comp-03', 'validation': 'bounded-and-structured',
+        'integration': 'available', 'validation': 'bounded-and-structured',
         'pattern_ids': ['julia.script', 'julia.function', 'julia.module',
                         'julia.runner-entrypoint', 'julia.project-toml',
                         'julia.computation-json'],

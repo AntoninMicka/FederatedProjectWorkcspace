@@ -30,6 +30,8 @@
     {"id": "COMP-01", "milestone": "M6-COMPUTE", "depends_on": []},
     {"id": "COMP-02", "milestone": "M6-COMPUTE", "depends_on": ["COMP-01"]},
     {"id": "COMP-03", "milestone": "M6-COMPUTE", "depends_on": ["COMP-02", "DOC-PATTERN-CATALOG-01"]},
+    {"id": "COMP-ORCH-DATASET-01", "milestone": "M6-COMPUTE", "depends_on": ["COMP-03"]},
+    {"id": "COMP-MATLAB-CONVERSION-01", "milestone": "M6-COMPUTE", "depends_on": ["COMP-03"]},
 
     {"id": "ER-00", "milestone": "RELATIONS", "depends_on": []},
     {"id": "ER-01", "milestone": "RELATIONS", "depends_on": ["ER-00"]},

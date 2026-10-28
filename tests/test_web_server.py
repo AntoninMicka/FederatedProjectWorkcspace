@@ -94,6 +94,73 @@ class WebTests(unittest.TestCase):
         self.assertEqual(409, code)
         self.assertIn('změnila', json.loads(data)['error'])
 
+    def test_julia_workspace_routes_keep_preview_and_execution_separate(self):
+        code, data, _ = self.create_project('Julia workspace routes')
+        self.assertEqual(200, code, data); project_id = json.loads(data)['id']
+
+        class Service:
+            def __init__(self): self.calls = []
+            def definitions(inner, project, head):
+                inner.calls.append(('definitions', project, head))
+                return {'schema': 'fpw-julia-workspace-v1', 'project_id': project,
+                        'project_commit': head, 'definitions': []}
+            def prepare(inner, request, *, user_id=None):
+                inner.calls.append(('preview', request, user_id))
+                return {'operation_id': request['operation_id'], 'state': 'prepared'}
+            def execute(inner, request, *, user_id=None):
+                inner.calls.append(('execute', request, user_id))
+                return {'operation_id': request['operation_id'], 'accepted': True,
+                        'state': 'dispatching'}
+            def editor_open(inner, project, head, definition_path=None):
+                inner.calls.append(('editor-open', project, head, definition_path))
+                return {'schema': 'fpw-julia-editor-v1', 'new': definition_path is None}
+            def editor_save(inner, request, *, user_id=None):
+                inner.calls.append(('editor-save', request, user_id))
+                return {'schema': 'fpw-julia-editor-result-v1',
+                        'project_id': request['project_id']}
+            def editor_delete_preview(inner, project, head, definition_path):
+                inner.calls.append(('editor-delete-preview', project, head,
+                                    definition_path))
+                return {'schema': 'fpw-julia-editor-delete-preview-v1',
+                        'preview_sha256': 'd' * 64}
+            def editor_delete(inner, request, *, user_id=None):
+                inner.calls.append(('editor-delete', request, user_id))
+                return {'schema': 'fpw-julia-editor-delete-result-v1',
+                        'project_id': request['project_id']}
+
+        service = Service(); self.server.julia_workspace = service
+        head = Projects(self.root/'node.json').open(project_id)['commit_id']
+        code, data, _ = self.request(path='/v1/julia/definitions', body=json.dumps({
+            'project_id': project_id, 'expected_head': head}))
+        self.assertEqual(200, code, data)
+        operation_id = str(uuid4())
+        preview = {'operation_id': operation_id, 'project_id': project_id,
+            'expected_head': head, 'definition_path': 'artifacts/a/computation.json',
+            'parameters': {}}
+        code, data, _ = self.request(path='/v1/julia/preview', body=json.dumps(preview))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/execute', body=json.dumps({
+            'operation_id': operation_id, 'project_id': project_id,
+            'approval_digest': 'a' * 64}))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/editor/open', body=json.dumps({
+            'project_id': project_id, 'expected_head': head}))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/editor/save', body=json.dumps({
+            'operation_id': operation_id, 'project_id': project_id, 'privacy': 'project'}))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/editor/delete/preview',
+            body=json.dumps({'project_id': project_id, 'expected_head': head,
+                             'definition_path': 'artifacts/a/computation.json'}))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/editor/delete/confirm',
+            body=json.dumps({'operation_id': operation_id, 'project_id': project_id,
+                'base_head': head, 'definition_path': 'artifacts/a/computation.json',
+                'preview_sha256': 'd' * 64}))
+        self.assertEqual(200, code, data)
+        self.assertEqual(['definitions', 'preview', 'execute', 'editor-open', 'editor-save',
+                          'editor-delete-preview', 'editor-delete'],
+                         [item[0] for item in service.calls])
     def test_document_pattern_catalog_and_validation_are_read_only(self):
         code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
             'action': 'catalog'}))
@@ -1065,6 +1132,64 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
                          {'Sdílený dokument', 'Hlavní seznam úkolů'})
         self.assertEqual(opened['main_todo']['items'][0]['title'],
                          '[MILESTONE-01] Ověřit editor')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_browser_opens_julia_pattern_editor_and_guards_draft(self):
+        _, data, _ = self.create_project('Julia pattern editor')
+        project = json.loads(data)
+        import sys
+        code = r"""
+import json, os, sys
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineWidgets import QWebEngineView
+app=QApplication([]);view=QWebEngineView();phase=0;ticks=0
+view.page().certificateError.connect(lambda error:error.acceptCertificate())
+key=os.environ['WORKSPACE_SMOKE_KEY']
+def run(script): view.page().runJavaScript(script)
+def finish(message,code=1): print(message,flush=True);app.exit(code)
+def result(value):
+ global phase
+ if isinstance(value,str) and value.startswith('FAIL:'): finish(value);return
+ if value!='ready': return
+ if phase==0:
+  phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
+ elif phase==1:
+  phase=2;run("document.querySelector('.project-card').click();")
+ elif phase==2:
+  phase=3;run("(()=>{document.querySelector('#tools-tab').click();document.querySelector('#tools-main-tab').click();const toolbar=document.querySelector('.sidebar-tool-primary-actions'),list=document.querySelector('#sidebar-tool-list'),input=document.querySelector('#julia-import-file');if(!toolbar||list.children.length!==0||!document.querySelector('#sidebar-tools-status').textContent.includes('Počet nástrojů: 0')||!document.querySelector('#julia-editor-new')){juliaToolsStatus.textContent='FAIL: Julia tool evidence unavailable';return;}const transfer=new DataTransfer();transfer.items.add(new File(['# imported smoke\\nvalue = 7\\n'],'smoke-model.jl',{type:'text/x-julia'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()")
+ elif phase==3:
+  phase=4;run("(()=>{const root=document.querySelector('#julia-source-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]'),textarea=root.querySelector('[data-raw-content]');if(juliaEditor.elements.title.value!=='smoke-model'||!textarea.value.includes('imported smoke')||!juliaToolsStatus.textContent.includes('lokálním konceptu')){juliaEditorStatus.textContent='FAIL: Julia import draft unavailable';return;}if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor je Julia')||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia file help unavailable';return;}select.value='julia.function';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Julia funkce'||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia pattern help unavailable';return;}textarea.setSelectionRange(textarea.value.length,textarea.value.length);root.querySelector('[data-raw-insert]').click();if(!textarea.value.includes('function model')){juliaEditorStatus.textContent='FAIL: Julia pattern insertion unavailable';return;}root.querySelector('[data-raw-validate]').click();})()")
+ elif phase==4:
+  phase=5;run("window.confirm=()=>false;document.querySelector('#julia-editor-close').click();")
+ elif phase==5:
+  phase=6;run("window.confirm=()=>true;document.querySelector('#julia-editor-close').click();")
+ elif phase==6: finish('Julia pattern editor smoke OK',0)
+def poll():
+ global ticks
+ ticks+=1
+ if ticks>300: finish('Julia pattern editor timeout at phase '+str(phase));return
+ checks={
+ 0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
+ 1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
+ 2:"!document.querySelector('#project-view').hidden&&document.querySelector('#sidebar-tools-status').textContent.startsWith('Počet nástrojů:')?'ready':'waiting'",
+ 3:"(()=>{if(document.querySelector('#julia-source-raw-widget [data-raw-pattern]')?.querySelector('option[value=\\\"julia.function\\\"]')&&!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('imported smoke'))return'ready';const s=juliaEditorStatus.textContent||juliaToolsStatus.textContent;return s&&s.startsWith('FAIL:')?s:'waiting'})()",
+ 4:"(()=>{const failure=juliaEditorStatus.textContent;if(failure.startsWith('FAIL:'))return failure;return document.querySelector('#julia-source-raw-widget [data-raw-status]').textContent.startsWith('Obsah je validní')?'ready':'waiting'})()",
+ 5:"!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('function model')?'ready':'FAIL: Julia draft was discarded without confirmation'",
+ 6:"juliaEditor.hidden?'ready':'waiting'"}
+ view.page().runJavaScript(checks[phase],result)
+timer=QTimer();timer.timeout.connect(poll);timer.start(100)
+view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
+"""
+        result = subprocess.run([sys.executable, '-c', code], env=dict(
+            os.environ, WORKSPACE_SMOKE_KEY=self.token,
+            WORKSPACE_SMOKE_URL='https://'+self.authority+'/'),
+            capture_output=True, text=True, timeout=40)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('Julia pattern editor smoke OK', result.stdout,
+                      result.stdout + result.stderr + f'\nreturncode={result.returncode}')
+        opened = Projects(self.root/'node.json').open(project['id'])
+        self.assertEqual([], opened['artifacts'])
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_browser_renders_and_filters_roadmap_graph(self):

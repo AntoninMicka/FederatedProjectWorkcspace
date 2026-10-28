@@ -91,44 +91,17 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
 evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
-`b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako
-commit `507c232`; evidence je ve WORK_LOG a backlog ji nedrží jako druhý
-stavový záznam.
+`b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako merge
+commit `507c232`; evidence je ve WORK_LOG. `COMP-03` byla po kontrole
+sidebarového rozvržení uživatelem uzavřena; její evidence je ve WORK_LOG a
+feature čeká na doručení jednoho PR.
+Editorové a plánovací závislosti byly doručeny PR #107–#110; jejich evidence
+je ve WORK_LOG a `COMP-03` po jejich začlenění pokračuje na původní větvi.
 
-Práce na `COMP-03` byla rozhodnutím uživatele 27. 10. 2026 přerušena:
-Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou.
-`DOC-PATTERN-CATALOG-01` už implementovala sdílený raw editor a Julia adaptér
-a byla doručena PR #107 jako squash commit `ac4281a`; její akceptovaná evidence
-je ve WORK_LOG. `PLAN-TASK-EDITOR-01` zahrnula souborový kontrakt
-`PLAN-FILE-HIERARCHY-01` i úplnou task coverage katalogu a byla doručena PR
-#108 jako squash commit `50284d1`. `DOC-PATTERN-LIBRARY-01` byla doručena PR
-#109 jako squash commit `ab09744`. Navazující ad-hoc dávka
-`PLAN-ROADMAP-MILESTONE-VIEW-01` je feature-akceptovaná a její doručení čeká v
-TODO. Poté zůstávají podle uživatelem aktualizovaného pořadí připravené
-`COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
-Každá položka
-zůstává samostatnou feature dávkou a vlastním PR; nevzniká společná větev ani
-stacked PR bez dalšího výslovného rozhodnutí.
-
-- [ ] [planned] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
-  PoC validated; větev `feature/comp-03-julia-workspace`).** Nad doručeným
-  `COMP-02` zpřístupnit v otevřeném projektu první řízený výpočet bez druhého
-  runneru nebo zápisové cesty. Workspace načte pouze validovanou verzovanou
-  `fpw-julia-computation-v1` definici z aktuálního Git commitu, vykreslí její
-  typované parametry a přesný preview s revizí, vstupy, privacy, runtime a
-  limity. Samostatné potvrzení spustí existující Julia journal; UI po restartu
-  zobrazí `prepared/running/current/stale/failed/cancelled/unknown`, dovolí
-  bezpečný cancel/reconcile a náhled deklarovaných výstupů. Teprve další
-  explicitní potvrzení publikuje jeden vybraný výstup přes existující
-  `Workspace` operaci s provenance. Otevření projektu, status ani změna
-  parametrů nic nespouštějí; local-only a RBAC se znovu ověří před dispatch i
-  publikací. Rozsah zahrnuje shared desktop/web UI a fyzický průchod na
-  podporovaném ARM64 runtime. Uživatelské rozšíření na téže větvi přidává
-  editor Julia modelu pod Nástroje. Rozpracovaná větev zůstává zachovaná a po
-  doručení `DOC-PATTERN-CATALOG-01` lze práci i fyzickou akceptaci obnovit;
-  `COMP-03` použije jeho widget a Julia adaptér bez paralelní jednorázové
-  textové plochy. Mimo rozsah zůstává Pluto/Jupyter, automatický scheduler,
-  síťové/GPU výpočty a instalace balíčků.
+Po dokončení a doručení `COMP-03` následují podle uživatelem aktualizovaného pořadí
+`DEV-IDE-TODO-01` a `DEV-01`.
+Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
+zůstává samostatnou feature dávkou a vlastním PR.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -167,10 +140,28 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 - [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle ADR 0008: manifest přesných bajtů, revalidace před odesláním, zákaz implicitního fallbacku a recovery unknown běhů.
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
+- [ ] [planned] **COMP-MATLAB-CONVERSION-01 — import a převod MATLAB modelu
+  (cílová úroveň: designed → implemented → PoC validated).** Uživatelský námět
+  z rozšíření `COMP-03`: posoudit `.m` jako budoucí vstup do evidence
+  modelových nástrojů. Před implementací vymezit podporovaný podmnožinový
+  formát, sémantické rozdíly, bezpečnost importu, reprodukovatelnost prostředí,
+  provenance a explicitní review vygenerované Julie. Současné UI směr pouze
+  označuje a žádnou konverzi netvrdí ani neprovádí.
+- [ ] [planned] **COMP-ORCH-DATASET-01 — Julia nástroje v orchestrace a
+  projektové datasety (cílová úroveň: designed → PoC validated).** Uživatelský
+  námět po uzavření `COMP-03`: navrhnout popis/capabilities každého skriptu tak,
+  aby jej LLM mohlo bezpečně vybrat, ale deterministická orchestrace dál
+  autorizovala přesnou akci. Rozhodnout kontrakt předání dat do Julia procesu a
+  návratu výsledků, včetně vazby na přesné revize, privacy, schéma, limity,
+  provenance, stale vstup a `unknown` běh. Posoudit samostatnou projektovou
+  kategorii datasetů s nejméně CSV, JSON a XML jako explicitními vstupy i
+  výstupy; formát sám nesmí znamenat důvěryhodnost ani automatickou publikaci.
+  Nejdříve porovnat staged soubory, deklarované parametry a jiné bounded
+  transporty; text roadmapy zatím žádný z nich nevolí.
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
-- [ ] [planned] **DEV-IDE-TODO-01 — VS Code/VSCodium jako zdroj TODO (cílová úroveň: PoC validated).** Po `PLAN-TASK-GRAPH-01` dodat malé rozšíření pro společný podporovaný průnik obou IDE, které zpřístupní explicitně vybraný workspace TODO zdroj a jeho revizi. První řez je read-only zdroj/importní preview bez spouštění coding agenta a bez zápisu mimo standardní Workspace lifecycle; plný handoff zůstává v DEV-02 a DEV-03.
+- [ ] [planned] **DEV-IDE-TODO-01 — VS Code/VSCodium bridge pro workspace TODO (cílová úroveň: PoC validated).** Po `PLAN-TASK-GRAPH-01` dodat malé rozšíření pro společný podporovaný průnik obou IDE. Směr Workspace → Code/VSCodium zpřístupní explicitně vybraný TODO a jeho revizi jako read-only virtuální dokument. Oddělené explicitní příkazy mohou navrhnout označení úkolu za splněný a odeslat připomínku či implementační poznatek pro upřesnění zadání; zpětný transport je před návrhem otevřený a žádná akce nesmí obejít standardní Workspace lifecycle, kontrolu stale revize ani lidskou akceptaci. První řez nespouští coding agenta. Projektové řízení zůstává ve Workspace oddělené od zdrojových souborů; propojení nese identitu repozitáře a přesnou revizi, ne druhou kopii plánu.
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
 - [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 vytvořit IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.

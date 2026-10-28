@@ -135,8 +135,9 @@ cestou jako ostatní nápovědu.
 
 **Reuse/adapt:** shared artifact editor a jeho draft guard, bezpečné DOM
 vykreslování, `ArtifactActions`, prezentační editor a existující
-validační/zápisové služby. Sdílený widget a Julia adaptér se implementují
-před obnovením přerušené `COMP-03`; ta je následně zapojí do Julia editoru.
+validační/zápisové služby. Sdílený widget a Julia adaptér byly implementovány
+před obnovením přerušené `COMP-03`; obnovená dávka je zapojila do editoru
+Julia zdroje a zachovala jeho původní atomickou operaci uložení.
 **Reject:** nový UI
 framework, executable template engine, druhý projektový store a univerzální
 save endpoint. Soukromá inventura neposkytla doložený komponent s odpovídající

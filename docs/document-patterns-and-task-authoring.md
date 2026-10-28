@@ -8,8 +8,8 @@ SPDX-License-Identifier: MPL-2.0
 Tento dokument popisuje současné i cílové používání. Vestavěný katalog,
 sdílený raw widget a jeho adaptéry pro Markdown/TODO a prezentaci jsou
 **implemented** v `DOC-PATTERN-CATALOG-01`; praktickou coverage a kontextovou
-nápovědu rozšiřuje `DOC-PATTERN-LIBRARY-01`. Julia adaptér je připravený jako
-neexekuční kontrakt, ale jeho UI zapojí až obnovená `COMP-03`. Souborový plán a
+nápovědu rozšiřuje `DOC-PATTERN-LIBRARY-01`. Julia adaptér je zapojený jako
+neexekuční raw editor zdrojového kódu v `COMP-03`. Souborový plán a
 speciální task editor jsou implementované v `PLAN-TASK-EDITOR-01`. Architekturu určují
 [ADR 0058](adr/0058-shared-raw-editor-and-pattern-catalog.md) a [ADR
 0059](adr/0059-file-plan-hierarchy-and-task-editor.md).
@@ -24,6 +24,30 @@ speciální task editor jsou implementované v `PLAN-TASK-EDITOR-01`. Architektu
    Prezentace už takový editor mají; úkoly dostanou editor z „lego kostek“.
 4. **Souborový plán** určuje typy uzlů, hierarchii, vztahy, zahrnuté soubory a
    podgrafy. Git soubory zůstávají autoritou.
+
+## Evidence Julia modelů v Nástrojích
+
+Hlavní panel **Nástroje** začíná příkazovou lištou **Nový nástroj** a
+**Import**. První nabídka zatím vytváří Julia model. Import podporuje `.jl` do
+lokálního konceptu editoru: kontroluje příponu, velikost, UTF-8 a NUL znaky,
+ale nic nezapisuje ani nespouští, dokud uživatel model výslovně neuloží.
+Konverze MATLAB `.m` je pouze viditelný budoucí směr; tato dávka nemá
+kompatibilitní ani reprodukovatelnostní kontrakt a převod neprovádí.
+
+Pod lištou je seznam všech validovaných Julia definic aktuálního Git HEAD.
+Každá položka má akce **Zobrazit**, **Editovat**, **Spustit** a **Smazat**.
+Zobrazení používá bezpečný textový DOM. Spustit jen vybere definici v panelu
+Výpočty, kde je stále nutný exact preview a samostatné potvrzení. Starší nebo
+importované immutable definice lze zobrazit a připravit ke spuštění, ale editor
+je nepřepisuje ani nemaže.
+
+Projektově spravovaný model tvoří čtyři svázané dokumentové artefakty: `.jl`,
+`Project.toml`, `Manifest.toml` a computation definice. Mazání proto nejprve
+připraví read-only náhled přesného HEAD a až po potvrzení odstraní celý balíček
+jednou Workspace transakcí. Stale nebo pozměněný náhled, neúplný balíček a
+vztah z jiného artefaktu se odmítnou. Před Git commitem je recovery autoritou
+Workspace journal, po commitu se index obnoví z HEAD; Git historie odstraněných
+souborů zůstává dostupná.
 
 ## Jak funguje vzor
 
@@ -200,5 +224,7 @@ DOC-PATTERN-CATALOG-01 ──> DOC-PATTERN-LIBRARY-01 (ostatní adaptéry)
 Katalog/raw editor je implementovaný a doručený; `COMP-03` je tím odblokovaná.
 Task editor ve své feature dávce dodal úplnou coverage vlastních operací a
 souborový kontrakt. `DOC-PATTERN-LIBRARY-01` doplňuje obecné Markdown,
-prezentační a Julia scénáře i společnou kontextovou nápovědu. Obnovená `COMP-03` zapojí
-sdílený widget i Julia adaptér bez změny umístění Julia editoru v Nástrojích.
+prezentační a Julia scénáře i společnou kontextovou nápovědu. Obnovená `COMP-03`
+zapojila sdílený widget i Julia adaptér. Katalog modelů a jeho primární akce
+jsou v levém panelu Nástroje, zatímco specializovaný editor zůstává v hlavní
+ploše; vložení vzoru ani bounded validace zdrojový kód nespouští.

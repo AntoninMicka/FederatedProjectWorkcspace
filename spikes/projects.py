@@ -117,6 +117,17 @@ class Projects:
         return Workspace(root, state, blocking=blocking, deadline=deadline,
                          write_guard=write_guard)
 
+    def repository(self, project_id, *, deadline=None):
+        """Open only validated committed Git state; never initialize local journals/indexes."""
+        binding = next((b for b in self._bindings() if b['project_id'] == project_id), None)
+        require(binding is not None, 'Project is not registered')
+        root = directory(binding['root']); directory(root / '.git')
+        git = Git(root, deadline=deadline)
+        require(Path(git.run('rev-parse', '--show-toplevel').stdout.strip()) == root,
+                'Registration must refer to the repository root')
+        committed_project(git, git.head(), project_id)
+        return git
+
     def open(self, project_id):
         import time
         workspace = self.workspace(project_id, blocking=not self.network,

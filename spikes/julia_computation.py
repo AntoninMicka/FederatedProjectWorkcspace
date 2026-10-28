@@ -404,6 +404,17 @@ class JuliaRunStore:
                 'state': row[9], 'error': row[10], 'receipt': receipt,
                 'created_at': row[12], 'updated_at': row[13]}
 
+    def list(self, project_id, node_id, user_id, *, limit=50):
+        """Return bounded owner-scoped records without weakening get validation."""
+        uuid(project_id); uuid(node_id); uuid(user_id)
+        require(type(limit) is int and 1 <= limit <= 100, 'Invalid Julia run list limit')
+        with self.connect() as db:
+            rows = db.execute(
+                'SELECT operation_id FROM runs WHERE project_id=? AND node_id=? AND user_id=? '
+                'ORDER BY updated_at DESC, operation_id LIMIT ?',
+                (project_id, node_id, user_id, limit)).fetchall()
+        return [self.get(row[0], node_id, user_id) for row in rows]
+
     def cancel(self, operation_id, node_id, user_id):
         """Durably request cancellation; the owning executor terminates its group."""
         record = self.get(operation_id, node_id, user_id)
@@ -515,10 +526,10 @@ class JuliaExecutor:
         require(digest(raw) == reference['sha256'], 'Pinned Julia bytes differ')
         return raw, oid
 
-    def _sources(self, project_id, commit, computation):
+    def _sources(self, project_id, commit, computation, extra_references=()):
         require(self.git.head() == commit, 'Project changed before Julia operation')
         entities = validate_snapshot(self.git.snapshot(commit))
-        refs = [computation['entrypoint'], *computation['inputs']]
+        refs = [*extra_references, computation['entrypoint'], *computation['inputs']]
         values, privacies = {}, []
         for reference in refs:
             entity = entities.get(reference['artifact_id'])
@@ -554,11 +565,14 @@ class JuliaExecutor:
                 and bool(COMMIT.fullmatch(manifest['project_hash'])),
                 'Julia Manifest does not match pinned runtime or Project contract')
 
-    def prepare(self, operation_id, node_id, user_id, project_id, computation, parameters):
+    def prepare(self, operation_id, node_id, user_id, project_id, computation, parameters,
+                definition_reference=None):
         uuid(project_id); computation = validate_computation(computation)
         validate_runtime_binding(self.binding)
         parameters = validate_parameters(computation, parameters)
-        commit = self.git.head(); sources, privacy = self._sources(project_id, commit, computation)
+        references = () if definition_reference is None else (definition_reference,)
+        commit = self.git.head(); sources, privacy = self._sources(
+            project_id, commit, computation, references)
         self._preflight(computation, sources)
         request = {'schema': RUN_SCHEMA, 'operation_id': operation_id,
             'project_id': project_id, 'project_commit': commit,
@@ -568,6 +582,8 @@ class JuliaExecutor:
                 'executable', 'sysimage', 'depot'}}, 'privacy': privacy,
             'sources': [{'path': path, 'sha256': digest(raw), 'size': len(raw)}
                         for path, raw in sorted(sources.items())]}
+        if definition_reference is not None:
+            request['definition'] = definition_reference
         preview = {'schema': RUN_SCHEMA, 'project_commit': commit,
             'computation_id': computation['computation_id'], 'title': computation['title'],
             'privacy': privacy, 'parameters': parameters, 'outputs': computation['outputs'],
@@ -585,7 +601,10 @@ class JuliaExecutor:
                 and record['request']['runtime'] == {key: self.binding[key]
                     for key in self.binding if key not in {'executable', 'sysimage', 'depot'}},
                 'Julia runtime binding changed')
-        sources, privacy = self._sources(record['project_id'], record['project_commit'], computation)
+        references = (() if record['request'].get('definition') is None
+                      else (record['request']['definition'],))
+        sources, privacy = self._sources(record['project_id'], record['project_commit'],
+                                         computation, references)
         self._preflight(computation, sources)
         require(record['request']['sources'] == [
             {'path': path, 'sha256': digest(raw), 'size': len(raw)}

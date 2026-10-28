@@ -16,7 +16,9 @@ feature-akceptovaný v `PLAN-ROADMAP-MILESTONE-VIEW-01`.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
 `F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
 #103 a `COMP-02` byla doručena PR #104 s lokálním Julia runnerem a explicitní
-publikací výsledků. Navazující `COMP-03` vzniká na samostatné feature větvi.
+publikací výsledků. `COMP-03` dokončila první řízený Julia výpočet, authoring a
+evidenci modelových nástrojů ve shared workspace UI; po uživatelské kontrole je
+feature akceptovaná a čeká na doručení.
 Návrhová dávka `DOC-EDITOR-CONTRACTS-01` odděleně popisuje společný raw
 editor a katalog vzorů, souborovou hierarchii plánu a speciální editor úkolů.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
@@ -310,15 +312,34 @@ Dokončený operativní rozpad `COMP-01` a `COMP-02` drží WORK_LOG. Julia runn
 není LLM backend a jeho deterministické nebo numerické výstupy se nesmějí
 evidenčně smíchat s LLM run records.
 
-Navazující dávka `COMP-03` zpřístupní existující runner ze shared workspace UI:
+Navazující dávka `COMP-03` zpřístupňuje existující runner ze shared workspace UI:
 výběr verzované definice, typované parametry, přesný preview a samostatné
 potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automatické
 spouštění ani notebookové prostředí. Na její samostatné feature větvi byl
 rozsah požadavkem uživatele rozšířen o Julia editor umístěný v Nástrojích;
 práce byla 27. 10. 2026 přerušena do doby implementace sdíleného raw editoru
 `DOC-PATTERN-CATALOG-01`. Ta byla doručena PR #107 jako `ac4281a`, takže práci
-lze obnovit; fyzickou akceptaci eviduje feature větev `COMP-03`, nikoli
-roadmapa.
+lze obnovit. `COMP-03` tento widget a Julia adaptér zapojila pro
+zdrojový kód bez změny atomické save operace. Před doručením byla akceptace
+rozšířena o uspořádanou evidenci modelových nástrojů: vytvoření, bezpečný import
+`.jl` do konceptu, seznam a akce Zobrazit/Editovat/Spustit/Smazat. Primární akce
+a seznam modelů používají levý panel Nástroje podle vzoru projektového katalogu;
+hlavní plocha je určena detailu a editoru. MATLAB je zatím pouze budoucí směr
+konverze, nikoli podporovaný formát. Fyzickou akceptaci eviduje feature větev,
+nikoli roadmapa.
+
+- [ ] **COMP-ORCH-DATASET-01 — Zapojit popsané Julia nástroje do řízené
+  orchestrace.** Každý skript má mít strojově čitelný i lidský popis účelu,
+  capabilities, deklarovaných vstupů, výstupů, omezení a prostředí, aby jej LLM
+  mohlo navrhnout bez získání oprávnění jej samo spustit. Deterministická vrstva
+  musí nadále připnout přesný skript, revizi, data a policy a vyžádat odpovídající
+  preview/potvrzení.
+- [ ] **COMP-ORCH-DATASET-01 — Navrhnout projektové datasety a datový transport
+  výpočtu.** Posoudit společnou kategorii datasetů nejméně pro CSV, JSON a XML,
+  která může být verzovaným vstupem i explicitně publikovaným výstupem skriptu.
+  Návrh musí určit schéma/media type, privacy, provenance, limity, validaci a
+  vazbu na přesné revize a zjistit, jak data bounded předat do procesu a získat
+  zpět bez tichého zápisu do projektu. Konkrétní transport zatím není zvolen.
 
 ---
 
@@ -347,11 +368,10 @@ endpointu.
 - [x] Zachovat raw text jako fallback. Specializovaný editor smí
   materializovat známé bloky do widgetů jen při lossless round-trip;
   neznámý obsah nesmí tiše odstranit ani přeformátovat.
-- [ ] Reuse prezentačního a Julia editoru provést přes společný widget a
+- [x] Reuse prezentačního a Julia editoru provést přes společný widget a
   adaptéry, nikoli jejich sloučení do jedného datového formátu nebo
-  transakce. Prezentační raw režim je implementovaný; Julia adaptér je
-  připravený, ale jeho authoring zapojí až `COMP-03`. Julia authoring zůstane
-  v Nástrojích, výpočet ve Výpočtech.
+  transakce. Prezentační raw režim i Julia raw authoring jsou implementované;
+  Julia authoring zůstává v Nástrojích, výpočet ve Výpočtech.
 
 Akceptovanou implementační evidenci drží WORK_LOG
 `DOC-PATTERN-CATALOG-01`, `PLAN-TASK-EDITOR-01` a
@@ -827,7 +847,14 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 
 **Stav: read-only roadmapový i obecný projektový graf PoC validated;
 profilovaný souborový plán, editor a milestone/batch pohled jsou implemented;
-DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+DEV-IDE-TODO-01 a DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace
+má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a
+evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual
+Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci
+zdrojového kódu lze předat samostatnému coding agentovi, například Codexu.
+Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů,
+oprávnění a akceptace a projektové řízení se nemá ukládat jako vedlejší kopie
+mezi zdrojové soubory implementačního repozitáře.
 
 - [x] Generovat read-only DAG feature dávek z autoritativních Markdown stavů a
   explicitní anotace hran; zobrazit milestone swimlanes, kritickou cestu,
@@ -862,8 +889,14 @@ DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosaž
 
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.
+- [ ] První úzký IDE bridge `DEV-IDE-TODO-01` zobrazí zvolený workspace TODO a
+  jeho revizi v Code/VSCodium jako read-only virtuální dokument. Zpětné akce
+  nebudou editovat tento dokument: explicitně navrhnou dokončení úkolu nebo
+  odešlou připomínku/poznatek z implementace pro upřesnění zadání. Transport
+  Code/VSCodium → Workspace je otevřené návrhové rozhodnutí; musí mít stale
+  kontrolu, autorizaci, preview/receipt a jedinou Workspace zápisovou cestu.
 - [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
-- [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu.
+- [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu. Vazba na oddělený zdrojový repozitář musí připnout jeho identitu a revizi bez přesunu autoritativního projektového řízení do zdrojového stromu.
 - [ ] Distribuci rozšíření navrhnout pro ověřené kanály obou IDE a offline instalovatelný balíček; dostupnost konkrétního marketplace, API a značky ověřit v době implementace. Rozdíly VS Code/VSCodium nesmějí měnit doménový kontrakt ani bezpečnostní policy.
 - [ ] Konkrétní Codex adaptér držet odděleně od IDE rozšíření a realizovat přes v době implementace oficiálně podporované a ověřené rozhraní. Produktový kontrakt nevázat napevno na jednu dnešní podobu integrace ani na jediného providera; stejné IDE rozšíření může později použít jiný kompatibilní coding-agent adaptér.
 - [ ] Výsledek běhu importovat jako oddělený run record a návrh aktualizace projektových dat: stav, shrnutí, diff/změněné soubory, testy a jejich skutečné výsledky, vytvořené commity/PR pouze pokud byly povoleny, omezení a vazbu na původní task ID a vstupní revizi. Přerušený běh má stav `unknown`, nikoli automaticky failed nebo completed.

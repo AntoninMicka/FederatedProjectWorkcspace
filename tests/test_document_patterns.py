@@ -140,10 +140,11 @@ class DocumentPatternTests(unittest.TestCase):
             self.assertFalse(forbidden & set(pattern))
             self.assertIn(pattern['insertion'], {'document', 'block', 'cursor'})
 
-    def test_shared_widget_is_wired_to_document_and_presentation_without_save_endpoint(self):
-        self.assertEqual(2, HTML.count('class="raw-editor-widget"'))
+    def test_shared_widget_is_wired_to_document_presentation_and_julia_without_save_endpoint(self):
+        self.assertEqual(3, HTML.count('class="raw-editor-widget"'))
         self.assertIn('id="artifact-raw-widget"', HTML)
         self.assertIn('id="presentation-raw-widget"', HTML)
+        self.assertIn('id="julia-source-raw-widget"', HTML)
         self.assertIn('id="presentation-editor-mode-raw"', HTML)
         self.assertIn('function createRawEditorWidget(', JS)
         widget = JS[JS.index('function createRawEditorWidget('):
@@ -156,11 +157,11 @@ class DocumentPatternTests(unittest.TestCase):
         self.assertIn('helpExample.textContent=pattern?.example||adapter?.format_examples?.[format]',
                       widget)
         self.assertIn("insertionPosition.value==='end'", widget)
-        self.assertEqual(2, HTML.count('data-raw-insertion-position'))
+        self.assertEqual(3, HTML.count('data-raw-insertion-position'))
         self.assertIn("patterns.length?'Vyberte vzor…'", widget)
-        self.assertEqual(2, HTML.count('class="raw-editor-help-panel"'))
-        self.assertEqual(2, HTML.count('data-raw-help-title'))
-        self.assertEqual(2, HTML.count('data-raw-help-example'))
+        self.assertEqual(3, HTML.count('class="raw-editor-help-panel"'))
+        self.assertEqual(3, HTML.count('data-raw-help-title'))
+        self.assertEqual(3, HTML.count('data-raw-help-example'))
         self.assertIn('.raw-editor-layout{display:grid', CSS)
         self.assertIn('grid-template-columns:minmax(0,820px) minmax(260px,320px)',
                       CSS)

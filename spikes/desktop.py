@@ -352,6 +352,8 @@ def main():
         server.metadata_suggestion_service = MetadataSuggestionService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)
+        from spikes.julia_workspace import JuliaWorkspaceService
+        server.julia_workspace = JuliaWorkspaceService(node_path, server.projects)
         server.publication_cms = PublicationCms(server.chat_service.state_dir)
         server.project_creation_actions = ProjectCreationActions(
             node_path, desktop_locations=True)

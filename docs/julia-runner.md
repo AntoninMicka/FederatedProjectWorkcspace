@@ -191,10 +191,35 @@ oficiální checksum, ale nemůže doložit, že jste skutečně provedli samost
 GPG krok výše. Příkaz také nestahuje balíčky, nespouští projektový kód a
 nevytváří `computation.json`.
 
-Tím je připravený **runtime**, nikoli ještě projektový výpočet v UI. Současný
-PoC nemá průvodce tvorbou Julia modelu ani tlačítko pro spuštění; navazující
-`next.command` je vývojářské CLI a vyžaduje verzované projektové artefakty a
-UUID registrovaného projektu, uzlu a uživatele.
+Tím je připravený **runtime**. Otevřený projekt poté nabídne v záložce
+**Výpočty** každou validní definici `fpw-julia-computation-v1`. Editor se
+otevírá z levého panelu přes **Nástroje → Julia editor** a zobrazí se v hlavní
+záložce **Nástroje**; záložka **Výpočty** slouží pouze k preview, běhu a
+publikaci. Tlačítko **Nový Julia model** vloží minimální bez-závislostní
+šablonu. Jedno potvrzené uložení zapíše Julia entrypoint, `Project.toml`,
+`Manifest.toml` a definici jako čtyři projektově spravované `document`
+artefakty v jediné Workspace transakci; importované immutable `source`
+artefakty editor měnit nesmí. Uložením se kód nespouští.
+
+Běžná část editoru obsahuje kód a JSON kontrakty parametrů a výstupů. Přesné
+prostředí a execution policy jsou v pokročilé části. Výchozí manifest odpovídá
+prázdnému projektu pro Julia 1.10.12; jakmile přidáte balíčky, vytvořte nový
+manifest pomocí Julia Pkg v kontrolovaném přípravném prostředí a vložte jeho
+úplné bajty. Editor balíčky nestahuje, `Pkg.resolve` ani `Pkg.instantiate`
+nespouští a ručně sestavený manifest nevydává za reprodukovatelný.
+
+Změna parametru ani příprava preview kód nespustí; běh vyžaduje samostatné
+potvrzení exact preview a publikace jednoho výsledku další potvrzení.
+
+Desktop použije lokálního autora projektu. Web používá přihlášený účet a
+vyžaduje zápisové oprávnění pro preview, dispatch, cancel/reconcile i
+publikaci; definici nebo vstup `local-only` přes síť nenabízí. Po restartu UI
+čte Julia journal, ale samo běh neopakuje. Stav `dispatching` lze explicitně
+reconcile, pouze pokud v aktuálním procesu neběží jeho worker; neúplný účinek
+bez kompletní materializace skončí `unknown`.
+
+`next.command` zůstává nízkoúrovňové CLI pro diagnostiku a automatizované
+testy a vyžaduje UUID registrovaného projektu, uzlu a uživatele.
 
 ### Časté chyby
 
