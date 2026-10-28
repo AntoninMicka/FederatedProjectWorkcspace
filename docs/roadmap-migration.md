@@ -431,3 +431,28 @@ nezvolená fyzická cesta nového modulového projektu. Obsahové review zbývá
 pro privacy 13 zdrojů a dostupnost devíti externích odkazů. `import_ready`
 proto zůstává `false`; i po opravě těchto nálezů chybí writer, jeho
 journal recovery a idempotentní retry.
+
+### Odstranění blokátorů prověrky
+
+Odvozené dokumenty nyní přepisují relativní odkazy na vybrané zdroje na
+jejich content-addressed source artefakty. Odkaz na soubor mimo vybraný import
+se nepokouší předstírat funkční navigaci: zachová popisek a původní cíl jako
+text `zdrojová cesta`. Nemění se tím archivované source artefakty ani jejich
+hash; transformace se týká pouze odvozených popisů a plánu.
+
+Pro modul `cz.proofofidea.publication-experiment-registry` je v operaci
+explicitně svázána cesta
+`/home/antonin/Projekty/publication-experiment-registry`. Odpovídající state
+adresář je
+`/home/antonin/Projekty/.workspace-state-af24865c-a81f-58c9-b572-a397bd0c3d6e`.
+Read-only kontrola mimo omezený vývojový sandbox potvrdila vlastnictví a
+zapisovatelnost parentu, neexistenci obou cílů a absenci překryvu. Adresáře
+nebyly vytvořeny.
+
+Opravený balík je `/tmp/dev-01-import-operation-v3`, SHA-256
+`ae0df1d730259fa233ef87f6a253969674d96e6b2e08c7bc080a0476fa558e99`.
+Prověrka `/tmp/dev-01-prewrite-review-v3-host` má 11 kontrol `passed`, nula
+`blocked` a tři `needs-review`. Otevřené review privacy 13 zdrojů a devíti
+externích URL není tímto krokem automaticky schválené. Zápis stále
+neproběhl a `import_ready` zůstává false do jejich rozhodnutí a implementace
+writeru/recovery.

@@ -282,7 +282,8 @@ def build_mapping(value, roots, *, module_placements=()):
             coverage[item['locator']] = dict(id=None, classification='supporting-document')
     require(set(coverage) == set(occurrences), 'Source coverage is incomplete')
 
-    milestone_titles, prose_documents = collect_descriptions(value, raw, nodes, checklist_owners)
+    milestone_titles, prose_documents = collect_descriptions(
+        value, raw, nodes, checklist_owners, source_refs=source_refs)
     gate_evidence = completed_gate_evidence(value, raw)
     completed_gates = {(item['repository_id'], item['milestone_id']) for item in gate_evidence}
     # Anonymous prose is not a new requirement entity with an invented ID.

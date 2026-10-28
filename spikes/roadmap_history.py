@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: MPL-2.0
 """Historical placement and non-executable prose for the migration preview."""
 from collections import defaultdict
+from pathlib import PurePosixPath
 import re
 from uuid import NAMESPACE_URL, uuid5
 
-from spikes.roadmap_migration import HEADING, visible_markdown_lines
+from spikes.roadmap_migration import HEADING, LINK, visible_markdown_lines
 
 # Curated placement of this product's recorded feature IDs, not guessed
 # dependencies or a change to their historical implementation/maturity state.
@@ -62,12 +63,56 @@ def completed_gate_evidence(value, raw):
     return evidence
 
 
-def collect_descriptions(value, raw, nodes, checklist_owners=()):
+def rewrite_source_links(text, source, source_paths, source_refs):
+    """Keep evidence readable without links back into the source checkout."""
+    source_path = PurePosixPath(source_paths[source])
+
+    def replace(match):
+        whole, target = match.group(0), match.group(1).strip()
+        clean = target.strip('<>')
+
+        def replace_destination(value):
+            boundary = whole.rfind('](') + 2
+            return whole[:boundary] + value + whole[boundary + len(match.group(1)):]
+
+        def source_path_label():
+            boundary = whole.rfind('](')
+            return whole[:boundary + 1] + ' (zdrojová cesta: `' + clean + '`)'
+
+        if clean.startswith('#') or re.match(r'^[A-Za-z][A-Za-z0-9+.-]*:', clean):
+            return whole
+        destination_path, marker, fragment = clean.partition('#')
+        # Titles and other complex Markdown destinations are retained as
+        # readable source evidence, never guessed into a live artifact link.
+        if (not destination_path or any(char in destination_path for char in '\t\r\n')
+                or destination_path.startswith('/')):
+            return source_path_label()
+        normalized = str(PurePosixPath(source_path.parent, destination_path))
+        parts = []
+        for part in PurePosixPath(normalized).parts:
+            if part == '..':
+                if parts:
+                    parts.pop()
+                else:
+                    return source_path_label()
+            elif part != '.':
+                parts.append(part)
+        key = source.split(':', 1)[0] + ':' + '/'.join(parts)
+        if key in source_refs:
+            return replace_destination(source_refs[key] + (marker + fragment if marker else ''))
+        return source_path_label()
+
+    return LINK.sub(replace, text)
+
+
+def collect_descriptions(value, raw, nodes, checklist_owners=(), source_refs=None):
     """Create complete Markdown notes, assigning only explicit section context.
 
     Unassigned notes are separate documents. No requirement becomes a task,
     and historical tasks without a recorded batch are not given a fake batch.
     """
+    source_refs = source_refs or {}
+    source_paths = {item['key']: item['path'] for item in value['sources']}
     milestones, documents, buckets = {}, [], defaultdict(list)
     occurrences = {(item['source'], item['line']): item for item in value['occurrences']}
     for source in value['sources']:
@@ -100,12 +145,14 @@ def collect_descriptions(value, raw, nodes, checklist_owners=()):
                 # Actual task/batch/checklist rows are not generic ideas.
                 # Their surrounding paragraph text is still retained in notes.
                 if not occurrence:
-                    current['prose'].append(line.strip())
+                    current['prose'].append(rewrite_source_links(line.strip(), key, source_paths, source_refs))
                 elif (not occurrence['id'] and occurrence['kind'] == 'checkbox'
                       and occurrence['locator'] not in checklist_owners):
-                    current['prose'].append(re.sub(r'^\s*[-+*]\s+\[[ xX]\]\s*', '', line))
+                    text = re.sub(r'^\s*[-+*]\s+\[[ xX]\]\s*', '', line)
+                    current['prose'].append(rewrite_source_links(text, key, source_paths, source_refs))
                 elif occurrence['id'] and (scope, occurrence['id']) not in nodes:
-                    current['prose'].append('Historický/zdrojový bod: ' + line.strip())
+                    text = rewrite_source_links(line.strip(), key, source_paths, source_refs)
+                    current['prose'].append('Historický/zdrojový bod: ' + text)
         if current:
             chunks.append(current)
         for chunk in chunks:
@@ -132,8 +179,9 @@ def collect_descriptions(value, raw, nodes, checklist_owners=()):
                     owner = 'MILESTONE-' + lanes.pop()
                     milestones.setdefault((scope, owner), owner.removeprefix('MILESTONE-'))
             bucket = (scope, owner, None if owner else (key, chunk['title']))
+            original = data[chunk['start']:chunk['end']].decode('utf-8')
             buckets[bucket].append(dict(source=key, **chunk,
-                                       original=data[chunk['start']:chunk['end']].decode('utf-8')))
+                                       original=rewrite_source_links(original, key, source_paths, source_refs)))
     for (scope, owner, detached_key), chunks in sorted(buckets.items(), key=lambda pair: str(pair[0])):
         identity = str(uuid5(NAMESPACE_URL, 'migration-notes:' + scope + ':' + str(owner or detached_key)))
         path = f'artifacts/{identity}/content.md'

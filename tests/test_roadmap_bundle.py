@@ -109,6 +109,18 @@ class RoadmapBundleTests(MappingFixture, unittest.TestCase):
         self.assertEqual(module['depends_on_operations'],[])
         self.assertTrue(all(entry['action']=='create' for entry in module['files']))
 
+    def test_new_module_location_is_explicitly_bound_into_the_operation(self):
+        _,_,value,mapping,roots,*_ = self.fixture_bundle(module=True)
+        location = '/srv/workspace/publication-registry'
+        operation,_ = assemble_bundle(value,mapping,roots,author_id=AUTHOR,created_at=WHEN,
+                                      privacy='project',target_locations={
+                                          'cz.proofofidea.publication-experiment-registry':location})
+        module = next(project for project in operation['projects'] if project['mode']=='create-seeded-project')
+        host = next(project for project in operation['projects'] if project['mode']=='replace-test-plan')
+        self.assertEqual(module['target_location'],location)
+        self.assertEqual(module['location_resolution'],'explicit')
+        self.assertIsNone(host['target_location'])
+
     def test_unbound_or_foreign_source_mapping_cannot_be_packaged(self):
         op,blobs,value,mapping,roots,*_ = self.fixture_bundle()
         mapping['projects'][0]['source_references']['foreign:secret.md']='artifacts/00000000-0000-0000-0000-000000000000/source.md'

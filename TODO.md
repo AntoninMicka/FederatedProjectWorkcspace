@@ -144,8 +144,18 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   autor, modulový seed a jeho task graph, nativní replica policy, čistý
   očekávaný host HEAD, prázdný journal a celý sloučený snapshot včetně
   `validate_transition` a task graphu.
-  Zápis nyní blokuje 184 nepřevedených relativních odkazů v odvozených host
-  dokumentech (72 odlišných cílů) a nezvolená fyzická cesta nového modulu.
+  První prověrku blokovalo 184 nepřevedených relativních odkazů v odvozených
+  host dokumentech (72 odlišných cílů) a nezvolená fyzická cesta nového modulu.
+  Oba blokátory jsou v opraveném balíku odstraněné. Vybrané zdroje se
+  odkazují na importované artifact cesty; nevybrané cíle zůstávají čitelnou,
+  neaktivní zdrojovou cestou. Modulová operace explicitně drží cíl
+  `/home/antonin/Projekty/publication-experiment-registry`; read-only kontrola
+  mimo vývojový sandbox potvrdila volný cíl, state adresář, skutečná práva
+  parentu a nepřekrývání chráněných cest. Nic nebylo vytvořeno.
+  Nový balík `/tmp/dev-01-import-operation-v3` má SHA-256
+  `ae0df1d730259fa233ef87f6a253969674d96e6b2e08c7bc080a0476fa558e99`;
+  `/tmp/dev-01-prewrite-review-v3-host` hlásí 11 passed / 0 blocked /
+  3 needs-review.
   Review vyžaduje klasifikace privacy všech 13 zdrojů a devět externích
   odkazů, jejichž dostupnost nebyla síťově ověřena. Validátor je uzavřený,
   nic nevytváří v projektu ani state a neoznačuje tyto nálezy za prošlé.
@@ -177,8 +187,8 @@ ponechání chybějící cesty/privacy jako otevřených stavů a rozlišení
 relativního a neexistujícího artifact odkazu. Skutečný report nad aktuálním
 balíkem potvrdil nezměněný živý HEAD a nulový rozpracovaný journal.
 Společný cílený běh validačních, bundle, mapping, inventory, task-graph,
-roadmap-graph a SPDX testů po poslední změně: 50 testů OK. Log:
-`/tmp/dev-01-review-tests.log`. Celá finální unittest brána zůstává pro
+roadmap-graph a SPDX testů po poslední změně: 52 testů OK. Log:
+`/tmp/dev-01-blocker-tests.log`. Celá finální unittest brána zůstává pro
 uzavření dávky.
 
 `python3 -m unittest tests.test_roadmap_bundle tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:

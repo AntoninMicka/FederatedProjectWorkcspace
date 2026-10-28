@@ -198,7 +198,8 @@ def validate_bundle(bundle, node, *, locations=None, source_privacy=None, source
             graph = project_task_graph(incoming, entities, project['project_id'], '0' * 40)
             require(graph['status'] == 'ready', graph.get('error', 'Invalid new project graph'))
             results.append(_result(prefix+'full-candidate', 'passed', 'Seed snapshot a task graph jsou validní.', files=len(incoming)))
-            results.append(_new_location(project, locations.get(scope), node, source_roots))
+            results.append(_new_location(project, locations.get(scope, project.get('target_location')),
+                                         node, source_roots))
             continue
         git = Projects(node).repository(project['project_id'])
         administration = Administration(node, deployment='desktop')

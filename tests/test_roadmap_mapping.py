@@ -12,6 +12,7 @@ from spikes.metadata import ValidationError
 from spikes.artifacts import Artifacts
 from spikes.markdown_documents import main_todo_id
 from spikes.project_creation import ProjectCreation
+from spikes.roadmap_history import rewrite_source_links
 from spikes.roadmap_mapping import bind_target_preview, build_mapping, node_title, source_block, validate_mapping_binding
 from spikes.roadmap_migration import canonical, inventory, markdown_occurrences
 from scripts.roadmap_migration_plan import write_preview
@@ -276,3 +277,14 @@ class RoadmapMappingTests(MappingFixture, unittest.TestCase):
         self.assertIn('Podklad:', milestone['description'])
         self.assertNotIn('x' * 100, milestone['description'])
         self.assertEqual(project['graph']['status'], 'ready')
+
+    def test_derived_notes_reconcile_selected_links_and_deactivate_unselected_paths(self):
+        source = 'federated-workspace:docs/note.md'
+        text = ('[TODO](../TODO.md#active) and [contract](adr/unselected.md) '
+                'and [web](https://example.test/doc)')
+        rendered = rewrite_source_links(
+            text, source, {source: 'docs/note.md'},
+            {'federated-workspace:TODO.md': 'artifacts/00000000-0000-0000-0000-000000000000/source.md'})
+        self.assertIn('[TODO](artifacts/00000000-0000-0000-0000-000000000000/source.md#active)', rendered)
+        self.assertIn('[contract] (zdrojová cesta: `adr/unselected.md`)', rendered)
+        self.assertIn('[web](https://example.test/doc)', rendered)

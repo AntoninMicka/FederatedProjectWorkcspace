@@ -58,7 +58,7 @@ def _scoped_mapping(mapping, scope):
                                                if item['repository_id'] == scope])
 
 
-def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy):
+def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy, target_locations=None):
     """Return a manifest and content-addressed blobs for subsequent validation.
 
     created_at is package preparation time, never a guessed original source
@@ -66,6 +66,7 @@ def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy):
     Artifact shape checks here do not replace authorization/recovery gates.
     """
     uuid(author_id); timestamp(created_at)
+    target_locations = target_locations or {}
     require(privacy in PRIVACY_ORDER, 'Invalid proposed import privacy')
     validate_mapping_binding(mapping, value)
     require(mapping.get('mapping_policy') == 'history-inclusive-and-free-descriptions-v2',
@@ -79,6 +80,7 @@ def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy):
     targets = {p['repository_id']: p.get('target_project_id') or
                str(uuid5(UUID(host_id), 'module-project:' + p['repository_id'])) for p in mapping['projects']}
     require(len(targets.values()) == len(set(targets.values())), 'Two scopes select the same target project')
+    require(set(target_locations) <= set(targets), 'Target location supplied for an unknown scope')
     blobs, projects = {}, []
 
     def blob(data):
@@ -200,11 +202,17 @@ def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy):
         preview = project.get('target_preview')
         declaration = next((json.loads(raw[s['key']]) for s in own_sources if s['role'] == 'module-manifest'), {})
         project_title = declaration.get('display_name', scope)
+        target_location = target_locations.get(scope)
+        require(target_location is None or (isinstance(target_location, str) and target_location.startswith('/')),
+                'Target location must be an absolute path')
+        require(preview is None or target_location is None, 'Existing registered project does not accept a target location')
         projects.append(dict(repository_id=scope, project_id=project_id, operation_id=operation_id,
                              payload_directory='payload/' + scope,
                              mode='replace-test-plan' if preview else 'create-seeded-project',
                              expected_head=preview['expected_head'] if preview else None,
-                             target_location=None, location_resolution='registered-project' if preview else 'required-before-create',
+                             target_location=target_location,
+                             location_resolution='registered-project' if preview else
+                             ('explicit' if target_location else 'required-before-create'),
                              project_metadata_proposal=None if preview else dict(schema_version=1, id=project_id,
                                  title=project_title, created_at=created_at, author_id=author_id),
                              privacy_proposal=privacy, preserve_unlisted_entities=True, deletions=[],
