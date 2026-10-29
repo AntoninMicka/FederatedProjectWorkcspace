@@ -252,6 +252,53 @@ class WebTests(unittest.TestCase):
         self.assertEqual(['definitions', 'preview', 'execute', 'editor-open', 'editor-save',
                           'editor-delete-preview', 'editor-delete'],
                          [item[0] for item in service.calls])
+
+    def test_roadmap_refinement_routes_separate_read_and_decision_actions(self):
+        code, data, _ = self.create_project('Roadmap review routes')
+        self.assertEqual(200, code, data); project_id = json.loads(data)['id']
+        proposal_id = str(uuid4()); calls = []
+        class Service:
+            def __init__(inner, node, selected):
+                self.assertEqual(project_id, selected)
+            def review_list(inner):
+                calls.append(('list',))
+                return [{'proposal_id': proposal_id, 'state': 'pending'}]
+            def review_detail(inner, selected):
+                calls.append(('detail', selected)); return {'row': {}, 'context': {}}
+            def decide(inner, selected, decision):
+                calls.append(('decide', selected, decision)); return {'proposal_id': selected}
+            def decide_many(inner, selected, decision):
+                calls.append(('many', selected, decision)); return {'updated': len(selected)}
+        with patch('spikes.roadmap_refinement.RoadmapRefinement', Service):
+            for path, body in (
+                ('/v1/roadmap-refinement/list', {'project_id': project_id}),
+                ('/v1/roadmap-refinement/detail', {'project_id': project_id,
+                                                   'proposal_id': proposal_id}),
+                ('/v1/roadmap-refinement/decide', {'project_id': project_id,
+                    'proposal_id': proposal_id, 'decision': 'accept'}),
+                ('/v1/roadmap-refinement/decide-all', {'project_id': project_id,
+                    'proposal_ids': [proposal_id], 'decision': 'reject'})):
+                code, data, _ = self.request(path=path, body=json.dumps(body))
+                self.assertEqual(200, code, data)
+            def admin(body):
+                code, value, _ = self.request(path='/v1/administration',
+                    body=json.dumps(body)); self.assertEqual(200, code, value); return json.loads(value)
+            state = admin({'action': 'list'})
+            state = admin({'action': 'create-user', 'expected_commit': state['commit_id'],
+                           'name': 'Roadmap reader', 'node_role': 'member'})
+            user, key = state['users'][0], state['access_key']
+            state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
+                'user_id': user['id'], 'active': True, 'node_role': 'member',
+                'memberships': {project_id: 'reader'}})
+            headers = {'Authorization': 'Bearer ' + key}
+            self.assertEqual(200, self.request(path='/v1/roadmap-refinement/list',
+                body=json.dumps({'project_id': project_id}), headers=headers)[0])
+            self.assertEqual(403, self.request(path='/v1/roadmap-refinement/decide',
+                body=json.dumps({'project_id': project_id, 'proposal_id': proposal_id,
+                                 'decision': 'accept'}), headers=headers)[0])
+        self.assertEqual([('list',), ('detail', proposal_id),
+                          ('decide', proposal_id, 'accept'),
+                          ('many', [proposal_id], 'reject'), ('list',)], calls)
     def test_document_pattern_catalog_and_validation_are_read_only(self):
         code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
             'action': 'catalog'}))

@@ -131,6 +131,21 @@ Worker vyžaduje hlavní plán a validní executable task graph. Importovaný mo
 který uchovává pouze původní zdrojové artefakty, lze přes `list` zkontrolovat,
 ale `scan` na něm záměrně skončí `Main plan is unavailable`.
 
+## Review ve Workspace UI
+
+Projekt s alespoň jedním řádkem v node-local proposal queue zobrazí v levém
+panelu **Nástroje** položku **Kontrola roadmapy**. Samostatná stránka má
+scrollovatelnou tabulku, filtr rozhodnutých stavů, lazy detail z exact proposal
+HEAD a jednotlivé Schválit/Zamítnout. Globální Schválit/Zamítnout všechny
+pracuje pouze s právě načtenými pending ID, vyžaduje potvrzení a ukládá celou
+dávku jednou SQLite transakcí. Obnovit znovu načte lokální autoritu.
+
+UI nevytváří druhou kopii návrhů a nenabízí `apply`. Reader může seznam a detail
+prohlížet, ale rozhodnutí vyžaduje editor/project-admin nebo node admina. Detail
+se načítá až po výběru řádku; počáteční seznam neobsahuje zdrojové excerpt ani
+raw modelovou odpověď. Pokud projekt nemá žádné záznamy, položka i hlavní panel
+zůstávají skryté.
+
 ## První živá evidence
 
 Na importovaném HEAD `ede2a869c09f9fc2bf66f75eebfb07799b1fd7c1` bylo nalezeno

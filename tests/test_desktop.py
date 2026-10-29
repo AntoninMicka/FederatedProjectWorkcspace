@@ -452,6 +452,23 @@ raise SystemExit(app.exec())
         self.assertNotIn('juliaEditorDefinition', JS)
         self.assertNotIn('julia-output-value.innerHTML', JS)
 
+    def test_roadmap_refinement_review_is_a_conditional_project_tool(self):
+        self.assertIn('id="roadmap-refinement-tab"', HTML)
+        self.assertIn('id="roadmap-refinement-panel"', HTML)
+        self.assertIn('id="roadmap-review-table"', HTML)
+        self.assertIn('id="roadmap-review-detail"', HTML)
+        self.assertIn('Schválit všechny pending', HTML)
+        self.assertIn('Zamítnout všechny pending', HTML)
+        self.assertIn('roadmapReviewTab.hidden=!roadmapReviewRows.length', JS)
+        self.assertIn('if(roadmapReviewRows.length)', JS)
+        for path in ('list', 'detail', 'decide', 'decide-all'):
+            self.assertIn(f"projectRequest('/v1/roadmap-refinement/{path}'", JS)
+            self.assertIn('/v1/roadmap-refinement/' + path, DesktopHandler.post_paths)
+        self.assertIn('.roadmap-review-layout{display:grid', CSS)
+        review_js = JS[JS.index('function renderRoadmapReviewRows'):
+                       JS.index('function renderJuliaParameters')]
+        self.assertNotIn('.innerHTML=', review_js)
+
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
         with tempfile.TemporaryDirectory() as directory:

@@ -102,6 +102,22 @@ class RoadmapRefinementTests(unittest.TestCase):
             other_service.decide(proposal['proposal_id'], 'reject')
         self.assertEqual(self.service.get(proposal['proposal_id'])['state'], 'pending')
 
+    def test_web_review_projection_is_bounded_and_bulk_decision_is_atomic(self):
+        proposal = self.service.scan()['created'][0]
+        rows = self.service.review_list()
+        self.assertEqual(1, len(rows))
+        self.assertNotIn('input', rows[0])
+        self.assertNotIn('reason', rows[0]['proposal'])
+        detail = self.service.review_detail(proposal['proposal_id'])
+        self.assertIn('Belongs to M1', detail['context']['source_excerpt'])
+        missing = str(uuid4())
+        with self.assertRaisesRegex(ValueError, 'no longer pending'):
+            self.service.decide_many([proposal['proposal_id'], missing], 'accept')
+        self.assertEqual('pending', self.service.get(proposal['proposal_id'])['state'])
+        result = self.service.decide_many([proposal['proposal_id']], 'accept')
+        self.assertEqual(1, result['updated'])
+        self.assertEqual('accepted', self.service.get(proposal['proposal_id'])['state'])
+
     def test_deep_check_freezes_source_clusters_into_the_same_proposal_queue(self):
         source_id = str(uuid4())
         self.docs.save(dict(project_id=self.project_id, artifact_id=source_id,

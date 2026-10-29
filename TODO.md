@@ -260,6 +260,16 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   Ad-hoc oprava pomalého otevření TUI: `refresh()` již nestaví exact-revision
   snapshot a task graph pro každý řádek fronty. Detail se načítá lazy jen pro
   vybranou položku, cachuje se v session a úvodní obrazovka oznamuje načítání.
+  Ad-hoc požadavek 2026-10-29 integruje review do Workspace UI: projekt s řádky
+  fronty dostane pod Nástroji samostatnou stránku s tabulkou, lazy detailem,
+  filtrem, jednotlivým a potvrzeným hromadným accept/reject. UI používá stejnou
+  queue a nevystavuje apply; reader smí číst, rozhodovat smí editor/admin.
+  Cílené ověření 2026-10-29: 24/24 testů roadmap refinement/TUI/API/UI prošlo;
+  celý `tests.test_desktop`: 52 testů OK, 6 fyzických Qt/WebEngine smoke testů
+  přeskočeno podle opt-in podmínky; celý `tests.test_web_server`: 41 testů OK,
+  8 opt-in browser smoke testů přeskočeno. Sdílený JavaScript prošel
+  `node --check`. Read-only živá projekce skutečné queue projektu načetla 1581
+  řádků; žádné rozhodnutí ani projektový zápis při kontrole nevznikly.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

@@ -595,6 +595,27 @@ class RoadmapRefinement:
         uuid(proposal_id)
         return next((row for row in self.list() if row['proposal_id'] == proposal_id), None)
 
+    def review_list(self):
+        """Return a bounded UI projection without source excerpts or raw responses."""
+        result = []
+        for row in self.list():
+            proposal = row['proposal']; frozen = row.get('input') or {}
+            summary = {key: proposal[key] for key in (
+                'decision', 'action', 'outcome', 'confidence', 'summary', 'target_id',
+                'target_ids') if key in proposal}
+            result.append({key: row[key] for key in (
+                'proposal_id', 'state', 'expected_head', 'created_at', 'mode')}
+                | {'proposal': summary,
+                   'source_label': (frozen.get('stable_id') or frozen.get('cluster_id')
+                                    or row.get('document_id', '-')[:8])})
+        return result
+
+    def review_detail(self, proposal_id):
+        row = self.get(proposal_id)
+        require(row is not None, 'Proposal is unavailable for this project')
+        public_row = {key: value for key, value in row.items() if key != 'input'}
+        return {'row': public_row, 'context': self.review_context(row)}
+
     def decide(self, proposal_id, decision):
         uuid(proposal_id); require(decision in {'accept', 'reject'}, 'Unknown review decision')
         with self._connect() as db, db:
@@ -605,6 +626,28 @@ class RoadmapRefinement:
                        ('accepted' if decision == 'accept' else 'rejected',
                         proposal_id, self.project_id))
         return self.get(proposal_id)
+
+    def decide_many(self, proposal_ids, decision):
+        require(isinstance(proposal_ids, list) and 0 < len(proposal_ids) <= 100000
+                and len(proposal_ids) == len(set(proposal_ids)),
+                'Invalid proposal decision list')
+        for proposal_id in proposal_ids:
+            uuid(proposal_id)
+        require(decision in {'accept', 'reject'}, 'Unknown review decision')
+        with self._connect() as db, db:
+            # Serialize validation and the whole batch update. A concurrent
+            # CLI/TUI decision cannot slip between the pending check and write.
+            db.execute('BEGIN IMMEDIATE')
+            available = {row[0] for row in db.execute(
+                'SELECT id FROM proposals WHERE project_id=? AND state=?',
+                (self.project_id, 'pending'))}
+            require(set(proposal_ids) <= available, 'Some proposals are no longer pending review')
+            target = 'accepted' if decision == 'accept' else 'rejected'
+            db.executemany('UPDATE proposals SET state=? WHERE id=? AND project_id=? AND state=?',
+                           ((target, proposal_id, self.project_id, 'pending')
+                            for proposal_id in proposal_ids))
+        return {'project_id': self.project_id, 'decision': decision,
+                'updated': len(proposal_ids), 'proposal_ids': proposal_ids}
 
     def apply(self, operation_id):
         uuid(operation_id)

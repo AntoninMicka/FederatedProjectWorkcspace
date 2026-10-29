@@ -835,3 +835,10 @@ settings panely a tabulky; parent connection a projektová mapování zůstávaj
 v témže node-local SQLite journalu. Reuse původních sessions/messages
 zachovává receipts a schema-v1 kompatibilitu. Nepřidává se další server,
 framework ani projektový writer; změnu scope a atomické recovery drží ADR 0060.
+
+DEV-01-E-RECONCILE-REVIEW **reuse/adaptuje** existující projektový sidebar
+Nástroje, hlavní tabpanely, bezpečné DOM vykreslení a RBAC hranice sdíleného
+desktop/web UI. Data i rozhodnutí zůstávají v jediné existující node-local
+roadmap refinement SQLite queue; detail používá exact proposal HEAD a bulk
+accept/reject jednu SQLite transakci nad explicitními pending ID. Nový UI store,
+projektový writer, framework nebo kopie proposal stavu jsou **reject**.
