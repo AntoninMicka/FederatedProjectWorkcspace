@@ -603,7 +603,7 @@ class RoadmapRefinement:
             summary = {key: proposal[key] for key in (
                 'decision', 'action', 'outcome', 'confidence', 'summary', 'target_id',
                 'target_ids') if key in proposal}
-            result.append({key: row[key] for key in ('proposal_id', 'state')}
+            result.append({key: row[key] for key in ('proposal_id', 'state', 'mode')}
                 | {'proposal': summary,
                    'source_label': (frozen.get('stable_id') or frozen.get('cluster_id')
                                     or row.get('document_id', '-')[:8])})

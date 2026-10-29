@@ -1082,7 +1082,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="roadmap-review-global form-actions"><button id="roadmap-review-refresh" class="secondary-button" type="button">Obnovit seznam</button>
 <button id="roadmap-review-previous" class="secondary-button" type="button">Předchozí stránka</button><button id="roadmap-review-next" class="secondary-button" type="button">Další stránka</button>
 <button id="roadmap-review-accept-all" type="button">Schválit všechny pending</button>
-<button id="roadmap-review-reject-all" class="danger-button" type="button">Zamítnout všechny pending</button></div>
+<button id="roadmap-review-reject-all" class="danger-button" type="button">Zamítnout všechny pending</button>
+<button id="roadmap-review-apply" type="button" disabled>Provést schválené</button></div>
 <div class="roadmap-review-filters"><fieldset><legend>Zobrazit stavy</legend><div id="roadmap-review-state-filters"></div><div class="roadmap-review-filter-actions"><button id="roadmap-review-states-all" class="secondary-button" type="button">Všechny</button><button id="roadmap-review-states-none" class="secondary-button" type="button">Žádné</button></div></fieldset>
 <fieldset><legend>Zobrazit návrhy</legend><div id="roadmap-review-action-filters"></div><div class="roadmap-review-filter-actions"><button id="roadmap-review-actions-all" class="secondary-button" type="button">Všechny</button><button id="roadmap-review-actions-none" class="secondary-button" type="button">Žádné</button></div></fieldset>
 <label>Řadit podle <select id="roadmap-review-sort"><option value="original">Původní pořadí</option><option value="state">Stavu</option><option value="action">Návrhu</option><option value="source">Zdroje</option><option value="target">Cíle</option><option value="confidence">Jistoty</option></select></label>
@@ -3406,6 +3407,7 @@ const roadmapReviewDetail=document.querySelector('#roadmap-review-detail');
 let roadmapReviewRows=[],roadmapReviewSelected=null,roadmapReviewRequest=0,roadmapReviewPage=0,roadmapReviewError=null;
 let roadmapReviewStates=new Set(),roadmapReviewKnownStates=new Set();
 let roadmapReviewActions=new Set(),roadmapReviewKnownActions=new Set();
+let roadmapReviewApplyOperation=null;
 const ROADMAP_REVIEW_PAGE_SIZE=100;
 const roadmapReviewDetails=new Map();
 const juliaDeleteDialog=document.querySelector('#julia-delete-dialog');
@@ -3471,7 +3473,7 @@ function clearJulia(){
  document.querySelector('#sidebar-tools-status').textContent='Otevřete projekt.';
 }
 function clearRoadmapReview(){
- ++roadmapReviewRequest;roadmapReviewRows=[];roadmapReviewSelected=null;roadmapReviewPage=0;roadmapReviewError=null;roadmapReviewStates.clear();roadmapReviewKnownStates.clear();roadmapReviewActions.clear();roadmapReviewKnownActions.clear();roadmapReviewDetails.clear();roadmapReviewBody.replaceChildren();document.querySelector('#roadmap-review-state-filters').replaceChildren();document.querySelector('#roadmap-review-action-filters').replaceChildren();
+ ++roadmapReviewRequest;roadmapReviewRows=[];roadmapReviewSelected=null;roadmapReviewPage=0;roadmapReviewError=null;roadmapReviewApplyOperation=null;roadmapReviewStates.clear();roadmapReviewKnownStates.clear();roadmapReviewActions.clear();roadmapReviewKnownActions.clear();roadmapReviewDetails.clear();roadmapReviewBody.replaceChildren();document.querySelector('#roadmap-review-state-filters').replaceChildren();document.querySelector('#roadmap-review-action-filters').replaceChildren();
  roadmapReviewTab.hidden=true;roadmapReviewStatus.textContent='Otevřením projektu se načte lokální fronta.';
  roadmapReviewDetail.querySelector('dl').replaceChildren();roadmapReviewDetail.querySelector('[data-review-reason]').textContent='—';roadmapReviewDetail.querySelector('[data-review-changes]').textContent='—';roadmapReviewDetail.querySelector('[data-review-source]').textContent='—';
  document.querySelector('#roadmap-review-detail-title').textContent='Vyberte záznam';document.querySelector('#roadmap-review-accept').disabled=true;document.querySelector('#roadmap-review-reject').disabled=true;
@@ -3519,9 +3521,10 @@ function roadmapReviewVisibleRows(){
 }
 function roadmapReviewFiltersChanged(){roadmapReviewPage=0;roadmapReviewSelected=null;renderRoadmapReviewFilters();renderRoadmapReviewRows();}
 function updateRoadmapReviewActions(){
- const pending=roadmapReviewRows.filter(row=>row.state==='pending'),selected=roadmapReviewRows.find(row=>row.proposal_id===roadmapReviewSelected),writable=!activeProject?.readOnly;
+ const pending=roadmapReviewRows.filter(row=>row.state==='pending'),accepted=roadmapReviewRows.filter(row=>row.state==='accepted'),selected=roadmapReviewRows.find(row=>row.proposal_id===roadmapReviewSelected),writable=!activeProject?.readOnly,applicable=accepted.length>0&&accepted.every(row=>row.mode==='detached');
  document.querySelector('#roadmap-review-accept-all').disabled=!pending.length||!writable;document.querySelector('#roadmap-review-reject-all').disabled=!pending.length||!writable;
  document.querySelector('#roadmap-review-accept').disabled=selected?.state!=='pending'||!writable;document.querySelector('#roadmap-review-reject').disabled=selected?.state!=='pending'||!writable;
+ const apply=document.querySelector('#roadmap-review-apply');apply.disabled=!applicable||!writable;apply.textContent=`Provést schválené (${accepted.length})`;apply.title=accepted.some(row=>row.mode!=='detached')?'Schválené deep-check návrhy zatím nelze automaticky zapsat.':'';
 }
 function renderRoadmapReviewRows(){
  const all=roadmapReviewVisibleRows(),pages=Math.max(1,Math.ceil(all.length/ROADMAP_REVIEW_PAGE_SIZE));roadmapReviewPage=Math.min(roadmapReviewPage,pages-1);
@@ -3557,6 +3560,13 @@ async function decideRoadmapReview(decision,proposalIds){
  try{if(proposalIds.length===1)await projectRequest('/v1/roadmap-refinement/decide',{project_id:activeProject.id,proposal_id:proposalIds[0],decision});else await projectRequest('/v1/roadmap-refinement/decide-all',{project_id:activeProject.id,proposal_ids:proposalIds,decision});await loadRoadmapReview(roadmapReviewSelected);if(roadmapReviewSelected)await selectRoadmapReview(roadmapReviewSelected);}
  catch(error){roadmapReviewStatus.textContent=error.message;}
 }
+async function applyRoadmapReview(){
+ const accepted=roadmapReviewRows.filter(row=>row.state==='accepted');if(!activeProject||!accepted.length||accepted.some(row=>row.mode!=='detached'))return;
+ if(!window.confirm(`Provést všech ${accepted.length} schválených návrhů jedním validovaným zápisem do projektového Gitu? Operace vyžaduje nezměněný HEAD; původní stav zůstane v Git historii.`))return;
+ const projectId=activeProject.id;roadmapReviewApplyOperation=roadmapReviewApplyOperation||crypto.randomUUID();roadmapReviewStatus.textContent='Validuji a zapisuji schválené návrhy…';
+ try{const result=await projectRequest('/v1/roadmap-refinement/apply',{project_id:projectId,operation_id:roadmapReviewApplyOperation},120000);roadmapReviewApplyOperation=null;await openRegisteredProject(projectId);openRoadmapReview();roadmapReviewStatus.textContent=`Provedeno ${result.applied_proposals.length} návrhů v commitu ${result.receipt.commit_id}.`;}
+ catch(error){roadmapReviewStatus.textContent=`Provedení selhalo nebo má nejasný výsledek: ${error.message} Opakování v této relaci použije stejné operation ID.`;}
+}
 document.querySelector('#roadmap-review-refresh').addEventListener('click',()=>loadRoadmapReview(roadmapReviewSelected));
 document.querySelector('#roadmap-review-states-all').addEventListener('click',()=>{roadmapReviewStates=new Set(roadmapReviewRows.map(row=>row.state));roadmapReviewFiltersChanged();});document.querySelector('#roadmap-review-states-none').addEventListener('click',()=>{roadmapReviewStates.clear();roadmapReviewFiltersChanged();});
 document.querySelector('#roadmap-review-actions-all').addEventListener('click',()=>{roadmapReviewActions=new Set(roadmapReviewRows.map(roadmapReviewAction));roadmapReviewFiltersChanged();});document.querySelector('#roadmap-review-actions-none').addEventListener('click',()=>{roadmapReviewActions.clear();roadmapReviewFiltersChanged();});
@@ -3566,6 +3576,7 @@ document.querySelector('#roadmap-review-previous').addEventListener('click',()=>
 document.querySelector('#roadmap-review-accept').addEventListener('click',()=>roadmapReviewSelected&&decideRoadmapReview('accept',[roadmapReviewSelected]));document.querySelector('#roadmap-review-reject').addEventListener('click',()=>roadmapReviewSelected&&decideRoadmapReview('reject',[roadmapReviewSelected]));
 document.querySelector('#roadmap-review-accept-all').addEventListener('click',()=>{const ids=roadmapReviewRows.filter(row=>row.state==='pending').map(row=>row.proposal_id);if(ids.length&&window.confirm(`Schválit všech ${ids.length} pending návrhů? Projektový Git se nezmění.`))decideRoadmapReview('accept',ids);});
 document.querySelector('#roadmap-review-reject-all').addEventListener('click',()=>{const ids=roadmapReviewRows.filter(row=>row.state==='pending').map(row=>row.proposal_id);if(ids.length&&window.confirm(`Zamítnout všech ${ids.length} pending návrhů?`))decideRoadmapReview('reject',ids);});
+document.querySelector('#roadmap-review-apply').addEventListener('click',applyRoadmapReview);
 function renderJuliaParameters(){
  juliaPrepared=null;document.querySelector('#julia-run-confirm-row').hidden=true;document.querySelector('#julia-run').disabled=true;
  juliaParameters.replaceChildren();const selected=selectedJulia();if(!selected)return;
@@ -7482,6 +7493,7 @@ class DesktopHandler(Handler):
         '/v1/roadmap/graph',
         '/v1/roadmap-refinement/list', '/v1/roadmap-refinement/detail',
         '/v1/roadmap-refinement/decide', '/v1/roadmap-refinement/decide-all',
+        '/v1/roadmap-refinement/apply',
         '/v1/julia/definitions', '/v1/julia/preview', '/v1/julia/execute',
         '/v1/julia/status', '/v1/julia/cancel', '/v1/julia/reconcile',
         '/v1/julia/output', '/v1/julia/publish', '/v1/julia/editor/open',
@@ -7636,6 +7648,9 @@ class DesktopHandler(Handler):
                         and set(request) == {'project_id', 'proposal_ids', 'decision'}:
                     return self.reply(200, service.decide_many(
                         request['proposal_ids'], request['decision']))
+                if self.path == '/v1/roadmap-refinement/apply' \
+                        and set(request) == {'project_id', 'operation_id'}:
+                    return self.reply(200, service.apply(request['operation_id']))
                 return self.send_error(400)
             except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})

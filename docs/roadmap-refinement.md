@@ -142,6 +142,12 @@ a lazy detail z exact proposal
 HEAD a jednotlivé Schválit/Zamítnout. Globální Schválit/Zamítnout všechny
 pracuje pouze s právě načtenými pending ID, vyžaduje potvrzení a ukládá celou
 dávku jednou SQLite transakcí. Obnovit znovu načte lokální autoritu.
+Globální **Provést schválené** vyžaduje další potvrzení, používá stabilní
+operation ID a zapisuje všechny schválené detached návrhy jednou validovanou
+`Workspace.transact` operací proti jejich společnému exact HEAD. Přijatý
+deep-check návrh akci fail-closed zablokuje: jeho strukturované změny vyžadují
+samostatný reconciliation writer a validaci složeného kandidáta. Nejasný timeout
+lze v téže UI relaci zopakovat se stejným operation ID.
 
 UI nevytváří druhou kopii návrhů a nenabízí `apply`. Reader může seznam a detail
 prohlížet, ale rozhodnutí vyžaduje editor/project-admin nebo node admina. Detail

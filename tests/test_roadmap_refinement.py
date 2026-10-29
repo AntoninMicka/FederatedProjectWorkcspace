@@ -62,6 +62,7 @@ class RoadmapRefinementTests(unittest.TestCase):
 
     def test_reviewed_attachment_applies_one_workspace_transaction(self):
         proposal = self.service.scan()['created'][0]
+        self.assertEqual(self.service.review_list()[0]['mode'], 'detached')
         self.service.decide(proposal['proposal_id'], 'accept')
         result = self.service.apply(str(uuid4()))
         self.assertEqual(result['applied_proposals'], [proposal['proposal_id']])
