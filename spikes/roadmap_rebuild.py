@@ -418,8 +418,9 @@ class RoadmapRebuild:
         adapter.prepare(handoff, binding, role, 'json')
         return adapter.dispatch(handoff, binding, role, 'json')['response']
 
-    def run(self, *, limit=1):
+    def run(self, *, limit=1, progress=None):
         require(type(limit) is int and 1 <= limit <= 100000, 'Run limit must be 1..100000')
+        require(progress is None or callable(progress), 'Invalid progress callback')
         manifest = self._load('manifest.json')
         require(manifest['prompts'] == {
             'extraction_sha256': hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
@@ -438,7 +439,19 @@ class RoadmapRebuild:
             require(availability['model_available'],
                     'Pinned local-LLM model is unavailable: ' + binding.model)
         extractions = []
-        for block in catalog['blocks']:
+        logical_done = sum((self.root/'results'/('extract-' + item['block_id'] + '.json')).exists()
+                           or (self.root/'results'/('extract-' + item['block_id'] + '.failed.json')).exists()
+                           for item in catalog['blocks'])
+        logical_done += sum((self.root/'results'/('audit-' + item['block_id'] + '.json')).exists()
+                            or (self.root/'results'/('audit-' + item['block_id'] + '.failed.json')).exists()
+                            for item in catalog['blocks'])
+        logical_total = len(catalog['blocks']) * 2
+
+        def notify(**event):
+            if progress is not None:
+                progress(dict(logical_done=logical_done, logical_total=logical_total, **event))
+
+        for block_index, block in enumerate(catalog['blocks'], 1):
             path = self.root/'results'/('extract-' + block['block_id'] + '.json')
             failure = self.root/'results'/('extract-' + block['block_id'] + '.failed.json')
             if path.exists():
@@ -465,12 +478,17 @@ class RoadmapRebuild:
                                 encoding='utf-8'),
                         validation_error=json.loads(prior[-1].read_text(encoding='utf-8'))['error'])
                     try:
+                        notify(event='dispatch', phase='extract', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt)
                         raw = self._dispatch('extract-' + str(attempt), block['block_id'],
                                              instruction, request)
                         (self.root/'raw'/('extract-' + block['block_id']
                          + f'.attempt-{attempt}.json')).write_text(raw, encoding='utf-8')
                         value = validate_extraction(raw, block); _atomic_json(path, value)
-                        calls += 1; break
+                        calls += 1; logical_done += 1
+                        notify(event='result', phase='extract', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='completed')
+                        break
                     except Exception as exc:
                         attempt_failure = self.root/'results'/('extract-' + block['block_id']
                                                                + f'.attempt-{attempt}.failed.json')
@@ -479,7 +497,12 @@ class RoadmapRebuild:
                                  'failed_at': _now()}
                         _atomic_json(attempt_failure, error); prior.append(attempt_failure); calls += 1
                         if raw is None or attempt == MAX_ATTEMPTS:
-                            _atomic_json(failure, error); break
+                            _atomic_json(failure, error); logical_done += 1
+                            notify(event='result', phase='extract', block=block_index,
+                                   blocks=len(catalog['blocks']), attempt=attempt, outcome='failed')
+                            break
+                        notify(event='result', phase='extract', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='repair')
                         attempt += 1
                 if value is None:
                     continue
@@ -490,7 +513,7 @@ class RoadmapRebuild:
         _atomic_json(self.root/'candidate.json', candidate)
         (self.root/'candidate.md').write_text(render_candidate(candidate), encoding='utf-8')
         audits = []
-        for block in catalog['blocks']:
+        for block_index, block in enumerate(catalog['blocks'], 1):
             path = self.root/'results'/('audit-' + block['block_id'] + '.json')
             failure = self.root/'results'/('audit-' + block['block_id'] + '.failed.json')
             if path.exists():
@@ -513,12 +536,17 @@ class RoadmapRebuild:
                                 encoding='utf-8'),
                         validation_error=json.loads(prior[-1].read_text(encoding='utf-8'))['error'])
                     try:
+                        notify(event='dispatch', phase='audit', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt)
                         raw = self._dispatch('audit-' + str(attempt), block['block_id'],
                                              instruction, request)
                         (self.root/'raw'/('audit-' + block['block_id']
                          + f'.attempt-{attempt}.json')).write_text(raw, encoding='utf-8')
                         value = validate_audit(raw, block); _atomic_json(path, value)
-                        calls += 1; break
+                        calls += 1; logical_done += 1
+                        notify(event='result', phase='audit', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='completed')
+                        break
                     except Exception as exc:
                         attempt_failure = self.root/'results'/('audit-' + block['block_id']
                                                                + f'.attempt-{attempt}.failed.json')
@@ -527,7 +555,12 @@ class RoadmapRebuild:
                                  'failed_at': _now()}
                         _atomic_json(attempt_failure, error); prior.append(attempt_failure); calls += 1
                         if raw is None or attempt == MAX_ATTEMPTS:
-                            _atomic_json(failure, error); break
+                            _atomic_json(failure, error); logical_done += 1
+                            notify(event='result', phase='audit', block=block_index,
+                                   blocks=len(catalog['blocks']), attempt=attempt, outcome='failed')
+                            break
+                        notify(event='result', phase='audit', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='repair')
                         attempt += 1
                 if value is None:
                     continue
@@ -572,8 +605,12 @@ class RoadmapRebuild:
         audit_repairs = sum(1 for item in (self.root/'raw').glob('audit-*.attempt-*.json')
                             if '.attempt-1.' not in item.name)
         report = self._load('report.json') if (self.root/'report.json').exists() else None
+        logical_completed = extracted + failed_extractions + audited + failed_audits
+        logical_total = len(catalog['blocks']) * 2
         return dict(run_dir=str(self.root), blocks=len(catalog['blocks']), extracted=extracted,
                     failed_extractions=failed_extractions, audited=audited,
                     failed_audits=failed_audits, extraction_repairs=extraction_repairs,
                     audit_repairs=audit_repairs, candidate=(self.root/'candidate.json').exists(),
+                    logical_completed=logical_completed, logical_total=logical_total,
+                    progress_percent=round(logical_completed * 100 / logical_total, 2),
                     complete=report is not None, report=report)

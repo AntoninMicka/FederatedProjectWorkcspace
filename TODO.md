@@ -366,8 +366,12 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   oddělenou maturity a nejvýše dva correction průchody. První fyzický blok
   čistého v5 prošel bez opravy a správně zachoval licenční preambuli jako
   description bez falešného ID.
+  CLI nyní při každém volání zobrazuje fázi, blok, pokus, logický postup,
+  procenta, elapsed a průběžnou ETA. Fyzický druhý blok ověřil 2/370 (0,5 %)
+  bez opravy; trval přibližně 70 sekund a první hrubý odhad celého zbytku
+  byl 7 h 10 min, při dalších blocích se bude zpřesňovat.
   Cílená migrační sada (`roadmap_rebuild`, `roadmap_migration`,
-  `roadmap_mapping`, `roadmap_importer`): 34/34 prošlo. Celý v5 extraction a
+  `roadmap_mapping`, `roadmap_importer`): 35/35 prošlo. Celý v5 extraction a
   audit modelem `qwen3-coder:latest` ještě zbývá.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu

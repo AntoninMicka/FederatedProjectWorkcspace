@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import json
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.roadmap_migration import HOST_SOURCES
 from spikes.roadmap_rebuild import RoadmapRebuild, source_catalog
 from spikes.storage import Git
+from scripts.roadmap_rebuild import progress_reporter
 
 
 class RoadmapRebuildTests(unittest.TestCase):
@@ -92,8 +94,12 @@ class RoadmapRebuildTests(unittest.TestCase):
     def test_run_is_resumable_and_publishes_candidate_then_audit(self):
         service = RoadmapRebuild.prepare(self.node, self.run_dir, self.repository,
                                          revision=self.commit)
-        first = RoadmapRebuild(self.node, self.run_dir, adapter_factory=self.factory).run(limit=1)
+        events = []
+        first = RoadmapRebuild(self.node, self.run_dir, adapter_factory=self.factory).run(
+            limit=1, progress=events.append)
         self.assertEqual(1, first['extracted']); self.assertFalse(first['candidate'])
+        self.assertEqual(['dispatch', 'result'], [item['event'] for item in events])
+        self.assertEqual('extract', events[-1]['phase'])
         status = first
         while not status['complete']:
             status = RoadmapRebuild(self.node, self.run_dir,
@@ -177,6 +183,18 @@ class RoadmapRebuildTests(unittest.TestCase):
         attempts = list((self.run_dir/'results').glob('extract-*.attempt-1.failed.json'))
         self.assertEqual(result['blocks'], len(attempts))
         self.assertTrue(any('validation_error' in call for call in calls))
+
+    def test_cli_progress_reports_phase_elapsed_percent_and_eta(self):
+        stream = io.StringIO(); report = progress_reporter(stream)
+        report(dict(event='dispatch', phase='extract', block=2, blocks=10, attempt=1,
+                    logical_done=1, logical_total=20))
+        report(dict(event='result', phase='extract', block=2, blocks=10, attempt=1,
+                    outcome='completed', logical_done=2, logical_total=20))
+        output = stream.getvalue()
+        self.assertIn('extract 2/10', output)
+        self.assertIn('2/20 (10.0 %)', output)
+        self.assertIn('běží', output)
+        self.assertIn('ETA', output)
 
 
 if __name__ == '__main__':

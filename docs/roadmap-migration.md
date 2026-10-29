@@ -115,6 +115,13 @@ python3 -m scripts.roadmap_rebuild \
   --run-dir /tmp/dev-01-source-rebuild run --limit 100000
 ```
 
+Během každého modelového volání CLI průběžně ukazuje fázi
+`extract`/`audit`, blok, opravný pokus, hotové logické jednotky, procenta, dobu
+běhu aktuálního příkazu a orientační ETA. ETA vznikne až po první dokončené
+odpovědi a průběžně se mění podle skutečné délky volání; opravné pokusy ji
+automaticky prodlouží. V interaktivním terminálu se obnovuje jeden řádek,
+při přesměrování jsou události samostatné logovací řádky.
+
 Nejdříve dokončí všechny extraction bloky, deterministicky publikuje
 `candidate.json` a `candidate.md` a teprve potom spustí nezávislé audity.
 Dokončený běh má `report.json` a `report.md`. `import_ready=true` vyžaduje
