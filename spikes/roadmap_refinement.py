@@ -3,6 +3,7 @@
 """Local Ollama proposals for attaching detached roadmap evidence."""
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
+import difflib
 import hashlib
 import fcntl
 import json
@@ -24,12 +25,13 @@ from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings, 
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.roadmap_migration import LINK
-from spikes.task_graph import project_task_graph
+from spikes.task_graph import (ALIASES, CHILD_TYPES, DOCUMENT_LINK, RELATION, TASK,
+                               project_task_graph)
 
 SCHEMA = 'fpw-roadmap-refinement-proposal-v1'
 ANALYZER_REVISION = 'attach-detached-v3'
 DEEP_SCHEMA = 'fpw-roadmap-deep-check-proposal-v1'
-DEEP_ANALYZER_REVISION = 'semantic-reconciliation-v1'
+DEEP_ANALYZER_REVISION = 'semantic-reconciliation-v2'
 DEEP_POLICY_REVISION = 'legacy-sequential-to-canonical-v1'
 HEADING = '## Samostatné podklady bez jednoznačného přiřazení'
 STABLE_ID = re.compile(r'(?<![A-Z0-9-])([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)(?![A-Z0-9-])')
@@ -45,7 +47,7 @@ Legacy conventions: TODO held one active feature batch; whole batches including 
 Desired state: one canonical executable node per stable ID, historical evidence stays non-executable, unfinished residual work becomes a concrete task, conflicting definitions are explicitly split/merged/conflicted, and no completion state changes without evidence.
 Return exactly one JSON object with fields:
 {"schema":"fpw-roadmap-deep-check-proposal-v1","action":"keep-history|keep-description|keep-canonical|promote|create-residual|merge-alias|split|update-node|add-dependency|remove-dependency|conflict","cluster_id":"exact supplied cluster ID","source_ids":["UUID"],"target_ids":["existing ID"],"confidence":"low|medium|high","summary":"Czech proposed change","reason":"Czech evidence-based explanation","changes":[{"kind":"create-node|update-node|add-dependency|remove-dependency","node_id":"ID or null","target_id":"ID or null","title":"text or null","node_type":"milestone|batch|task or null","parent_id":"existing ID or null","checked":true|false|null,"reason":"Czech explanation"}]}.
-For keep-history, keep-description, keep-canonical and conflict, changes must be empty. Existing target_ids, target_id and parent_id must be copied exactly from the supplied catalog. New node_id values are proposals only and must be uppercase stable IDs not present in the catalog. Do not silently resolve ambiguity, invent completion evidence, or output Markdown. Return JSON only.'''
+For keep-history, keep-description, keep-canonical and conflict, changes must be empty. Existing target_ids, target_id and parent_id must be copied exactly from the supplied catalog. New node_id values are proposals only and must be uppercase stable IDs not present in the catalog. Hierarchy is strict: a root is a milestone, a batch belongs to a milestone, and a task belongs to a batch. update-node must preserve the existing type and parent. Do not silently resolve ambiguity, invent completion evidence, or output Markdown. Return JSON only.'''
 
 
 def now():
@@ -145,8 +147,22 @@ def validate_deep_proposal(raw, cluster, targets):
         if change['kind'] == 'create-node':
             require(node_id not in targets and isinstance(change['title'], str)
                     and bool(change['title'].strip()), 'Created deep-check node collides or lacks title')
+            node_type, parent_id = change['node_type'], change['parent_id']
+            if parent_id is None:
+                require(node_type == 'milestone', 'Created root node must be a milestone')
+            else:
+                require(node_type in CHILD_TYPES[targets[parent_id]['type']],
+                        'Created deep-check node has an invalid parent type')
         else:
             require(node_id in targets, 'Deep-check change refers to unavailable node')
+            if change['kind'] == 'update-node':
+                current = targets[node_id]
+                require(change['node_type'] in {None, current['type']}
+                        and change['parent_id'] in {None, current['parent_id']},
+                        'Deep-check update cannot change node type or parent')
+            else:
+                require(change['target_id'] is not None,
+                        'Dependency change requires an existing target')
     return value
 
 
@@ -235,6 +251,102 @@ def attach_document(body, document_id, target_id):
         insert += 1
     lines.insert(insert, ' ' * indent + '- Podklad: ' + link)
     return '\n'.join(lines) + ('\n' if body.endswith('\n') else '')
+
+
+def _replace_body(files, path, lines, trailing):
+    result = dict(files)
+    result[path] = ('\n'.join(lines) + ('\n' if trailing else '')).encode('utf-8')
+    return result
+
+
+def _deep_change(files, entities, project_id, head, change):
+    """Apply one typed change to a candidate snapshot, validating after every step."""
+    graph = project_task_graph(files, entities, project_id, head)
+    require(graph['status'] == 'ready', 'Reconciliation candidate task graph is invalid')
+    nodes = {item['id']: item for item in graph['nodes']}
+    kind, node_id = change['kind'], change['node_id']
+    if kind == 'create-node':
+        require(node_id not in nodes, 'Reconciliation creates a duplicate node ID')
+        parent_id = change['parent_id']; node_type = change['node_type']
+        if parent_id is None:
+            require(node_type == 'milestone', 'Created root node must be a milestone')
+            path = 'artifacts/' + main_todo_id(project_id) + '/' + entities[main_todo_id(project_id)]['file']
+            lines = files[path].decode('utf-8').splitlines(); index = len(lines); indent = 0
+        else:
+            require(parent_id in nodes and node_type in CHILD_TYPES[nodes[parent_id]['type']],
+                    'Created node has an invalid parent type')
+            parent = nodes[parent_id]; children = [item for item in nodes.values()
+                                                   if item['parent_id'] == parent_id]
+            if parent['type'] == 'batch' and children:
+                paths = {item['source']['path'] for item in children}
+                require(len(paths) == 1, 'Batch children span multiple plan documents')
+                path = paths.pop(); lines = files[path].decode('utf-8').splitlines()
+                index = len(lines); indent = len(lines[children[0]['line'] - 1]) - len(lines[children[0]['line'] - 1].lstrip())
+            else:
+                path = parent['source']['path']; lines = files[path].decode('utf-8').splitlines()
+                match = TASK.match(lines[parent['line'] - 1]); require(match is not None, 'Parent task line disappeared')
+                link = DOCUMENT_LINK.fullmatch(match.group(4))
+                if parent['type'] == 'batch' and link:
+                    path = link.group(2); require(path in files, 'Linked batch plan disappeared')
+                    lines = files[path].decode('utf-8').splitlines(); index = len(lines); indent = 0
+                else:
+                    parent_indent = len(match.group(1).expandtabs(4)); index = parent['line']
+                    while index < len(lines):
+                        following = TASK.match(lines[index])
+                        if following and len(following.group(1).expandtabs(4)) <= parent_indent:
+                            break
+                        index += 1
+                    indent = parent_indent + 2
+        trailing = files[path].endswith(b'\n')
+        addition = [' ' * indent + f"- [{'x' if change['checked'] else ' '}] [{node_id}] {change['title']}",
+                    ' ' * (indent + 2) + '- type: ' + node_type]
+        if index and lines[index - 1].strip(): addition.insert(0, '')
+        lines[index:index] = addition
+        candidate = _replace_body(files, path, lines, trailing)
+    else:
+        require(node_id in nodes, 'Reconciliation target disappeared')
+        node = nodes[node_id]; path = node['source']['path']; raw = files[path].decode('utf-8')
+        lines = raw.splitlines(); line_index = node['line'] - 1; match = TASK.match(lines[line_index])
+        require(match is not None, 'Reconciliation task line disappeared')
+        trailing = raw.endswith('\n')
+        if kind == 'update-node':
+            require(change['node_type'] in {None, node['type']}
+                    and change['parent_id'] in {None, node['parent_id']},
+                    'Reconciliation update cannot change node type or parent')
+            title = change['title'] if change['title'] is not None else node['title']
+            link = DOCUMENT_LINK.fullmatch(match.group(4))
+            if link:
+                title = f'[{title}]({link.group(2)})'
+            checked = node['checked'] if change['checked'] is None else change['checked']
+            lines[line_index] = match.group(1) + f"- [{'x' if checked else ' '}] [{node_id}] {title}"
+        else:
+            target = change['target_id']; require(target in nodes, 'Dependency target disappeared')
+            block_end = line_index + 1; indent = len(match.group(1).expandtabs(4))
+            while block_end < len(lines):
+                following = TASK.match(lines[block_end])
+                if following and len(following.group(1).expandtabs(4)) <= indent: break
+                block_end += 1
+            relation_rows = []
+            for index in range(line_index + 1, block_end):
+                relation = RELATION.match(lines[index])
+                if relation and ALIASES.get(relation.group(2).strip().lower()) == 'depends_on':
+                    relation_rows.append((index, relation, [item.strip() for item in relation.group(3).split(',')]))
+            existing = {item for _, _, values in relation_rows for item in values}
+            if kind == 'add-dependency':
+                require(target not in existing, 'Dependency already exists')
+                lines.insert(line_index + 1, ' ' * (indent + 2) + '- depends_on: ' + target)
+            else:
+                require(target in existing, 'Removed dependency does not exist')
+                index, relation, values = next(row for row in relation_rows if target in row[2])
+                values.remove(target)
+                if values:
+                    lines[index] = relation.group(1) + '- ' + relation.group(2) + ': ' + ', '.join(values)
+                else:
+                    del lines[index]
+        candidate = _replace_body(files, path, lines, trailing)
+    checked = project_task_graph(candidate, entities, project_id, head)
+    require(checked['status'] == 'ready', 'Reconciliation change makes task graph invalid: ' + checked.get('error', 'unknown error'))
+    return candidate
 
 
 class RoadmapRefinement:
@@ -648,39 +760,120 @@ class RoadmapRefinement:
         return {'project_id': self.project_id, 'decision': decision,
                 'updated': len(proposal_ids), 'proposal_ids': proposal_ids}
 
-    def apply(self, operation_id):
-        uuid(operation_id)
+    def _reconciliation(self):
         accepted = [row for row in self.list() if row['state'] == 'accepted']
         require(bool(accepted), 'No accepted refinement proposals')
-        require(all(row.get('mode') == 'detached' for row in accepted),
-                'Accepted deep-check proposals require a future structured reconciliation apply')
         heads = {row['expected_head'] for row in accepted}; require(len(heads) == 1, 'Accepted proposals use different HEADs')
-        expected_head = heads.pop(); workspace = Projects(self.node).workspace(self.project_id)
+        expected_head = heads.pop(); workspace = Projects(self.node).workspace(self.project_id, blocking=False)
+        files = workspace.git.snapshot(expected_head); entities = validate_snapshot(files)
+        graph = project_task_graph(files, entities, self.project_id, expected_head)
+        require(graph['status'] == 'ready', 'Project task graph is invalid')
+        targets = {item['id']: {'type': item['type'], 'title': item['title'],
+                                'parent_id': item['parent_id']} for item in graph['nodes']}
+        candidate = dict(files); evidence = []; mutations = []; blockers = []
+        if workspace.git.head() != expected_head:
+            blockers.append({'proposal_id': None,
+                             'reason': 'Project HEAD changed after accepted proposals'})
+        root_id = main_todo_id(self.project_id); meta = entities[root_id]
+        root_path = 'artifacts/' + root_id + '/' + meta['file']
+        for row in accepted:
+            try:
+                if row['mode'] == 'detached':
+                    proposal = row['proposal']; require(proposal['target_id'] in targets,
+                                                        'Accepted target disappeared')
+                    body = candidate[root_path].decode('utf-8')
+                    candidate[root_path] = attach_document(
+                        body, proposal['document_id'], proposal['target_id']).encode('utf-8')
+                    mutations.append((row['proposal_id'], {'kind': 'attach-document'}))
+                    continue
+                require(row['mode'] == 'deep-check', 'Unknown accepted proposal mode')
+                proposal = validate_deep_proposal(json.dumps(row['proposal'], ensure_ascii=False),
+                                                  row['input'], targets)
+                if not proposal['changes']:
+                    evidence.append(row['proposal_id']); continue
+                for change in proposal['changes']:
+                    mutations.append((row['proposal_id'], change))
+            except (ValueError, KeyError, TypeError) as exc:
+                blockers.append({'proposal_id': row['proposal_id'], 'reason': str(exc)})
+        touched = {}
+        for proposal_id, change in mutations:
+            if change['kind'] == 'attach-document':
+                continue
+            key = (change['kind'], change.get('node_id'), change.get('target_id'))
+            owner = touched.get(key)
+            if owner:
+                blockers.append({'proposal_id': proposal_id,
+                                 'reason': 'Structured change duplicates proposal ' + owner})
+            else:
+                touched[key] = proposal_id
+        if not blockers:
+            for proposal_id, change in mutations:
+                if change['kind'] == 'attach-document':
+                    continue
+                try:
+                    candidate = _deep_change(candidate, entities, self.project_id,
+                                             expected_head, change)
+                except (ValueError, KeyError, TypeError) as exc:
+                    blockers.append({'proposal_id': proposal_id, 'reason': str(exc)})
+                    break
+        changes = {path: body for path, body in candidate.items()
+                   if files.get(path) != body}
+        digest_input = {'project_id': self.project_id, 'expected_head': expected_head,
+                        'proposals': [row['proposal_id'] for row in accepted],
+                        'changes': {path: hashlib.sha256(body).hexdigest()
+                                    for path, body in sorted(changes.items())}}
+        preview_sha256 = hashlib.sha256(canonical(digest_input)).hexdigest()
+        diffs = []
+        for path, body in sorted(changes.items()):
+            before = files[path].decode('utf-8').splitlines()
+            after = body.decode('utf-8').splitlines()
+            diffs.extend(difflib.unified_diff(before, after, fromfile='a/' + path,
+                                               tofile='b/' + path, lineterm=''))
+        diff = '\n'.join(diffs)
+        require(len(diff.encode('utf-8')) <= 256 * 1024,
+                'Reconciliation preview diff exceeds limit')
+        return {'project_id': self.project_id, 'expected_head': expected_head,
+                'preview_sha256': preview_sha256,
+                'proposal_ids': [row['proposal_id'] for row in accepted],
+                'evidence_only': evidence, 'mutation_count': len(mutations),
+                'changed_files': sorted(changes), 'blockers': blockers,
+                'diff': diff}, changes
+
+    def reconciliation_preview(self):
+        return self._reconciliation()[0]
+
+    def apply(self, operation_id, preview_sha256=None):
+        uuid(operation_id)
+        preview, changes = self._reconciliation()
+        require(not preview['blockers'], 'Reconciliation preview has blockers')
+        if preview_sha256 is not None:
+            require(preview_sha256 == preview['preview_sha256'],
+                    'Reconciliation preview changed before apply')
+        expected_head = preview['expected_head']; accepted_ids = preview['proposal_ids']
+        workspace = Projects(self.node).workspace(self.project_id)
         request = {'action': 'apply-roadmap-refinement', 'project_id': self.project_id,
-                   'proposals': [row['proposal_id'] for row in accepted], 'expected_head': expected_head}
+                   'proposals': accepted_ids, 'expected_head': expected_head,
+                   'preview_sha256': preview['preview_sha256']}
 
         def prepare(active):
             require(active.git.head() == expected_head, 'Project changed before refinement apply')
-            files = active.git.snapshot(expected_head); entities = validate_snapshot(files)
-            root_id = main_todo_id(self.project_id); meta = entities[root_id]
-            path = 'artifacts/' + root_id + '/' + meta['file']; body = files[path].decode('utf-8')
-            graph = project_task_graph(files, entities, self.project_id, expected_head)
-            targets = {item['id'] for item in graph['nodes']}
-            for row in accepted:
-                proposal = row['proposal']; require(proposal['target_id'] in targets, 'Accepted target disappeared')
-                body = attach_document(body, proposal['document_id'], proposal['target_id'])
-            candidate = dict(files); candidate[path] = body.encode(); candidate_entities = validate_snapshot(candidate)
-            require(project_task_graph(candidate, candidate_entities, self.project_id, expected_head)['status'] == 'ready',
-                    'Refined task graph is invalid')
             author = ProjectCreation(self.node).author_id()
-            return {path: body.encode()}, 'Local workspace author', author + '@local.invalid', 'Apply reviewed roadmap refinement'
+            return changes, 'Local workspace author', author + '@local.invalid', 'Apply reviewed roadmap refinement'
 
-        receipt = workspace.transact(operation_id, request, prepare, expected_head=expected_head)
+        if changes:
+            receipt = workspace.transact(operation_id, request, prepare,
+                                         expected_head=expected_head)
+        else:
+            require(workspace.git.head() == expected_head,
+                    'Project changed before evidence-only reconciliation')
+            receipt = {'operation_id': operation_id, 'commit_id': expected_head,
+                       'state': 'evidence-only'}
         with self._connect() as db, db:
-            for row in accepted:
+            for proposal_id in accepted_ids:
                 db.execute("UPDATE proposals SET state='applied',receipt=? "
                            "WHERE id=? AND project_id=? AND state='accepted'",
                            (json.dumps(receipt, sort_keys=True, separators=(',', ':')),
-                            row['proposal_id'], self.project_id))
+                            proposal_id, self.project_id))
         return {'operation_id': operation_id, 'receipt': receipt,
-                'applied_proposals': [row['proposal_id'] for row in accepted]}
+                'applied_proposals': accepted_ids,
+                'evidence_only': preview['evidence_only']}

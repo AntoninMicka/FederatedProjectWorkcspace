@@ -184,7 +184,8 @@ class Handler(BaseHTTPRequestHandler):
         lane_name = ('telemetry_lane' if self.path == '/v1/node-telemetry/status'
                      else 'review_lane' if self.path in {
                          '/v1/roadmap-refinement/list',
-                         '/v1/roadmap-refinement/detail'}
+                         '/v1/roadmap-refinement/detail',
+                         '/v1/roadmap-refinement/reconcile/preview'}
                      else 'application_lane')
         return self._in_request_lane(
             self._do_POST, lane_name=lane_name)

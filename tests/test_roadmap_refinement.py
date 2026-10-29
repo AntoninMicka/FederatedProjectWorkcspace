@@ -12,7 +12,9 @@ from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.roadmap_refinement import RoadmapRefinement
+from spikes.metadata import validate_snapshot
 from spikes.storage import Git
+from spikes.task_graph import project_task_graph
 
 
 class RoadmapRefinementTests(unittest.TestCase):
@@ -31,6 +33,7 @@ class RoadmapRefinementTests(unittest.TestCase):
                 f'- [ ] [{self.target_id}] First milestone\n  - type: milestone\n'
                 '  - [ ] [BATCH-01] Feature\n    - type: batch\n'
                 '    - [ ] [TASK-01] Work\n      - type: task\n')
+        body += ('    - [ ] [TASK-02] Later work\n      - type: task\n')
         self.docs.save(dict(project_id=self.project_id, artifact_id=main_todo_id(self.project_id),
             base_head=self.git.head(), title='Roadmap', body=body, new=True), str(uuid4()))
         self.head = self.git.head(); self.state = self.base/'refinement'; self.chat = self.node.parent/('.'+self.node.name+'.chat')
@@ -146,8 +149,86 @@ class RoadmapRefinementTests(unittest.TestCase):
         self.assertTrue(second['converged'])
         proposal = first['created'][0]
         self.service.decide(proposal['proposal_id'], 'accept')
-        with self.assertRaisesRegex(ValueError, 'future structured reconciliation apply'):
-            self.service.apply(str(uuid4()))
+        preview = self.service.reconciliation_preview()
+        self.assertEqual(preview['evidence_only'], [proposal['proposal_id']])
+        self.assertEqual(preview['changed_files'], [])
+        result = self.service.apply(str(uuid4()), preview['preview_sha256'])
+        self.assertEqual(result['receipt']['state'], 'evidence-only')
+        self.assertEqual(self.git.head(), deep_head)
+        self.assertEqual(self.service.get(proposal['proposal_id'])['state'], 'applied')
+
+    def test_deep_reconciliation_previews_and_applies_valid_created_task(self):
+        source_id = str(uuid4())
+        self.docs.save(dict(project_id=self.project_id, artifact_id=source_id,
+            base_head=self.git.head(), title='Legacy backlog',
+            body='- [ ] **NEW-TASK-01 — New work** Missing residual.\n', new=True,
+            metadata={'tags': ['original-source']}), str(uuid4()))
+        self.response = dict(
+            schema='fpw-roadmap-deep-check-proposal-v1', action='create-residual',
+            cluster_id='id:NEW-TASK-01', source_ids=[source_id], target_ids=[],
+            confidence='high', summary='Create missing task.', reason='Concrete residual.',
+            changes=[dict(kind='create-node', node_id='NEW-TASK-01', target_id=None,
+                title='New work', node_type='task', parent_id='BATCH-01', checked=False,
+                reason='Concrete residual.')])
+        proposal = self.service.scan(limit=10, deep_check=True)['created'][0]
+        self.assertEqual(proposal['state'], 'pending')
+        self.service.decide(proposal['proposal_id'], 'accept')
+        preview = self.service.reconciliation_preview()
+        self.assertEqual([], preview['blockers'])
+        self.assertEqual(1, preview['mutation_count'])
+        self.assertIn('NEW-TASK-01', preview['diff'])
+        result = self.service.apply(str(uuid4()), preview['preview_sha256'])
+        self.assertEqual([proposal['proposal_id']], result['applied_proposals'])
+        view = Projects(self.node).open(self.project_id)
+        files = self.git.snapshot(view['commit_id'])
+        graph = project_task_graph(files, validate_snapshot(files),
+                                   self.project_id, view['commit_id'])
+        self.assertIn('NEW-TASK-01', {item['id'] for item in graph['nodes']})
+
+    def test_deep_scan_rejects_created_task_directly_under_milestone(self):
+        source_id = str(uuid4())
+        self.docs.save(dict(project_id=self.project_id, artifact_id=source_id,
+            base_head=self.git.head(), title='Legacy backlog',
+            body='- [ ] **BAD-TASK-01 — Bad hierarchy** Missing residual.\n', new=True,
+            metadata={'tags': ['original-source']}), str(uuid4()))
+        self.response = dict(
+            schema='fpw-roadmap-deep-check-proposal-v1', action='create-residual',
+            cluster_id='id:BAD-TASK-01', source_ids=[source_id], target_ids=[],
+            confidence='high', summary='Create task.', reason='Concrete residual.',
+            changes=[dict(kind='create-node', node_id='BAD-TASK-01', target_id=None,
+                title='Bad hierarchy', node_type='task', parent_id=self.target_id,
+                checked=False, reason='Invalid direct child.')])
+        proposal = self.service.scan(limit=10, deep_check=True)['created'][0]
+        self.assertEqual('failed', proposal['state'])
+        self.assertIn('invalid parent type', proposal['proposal']['error'])
+
+    def test_deep_reconciliation_applies_dependency_and_rejects_stale_preview(self):
+        source_id = str(uuid4())
+        self.docs.save(dict(project_id=self.project_id, artifact_id=source_id,
+            base_head=self.git.head(), title='Legacy dependency',
+            body='- [ ] **TASK-01 — Work** Requires TASK-02.\n', new=True,
+            metadata={'tags': ['original-source']}), str(uuid4()))
+        self.response = dict(
+            schema='fpw-roadmap-deep-check-proposal-v1', action='add-dependency',
+            cluster_id='id:TASK-01', source_ids=[source_id],
+            target_ids=['TASK-01', 'TASK-02'], confidence='high',
+            summary='Add dependency.', reason='Explicit prerequisite.',
+            changes=[dict(kind='add-dependency', node_id='TASK-01',
+                target_id='TASK-02', title=None, node_type=None, parent_id=None,
+                checked=None, reason='Explicit prerequisite.')])
+        proposal = self.service.scan(limit=10, deep_check=True)['created'][0]
+        self.assertEqual('pending', proposal['state'])
+        self.service.decide(proposal['proposal_id'], 'accept')
+        preview = self.service.reconciliation_preview()
+        self.assertIn('depends_on: TASK-02', preview['diff'])
+        with self.assertRaisesRegex(ValueError, 'preview changed'):
+            self.service.apply(str(uuid4()), '0' * 64)
+        result = self.service.apply(str(uuid4()), preview['preview_sha256'])
+        files = self.git.snapshot(result['receipt']['commit_id'])
+        graph = project_task_graph(files, validate_snapshot(files), self.project_id,
+                                   result['receipt']['commit_id'])
+        task = next(item for item in graph['nodes'] if item['id'] == 'TASK-01')
+        self.assertEqual(['TASK-02'], task['depends_on'])
 
     def test_deep_check_rejects_unknown_structured_targets_without_retry(self):
         source_id = str(uuid4())

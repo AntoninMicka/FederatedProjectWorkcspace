@@ -842,3 +842,8 @@ desktop/web UI. Data i rozhodnutí zůstávají v jediné existující node-loca
 roadmap refinement SQLite queue; detail používá exact proposal HEAD a bulk
 accept/reject jednu SQLite transakci nad explicitními pending ID. Nový UI store,
 projektový writer, framework nebo kopie proposal stavu jsou **reject**.
+Reconciliation rozšíření **adaptuje** stejný `task_graph` parser/validátor a
+jediný `Workspace.transact` writer: accepted návrhy skládá do exact kandidáta,
+po každé typované změně znovu validuje celý graf a potvrzení váže na preview
+SHA-256. Vlastní obecný Markdown framework, druhý projektový store a zápis mimo
+journal/Git/index recovery hranici jsou **reject**.

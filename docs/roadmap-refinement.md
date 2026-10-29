@@ -143,13 +143,17 @@ HEAD a jednotlivé Schválit/Zamítnout. Globální Schválit/Zamítnout všechn
 pracuje pouze s právě načtenými pending ID, vyžaduje potvrzení a ukládá celou
 dávku jednou SQLite transakcí. Obnovit znovu načte lokální autoritu.
 Globální **Provést schválené** vyžaduje další potvrzení, používá stabilní
-operation ID a zapisuje všechny schválené detached návrhy jednou validovanou
-`Workspace.transact` operací proti jejich společnému exact HEAD. Přijatý
-deep-check návrh akci fail-closed zablokuje: jeho strukturované změny vyžadují
-samostatný reconciliation writer a validaci složeného kandidáta. Nejasný timeout
-lze v téže UI relaci zopakovat se stejným operation ID.
+operation ID a zapisuje všechny schválené změny jednou validovanou
+`Workspace.transact` operací proti jejich společnému exact HEAD. Deep-check
+návrhy nejprve projdou složeným reconciliation preview: evidenční rozhodnutí
+nemění Git, strukturované změny se aplikují po jedné do kandidáta a po každé se
+znovu validuje celý task graph. Kolize, neplatná hierarchie, změněný HEAD nebo
+neplatný výsledný graf zápis zablokují a původní proposals zůstanou zachované.
+Potvrzení je možné až nad preview SHA-256; nejasný timeout lze v téže UI relaci
+zopakovat se stejným operation ID.
 
-UI nevytváří druhou kopii návrhů a nenabízí `apply`. Reader může seznam a detail
+UI nevytváří druhou kopii návrhů. Reader může seznam, detail a reconciliation
+preview
 prohlížet, ale rozhodnutí vyžaduje editor/project-admin nebo node admina. Detail
 se načítá až po výběru řádku; počáteční seznam neobsahuje zdrojové excerpt ani
 raw modelovou odpověď. Pokud projekt nemá žádné záznamy, položka i hlavní panel
@@ -161,11 +165,18 @@ transportní traceback ani nejasný proposal stav.
 Pokud úvodní načtení fronty přechodně selže, nástroj zůstane viditelný s
 diagnostikou a tlačítkem `Obnovit seznam`; chyba se nesmí tvářit jako prázdná
 fronta.
-Read-only `list` a `detail` používají vlastní serializovanou request lane, takže
+Read-only `list`, `detail` a reconciliation preview používají vlastní
+serializovanou request lane, takže
 je nezablokuje dlouhá operace v hlavní aplikační lane. Rozhodnutí
 `decide`/`decide-all` zůstávají v hlavní lane a jejich jedinou persistentní
 hranicí je SQLite transakce proposal queue; oddělení čtení nepřidává journal ani
 nemění recovery.
+
+Scan validuje typ rodiče už při přijetí modelové odpovědi: kořen může být jen
+milestone, batch patří pod milestone a task pod batch. Update nesmí měnit typ
+ani rodiče existujícího uzlu; dependency změna vyžaduje existující cíl. Staré
+queue záznamy se nemažou — nový preview je označí jako blokátory, zatímco nový
+`--forget-previous` běh je znovu vytvoří podle zpřísněného kontraktu.
 
 ## První živá evidence
 

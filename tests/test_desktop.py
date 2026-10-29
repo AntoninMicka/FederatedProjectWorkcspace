@@ -478,11 +478,13 @@ raise SystemExit(app.exec())
         self.assertIn('roadmapReviewActions.has(roadmapReviewAction(item.row))', JS)
         self.assertIn('function roadmapReviewFiltersChanged()', JS)
         self.assertIn("path.startsWith('/v1/roadmap-refinement/')", JS)
-        for path in ('list', 'detail', 'decide', 'decide-all', 'apply'):
+        for path in ('list', 'detail', 'decide', 'decide-all',
+                     'reconcile/preview', 'apply'):
             self.assertIn(f"projectRequest('/v1/roadmap-refinement/{path}'", JS)
             self.assertIn('/v1/roadmap-refinement/' + path, DesktopHandler.post_paths)
         self.assertIn('roadmapReviewApplyOperation=roadmapReviewApplyOperation||crypto.randomUUID()', JS)
-        self.assertIn("accepted.every(row=>row.mode==='detached')", JS)
+        self.assertIn('preview.blockers.length', JS)
+        self.assertIn('preview.preview_sha256', JS)
         self.assertIn('.roadmap-review-layout{display:grid', CSS)
         self.assertIn('.roadmap-review-detail{position:sticky;top:8px;display:block;width:100%;height:auto', CSS)
         review_js = JS[JS.index('function renderRoadmapReviewRows'):

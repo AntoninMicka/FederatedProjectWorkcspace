@@ -223,7 +223,8 @@ class WebHandler(DesktopHandler):
                 return self.send_error(400)
             project_id = request.get('project_id')
             read_only = self.path in {'/v1/roadmap-refinement/list',
-                                      '/v1/roadmap-refinement/detail'}
+                                      '/v1/roadmap-refinement/detail',
+                                      '/v1/roadmap-refinement/reconcile/preview'}
             allowed = (self.server.administration.allowed(self.actor, project_id)
                        if read_only else self._can_write(project_id))
             if not allowed:

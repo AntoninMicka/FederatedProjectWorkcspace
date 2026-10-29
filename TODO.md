@@ -311,12 +311,18 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   také pro hodnotu návrhu (`attach`, `keep-detached`, deep-check outcomes aj.).
   Globální „Provést schválené“ nyní po potvrzení používá existující exact-HEAD
   `Workspace.transact` apply a při nejasném timeoutu zachová operation ID pro
-  idempotentní opakování. Je povolen pouze tehdy, když jsou všechny accepted
-  návrhy aplikovatelné detached návrhy; accepted deep-check zůstává fail-closed.
+  idempotentní opakování. Deep-check nyní nejprve skládá exact diff: evidenční
+  výsledky nemění Git, create/update/dependency změny se aplikují po jedné a po
+  každé se validuje celý task graph; preview SHA stale-protectuje potvrzení.
+  Scan nově odmítá neplatný typ rodiče, změnu typu/rodiče existujícího uzlu a
+  dependency bez existujícího cíle už před lidským review.
   Živá kontrola 2026-10-29 našla 87 accepted deep-check, 0 accepted detached a
   1271 pending položek. Nejméně jeden přijatý create-node návrh navíc navrhuje
-  task přímo pod milestone, takže před zápisem vyžaduje složený reconciliation
-  writer a hierarchickou validaci; samotné UI apply DEV-01 neuzavírá.
+  task přímo pod milestone. Read-only preview nad živou queue jej zachytil bez
+  zápisu: 87 proposals, 50 evidenčních výsledků, 25 strukturovaných změn a 16
+  blokátorů (14 chybných typů rodiče, 2 neplatné kořenové tasky). Opakovaný scan
+  s `--forget-previous` tyto staré odpovědi nahradí návrhy podle přísnějšího
+  kontraktu; samotné UI apply DEV-01 neuzavírá.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
