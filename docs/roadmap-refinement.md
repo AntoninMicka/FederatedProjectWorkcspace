@@ -135,7 +135,9 @@ ale `scan` na něm záměrně skončí `Main plan is unavailable`.
 
 Projekt s alespoň jedním řádkem v node-local proposal queue zobrazí v levém
 panelu **Nástroje** položku **Kontrola roadmapy**. Samostatná stránka má
-scrollovatelnou tabulku stránkovanou po 100 řádcích, filtr rozhodnutých stavů, lazy detail z exact proposal
+scrollovatelnou tabulku stránkovanou po 100 řádcích, stavový checklist s počty,
+stabilní vzestupné/sestupné řazení podle stavu, návrhu, zdroje, cíle či jistoty
+a lazy detail z exact proposal
 HEAD a jednotlivé Schválit/Zamítnout. Globální Schválit/Zamítnout všechny
 pracuje pouze s právě načtenými pending ID, vyžaduje potvrzení a ukládá celou
 dávku jednou SQLite transakcí. Obnovit znovu načte lokální autoritu.

@@ -303,6 +303,10 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   SQLite transakci. Regresní test načetl seznam i při explicitně obsazené hlavní
   lane. Detailní panel navíc resetuje obecné styly levého `<aside>`, využívá celý
   pravý sloupec a při užším viewportu se dále skládá pod tabulku.
+  Review tabulka nyní nabízí kombinovatelný checklist všech skutečně nalezených
+  stavů s počty a rychlou volbou všech/žádných. Stabilní řazení podporuje původní
+  pořadí, stav, návrh, zdroj, cíl a jistotu vzestupně i sestupně; změna ovládání
+  vrací stránkování na začátek a filtry se při obnovení fronty zachovají.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
