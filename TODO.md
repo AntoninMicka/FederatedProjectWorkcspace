@@ -281,6 +281,12 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   real-WebEngine smoke nad skutečným projektem se k UI nedostal: jiný proces
   držel Workspace journal lock (`BlockingIOError`); proces ani zámek nebyly
   násilně ukončeny. GBM hlášení bylo pouze fallback na Vulkan.
+  Navazující traceback odhalil chybějící recovery hranici automatického
+  federation catalog scheduleru: očekávaná kolize se sdíleným node writer
+  lockem ukončila jeho daemon vlákno. Scheduler nyní přechodné selhání zachytí,
+  nejvýše pět sekund vyčká a pokus bezpečně opakuje; stav journalu ani zámek
+  nemění. Regresní test prvního selhání a následného zotavení prošel spolu
+  s kontrolou automatického výběru peerů (2/2).
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

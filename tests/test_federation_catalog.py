@@ -13,9 +13,10 @@ from uuid import uuid4
 from spikes.administration import Administration, AccessDenied
 from spikes.federation_accounts import MappingSignatures, canonical
 from spikes.federation_catalog import (
-    CONTENT_TYPE, PATH, CatalogControl, CatalogStore, prepare, receive,
+    CONTENT_TYPE, PATH, CatalogControl, CatalogScheduler, CatalogStore, prepare,
+    receive,
 )
-from spikes.project_creation import ProjectCreation
+from spikes.project_creation import CreationConflict, ProjectCreation
 from spikes.web_server import WebHandler
 
 
@@ -128,6 +129,26 @@ class FederationCatalogTests(unittest.TestCase):
         envelope, _ = prepare(self.services[0], self.node_ids[1])
         with self.assertRaises(AccessDenied):
             receive(self.services[1], envelope)
+
+    def test_scheduler_survives_transient_node_lock_conflict(self):
+        scheduler = CatalogScheduler(self.nodes[0], deployment='web',
+                                     interval=.01)
+        recovered = threading.Event()
+        attempts = 0
+
+        def run():
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise CreationConflict('simulated node lock conflict')
+            recovered.set()
+            scheduler.stopping.set()
+
+        with patch.object(scheduler.control, 'run_automatic', side_effect=run):
+            scheduler.start()
+            self.assertTrue(recovered.wait(2))
+            scheduler.stop()
+        self.assertGreaterEqual(attempts, 2)
 
     def test_bounded_node_endpoint_rejects_browser_auth(self):
         envelope, _ = prepare(self.services[0], self.node_ids[1])
