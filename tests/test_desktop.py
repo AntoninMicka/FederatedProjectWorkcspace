@@ -472,6 +472,7 @@ raise SystemExit(app.exec())
             self.assertIn(f"projectRequest('/v1/roadmap-refinement/{path}'", JS)
             self.assertIn('/v1/roadmap-refinement/' + path, DesktopHandler.post_paths)
         self.assertIn('.roadmap-review-layout{display:grid', CSS)
+        self.assertIn('.roadmap-review-detail{position:sticky;top:8px;display:block;width:100%;height:auto', CSS)
         review_js = JS[JS.index('function renderRoadmapReviewRows'):
                        JS.index('function renderJuliaParameters')]
         self.assertNotIn('.innerHTML=', review_js)

@@ -414,6 +414,16 @@ class WebTests(unittest.TestCase):
         self.assertEqual('activity', json.loads(data)['system']['group'])
         self.assertFalse(hasattr(self.server, 'authority'))
 
+    def test_roadmap_review_reads_use_separate_lane(self):
+        self.server.application_lane.acquire()
+        try:
+            code, data, _ = self.request(path='/v1/roadmap-refinement/list',
+                body=json.dumps({'project_id': str(uuid4())}))
+        finally:
+            self.server.application_lane.release()
+        self.assertEqual(200, code, data)
+        self.assertEqual([], json.loads(data)['rows'])
+
     def test_admin_project_removal_routes_require_preview_and_restore_from_trash(self):
         code, data, _ = self.create_project('Disposable project')
         self.assertEqual(code, 200, data)

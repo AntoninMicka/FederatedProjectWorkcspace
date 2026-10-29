@@ -41,6 +41,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self._worker_slots = threading.BoundedSemaphore(max_workers)
         self.application_lane = threading.Lock()
         self.telemetry_lane = threading.Lock()
+        self.review_lane = threading.Lock()
         self.request_lane_timeout = lane_timeout
         self.shutdown_timeout = shutdown_timeout
         self.shutdown_clean = None
@@ -166,9 +167,8 @@ class Handler(BaseHTTPRequestHandler):
         self.server.counter += 1
         self.reply(200, {'value': self.server.counter})
 
-    def _in_request_lane(self, operation, *, telemetry=False):
-        lane = getattr(self.server,
-                       'telemetry_lane' if telemetry else 'application_lane', None)
+    def _in_request_lane(self, operation, *, lane_name='application_lane'):
+        lane = getattr(self.server, lane_name, None)
         if lane is None:
             # Small unit fixtures may compose this handler with an already
             # sequential HTTPServer; only BoundedHTTPServer enables concurrency.
@@ -181,9 +181,13 @@ class Handler(BaseHTTPRequestHandler):
             lane.release()
 
     def do_POST(self):
+        lane_name = ('telemetry_lane' if self.path == '/v1/node-telemetry/status'
+                     else 'review_lane' if self.path in {
+                         '/v1/roadmap-refinement/list',
+                         '/v1/roadmap-refinement/detail'}
+                     else 'application_lane')
         return self._in_request_lane(
-            self._do_POST,
-            telemetry=self.path == '/v1/node-telemetry/status')
+            self._do_POST, lane_name=lane_name)
 
     def _do_POST(self):
         authority = self.request_authority()
@@ -269,6 +273,7 @@ def running_api(transport, runtime=None, *, handler=Handler, projects=None,
         server.authority = 'workspace.local'
         server.application_lane = threading.Lock()
         server.telemetry_lane = threading.Lock()
+        server.review_lane = threading.Lock()
         server.request_lane_timeout = REQUEST_LANE_TIMEOUT
     elif transport == 'http':
         server = BoundedHTTPServer(('127.0.0.1', 0), handler,

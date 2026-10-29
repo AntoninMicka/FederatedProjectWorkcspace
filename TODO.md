@@ -297,6 +297,12 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   odstranil odkaz na nástroj a chybu ponechal jen ve skrytém panelu. Chybový
   stav je nyní fail-visible v levém panelu, stránka zůstane dostupná a nabízí
   opakování přes „Obnovit seznam“; úspěšné načtení stav chyby odstraní.
+  Read-only list/detail byly následně odděleny do vlastní serializované HTTP
+  lane, takže startovní backend kontroly v application lane již nevracejí
+  `server busy`; rozhodovací zápisy zůstávají v application lane a atomické
+  SQLite transakci. Regresní test načetl seznam i při explicitně obsazené hlavní
+  lane. Detailní panel navíc resetuje obecné styly levého `<aside>`, využívá celý
+  pravý sloupec a při užším viewportu se dále skládá pod tabulku.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

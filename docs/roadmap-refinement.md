@@ -152,6 +152,11 @@ transportní traceback ani nejasný proposal stav.
 Pokud úvodní načtení fronty přechodně selže, nástroj zůstane viditelný s
 diagnostikou a tlačítkem `Obnovit seznam`; chyba se nesmí tvářit jako prázdná
 fronta.
+Read-only `list` a `detail` používají vlastní serializovanou request lane, takže
+je nezablokuje dlouhá operace v hlavní aplikační lane. Rozhodnutí
+`decide`/`decide-all` zůstávají v hlavní lane a jejich jedinou persistentní
+hranicí je SQLite transakce proposal queue; oddělení čtení nepřidává journal ani
+nemění recovery.
 
 ## První živá evidence
 
