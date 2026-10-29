@@ -149,6 +149,9 @@ zůstávají skryté.
 Načtení lokální review fronty neplánuje síťový backend/Ollama probe. Zavření
 WebEngine stránky během odpovědi je očekávané odpojení klienta a nevytváří
 transportní traceback ani nejasný proposal stav.
+Pokud úvodní načtení fronty přechodně selže, nástroj zůstane viditelný s
+diagnostikou a tlačítkem `Obnovit seznam`; chyba se nesmí tvářit jako prázdná
+fronta.
 
 ## První živá evidence
 
