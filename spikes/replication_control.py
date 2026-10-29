@@ -126,8 +126,15 @@ class ReplicationScheduler:
 
     def _run(self):
         while not self.stopping.is_set():
-            self.control.run_enabled()
-            self.stopping.wait(self.interval)
+            try:
+                self.control.run_enabled()
+                delay = self.interval
+            except Exception:
+                # Registry reads share the node writer lock with project
+                # operations. Retry transient lock/startup races without
+                # permanently terminating replication for this process.
+                delay = min(self.interval, 5)
+            self.stopping.wait(delay)
 
     def stop(self):
         self.stopping.set()

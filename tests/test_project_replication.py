@@ -17,7 +17,7 @@ from uuid import uuid4
 
 from spikes.administration import Administration, AccessDenied
 from spikes.git_transfer import validate_history
-from spikes.project_creation import ProjectCreation
+from spikes.project_creation import CreationConflict, ProjectCreation
 from spikes.project_repair import ProjectDiagnostics
 from spikes.projects import Projects
 from spikes.project_replication import (
@@ -25,7 +25,7 @@ from spikes.project_replication import (
     ReplicationReceiver, _signature,
     decode_body, encode_body, prepare, send, validate_request,
 )
-from spikes.replication_control import ReplicationControl
+from spikes.replication_control import ReplicationControl, ReplicationScheduler
 from spikes.network_backend import NetworkBackend, ProbeHandler, trust_ca
 from spikes.source_import import Sources, request_from_file
 from spikes.storage import Git
@@ -227,6 +227,26 @@ class ProjectReplicationTests(unittest.TestCase):
         with patch.object(control, 'synchronize') as automatic:
             control.run_enabled()
         automatic.assert_called_once_with(self.replication_id)
+
+    def test_scheduler_survives_transient_node_lock_conflict(self):
+        scheduler = ReplicationScheduler(self.nodes[0], deployment='web',
+                                         interval=.01)
+        recovered = threading.Event()
+        attempts = 0
+
+        def run():
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise CreationConflict('simulated node lock conflict')
+            recovered.set()
+            scheduler.stopping.set()
+
+        with patch.object(scheduler.control, 'run_enabled', side_effect=run):
+            scheduler.start()
+            self.assertTrue(recovered.wait(2))
+            scheduler.stop()
+        self.assertGreaterEqual(attempts, 2)
 
     def test_crash_after_cas_rolls_forward_without_second_ref_effect(self):
         base = self.import_source('base')

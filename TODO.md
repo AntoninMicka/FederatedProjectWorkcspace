@@ -287,6 +287,11 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   nejvýše pět sekund vyčká a pokus bezpečně opakuje; stav journalu ani zámek
   nemění. Regresní test prvního selhání a následného zotavení prošel spolu
   s kontrolou automatického výběru peerů (2/2).
+  Stejná recovery mezera byla nalezena a opravena v project replication
+  scheduleru; audit periodických daemon smyček potvrdil, že content sync již
+  odpovídající retry hranici měl. Replication worker nyní po node-lock/startup
+  kolizi rovněž pokračuje a cílený test zotavení i běžného control-plane toku
+  prošel (2/2).
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
