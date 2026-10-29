@@ -25,6 +25,70 @@ balíčku. UI úkolů v IDE, automatické zpracování zpráv a review dokončen
 zůstávají DEV-02/DEV-03. Migrace není důvod označit starý checkbox za ověřenou
 implementaci ani uzavřít celý milník.
 
+## Revize návrhu po prvním fyzickém importu
+
+Rozhodnutí 29. 10. 2026: první vygenerovaný import ani jeho deep-check
+proposal queue nejsou vstupem další migrace. Lokální kontrola ukázala, že
+transformace sice zachovala mnoho textových výskytů, ale rozhodovala izolované
+source clustery proti již chybnému cíli. Tím ztratila sekvenční význam celých
+dávek a dokázala navrhnout strukturálně platné, ale sémanticky nesprávné
+zařazení. Tento výsledek se nebude ručně opravovat ani aplikovat po částech.
+
+Nová migrace vznikne znovu pouze z připnutých původních zdrojů pomocí
+provider-neutral lokálního LLM. Současný importovaný cíl bude při potvrzeném
+apply kompletně nahrazen; do té doby se fyzicky nemaže a zůstává obnovitelný
+z Git historie. Stará node-local queue se uklidí explicitně až spolu s touto
+náhradou, aby s novým během nesdílela rozhodnutí ani fingerprinty.
+
+### Oddělení tří workflow
+
+1. **Jednorázová source-first migrace** rekonstruuje nový plán z původních
+   sekvenčních dokumentů. Nepoužívá předchozí import jako autoritu, mapu ani
+   pozitivní příklad.
+2. **Roadmap refinement scan** kontroluje pouze novou kanonickou roadmapu,
+   její explicitní seznamy úkolů, hierarchii, stavy a dependency. Po oddělení
+   migračního režimu nebude procházet historické source artefakty ani obecné
+   dokumenty a nebude z nich vytvářet úkoly.
+3. **Document-to-plan workflow** bude samostatný budoucí nástroj: z nového
+   nebo změněného dokumentu navrhne dílčí plán a jeho explicitní integraci.
+   Není součástí jednorázové migrace ani refinement scanu.
+
+### Nový transformační tok
+
+1. **Deterministický source catalog.** Pro každý zdroj se uchová role
+   dokumentu, commit, hash, cesta, byte/line rozsah, nadpisová cesta, celý
+   logický blok, předchozí a následující blok a původní pořadí. Katalog
+   explicitně popíše zvyklost TODO → celá uzavřená dávka ve WORK_LOG,
+   rozdílnou roli BACKLOGu a strategického Master Checklistu a skutečnost,
+   že pozdější výskyt je autoritativnější jen s doloženým výsledkem.
+2. **LLM extraction bez cíle.** Model znovu načte celý zdrojový blok a
+   relevantní okolí. Vrátí striktně typovaný mezimodel milestone, dávek,
+   úkolů, checklistů, historie, popisů, vazeb a nejasností. Původní import
+   ani jeho IDs nejsou součástí kontextu. Nejasný obsah zůstane podkladem;
+   model jej nesmí vynutit do executable uzlu.
+3. **Globální sestavení.** Deterministická vrstva spojí výstupy podle
+   provenance a stabilních ID, odhalí kolize a sestaví celý kandidátní graf.
+   Markdown a metadata se renderují až z tohoto mezimodelu, nikoli přímými
+   volnými editacemi modelu.
+4. **Nezávislý LLM audit.** Pro každý logický celek se znovu otevře původní
+   zdroj i nový kandidát, s důrazem na zdroj. Audit rozliší `correct`,
+   `equivalent`, `misplaced`, `distorted`, `missing`, `duplicated`,
+   `unsupported-target` a `ambiguous` a musí citovat konkrétní lokátory.
+5. **Měření věrnosti.** Report oddělí pokrytí zdrojů, správnost
+   hierarchie, stavu, přiřazení, provenance a dependency a podíl nejasností.
+   Souhrnné procento smí být pouze odvozenina těchto kontrol, nikoli
+   nedoložená modelová confidence.
+6. **Review po logických celcích.** Uživatel kontroluje milestone/dávku a její
+   coverage, ne tisíce izolovaných vět. Blokující chyby nebo nízká věrnost
+   znamenají nový běh stejného vstupu, případně s lepším lokálním modelem.
+7. **Úplná náhrada.** Jediný potvrzený preview/digest apply nahradí
+   současný testovací import celým validovaným bundlem. Částečné přebírání
+   starého výsledku ani jeho accepted proposals není dovoleno.
+
+Model, prompt, parametry a raw bounded odpovědi jsou součástí run manifestu.
+Stejný source catalog proto lze zopakovat s jiným volně dostupným modelem a
+porovnat deterministické validační a auditní metriky bez nové ruční přípravy.
+
 ## 1. Připnutá inventura a náhled bez zápisu
 
 Výchozí checkout: `develop` po PR #112, commit

@@ -38,6 +38,10 @@ jsou transportní historie, nikoli požadavek zachovat testovací plán.
 Migrace má zahrnout i historické a realizované úkoly a dávky. Obecné myšlenky
 mají být volným popisem pod jasným milníkem/dávkou; nejednoznačný obsah
 samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
+První fyzický import a jeho deep-check výsledky uživatel 29. 10. 2026 odmítl
+jako celek: nepřebírat z nich uzly, IDs ani schválené proposals a neopravovat je
+ručně. Nová migrace vznikne source-first pouze z původních sekvenčních dat
+pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový bundle.
 
 ## Úkoly dávky
 
@@ -326,6 +330,22 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   blokátorů (14 chybných typů rodiče, 2 neplatné kořenové tasky). Opakovaný scan
   s `--forget-previous` tyto staré odpovědi nahradí návrhy podle přísnějšího
   kontraktu; samotné UI apply DEV-01 neuzavírá.
+  Migrační použití tohoto scanu je po fyzickém vyhodnocení odmítnuté:
+  lokální cluster proti chybnému cíli nezachoval sekvenční kontext. Queue se
+  neaplikuje. Implementace zůstává podkladem pro pozdější omezení na audit
+  kanonické task roadmapy bez původních dat a obecných artefaktů.
+- [x] [completed] **DEV-01-E-REPLAN-01 — opravený source-first návrh migrace
+  (designed).** Zdokumentováno úplné odmítnutí prvního importu, oddělení
+  migration/refinement/document-to-plan workflow a nový tok: deterministický
+  source catalog se sekvenčním kontextem → LLM extraction bez cíle → globální
+  mezimodel → nezávislý source-vs-candidate audit → metriky věrnosti → review
+  po logických celcích → jediná úplná náhrada. Návrh je v
+  `docs/roadmap-migration.md`; v tomto kroku se data ani queue nemažou.
+- [ ] [planned] **DEV-01-E-REBUILD-01 — lokální LLM source-first migrační
+  utility (cílová úroveň: implemented).** Implementovat resumovatelný katalog,
+  provider-neutral extraction a audit run manifest, validovaný mezimodel,
+  deterministický kandidát a coverage/fidelity report. První krok nesmí měnit
+  Workspace projekt; apply úplné náhrady zůstává odděleným potvrzeným krokem.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

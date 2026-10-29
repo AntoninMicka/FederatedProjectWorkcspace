@@ -3,12 +3,24 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# DEV-01 — jednorázová úplná sémantická reconciliation roadmapy
+# DEV-01 — historický experiment sémantické reconciliation roadmapy
 
-Stav: **proposal scan implemented**, 28. 10. 2026. Jde o jednorázový nástroj pro dokončení
-migrace, nikoli o cílovou obecnou Workspace feature `PLAN-SEMANTIC-AUDIT-01`.
-Nástroj nejprve deterministicky vytvoří úplnou resumovatelnou frontu a až poté
-jednotlivé položky předává same-node Ollamě. Běh nic nezapisuje do projektu.
+Stav: **migrační postup odmítnut, scanner zachován k omezení**, 29. 10. 2026.
+Jde o zaznamenaný experiment, nikoli o postup dokončení migrace. Fyzický běh
+ukázal, že izolovaný source cluster a malá sada cílových kandidátů nezachovávají
+sekvenční kontext celé dávky; návrh proto dokáže být strukturálně platný a
+sémanticky chybný. Vzniklý import ani queue se do nové migrace nepřebírají.
+Náhradní source-first postup definuje
+[plán migrace](roadmap-migration.md#revize-návrhu-po-prvním-fyzickém-importu).
+
+Implementovaný scanner se později omezí na kontrolu již kanonické roadmapy:
+explicitní task listy, hierarchii, stavy, duplicity a dependency. Zpracování
+původních migračních dat a obecných artefaktů se odstraní; vytváření plánu
+z nového nebo změněného dokumentu bude samostatný nástroj.
+
+Původní experiment nejprve deterministicky vytvořil úplnou resumovatelnou
+frontu a až poté jednotlivé položky předával same-node Ollamě. Běh sám nic
+nezapisoval do projektu.
 
 ## Původní pracovní zvyklosti
 
