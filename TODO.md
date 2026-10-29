@@ -316,6 +316,9 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   každé se validuje celý task graph; preview SHA stale-protectuje potvrzení.
   Scan nově odmítá neplatný typ rodiče, změnu typu/rodiče existujícího uzlu a
   dependency bez existujícího cíle už před lidským review.
+  Review UI umí vrátit jednotlivé i všechny accepted návrhy zpět do pending,
+  označuje evidence/mutation a orientační riziko a dovoluje preview a provedení
+  pouze vybraného accepted záznamu bez ovlivnění ostatních rozhodnutí.
   Živá kontrola 2026-10-29 našla 87 accepted deep-check, 0 accepted detached a
   1271 pending položek. Nejméně jeden přijatý create-node návrh navíc navrhuje
   task přímo pod milestone. Read-only preview nad živou queue jej zachytil bez

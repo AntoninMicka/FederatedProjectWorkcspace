@@ -142,6 +142,10 @@ a lazy detail z exact proposal
 HEAD a jednotlivé Schválit/Zamítnout. Globální Schválit/Zamítnout všechny
 pracuje pouze s právě načtenými pending ID, vyžaduje potvrzení a ukládá celou
 dávku jednou SQLite transakcí. Obnovit znovu načte lokální autoritu.
+Schválení lze před provedením jednotlivě nebo hromadně vrátit z
+`accepted` do `pending`; jde o jednu SQLite transakci proposal queue a projektový
+Git se nemění. UI rozlišuje evidenční rozhodnutí od mutací a zvýrazňuje
+create/dependency/completion změny jako rizikové.
 Globální **Provést schválené** vyžaduje další potvrzení, používá stabilní
 operation ID a zapisuje všechny schválené změny jednou validovanou
 `Workspace.transact` operací proti jejich společnému exact HEAD. Deep-check
@@ -151,6 +155,8 @@ znovu validuje celý task graph. Kolize, neplatná hierarchie, změněný HEAD n
 neplatný výsledný graf zápis zablokují a původní proposals zůstanou zachované.
 Potvrzení je možné až nad preview SHA-256; nejasný timeout lze v téže UI relaci
 zopakovat se stejným operation ID.
+Vedle globální akce lze stejným preview-SHA kontraktem provést pouze právě
+vybraný accepted záznam; ostatní schválené zůstanou ve frontě beze změny.
 
 UI nevytváří druhou kopii návrhů. Reader může seznam, detail a reconciliation
 preview

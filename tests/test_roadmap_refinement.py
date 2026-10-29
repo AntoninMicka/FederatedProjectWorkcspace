@@ -122,6 +122,12 @@ class RoadmapRefinementTests(unittest.TestCase):
         result = self.service.decide_many([proposal['proposal_id']], 'accept')
         self.assertEqual(1, result['updated'])
         self.assertEqual('accepted', self.service.get(proposal['proposal_id'])['state'])
+        reset = self.service.decide_many([proposal['proposal_id']], 'reset')
+        self.assertEqual(1, reset['updated'])
+        self.assertEqual('pending', self.service.get(proposal['proposal_id'])['state'])
+        self.service.decide(proposal['proposal_id'], 'accept')
+        self.service.decide(proposal['proposal_id'], 'reset')
+        self.assertEqual('pending', self.service.get(proposal['proposal_id'])['state'])
 
     def test_deep_check_freezes_source_clusters_into_the_same_proposal_queue(self):
         source_id = str(uuid4())
@@ -152,7 +158,12 @@ class RoadmapRefinementTests(unittest.TestCase):
         preview = self.service.reconciliation_preview()
         self.assertEqual(preview['evidence_only'], [proposal['proposal_id']])
         self.assertEqual(preview['changed_files'], [])
-        result = self.service.apply(str(uuid4()), preview['preview_sha256'])
+        selected = self.service.reconciliation_preview([proposal['proposal_id']])
+        self.assertEqual(preview['preview_sha256'], selected['preview_sha256'])
+        with self.assertRaisesRegex(ValueError, 'no longer accepted'):
+            self.service.reconciliation_preview([str(uuid4())])
+        result = self.service.apply(str(uuid4()), preview['preview_sha256'],
+                                    [proposal['proposal_id']])
         self.assertEqual(result['receipt']['state'], 'evidence-only')
         self.assertEqual(self.git.head(), deep_head)
         self.assertEqual(self.service.get(proposal['proposal_id'])['state'], 'applied')

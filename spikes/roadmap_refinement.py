@@ -715,8 +715,14 @@ class RoadmapRefinement:
             summary = {key: proposal[key] for key in (
                 'decision', 'action', 'outcome', 'confidence', 'summary', 'target_id',
                 'target_ids') if key in proposal}
+            changes = proposal.get('changes') or []
+            impact = 'evidence' if not changes else 'mutation'
+            risky = any(change.get('kind') in {'create-node', 'add-dependency',
+                                                'remove-dependency'}
+                        or change.get('checked') is not None for change in changes)
             result.append({key: row[key] for key in ('proposal_id', 'state', 'mode')}
                 | {'proposal': summary,
+                   'impact': impact, 'risk': 'high' if risky else ('medium' if changes else 'low'),
                    'source_label': (frozen.get('stable_id') or frozen.get('cluster_id')
                                     or row.get('document_id', '-')[:8])})
         return result
@@ -728,14 +734,17 @@ class RoadmapRefinement:
         return {'row': public_row, 'context': self.review_context(row)}
 
     def decide(self, proposal_id, decision):
-        uuid(proposal_id); require(decision in {'accept', 'reject'}, 'Unknown review decision')
+        uuid(proposal_id); require(decision in {'accept', 'reject', 'reset'}, 'Unknown review decision')
+        source = 'accepted' if decision == 'reset' else 'pending'
+        target = 'pending' if decision == 'reset' else ('accepted' if decision == 'accept' else 'rejected')
         with self._connect() as db, db:
             row = db.execute('SELECT state FROM proposals WHERE id=? AND project_id=?',
                              (proposal_id, self.project_id)).fetchone()
-            require(row is not None and row[0] == 'pending', 'Proposal is not pending review')
+            require(row is not None and row[0] == source,
+                    ('Proposal is not accepted' if decision == 'reset'
+                     else 'Proposal is not pending review'))
             db.execute('UPDATE proposals SET state=? WHERE id=? AND project_id=?',
-                       ('accepted' if decision == 'accept' else 'rejected',
-                        proposal_id, self.project_id))
+                       (target, proposal_id, self.project_id))
         return self.get(proposal_id)
 
     def decide_many(self, proposal_ids, decision):
@@ -744,24 +753,37 @@ class RoadmapRefinement:
                 'Invalid proposal decision list')
         for proposal_id in proposal_ids:
             uuid(proposal_id)
-        require(decision in {'accept', 'reject'}, 'Unknown review decision')
+        require(decision in {'accept', 'reject', 'reset'}, 'Unknown review decision')
+        source = 'accepted' if decision == 'reset' else 'pending'
         with self._connect() as db, db:
             # Serialize validation and the whole batch update. A concurrent
             # CLI/TUI decision cannot slip between the pending check and write.
             db.execute('BEGIN IMMEDIATE')
             available = {row[0] for row in db.execute(
                 'SELECT id FROM proposals WHERE project_id=? AND state=?',
-                (self.project_id, 'pending'))}
-            require(set(proposal_ids) <= available, 'Some proposals are no longer pending review')
-            target = 'accepted' if decision == 'accept' else 'rejected'
+                (self.project_id, source))}
+            require(set(proposal_ids) <= available,
+                    ('Some proposals are no longer accepted' if decision == 'reset'
+                     else 'Some proposals are no longer pending review'))
+            target = 'pending' if decision == 'reset' else ('accepted' if decision == 'accept' else 'rejected')
             db.executemany('UPDATE proposals SET state=? WHERE id=? AND project_id=? AND state=?',
-                           ((target, proposal_id, self.project_id, 'pending')
+                           ((target, proposal_id, self.project_id, source)
                             for proposal_id in proposal_ids))
         return {'project_id': self.project_id, 'decision': decision,
                 'updated': len(proposal_ids), 'proposal_ids': proposal_ids}
 
-    def _reconciliation(self):
+    def _reconciliation(self, proposal_ids=None):
         accepted = [row for row in self.list() if row['state'] == 'accepted']
+        if proposal_ids is not None:
+            require(isinstance(proposal_ids, list) and proposal_ids
+                    and len(proposal_ids) == len(set(proposal_ids)),
+                    'Invalid reconciliation proposal selection')
+            for proposal_id in proposal_ids:
+                uuid(proposal_id)
+            selected = set(proposal_ids)
+            accepted = [row for row in accepted if row['proposal_id'] in selected]
+            require({row['proposal_id'] for row in accepted} == selected,
+                    'Some selected proposals are no longer accepted')
         require(bool(accepted), 'No accepted refinement proposals')
         heads = {row['expected_head'] for row in accepted}; require(len(heads) == 1, 'Accepted proposals use different HEADs')
         expected_head = heads.pop(); workspace = Projects(self.node).workspace(self.project_id, blocking=False)
@@ -839,12 +861,12 @@ class RoadmapRefinement:
                 'changed_files': sorted(changes), 'blockers': blockers,
                 'diff': diff}, changes
 
-    def reconciliation_preview(self):
-        return self._reconciliation()[0]
+    def reconciliation_preview(self, proposal_ids=None):
+        return self._reconciliation(proposal_ids)[0]
 
-    def apply(self, operation_id, preview_sha256=None):
+    def apply(self, operation_id, preview_sha256=None, proposal_ids=None):
         uuid(operation_id)
-        preview, changes = self._reconciliation()
+        preview, changes = self._reconciliation(proposal_ids)
         require(not preview['blockers'], 'Reconciliation preview has blockers')
         if preview_sha256 is not None:
             require(preview_sha256 == preview['preview_sha256'],

@@ -269,11 +269,11 @@ class WebTests(unittest.TestCase):
                 calls.append(('decide', selected, decision)); return {'proposal_id': selected}
             def decide_many(inner, selected, decision):
                 calls.append(('many', selected, decision)); return {'updated': len(selected)}
-            def reconciliation_preview(inner):
-                calls.append(('preview',)); return {'preview_sha256': 'b' * 64,
+            def reconciliation_preview(inner, proposal_ids=None):
+                calls.append(('preview', proposal_ids)); return {'preview_sha256': 'b' * 64,
                     'proposal_ids': [proposal_id], 'blockers': []}
-            def apply(inner, operation_id, preview_sha256):
-                calls.append(('apply', operation_id, preview_sha256)); return {
+            def apply(inner, operation_id, preview_sha256, proposal_ids=None):
+                calls.append(('apply', operation_id, preview_sha256, proposal_ids)); return {
                     'operation_id': operation_id, 'receipt': {'commit_id': 'a' * 40},
                     'applied_proposals': [proposal_id]}
         operation_id = str(uuid4())
@@ -285,10 +285,12 @@ class WebTests(unittest.TestCase):
                 ('/v1/roadmap-refinement/decide', {'project_id': project_id,
                     'proposal_id': proposal_id, 'decision': 'accept'}),
                 ('/v1/roadmap-refinement/decide-all', {'project_id': project_id,
-                    'proposal_ids': [proposal_id], 'decision': 'reject'}),
-                ('/v1/roadmap-refinement/reconcile/preview', {'project_id': project_id}),
+                    'proposal_ids': [proposal_id], 'decision': 'reset'}),
+                ('/v1/roadmap-refinement/reconcile/preview', {'project_id': project_id,
+                    'proposal_ids': [proposal_id]}),
                 ('/v1/roadmap-refinement/apply', {'project_id': project_id,
-                    'operation_id': operation_id, 'preview_sha256': 'b' * 64})):
+                    'operation_id': operation_id, 'preview_sha256': 'b' * 64,
+                    'proposal_ids': [proposal_id]})):
                 code, data, _ = self.request(path=path, body=json.dumps(body))
                 self.assertEqual(200, code, data)
             def admin(body):
@@ -316,9 +318,10 @@ class WebTests(unittest.TestCase):
                                  'preview_sha256': 'b' * 64}), headers=headers)[0])
         self.assertEqual([('list',), ('detail', proposal_id),
                           ('decide', proposal_id, 'accept'),
-                          ('many', [proposal_id], 'reject'), ('preview',),
-                          ('apply', operation_id, 'b' * 64),
-                          ('list',), ('preview',)], calls)
+                          ('many', [proposal_id], 'reset'),
+                          ('preview', [proposal_id]),
+                          ('apply', operation_id, 'b' * 64, [proposal_id]),
+                          ('list',), ('preview', None)], calls)
     def test_document_pattern_catalog_and_validation_are_read_only(self):
         code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
             'action': 'catalog'}))
