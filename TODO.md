@@ -341,11 +341,29 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   mezimodel → nezávislý source-vs-candidate audit → metriky věrnosti → review
   po logických celcích → jediná úplná náhrada. Návrh je v
   `docs/roadmap-migration.md`; v tomto kroku se data ani queue nemažou.
-- [ ] [planned] **DEV-01-E-REBUILD-01 — lokální LLM source-first migrační
+- [ ] [in progress] **DEV-01-E-REBUILD-01 — lokální LLM source-first migrační
   utility (cílová úroveň: implemented).** Implementovat resumovatelný katalog,
   provider-neutral extraction a audit run manifest, validovaný mezimodel,
   deterministický kandidát a coverage/fidelity report. První krok nesmí měnit
   Workspace projekt; apply úplné náhrady zůstává odděleným potvrzeným krokem.
+  Implementovány CLI `prepare/run/status`, commit-pinned sekvenční bloky s
+  okolím, striktní extraction/audit schémata, stabilní Ollama run IDs,
+  atomické resumovatelné výsledky, terminální evidence vadné odpovědi,
+  deterministické sloučení kompatibilních ID, validace hierarchie/dependency a
+  JSON/Markdown candidate i fidelity report. Utility nečte existující cílový
+  projekt a nemá writer. Zbývá fyzický běh nad připnutými reálnými zdroji,
+  vyhodnocení schopnosti zvoleného modelu a review výsledného kandidáta.
+  Read-only fyzické `prepare` nad host HEAD `692e47a` a modulem
+  `cz.proofofidea.publication-experiment-registry` `446d980` vytvořilo v
+  `/tmp/dev-01-source-rebuild-20261029-v4` katalog 6 souborů / 607109 bajtů /
+  185 logických bloků; největší blok má 24477 bajtů. První smoke dispatch
+  odhalil nedostupný Ollama endpoint ještě před modelovou odpovědí; utility
+  proto nyní před prvním blokem ověří endpoint i připnutý model a
+  nedostupnost už nekonzumuje blokový run. Čistý v4 run nemá žádné selhání.
+  Cílená migrační sada (`roadmap_rebuild`, `roadmap_migration`,
+  `roadmap_mapping`, `roadmap_importer`): 33/33 prošlo; fyzická inference
+  zůstává neověřená do dostupnosti modelu
+  `qwen3-coder:latest`.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

@@ -89,6 +89,47 @@ Model, prompt, parametry a raw bounded odpovědi jsou součástí run manifestu.
 Stejný source catalog proto lze zopakovat s jiným volně dostupným modelem a
 porovnat deterministické validační a auditní metriky bez nové ruční přípravy.
 
+### Source-first utility
+
+Implementovaný read-only nástroj odděluje přípravu připnutého katalogu od
+modelových volání. Nový run adresář musí být soukromý a nesmí existovat:
+
+```bash
+python3 -m scripts.roadmap_rebuild \
+  --node /home/antonin/.local/state/federated-workspace/node.json \
+  --run-dir /tmp/dev-01-source-rebuild \
+  prepare --repository . --revision SOURCE_COMMIT \
+  --module MODULE_ID MODULE_REPOSITORY MODULE_COMMIT
+```
+
+`prepare` vytvoří `catalog.json` a `manifest.json`, ale nevolá model ani
+neotevírá Workspace projekt. Katalog dělí zdroje po celých H2 logických
+blocích; pouze blok nad 96 KiB se rekurzivně dělí na podsekce. Každý blok nese
+přesný text, globální rozsah řádků, pořadí a předchozí/následující blok.
+
+Resumovatelné zpracování se spouští opakovaně:
+
+```bash
+python3 -m scripts.roadmap_rebuild \
+  --node /home/antonin/.local/state/federated-workspace/node.json \
+  --run-dir /tmp/dev-01-source-rebuild run --limit 100000
+```
+
+Nejdříve dokončí všechny extraction bloky, deterministicky publikuje
+`candidate.json` a `candidate.md` a teprve potom spustí nezávislé audity.
+Dokončený běh má `report.json` a `report.md`. `import_ready=true` vyžaduje
+kandidáta bez kolizí, neplatných rodičů a dependency a všechny auditní verdicts
+jen `correct` nebo `equivalent`; samotná vysoká confidence modelu nestačí.
+
+Každý modelový request používá stabilní run ID a existující
+`OllamaRuns` journal. Atomicky publikovaný výsledek bloku se při opakování
+nedispatchuje. Vadná odpověď nebo nejasný transport se uloží jako terminální
+`*.failed.json` pro daný run a ostatní bloky mohou pokračovat; nový model,
+prompt nebo oprava takového bloku vyžadují nový run adresář. Pád před
+atomickým rename nezveřejní částečný výsledek. Utility nemá apply ani
+projektový writer, takže žádná z těchto hranic nemění Git, index ani journal
+Workspace projektu.
+
 ## 1. Připnutá inventura a náhled bez zápisu
 
 Výchozí checkout: `develop` po PR #112, commit

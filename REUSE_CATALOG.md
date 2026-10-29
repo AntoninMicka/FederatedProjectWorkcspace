@@ -847,3 +847,12 @@ jediný `Workspace.transact` writer: accepted návrhy skládá do exact kandidá
 po každé typované změně znovu validuje celý graf a potvrzení váže na preview
 SHA-256. Vlastní obecný Markdown framework, druhý projektový store a zápis mimo
 journal/Git/index recovery hranici jsou **reject**.
+
+DEV-01-E-REBUILD-01 **reuse/adaptuje** commit-pinned `roadmap_migration`
+inventuru a `PinnedRepository`, validovaný same-node `OllamaBinding`, existující
+`OllamaAdapter`/`OllamaRuns` exactly-once journal a stdlib JSON/SHA/atomický
+rename. Starý mapping builder, refinement proposal queue a importovaný cíl jsou
+pro novou source-first transformaci **reject**, protože by znovu zavedly
+chybnou cílovou autoritu a lokální clusterovou korekci. Nový LLM framework,
+vektorová DB, RAG, druhý projektový writer a přímé modelové editace Markdownu
+se nepřidávají; kandidát vzniká deterministicky z validovaného mezimodelu.
