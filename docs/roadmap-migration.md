@@ -123,9 +123,13 @@ jen `correct` nebo `equivalent`; samotná vysoká confidence modelu nestačí.
 
 Každý modelový request používá stabilní run ID a existující
 `OllamaRuns` journal. Atomicky publikovaný výsledek bloku se při opakování
-nedispatchuje. Vadná odpověď nebo nejasný transport se uloží jako terminální
-`*.failed.json` pro daný run a ostatní bloky mohou pokračovat; nový model,
-prompt nebo oprava takového bloku vyžadují nový run adresář. Pád před
+nedispatchuje. Extraction schema v2 používá lokální `entity_key` a
+`parent_ref`, odděluje source ID, execution status a maturity a dovolí pouze
+ID z deterministického block allowlistu. Vadná JSON odpověď dostane nejvýše
+dva opravné průchody se stejným zdrojem, původní odpovědí a konkrétní
+validační chybou. Třetí neúspěch nebo nejasný transport se uloží jako
+terminální `*.failed.json` pro daný run a ostatní bloky mohou pokračovat;
+nový model, prompt nebo oprava takového bloku vyžadují nový run adresář. Pád před
 atomickým rename nezveřejní částečný výsledek. Utility nemá apply ani
 projektový writer, takže žádná z těchto hranic nemění Git, index ani journal
 Workspace projektu.

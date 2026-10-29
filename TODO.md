@@ -348,22 +348,27 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   Workspace projekt; apply úplné náhrady zůstává odděleným potvrzeným krokem.
   Implementovány CLI `prepare/run/status`, commit-pinned sekvenční bloky s
   okolím, striktní extraction/audit schémata, stabilní Ollama run IDs,
-  atomické resumovatelné výsledky, terminální evidence vadné odpovědi,
+  atomické resumovatelné výsledky, bounded oprava a terminální evidence vadné odpovědi,
   deterministické sloučení kompatibilních ID, validace hierarchie/dependency a
   JSON/Markdown candidate i fidelity report. Utility nečte existující cílový
   projekt a nemá writer. Zbývá fyzický běh nad připnutými reálnými zdroji,
   vyhodnocení schopnosti zvoleného modelu a review výsledného kandidáta.
   Read-only fyzické `prepare` nad host HEAD `692e47a` a modulem
   `cz.proofofidea.publication-experiment-registry` `446d980` vytvořilo v
-  `/tmp/dev-01-source-rebuild-20261029-v4` katalog 6 souborů / 607109 bajtů /
+  `/tmp/dev-01-source-rebuild-20261029-v5-final` katalog 6 souborů / 607109 bajtů /
   185 logických bloků; největší blok má 24477 bajtů. První smoke dispatch
   odhalil nedostupný Ollama endpoint ještě před modelovou odpovědí; utility
   proto nyní před prvním blokem ověří endpoint i připnutý model a
-  nedostupnost už nekonzumuje blokový run. Čistý v4 run nemá žádné selhání.
+  nedostupnost už nekonzumuje blokový run. Fyzický v4 extraction dokončil
+  140/185 bloků; 23 rodičů odhalilo chybějící lokální reference ve schema v1,
+  16 entit míchalo ID/maturity a 6 citovalo řádky mimo blok. Schema v2 proto
+  zavádí `entity_key`, lokální/source refs, deterministický ID allowlist,
+  oddělenou maturity a nejvýše dva correction průchody. První fyzický blok
+  čistého v5 prošel bez opravy a správně zachoval licenční preambuli jako
+  description bez falešného ID.
   Cílená migrační sada (`roadmap_rebuild`, `roadmap_migration`,
-  `roadmap_mapping`, `roadmap_importer`): 33/33 prošlo; fyzická inference
-  zůstává neověřená do dostupnosti modelu
-  `qwen3-coder:latest`.
+  `roadmap_mapping`, `roadmap_importer`): 34/34 prošlo. Celý v5 extraction a
+  audit modelem `qwen3-coder:latest` ještě zbývá.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

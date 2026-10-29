@@ -57,21 +57,21 @@ class RoadmapRebuildTests(unittest.TestCase):
                 block = focus['block']; entities = []
                 if 'MILESTONE-M1' in block['text']:
                     entities = [
-                        dict(kind='milestone', stable_id='MILESTONE-M1', title='Milník',
-                             status='planned', parent_id=None, depends_on=[],
+                        dict(entity_key='e1', kind='milestone', source_ids=['MILESTONE-M1'], title='Milník',
+                             status='planned', maturity='unknown', parent_ref=None, dependency_refs=[],
                              line_start=block['line_start'], line_end=block['line_start'], summary='Milník.'),
-                        dict(kind='batch', stable_id='BATCH-01', title='Dávka', status='planned',
-                             parent_id='MILESTONE-M1', depends_on=[], line_start=block['line_start'] + 1,
+                        dict(entity_key='e2', kind='batch', source_ids=['BATCH-01'], title='Dávka', status='planned',
+                             maturity='unknown', parent_ref='entity:e1', dependency_refs=[], line_start=block['line_start'] + 1,
                              line_end=block['line_start'] + 1, summary='Dávka.'),
-                        dict(kind='task', stable_id='TASK-01', title='Úloha', status='planned',
-                             parent_id='BATCH-01', depends_on=[], line_start=block['line_start'] + 2,
+                        dict(entity_key='e3', kind='task', source_ids=['TASK-01'], title='Úloha', status='planned',
+                             maturity='unknown', parent_ref='entity:e2', dependency_refs=[], line_start=block['line_start'] + 2,
                              line_end=block['line_start'] + 2, summary='Úloha.')]
                 else:
-                    entities = [dict(kind='description', stable_id=None, title=block['title'],
-                        status='unknown', parent_id=None, depends_on=[],
+                    entities = [dict(entity_key='e1', kind='description', source_ids=[], title=block['title'],
+                        status='unknown', maturity='unknown', parent_ref=None, dependency_refs=[],
                         line_start=block['line_start'], line_end=block['line_start'],
                         summary='Zachovaný popis.')]
-                value = {'schema': 'fpw-roadmap-source-extraction-v1',
+                value = {'schema': 'fpw-roadmap-source-extraction-v2',
                          'block_id': block['block_id'], 'entities': entities,
                          'ambiguities': [], 'summary': 'Extrahovaný celek.'}
             return {'model': binding.model, 'response': json.dumps(value, ensure_ascii=False)}
@@ -83,6 +83,8 @@ class RoadmapRebuildTests(unittest.TestCase):
         self.assertGreaterEqual(value['summary']['blocks'], 4)
         roadmap = [item for item in value['blocks'] if item['source'].endswith(HOST_SOURCES[0][0])]
         self.assertIn('MILESTONE-M1', roadmap[-1]['text'])
+        self.assertNotIn('MPL-2', roadmap[0]['allowed_source_ids'])
+        self.assertIn('MILESTONE-M1', roadmap[-1]['allowed_source_ids'])
         self.assertEqual(roadmap[-1]['sha256'], __import__('hashlib').sha256(
             roadmap[-1]['text'].encode()).hexdigest())
         self.assertNotIn('target', json.dumps(value))
@@ -117,14 +119,16 @@ class RoadmapRebuildTests(unittest.TestCase):
                 calls.append(request); return {'model': binding.model, 'response': '{}'}
             return OllamaAdapter(runs, transport=transport)
         service = RoadmapRebuild(self.node, self.run_dir, adapter_factory=broken)
-        first = service.run(limit=2)
-        self.assertEqual(2, first['failed_extractions'])
-        self.assertEqual(2, len(calls))
-        second = service.run(limit=2)
-        self.assertEqual(4, second['failed_extractions'])
-        self.assertEqual(4, len(calls))  # Two new blocks, no retry of failed blocks.
-        failed = list((self.run_dir/'results').glob('extract-*.failed.json'))
-        self.assertEqual(4, len(failed))
+        total = service.status()['blocks']
+        first = service.run(limit=100000)
+        self.assertEqual(total, first['failed_extractions'])
+        self.assertEqual(total * 3, len(calls))
+        second = service.run(limit=100000)
+        self.assertEqual(total, second['failed_extractions'])
+        self.assertEqual(total * 3, len(calls))  # Final failures are not retried.
+        failed = [item for item in (self.run_dir/'results').glob('extract-*.failed.json')
+                  if '.attempt-' not in item.name]
+        self.assertEqual(total, len(failed))
         self.assertTrue(all('response fields differ' in json.loads(
             item.read_text(encoding='utf-8'))['error'] for item in failed))
 
@@ -137,6 +141,42 @@ class RoadmapRebuildTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'catalog changed'):
             RoadmapRebuild(self.node, self.run_dir,
                            adapter_factory=lambda _runs: self.fail('must not dispatch')).run()
+
+    def test_validation_error_gets_bounded_repair_with_same_source(self):
+        RoadmapRebuild.prepare(self.node, self.run_dir, self.repository,
+                               revision=self.commit)
+        calls = []
+        def repairing(runs):
+            def transport(binding, request):
+                prompt = json.loads(request)['prompt']; calls.append(prompt)
+                focus = json.loads(prompt.split('Focus:\n', 1)[1].rsplit('\n\nSummary:', 1)[0])
+                if 'previous_response' in focus:
+                    block = focus['source_block']['block']
+                    value = {'schema': 'fpw-roadmap-source-extraction-v2',
+                             'block_id': block['block_id'], 'entities': [dict(
+                                 entity_key='e1', kind='description', source_ids=[],
+                                 title=block['title'], status='unknown', maturity='unknown',
+                                 parent_ref=None, dependency_refs=[], line_start=block['line_start'],
+                                 line_end=block['line_start'], summary='Opravený popis.')],
+                             'ambiguities': [], 'summary': 'Opraveno.'}
+                elif 'source_block' in focus:
+                    block = focus['source_block']
+                    value = {'schema': 'fpw-roadmap-source-audit-v1',
+                             'block_id': block['block_id'], 'verdict': 'correct',
+                             'scores': {key: 100 for key in ('coverage', 'hierarchy', 'status',
+                                                             'provenance', 'dependencies')},
+                             'findings': [], 'summary': 'Správně.'}
+                else:
+                    value = {}
+                return {'model': binding.model, 'response': json.dumps(value, ensure_ascii=False)}
+            return OllamaAdapter(runs, transport=transport)
+        result = RoadmapRebuild(self.node, self.run_dir,
+                                adapter_factory=repairing).run(limit=100000)
+        self.assertTrue(result['complete'])
+        self.assertEqual(0, result['failed_extractions'])
+        attempts = list((self.run_dir/'results').glob('extract-*.attempt-1.failed.json'))
+        self.assertEqual(result['blocks'], len(attempts))
+        self.assertTrue(any('validation_error' in call for call in calls))
 
 
 if __name__ == '__main__':
