@@ -270,6 +270,17 @@ samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
   8 opt-in browser smoke testů přeskočeno. Sdílený JavaScript prošel
   `node --check`. Read-only živá projekce skutečné queue projektu načetla 1581
   řádků; žádné rozhodnutí ani projektový zápis při kontrole nevznikly.
+  Oprava po fyzickém startu 2026-10-29: původní UI při otevření projektu
+  materializovalo všech 1581 řádků (přibližně 8000 DOM buněk) a každý review
+  request plánoval nesouvisející backend probe, což mohlo zahltit jedinou
+  application lane. Tabulka je nyní stránkovaná po 100, úvodní projekce je
+  menší a review requesty backend refresh neplánují. Odpojený WebEngine klient
+  při odpovědi nezapisuje BrokenPipe traceback. Transportní sada 13/13 prošla
+  mimo sandbox; první sandbox běh byl neplatný kvůli zákazu loopback/Unix socketů.
+  Celý desktop modul po opravě: 52 testů OK, 6 opt-in smoke přeskočeno. Pokus o
+  real-WebEngine smoke nad skutečným projektem se k UI nedostal: jiný proces
+  držel Workspace journal lock (`BlockingIOError`); proces ani zámek nebyly
+  násilně ukončeny. GBM hlášení bylo pouze fallback na Vulkan.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

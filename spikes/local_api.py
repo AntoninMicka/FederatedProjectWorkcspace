@@ -133,7 +133,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Connection', 'close')
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError, socket.timeout):
+            # The browser can close an in-flight request while a page/profile
+            # is shutting down. The response has no durable effect to recover.
+            self.close_connection = True
 
     def send_error(self, code, message=None, explain=None):
         self.reply(code, {'error': 'request rejected'})

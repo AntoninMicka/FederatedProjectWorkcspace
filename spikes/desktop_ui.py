@@ -1081,6 +1081,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p>Prohlížení a rozhodnutí používají stejnou lokální frontu jako CLI. Projektový Git ani roadmapa se zde nemění.</p></header>
 <div class="roadmap-review-global form-actions"><button id="roadmap-review-refresh" class="secondary-button" type="button">Obnovit seznam</button>
 <label><input id="roadmap-review-hide-decided" type="checkbox"> Skrýt rozhodnuté</label>
+<button id="roadmap-review-previous" class="secondary-button" type="button">Předchozí stránka</button><button id="roadmap-review-next" class="secondary-button" type="button">Další stránka</button>
 <button id="roadmap-review-accept-all" type="button">Schválit všechny pending</button>
 <button id="roadmap-review-reject-all" class="danger-button" type="button">Zamítnout všechny pending</button></div>
 <p id="roadmap-review-status" role="status" aria-live="polite">Otevřením projektu se načte lokální fronta.</p>
@@ -2302,7 +2303,7 @@ function clearProject(){
  document.querySelector('#project-commit').textContent='';
 }
 async function projectRequest(path,body,timeout=60000){
- const monitorRequest=path.startsWith('/v1/node-telemetry/') || path==='/v1/chat/test' ||
+ const monitorRequest=path.startsWith('/v1/node-telemetry/') || path.startsWith('/v1/roadmap-refinement/') || path==='/v1/chat/test' ||
   path==='/v1/chat/status' || path==='/v1/external/status' || path==='/v1/media/status' ||
   path==='/v1/google-drive/status' || path.startsWith('/v1/backend-metrics/');
  try{
@@ -3398,7 +3399,8 @@ const roadmapReviewTab=document.querySelector('#roadmap-refinement-tab');
 const roadmapReviewStatus=document.querySelector('#roadmap-review-status');
 const roadmapReviewBody=document.querySelector('#roadmap-review-table tbody');
 const roadmapReviewDetail=document.querySelector('#roadmap-review-detail');
-let roadmapReviewRows=[],roadmapReviewSelected=null,roadmapReviewRequest=0;
+let roadmapReviewRows=[],roadmapReviewSelected=null,roadmapReviewRequest=0,roadmapReviewPage=0;
+const ROADMAP_REVIEW_PAGE_SIZE=100;
 const roadmapReviewDetails=new Map();
 const juliaDeleteDialog=document.querySelector('#julia-delete-dialog');
 let juliaCatalog=[],juliaPrepared=null,juliaRun=null,juliaPoll=null;
@@ -3463,7 +3465,7 @@ function clearJulia(){
  document.querySelector('#sidebar-tools-status').textContent='Otevřete projekt.';
 }
 function clearRoadmapReview(){
- ++roadmapReviewRequest;roadmapReviewRows=[];roadmapReviewSelected=null;roadmapReviewDetails.clear();roadmapReviewBody.replaceChildren();
+ ++roadmapReviewRequest;roadmapReviewRows=[];roadmapReviewSelected=null;roadmapReviewPage=0;roadmapReviewDetails.clear();roadmapReviewBody.replaceChildren();
  roadmapReviewTab.hidden=true;roadmapReviewStatus.textContent='Otevřením projektu se načte lokální fronta.';
  roadmapReviewDetail.querySelector('dl').replaceChildren();roadmapReviewDetail.querySelector('[data-review-reason]').textContent='—';roadmapReviewDetail.querySelector('[data-review-changes]').textContent='—';roadmapReviewDetail.querySelector('[data-review-source]').textContent='—';
  document.querySelector('#roadmap-review-detail-title').textContent='Vyberte záznam';document.querySelector('#roadmap-review-accept').disabled=true;document.querySelector('#roadmap-review-reject').disabled=true;
@@ -3503,12 +3505,15 @@ function updateRoadmapReviewActions(){
  document.querySelector('#roadmap-review-accept').disabled=selected?.state!=='pending'||!writable;document.querySelector('#roadmap-review-reject').disabled=selected?.state!=='pending'||!writable;
 }
 function renderRoadmapReviewRows(){
- const rows=roadmapReviewVisibleRows();roadmapReviewBody.replaceChildren();
- if(!rows.some(row=>row.proposal_id===roadmapReviewSelected))roadmapReviewSelected=rows[0]?.proposal_id||null;
+ const all=roadmapReviewVisibleRows(),pages=Math.max(1,Math.ceil(all.length/ROADMAP_REVIEW_PAGE_SIZE));roadmapReviewPage=Math.min(roadmapReviewPage,pages-1);
+ if(!all.some(row=>row.proposal_id===roadmapReviewSelected))roadmapReviewSelected=all[0]?.proposal_id||null;
+ const selectedIndex=all.findIndex(row=>row.proposal_id===roadmapReviewSelected);if(selectedIndex>=0&&Math.floor(selectedIndex/ROADMAP_REVIEW_PAGE_SIZE)!==roadmapReviewPage)roadmapReviewPage=Math.floor(selectedIndex/ROADMAP_REVIEW_PAGE_SIZE);
+ const start=roadmapReviewPage*ROADMAP_REVIEW_PAGE_SIZE,rows=all.slice(start,start+ROADMAP_REVIEW_PAGE_SIZE);roadmapReviewBody.replaceChildren();
  for(const row of rows){const tr=document.createElement('tr');tr.tabIndex=0;tr.setAttribute('aria-selected',String(row.proposal_id===roadmapReviewSelected));
   for(const value of [row.state,roadmapReviewAction(row),row.source_label,roadmapReviewTargets(row),row.proposal.confidence||'—']){const cell=document.createElement('td');cell.textContent=value;tr.append(cell);}
   const select=()=>selectRoadmapReview(row.proposal_id);tr.addEventListener('click',select);tr.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();select();}});roadmapReviewBody.append(tr);}
- roadmapReviewStatus.textContent=`${rows.length} z ${roadmapReviewRows.length} záznamů · ${roadmapReviewRows.filter(row=>row.state==='pending').length} čeká na rozhodnutí.`;updateRoadmapReviewActions();
+ const end=Math.min(start+rows.length,all.length);roadmapReviewStatus.textContent=`${all.length?start+1:0}–${end} z ${all.length} zobrazených · celkem ${roadmapReviewRows.length} · ${roadmapReviewRows.filter(row=>row.state==='pending').length} čeká na rozhodnutí.`;
+ document.querySelector('#roadmap-review-previous').disabled=roadmapReviewPage===0;document.querySelector('#roadmap-review-next').disabled=roadmapReviewPage>=pages-1;updateRoadmapReviewActions();
 }
 function renderRoadmapReviewDetail(value){
  const row=value.row,proposal=row.proposal,context=value.context,title=document.querySelector('#roadmap-review-detail-title'),list=roadmapReviewDetail.querySelector('dl');title.textContent=context.source_title||row.proposal_id;list.replaceChildren();
@@ -3525,7 +3530,7 @@ async function selectRoadmapReview(proposalId){
 function openRoadmapReview(){if(!roadmapReviewRows.length)return;selectSidebarTab(document.querySelector('#tools-tab'));roadmapReviewTab.hidden=false;selectMainTab(roadmapReviewTab);selectRoadmapReview(roadmapReviewSelected||roadmapReviewVisibleRows()[0]?.proposal_id);}
 async function loadRoadmapReview(preferred=null){
  if(!activeProject)return;const project=activeProject,request=++roadmapReviewRequest;roadmapReviewStatus.textContent='Načítám lokální proposal queue…';
- try{const result=await projectRequest('/v1/roadmap-refinement/list',{project_id:project.id});if(request!==roadmapReviewRequest||activeProject!==project)return;roadmapReviewRows=result.rows;roadmapReviewDetails.clear();roadmapReviewTab.hidden=!roadmapReviewRows.length;roadmapReviewSelected=roadmapReviewRows.some(row=>row.proposal_id===preferred)?preferred:roadmapReviewRows[0]?.proposal_id||null;renderJuliaModelList();renderRoadmapReviewRows();}
+ try{const result=await projectRequest('/v1/roadmap-refinement/list',{project_id:project.id});if(request!==roadmapReviewRequest||activeProject!==project)return;roadmapReviewRows=result.rows;roadmapReviewDetails.clear();roadmapReviewPage=0;roadmapReviewTab.hidden=!roadmapReviewRows.length;roadmapReviewSelected=roadmapReviewRows.some(row=>row.proposal_id===preferred)?preferred:roadmapReviewRows[0]?.proposal_id||null;renderJuliaModelList();renderRoadmapReviewRows();}
  catch(error){if(request===roadmapReviewRequest){roadmapReviewRows=[];roadmapReviewTab.hidden=true;renderJuliaModelList();roadmapReviewStatus.textContent=error.message;}}
 }
 async function decideRoadmapReview(decision,proposalIds){
@@ -3533,7 +3538,9 @@ async function decideRoadmapReview(decision,proposalIds){
  try{if(proposalIds.length===1)await projectRequest('/v1/roadmap-refinement/decide',{project_id:activeProject.id,proposal_id:proposalIds[0],decision});else await projectRequest('/v1/roadmap-refinement/decide-all',{project_id:activeProject.id,proposal_ids:proposalIds,decision});await loadRoadmapReview(roadmapReviewSelected);if(roadmapReviewSelected)await selectRoadmapReview(roadmapReviewSelected);}
  catch(error){roadmapReviewStatus.textContent=error.message;}
 }
-document.querySelector('#roadmap-review-refresh').addEventListener('click',()=>loadRoadmapReview(roadmapReviewSelected));document.querySelector('#roadmap-review-hide-decided').addEventListener('change',renderRoadmapReviewRows);
+document.querySelector('#roadmap-review-refresh').addEventListener('click',()=>loadRoadmapReview(roadmapReviewSelected));document.querySelector('#roadmap-review-hide-decided').addEventListener('change',()=>{roadmapReviewPage=0;renderRoadmapReviewRows();});
+function moveRoadmapReviewPage(delta){const rows=roadmapReviewVisibleRows();roadmapReviewPage=Math.max(0,roadmapReviewPage+delta);roadmapReviewSelected=rows[roadmapReviewPage*ROADMAP_REVIEW_PAGE_SIZE]?.proposal_id||null;renderRoadmapReviewRows();}
+document.querySelector('#roadmap-review-previous').addEventListener('click',()=>moveRoadmapReviewPage(-1));document.querySelector('#roadmap-review-next').addEventListener('click',()=>moveRoadmapReviewPage(1));
 document.querySelector('#roadmap-review-accept').addEventListener('click',()=>roadmapReviewSelected&&decideRoadmapReview('accept',[roadmapReviewSelected]));document.querySelector('#roadmap-review-reject').addEventListener('click',()=>roadmapReviewSelected&&decideRoadmapReview('reject',[roadmapReviewSelected]));
 document.querySelector('#roadmap-review-accept-all').addEventListener('click',()=>{const ids=roadmapReviewRows.filter(row=>row.state==='pending').map(row=>row.proposal_id);if(ids.length&&window.confirm(`Schválit všech ${ids.length} pending návrhů? Projektový Git se nezmění.`))decideRoadmapReview('accept',ids);});
 document.querySelector('#roadmap-review-reject-all').addEventListener('click',()=>{const ids=roadmapReviewRows.filter(row=>row.state==='pending').map(row=>row.proposal_id);if(ids.length&&window.confirm(`Zamítnout všech ${ids.length} pending návrhů?`))decideRoadmapReview('reject',ids);});

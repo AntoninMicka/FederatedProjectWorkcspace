@@ -107,6 +107,7 @@ class RoadmapRefinementTests(unittest.TestCase):
         rows = self.service.review_list()
         self.assertEqual(1, len(rows))
         self.assertNotIn('input', rows[0])
+        self.assertNotIn('expected_head', rows[0])
         self.assertNotIn('reason', rows[0]['proposal'])
         detail = self.service.review_detail(proposal['proposal_id'])
         self.assertIn('Belongs to M1', detail['context']['source_excerpt'])
