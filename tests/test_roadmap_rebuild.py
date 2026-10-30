@@ -287,6 +287,22 @@ class RoadmapRebuildTests(unittest.TestCase):
         self.assertEqual({'response_timeout_seconds': ROADMAP_LLM_TIMEOUT},
                          manifest['transport'])
 
+    def test_derived_run_reuses_audit_only_for_unchanged_candidate_input(self):
+        RoadmapRebuild.prepare(self.node, self.run_dir, self.repository,
+                               revision=self.commit)
+        status = {}
+        while not status.get('complete'):
+            status = RoadmapRebuild(self.node, self.run_dir,
+                                    adapter_factory=self.factory).run(limit=100)
+        derived_dir = self.base/'derived-complete'
+        derived = RoadmapRebuild.derive(self.node, derived_dir, self.run_dir)
+        reused = derived.status()
+        self.assertEqual(reused['blocks'], reused['extracted'])
+        self.assertEqual(reused['blocks'], reused['audited'])
+        manifest = json.loads((derived_dir/'manifest.json').read_text(encoding='utf-8'))
+        self.assertEqual(reused['blocks'],
+                         len(manifest['derived_from']['reused_audits']))
+
     def test_candidate_renderer_marks_unresolved_dependency_and_cycle(self):
         nodes = [
             {'candidate_id': 'BATCH-01', 'title': 'Dávka', 'status': 'planned',
@@ -352,6 +368,31 @@ class RoadmapRebuildTests(unittest.TestCase):
         candidate = build_candidate({'blocks': blocks}, values)
         self.assertIn('reconciliation-ambiguity',
                       {item['kind'] for item in candidate['issues']})
+
+    def test_reconciliation_scopes_same_id_per_repository(self):
+        blocks = [
+            {'block_id': 'host', 'source': 'federated-workspace:ROADMAP.md',
+             'repository_id': 'federated-workspace', 'role': 'requirements', 'order': 0,
+             'line_start': 1, 'line_end': 1, 'allowed_source_ids': ['M1']},
+            {'block_id': 'module', 'source': 'example.module:ROADMAP.md',
+             'repository_id': 'example.module', 'role': 'requirements', 'order': 0,
+             'line_start': 1, 'line_end': 1, 'allowed_source_ids': ['M1']}]
+        values = []
+        for block, title in zip(blocks, ('Host M1', 'Module M1')):
+            value = {'schema': 'fpw-roadmap-source-extraction-v2',
+                     'block_id': block['block_id'], 'entities': [dict(
+                         entity_key='e1', kind='milestone', source_ids=['M1'], title=title,
+                         status='planned', maturity='designed', parent_ref=None,
+                         dependency_refs=[], line_start=1, line_end=1, summary=title)],
+                     'ambiguities': [], 'summary': title}
+            values.append(validate_extraction(json.dumps(value), block))
+        candidate = build_candidate({'blocks': blocks}, values)
+        self.assertEqual({('federated-workspace', 'Host M1'),
+                          ('example.module', 'Module M1')},
+                         {(node['repository_id'], node['title'])
+                          for node in candidate['nodes']})
+        self.assertNotIn('reconciliation-ambiguity',
+                         {item['kind'] for item in candidate['issues']})
 
     def test_combined_source_ids_create_review_issue_instead_of_failure(self):
         block = {'block_id': 'block-1', 'source': 'BACKLOG.md', 'line_start': 1,

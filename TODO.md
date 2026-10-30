@@ -426,6 +426,17 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   konflikt. Nový audit uvidí i varianty přes `provenance_all`. Odvozený run
   `/tmp/dev-01-source-rebuild-20261030-v7-reconciled` převzal všech 185
   extrakcí a čeká pouze na nové audity; cílená migrační sada: 46/46 prošlo.
+  Reconciled audit dokončil všech 185 bloků s fidelity 97,87: 164 `correct`,
+  14 `equivalent`, 6 `misplaced` a 1 `distorted`. Šest ze sedmi výhrad
+  pocházelo z vloženého modulu, jehož lokální M0–M6 byly chybně sloučeny s
+  hostitelskými milníky. Reconciliation nyní klíčuje identitu dvojicí
+  repository/ID, parent i dependency řeší pouze uvnitř stejného projektu a
+  candidate nese explicitní `repository_id`. Deterministický náhled má 697
+  hostitelských a 18 modulových uzlů; odhaluje tři skutečné lokální
+  reconciliation ambiguity místo cross-project kolizí. Odvozený run
+  `/tmp/dev-01-source-rebuild-20261030-v7-scoped` převzal 185 extrakcí a 166
+  auditů s kanonicky shodným vstupem; zbývá jen 19 auditů dotčených novým
+  scoped kandidátem. Cílená migrační sada: 48/48 prošlo.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

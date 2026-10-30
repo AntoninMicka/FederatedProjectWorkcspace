@@ -203,10 +203,20 @@ při mapování přednost před výskytem v kombinované skupině; konflikt zůs
 jen mezi více nejednoznačnými skupinami bez kanonického samostatného ID.
 Audit zdrojového bloku dostane uzel i tehdy, když je daný blok pouze v jeho
 `provenance_all`, takže historická varianta nezmizí po volbě kanonického stavu.
+Identita uzlu je interně dvojice `(repository_id, source_id)`. Stejné lokální
+`M0–M6` ve vloženém modulu se proto neslučuje s milníky hostitelského projektu;
+candidate zachová lokální ID i explicitní `repository_id` a renderer oddělí
+projekty do samostatných sekcí. Parent a dependency se vždy řeší jen ve stejném
+repository scope, což odpovídá odděleným cílovým projektům migrace.
 
 Pozitivní auditní findings `correct`/`equivalent` jsou redundantní se souhrnným
 verdict a deterministicky se odstraní; findings nadále nesou pouze problémy.
 Raw odpověď zůstává zachovaná. Prompt tuto podmínku uvádí explicitně.
+
+Odvozený run může převzít i audit, ale jen pokud má stejný auditní prompt a
+projekce candidate records pro konkrétní blok je kanonicky shodná. Lineage
+manifest uvádí hash každého převzatého auditu. Změněné bloky se odešlou znovu;
+nezměněný audit se nepoužije pouze podle ID nebo podobnosti textu.
 
 ## 1. Připnutá inventura a náhled bez zápisu
 
