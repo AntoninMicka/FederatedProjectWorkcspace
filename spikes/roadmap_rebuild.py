@@ -32,6 +32,8 @@ VERDICTS = {'correct', 'equivalent', 'misplaced', 'distorted', 'missing',
             'duplicated', 'unsupported-target', 'ambiguous'}
 STABLE_ID = re.compile(r'[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+')
 SOURCE_ID = re.compile(r'(?<![A-Z0-9-])(?:M\d+(?:\.\d+)?|[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)(?![A-Z0-9-])')
+GROUPED_ID = re.compile(r'(?<![A-Z0-9-])([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)((?:/[A-Z0-9-]+)+)')
+STRONG = re.compile(r'\*\*(.+?)\*\*', re.DOTALL)
 LOCAL_KEY = re.compile(r'e[1-9][0-9]{0,3}')
 MAX_ATTEMPTS = 3
 
@@ -42,7 +44,7 @@ EXTRACTION_INSTRUCTION = SOURCE_POLICY + '''
 Extract the supplied complete logical source block without using any existing imported target.
 Return exactly one JSON object:
 {"schema":"fpw-roadmap-source-extraction-v2","block_id":"exact block ID","entities":[{"entity_key":"e1","kind":"milestone|batch|task|checklist|history|description","source_ids":["exact allowed source ID"],"title":"text","status":"planned|in-progress|completed|blocked|unknown","maturity":"designed|implemented|poc-validated|production-ready|unknown","parent_ref":"entity:e1|source:EXACT-ID|null","dependency_refs":["entity:e1|source:EXACT-ID"],"line_start":1,"line_end":1,"summary":"Czech meaning preserved from source"}],"ambiguities":[{"line_start":1,"line_end":1,"reason":"Czech explanation"}],"summary":"Czech block summary"}.
-entity_key values are unique local references e1, e2, ... inside this response. Use entity:KEY to express hierarchy between anonymous entities. Use source:ID only for an ID copied exactly from allowed_source_ids. source_ids is empty when there is no exact allowed ID; never put titles, grouped A/B ranges, prose, or block UUIDs into source_ids. When one source entity explicitly groups multiple exact allowed IDs, keep those IDs together; the candidate builder will assign a migration ID and require human review. Status and maturity are independent; designed is maturity, not status. Use checklist only for an actual checkbox acceptance item; copyright, license, headings and introductory prose are descriptions. A non-executable entity may use parent_ref to preserve where its context belongs, but it cannot define dependencies. Line numbers are absolute original-document numbers from block.line_start through block.line_end, not block-relative numbers. Do not invent completion, implementation evidence, dependencies, or IDs. Preserve descriptions and history as non-executable entities. Return JSON only.'''
+entity_key values are unique local references e1, e2, ... inside this response. Use entity:KEY to express hierarchy between anonymous entities. Use source:ID only for an ID copied exactly from allowed_source_ids; parent and dependency refs may also use an ID from reference_source_ids. source_ids is empty when there is no exact allowed ID; never put titles, grouped A/B ranges, prose, block UUIDs or validation fields into source_ids. Historical shorthand labels are already expanded in allowed_source_ids. When one source entity explicitly groups multiple exact allowed IDs, keep those IDs together; the candidate builder will assign a migration ID and require human review. Status and maturity are independent; designed is maturity, not status. Use checklist only for an actual checkbox acceptance item; copyright, license, headings and introductory prose are descriptions. A non-executable entity may use parent_ref to preserve where its context belongs, but it cannot define dependencies. The source text is supplied as numbered_text; copy its displayed absolute line numbers and never calculate or continue them beyond the block. Do not invent completion, implementation evidence, dependencies, or IDs. Preserve descriptions and history as non-executable entities. Return JSON only.'''
 
 AUDIT_INSTRUCTION = SOURCE_POLICY + '''
 Audit whether the candidate records faithfully represent the supplied original source block. Source evidence has priority; do not merely judge whether the candidate sounds reasonable.
@@ -126,6 +128,29 @@ def _sections(raw):
     return [(start + 1, end, title, ''.join(lines[start:end])) for start, end, title in result]
 
 
+def _declared_ids(body, known):
+    """Retain catalog IDs plus historical IDs declared in emphasized task labels."""
+    discovered = set(SOURCE_ID.findall(body))
+    allowed = (discovered & known) | {
+        item for item in discovered if re.fullmatch(r'M\d+(?:\.\d+)?', item)}
+    for label in STRONG.findall(body):
+        allowed |= {item for item in SOURCE_ID.findall(label)
+                    if re.fullmatch(r'V-\d+', item)}
+        for match in GROUPED_ID.finditer(label):
+            first, tails = match.groups(); prefix = first.rsplit('-', 1)[0]
+            allowed.add(first)
+            allowed |= {prefix + '-' + tail for tail in tails.split('/') if tail}
+    return discovered, allowed
+
+
+def _prompt_block(block):
+    value = {key: item for key, item in block.items() if key != 'text'}
+    value['numbered_text'] = ''.join(
+        f'{number}: {line}' for number, line in enumerate(
+            block['text'].splitlines(keepends=True), block['line_start']))
+    return value
+
+
 def source_catalog(host_root, *, revision='HEAD', modules=()):
     selected = tuple(modules)
     base = inventory(host_root, revision=revision, modules=selected)
@@ -150,13 +175,13 @@ def source_catalog(host_root, *, revision='HEAD', modules=()):
         for index, (line_start, line_end, title, body) in enumerate(sections):
             digest = hashlib.sha256((source['key'] + '\0' + str(line_start) + '\0' + body).encode()).hexdigest()
             block_id = str(uuid5(NAMESPACE_URL, 'roadmap-source-block:' + digest))
-            discovered = set(SOURCE_ID.findall(body))
-            allowed = discovered & known_by_repository.get(source['repository_id'], set())
-            allowed |= {item for item in discovered if re.fullmatch(r'M\d+(?:\.\d+)?', item)}
+            discovered, allowed = _declared_ids(
+                body, known_by_repository.get(source['repository_id'], set()))
             blocks.append(dict(block_id=block_id, source=source['key'], role=source['role'],
                                order=index, title=title, line_start=line_start,
                                line_end=line_end, sha256=hashlib.sha256(body.encode()).hexdigest(),
                                allowed_source_ids=sorted(allowed),
+                               reference_source_ids=sorted(discovered | allowed),
                                text=body))
     by_source = {}
     for block in blocks:
@@ -198,6 +223,16 @@ def validate_extraction(raw, block):
                 'source_ids', 'title', 'status', 'maturity', 'parent_ref',
                 'dependency_refs', 'line_start', 'line_end', 'summary'},
                 'Invalid extracted entity fields')
+        if entity['parent_ref'] in {'null', 'source:' + block['block_id']}:
+            entity['parent_ref'] = None
+        if entity['maturity'] == 'test-validated':
+            require(len(value['ambiguities']) < 128,
+                    'Cannot preserve normalized maturity ambiguity')
+            entity['maturity'] = 'unknown'
+            value['ambiguities'].append({
+                'line_start': entity['line_start'], 'line_end': entity['line_end'],
+                'reason': 'Model použil neformální maturity test-validated; '
+                          'hodnota byla ponechána unknown k lidskému rozhodnutí.'})
         require(isinstance(entity['entity_key'], str) and LOCAL_KEY.fullmatch(entity['entity_key'])
                 and entity['entity_key'] not in keys, 'Invalid or duplicate local entity key')
         keys.add(entity['entity_key'])
@@ -221,7 +256,8 @@ def validate_extraction(raw, block):
                 and block['line_start'] <= entity['line_start'] <= entity['line_end'] <= block['line_end'],
                 'Extracted entity cites lines outside source block')
     allowed_refs = {'entity:' + key for key in keys} | {
-        'source:' + source_id for source_id in block['allowed_source_ids']}
+        'source:' + source_id for source_id in block.get(
+            'reference_source_ids', block['allowed_source_ids'])}
     for entity in value['entities']:
         require(entity['parent_ref'] is None or entity['parent_ref'] in allowed_refs,
                 'Invalid extracted parent reference')
@@ -330,6 +366,14 @@ def build_candidate(catalog, extractions):
             row['provenance_all'] = [row['provenance']]
             used.add(node_id); nodes[node_id] = row
     issues = list(conflicts)
+    for extraction in extractions:
+        block = block_by_id[extraction['block_id']]
+        for ambiguity in extraction['ambiguities']:
+            issues.append({'kind': 'source-ambiguity', 'reason': ambiguity['reason'],
+                           'provenance': {'block_id': block['block_id'],
+                                          'source': block['source'],
+                                          'line_start': ambiguity['line_start'],
+                                          'line_end': ambiguity['line_end']}})
     allowed = {'milestone': {None}, 'batch': {'milestone'}, 'task': {'batch'}}
     for node_id, node in nodes.items():
         parent = nodes.get(node['parent_id']) if node['parent_id'] else None
@@ -477,8 +521,10 @@ class RoadmapRebuild:
                 continue
             else:
                 focused = dict(schema='fpw-roadmap-source-block-v1', policy=SOURCE_POLICY,
-                               block=block,
+                               block=_prompt_block(block),
                                allowed_source_ids=block['allowed_source_ids'],
+                               reference_source_ids=block.get(
+                                   'reference_source_ids', block['allowed_source_ids']),
                                previous_title=next((item['title'] for item in catalog['blocks']
                                    if item['block_id'] == block['previous']), None),
                                next_title=next((item['title'] for item in catalog['blocks']
@@ -541,7 +587,8 @@ class RoadmapRebuild:
             else:
                 records = [item for item in candidate['nodes'] + candidate['supporting_records']
                            if item['provenance']['block_id'] == block['block_id']]
-                focused = {'source_block': block, 'candidate_records': records}
+                focused = {'source_block': _prompt_block(block),
+                           'candidate_records': records}
                 prior = sorted((self.root/'results').glob(
                     'audit-' + block['block_id'] + '.attempt-*.failed.json'))
                 attempt = len(prior) + 1; value = None

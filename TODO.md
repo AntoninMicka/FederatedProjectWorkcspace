@@ -383,8 +383,16 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   zůstávají fail-closed. Cílená migrační sada (`roadmap_rebuild`,
   `roadmap_migration`, `roadmap_mapping`, `roadmap_importer`): 37/37 prošlo.
   Čistý v6 nad stejnými připnutými revizemi je připraven v
-  `/tmp/dev-01-source-rebuild-20261030-v6`: 185 bloků / 370 logických kroků,
-  před spuštěním extraction a auditu modelem `qwen3-coder:latest`.
+  `/tmp/dev-01-source-rebuild-20261030-v6`: extraction zlepšila výsledek na
+  155/185 validních bloků a 30 terminálních chyb po 99 opravných voláních.
+  Z nich bylo 21 mechanických parent refs (`"null"` nebo UUID obálky), 8
+  nepřesných rozsahů řádků, 6 source ID mimo allowlist, 3 bezpečně neurčité
+  transporty a 1 neformální maturity; některé bloky měly více vad. V7 proto
+  předává očíslovaný zdroj, normalizuje pouze dvě jednoznačné transportní
+  reprezentace rodiče, rozpozná historické shorthand ID z deklarovaných názvů,
+  odděluje zmíněná ID použitelná jen jako reference a zachovává každou
+  ambiguity jako blokátor kandidáta. Vymyšlené ID a obsah mimo blok zůstávají
+  fail-closed. Cílená migrační sada: 40/40 prošlo. Zbývá čistý fyzický v7 běh.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

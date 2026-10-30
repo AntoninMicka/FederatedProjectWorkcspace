@@ -122,6 +122,12 @@ odpovědi a průběžně se mění podle skutečné délky volání; opravné po
 automaticky prodlouží. V interaktivním terminálu se obnovuje jeden řádek,
 při přesměrování jsou události samostatné logovací řádky.
 
+Model dostává zdrojový blok jako `numbered_text` s explicitními absolutními
+čísly řádků; provenance proto nesmí dopočítávat z počátku bloku. Transportní
+řetězec `"null"` a odkaz na UUID obálky právě zpracovávaného bloku se
+deterministicky normalizují na chybějícího rodiče, raw odpověď však zůstává
+zachovaná. Jiné neplatné reference se neopravují odhadem.
+
 Nejdříve dokončí všechny extraction bloky, deterministicky publikuje
 `candidate.json` a `candidate.md` a teprve potom spustí nezávislé audity.
 Dokončený běh má `report.json` a `report.md`. `import_ready=true` vyžaduje
@@ -146,6 +152,14 @@ nový model, prompt nebo oprava takového bloku vyžadují nový run adresář. 
 atomickým rename nezveřejní částečný výsledek. Utility nemá apply ani
 projektový writer, takže žádná z těchto hranic nemění Git, index ani journal
 Workspace projektu.
+
+Historické shorthand identifikátory deklarované v názvu položky, například
+`FEATURE-A/B/AH-01`, katalog rozvine na `FEATURE-A`, `FEATURE-B` a
+`FEATURE-AH-01`; jejich společná entita zůstane blokovaná k review. Pouhé ID
+vymyšlené modelem se do allowlistu nedostane. Neformální maturity
+`test-validated` se nepovýší na PoC: uloží se jako `unknown` a povinná
+`source-ambiguity`. Všechny ambiguity z extraction se přenášejí mezi blokátory
+kandidáta a nemohou vést k `import_ready=true`.
 
 ## 1. Připnutá inventura a náhled bez zápisu
 

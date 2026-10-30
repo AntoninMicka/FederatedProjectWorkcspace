@@ -58,7 +58,7 @@ class RoadmapRebuildTests(unittest.TestCase):
                          'findings': [], 'summary': 'Zdroj je zachován.'}
             else:
                 block = focus['block']; entities = []
-                if 'MILESTONE-M1' in block['text']:
+                if 'MILESTONE-M1' in block['numbered_text']:
                     entities = [
                         dict(entity_key='e1', kind='milestone', source_ids=['MILESTONE-M1'], title='Milník',
                              status='planned', maturity='unknown', parent_ref=None, dependency_refs=[],
@@ -91,6 +91,18 @@ class RoadmapRebuildTests(unittest.TestCase):
         self.assertEqual(roadmap[-1]['sha256'], __import__('hashlib').sha256(
             roadmap[-1]['text'].encode()).hexdigest())
         self.assertNotIn('target', json.dumps(value))
+
+    def test_catalog_expands_historical_shorthand_and_numbers_prompt_source(self):
+        path = self.repository/'WORK_LOG.md'
+        path.write_text('# Work log\n\n## Historie\n\n'
+                        '- [x] **BATCH-OLD-A/B/AH-01 — společný historický bod.**\n',
+                        encoding='utf-8')
+        commit = self.git.commit('Historical shorthand')
+        value = source_catalog(self.repository, revision=commit)
+        block = next(item for item in value['blocks']
+                     if item['source'].endswith('WORK_LOG.md') and item['line_start'] > 1)
+        self.assertEqual({'BATCH-OLD-A', 'BATCH-OLD-B', 'BATCH-OLD-AH-01'},
+                         set(block['allowed_source_ids']))
 
     def test_run_is_resumable_and_publishes_candidate_then_audit(self):
         service = RoadmapRebuild.prepare(self.node, self.run_dir, self.repository,
@@ -213,6 +225,35 @@ class RoadmapRebuildTests(unittest.TestCase):
                  'ambiguities': [], 'summary': 'Dávka a její historie.'}
         validated = validate_extraction(json.dumps(value), block)
         self.assertEqual('entity:e1', validated['entities'][1]['parent_ref'])
+
+    def test_transport_null_and_block_wrapper_parent_are_normalized(self):
+        block = {'block_id': 'block-1', 'line_start': 10, 'line_end': 20,
+                 'allowed_source_ids': [], 'reference_source_ids': []}
+        entities = []
+        for index, parent in enumerate(('null', 'source:block-1'), 1):
+            entities.append(dict(entity_key=f'e{index}', kind='description', source_ids=[],
+                title='Kontext', status='unknown', maturity='unknown', parent_ref=parent,
+                dependency_refs=[], line_start=10 + index, line_end=10 + index,
+                summary='Zdrojový kontext.'))
+        value = {'schema': 'fpw-roadmap-source-extraction-v2', 'block_id': 'block-1',
+                 'entities': entities, 'ambiguities': [], 'summary': 'Kontext.'}
+        validated = validate_extraction(json.dumps(value), block)
+        self.assertEqual([None, None], [item['parent_ref'] for item in validated['entities']])
+
+    def test_nonformal_maturity_becomes_reviewable_source_ambiguity(self):
+        block = {'block_id': 'block-1', 'source': 'WORK_LOG.md',
+                 'line_start': 10, 'line_end': 20, 'allowed_source_ids': []}
+        value = {'schema': 'fpw-roadmap-source-extraction-v2', 'block_id': 'block-1',
+                 'entities': [dict(entity_key='e1', kind='task', source_ids=[],
+                     title='Ověřený bod', status='completed', maturity='test-validated',
+                     parent_ref=None, dependency_refs=[], line_start=11, line_end=12,
+                     summary='Zdroj používá neformální úroveň.')],
+                 'ambiguities': [], 'summary': 'Historický bod.'}
+        extraction = validate_extraction(json.dumps(value), block)
+        self.assertEqual('unknown', extraction['entities'][0]['maturity'])
+        candidate = build_candidate({'blocks': [block]}, [extraction])
+        self.assertFalse(candidate['ready'])
+        self.assertEqual('source-ambiguity', candidate['issues'][0]['kind'])
 
     def test_combined_source_ids_create_review_issue_instead_of_failure(self):
         block = {'block_id': 'block-1', 'source': 'BACKLOG.md', 'line_start': 1,
