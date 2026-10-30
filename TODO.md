@@ -14,9 +14,19 @@ Skutečná větev: `feature/dev-01-roadmap-migration`, založena z čistého
 Základ/cíl jediného PR: `develop`. PR této dávky není vytvořen ani sloučen.
 Cíl dávky: **implemented → PoC validated**; návrh je **designed**,
 read-only inventura **implemented**.
-Návrh: [plán migrace](docs/roadmap-migration.md). Samotná migrace ani přepnutí
-autority zatím neproběhly. Návrh uživatel schválil; probíhá inventura
-a příprava mapovacího náhledu.
+Návrh: [plán migrace](docs/roadmap-migration.md). Potvrzený source-first
+bundle v4 je fyzicky importovaný do hostitelského i modulového projektu;
+uživatel ověřil zobrazení hostitelské roadmapy. Zbývá ověření aktuálního
+exportu v IDE, akceptace úplnosti modulů, bezpečné následné aktualizace zdroje
+a konkrétní předání autority. Původní evidenci zatím nenahrazujeme archivem.
+
+Obnovení dávky 30. 10. 2026: PR #113 s opravou desktopového bridge byl
+sloučen do `develop` jako `03d76ee111c1195fc23ea50bf0926b603a6ddbde`
+(GitHub potvrzuje merge 17:56:55 UTC / 18:56:55 CET). Všechna čtyři CI
+shard jobs, souhrnná kontrola `tests` a `licensing` prošly. Při požadovaném
+merge přes gh byl PR již sloučen; agent neprováděl druhý merge na GitHubu.
+Aktuální větev DEV-01 přebírá tento develop; konflikty pouze v TODO a reuse
+katalogu byly vyřešeny zachováním aktivní migrace a obou reuse evidencí.
 
 ## Původní rozsah a akceptace DEV-01
 
@@ -189,7 +199,7 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   Izolovaně ověřen normální apply/replay bez druhého commitu, pád mezi
   projekty, recovery hostu od `prepared` a odmítnutí nesprávného explicitního
   bundle SHA před zápisem. Fyzický apply na skutečný projekt patří DEV-01-F
-  a zatím spuštěn nebyl. Pro uzavření D ještě zbývá doložit navazující
+  a jeho výsledek je doložen níže. Pro uzavření D ještě zbývá doložit navazující
   import nové source revize: ruční změnu proti novému mappingu, explicitní
   rename/removal review a odmítnutí tichého přepsání. Aktuální one-shot
   balík žádné deletion akce neobsahuje, takže je nelze vydávat za ověřené.
@@ -529,6 +539,22 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   ověřil funkční zobrazení roadmapy ve Workspace. Zbývá ověření v IDE a
   samostatná akceptace úplnosti modulů a úpravy workflow zdrojového repozitáře;
   původní evidence se zatím neodstraňuje.
+- [ ] [in progress] **DEV-01-F-IDE-01 — obnovení ověření po opravě bridge
+  (PoC validated).** Původ: chyba spojení VSCodia a uživatelský pokyn
+  30. 10. 2026 pokračovat po merge opravy. Převzít PR #113 z develop,
+  zachovat existující připojení a ověřit export importované revize v IDE.
+  Read-only audit `/tmp/dev-01-post-bridge-merge-evidence-20261030`
+  znovu potvrdil `complete-no-loss-detected`: 13/13 zdrojů, 185/185 bloků,
+  728 uzlů, 294 podpůrných záznamů, oba původní import commity a 0 pending /
+  unfinished operací. Nevznikl další import, zápis do projektů ani LLM scan.
+  Existující aktivní IDE mapování je stále bound k historickému testovacímu
+  HEAD `c36af3e` s 5 uzly, nikoli k importovanému host HEAD `54915375`.
+  Připojení se znovu nepáruje; pro aktuální plán je nutné explicitní review
+  nové připnuté exportní revize podle ADR 0060. Staré zprávy zůstanou zachované.
+  Izolované začlenění opravy do migrace: 26 cílených testů bridge,
+  rebuild bundle a roadmap graph prošlo; log
+  `/tmp/dev-01-bridge-merged-targeted-final.log`. Celá závěrečná brána DEV-01
+  nad finálním kódem zbývá; nejde o akceptaci celé migrace.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.

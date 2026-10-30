@@ -20,6 +20,38 @@ nastavit jejich propagaci. Nezpřístupňuje obecné API ani automaticky
 neexportuje obsah všech projektů. Obsah local-only a read-only repliky se
 v novém mapování odmítají. Credentials jsou v SecretStorage editoru.
 
+## Restart desktopu a aktualizace bez nového párování
+
+Od rozšíření **0.2.1** a odpovídajícího desktopu se změna portu při restartu
+obnovuje automaticky. Připojení, přiřazené projekty, credentials i komunikační
+soubory zůstávají zachované. Při vypnutém desktopu rozšíření čeká; při zapnutém
+Auto Sync se po jeho spuštění připojí při nejbližší synchronizaci (10 sekund).
+Při vypnutém Auto Sync použijte **Workspace: Synchronizovat zprávy**.
+
+Stávající uživatel aktualizuje desktop a rozšíření jednou. Pro aktualizaci
+rozšíření **bez nového přístupového údaje** vytvořte z opraveného checkoutu
+obecný balíček a nainstalujte ho do stejného profilu VSCodia:
+
+```bash
+python3 -c "from pathlib import Path; from spikes.ide_bridge import IdeBridge; Path('/tmp/workspace-bridge-update.vsix').write_bytes(IdeBridge(Path('/tmp/unused-node.json')).package())"
+codium --install-extension /tmp/workspace-bridge-update.vsix --force
+```
+
+Pak ve VSCodiu spusťte **Developer: Reload Window** a spusťte aktualizovaný
+desktop se stejnými daty uzlu. Znovu nepárujte ani nenastavujte projekty;
+obecný balíček neobsahuje `pairing.json` a zachovává dosavadní SecretStorage
+na stejném ID rozšíření. Starší desktop bez této opravy sám adresu neobnoví.
+Odvolání a dosavadní 30denní platnost credentialu platí i nadále.
+
+Desktop při startu obnoví podepsané adresy existujících připojení v
+`~/.local/state/federated-workspace/ide-discovery/<connection-or-session-id>.json`.
+Umístění je společné pro lokální desktop i IDE nezávisle na `XDG_STATE_HOME`;
+ID oddělují více uzlů. Adresář vyžaduje 0700, soubory 0600 a stejného vlastníka,
+bez symlinků a mimo Git. Soubor obsahuje pouze ID, přesnou loopback adresu a
+HMAC podpis, žádný token ani projektový obsah. Rozšíření ověří podpis pomocí
+již uloženého credentialu před odesláním požadavku. Poškozená discovery se
+odmítne; pro HTTPS se lokální discovery vůbec nepoužívá.
+
 ## Projekty a jejich přiřazení
 
 Na stránce **IDE a editory** vyberte připojený editor. Tabulka obsahuje:

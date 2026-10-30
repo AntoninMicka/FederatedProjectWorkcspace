@@ -6,6 +6,7 @@ const path = require('node:path');
 const http = require('node:http');
 const https = require('node:https');
 const crypto = require('node:crypto');
+const os = require('node:os');
 const {execFile} = require('node:child_process');
 const {promisify} = require('node:util');
 const exec = promisify(execFile);
@@ -65,8 +66,42 @@ async function repository(root, identity) {
   if (identity !== actual && identity !== remote) throw new Error('Identita repozitáře nesouhlasí s propojením.');
   return {root: actual, commit: await git(actual, 'rev-parse', 'HEAD')};
 }
-function httpRequest(pairing, route, body, ca) {
+async function discover(pairing, root = path.join(os.homedir(), '.local', 'state', 'federated-workspace', 'ide-discovery')) {
   validatePairing(pairing);
+  // Web/TLS connections never consult local discovery or downgrade transport.
+  if (new URL(pairing.endpoint).protocol !== 'http:') return pairing;
+  const id = pairing.connection_id || pairing.session_id;
+  let text;
+  try {
+    const stat = await fs.lstat(root);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || path.resolve(root) !== await fs.realpath(root)
+        || (process.getuid && (stat.uid !== process.getuid() || (stat.mode & 0o077))))
+      throw new Error('Neplatný adresář pro obnovení spojení.');
+    await outsideGit(root);
+    const file = path.join(root, id + '.json');
+    await regular(file);
+    const info = await fs.lstat(file);
+    if (process.getuid && (info.uid !== process.getuid() || (info.mode & 0o077)))
+      throw new Error('Neplatná oprávnění adresy Workspace.');
+    text = await read(file);
+  } catch (error) {
+    if (error.code === 'ENOENT') return pairing; // compatibility with older desktop
+    throw error;
+  }
+  const value = JSON.parse(text);
+  if (value.id !== id || typeof value.endpoint !== 'string' || !/^[a-f0-9]{64}$/.test(value.signature))
+    throw new Error('Neplatná adresa pro obnovení spojení.');
+  const key = crypto.createHash('sha256').update(pairing.token).digest();
+  const signature = crypto.createHmac('sha256', key).update(id + '\n' + value.endpoint).digest();
+  if (!crypto.timingSafeEqual(signature, Buffer.from(value.signature, 'hex')))
+    throw new Error('Podpis adresy Workspace nesouhlasí.');
+  const url = new URL(value.endpoint);
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1')
+    throw new Error('Obnovení spojení vyžaduje lokální Workspace.');
+  return validatePairing({...pairing, endpoint: value.endpoint});
+}
+async function httpRequest(pairing, route, body, ca) {
+  pairing = await discover(pairing);
   const url = new URL(route, pairing.endpoint);
   const data = JSON.stringify(body);
   return new Promise((resolve, reject) => {
@@ -133,4 +168,4 @@ async function sync(root, pairing, repoRoot, ca, transport = request) {
   await atomic(path.join(root, 'STATUS.json'), JSON.stringify({stale: result.stale, synchronized_at: new Date().toISOString()}, null, 2));
   return result;
 }
-module.exports = {git, outsideGit, safeDirectory, read, atomic, validatePairing, repository, request, connectionRequest, sync};
+module.exports = {discover, git, outsideGit, safeDirectory, read, atomic, validatePairing, repository, request, connectionRequest, sync};

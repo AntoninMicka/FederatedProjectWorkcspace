@@ -251,6 +251,14 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   mazání, úplnost historie a audit bez předpokladu globální transakce nebo
   spolehlivých hodin.
 
+  Doplnění **DEV-IDE-RECONNECT-OBS-01** (30. 10. 2026, planned, cílová úroveň
+  PoC validated): skutečný start desktopu ukončil worker `project-replication`
+  na `CreationConflict` při kolizi node locku v
+  `Administration.public → ProjectCreation.author_id`. Ověřit retry/obnovu
+  workeru po dočasném zámku, včetně startup race. HTTP/IDE server pokračoval;
+  nález pochází z opravy IDE restartu a není její součástí. Dokončení vyžaduje
+  cílený runtime/restart test. Traceback: `/tmp/fw-desktop-reconnect.log`.
+
 - [ ] [planned] **UX-FEDERATION-02-E — threat model, migrace a implementační
   rozpad plné federace (cílová úroveň: designed).** Pokrýt bootstrap,
   rotaci/ztrátu klíčů, obnovu účtu a MFA, kompromitovaný uzel, stale členství,

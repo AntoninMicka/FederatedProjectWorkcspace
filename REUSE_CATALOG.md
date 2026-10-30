@@ -856,3 +856,11 @@ pro novou source-first transformaci **reject**, protože by znovu zavedly
 chybnou cílovou autoritu a lokální clusterovou korekci. Nový LLM framework,
 vektorová DB, RAG, druhý projektový writer a přímé modelové editace Markdownu
 se nepřidávají; kandidát vzniká deterministicky z validovaného mezimodelu.
+
+
+DEV-IDE-RECONNECT-01 **adaptuje** existující IdeBridge SQLite credentialy,
+privátní ordinary-file publikaci a desktop running_api. Rozšíření zachovává
+SecretStorage a mapování, přidává ověření podepsané lokální adresy před HTTP
+požadavkem. Obecný VSIX reuse stávajícího balení umožňuje update bez párování.
+Pevný společný port byl odmítnut kvůli kolizím více lokálních uzlů; externí
+komponenta se nepřebírá. Recovery: [ADR 0060](docs/adr/0060-local-file-ide-bridge.md).
