@@ -218,6 +218,14 @@ projekce candidate records pro konkrétní blok je kanonicky shodná. Lineage
 manifest uvádí hash každého převzatého auditu. Změněné bloky se odešlou znovu;
 nezměněný audit se nepoužije pouze podle ID nebo podobnosti textu.
 
+Konkrétní obsahově vadný blok lze v odvozeném runu vynechat pomocí
+`derive --retry-extraction BLOCK_ID`. Jeho nový request dostane původní
+očíslovaný zdroj, předchozí validní extraction a findings zdrojového auditu;
+výstupem je opět úplná extraction, nikoli neověřený patch. Explicitně
+posouzený falešný audit lze zaznamenat přes
+`--accept-audit BLOCK_ID REASON`; původní modelový audit zůstává ve zdrojovém
+runu a report uvádí oddělený human-review override i jeho důvod.
+
 ## 1. Připnutá inventura a náhled bez zápisu
 
 Výchozí checkout: `develop` po PR #112, commit

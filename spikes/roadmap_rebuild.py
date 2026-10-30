@@ -57,6 +57,8 @@ REPAIR_POLICY = '''
 The request contains source_block, previous_response and validation_error. Repair the previous response using the unchanged source evidence. Do not copy validation_error or request wrapper fields into the response. Do not add facts, lines, IDs, parents, dependencies, completion, or maturity merely to satisfy validation. Drop or mark ambiguous anything unsupported. Return only the complete corrected JSON object in the exact schema above.'''
 EXTRACTION_REPAIR_INSTRUCTION = EXTRACTION_INSTRUCTION + REPAIR_POLICY
 AUDIT_REPAIR_INSTRUCTION = AUDIT_INSTRUCTION + REPAIR_POLICY
+AUDIT_GUIDED_EXTRACTION_INSTRUCTION = EXTRACTION_INSTRUCTION + '''
+This is a targeted re-extraction. The request also contains previous_extraction and source_audit. Correct only omissions or distortions that the audit supports from numbered_text. Preserve valid prior entities, exact source scope and uncertainty. Do not satisfy an incorrect audit claim by inventing content. Return the complete extraction JSON, not a patch.'''
 
 
 def _now():
@@ -536,6 +538,7 @@ class RoadmapRebuild:
                                      target_id=binding.target_id, model=binding.model),
                         prompts=dict(extraction_sha256=hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
                                      audit_sha256=hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
+                                     guided_extraction_sha256=hashlib.sha256(AUDIT_GUIDED_EXTRACTION_INSTRUCTION.encode()).hexdigest(),
                                      extraction_repair_sha256=hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
                                      audit_repair_sha256=hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()),
                         transport=dict(response_timeout_seconds=ROADMAP_LLM_TIMEOUT),
@@ -547,7 +550,7 @@ class RoadmapRebuild:
         return cls(node, root)
 
     @classmethod
-    def derive(cls, node, run_dir, source_run):
+    def derive(cls, node, run_dir, source_run, *, retry_extractions=(), audit_overrides=()):
         source_root = _secure_directory(source_run)
         root = Path(run_dir).absolute()
         require(not root.exists(), 'Rebuild run directory already exists')
@@ -562,6 +565,7 @@ class RoadmapRebuild:
         prompts = dict(
             extraction_sha256=hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
             audit_sha256=hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
+            guided_extraction_sha256=hashlib.sha256(AUDIT_GUIDED_EXTRACTION_INSTRUCTION.encode()).hexdigest(),
             extraction_repair_sha256=hashlib.sha256(
                 EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
             audit_repair_sha256=hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest())
@@ -578,11 +582,18 @@ class RoadmapRebuild:
         (root/'ollama-runs').mkdir(mode=0o700)
         reused = []
         block_by_id = {item['block_id']: item for item in catalog['blocks']}
+        retry_extractions = set(retry_extractions)
+        require(retry_extractions <= set(block_by_id), 'Unknown extraction retry block')
+        override_map = {block_id: reason for block_id, reason in audit_overrides}
+        require(len(override_map) == len(tuple(audit_overrides))
+                and set(override_map) <= set(block_by_id), 'Invalid audit override')
         for path in sorted((source_root/'results').glob('extract-*.json')):
             if '.attempt-' in path.name or path.name.endswith('.failed.json'):
                 continue
             block_id = path.name[len('extract-'):-len('.json')]
             require(block_id in block_by_id, 'Source run contains an unknown extraction block')
+            if block_id in retry_extractions:
+                continue
             value = validate_extraction(path.read_text(encoding='utf-8'), block_by_id[block_id])
             _atomic_json(root/'results'/path.name, value)
             reused.append({'block_id': block_id,
@@ -613,6 +624,18 @@ class RoadmapRebuild:
             'run_dir': str(source_root),
             'manifest_sha256': hashlib.sha256(canonical(source_manifest)).hexdigest(),
             'reused_extractions': reused, 'reused_audits': reused_audits}
+        manifest['guided_extractions'] = {}
+        for block_id in sorted(retry_extractions):
+            extraction_path = source_root/'results'/('extract-' + block_id + '.json')
+            audit_path = source_root/'results'/('audit-' + block_id + '.json')
+            require(extraction_path.exists() and audit_path.exists(),
+                    'Guided retry requires prior extraction and audit')
+            manifest['guided_extractions'][block_id] = {
+                'previous_extraction': json.loads(extraction_path.read_text(encoding='utf-8')),
+                'source_audit': json.loads(audit_path.read_text(encoding='utf-8'))}
+        manifest['audit_overrides'] = [
+            {'block_id': block_id, 'verdict': 'equivalent', 'reason': reason}
+            for block_id, reason in sorted(override_map.items())]
         manifest['state'] = 'prepared'
         _atomic_json(root/'catalog.json', catalog); _atomic_json(root/'manifest.json', manifest)
         return cls(node, root)
@@ -659,6 +682,7 @@ class RoadmapRebuild:
         require(manifest['prompts'] == {
             'extraction_sha256': hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
             'audit_sha256': hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
+            'guided_extraction_sha256': hashlib.sha256(AUDIT_GUIDED_EXTRACTION_INSTRUCTION.encode()).hexdigest(),
             'extraction_repair_sha256': hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
             'audit_repair_sha256': hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()},
             'Rebuild prompt changed after prepare; create a new run')
@@ -706,14 +730,18 @@ class RoadmapRebuild:
                                    if item['block_id'] == block['previous']), None),
                                next_title=next((item['title'] for item in catalog['blocks']
                                    if item['block_id'] == block['next']), None))
+                guidance = manifest.get('guided_extractions', {}).get(block['block_id'])
                 prior = sorted((self.root/'results').glob(
                     'extract-' + block['block_id'] + '.attempt-*.failed.json'))
                 attempt = len(prior) + 1; value = None
                 while attempt <= MAX_ATTEMPTS and calls < limit:
                     raw = None
-                    instruction = (EXTRACTION_INSTRUCTION if attempt == 1
+                    instruction = (AUDIT_GUIDED_EXTRACTION_INSTRUCTION
+                                   if attempt == 1 and guidance else
+                                   EXTRACTION_INSTRUCTION if attempt == 1
                                    else EXTRACTION_REPAIR_INSTRUCTION)
-                    request = focused if attempt == 1 else dict(
+                    request = ({'source_block': focused, **guidance}
+                               if attempt == 1 and guidance else focused) if attempt == 1 else dict(
                         source_block=focused, previous_response=(self.root/'raw'/(
                             'extract-' + block['block_id'] + f'.attempt-{attempt - 1}.json')).read_text(
                                 encoding='utf-8'),
@@ -806,6 +834,11 @@ class RoadmapRebuild:
                         attempt += 1
                 if value is None:
                     continue
+            override = next((item for item in manifest.get('audit_overrides', [])
+                             if item['block_id'] == block['block_id']), None)
+            if override is not None:
+                value = dict(value, verdict=override['verdict'], findings=[],
+                             summary='Human review override: ' + override['reason'])
             audits.append(value)
         if len(audits) == len(catalog['blocks']):
             dimensions = {key: round(sum(item['scores'][key] for item in audits) / len(audits), 2)
@@ -815,6 +848,7 @@ class RoadmapRebuild:
                           verdicts=dict(Counter(item['verdict'] for item in audits)),
                           scores=dimensions, fidelity=round(sum(dimensions.values()) / len(dimensions), 2),
                           candidate_ready=candidate['ready'], candidate_issues=candidate['issues'],
+                          audit_overrides=manifest.get('audit_overrides', []),
                           import_ready=candidate['ready'] and all(item['verdict'] in {'correct', 'equivalent'}
                                                                  for item in audits))
             _atomic_json(self.root/'report.json', report)

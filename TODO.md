@@ -448,6 +448,12 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   také kvůli 304 strukturálním blokátorům: 211 parent, 42 combined-source-ids,
   42 source-ambiguity, 6 dependency a 3 reconciliation ambiguity. Žádný apply
   před jejich cíleným reconciliation/review neproběhne.
+  Implementován audit-guided selektivní retry jednoho extraction bloku a
+  manifestovaný human-review audit override. Run
+  `/tmp/dev-01-source-rebuild-20261030-v7-m5-repair` převzal 184 extrakcí,
+  znovu odešle pouze M5 s předchozí extrakcí a findings a eviduje explicitní
+  odmítnutí XREF-01 `misplaced`; původní run ani raw evidence se nemění.
+  Cílená migrační sada: 48/48 prošlo.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

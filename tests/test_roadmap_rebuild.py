@@ -302,6 +302,15 @@ class RoadmapRebuildTests(unittest.TestCase):
         manifest = json.loads((derived_dir/'manifest.json').read_text(encoding='utf-8'))
         self.assertEqual(reused['blocks'],
                          len(manifest['derived_from']['reused_audits']))
+        block_id = json.loads((self.run_dir/'catalog.json').read_text(
+            encoding='utf-8'))['blocks'][0]['block_id']
+        guided_dir = self.base/'derived-guided'
+        guided = RoadmapRebuild.derive(self.node, guided_dir, self.run_dir,
+            retry_extractions=[block_id], audit_overrides=[(block_id, 'Human review')])
+        self.assertEqual(reused['blocks'] - 1, guided.status()['extracted'])
+        guided_manifest = json.loads((guided_dir/'manifest.json').read_text(encoding='utf-8'))
+        self.assertIn(block_id, guided_manifest['guided_extractions'])
+        self.assertEqual('equivalent', guided_manifest['audit_overrides'][0]['verdict'])
 
     def test_candidate_renderer_marks_unresolved_dependency_and_cycle(self):
         nodes = [
