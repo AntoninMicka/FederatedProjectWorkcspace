@@ -13,10 +13,13 @@ from spikes.markdown_documents import main_todo_id
 from spikes.project_creation import ProjectCreation
 from spikes.roadmap_migration import canonical, inventory
 from spikes.roadmap_rebuild_bundle import (accepted_rebuild, assemble_rebuild_bundle,
-                                           rebind_source_review)
-from spikes.roadmap_validation import load_bundle
+                                           local_author_id, rebind_source_review)
+from spikes.roadmap_import_evidence import audit_import_evidence
+from spikes.roadmap_importer import RoadmapImporter
+from spikes.roadmap_validation import load_bundle, validate_bundle
 from tests.fixtures import AUTHOR
 from tests.test_roadmap_mapping import MappingFixture
+from tests import test_roadmap_validation as validation_tests
 
 
 class RoadmapRebuildBundleTests(MappingFixture, unittest.TestCase):
@@ -147,6 +150,28 @@ class RoadmapRebuildBundleTests(MappingFixture, unittest.TestCase):
             reviewed_at='2026-10-30T13:00:00Z')
         self.assertEqual(operation['bundle_sha256'], review['bundle_sha256'])
         self.assertEqual(len(manifest['sources']), len(review['source_classifications']))
+
+    def test_read_only_evidence_audit_proves_applied_candidate_coverage(self):
+        source, run, node, project_id, _, base = self.fixture_run()
+        output = base/'bundle-evidence'
+        operation, _ = assemble_rebuild_bundle(run, {'federated-workspace': source.root},
+            node, project_id, author_id=local_author_id(node), privacy='project', output=output,
+            created_at='2026-10-30T12:00:00Z')
+        _, blobs = load_bundle(output)
+        review = validation_tests.RoadmapValidationTests.source_review(self, operation, blobs)
+        validation = validate_bundle(output, node, source_roots=[source.root],
+                                     source_review=review)
+        self.assertTrue(validation['prewrite_checks_passed'], validation)
+        receipt = RoadmapImporter(node).apply(output, review, operation['bundle_sha256'],
+                                              source_roots=[source.root])
+        receipt_path = base/'receipt.json'
+        receipt_path.write_text(json.dumps(receipt), encoding='utf-8')
+        report = audit_import_evidence(run, output, receipt_path, node)
+        self.assertTrue(report['complete'])
+        self.assertEqual(report['verdict'], 'complete-no-loss-detected')
+        self.assertEqual(report['counts']['source_blocks'], 1)
+        self.assertEqual(report['counts']['nodes'], 3)
+        self.assertEqual(report['counts']['supporting_records'], 2)
 
 
 if __name__ == '__main__':

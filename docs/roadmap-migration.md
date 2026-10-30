@@ -300,6 +300,27 @@ python3 -m scripts.roadmap_rebuild_review \
 Příkaz odmítne neznámý/duplicitní zdroj a také nové nebo jinak četné externí
 URL bez samostatného review. Teprve následný `roadmap_migration_validate` musí
 vrátit nula `blocked`, nula `needs-review` a `prewrite_checks_passed=true`.
+
+### Evidenční kontrola po fyzickém importu
+
+Po apply lze bez LLM a bez zápisu do projektů doložit celý řetězec zdrojový
+katalog → přijatý candidate → bundle → receipt → skutečné Git commity:
+
+```bash
+python3 -m scripts.roadmap_import_evidence \
+  --run-dir /tmp/dev-01-source-rebuild-20261030-v7-final \
+  --bundle /tmp/dev-01-source-rebuild-final-bundle-v4 \
+  --receipt /tmp/dev-01-source-rebuild-final-import-receipt-v4.json \
+  --node /home/antonin/.local/state/federated-workspace/node.json \
+  --output /tmp/dev-01-source-rebuild-final-import-evidence-v4
+```
+
+Kontrola vyžaduje shodu receipt a bundle, aktuální HEAD na importovaném commitu,
+idle journal, byte-for-byte přítomnost všech bundle souborů, shodné hashe všech
+roadmapových zdrojů a reprezentaci každého candidate uzlu i podpůrného záznamu.
+Výstup `report.json` je strojově čitelný, `summary.md` slouží k lidské kontrole.
+Jde o evidenci úplnosti přenosu; neopakuje sémantický LLM audit a nedokládá
+vykreslení v UI.
 Samotný zápis nadále provádí výhradně `roadmap_migration_apply` s explicitním
 bundle SHA a novým receipt souborem.
 

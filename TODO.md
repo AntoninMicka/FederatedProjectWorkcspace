@@ -511,12 +511,23 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   potvrdil privacy `project`; bundle-bound manifest je
   `/tmp/dev-01-source-rebuild-final-source-review-v4.json`. Opakovaná read-only
   prověrka `/tmp/dev-01-source-rebuild-final-review-v4-complete` má 16 passed,
-  0 blocked, 0 needs-review a `prewrite_checks_passed=true`. Workspace apply
-  neproběhl.
-- [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
-  Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
-  v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
-  zdrojového repozitáře; žádné předčasné odstranění původní evidence.
+  0 blocked, 0 needs-review a `prewrite_checks_passed=true`.
+- [ ] [in progress] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
+  Uživatel výslovně potvrdil fyzický import bundle v4 do obou projektů. Nativní
+  recoverable writer jej dokončil a uložil orchestrující receipt
+  `/tmp/dev-01-source-rebuild-final-import-receipt-v4.json`: modul přešel z
+  `10a9cfad` na `e9eea387`, hostitelský projekt z `6754f147` na `54915375`.
+  Oba commity odpovídají receipt, snapshoty prošly `validate_snapshot`, pracovní
+  stromy jsou čisté a oba journaly mají 0 pending souborů a 0 nedokončených
+  operací. Read-only evidenční audit
+  `/tmp/dev-01-source-rebuild-final-import-evidence-v4` uzavřel výsledek
+  `complete-no-loss-detected`: 13/13 připnutých zdrojů (6 roadmapových a 7
+  doprovodných), 185/185 zdrojových bloků, 728/728 uzlů a 294/294 podpůrných
+  záznamů je dohledáno v byte-for-byte ověřených importovaných souborech; nebyl
+  proveden další zápis ani LLM scan. Cílený modul
+  `tests.test_roadmap_rebuild_bundle`: 4/4 prošly. Zbývá ověřit obsah v aplikaci
+  a IDE a samostatně akceptovat úplnost modulů a úpravu workflow zdrojového
+  repozitáře; původní evidence se zatím neodstraňuje.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.
