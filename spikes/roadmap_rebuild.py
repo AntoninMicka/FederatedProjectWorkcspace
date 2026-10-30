@@ -557,15 +557,21 @@ class RoadmapRebuild:
         return cls(node, root)
 
     @classmethod
-    def derive(cls, node, run_dir, source_run, *, retry_extractions=(), audit_overrides=()):
+    def derive(cls, node, run_dir, source_run, *, retry_extractions=(), audit_overrides=(),
+               audit_source_run=None):
         source_root = _secure_directory(source_run)
+        audit_source_root = (_secure_directory(audit_source_run)
+                             if audit_source_run is not None else source_root)
         root = Path(run_dir).absolute()
         require(not root.exists(), 'Rebuild run directory already exists')
         catalog = json.loads((source_root/'catalog.json').read_text(encoding='utf-8'))
         source_manifest = json.loads((source_root/'manifest.json').read_text(encoding='utf-8'))
+        audit_source_manifest = json.loads(
+            (audit_source_root/'manifest.json').read_text(encoding='utf-8'))
         frozen = dict(catalog); catalog_sha256 = frozen.pop('catalog_sha256')
         require(hashlib.sha256(canonical(frozen)).hexdigest() == catalog_sha256
-                and source_manifest['catalog_sha256'] == catalog_sha256,
+                and source_manifest['catalog_sha256'] == catalog_sha256
+                and audit_source_manifest['catalog_sha256'] == catalog_sha256,
                 'Source rebuild catalog or manifest is inconsistent')
         binding = OllamaBindings(Path(node).absolute().parent / ('.' + Path(node).name + '.chat')).load()
         require(binding.boundary == 'same-node', 'Source rebuild requires same-node Ollama')
@@ -591,8 +597,11 @@ class RoadmapRebuild:
         block_by_id = {item['block_id']: item for item in catalog['blocks']}
         retry_extractions = set(retry_extractions)
         require(retry_extractions <= set(block_by_id), 'Unknown extraction retry block')
-        override_map = {block_id: reason for block_id, reason in audit_overrides}
-        require(len(override_map) == len(tuple(audit_overrides))
+        inherited_overrides = [(item['block_id'], item['reason'])
+                               for item in source_manifest.get('audit_overrides', [])]
+        combined_overrides = inherited_overrides + list(audit_overrides)
+        override_map = {block_id: reason for block_id, reason in combined_overrides}
+        require(len(override_map) == len(combined_overrides)
                 and set(override_map) <= set(block_by_id), 'Invalid audit override')
         for path in sorted((source_root/'results').glob('extract-*.json')):
             if '.attempt-' in path.name or path.name.endswith('.failed.json'):
@@ -606,13 +615,13 @@ class RoadmapRebuild:
             reused.append({'block_id': block_id,
                            'result_sha256': hashlib.sha256(canonical(value)).hexdigest()})
         reused_audits = []
-        if len(reused) == len(catalog['blocks']) and (source_root/'candidate.json').exists() \
-                and source_manifest.get('prompts', {}).get('audit_sha256') \
+        if len(reused) == len(catalog['blocks']) and (audit_source_root/'candidate.json').exists() \
+                and audit_source_manifest.get('prompts', {}).get('audit_sha256') \
                 == prompts['audit_sha256']:
             extractions = [json.loads((root/'results'/(
                 'extract-' + block['block_id'] + '.json')).read_text(encoding='utf-8'))
                 for block in catalog['blocks']]
-            previous_candidate = json.loads((source_root/'candidate.json').read_text(
+            previous_candidate = json.loads((audit_source_root/'candidate.json').read_text(
                 encoding='utf-8'))
             current_candidate = build_candidate(catalog, extractions)
             for block in catalog['blocks']:
@@ -620,7 +629,7 @@ class RoadmapRebuild:
                     previous_candidate, block['block_id']))
                 current = audit_projection(candidate_records(
                     current_candidate, block['block_id']))
-                audit_path = source_root/'results'/('audit-' + block['block_id'] + '.json')
+                audit_path = audit_source_root/'results'/('audit-' + block['block_id'] + '.json')
                 if canonical(previous) != canonical(current) or not audit_path.exists():
                     continue
                 value = validate_audit(audit_path.read_text(encoding='utf-8'), block)
@@ -631,6 +640,11 @@ class RoadmapRebuild:
             'run_dir': str(source_root),
             'manifest_sha256': hashlib.sha256(canonical(source_manifest)).hexdigest(),
             'reused_extractions': reused, 'reused_audits': reused_audits}
+        if audit_source_root != source_root:
+            manifest['audit_source'] = {
+                'run_dir': str(audit_source_root),
+                'manifest_sha256': hashlib.sha256(
+                    canonical(audit_source_manifest)).hexdigest()}
         manifest['guided_extractions'] = {}
         for block_id in sorted(retry_extractions):
             extraction_path = source_root/'results'/('extract-' + block_id + '.json')

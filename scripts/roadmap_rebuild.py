@@ -56,6 +56,7 @@ def main(argv=None):
                          metavar=('MODULE_ID', 'REPOSITORY', 'REVISION'))
     derive = sub.add_parser('derive')
     derive.add_argument('--from-run', required=True)
+    derive.add_argument('--audit-from-run')
     derive.add_argument('--retry-extraction', action='append', default=[])
     derive.add_argument('--accept-audit', nargs=2, action='append', default=[],
                         metavar=('BLOCK_ID', 'REASON'))
@@ -69,7 +70,8 @@ def main(argv=None):
     elif args.command == 'derive':
         service = RoadmapRebuild.derive(args.node, args.run_dir, args.from_run,
                                         retry_extractions=args.retry_extraction,
-                                        audit_overrides=args.accept_audit)
+                                        audit_overrides=args.accept_audit,
+                                        audit_source_run=args.audit_from_run)
         result = service.status()
     else:
         service = RoadmapRebuild(args.node, args.run_dir)

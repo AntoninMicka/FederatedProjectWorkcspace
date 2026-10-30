@@ -323,6 +323,33 @@ class RoadmapRebuildTests(unittest.TestCase):
         self.assertIn(block_id, guided_manifest['guided_extractions'])
         self.assertEqual('equivalent', guided_manifest['audit_overrides'][0]['verdict'])
 
+    def test_derived_run_can_reuse_compatible_audits_from_separate_run(self):
+        RoadmapRebuild.prepare(self.node, self.run_dir, self.repository,
+                               revision=self.commit)
+        status = {}
+        while not status.get('complete'):
+            status = RoadmapRebuild(self.node, self.run_dir,
+                                    adapter_factory=self.factory).run(limit=100)
+        block_id = json.loads((self.run_dir/'catalog.json').read_text(
+            encoding='utf-8'))['blocks'][0]['block_id']
+        extraction_dir = self.base/'extraction-only'
+        RoadmapRebuild.derive(self.node, extraction_dir, self.run_dir,
+            retry_extractions=[block_id], audit_overrides=[(block_id, 'Human review')])
+        name = f'extract-{block_id}.json'
+        (extraction_dir/'results'/name).write_bytes((self.run_dir/'results'/name).read_bytes())
+
+        combined_dir = self.base/'combined'
+        combined = RoadmapRebuild.derive(
+            self.node, combined_dir, extraction_dir, audit_source_run=self.run_dir)
+        combined_status = combined.status()
+        self.assertEqual(combined_status['blocks'], combined_status['extracted'])
+        self.assertEqual(combined_status['blocks'], combined_status['audited'])
+        manifest = json.loads((combined_dir/'manifest.json').read_text(encoding='utf-8'))
+        self.assertEqual(str(self.run_dir), manifest['audit_source']['run_dir'])
+        self.assertEqual(combined_status['blocks'],
+                         len(manifest['derived_from']['reused_audits']))
+        self.assertEqual('Human review', manifest['audit_overrides'][0]['reason'])
+
     def test_candidate_renderer_marks_unresolved_dependency_and_cycle(self):
         nodes = [
             {'candidate_id': 'BATCH-01', 'title': 'Dávka', 'status': 'planned',

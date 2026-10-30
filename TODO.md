@@ -458,7 +458,13 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   nyní hlásí index a konkrétní vadný rozsah a při resume znovu odvodí přesnou
   chybu z uchované raw odpovědi, takže poslední bounded repair dostane
   použitelnou zpětnou vazbu bez změny katalogu nebo evidence. Cílený modul
-  `tests.test_roadmap_rebuild`: 20/20 prošlo; `git diff --check` prošel.
+  `tests.test_roadmap_rebuild`: 20/20 prošlo. Třetí pokus M5 uspěl a vytvořil
+  kandidáta se všemi 185 extrakcemi. `derive --audit-from-run` nyní umí oddělit
+  lineage extrakcí od auditního zdroje, kanonicky převzít pouze kompatibilní
+  audity a zdědit human-review override. Navazující run
+  `/tmp/dev-01-source-rebuild-20261030-v7-m5-audit` převzal 185 extrakcí a 180
+  nezměněných auditů; k opakování zbývá pět auditů. Cílený modul po změně:
+  21/21 prošlo; `git diff --check` prošel.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
