@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from spikes.artifacts import Artifacts, main_todo_id
 from spikes.desktop_ui import DesktopHandler
-from spikes.ide_bridge import IdeBridge
+from spikes.ide_bridge import IdeBridge, desktop_bridge
 from spikes.local_api import running_api
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
@@ -29,9 +29,14 @@ def main():
         head = Projects(node).open(project)['commit_id']
         head = Artifacts(node).save(dict(project_id=project, artifact_id=main_todo_id(project),
             base_head=head, title='Tasks', body='- [ ] [TASK-01] Smoke test\n', new=True), str(uuid4()))['commit_id']
-        with running_api('http', handler=DesktopHandler, projects=Projects(node)) as server:
-            service = IdeBridge(node)
-            result = service.connection_create({'name': 'Smoke IDE'}, None, server.origin)
+        service = IdeBridge(node)
+        with running_api('http', handler=DesktopHandler, projects=Projects(node)) as old_server:
+            result = service.connection_create({'name': 'Smoke IDE'}, None, old_server.origin)
+        discovery_home = root / 'home'
+        discovery_root = discovery_home / '.local/state/federated-workspace/ide-discovery'
+        with running_api('http', handler=DesktopHandler, projects=Projects(node)) as server, desktop_bridge(
+                node, server, discovery_root=discovery_root):
+            assert server.origin != result['pairing']['endpoint']
             package = root / result['filename']; package.write_bytes(base64.b64decode(result['package_base64']))
             common = ['--user-data-dir', str(root / 'profile'), '--extensions-dir', str(root / 'extensions')]
             installed = subprocess.run([args.editor, *common, '--install-extension', str(package), '--force'],
@@ -41,7 +46,7 @@ def main():
             extension = next((root / 'extensions').glob('federated-workspace.workspace-file-bridge-*'))
             fixture = root / 'fixture.json'; output = root / 'result.json'
             fixture.write_text(json.dumps(dict(pairing=result['pairing'], repository=str(repo),
-                                               mailbox=str(root / 'mailbox'), result=str(output), project_id=project, head=head)))
+                                               mailbox=str(root / 'mailbox'), result=str(output), project_id=project, head=head, discovery_home=str(discovery_home))))
             fixture.chmod(0o600)
             env = dict(os.environ, WORKSPACE_BRIDGE_SMOKE=str(fixture))
             process = subprocess.run([args.editor, *common, '--disable-workspace-trust',
@@ -55,7 +60,7 @@ def main():
             assert evidence['active'] and evidence['receipt']['status'] == 'received'
             assert Projects(node).open(project)['commit_id'] == head
             assert len(service.status(project)['sessions'][0]['messages']) == 1
-            print('VSIX installed; Workspace connection and project mapping verified; extension host active; ordinary files and receipt/retry verified; project Git unchanged.')
+            print('VSIX installed; desktop restarted on different port without pairing; Workspace connection and project mapping verified; extension host active; ordinary files and receipt/retry verified; project Git unchanged.')
     return 0
 
 

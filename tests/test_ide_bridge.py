@@ -3,6 +3,9 @@
 import base64
 import io
 import json
+import os
+import hmac
+import hashlib
 from pathlib import Path
 import shutil
 import sqlite3
@@ -14,7 +17,9 @@ from unittest.mock import patch
 import zipfile
 
 from spikes.artifacts import Artifacts, main_todo_id
-from spikes.ide_bridge import IdeBridge, endpoint
+from spikes.ide_bridge import IdeBridge, endpoint, desktop_bridge
+from spikes.local_api import running_api
+from spikes.desktop_ui import DesktopHandler
 from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
@@ -227,6 +232,100 @@ class IdeBridgeTests(unittest.TestCase):
         with patch.object(self.service.projects, 'open', return_value=dict(view, read_only=True)):
             with self.assertRaisesRegex(ValidationError, 'read-only'):
                 self.service.configure_mapping(None, self.mapping(other))
+
+    def test_fresh_desktop_needs_no_node_and_new_credentials_are_published(self):
+        from types import SimpleNamespace
+        root = self.root / 'discovery'
+        absent_node = self.root / 'missing-parent/node.json'
+        with desktop_bridge(absent_node, SimpleNamespace(origin='http://127.0.0.1:12345'),
+                            discovery_root=root):
+            self.assertFalse(root.exists())
+        server = SimpleNamespace(origin='http://127.0.0.1:12346')
+        with desktop_bridge(self.node, server, discovery_root=root) as service:
+            created = service.connection_create({'name': 'New'}, None, server.origin)
+            descriptor = root / (created['connection_id'] + '.json')
+            self.assertEqual(server.origin, json.loads(descriptor.read_text())['endpoint'])
+            other_node = self.root / 'second.json'
+            with desktop_bridge(other_node, SimpleNamespace(origin='http://127.0.0.1:12347'),
+                                discovery_root=root):
+                self.assertEqual(server.origin, json.loads(descriptor.read_text())['endpoint'])
+        self.assertIsNone(server.ide_bridge_service)
+
+    def test_discovery_rebuild_and_publish_failure_keep_credentials_and_mappings(self):
+        created, parent = self.parent()
+        mapping = self.service.configure_mapping(None, self.mapping(parent))
+        root = self.root / 'discovery'
+        self.service.discovery_root = root
+        self.service.desktop_origin = 'http://127.0.0.1:12345'
+        with patch('spikes.ide_bridge.os.replace', side_effect=OSError('crash before rename')):
+            with self.assertRaisesRegex(OSError, 'crash'):
+                self.service.publish_endpoints()
+        self.assertEqual([], list(root.iterdir()))
+        self.service.publish_endpoints()
+        file = root / (parent['connection_id'] + '.json')
+        first = json.loads(file.read_text())
+        self.assertNotIn(created['pairing']['token'], file.read_text())
+        self.assertEqual(0o600, file.stat().st_mode & 0o777)
+        key = hashlib.sha256(created['pairing']['token'].encode()).digest()
+        expected = hmac.new(key, (first['id'] + '\n' + first['endpoint']).encode(), hashlib.sha256).hexdigest()
+        self.assertEqual(expected, first['signature'])
+        restarted = IdeBridge(self.node)
+        restarted.discovery_root = root
+        restarted.desktop_origin = 'http://127.0.0.1:12346'
+        restarted.publish_endpoints()
+        self.assertEqual(restarted.desktop_origin, json.loads(file.read_text())['endpoint'])
+        self.assertEqual(mapping['session_id'], restarted.connection_mappings(parent['connection_id'],
+            {'node_role': 'federation-admin'})[0]['session_id'])
+        self.assertEqual(parent, restarted.connection(created['pairing']['token']))
+        alias = self.root / 'alias'
+        alias.symlink_to(root, target_is_directory=True)
+        restarted.discovery_root = alias
+        with self.assertRaises(ValueError):
+            restarted.publish_endpoints()
+        with zipfile.ZipFile(io.BytesIO(restarted.package())) as archive:
+            self.assertNotIn('extension/pairing.json', archive.namelist())
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required')
+    def test_real_transport_recovers_existing_mapping_after_desktop_port_change(self):
+        created, parent = self.parent()  # issued by the old version, no discovery field
+        mapping = self.service.configure_mapping(None, self.mapping(parent))
+        bound = self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'],
+            action='bind', session_id=mapping['session_id'], repository=str(self.root/'project'),
+            editor_workspace=str(self.root/'project')))
+        home = self.root / 'home'
+        discovery = home / '.local/state/federated-workspace/ide-discovery'
+        pairing = dict(created['pairing'], **bound)
+        env = dict(os.environ, HOME=str(home))
+        program = """
+const fs = require('node:fs');
+const bridge = require('./extensions/workspace-bridge/bridge');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+bridge.sync(input.mailbox, input.pairing, input.repo).then(result => {
+  console.log(JSON.stringify({session: result.session_id, todo: result.snapshot.todo}));
+}).catch(error => {console.error(error.message); process.exitCode = 1;});
+"""
+        def client():
+            return subprocess.run(['node', '-e', program], input=json.dumps(dict(pairing=pairing,
+                mailbox=str(self.root/'mailbox'), repo=str(self.root/'project'))),
+                text=True, capture_output=True, timeout=20, env=env)
+        with running_api('http', handler=DesktopHandler, projects=Projects(self.node)) as first:
+            with desktop_bridge(self.node, first, discovery_root=discovery):
+                first_origin = first.origin
+                response = client()
+                self.assertEqual(0, response.returncode, response.stderr)
+        offline = client()
+        self.assertNotEqual(0, offline.returncode)
+        self.assertIn('ECONNREFUSED', offline.stderr)
+        with running_api('http', handler=DesktopHandler, projects=Projects(self.node)) as second:
+            with desktop_bridge(self.node, second, discovery_root=discovery) as service:
+                self.assertNotEqual(first_origin, second.origin)
+                response = client()
+                self.assertEqual(0, response.returncode, response.stderr)
+                self.assertEqual(mapping['session_id'], json.loads(response.stdout)['session'])
+                self.assertIn('TASK-01', json.loads(response.stdout)['todo'])
+                service.connection_revoke(None, parent['connection_id'])
+                self.assertNotEqual(0, client().returncode)
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required for extension transport tests')
     def test_extension_files_recovery_and_transport(self):

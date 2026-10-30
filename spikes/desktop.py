@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from spikes.desktop_management import ASSETS, DesktopManagementHandler as DesktopHandler
 from spikes.administration import Administration
+from spikes.ide_bridge import desktop_bridge
 from spikes.local_api import running_api
 from spikes.projects import Projects
 from spikes.project_creation import CreationConflict, ProjectCreation, default_node_path
@@ -332,7 +333,7 @@ def main():
         ProjectDeletion(node_path).recover()
     except Exception as exc:
         QMessageBox.warning(None, 'Odstranění projektu nebylo dokončeno', str(exc))
-    with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
+    with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server, desktop_bridge(node_path, server):
         server.administration = Administration(node_path, deployment='desktop')
         server.user_profile = UserProfile(node_path)
         server.gamepad_settings = GamepadSettings(node_path)

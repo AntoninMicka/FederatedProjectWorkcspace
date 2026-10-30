@@ -1,13 +1,9 @@
-<!--
-SPDX-FileCopyrightText: 2026 Antonín Mička
-SPDX-License-Identifier: MPL-2.0
--->
+<!-- SPDX-FileCopyrightText: 2026 Antonín Mička -->
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+# TODO — čeká na doručení DEV-IDE-RECONNECT-01
 
-# TODO — čeká na doručení DEV-IDE-TODO-01
-
-Uživatelem akceptovaná evidence lokálního souborového IDE bridge na úrovni
-**PoC validated**, včetně opravy desktopové instalace a fyzického obousměrného
-ověření, je archivována ve
-[WORK_LOG](WORK_LOG.md#dev-ide-todo-01--lokální-souborový-ide-bridge--2026-10-28).
-Větev `feature/dev-ide-todo-01-file-bridge` čeká na doručení jediného PR do
-`develop`; merge není doložen. Další feature zde není aktivována.
+Ověřená evidence opravy na úrovni **PoC validated** je archivována ve
+[WORK_LOG](WORK_LOG.md#dev-ide-reconnect-01--automatické-obnovení-desktopového-ide-bridge--2026-10-30).
+Větev `feature/dev-ide-reconnect-desktop` čeká na doručení jediného PR do
+`develop`. PR není vytvořen ani sloučen; commit ani push nebyl proveden.
+Další feature zde není aktivována.

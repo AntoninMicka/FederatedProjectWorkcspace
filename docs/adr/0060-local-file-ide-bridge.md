@@ -144,3 +144,45 @@ Primární podklady ověřené 28. 10. 2026:
 [CLI instalace](https://code.visualstudio.com/docs/configure/command-line),
 [Extension API](https://code.visualstudio.com/api/references/vscode-api).
 Runtime výsledky drží TODO, po uzavření WORK_LOG; dokument sám není důkaz testů.
+
+
+## Doplnění 30. 10. 2026 — restart desktopu (DEV-IDE-RECONNECT-01)
+
+Fyzický uživatelský log vykázal ECONNREFUSED na uloženém loopback portu.
+Desktop running_api používá náhodný port při každém startu; připnutá síťová
+adresa proto nestačila pro trvalé propojení. Zachováváme dynamický loopback
+server a přidáváme node-local obnovitelnou discovery, nikoli pevný společný
+port nebo nové párování. Zachování mapování je podmínka opravy.
+
+Desktop zveřejní pro každé aktivní neexpirované připojení a původní schema-v1
+relaci ID, aktuální loopback origin a HMAC-SHA256 podpis. Klíčem je existující
+SHA-256 digest credentialu v SQLite; editor jej odvodí z SecretStorage.
+Podepisované bajty jsou UTF-8 `id + "\n" + origin`. Token se do souboru
+neukládá. Schema-v2 potomci používají descriptor rodiče, nikoli nový token.
+Discovery je v privátní složce stejného lokálního uživatele mimo Git pod
+`~/.local/state/federated-workspace/ide-discovery/`; ID oddělují uzly.
+Rozšíření kontroluje typ/vlastníka/práva/symlinky, ID, podpis a přesnou HTTP
+adresu 127.0.0.1 ještě před přenosem credentialu. HTTPS discovery nepoužívá.
+Hranicí důvěry je stejný OS uživatel, nikoli ochrana před kompromitovaným
+účtem s přístupem k databázi či SecretStorage. Server stále kontroluje
+credential, expiraci, revokaci, privacy a oprávnění při každém požadavku.
+
+Crash boundaries rozšiřují původní body výše:
+
+1. Credential/mapování je commitnuté v SQLite před publikací descriptoru.
+   Pád při publikaci nezruší credential; další start obnoví projekci z DB.
+   Ztracená instalační odpověď má dosavadní recovery přes přehled připojení.
+2. Publikace používá privátní dočasný soubor, fsync, rename a fsync adresáře.
+   Čtenář vidí celý starý nebo nový descriptor; `.tmp` nepoužívá. Pád před
+   rename může ponechat starou adresu, následující start ji znovu zveřejní.
+3. Při ukončení descriptor zůstává: havárie a řádné vypnutí mají stejnou
+   obnovu. Odmítnuté spojení nemaže SecretStorage, mapování ani zprávy.
+   Další automatická synchronizace načte nově podepsanou adresu. Neplatný
+   descriptor se odmítne bez síťového požadavku; chybějící descriptor zachová
+   kompatibilitu s původním endpointem staršího desktopu.
+4. Obecný aktualizační VSIX neobsahuje pairing.json. Aktualizace rozšíření
+   stejného ID/profilu zachová credentials a mapování bez nového párování.
+   Expirace, odvolání a explicitní změna identity uzlu tím nejsou obcházené.
+
+Recovery testy a skutečný IDE smoke této opravy jsou evidovány u samostatné
+feature dávky; původní historické důkazy zůstávají platné v původním rozsahu.

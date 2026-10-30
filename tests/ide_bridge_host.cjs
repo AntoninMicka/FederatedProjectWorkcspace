@@ -16,6 +16,9 @@ exports.run = async function () {
   assert.ok(commands.includes('workspaceBridge.configure'));
   assert.ok(commands.includes('workspaceBridge.assign'));
 
+  const os = require('node:os');
+  const originalHome = os.homedir;
+  os.homedir = () => fixture.discovery_home;
   const bridge = require(path.join(extension.extensionPath, 'bridge.js'));
   assert.equal(fixture.pairing.schema_version,2);
   const catalog = await bridge.connectionRequest(fixture.pairing,{action:'status'});
@@ -35,5 +38,6 @@ exports.run = async function () {
   assert.equal(response.receipts[0].status, 'received');
   await bridge.sync(fixture.mailbox, pairing, fixture.repository);
   assert.equal(await bridge.git(fixture.repository, 'status', '--porcelain'), '');
+  os.homedir = originalHome;
   await fs.writeFile(fixture.result, JSON.stringify({active: true, receipt: response.receipts[0], todo: await fs.readFile(path.join(fixture.mailbox, 'TODO.md'), 'utf8')}));
 };

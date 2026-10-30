@@ -31,3 +31,11 @@ První fyzicky ověřený profil je Linux/VSCodium. Windows a VS Code vyžadují
 samostatné ověření. Webový Workspace funguje přes HTTPS, rozšíření běží
 v lokálním IDE. Remote SSH, WSL a browser-only IDE nejsou podporované.
 Bridge nespouští coding agenta ani mu automaticky nepřidává práva k souborům.
+
+Od verze 0.2.1 se při restartu aktualizovaného desktopu automaticky obnoví
+jeho adresa z lokální podepsané discovery. Uložené projekty a credentials
+zůstávají zachované, včetně propojení vytvořených starší verzí. Obecný VSIX
+bez pairing.json lze použít pro aktualizaci stejného profilu bez párování.
+Při vypnutém desktopu stav ukazuje čekání na spuštění; Auto Sync opakuje pokus
+každých 10 sekund. Odvolání a 30denní expirace zůstávají platné. Podrobný
+postup a omezení: docs/ide-file-bridge.md ve zdrojovém repozitáři.
