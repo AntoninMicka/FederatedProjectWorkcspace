@@ -328,6 +328,31 @@ bridge.sync(input.mailbox, input.pairing, input.repo).then(result => {
         self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required for extension transport tests')
+    def test_extension_refreshes_assignment_and_recovers_lost_map_response(self):
+        created, parent = self.parent()
+        repository = str(self.root / 'project')
+        mapping = self.service.configure_mapping(None, self.mapping(parent,
+            repository=repository, editor_workspace=repository))
+        self.service.connection_exchange(parent, dict(connection_id=parent['connection_id'],
+            action='bind', session_id=mapping['session_id'], repository=repository,
+            editor_workspace=repository))
+        self.head = self.save(self.body + '- [ ] [TASK-03] New assignment\n')
+        with running_api('http', handler=DesktopHandler, projects=Projects(self.node)) as server:
+            config = dict(pairing=dict(created['pairing'], endpoint=server.origin),
+                session=mapping['session_id'], repository=repository,
+                storage=str(self.root / 'extension-storage'), head=self.head)
+            fixture = self.root / 'refresh.json'
+            fixture.write_text(json.dumps(config))
+            result = subprocess.run(['node', 'tests/ide_bridge_refresh.cjs', str(fixture)],
+                                    capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        active = self.service.connection_mappings(parent['connection_id'], {'node_role': 'federation-admin'})
+        self.assertEqual(1, len(active))
+        self.assertEqual(self.head, active[0]['expected_head'])
+        self.assertEqual(json.loads(result.stdout)['session'], active[0]['session_id'])
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required for extension transport tests')
     def test_extension_files_recovery_and_transport(self):
         result = subprocess.run(['node', '--test', 'tests/ide_bridge.test.js'],
                                 capture_output=True, text=True, timeout=40)

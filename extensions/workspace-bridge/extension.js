@@ -62,13 +62,31 @@ async function activate(context) {
       } else {
         const current = await catalog(config);
         let count = 0, stale = 0, failed = 0;
-        for (const mapping of current.mappings) {
-          const local = config.mappings?.[mapping.session_id];
-          if (!local || !mapping.bound) continue;
+        for (const [session, local] of Object.entries(config.mappings || {})) {
+          let mapping = current.mappings.find(item => item.session_id === session);
+          if (!local.refresh && (!mapping || !mapping.bound)) continue;
           try {
-            const result = await bridge.sync(mailbox(mapping.session_id), {...config.pairing, ...mapping}, local.repository, config.ca);
+            if (local.refresh) mapping = await refreshProject(config, current, session, local);
+            let result = await bridge.sync(mailbox(mapping.session_id), {...config.pairing, ...mapping}, local.repository, config.ca);
+            const project = current.projects.find(item => item.project_id === mapping.project_id);
+            if (!local.refresh && result.stale && project && project.expected_head !== mapping.expected_head
+                && !await hasPendingMessages(mapping.session_id)) {
+              // Persist intent before map can revoke the previous session.
+              local.refresh = {...mapping, expected_head: project.expected_head};
+              await persist(config);
+              mapping = await refreshProject(config, current, mapping.session_id, local);
+              result = await bridge.sync(mailbox(mapping.session_id), {...config.pairing, ...mapping}, local.repository, config.ca);
+            }
+            if (mapping.session_id !== session || local.previous_session) {
+              for (const editor of vscode.window.visibleTextEditors || []) {
+                if ([session, local.previous_session].filter(id => id && id !== mapping.session_id)
+                    .some(id => editor.document.uri.fsPath === path.join(mailbox(id), 'TODO.md')))
+                  await vscode.window.showTextDocument(vscode.Uri.file(path.join(mailbox(mapping.session_id), 'TODO.md')),
+                    {viewColumn: editor.viewColumn, preserveFocus: true, preview: false});
+              }
+            }
             count++; if (result.stale) stale++;
-          } catch (error) { failed++; output.appendLine(mapping.title + ': ' + error.message); }
+          } catch (error) { failed++; output.appendLine((mapping?.title || local.refresh?.title || session) + ': ' + error.message); }
         }
         status.text = `${current.name}: ${count} projektů` + (stale ? ` · ${stale} zastaralých` : '') + (failed ? ` · ${failed} chyb` : '');
         warning = Boolean(stale || failed || !count);
@@ -85,6 +103,50 @@ async function activate(context) {
       output.appendLine(error.message);
       if (!quiet) vscode.window.showErrorMessage(error.message);
     } finally { busy = false; }
+  }
+  async function hasPendingMessages(session) {
+    const root = mailbox(session);
+    for (const name of await fs.readdir(path.join(root, 'inbox'))) {
+      if (!/^[0-9a-f-]{36}\.json$/.test(name)) continue;
+      try {
+        const receipt = JSON.parse(await bridge.read(path.join(root, 'receipts', name)));
+        if (receipt.message_id + '.json' !== name || !['received', 'stale'].includes(receipt.status)) return true;
+      }
+      catch (error) { if (error.code === 'ENOENT') return true; throw error; }
+    }
+    return false;
+  }
+  async function refreshProject(config, current, session, local) {
+    const intent = local.refresh;
+    await bridge.repository(local.repository, intent.repository);
+    const active = current.mappings.find(item => item.project_id === intent.project_id);
+    let next;
+    if (active?.session_id === session) {
+      const project = current.projects.find(item => item.project_id === intent.project_id);
+      if (!project) throw new Error('Projekt již není dostupný.');
+      // No server write has happened yet; follow a newer HEAD after a restart.
+      intent.expected_head = project.expected_head;
+      await persist(config);
+      next = await bridge.connectionRequest(config.pairing, {action: 'map', mapping: {
+        connection_id: config.pairing.connection_id, project_id: intent.project_id, enabled: true,
+        expected_head: intent.expected_head, expected_mapping: session, repository: intent.repository,
+        editor_workspace: intent.editor_workspace, instructions: intent.instructions}}, config.ca);
+    } else {
+      // Recover only the exact result of our persisted intent, never a changed target.
+      if (!active || !['project_id', 'expected_head', 'repository', 'editor_workspace', 'instructions']
+          .every(key => active[key] === intent[key])) throw new Error('Přiřazení se změnilo během obnovy zadání.');
+      next = active;
+    }
+    const bound = await bridge.connectionRequest(config.pairing, {action: 'bind', session_id: next.session_id,
+      repository: intent.repository, editor_workspace: intent.editor_workspace}, config.ca);
+    const mapping = {...intent, ...bound, bound: true};
+    const restored = {repository: local.repository, editor_workspace: local.editor_workspace, previous_session: session};
+    // Publish the new local mapping only after bind; a failed store retains intent.
+    const updated = {...config, mappings: {...config.mappings, [bound.session_id]: restored}};
+    delete updated.mappings[session];
+    await persist(updated);
+    config.mappings = updated.mappings;
+    return mapping;
   }
   function command(name, action) {
     context.subscriptions.push(vscode.commands.registerCommand('workspaceBridge.' + name,

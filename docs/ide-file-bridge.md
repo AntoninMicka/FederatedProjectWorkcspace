@@ -80,8 +80,14 @@ synchronizaci. Výběr projektů a cíle spravují uvedené dva příkazy. Otev�
 TODO a odeslání zprávy nabídne při více přiřazeních výběr konkrétního projektu.
 Ruční synchronizace od verze 0.2.3 hlásí počet synchronizovaných projektů,
 zastaralých zadání a chyb. Zastaralé zadání, chyba části projektů i nulový
-počet přiřazení vyvolají varování. Synchronizace sama připnutou revizi
-neobnovuje; aktuální revizi potvrďte přes **Workspace: Nastavení projektů**.
+počet přiřazení vyvolají varování. Od verze **0.2.4** synchronizace také
+automaticky obnovuje zadání již přiřazených schema-v2 projektů. Ponechá
+potvrzený repozitář, lokální složku či `.code-workspace` a instrukce; nový
+projekt ani změnu cíle sama nepotvrzuje. Auto Sync změnu načte při nejbližším
+úspěšném cyklu (obvykle do 10 sekund), ruční synchronizace provede totéž.
+Nejprve doručí čekající zprávy pod původní revizí. Má-li fronta více než
+20 zpráv, další cykly ji postupně vyprázdní a pak obnoví zadání.
+Viditelné TODO původní relace se otevře nad novým exportem.
 Rozšíření v jednom profilu používá jedno aktivní připojení Workspace; přepnutí
 na nové připojení odstraní starý aktivní credential, soubory ponechá.
 
@@ -129,8 +135,18 @@ přiřazená mapování; chyba jednoho projektu nezastaví ostatní. Ruční př
 `received` v receipts potvrzuje trvalé přijetí, nikoli splnění úkolu. Zprávy
 otevřete tlačítkem **Zprávy** u projektu v tabulce. Člověk posoudí důkazy
 a případně upraví autoritativní TODO existujícím editorem Workspace.
-Změna projektového HEAD označí relaci jako stale. Uložte nové přiřazení
-nad aktuální revizí a potvrďte je v IDE; staré zprávy se nepřenesou automaticky.
+Změna projektového HEAD označí relaci jako stale. Rozšíření 0.2.4 vytvoří
+novou připnutou relaci pro stejné přiřazení; původní snapshot ani zprávy
+nepřepisuje a nepřenáší do nové revize. Rozpracovaná obnova je uložená v
+SecretStorage, takže restart dokončí také mapování či bind se ztracenou
+odpovědí. Při odvolání přístupu nebo souběžné změně cíle obnova selže;
+ruční kontrola patří do **Workspace: Nastavení projektů**.
+Schema-v1 a starší rozšíření nadále vyžadují ruční obnovení přiřazení.
+Zprávy zapsané do staré schránky až po přepnutí zůstávají v historické
+schránce pro ruční posouzení. Nové zprávy zapisujte do nové relace.
+Obnova souborů sama nepředává změnu do již běžící konverzace coding agenta;
+agent musí číst aktuální export. Spouštění a řízené předání agentům je
+samostatný navazující kontrakt DEV-02/DEV-04.
 
 Vypnutí propagace odvolá jen dané mapování. **Odvolat připojení** zablokuje
 celý editor včetně všech jeho mapování. **Workspace: Odpojit lokální bridge**

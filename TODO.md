@@ -616,6 +616,40 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   syntaxe a diffu prošla. Konflikty jsou vyřešené a připravené v indexu;
   merge commit nevytváří agent. Celá finální brána DEV-01 ani fyzický restart /
   IDE akceptace tím nejsou nahrazené a nadále zbývají.
+- [x] [completed] **DEV-01-F-IDE-02 — automatická obnova změněného zadání
+  (PoC validated, 30. 10. 2026).** Původ: uživatel požaduje automatický
+  přenos změny textu zadání místo hlášky „zastaralé“ a ručního nastavení.
+  Rozsah: nezbytná oprava otevřené IDE akceptace DEV-01-F-IDE-01, žádná
+  obecná orchestrace agenta. Rozšíření 0.2.4 po doručení čekajících zpráv
+  automaticky obnoví již potvrzené schema-v2 přiřazení nad aktuálním HEAD,
+  zachová repozitář, editor workspace a instrukce a otevře nový export,
+  pokud bylo viditelné původní TODO. Nová immutable relace používá vlastní
+  schránku; staré zprávy a receipts se nepřepisují ani nerevidují.
+  Persistovaný intent v SecretStorage obnoví map/bind i po ztrátě odpovědi
+  či restartu; odvolání nebo změněný cíl se nepřepisují. Hranice a recovery:
+  [ADR 0060](docs/adr/0060-local-file-ide-bridge.md#doplnění-30-10-2026--automatická-obnova-zadání-dev-01-f-ide-02).
+  Reuse/adapt: existující katalog, map CAS, bind a privátní mailbox;
+  nový endpoint, databáze, writer ani externí kód nejsou potřeba.
+  Dokončení: ověřit automatický refresh, zachování cíle a historie,
+  čekající frontu, recovery map/bind/SecretStorage a odmítnutí změny cíle.
+  Ověření finálního kódu: `python3 -m unittest tests.test_ide_bridge -v`
+  — 17/17 OK (14,022 s), včetně vnořených 6/6 Node testů a nového
+  integračního testu s reálným HTTP backendem, persistovaným intentem,
+  ztracenou odpovědí map a přerušením prvního exportu nové relace.
+  `node --check` pro rozšíření a nový integrační helper i
+  `git diff --check` prošly. Obecný VSIX bez pairing.json
+  `/tmp/workspace-bridge-update-0.2.4.vsix` byl úspěšně nainstalován;
+  `codium --list-extensions --show-versions` potvrdilo
+  `federated-workspace.workspace-file-bridge@0.2.4`.
+  Běžící okno vyžaduje `Developer: Reload Window`; načtení aktuálního
+  skutečného projektu tímto oknem zatím nebylo fyzicky ověřeno.
+  Celá závěrečná testovací brána DEV-01 nebyla v tomto kroku spuštěna;
+  dávka se neuzavírá a doporučení PR se nevydává.
+  Fyzická aktivace v uživatelově běžícím okně IDE zůstává oddělená od
+  izolované PoC validace a od celkové DEV-01-F-IDE-01 akceptace.
+  Schema-v1 zůstává ruční. Agent čtoucí starou cestu ani jeho běžící
+  konverzace se tím automaticky nepřesměruje; agent handoff patří DEV-02/04.
+  Pozdě zapsané zprávy ve staré schránce zůstávají pro ruční posouzení.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.
