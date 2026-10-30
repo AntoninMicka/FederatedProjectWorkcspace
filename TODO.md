@@ -453,7 +453,12 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   `/tmp/dev-01-source-rebuild-20261030-v7-m5-repair` převzal 184 extrakcí,
   znovu odešle pouze M5 s předchozí extrakcí a findings a eviduje explicitní
   odmítnutí XREF-01 `misplaced`; původní run ani raw evidence se nemění.
-  Cílená migrační sada: 48/48 prošlo.
+  První guided odpověď porušila extraction schema; druhý opravný pokus již
+  prošel strukturou entit, ale v obou ambiguity obrátil rozsah řádků. Validátor
+  nyní hlásí index a konkrétní vadný rozsah a při resume znovu odvodí přesnou
+  chybu z uchované raw odpovědi, takže poslední bounded repair dostane
+  použitelnou zpětnou vazbu bez změny katalogu nebo evidence. Cílený modul
+  `tests.test_roadmap_rebuild`: 20/20 prošlo; `git diff --check` prošel.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

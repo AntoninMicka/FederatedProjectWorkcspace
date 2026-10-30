@@ -283,12 +283,19 @@ def validate_extraction(raw, block):
         require(entity['parent_ref'] != 'entity:' + entity['entity_key']
                 and 'entity:' + entity['entity_key'] not in entity['dependency_refs'],
                 'Extracted entity cannot reference itself')
-    for item in value['ambiguities']:
-        require(isinstance(item, dict) and set(item) == {'line_start', 'line_end', 'reason'}
-                and type(item['line_start']) is int and type(item['line_end']) is int
-                and block['line_start'] <= item['line_start'] <= item['line_end'] <= block['line_end']
-                and isinstance(item['reason'], str) and bool(item['reason'].strip()),
-                'Invalid extraction ambiguity')
+    for index, item in enumerate(value['ambiguities'], 1):
+        require(isinstance(item, dict),
+                f'Invalid extraction ambiguity {index}: expected an object')
+        require(set(item) == {'line_start', 'line_end', 'reason'},
+                f'Invalid extraction ambiguity {index}: fields differ')
+        require(type(item['line_start']) is int and type(item['line_end']) is int,
+                f'Invalid extraction ambiguity {index}: line range must contain integers')
+        require(block['line_start'] <= item['line_start'] <= item['line_end'] <= block['line_end'],
+                f'Invalid extraction ambiguity {index}: line range '
+                f"{item['line_start']}-{item['line_end']} is outside or reversed; "
+                f"use an ordered range within {block['line_start']}-{block['line_end']}")
+        require(isinstance(item['reason'], str) and bool(item['reason'].strip()),
+                f'Invalid extraction ambiguity {index}: reason must be non-empty text')
     return value
 
 
@@ -740,12 +747,22 @@ class RoadmapRebuild:
                                    if attempt == 1 and guidance else
                                    EXTRACTION_INSTRUCTION if attempt == 1
                                    else EXTRACTION_REPAIR_INSTRUCTION)
-                    request = ({'source_block': focused, **guidance}
-                               if attempt == 1 and guidance else focused) if attempt == 1 else dict(
-                        source_block=focused, previous_response=(self.root/'raw'/(
-                            'extract-' + block['block_id'] + f'.attempt-{attempt - 1}.json')).read_text(
-                                encoding='utf-8'),
-                        validation_error=json.loads(prior[-1].read_text(encoding='utf-8'))['error'])
+                    if attempt == 1:
+                        request = ({'source_block': focused, **guidance}
+                                   if guidance else focused)
+                    else:
+                        previous_response = (self.root/'raw'/(
+                            'extract-' + block['block_id']
+                            + f'.attempt-{attempt - 1}.json')).read_text(encoding='utf-8')
+                        validation_error = json.loads(
+                            prior[-1].read_text(encoding='utf-8'))['error']
+                        try:
+                            validate_extraction(previous_response, block)
+                        except Exception as exc:
+                            validation_error = str(exc)
+                        request = dict(source_block=focused,
+                                       previous_response=previous_response,
+                                       validation_error=validation_error)
                     try:
                         notify(event='dispatch', phase='extract', block=block_index,
                                blocks=len(catalog['blocks']), attempt=attempt)

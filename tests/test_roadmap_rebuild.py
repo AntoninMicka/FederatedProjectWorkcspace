@@ -241,6 +241,17 @@ class RoadmapRebuildTests(unittest.TestCase):
         validated = validate_extraction(json.dumps(value), block)
         self.assertEqual([None, None], [item['parent_ref'] for item in validated['entities']])
 
+    def test_reversed_ambiguity_range_reports_actionable_validation_error(self):
+        block = {'block_id': 'block-1', 'line_start': 10, 'line_end': 20,
+                 'allowed_source_ids': []}
+        value = {'schema': 'fpw-roadmap-source-extraction-v2', 'block_id': 'block-1',
+                 'entities': [], 'ambiguities': [
+                     {'line_start': 14, 'line_end': 12, 'reason': 'Nejisté pořadí.'}],
+                 'summary': 'Kontext.'}
+        with self.assertRaisesRegex(
+                ValueError, r'ambiguity 1: line range 14-12 is outside or reversed'):
+            validate_extraction(json.dumps(value), block)
+
     def test_nonformal_maturity_becomes_reviewable_source_ambiguity(self):
         block = {'block_id': 'block-1', 'source': 'WORK_LOG.md',
                  'line_start': 10, 'line_end': 20, 'allowed_source_ids': []}
