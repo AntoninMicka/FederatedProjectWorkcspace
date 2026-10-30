@@ -370,9 +370,21 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   procenta, elapsed a průběžnou ETA. Fyzický druhý blok ověřil 2/370 (0,5 %)
   bez opravy; trval přibližně 70 sekund a první hrubý odhad celého zbytku
   byl 7 h 10 min, při dalších blocích se bude zpřesňovat.
-  Cílená migrační sada (`roadmap_rebuild`, `roadmap_migration`,
-  `roadmap_mapping`, `roadmap_importer`): 35/35 prošlo. Celý v5 extraction a
-  audit modelem `qwen3-coder:latest` ještě zbývá.
+  Celý v5 extraction skončil 94/185 validními bloky a 91 terminálními chybami;
+  audit se správně nespustil bez úplného kandidáta. Diagnostika 241 opravných
+  volání odhalila tři chyby kontraktu utility: 55 obsahově správných
+  neexekučních záznamů odmítla kvůli rodiči, 7 explicitních skupin více ID
+  odmítla místo předání k review a všech 16 odpovědí s odlišnými poli pouze
+  zopakovalo pomocné `validation_error`, protože opravný prompt neopakoval
+  cílové schéma. Opravený kontrakt dovoluje kontextový `parent_ref`, skupině
+  source ID přidělí `MIG-*` a blokátor `combined-source-ids`, používá samostatný
+  úplný repair prompt pro extraction/audit a vrací podrobnější validační chyby.
+  Zbývající skutečné odchylky (zejména citace řádků mimo blok a neplatné refs)
+  zůstávají fail-closed. Cílená migrační sada (`roadmap_rebuild`,
+  `roadmap_migration`, `roadmap_mapping`, `roadmap_importer`): 37/37 prošlo.
+  Čistý v6 nad stejnými připnutými revizemi je připraven v
+  `/tmp/dev-01-source-rebuild-20261030-v6`: 185 bloků / 370 logických kroků,
+  před spuštěním extraction a auditu modelem `qwen3-coder:latest`.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

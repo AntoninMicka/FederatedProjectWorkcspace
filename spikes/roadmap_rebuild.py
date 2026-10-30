@@ -42,15 +42,18 @@ EXTRACTION_INSTRUCTION = SOURCE_POLICY + '''
 Extract the supplied complete logical source block without using any existing imported target.
 Return exactly one JSON object:
 {"schema":"fpw-roadmap-source-extraction-v2","block_id":"exact block ID","entities":[{"entity_key":"e1","kind":"milestone|batch|task|checklist|history|description","source_ids":["exact allowed source ID"],"title":"text","status":"planned|in-progress|completed|blocked|unknown","maturity":"designed|implemented|poc-validated|production-ready|unknown","parent_ref":"entity:e1|source:EXACT-ID|null","dependency_refs":["entity:e1|source:EXACT-ID"],"line_start":1,"line_end":1,"summary":"Czech meaning preserved from source"}],"ambiguities":[{"line_start":1,"line_end":1,"reason":"Czech explanation"}],"summary":"Czech block summary"}.
-entity_key values are unique local references e1, e2, ... inside this response. Use entity:KEY to express hierarchy between anonymous entities. Use source:ID only for an ID copied exactly from allowed_source_ids. source_ids is empty when there is no exact allowed ID; never put titles, grouped A/B ranges, prose, or block UUIDs into source_ids. An executable entity may have at most one source ID; split grouped source labels into separate entities only when each exact ID is in allowed_source_ids. Status and maturity are independent; designed is maturity, not status. Use checklist only for an actual checkbox acceptance item; copyright, license, headings and introductory prose are descriptions. Line numbers are absolute original-document numbers from block.line_start through block.line_end, not block-relative numbers. Do not invent completion, implementation evidence, dependencies, or IDs. Preserve descriptions and history as non-executable entities. Return JSON only.'''
-
-REPAIR_INSTRUCTION = '''Repair the previous JSON response to the exact requested schema. Use the unchanged source block, allowed_source_ids and validation_error. Do not add facts, lines, IDs, parents, dependencies, completion, or maturity merely to satisfy validation. Drop or mark ambiguous anything unsupported. Return only the complete corrected JSON object.'''
+entity_key values are unique local references e1, e2, ... inside this response. Use entity:KEY to express hierarchy between anonymous entities. Use source:ID only for an ID copied exactly from allowed_source_ids. source_ids is empty when there is no exact allowed ID; never put titles, grouped A/B ranges, prose, or block UUIDs into source_ids. When one source entity explicitly groups multiple exact allowed IDs, keep those IDs together; the candidate builder will assign a migration ID and require human review. Status and maturity are independent; designed is maturity, not status. Use checklist only for an actual checkbox acceptance item; copyright, license, headings and introductory prose are descriptions. A non-executable entity may use parent_ref to preserve where its context belongs, but it cannot define dependencies. Line numbers are absolute original-document numbers from block.line_start through block.line_end, not block-relative numbers. Do not invent completion, implementation evidence, dependencies, or IDs. Preserve descriptions and history as non-executable entities. Return JSON only.'''
 
 AUDIT_INSTRUCTION = SOURCE_POLICY + '''
 Audit whether the candidate records faithfully represent the supplied original source block. Source evidence has priority; do not merely judge whether the candidate sounds reasonable.
 Return exactly one JSON object:
 {"schema":"fpw-roadmap-source-audit-v1","block_id":"exact block ID","verdict":"correct|equivalent|misplaced|distorted|missing|duplicated|unsupported-target|ambiguous","scores":{"coverage":0,"hierarchy":0,"status":0,"provenance":0,"dependencies":0},"findings":[{"line_start":1,"line_end":1,"candidate_id":"ID or null","kind":"missing|misplaced|distorted|duplicated|unsupported-target|ambiguous","reason":"Czech evidence-based explanation"}],"summary":"Czech audit summary"}.
 Every score is an integer 0..100 and must be justified by the findings and absolute original-document line numbers from source_block.line_start through source_block.line_end. A different representation can be equivalent, but missing or changed meaning must not be excused. Return JSON only.'''
+
+REPAIR_POLICY = '''
+The request contains source_block, previous_response and validation_error. Repair the previous response using the unchanged source evidence. Do not copy validation_error or request wrapper fields into the response. Do not add facts, lines, IDs, parents, dependencies, completion, or maturity merely to satisfy validation. Drop or mark ambiguous anything unsupported. Return only the complete corrected JSON object in the exact schema above.'''
+EXTRACTION_REPAIR_INSTRUCTION = EXTRACTION_INSTRUCTION + REPAIR_POLICY
+AUDIT_REPAIR_INSTRUCTION = AUDIT_INSTRUCTION + REPAIR_POLICY
 
 
 def _now():
@@ -198,20 +201,22 @@ def validate_extraction(raw, block):
         require(isinstance(entity['entity_key'], str) and LOCAL_KEY.fullmatch(entity['entity_key'])
                 and entity['entity_key'] not in keys, 'Invalid or duplicate local entity key')
         keys.add(entity['entity_key'])
-        require(entity['kind'] in KINDS and entity['status'] in STATUSES
-                and entity['maturity'] in MATURITIES
-                and isinstance(entity['title'], str) and bool(entity['title'].strip())
-                and isinstance(entity['summary'], str) and isinstance(entity['source_ids'], list)
-                and len(entity['source_ids']) == len(set(entity['source_ids']))
-                and set(entity['source_ids']) <= set(block['allowed_source_ids'])
-                and isinstance(entity['dependency_refs'], list),
-                'Invalid extracted entity')
-        if entity['kind'] in {'milestone', 'batch', 'task'}:
-            require(len(entity['source_ids']) <= 1,
-                    'Executable entity cannot combine multiple source IDs')
-        else:
-            require(entity['parent_ref'] is None and not entity['dependency_refs'],
-                    'Non-executable entity cannot define graph relationships')
+        require(entity['kind'] in KINDS, 'Invalid extracted entity kind')
+        require(entity['status'] in STATUSES, 'Invalid extracted entity status')
+        require(entity['maturity'] in MATURITIES, 'Invalid extracted entity maturity')
+        require(isinstance(entity['title'], str) and bool(entity['title'].strip())
+                and isinstance(entity['summary'], str), 'Invalid extracted entity text')
+        require(isinstance(entity['source_ids'], list)
+                and all(isinstance(item, str) for item in entity['source_ids'])
+                and len(entity['source_ids']) == len(set(entity['source_ids'])),
+                'Invalid extracted source ID list')
+        require(set(entity['source_ids']) <= set(block['allowed_source_ids']),
+                'Extracted source ID is not in allowed_source_ids')
+        require(isinstance(entity['dependency_refs'], list),
+                'Invalid extracted dependency list')
+        if entity['kind'] not in {'milestone', 'batch', 'task'}:
+            require(not entity['dependency_refs'],
+                    'Non-executable entity cannot define dependencies')
         require(type(entity['line_start']) is int and type(entity['line_end']) is int
                 and block['line_start'] <= entity['line_start'] <= entity['line_end'] <= block['line_end'],
                 'Extracted entity cites lines outside source block')
@@ -267,7 +272,7 @@ def build_candidate(catalog, extractions):
             if entity['kind'] not in {'milestone', 'batch', 'task'}:
                 local_ids[(block['block_id'], entity['entity_key'])] = None
                 continue
-            if entity['source_ids']:
+            if len(entity['source_ids']) == 1:
                 source_id = entity['source_ids'][0]
                 candidate_id = (source_id if STABLE_ID.fullmatch(source_id) else
                                 'MILESTONE-' + source_id.replace('.', '-'))
@@ -279,6 +284,12 @@ def build_candidate(catalog, extractions):
                 digest = hashlib.sha256((block['block_id'] + ':' + entity['entity_key']
                                          + ':' + str(index)).encode()).hexdigest()[:12].upper()
                 candidate_id = 'MIG-' + entity['kind'].upper() + '-' + digest
+                for source_id in entity['source_ids']:
+                    previous = source_ids.get(source_id)
+                    if previous is not None and previous != candidate_id:
+                        conflicts.append({'kind': 'source-id-mapping',
+                                          'source_id': source_id})
+                    source_ids[source_id] = candidate_id
             local_ids[(block['block_id'], entity['entity_key'])] = candidate_id
 
     def resolve(block_id, reference):
@@ -301,6 +312,10 @@ def build_candidate(catalog, extractions):
             if entity['kind'] not in {'milestone', 'batch', 'task'}:
                 support.append(row); continue
             node_id = row['candidate_id']
+            if len(entity['source_ids']) > 1:
+                conflicts.append({'kind': 'combined-source-ids', 'id': node_id,
+                                  'source_ids': entity['source_ids'],
+                                  'provenance': row['provenance']})
             if node_id in used:
                 existing = nodes[node_id]
                 comparable = ('kind', 'title', 'status', 'maturity', 'parent_id',
@@ -380,7 +395,8 @@ class RoadmapRebuild:
                                      target_id=binding.target_id, model=binding.model),
                         prompts=dict(extraction_sha256=hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
                                      audit_sha256=hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
-                                     repair_sha256=hashlib.sha256(REPAIR_INSTRUCTION.encode()).hexdigest()),
+                                     extraction_repair_sha256=hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
+                                     audit_repair_sha256=hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()),
                         state='prepared')
         root = _secure_directory(root, create=True)
         _atomic_json(root/'catalog.json', catalog); _atomic_json(root/'manifest.json', manifest)
@@ -425,7 +441,8 @@ class RoadmapRebuild:
         require(manifest['prompts'] == {
             'extraction_sha256': hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
             'audit_sha256': hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
-            'repair_sha256': hashlib.sha256(REPAIR_INSTRUCTION.encode()).hexdigest()},
+            'extraction_repair_sha256': hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
+            'audit_repair_sha256': hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()},
             'Rebuild prompt changed after prepare; create a new run')
         catalog = self._load('catalog.json')
         frozen = dict(catalog); catalog_sha256 = frozen.pop('catalog_sha256')
@@ -471,7 +488,8 @@ class RoadmapRebuild:
                 attempt = len(prior) + 1; value = None
                 while attempt <= MAX_ATTEMPTS and calls < limit:
                     raw = None
-                    instruction = EXTRACTION_INSTRUCTION if attempt == 1 else REPAIR_INSTRUCTION
+                    instruction = (EXTRACTION_INSTRUCTION if attempt == 1
+                                   else EXTRACTION_REPAIR_INSTRUCTION)
                     request = focused if attempt == 1 else dict(
                         source_block=focused, previous_response=(self.root/'raw'/(
                             'extract-' + block['block_id'] + f'.attempt-{attempt - 1}.json')).read_text(
@@ -529,7 +547,8 @@ class RoadmapRebuild:
                 attempt = len(prior) + 1; value = None
                 while attempt <= MAX_ATTEMPTS and calls < limit:
                     raw = None
-                    instruction = AUDIT_INSTRUCTION if attempt == 1 else REPAIR_INSTRUCTION
+                    instruction = (AUDIT_INSTRUCTION if attempt == 1
+                                   else AUDIT_REPAIR_INSTRUCTION)
                     request = focused if attempt == 1 else dict(
                         source_block=focused, previous_response=(self.root/'raw'/(
                             'audit-' + block['block_id'] + f'.attempt-{attempt - 1}.json')).read_text(

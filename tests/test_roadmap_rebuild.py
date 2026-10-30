@@ -9,7 +9,8 @@ from uuid import uuid4
 
 from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.roadmap_migration import HOST_SOURCES
-from spikes.roadmap_rebuild import RoadmapRebuild, source_catalog
+from spikes.roadmap_rebuild import (RoadmapRebuild, build_candidate, source_catalog,
+                                    validate_extraction)
 from spikes.storage import Git
 from scripts.roadmap_rebuild import progress_reporter
 
@@ -195,6 +196,44 @@ class RoadmapRebuildTests(unittest.TestCase):
         self.assertIn('2/20 (10.0 %)', output)
         self.assertIn('běží', output)
         self.assertIn('ETA', output)
+
+    def test_non_executable_context_can_belong_to_parent(self):
+        block = {'block_id': 'block-1', 'line_start': 10, 'line_end': 20,
+                 'allowed_source_ids': ['BATCH-01']}
+        value = {'schema': 'fpw-roadmap-source-extraction-v2', 'block_id': 'block-1',
+                 'entities': [
+                     dict(entity_key='e1', kind='batch', source_ids=['BATCH-01'],
+                          title='Dávka', status='completed', maturity='implemented',
+                          parent_ref=None, dependency_refs=[], line_start=10, line_end=11,
+                          summary='Dokončená dávka.'),
+                     dict(entity_key='e2', kind='history', source_ids=[], title='Ověření',
+                          status='unknown', maturity='unknown', parent_ref='entity:e1',
+                          dependency_refs=[], line_start=12, line_end=14,
+                          summary='Historický důkaz dávky.')],
+                 'ambiguities': [], 'summary': 'Dávka a její historie.'}
+        validated = validate_extraction(json.dumps(value), block)
+        self.assertEqual('entity:e1', validated['entities'][1]['parent_ref'])
+
+    def test_combined_source_ids_create_review_issue_instead_of_failure(self):
+        block = {'block_id': 'block-1', 'source': 'BACKLOG.md', 'line_start': 1,
+                 'line_end': 5, 'allowed_source_ids': ['ER-01', 'ER-03']}
+        value = {'schema': 'fpw-roadmap-source-extraction-v2', 'block_id': 'block-1',
+                 'entities': [dict(entity_key='e1', kind='batch',
+                     source_ids=['ER-01', 'ER-03'], title='Společná dávka', status='planned',
+                     maturity='designed', parent_ref=None, dependency_refs=[], line_start=1,
+                     line_end=3, summary='Zdroj výslovně spojuje oba požadavky.'),
+                     dict(entity_key='e2', kind='task', source_ids=[], title='Navazující úkol',
+                          status='planned', maturity='designed', parent_ref='source:ER-01',
+                          dependency_refs=[], line_start=4, line_end=5,
+                          summary='Úkol patří pod společnou dávku.')],
+                 'ambiguities': [], 'summary': 'Seskupený požadavek.'}
+        extraction = validate_extraction(json.dumps(value), block)
+        candidate = build_candidate({'blocks': [block]}, [extraction])
+        self.assertTrue(candidate['nodes'][0]['candidate_id'].startswith('MIG-BATCH-'))
+        self.assertEqual('combined-source-ids', candidate['issues'][0]['kind'])
+        nodes = {item['title']: item for item in candidate['nodes']}
+        self.assertEqual(nodes['Společná dávka']['candidate_id'],
+                         nodes['Navazující úkol']['parent_id'])
 
 
 if __name__ == '__main__':

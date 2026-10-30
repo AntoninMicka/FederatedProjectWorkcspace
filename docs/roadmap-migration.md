@@ -132,9 +132,15 @@ Každý modelový request používá stabilní run ID a existující
 `OllamaRuns` journal. Atomicky publikovaný výsledek bloku se při opakování
 nedispatchuje. Extraction schema v2 používá lokální `entity_key` a
 `parent_ref`, odděluje source ID, execution status a maturity a dovolí pouze
-ID z deterministického block allowlistu. Vadná JSON odpověď dostane nejvýše
-dva opravné průchody se stejným zdrojem, původní odpovědí a konkrétní
-validační chybou. Třetí neúspěch nebo nejasný transport se uloží jako
+ID z deterministického block allowlistu. Popis, checklist a historie smějí
+odkazovat na rodiče, pod kterého obsahově patří, ale nesmějí vytvářet
+dependency. Zdrojový celek, který výslovně sdružuje více platných ID, dostane
+nové deterministické `MIG-*` ID a blokátor `combined-source-ids` k lidskému
+rozhodnutí; kvůli této nejednoznačnosti se nezahodí celý blok. Vadná JSON
+odpověď dostane nejvýše dva opravné průchody se stejným zdrojem, původní
+odpovědí a konkrétní validační chybou. Opravná instrukce vždy znovu obsahuje
+celé schéma příslušné fáze a zakazuje přenést pomocné `validation_error` do
+výsledku. Třetí neúspěch nebo nejasný transport se uloží jako
 terminální `*.failed.json` pro daný run a ostatní bloky mohou pokračovat;
 nový model, prompt nebo oprava takového bloku vyžadují nový run adresář. Pád před
 atomickým rename nezveřejní částečný výsledek. Utility nemá apply ani
