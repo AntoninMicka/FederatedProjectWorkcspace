@@ -437,6 +437,17 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   `/tmp/dev-01-source-rebuild-20261030-v7-scoped` převzal 185 extrakcí a 166
   auditů s kanonicky shodným vstupem; zbývá jen 19 auditů dotčených novým
   scoped kandidátem. Cílená migrační sada: 48/48 prošlo.
+  Scoped audit je úplný: fidelity 99,57, coverage 99,84, hierarchy 99,59,
+  status 99,14, provenance 99,84 a dependencies 99,46; verdicts 172 `correct`,
+  11 `equivalent`, 1 `misplaced` a 1 `distorted`. Jediné `misplaced` XREF-01
+  odporuje přímo zdrojové formulaci, podle níž master roadmap drží strategický
+  požadavek a konkrétní budoucí dávku BACKLOG; jde proto o auditní návrh k
+  odmítnutí, nikoli automatickou změnu. `distorted` blok M5 je věcný: chybí
+  několik plánovaných trust/chat/backend/conflict požadavků a vyžaduje cílené
+  doplnění ze zdrojových řádků 1460–1501. Candidate zůstává `import_ready=false`
+  také kvůli 304 strukturálním blokátorům: 211 parent, 42 combined-source-ids,
+  42 source-ambiguity, 6 dependency a 3 reconciliation ambiguity. Žádný apply
+  před jejich cíleným reconciliation/review neproběhne.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
