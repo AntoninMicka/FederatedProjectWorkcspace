@@ -11,7 +11,7 @@ from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.roadmap_migration import HOST_SOURCES
 from spikes.roadmap_rebuild import (ROADMAP_LLM_TIMEOUT, RoadmapRebuild,
                                     build_candidate, render_candidate, source_catalog,
-                                    validate_extraction)
+                                    validate_audit, validate_extraction)
 from spikes.storage import Git
 from scripts.roadmap_rebuild import progress_reporter
 
@@ -299,6 +299,59 @@ class RoadmapRebuildTests(unittest.TestCase):
                                      'supporting_records': [], 'issues': []})
         self.assertIn('depends_on: <unresolved>', rendered)
         self.assertIn('[cycle] BATCH-01', rendered)
+
+    def test_positive_audit_findings_are_redundant_not_terminal(self):
+        block = {'block_id': 'block-1', 'line_start': 1, 'line_end': 5}
+        value = {'schema': 'fpw-roadmap-source-audit-v1', 'block_id': 'block-1',
+                 'verdict': 'correct',
+                 'scores': {key: 100 for key in ('coverage', 'hierarchy', 'status',
+                                                  'provenance', 'dependencies')},
+                 'findings': [{'line_start': 1, 'line_end': 5, 'candidate_id': 'B-01',
+                               'kind': 'correct', 'reason': 'Obsah odpovídá.'}],
+                 'summary': 'Kandidát odpovídá.'}
+        self.assertEqual([], validate_audit(json.dumps(value), block)['findings'])
+
+    def test_reconciliation_prefers_completed_history_and_preserves_variants(self):
+        blocks = [
+            {'block_id': 'backlog', 'source': 'BACKLOG.md', 'role': 'backlog',
+             'order': 0, 'line_start': 1, 'line_end': 2, 'allowed_source_ids': ['B-01']},
+            {'block_id': 'history', 'source': 'WORK_LOG.md', 'role': 'history',
+             'order': 0, 'line_start': 1, 'line_end': 2, 'allowed_source_ids': ['B-01']}]
+        def extraction(block_id, status, summary):
+            return {'schema': 'fpw-roadmap-source-extraction-v2', 'block_id': block_id,
+                    'entities': [dict(entity_key='e1', kind='batch', source_ids=['B-01'],
+                        title='Dávka', status=status, maturity='implemented', parent_ref=None,
+                        dependency_refs=[], line_start=1, line_end=2, summary=summary)],
+                    'ambiguities': [], 'summary': summary}
+        values = [validate_extraction(json.dumps(extraction('backlog', 'planned', 'Plán.')),
+                                      blocks[0]),
+                  validate_extraction(json.dumps(extraction('history', 'completed', 'Hotovo.')),
+                                      blocks[1])]
+        candidate = build_candidate({'blocks': blocks}, values)
+        node = candidate['nodes'][0]
+        self.assertEqual(('completed', 'Hotovo.'), (node['status'], node['summary']))
+        self.assertEqual(1, len(node['variants']))
+        self.assertNotIn('reconciliation-ambiguity',
+                         {item['kind'] for item in candidate['issues']})
+
+    def test_reconciliation_blocks_equal_authority_structural_disagreement(self):
+        blocks = [
+            {'block_id': key, 'source': 'WORK_LOG.md', 'role': 'history',
+             'order': index, 'line_start': 1, 'line_end': 1,
+             'allowed_source_ids': ['SAME-01']}
+            for index, key in enumerate(('first', 'second'))]
+        values = []
+        for block, kind in zip(blocks, ('batch', 'task')):
+            value = {'schema': 'fpw-roadmap-source-extraction-v2',
+                     'block_id': block['block_id'], 'entities': [dict(
+                         entity_key='e1', kind=kind, source_ids=['SAME-01'], title=kind,
+                         status='completed', maturity='implemented', parent_ref=None,
+                         dependency_refs=[], line_start=1, line_end=1, summary=kind)],
+                     'ambiguities': [], 'summary': kind}
+            values.append(validate_extraction(json.dumps(value), block))
+        candidate = build_candidate({'blocks': blocks}, values)
+        self.assertIn('reconciliation-ambiguity',
+                      {item['kind'] for item in candidate['issues']})
 
     def test_combined_source_ids_create_review_issue_instead_of_failure(self):
         block = {'block_id': 'block-1', 'source': 'BACKLOG.md', 'line_start': 1,

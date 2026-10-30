@@ -192,6 +192,22 @@ Stejně se zachová obsah entity, pokud model navrhne source ID mimo allowlist:
 ID se odstraní, přesný problém se zapíše jako `source-ambiguity` a candidate
 zůstane blokovaný k lidskému review namísto zahození celého zdrojového bloku.
 
+Globální reconciliation nesmí považovat každý sekvenční výskyt stejného ID za
+současnou konfliktní definici. Jednotlivé výskyty řadí podle doložené autority:
+dokončená evidence ve WORK_LOG → aktivní TODO → BACKLOG → strategické
+requirements → ostatní historický kontext; uvnitř stejné vrstvy zohlední stav
+a maturity. Zvolený uzel nese všechny `provenance_all` a obsahově odlišné
+`variants`. Blokátor `reconciliation-ambiguity` vznikne jen tehdy, když se
+strukturálně liší stejně autoritativní výskyty. Přesné samostatné source ID má
+při mapování přednost před výskytem v kombinované skupině; konflikt zůstává
+jen mezi více nejednoznačnými skupinami bez kanonického samostatného ID.
+Audit zdrojového bloku dostane uzel i tehdy, když je daný blok pouze v jeho
+`provenance_all`, takže historická varianta nezmizí po volbě kanonického stavu.
+
+Pozitivní auditní findings `correct`/`equivalent` jsou redundantní se souhrnným
+verdict a deterministicky se odstraní; findings nadále nesou pouze problémy.
+Raw odpověď zůstává zachovaná. Prompt tuto podmínku uvádí explicitně.
+
 ## 1. Připnutá inventura a náhled bez zápisu
 
 Výchozí checkout: `develop` po PR #112, commit

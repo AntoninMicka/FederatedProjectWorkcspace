@@ -412,6 +412,20 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   `null`, ale Markdown renderer je před auditem zkoušel přímo spojit jako
   řetězce. Renderer nyní zobrazuje `<unresolved>` a bezpečně označí případný
   cyklus; autoritativní candidate JSON ani modelové výsledky se nemění.
+  Audit dokončil 182/185 validních bloků; tři terminální chyby byly pouze
+  redundantní pozitivní findings druhu `correct` při celkovém verdictu
+  `correct` a skóre 100. Z validních auditů bylo 170 `correct`, 8 `equivalent`,
+  3 `distorted` a 1 `missing`; skutečné výhrady se soustředily do čtyř bloků.
+  Původní globální sloučení mělo 793 blokátorů, protože každý odlišný
+  sekvenční výskyt stejného ID považovalo za konflikt. Autoritativní
+  reconciliation nyní zachovává 261 variant u 90 uzlů, preferuje dokončenou
+  historickou evidenci a vytváří jen jedinou skutečnou stejně autoritativní
+  `reconciliation-ambiguity` (`M0-06`). Deterministický náhled nad stejnými 185
+  extrakcemi klesl na 296 blokátorů: 205 neplatných/neurčených rodičů, 42
+  kombinovaných ID, 42 zdrojových nejasností, 6 dependency a 1 reconciliation
+  konflikt. Nový audit uvidí i varianty přes `provenance_all`. Odvozený run
+  `/tmp/dev-01-source-rebuild-20261030-v7-reconciled` převzal všech 185
+  extrakcí a čeká pouze na nové audity; cílená migrační sada: 46/46 prošlo.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

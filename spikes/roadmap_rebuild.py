@@ -51,7 +51,7 @@ AUDIT_INSTRUCTION = SOURCE_POLICY + '''
 Audit whether the candidate records faithfully represent the supplied original source block. Source evidence has priority; do not merely judge whether the candidate sounds reasonable.
 Return exactly one JSON object:
 {"schema":"fpw-roadmap-source-audit-v1","block_id":"exact block ID","verdict":"correct|equivalent|misplaced|distorted|missing|duplicated|unsupported-target|ambiguous","scores":{"coverage":0,"hierarchy":0,"status":0,"provenance":0,"dependencies":0},"findings":[{"line_start":1,"line_end":1,"candidate_id":"ID or null","kind":"missing|misplaced|distorted|duplicated|unsupported-target|ambiguous","reason":"Czech evidence-based explanation"}],"summary":"Czech audit summary"}.
-Every score is an integer 0..100 and must be justified by the findings and absolute original-document line numbers from source_block.line_start through source_block.line_end. A different representation can be equivalent, but missing or changed meaning must not be excused. Return JSON only.'''
+Every score is an integer 0..100 and must be justified by the findings and absolute original-document line numbers from source_block.line_start through source_block.line_end. Findings contain problems only: never emit a finding with kind correct or equivalent; use an empty findings list when no problem exists. A different representation can be equivalent, but missing or changed meaning must not be excused. Return JSON only.'''
 
 REPAIR_POLICY = '''
 The request contains source_block, previous_response and validation_error. Repair the previous response using the unchanged source evidence. Do not copy validation_error or request wrapper fields into the response. Do not add facts, lines, IDs, parents, dependencies, completion, or maturity merely to satisfy validation. Drop or mark ambiguous anything unsupported. Return only the complete corrected JSON object in the exact schema above.'''
@@ -299,6 +299,9 @@ def validate_audit(raw, block):
         'coverage', 'hierarchy', 'status', 'provenance', 'dependencies'}
         and all(type(score) is int and 0 <= score <= 100 for score in value['scores'].values()),
         'Invalid audit scores')
+    value['findings'] = [item for item in value['findings']
+                         if not (isinstance(item, dict)
+                                 and item.get('kind') in {'correct', 'equivalent'})]
     for item in value['findings']:
         require(isinstance(item, dict) and set(item) == {'line_start', 'line_end',
                 'candidate_id', 'kind', 'reason'} and item['kind'] in VERDICTS - {'correct', 'equivalent'}
@@ -311,9 +314,9 @@ def validate_audit(raw, block):
 
 
 def build_candidate(catalog, extractions):
-    nodes, support, conflicts, used = {}, [], [], set()
+    support, conflicts = [], []
     block_by_id = {item['block_id']: item for item in catalog['blocks']}
-    local_ids, source_ids = {}, {}
+    local_ids, source_ids, grouped_mappings = {}, {}, []
     for extraction in extractions:
         block = block_by_id[extraction['block_id']]
         for index, entity in enumerate(extraction['entities']):
@@ -324,21 +327,21 @@ def build_candidate(catalog, extractions):
                 source_id = entity['source_ids'][0]
                 candidate_id = (source_id if STABLE_ID.fullmatch(source_id) else
                                 'MILESTONE-' + source_id.replace('.', '-'))
-                previous = source_ids.get(source_id)
-                if previous is not None and previous != candidate_id:
-                    conflicts.append({'kind': 'source-id-mapping', 'source_id': source_id})
                 source_ids[source_id] = candidate_id
             else:
                 digest = hashlib.sha256((block['block_id'] + ':' + entity['entity_key']
                                          + ':' + str(index)).encode()).hexdigest()[:12].upper()
                 candidate_id = 'MIG-' + entity['kind'].upper() + '-' + digest
-                for source_id in entity['source_ids']:
-                    previous = source_ids.get(source_id)
-                    if previous is not None and previous != candidate_id:
-                        conflicts.append({'kind': 'source-id-mapping',
-                                          'source_id': source_id})
-                    source_ids[source_id] = candidate_id
+                grouped_mappings.append((candidate_id, entity['source_ids']))
             local_ids[(block['block_id'], entity['entity_key'])] = candidate_id
+    for candidate_id, grouped_ids in grouped_mappings:
+        for source_id in grouped_ids:
+            previous = source_ids.get(source_id)
+            if previous is None:
+                source_ids[source_id] = candidate_id
+            elif previous.startswith('MIG-') and previous != candidate_id:
+                conflicts.append({'kind': 'source-id-mapping', 'source_id': source_id,
+                                  'candidates': sorted({previous, candidate_id})})
 
     def resolve(block_id, reference):
         if reference is None:
@@ -346,6 +349,7 @@ def build_candidate(catalog, extractions):
         kind, value = reference.split(':', 1)
         return local_ids.get((block_id, value)) if kind == 'entity' else source_ids.get(value)
 
+    occurrences = {}
     for extraction in extractions:
         block = block_by_id[extraction['block_id']]
         for entity in extraction['entities']:
@@ -356,6 +360,8 @@ def build_candidate(catalog, extractions):
             row['depends_on'] = [resolve(block['block_id'], item)
                                  for item in entity['dependency_refs']]
             row['provenance'] = dict(block_id=block['block_id'], source=block['source'],
+                                     role=block.get('role', 'unknown'),
+                                     order=block.get('order', 0),
                                      line_start=entity['line_start'], line_end=entity['line_end'])
             if entity['kind'] not in {'milestone', 'batch', 'task'}:
                 support.append(row); continue
@@ -364,19 +370,55 @@ def build_candidate(catalog, extractions):
                 conflicts.append({'kind': 'combined-source-ids', 'id': node_id,
                                   'source_ids': entity['source_ids'],
                                   'provenance': row['provenance']})
-            if node_id in used:
-                existing = nodes[node_id]
-                comparable = ('kind', 'title', 'status', 'maturity', 'parent_id',
-                              'depends_on', 'summary')
-                if all(existing[key] == row[key] for key in comparable):
-                    existing['provenance_all'].append(row['provenance'])
-                else:
-                    conflicts.append({'kind': 'conflicting-id', 'id': node_id,
-                                      'first': existing['provenance'],
-                                      'other': row['provenance']})
-                continue
-            row['provenance_all'] = [row['provenance']]
-            used.add(node_id); nodes[node_id] = row
+            occurrences.setdefault(node_id, []).append(row)
+
+    status_rank = {'unknown': 0, 'planned': 1, 'blocked': 2,
+                   'in-progress': 3, 'completed': 4}
+    maturity_rank = {'unknown': 0, 'designed': 1, 'implemented': 2,
+                     'poc-validated': 3, 'production-ready': 4}
+
+    def authority(row):
+        role = row['provenance']['role']
+        role_rank = (5 if role == 'history' and row['status'] == 'completed' else
+                     4 if role == 'active' else 3 if role == 'backlog' else
+                     2 if role == 'requirements' else 1)
+        return role_rank, status_rank[row['status']], maturity_rank[row['maturity']]
+
+    nodes = {}
+    structural = ('kind', 'status', 'maturity', 'parent_id', 'depends_on')
+    variant_fields = ('kind', 'title', 'status', 'maturity', 'parent_id',
+                      'depends_on', 'summary')
+    for node_id, rows in occurrences.items():
+        best = max(authority(row) for row in rows)
+        strongest = [row for row in rows if authority(row) == best]
+        signatures = {canonical({key: row[key] for key in structural})
+                      for row in strongest}
+        strongest.sort(key=lambda row: (row['provenance']['source'],
+                                        row['provenance']['line_start']))
+        selected = dict(strongest[0])
+        selected['provenance_all'] = [row['provenance'] for row in rows]
+        selected['variants'] = [
+            {**{key: row[key] for key in variant_fields},
+             'provenance': row['provenance']}
+            for row in rows if any(row[key] != selected[key] for key in variant_fields)]
+        if len(signatures) > 1:
+            conflicts.append({'kind': 'reconciliation-ambiguity', 'id': node_id,
+                              'authority': list(best),
+                              'provenance': [row['provenance'] for row in strongest]})
+        nodes[node_id] = selected
+    normalizations = []
+    for node_id, node in nodes.items():
+        expected = {'batch': 'milestone', 'task': 'batch'}.get(node['kind'])
+        original = node['parent_id']; current = original; seen = {node_id}
+        while expected is not None and current in nodes \
+                and nodes[current]['kind'] != expected and current not in seen:
+            seen.add(current); current = nodes[current]['parent_id']
+        if expected is not None and current in nodes \
+                and nodes[current]['kind'] == expected and current != original:
+            node['source_parent_id'] = original; node['parent_id'] = current
+            normalizations.append({'kind': 'flatten-parent', 'id': node_id,
+                                   'source_parent_id': original, 'parent_id': current})
+
     issues = list(conflicts)
     for extraction in extractions:
         block = block_by_id[extraction['block_id']]
@@ -400,7 +442,7 @@ def build_candidate(catalog, extractions):
     ordered = sorted(nodes.values(), key=lambda item: (
         item['provenance']['source'], item['provenance']['line_start'], item['candidate_id']))
     candidate = dict(schema='fpw-roadmap-rebuild-candidate-v1', nodes=ordered,
-                     supporting_records=support, issues=issues,
+                     supporting_records=support, normalizations=normalizations, issues=issues,
                      ready=not issues and bool(ordered))
     candidate['candidate_sha256'] = hashlib.sha256(canonical(candidate)).hexdigest()
     return candidate
@@ -664,7 +706,9 @@ class RoadmapRebuild:
                 continue
             else:
                 records = [item for item in candidate['nodes'] + candidate['supporting_records']
-                           if item['provenance']['block_id'] == block['block_id']]
+                           if item['provenance']['block_id'] == block['block_id']
+                           or any(provenance['block_id'] == block['block_id']
+                                  for provenance in item.get('provenance_all', []))]
                 focused = {'source_block': _prompt_block(block),
                            'candidate_records': records}
                 prior = sorted((self.root/'results').glob(
