@@ -25,8 +25,9 @@ sloučen do `develop` jako `03d76ee111c1195fc23ea50bf0926b603a6ddbde`
 (GitHub potvrzuje merge 17:56:55 UTC / 18:56:55 CET). Všechna čtyři CI
 shard jobs, souhrnná kontrola `tests` a `licensing` prošly. Při požadovaném
 merge přes gh byl PR již sloučen; agent neprováděl druhý merge na GitHubu.
-Aktuální větev DEV-01 přebírá tento develop; konflikty pouze v TODO a reuse
-katalogu byly vyřešeny zachováním aktivní migrace a obou reuse evidencí.
+Aktuální větev DEV-01 převzala tento develop lokálním merge commitem
+`76fa08c`; konflikty pouze v TODO a reuse katalogu byly vyřešeny zachováním
+aktivní migrace a obou reuse evidencí. Migrační větev nebyla pushnuta.
 
 ## Původní rozsah a akceptace DEV-01
 
@@ -203,7 +204,7 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   import nové source revize: ruční změnu proti novému mappingu, explicitní
   rename/removal review a odmítnutí tichého přepsání. Aktuální one-shot
   balík žádné deletion akce neobsahuje, takže je nelze vydávat za ověřené.
-- [ ] [planned] **DEV-01-E — izolovaná zkouška a export (PoC validated).**
+- [ ] [in progress] **DEV-01-E — izolovaná zkouška a export (PoC validated).**
   Reálné připnuté zdroje a modulový vzorek, Markdown/strojový task export,
   konflikty, změny revizí, limity a injektované pády. Po poslední relevantní
   změně spustit celou unittest bránu.
@@ -555,6 +556,31 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   rebuild bundle a roadmap graph prošlo; log
   `/tmp/dev-01-bridge-merged-targeted-final.log`. Celá závěrečná brána DEV-01
   nad finálním kódem zbývá; nejde o akceptaci celé migrace.
+  Nativní `IdeBridge.snapshot` nyní skutečně exportoval oba importované
+  projekty nad receiptem připnutými HEAD: host 709 uzlů / 798 674 bajtů,
+  modul 19 uzlů / 20 947 bajtů. Oba exporty jsou pod limitem 1 MiB, mají
+  jedinečná ID a vznikly jako Markdown TODO + strojový snapshot JSON v
+  `/tmp/dev-01-ide-export-current-20261030` se souhrnem `summary.json`.
+  Nebyl přepsán aktivní IDE mapping ani jeho lokální konfigurace. Jde o
+  ověření skutečného backendového exportu, nikoli již o načtení nové revize
+  v uživatelově běžícím okně VSCodia.
+  Doplnění 30. 10. 2026 po hlášení „Workspace odmítl synchronizaci (503)“
+  z desktopového propojení: bridge 0.2.2 opakuje pouze explicitní
+  pre-dispatch `503 server busy` nejvýše třikrát s odstupem 250/500/1000 ms.
+  Reuse/adapt: stávající HTTP transport rozšíření a serializovaná application
+  lane; žádná nová fronta ani obcházení writer locku. Jiné HTTP chyby a
+  nejasné síťové selhání se neopakují. Recovery zůstává podle ADR 0060:
+  inbox/receipts a SQLite idempotence beze změny, odmítnutí nastává před
+  dispatch a retry znovu ověřuje podepsanou discovery adresu.
+  Ověření: 6/6 Node testů včetně zotavení po dvou 503, limitu čtyř pokusů,
+  nereplikování jiných 503/403 a existujících mailbox recovery scénářů;
+  17/17 cílených Python testů bridge a odmítnutí souběžného zápisu prošlo
+  mimo sandbox (`/tmp/dev-01-ide-busy-tests.log`). Balíček
+  `/tmp/workspace-bridge-update-0.2.2.vsix` byl úspěšně nainstalován příkazem
+  `codium --install-extension … --force`. Aktivace v již běžícím okně vyžaduje
+  reload; fyzické zotavení konkrétního spojení zatím neověřeno. Dlouhodobě
+  obsazený backend zůstává chybou, tato změna řeší přechodné odmítnutí.
+  Celá závěrečná brána DEV-01 nad finálním kódem nadále zbývá.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.

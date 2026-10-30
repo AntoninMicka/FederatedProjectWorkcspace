@@ -100,7 +100,7 @@ async function discover(pairing, root = path.join(os.homedir(), '.local', 'state
     throw new Error('Obnovení spojení vyžaduje lokální Workspace.');
   return validatePairing({...pairing, endpoint: value.endpoint});
 }
-async function httpRequest(pairing, route, body, ca) {
+async function httpRequest(pairing, route, body, ca, attempt = 0) {
   pairing = await discover(pairing);
   const url = new URL(route, pairing.endpoint);
   const data = JSON.stringify(body);
@@ -114,8 +114,20 @@ async function httpRequest(pairing, route, body, ca) {
       response.on('data', chunk => {size += chunk.length; if (size > 4 * 1024 * 1024) req.destroy(new Error('Příliš velká odpověď.')); else chunks.push(chunk);});
       response.on('error', reject);
       response.on('end', () => {try {
+        const text = Buffer.concat(chunks).toString('utf8');
+        // This response is emitted before dispatch: replay cannot repeat a write.
+        let busy = false;
+        if (response.statusCode === 503) {
+          try { busy = JSON.parse(text).error === 'server busy'; } catch (_) { /* other 503 */ }
+        }
+        if (busy && attempt < 3) {
+          setTimeout(() => httpRequest(pairing, route, body, ca, attempt + 1).then(resolve, reject),
+            250 * (2 ** attempt));
+          return;
+        }
+        if (busy) throw new Error('Workspace je zaneprázdněný. Synchronizaci zkuste znovu za chvíli (503).');
         if (response.statusCode !== 200) throw new Error(`Workspace odmítl synchronizaci (${response.statusCode}).`);
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        resolve(JSON.parse(text));
       } catch (error) { reject(error); }});
     });
     req.setTimeout(10000, () => req.destroy(new Error('Workspace neodpovídá.')));

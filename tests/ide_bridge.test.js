@@ -10,6 +10,35 @@ const {execFileSync} = require('node:child_process');
 const crypto = require('node:crypto');
 const bridge = require('../extensions/workspace-bridge/bridge');
 
+test('HTTP retries only pre-dispatch busy responses and bounds persistent overload', async t => {
+  const http = require('node:http');
+  let calls = 0, mode = 'recover';
+  const server = http.createServer((req, res) => {
+    req.resume();
+    calls++;
+    res.setHeader('Content-Type', 'application/json');
+    if (mode === 'recover' && calls > 2) return res.end('{"ok":true}');
+    res.statusCode = mode === 'forbidden' ? 403 : 503;
+    res.end(mode === 'other' ? '{"error":"unavailable"}' : '{"error":"server busy"}');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const pairing = {schema_version: 2, connection_id: crypto.randomUUID(), name: 'Test IDE',
+    token: 'a'.repeat(43), endpoint: `http://127.0.0.1:${server.address().port}`,
+    expires_at: Math.floor(Date.now()/1000) + 1000};
+  assert.deepEqual(await bridge.connectionRequest(pairing, {action: 'status'}), {ok: true});
+  assert.equal(calls, 3);
+  mode = 'busy'; calls = 0;
+  await assert.rejects(bridge.connectionRequest(pairing, {action: 'status'}), /zaneprázdněný/);
+  assert.equal(calls, 4);
+  for (const value of ['other', 'forbidden']) {
+    mode = value; calls = 0;
+    await assert.rejects(bridge.connectionRequest(pairing, {action: 'status'}),
+      value === 'other' ? /\(503\)/ : /\(403\)/);
+    assert.equal(calls, 1);
+  }
+});
+
 async function fixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'ide-bridge-'));
   t.after(() => fs.rm(base, {recursive: true, force: true}));

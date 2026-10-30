@@ -5,10 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # DEV-01 — plán migrace roadmapy do Workspace
 
-Stav: **designed**, 28. 10. 2026. Pracovní plán jediné feature DEV-01,
-nikoli druhá roadmapa produktu. Aktuální stav a úkoly drží [TODO](../TODO.md).
-Importér se zápisem a přepnutí autority zatím nejsou implementované.
-Read-only inventuru lze již spustit postupem níže; její výstup je návrh k review.
+Návrh: **designed**, 28. 10. 2026; implementační stav aktualizován
+30. 10. 2026. Pracovní plán jediné feature DEV-01, nikoli druhá roadmapa
+produktu. Aktuální stav a úkoly drží [TODO](../TODO.md). Nativní recoverable
+importér je implementovaný a potvrzený source-first bundle v4 je fyzicky
+importovaný do obou cílových projektů. Následující původní návrhové kroky
+zachovávají svůj kontext; nejsou tvrzením, že se mají znovu provádět.
+Předání autority, akceptace modulů, aktuální export v uživatelově IDE a
+scénáře následné změny zdroje zůstávají otevřené podle TODO.
 
 ## Výstup a hranice
 
