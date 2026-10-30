@@ -10,7 +10,7 @@ from uuid import uuid4
 from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.roadmap_migration import HOST_SOURCES
 from spikes.roadmap_rebuild import (ROADMAP_LLM_TIMEOUT, RoadmapRebuild,
-                                    build_candidate, render_candidate, source_catalog,
+                                    build_candidate, render_candidate, resolve_candidate, source_catalog,
                                     validate_audit, validate_extraction)
 from spikes.storage import Git
 from scripts.roadmap_rebuild import progress_reporter
@@ -362,6 +362,37 @@ class RoadmapRebuildTests(unittest.TestCase):
                                      'supporting_records': [], 'issues': []})
         self.assertIn('depends_on: <unresolved>', rendered)
         self.assertIn('[cycle] BATCH-01', rendered)
+
+    def test_structural_resolution_uses_pinned_graph_and_quarantines_unknowns(self):
+        candidate = {'schema': 'fpw-roadmap-rebuild-candidate-v1', 'nodes': [
+            {'entity_key': 'e1', 'kind': 'batch', 'source_ids': ['BATCH-01'],
+             'title': 'Dávka', 'status': 'completed', 'maturity': 'implemented',
+             'line_start': 2, 'line_end': 2, 'summary': 'Dávka.',
+             'candidate_id': 'BATCH-01', 'repository_id': 'federated-workspace',
+             'parent_id': None, 'depends_on': ['MISSING-01'],
+             'provenance': {'block_id': 'b1', 'source': 'source.md', 'role': 'history',
+                            'order': 1, 'line_start': 2, 'line_end': 2},
+             'provenance_all': [], 'variants': []},
+            {'entity_key': 'e2', 'kind': 'task', 'source_ids': ['OTHER-01'],
+             'title': 'Nezařazený úkol', 'status': 'planned', 'maturity': 'unknown',
+             'line_start': 3, 'line_end': 3, 'summary': 'Úkol.',
+             'candidate_id': 'OTHER-01', 'repository_id': 'federated-workspace',
+             'parent_id': None, 'depends_on': [],
+             'provenance': {'block_id': 'b1', 'source': 'source.md', 'role': 'history',
+                            'order': 1, 'line_start': 3, 'line_end': 3},
+             'provenance_all': [], 'variants': []}],
+            'supporting_records': [], 'normalizations': [],
+            'issues': [{'kind': 'invalid-parent'}], 'ready': False,
+            'candidate_sha256': 'old'}
+        resolved = resolve_candidate(candidate, [
+            {'id': 'BATCH-01', 'milestone': 'M2', 'depends_on': []}])
+        nodes = {item['candidate_id']: item for item in resolved['nodes']}
+        self.assertEqual('MILESTONE-M2', nodes['BATCH-01']['parent_id'])
+        self.assertEqual('MIGRATION-UNPLACED-BATCH', nodes['OTHER-01']['parent_id'])
+        self.assertEqual('MILESTONE-LEGACY', nodes['MIGRATION-UNPLACED-BATCH']['parent_id'])
+        self.assertTrue(resolved['ready'])
+        self.assertEqual([], resolved['issues'])
+        self.assertTrue(resolved['resolution_warnings'])
 
     def test_positive_audit_findings_are_redundant_not_terminal(self):
         block = {'block_id': 'block-1', 'line_start': 1, 'line_end': 5}

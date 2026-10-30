@@ -3,6 +3,7 @@
 """Source-first local-LLM roadmap reconstruction without Workspace writes."""
 from base64 import b64encode
 from collections import Counter
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -37,6 +38,7 @@ STRONG = re.compile(r'\*\*(.+?)\*\*', re.DOTALL)
 LOCAL_KEY = re.compile(r'e[1-9][0-9]{0,3}')
 MAX_ATTEMPTS = 3
 ROADMAP_LLM_TIMEOUT = 600
+STRUCTURAL_RESOLUTION_POLICY = 'pinned-graph-variants-and-explicit-legacy-quarantine-v1'
 
 SOURCE_POLICY = '''The source documents are sequential project records, not a normalized database.
 TODO contains one current feature batch. A closed whole batch, including completed subtasks and evidence, moves to WORK_LOG. BACKLOG contains future batches and deferred or implemented-but-unverified work. The Master Checklist is a strategic catalog and may describe the same capability at a broader granularity. A later occurrence wins only when it contains actual evidence. History is not a new open task; free prose is not automatically executable work. Preserve uncertainty instead of inventing hierarchy, completion, IDs, or dependencies.'''
@@ -474,6 +476,133 @@ def build_candidate(catalog, extractions):
     return candidate
 
 
+def resolve_candidate(candidate, graph_nodes):
+    """Apply pinned structural evidence and quarantine unresolved legacy placement."""
+    require(isinstance(graph_nodes, list), 'Invalid structural resolution graph')
+    hints = {}
+    for item in graph_nodes:
+        require(isinstance(item, dict) and set(item) == {'id', 'milestone', 'depends_on'}
+                and isinstance(item['id'], str) and isinstance(item['milestone'], str)
+                and isinstance(item['depends_on'], list)
+                and all(isinstance(value, str) for value in item['depends_on']),
+                'Invalid structural resolution hint')
+        require(item['id'] not in hints, 'Duplicate structural resolution hint')
+        hints[item['id']] = item
+    value = deepcopy(candidate)
+    nodes = {(item['repository_id'], item['candidate_id']): item
+             for item in value['nodes']}
+    warnings = deepcopy(value['issues'])
+    normalizations = value.setdefault('normalizations', [])
+
+    def synthetic(repository_id, node_id, kind, parent_id, title):
+        key = (repository_id, node_id)
+        if key not in nodes:
+            row = dict(entity_key='resolution', kind=kind, source_ids=[node_id],
+                       title=title, status='unknown', maturity='unknown',
+                       line_start=0, line_end=0, summary='Deterministický migrační kontejner.',
+                       candidate_id=node_id, repository_id=repository_id,
+                       parent_id=parent_id, depends_on=[],
+                       provenance=dict(block_id='structural-resolution',
+                           source='pinned:docs/roadmap-graph.json', role='graph', order=0,
+                           line_start=0, line_end=0), provenance_all=[], variants=[])
+            nodes[key] = row
+            value['nodes'].append(row)
+        return nodes[key]
+
+    def lane_from_id(node_id):
+        match = re.match(r'(?:F-)?M([0-9]+)(?:-|$)', node_id)
+        return 'M' + match.group(1) if match else None
+
+    def milestone(repository_id, lane):
+        node_id = 'MILESTONE-' + lane
+        return synthetic(repository_id, node_id, 'milestone', None, lane)
+
+    graph_repository = 'federated-workspace'
+    for node_id, hint in hints.items():
+        node = nodes.get((graph_repository, node_id))
+        if node is None:
+            continue
+        parent_id = milestone(graph_repository, hint['milestone'])['candidate_id']
+        if node['kind'] != 'batch' or node['parent_id'] != parent_id:
+            normalizations.append({'kind': 'pinned-graph-placement', 'id': node_id,
+                'repository_id': graph_repository, 'source_kind': node['kind'],
+                'source_parent_id': node['parent_id'], 'parent_id': parent_id})
+        node['kind'] = 'batch'; node['parent_id'] = parent_id
+        node['depends_on'] = list(dict.fromkeys(hint['depends_on']))
+
+    for (repository_id, node_id), node in list(nodes.items()):
+        if node_id.startswith('MILESTONE-') or node['kind'] == 'milestone':
+            if node['kind'] != 'milestone' or node['parent_id'] is not None:
+                normalizations.append({'kind': 'milestone-root', 'id': node_id,
+                    'repository_id': repository_id, 'source_kind': node['kind'],
+                    'source_parent_id': node['parent_id'], 'parent_id': None})
+            node['kind'] = 'milestone'; node['parent_id'] = None
+
+    for (repository_id, node_id), node in list(nodes.items()):
+        if node['kind'] == 'milestone':
+            continue
+        expected = 'milestone' if node['kind'] == 'batch' else 'batch'
+        parent = nodes.get((repository_id, node['parent_id']))
+        if parent is not None and parent['kind'] == expected and node['parent_id'] != node_id:
+            continue
+        variant_parents = []
+        for variant in node.get('variants', []):
+            candidate_parent = nodes.get((repository_id, variant.get('parent_id')))
+            if candidate_parent is not None and candidate_parent['kind'] == expected \
+                    and candidate_parent['candidate_id'] != node_id:
+                variant_parents.append(candidate_parent['candidate_id'])
+        variant_parents = list(dict.fromkeys(variant_parents))
+        if len(variant_parents) == 1:
+            replacement = variant_parents[0]
+            basis = 'preserved-structural-variant'
+        elif node['kind'] == 'batch' and lane_from_id(node_id):
+            replacement = milestone(repository_id, lane_from_id(node_id))['candidate_id']
+            basis = 'stable-id-milestone'
+        elif node['kind'] == 'batch':
+            replacement = milestone(repository_id, 'LEGACY')['candidate_id']
+            basis = 'legacy-quarantine'
+        else:
+            legacy = milestone(repository_id, 'LEGACY')['candidate_id']
+            replacement = synthetic(repository_id, 'MIGRATION-UNPLACED-BATCH', 'batch',
+                                    legacy, 'Nezařazené historické úkoly')['candidate_id']
+            basis = 'legacy-task-quarantine'
+        normalizations.append({'kind': basis, 'id': node_id,
+            'repository_id': repository_id, 'source_parent_id': node['parent_id'],
+            'parent_id': replacement})
+        node['parent_id'] = replacement
+
+    for (repository_id, node_id), node in nodes.items():
+        valid = []
+        for dependency in node['depends_on']:
+            if dependency != node_id and (repository_id, dependency) in nodes:
+                valid.append(dependency)
+            else:
+                warnings.append({'kind': 'dropped-unresolved-dependency', 'id': node_id,
+                                 'repository_id': repository_id,
+                                 'dependency': dependency})
+        node['depends_on'] = list(dict.fromkeys(valid))
+
+    fatal = []
+    allowed = {'milestone': {None}, 'batch': {'milestone'}, 'task': {'batch'}}
+    for (repository_id, node_id), node in nodes.items():
+        parent = nodes.get((repository_id, node['parent_id'])) if node['parent_id'] else None
+        if (parent['kind'] if parent else None) not in allowed[node['kind']]:
+            fatal.append({'kind': 'invalid-parent', 'id': node_id,
+                          'repository_id': repository_id, 'parent_id': node['parent_id']})
+        for dependency in node['depends_on']:
+            if (repository_id, dependency) not in nodes or dependency == node_id:
+                fatal.append({'kind': 'invalid-dependency', 'id': node_id,
+                              'repository_id': repository_id, 'dependency': dependency})
+    value['nodes'] = sorted(nodes.values(), key=lambda item: (
+        item['provenance']['source'], item['provenance']['line_start'], item['candidate_id']))
+    value['resolution_warnings'] = warnings
+    value['issues'] = fatal
+    value['ready'] = not fatal and bool(value['nodes'])
+    value.pop('candidate_sha256', None)
+    value['candidate_sha256'] = hashlib.sha256(canonical(value)).hexdigest()
+    return value
+
+
 def render_candidate(candidate):
     lines = ['# Source-first roadmap candidate', '',
              f'Ready: {str(candidate["ready"]).lower()}', '']
@@ -558,7 +687,7 @@ class RoadmapRebuild:
 
     @classmethod
     def derive(cls, node, run_dir, source_run, *, retry_extractions=(), audit_overrides=(),
-               audit_source_run=None):
+               audit_source_run=None, structure_repository=None):
         source_root = _secure_directory(source_run)
         audit_source_root = (_secure_directory(audit_source_run)
                              if audit_source_run is not None else source_root)
@@ -590,6 +719,23 @@ class RoadmapRebuild:
                         prompts=prompts,
                         transport=dict(response_timeout_seconds=ROADMAP_LLM_TIMEOUT),
                         state='preparing-derived')
+        if structure_repository is not None:
+            host_commits = {item['commit_id'] for item in catalog['sources']
+                            if item['repository_id'] == 'federated-workspace'}
+            require(len(host_commits) == 1, 'Pinned host revision is ambiguous')
+            host = PinnedRepository(structure_repository, 'federated-workspace',
+                                    next(iter(host_commits)))
+            graph_raw = host.read('docs/roadmap-graph.json')
+            graph = json.loads(graph_raw)
+            require(graph.get('schema') == 'fpw-roadmap-graph-v1'
+                    and isinstance(graph.get('nodes'), list),
+                    'Unsupported structural resolution graph')
+            manifest['structural_resolution'] = {
+                'schema': graph['schema'], 'commit_id': host.commit,
+                'path': 'docs/roadmap-graph.json',
+                'sha256': hashlib.sha256(graph_raw).hexdigest(),
+                'policy': STRUCTURAL_RESOLUTION_POLICY,
+                'nodes': graph['nodes']}
         root = _secure_directory(root, create=True)
         (root/'results').mkdir(mode=0o700); (root/'raw').mkdir(mode=0o700)
         (root/'ollama-runs').mkdir(mode=0o700)
@@ -624,6 +770,9 @@ class RoadmapRebuild:
             previous_candidate = json.loads((audit_source_root/'candidate.json').read_text(
                 encoding='utf-8'))
             current_candidate = build_candidate(catalog, extractions)
+            if 'structural_resolution' in manifest:
+                current_candidate = resolve_candidate(
+                    current_candidate, manifest['structural_resolution']['nodes'])
             for block in catalog['blocks']:
                 previous = audit_projection(candidate_records(
                     previous_candidate, block['block_id']))
@@ -710,6 +859,10 @@ class RoadmapRebuild:
         require(manifest.get('transport') == {
             'response_timeout_seconds': ROADMAP_LLM_TIMEOUT},
             'Rebuild transport limits changed after prepare; create a new run')
+        if 'structural_resolution' in manifest:
+            require(manifest['structural_resolution'].get('policy')
+                    == STRUCTURAL_RESOLUTION_POLICY,
+                    'Structural resolution policy changed after prepare; create a new run')
         catalog = self._load('catalog.json')
         frozen = dict(catalog); catalog_sha256 = frozen.pop('catalog_sha256')
         require(hashlib.sha256(canonical(frozen)).hexdigest() == catalog_sha256
@@ -810,6 +963,8 @@ class RoadmapRebuild:
         if len(extractions) != len(catalog['blocks']):
             return self.status() | {'processed': calls}
         candidate = build_candidate(catalog, extractions)
+        if 'structural_resolution' in manifest:
+            candidate = resolve_candidate(candidate, manifest['structural_resolution']['nodes'])
         _atomic_json(self.root/'candidate.json', candidate)
         (self.root/'candidate.md').write_text(render_candidate(candidate), encoding='utf-8')
         audits = []

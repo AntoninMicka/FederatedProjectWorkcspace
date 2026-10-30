@@ -471,6 +471,17 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   fail-closed `import_ready=false` kvůli nezměněným 304 strukturálním review
   položkám (211 parent, 42 combined-source-ids, 42 source-ambiguity,
   6 dependency a 3 reconciliation ambiguity), nikoli kvůli fidelity auditu.
+  Strukturální resolver nyní používá `roadmap-graph.json` z přesně připnutého
+  host commitu, platné zachované varianty a stabilní milestone ID; neurčité
+  zbytky ukládá do explicitní `MILESTONE-LEGACY` karantény a veškeré původní
+  problémy zachovává jako `resolution_warnings`. Run
+  `/tmp/dev-01-source-rebuild-20261030-v7-structured-v2` převzal všech 185
+  extrakcí a 30 kanonicky nezměněných auditů. Deterministický preview má nula
+  fatálních parent/dependency chyb: 74 pinned-graph placementů, 32 placementů
+  ze zachované varianty, 21 ze stabilního milestone ID, 16 normalizovaných
+  kořenových milestone, 49 legacy batch a 20 legacy task karanténních
+  placementů. Zbývá selektivně zopakovat 155 auditů změněné hierarchie; bez
+  nich se strukturální `ready` nesmí vydávat za `import_ready`.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

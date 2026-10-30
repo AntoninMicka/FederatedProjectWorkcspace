@@ -226,6 +226,36 @@ posouzený falešný audit lze zaznamenat přes
 `--accept-audit BLOCK_ID REASON`; původní modelový audit zůstává ve zdrojovém
 runu a report uvádí oddělený human-review override i jeho důvod.
 
+Po dokončeném fidelity auditu lze v novém odvozeném runu zapnout explicitní
+strukturální reconciliation proti `docs/roadmap-graph.json` z téhož připnutého
+hostitelského commitu:
+
+```bash
+python3 -m scripts.roadmap_rebuild \
+  --node /home/antonin/.local/state/federated-workspace/node.json \
+  --run-dir /tmp/dev-01-source-rebuild-structured \
+  derive --from-run /tmp/dev-01-source-rebuild-audited \
+  --audit-from-run /tmp/dev-01-source-rebuild-audited \
+  --structure-from-repository .
+```
+
+Resolver nepoužívá současný pracovní strom jako autoritu: z předaného
+repozitáře otevře commit zaznamenaný v připnutém katalogu, načte jeho graph a
+uloží commit, cestu, SHA-256, úplné hints a verzi policy do nového manifestu.
+Známé placementy a dependencies přebírá z graphu, dále používá jediný platný
+strukturální variant a explicitní milestone ve stabilním ID. Zbytek nezahodí
+ani náhodně nepřiřadí; uloží jej do viditelné větve
+`MILESTONE-LEGACY/MIGRATION-UNPLACED-BATCH`. Původní konflikty a nejasnosti
+zůstávají v `resolution_warnings` s provenance. Import blokují už jen vztahy,
+které jsou neplatné i po tomto konzervativním zařazení.
+
+Každá změna candidate projekce zneplatní audit příslušného bloku. `derive`
+převezme z `--audit-from-run` pouze kanonicky shodné audity a zbytek musí
+znovu projít modelem; samotné strukturální „ready“ tedy nestačí k
+`import_ready=true`. Crash před dokončením nového runu neovlivní zdrojový run
+ani Workspace: jednotlivé výsledky jsou resumovatelné a projektový zápis zde
+stále neexistuje.
+
 ## 1. Připnutá inventura a náhled bez zápisu
 
 Výchozí checkout: `develop` po PR #112, commit
