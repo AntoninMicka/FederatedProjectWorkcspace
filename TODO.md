@@ -525,9 +525,10 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   doprovodných), 185/185 zdrojových bloků, 728/728 uzlů a 294/294 podpůrných
   záznamů je dohledáno v byte-for-byte ověřených importovaných souborech; nebyl
   proveden další zápis ani LLM scan. Cílený modul
-  `tests.test_roadmap_rebuild_bundle`: 4/4 prošly. Zbývá ověřit obsah v aplikaci
-  a IDE a samostatně akceptovat úplnost modulů a úpravu workflow zdrojového
-  repozitáře; původní evidence se zatím neodstraňuje.
+  `tests.test_roadmap_rebuild_bundle`: 4/4 prošly. Uživatel po importu fyzicky
+  ověřil funkční zobrazení roadmapy ve Workspace. Zbývá ověření v IDE a
+  samostatná akceptace úplnosti modulů a úpravy workflow zdrojového repozitáře;
+  původní evidence se zatím neodstraňuje.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.
