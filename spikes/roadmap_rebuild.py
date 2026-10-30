@@ -410,15 +410,23 @@ def render_candidate(candidate):
     lines = ['# Source-first roadmap candidate', '',
              f'Ready: {str(candidate["ready"]).lower()}', '']
     children = {}
+    rendered = set()
     for node in candidate['nodes']:
         children.setdefault(node['parent_id'], []).append(node)
     def add(parent, indent=0):
         for node in children.get(parent, []):
+            if node['candidate_id'] in rendered:
+                lines.append(' ' * indent + '- [cycle] ' + node['candidate_id'])
+                continue
+            rendered.add(node['candidate_id'])
             checked = 'x' if node['status'] == 'completed' else ' '
             lines.append(' ' * indent + f'- [{checked}] [{node["candidate_id"]}] {node["title"]}')
             lines.append(' ' * (indent + 2) + '- type: ' + node['kind'])
             if node['depends_on']:
-                lines.append(' ' * (indent + 2) + '- depends_on: ' + ', '.join(node['depends_on']))
+                dependencies = (item if item is not None else '<unresolved>'
+                                for item in node['depends_on'])
+                lines.append(' ' * (indent + 2) + '- depends_on: '
+                             + ', '.join(dependencies))
             add(node['candidate_id'], indent + 2)
     add(None)
     lines += ['', '## Nezařazené popisy a historie', '']

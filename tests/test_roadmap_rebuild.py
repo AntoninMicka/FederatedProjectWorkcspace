@@ -10,7 +10,7 @@ from uuid import uuid4
 from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.roadmap_migration import HOST_SOURCES
 from spikes.roadmap_rebuild import (ROADMAP_LLM_TIMEOUT, RoadmapRebuild,
-                                    build_candidate, source_catalog,
+                                    build_candidate, render_candidate, source_catalog,
                                     validate_extraction)
 from spikes.storage import Git
 from scripts.roadmap_rebuild import progress_reporter
@@ -286,6 +286,19 @@ class RoadmapRebuildTests(unittest.TestCase):
         self.assertEqual(600, ROADMAP_LLM_TIMEOUT)
         self.assertEqual({'response_timeout_seconds': ROADMAP_LLM_TIMEOUT},
                          manifest['transport'])
+
+    def test_candidate_renderer_marks_unresolved_dependency_and_cycle(self):
+        nodes = [
+            {'candidate_id': 'BATCH-01', 'title': 'Dávka', 'status': 'planned',
+             'kind': 'batch', 'parent_id': None, 'depends_on': [None]},
+            {'candidate_id': 'TASK-01', 'title': 'Úkol', 'status': 'planned',
+             'kind': 'task', 'parent_id': 'BATCH-01', 'depends_on': []},
+            {'candidate_id': 'BATCH-01', 'title': 'Cyklus', 'status': 'planned',
+             'kind': 'batch', 'parent_id': 'TASK-01', 'depends_on': []}]
+        rendered = render_candidate({'ready': False, 'nodes': nodes,
+                                     'supporting_records': [], 'issues': []})
+        self.assertIn('depends_on: <unresolved>', rendered)
+        self.assertIn('[cycle] BATCH-01', rendered)
 
     def test_combined_source_ids_create_review_issue_instead_of_failure(self):
         block = {'block_id': 'block-1', 'source': 'BACKLOG.md', 'line_start': 1,

@@ -406,7 +406,12 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   tedy o doloženou obsahovou chybu. Rebuild má nyní vlastní manifestem
   připnutý limit 600 sekund bez změny globálního Ollama adapteru. Druhý
   selektivní run `/tmp/dev-01-source-rebuild-20261030-v7-retry-2` převzal 184
-  validních extrakcí a čeká pouze na tento blok; poté poprvé provede audity.
+  validních extrakcí. Poslední blok uspěl za přibližně 3 min 29 s, takže
+  extraction je úplná 185/185. První sestavení kandidáta odhalilo čistě
+  prezentační chybu: dva vědomě nerozřešené dependency blokátory byly v JSON
+  `null`, ale Markdown renderer je před auditem zkoušel přímo spojit jako
+  řetězce. Renderer nyní zobrazuje `<unresolved>` a bezpečně označí případný
+  cyklus; autoritativní candidate JSON ani modelové výsledky se nemění.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
