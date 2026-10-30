@@ -152,7 +152,7 @@ class WebHandler(DesktopHandler):
             return True
         try:
             operation = (self.server.administration.authenticate_readonly
-                         if self.path == '/v1/node-telemetry/status'
+                         if self.path in {'/v1/node-telemetry/status', '/v1/chat/availability'}
                          else self.server.administration.authenticate)
             self.actor = operation(auth)
             return self.actor is not None
@@ -311,7 +311,7 @@ class WebHandler(DesktopHandler):
             if (not pending or not self._can_write(pending['project_id'])
                     or pending['privacy'] == 'local-only'):
                 return self.send_error(403)
-        if self.path in {'/v1/chat/configure', '/v1/chat/test', '/v1/chat/models',
+        if self.path in {'/v1/chat/configure', '/v1/chat/test', '/v1/chat/availability', '/v1/chat/models',
                          '/v1/search/configure', '/v1/search/test',
                          '/v1/model-catalog/import', '/v1/atlascloud/models',
                          '/v1/atlascloud/configure',

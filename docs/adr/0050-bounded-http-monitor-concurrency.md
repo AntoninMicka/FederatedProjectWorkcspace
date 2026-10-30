@@ -159,3 +159,50 @@ a souběžný zápis skončil bounded jako `503`. Restart zachoval jediný dokon
 run. Fyzické odpojení dalšího klienta po delta rámci zanechalo durable
 `unknown/transport-unknown`; opakování po restartu selhalo před redispatch a
 počet runů se nezměnil. Evidence a přesné výsledky regresí jsou ve WORK_LOG.
+
+
+## Rozšíření 2026-10-30 — automatická dostupnost backendu
+
+`OPS-BACKEND-AVAILABILITY-01` řeší konkrétní nález: UI automaticky volalo
+`/v1/chat/test` každých 30 s i po běžných aplikačních operacích. Síťová sonda
+`/api/tags` s timeoutem 10 s držela aplikační linku, jejíž čekací limit je 2 s.
+Jde o doloženou možnost blokování; není to měření konkrétního uživatelského záseku.
+
+Původní zákaz paralelního `/v1/chat/test` zůstává pro ruční test nastavení.
+Automatický monitor nově používá přesný `POST /v1/chat/availability` v samostatné
+krátké lince. Worker HTTP pouze provede stejné bezpečnostní kontroly, parsuje
+binding a vrátí paměťový stav. Web vyžaduje admin oprávnění jako u ručního testu,
+autentizuje však výhradně read-only, bez bootstrapu nebo migrace registru.
+
+Jediný server-owned background worker provádí read-only `OllamaAdapter.probe`
+(timeout 10 s) nad immutable validovaným bindingem se stejným boundary a TLS
+pinem. Nemá referenci na handler, socket klienta, projekt ani zapisující službu.
+V daném okamžiku běží nejvýše jedna automatická sonda pro celý server. Další dotaz sondu
+neduplikuje ani nevkládá do fronty; při jiném bindingu dostane neověřený stav
+nebo vlastní starší vzorek a doporučení znovu načíst stav za sekundu.
+
+Cache má nejvýše osm vzorků, klíčem je celý binding včetně endpointu, modelu,
+revize a TLS pinu. TTL 30 s se měří monotónně od dokončení sondy. Status nese
+čas dokončení v UTC, `available` (true/false/null), `model_available`, `checking`
+a `stale`. Selhání sondy je nový nedostupný vzorek; chyba načítání statusu v UI
+nevydává sama o sobě backend za nedostupný. Při obnově UI zachová předchozí čas
+měření a označí stáří. Při změně bindingu výsledek starého požadavku nepřevezme.
+Pravidelné dotazy i následná kontrola po akci mohou číst cache bez nové sítě.
+
+### Crash boundaries a shutdown
+
+Nevzniká persistentní vrstva ani koordinace více úložišť. Pád před, během i po
+sondě zahodí pouze paměťový vzorek; další proces začíná neověřeně. Síťový efekt
+je pouze read-only `/api/tags`, nikoli generování, fallback nebo restart.
+Sampler se neúčastní Workspace, Git, indexu ani providerového run journalu.
+Jejich původní recovery se nemění. Běžný shutdown nejprve zavře HTTP admission,
+poté dokončí přijaté requesty, zavře admission sampleru a čeká na běžící sondu
+ve zbývající společné grace. Vypršení grace nastaví `shutdown_clean=false`;
+proces nesmí hlásit čisté dokončení. Po uzavření sampler nepřijímá nové sondy
+ani nepublikuje pozdní výsledky. Unixový M0 transport zůstává sekvenční.
+
+Reuse: stdlib Thread/Condition a bounded HTTP lifecycle, původní Ollama klient
+a validátor, read-only admin autentizace, stávající panel Zdroje. Obecný worker
+pool s frontou, změna serializace zápisů, neomezená vlákna, nová databáze a
+externí framework se odmítají. Výsledky ověření patří do aktivního TODO a po
+předání do WORK_LOG pod ID této feature, nikoli do historických počtů výše.

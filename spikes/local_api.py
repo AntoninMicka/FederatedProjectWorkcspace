@@ -15,6 +15,9 @@ import stat
 import struct
 import tempfile
 import threading
+import time
+
+from spikes.backend_availability import BackendAvailability
 
 from spikes.metadata import parse_json, ValidationError
 
@@ -41,6 +44,8 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self._worker_slots = threading.BoundedSemaphore(max_workers)
         self.application_lane = threading.Lock()
         self.telemetry_lane = threading.Lock()
+        self.availability_lane = threading.Lock()
+        self.backend_availability = BackendAvailability()
         self.request_lane_timeout = lane_timeout
         self.shutdown_timeout = shutdown_timeout
         self.shutdown_clean = None
@@ -91,13 +96,15 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         return super().shutdown()
 
     def server_close(self):
+        deadline = time.monotonic() + self.shutdown_timeout
         with self._worker_condition:
             self._admission_open = False
             clean = self._worker_condition.wait_for(
                 lambda: not self._active_requests,
                 timeout=self.shutdown_timeout)
             active = tuple(self._active_requests)
-        self.shutdown_clean = clean
+        probe_clean = self.backend_availability.close(deadline - time.monotonic())
+        self.shutdown_clean = clean and probe_clean
         if not clean:
             for request in active:
                 try:
@@ -161,8 +168,8 @@ class Handler(BaseHTTPRequestHandler):
         self.server.counter += 1
         self.reply(200, {'value': self.server.counter})
 
-    def _in_request_lane(self, operation, *, telemetry=False):
-        lane = getattr(self.server,
+    def _in_request_lane(self, operation, *, telemetry=False, availability=False):
+        lane = getattr(self.server, 'availability_lane' if availability else
                        'telemetry_lane' if telemetry else 'application_lane', None)
         if lane is None:
             # Small unit fixtures may compose this handler with an already
@@ -178,7 +185,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         return self._in_request_lane(
             self._do_POST,
-            telemetry=self.path == '/v1/node-telemetry/status')
+            telemetry=self.path == '/v1/node-telemetry/status',
+            availability=self.path == '/v1/chat/availability')
 
     def _do_POST(self):
         authority = self.request_authority()
@@ -228,6 +236,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 class UnixAPI(UnixStreamServer):
+    def server_close(self):
+        sampler = getattr(self, 'backend_availability', None)
+        if sampler is not None:
+            sampler.close(SHUTDOWN_GRACE_SECONDS)
+        return super().server_close()
+
     def verify_request(self, request, client_address):
         _, uid, _ = struct.unpack('3i', request.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
         return uid == self.allowed_uid
@@ -264,6 +278,8 @@ def running_api(transport, runtime=None, *, handler=Handler, projects=None,
         server.authority = 'workspace.local'
         server.application_lane = threading.Lock()
         server.telemetry_lane = threading.Lock()
+        server.availability_lane = threading.Lock()
+        server.backend_availability = BackendAvailability()
         server.request_lane_timeout = REQUEST_LANE_TIMEOUT
     elif transport == 'http':
         server = BoundedHTTPServer(('127.0.0.1', 0), handler,
