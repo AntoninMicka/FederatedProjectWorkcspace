@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from spikes.storage import Git, Index, StaleIndex
 from tests.fixtures import ENTITY, registry, markdown
@@ -30,6 +31,65 @@ class StorageSpike(unittest.TestCase):
         folder = git.root / 'registries' / 'decisions'
         folder.mkdir(parents=True, exist_ok=True)
         (folder / f'{name}.json').write_bytes(registry(title, entity_id))
+
+    def test_snapshot_batches_binary_files_and_preserves_fixed_commit(self):
+        expected = self.git.snapshot(self.base)
+        additions = {'artifacts/raw/empty': b'', 'artifacts/raw/žluťoučký\tname\n.bin': b'\x00\xff\nblob 20\n',
+                     'artifacts/raw/copy.bin': b'\x00\xff\nblob 20\n', 'artifacts/raw/executable': b'#!/bin/sh\n'}
+        for name, raw in additions.items():
+            target = self.desktop / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+        (self.desktop / 'artifacts/raw/executable').chmod(0o755)
+        commit = self.git.commit('Binary files')
+        (self.desktop / 'artifacts/raw/empty').write_bytes(b'uncommitted')
+        with patch.object(self.git, 'run', wraps=self.git.run) as run:
+            result = self.git.snapshot(commit, env_extra={'GIT_NO_REPLACE_OBJECTS': '1'})
+        self.assertEqual(expected | additions, result)
+        self.assertEqual(2, run.call_count, 'snapshot must not spawn one Git process per file')
+        self.assertTrue(all(call.kwargs['env_extra'] == {'GIT_NO_REPLACE_OBJECTS': '1'}
+                            for call in run.call_args_list))
+        self.assertEqual(expected, self.git.snapshot(self.base))
+        empty = self.git.run('mktree', input='').stdout.strip()
+        self.assertEqual({}, self.git.snapshot(empty))
+
+    def test_snapshot_rejects_limits_before_reading_blob_content(self):
+        for name, limit in [('MAX_FILE', 1), ('MAX_SNAPSHOT', 1)]:
+            with self.subTest(limit=name), patch('spikes.storage.' + name, limit), \
+                    patch.object(self.git, 'run', wraps=self.git.run) as run:
+                with self.assertRaisesRegex(ValueError, 'Snapshot exceeds limits'):
+                    self.git.snapshot(self.base)
+                self.assertEqual(1, run.call_count)
+        entry = '100644 blob ' + 'a' * 40 + ' 0\tregistries/decisions/x.json\0'
+        with patch.object(self.git, 'run') as run:
+            run.return_value.stdout = entry * 10001
+            with self.assertRaisesRegex(ValueError, 'Snapshot exceeds limits'):
+                self.git.snapshot(self.base)
+            self.assertEqual(1, run.call_count)
+
+    def test_snapshot_rejects_symlinks_before_reading_content(self):
+        target = self.desktop / 'artifacts/raw/link'
+        target.parent.mkdir(parents=True)
+        target.symlink_to('/etc/passwd')
+        commit = self.git.commit('Unsupported symlink')
+        with patch.object(self.git, 'run', wraps=self.git.run) as run:
+            with self.assertRaisesRegex(ValueError, 'Non-regular Git entry'):
+                self.git.snapshot(commit)
+            self.assertEqual(1, run.call_count)
+
+    def test_snapshot_rejects_malformed_or_truncated_batch(self):
+        original = self.git.run
+        for corrupt in [lambda raw: raw.replace(b' blob ', b' tree ', 1),
+                        lambda raw: b'0' + raw[1:], lambda raw: raw[:-1],
+                        lambda raw: raw + b'extra', lambda raw: b'missing\n']:
+            def changed(*args, **kwargs):
+                result = original(*args, **kwargs)
+                if args[:2] == ('cat-file', '--batch'):
+                    result.stdout = corrupt(result.stdout)
+                return result
+            with self.subTest(corrupt=corrupt), patch.object(self.git, 'run', side_effect=changed):
+                with self.assertRaisesRegex(ValueError, 'Git batch'):
+                    self.git.snapshot(self.base)
 
     def test_divergence_abort_and_resolution_preserve_history(self):
         peer = Git(self.root / 'server')

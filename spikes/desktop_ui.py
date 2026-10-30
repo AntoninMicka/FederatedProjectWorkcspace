@@ -6264,7 +6264,7 @@ async function loadChat(){
  if(projectId!==(activeProject?.id || null))return;
  if(modelSelectionState.status==='fulfilled')renderModelSelection(modelSelectionState.value);
  else{modelSelectionProjection=null;renderChatRunSelectors();}
- let result;
+ let result,restored=null;
  try{
   result=await projectRequest('/v1/chat/status',{});
  }catch(error){
@@ -6285,7 +6285,7 @@ async function loadChat(){
   if(!Array.isArray(result.threads))throw new Error('Odpověď neobsahuje seznam vláken.');
   const ordered=[...result.threads].reverse();
   const projectThreads=projectId?ordered.filter(thread=>thread.project_id===projectId):[];
-  const restored=projectThreads.find(thread=>thread.status==='active') || projectThreads[0] || null;
+  restored=projectThreads.find(thread=>thread.status==='active') || projectThreads[0] || null;
   activeThread=restored;activeTaskThreadId=restored?.thread_id || null;
   taskOutcomes=[];
   renderThreadList(ordered);renderTaskPublicSources();renderChat(restored);

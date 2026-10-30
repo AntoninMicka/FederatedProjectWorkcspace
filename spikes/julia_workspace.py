@@ -100,23 +100,26 @@ class JuliaWorkspaceService:
             runtime_binding=_private_json(self.runtime_root / 'binding.json'))
 
     @staticmethod
-    def _definition(git, commit, path):
+    def _definition(git, commit, path, *, validated=None):
         parts = safe_path(path)
         require(len(parts) >= 3 and parts[0] == 'artifacts' and path.endswith('.json'),
                 'Julia definition must be artifact JSON')
         uuid(parts[1])
-        entities = validate_snapshot(git.snapshot(commit))
+        if validated is None:
+            files = git.snapshot(commit)
+            entities = validate_snapshot(files)
+        else:
+            files, entities = validated
         require(parts[1] in entities, 'Julia definition artifact is missing')
+        require(path in files, 'Julia definition is missing')
+        raw = files[path]
+        value = validate_computation(parse_json(raw, MAX_METADATA))
         rows = [row for row in git.run('ls-tree', commit, '--', path).stdout.splitlines()
                 if row]
         require(len(rows) == 1, 'Julia definition is missing')
         info, actual = rows[0].split('\t', 1); mode, kind, oid = info.split()
         require(actual == path and mode == '100644' and kind == 'blob',
                 'Julia definition must be a regular Git blob')
-        require(int(git.run('cat-file', '-s', oid).stdout) <= MAX_METADATA,
-                'Julia definition exceeds limit')
-        raw = git.run('cat-file', 'blob', oid, binary=True).stdout
-        value = validate_computation(parse_json(raw, MAX_METADATA))
         return value, {'artifact_id': parts[1], 'path': path,
                        'git_blob': oid, 'sha256': digest(raw)}, entities
 
@@ -137,13 +140,16 @@ class JuliaWorkspaceService:
         uuid(project_id)
         git = self.projects.repository(project_id)
         require(git.head() == expected_head, 'Project changed before Julia projection')
-        paths = git.run('ls-tree', '-r', '--name-only', expected_head).stdout.splitlines()
+        files = git.snapshot(expected_head)
+        entities = validate_snapshot(files)
         result = []
-        for path in paths:
-            if not path.startswith('artifacts/') or not path.endswith('.json'):
+        for path in files:
+            if (not path.startswith('artifacts/') or not path.endswith('.json')
+                    or path.endswith('/metadata.json')):
                 continue
             try:
-                computation, reference, entities = self._definition(git, expected_head, path)
+                computation, reference, _ = self._definition(
+                    git, expected_head, path, validated=(files, entities))
             except (ValueError, OSError, json.JSONDecodeError, UnicodeDecodeError,
                     subprocess.SubprocessError):
                 continue

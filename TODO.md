@@ -16,9 +16,20 @@ Cíl dávky: **implemented → PoC validated**; návrh je **designed**,
 read-only inventura **implemented**.
 Návrh: [plán migrace](docs/roadmap-migration.md). Potvrzený source-first
 bundle v4 je fyzicky importovaný do hostitelského i modulového projektu;
-uživatel ověřil zobrazení hostitelské roadmapy. Zbývá ověření aktuálního
-exportu v IDE, akceptace úplnosti modulů, bezpečné následné aktualizace zdroje
+uživatel ověřil zobrazení hostitelské roadmapy. Aktuální IDE export je
+ověřený proti živému Workspace. Zbývá akceptace úplnosti modulů,
+bezpečné následné aktualizace zdroje
 a konkrétní předání autority. Původní evidenci zatím nenahrazujeme archivem.
+
+### Potvrzený společný rozsah — 30. 10. 2026
+
+Uživatel výslovně požaduje dokončit migraci, její nezbytný IDE bridge
+i opravu zasekávání Workspace v této jediné větvi a jediném PR DEV-01.
+Větve se kvůli těmto podmínkám akceptace nepřepínají. Jde o schválené
+upřesnění rozsahu; další nezávislé funkce IDE/agenta se tím neaktivují.
+Pořadí práce: odstranit doložené zpomalování → ověřit bridge na aktuálním
+importovaném zadání → dokončit zbývající migrační akceptaci a předání.
+Samotný aktuální soubor v IDE není důkaz srozumitelného celého workflow.
 
 Obnovení dávky 30. 10. 2026: PR #113 s opravou desktopového bridge byl
 sloučen do `develop` jako `03d76ee111c1195fc23ea50bf0926b603a6ddbde`
@@ -540,7 +551,7 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   ověřil funkční zobrazení roadmapy ve Workspace. Zbývá ověření v IDE a
   samostatná akceptace úplnosti modulů a úpravy workflow zdrojového repozitáře;
   původní evidence se zatím neodstraňuje.
-- [ ] [in progress] **DEV-01-F-IDE-01 — obnovení ověření po opravě bridge
+- [x] [completed] **DEV-01-F-IDE-01 — obnovení ověření po opravě bridge
   (PoC validated).** Původ: chyba spojení VSCodia a uživatelský pokyn
   30. 10. 2026 pokračovat po merge opravy. Převzít PR #113 z develop,
   zachovat existující připojení a ověřit export importované revize v IDE.
@@ -616,6 +627,16 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   syntaxe a diffu prošla. Konflikty jsou vyřešené a připravené v indexu;
   merge commit nevytváří agent. Celá finální brána DEV-01 ani fyzický restart /
   IDE akceptace tím nejsou nahrazené a nadále zbývají.
+  Aktuální výsledek po opravách odezvy 30. 10. 2026: skutečná běžící IDE
+  schránka odpovídá celým JSON snapshotem aktuálnímu nativnímu
+  `IdeBridge.snapshot` pro host HEAD `54915375`, včetně všech 709 uzlů.
+  `STATUS.stale=false`, stáří heartbeat při kontrole 0,6 s, aktuální inbox
+  je prázdný. `/tmp/dev-01-bridge-live-after-perf.json`. Původní neověření
+  aktuálního exportu výše je tím nahrazené; historická relace a receipts
+  zůstaly zachované. Jde o fyzický přenos do schránky živého IDE, nikoli
+  automatické předání zadání do běžící konverzace agenta.
+  Samostatný izolovaný VSCodium extension-host smoke nyní skončil timeoutem
+  podle DEV-01-F-PERF-01; za úspěšnou kompletní IDE smoke sadu se nevydává.
 - [x] [completed] **DEV-01-F-IDE-02 — automatická obnova změněného zadání
   (PoC validated, 30. 10. 2026).** Původ: uživatel požaduje automatický
   přenos změny textu zadání místo hlášky „zastaralé“ a ručního nastavení.
@@ -650,6 +671,69 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   Schema-v1 zůstává ruční. Agent čtoucí starou cestu ani jeho běžící
   konverzace se tím automaticky nepřesměruje; agent handoff patří DEV-02/04.
   Pozdě zapsané zprávy ve staré schránce zůstávají pro ruční posouzení.
+- [ ] [in progress] **DEV-01-F-PERF-01 — odezva Workspace nad importovaným
+  projektem (cílová úroveň: PoC validated).** Původ: uživatelské hlášení
+  zasekávání a výslovné zařazení opravy mezi podmínky uzavření DEV-01.
+  Rozsah: změřit skutečný běžící desktop, najít opakovanou drahou cestu
+  a opravit ji bez obcházení serializace, privacy či recovery.
+  Výchozí krátký vzorek procesu `python3 -m spikes.desktop` ukázal 24 %
+  jednoho jádra CPU; není důkaz příčiny. Akceptace: doložená příčina,
+  srovnatelné měření před/po, regresní test relevantního chování a chybových
+  cest, zachování aktuálnosti dat a ověření odezvy skutečného projektu.
+  Implementace a izolované ověření 30. 10. 2026:
+  - Git snapshot načítal 670 souborů / 4 556 447 B přes 1 341 procesů.
+    `spikes.storage.Git.snapshot` nyní preflightuje typy/počty/velikosti přes
+    `ls-tree -l` a čte přesné blob ID jedním `cat-file --batch`. Kontroluje
+    hlavičky, velikosti, ukončení a úplné spotřebování odpovědi; zachovává
+    env_extra, deadline a stejné PoC limity. Před/po nad stejným host HEAD
+    `54915375`: 2,874 s → 0,0404 s a 1 341 → 2 příkazy. Nezávislé porovnání
+    původním čtenářem potvrdilo shodu všech 670 souborů bajt po bajtu.
+    Reporty `/tmp/dev-01-perf-before.json` a `/tmp/dev-01-perf-after.json`.
+    Celý nativní `Projects.open`: 3,105 s → 0,2109 s, stále 709 uzlů;
+    `/tmp/dev-01-open-before.json` a `/tmp/dev-01-open-after.json`.
+  - Normální otevření dále blokoval `/v1/julia/definitions`: pro každý
+    JSON včetně metadat znovu načítal a validoval celý projekt. Katalog nyní
+    sdílí jeden request-local validovaný snapshot, vynechá metadata a znovu
+    ověří HEAD; mode/ID/descriptor/privacy kontroly platných definic zůstaly.
+    Nezavádí se cache přežívající požadavek ani čtení nevalidovaného indexu.
+  - Qt kontrola poté odhalila `restored is not defined` v `loadChat`:
+    proměnná obnoveného vlákna byla deklarovaná pouze uvnitř try bloku,
+    ale použila se i po načtení doplňkových stavů. Má nyní rozsah celé funkce.
+    Regrese skutečně spouští JS pro prázdnou historii, obnovení vlákna,
+    jeho vlastní úlohy a selhání hlavního i volitelného požadavku.
+  - Reuse/adapt: stávající Git CLI wrapper, parser/validátor Julia definic
+    a UI loader; bez nové závislosti, procesu na pozadí či persistentního
+    storu. Read-only změna nepřidává crash boundary: při vadném čtení
+    nevznikne snapshot ani zápis do projektu/indexu. ADR 0003 se nemění.
+  - Cílená storage/Workspace/index/bridge sada: 50/50 OK, log
+    `/tmp/dev-01-perf-targeted.log`. Následující Julia/UI sada: 34 testů,
+    32 OK / 2 opt-in skipped, `/tmp/dev-01-open-workflow-targeted.log`.
+  - Izolovaný skutečný Qt/WebEngine nad importovaným projektem dokončil
+    standardní `openRegisteredProject` za 424,7 ms, zobrazil přesný HEAD,
+    709 uzlů a 335 podkladů. Výsledek a snímek:
+    `/tmp/dev-01-current-project-ui-after-perf/browser-result.json`,
+    `browser-screenshot.png`, log `browser-final.log` v témže adresáři.
+    Test měl vlastní konfiguraci/profil a nepřesměroval uživatelův bridge.
+    První obecný desktop smoke selhal na nepřítomnosti cíle mezi prvními
+    čtyřmi kartami; po opravě izolované registrace odhalil blokující Julia
+    načtení. Za úspěšnou plnou smoke akceptaci se tyto pokusy nevydávají.
+  - Samostatný reálný VSCodium smoke tentokrát skončil 90s timeoutem
+    extension test hostu (`/tmp/dev-01-bridge-current-smoke.log`); výsledek
+    se neoznačuje jako pass. Izolované HTTP/Node bridge regrese prošly.
+  - Modulový projekt prošel týmž Qt tokem za 190,1 ms: přesný HEAD
+    `e9eea387`, 19 uzlů / 22 podkladů, `module-browser-result.json` a
+    `module-browser-screenshot.png` v témže evidenčním adresáři.
+    Opakovaný read-only audit
+    `/tmp/dev-01-closure-evidence-after-perf-20261030` potvrdil všech 13
+    zdrojů, 185 bloků, 728 uzlů a 294 podpůrných záznamů v obou projektech;
+    projektové commity zůstaly shodné s importním receiptem a oba journály
+    mají 0 pending / unfinished operací. Nevznikl další import ani LLM scan.
+  Uživatelská fyzická akceptace odezvy 30. 10. 2026: „Ano, odezva je teď
+  v pořádku“. Běžný desktop byl uživatelem znovu spuštěný nad aktuálním
+  checkoutem; agent nespouštěl druhou instanci ani neukončoval jeho proces.
+  Finální celá testovací brána po všech třech opravách prošla při kontrole
+  po výpadku napájení (výsledek níže). Zbývá ověření běžného desktopu/IDE
+  workflow po restartu s aktuálním checkoutem.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.
@@ -698,6 +782,31 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   větev a PR po uzavření `DEV-01`; není součástí akceptace aktuální migrace.
 
 ## Ověření aktuálního kroku
+
+Kontrola po výpadku napájení 30. 10. 2026: všechny tři poslední opravy
+(Git batch snapshot, request-local Julia katalog a obnova chatu) i jejich
+regresní testy jsou zachované v pracovním stromu; nejsou commitované.
+`git fsck --full` skončil s exit 0, pouze s dangling objekty, bez hlášení
+poškozených či chybějících objektů. `git diff --check` prošel.
+Nový běh `python3 -m unittest tests.test_storage tests.test_julia_computation
+tests.test_desktop -v` mimo socketově omezený sandbox: 94 testů,
+OK / 8 skipped; log `/tmp/dev-01-power-recovery-targeted-permitted.log`.
+První sandboxový běh měl 15 chyb při zakázaných socketech a nenahrazuje
+úspěšný opakovaný běh. Read-only kontrola živých projektů potvrdila host
+HEAD `549153757576f24fb5244c313818a08bb2273ce6` (670 souborů / 335 entit)
+a modul HEAD `e9eea387918ed726daf7ee8c40ff309bd6fd8418` (44 / 22),
+validní snapshoty, čisté stromy a v obou journálech 0 pending / unfinished.
+Historické reporty, bundle/receipt a snímky odkazované v `/tmp` nejsou po
+restartu dostupné; jejich dřívější výsledky výše jsou historická evidence,
+nikoli nyní opakovaný byte-for-byte audit zdrojů. Živá projektová data se
+při kontrole neměnila. Akceptace celé DEV-01 a běžného desktop/IDE workflow
+po restartu zůstává otevřená.
+Celá závěrečná sada `python3 -m unittest discover -s tests -v` následně
+mimo sandbox prošla: 1092 testů za 246,817 s, OK / 39 skipped, exit 0;
+log `/tmp/dev-01-power-recovery-full-permitted.log`. Původní celosadový běh
+v sandboxu byl přerušen po zjištění socketového omezení z cíleného běhu;
+není vykazován jako dokončené ověření. Starší poznámky níže o zbývající
+celé bráně popisují tehdejší stav a nahrazuje je tento nový výsledek.
 
 `python3 -m unittest tests.test_roadmap_refinement tests.test_roadmap_importer
 tests.test_roadmap_validation tests.test_roadmap_bundle tests.test_roadmap_mapping

@@ -337,6 +337,56 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
                 'parameters': {'value': 42}}, user_id=self.author)
         self.assertFalse((self.state / 'julia-runs.sqlite').exists())
 
+    def test_definition_catalog_validates_one_snapshot_for_many_unrelated_json_files(self):
+        from spikes.storage import Git
+        path = self.publish_definition()
+        for _ in range(12):
+            identifier = str(uuid4()); folder = self.git.root / 'artifacts' / identifier
+            folder.mkdir()
+            (folder / 'data.json').write_text('{"unrelated": true}')
+            (folder / 'metadata.json').write_text(json.dumps({
+                'schema_version': 1, 'id': identifier, 'title': 'Unrelated JSON',
+                'kind': 'source', 'created_at': '2026-10-26T12:00:00Z',
+                'author_id': self.author, 'privacy': 'project', 'provenance': 'user',
+                'file': 'data.json'}))
+        head = self.git.commit('Unrelated JSON documents')
+        service = JuliaWorkspaceService(self.node, Projects(self.node))
+        with patch.object(Git, 'snapshot', autospec=True, side_effect=Git.snapshot) as snapshots, \
+                patch('spikes.julia_workspace.validate_snapshot', wraps=validate_snapshot) as validations:
+            catalog = service.definitions(self.project_id, head)
+        self.assertEqual([path], [row['definition']['path'] for row in catalog['definitions']])
+        self.assertEqual(1, snapshots.call_count, 'catalog must not reload the project per JSON file')
+        self.assertEqual(1, validations.call_count, 'metadata must be validated once per projection')
+
+    def test_definition_catalog_refuses_invalid_snapshot_and_stale_head(self):
+        from spikes.storage import Git
+        self.publish_definition()
+        service = JuliaWorkspaceService(self.node, Projects(self.node))
+        with patch.object(Git, 'snapshot', autospec=True, side_effect=Git.snapshot) as snapshots:
+            with self.assertRaisesRegex(ValueError, 'Project changed before'):
+                service.definitions(self.project_id, '0' * 40)
+            self.assertEqual(0, snapshots.call_count)
+        folder = self.git.root / 'artifacts' / self.ids['model']
+        metadata = json.loads((folder / 'metadata.json').read_text())
+        metadata['privacy'] = 'invalid'
+        (folder / 'metadata.json').write_text(json.dumps(metadata))
+        head = self.git.commit('Invalid metadata')
+        with self.assertRaises(ValueError):
+            service.definitions(self.project_id, head)
+
+    def test_definition_catalog_rechecks_head_after_snapshot_read(self):
+        from spikes.storage import Git
+        self.publish_definition()
+        service = JuliaWorkspaceService(self.node, Projects(self.node))
+        head = self.git.head(); original = Git.snapshot
+        def moving(git, *args, **kwargs):
+            files = original(git, *args, **kwargs)
+            self.git.run('commit', '--allow-empty', '-m', 'Concurrent HEAD move')
+            return files
+        with patch.object(Git, 'snapshot', autospec=True, side_effect=moving):
+            with self.assertRaisesRegex(ValueError, 'Project changed during'):
+                service.definitions(self.project_id, head)
+
     def test_workspace_reports_predispatch_rejection_and_does_not_reconcile_live_worker(self):
         path = self.publish_definition()
         service = JuliaWorkspaceService(self.node, Projects(self.node),

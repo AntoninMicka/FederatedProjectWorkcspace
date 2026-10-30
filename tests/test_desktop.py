@@ -1463,6 +1463,51 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('++chatLoadRevision', JS)
         self.assertIn('expectedProjectId!==(activeProject?.id || null)', JS)
 
+    def test_project_chat_restoration_finishes_after_optional_requests(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js required')
+        function = 'async function loadChat(){' + JS.split('async function loadChat(){', 1)[1].split(
+            '\n}\nfunction backendCandidate()', 1)[0] + '\n}'
+        harness = r'''
+const assert=require('node:assert/strict');
+let chatLoadRevision=0,chatSelectionRevision=0,activeProject={id:'project'},activeThread=null,
+ activeTaskThreadId=null,taskOutcomes=[],modelSelectionProjection=null,externalBinding=null,
+ externalStreaming=false,atlasCloudBinding=null,atlasCloudStreaming=false;
+let mode='empty',rendered=[],selected={textContent:'',value:''};
+const document={querySelector:()=>selected},chatStatus={textContent:''},chatOperationStatus={textContent:''};
+const thread={thread_id:'thread',project_id:'project',status:'active',classification:'brainstorming'};
+const renderModelSelection=()=>{},renderChatRunSelectors=()=>{},fillBinding=()=>{},fillSearchBinding=()=>{},
+ applyOllamaStreamingStatus=()=>{},applyResponseLanguageStatus=()=>{},renderThreadList=()=>{},
+ renderTaskPublicSources=()=>{},refreshChatModeControls=()=>{},fillExternalModels=()=>{},fillAtlasCloudOffers=()=>{};
+function renderChat(value){rendered.push(value);}
+async function loadAutonomyQueue(){return true;}
+async function projectRequest(url){
+ if(url==='/v1/chat/status'){
+  if(mode==='history-failure')throw Error('unavailable');
+  return {threads:mode==='empty'?[]:[thread]};
+ }
+ if(url==='/v1/tasks/list'){
+  if(mode==='task-failure')throw Error('unavailable');
+  return {outcomes:[{thread_id:'thread',id:'belongs'},{thread_id:'other',id:'foreign'}]};
+ }
+ return {};
+}
+'''
+        checks = r'''
+(async()=>{
+ await loadChat();assert.equal(rendered.at(-1),null);assert.deepEqual(taskOutcomes,[]);
+ mode='thread';await loadChat();assert.equal(rendered.at(-1),thread);
+ assert.equal(activeTaskThreadId,'thread');assert.deepEqual(taskOutcomes.map(item=>item.id),['belongs']);
+ assert.match(chatOperationStatus.textContent,/Obnoveno poslední/);
+ mode='task-failure';await loadChat();assert.equal(rendered.at(-1),thread);
+ assert.deepEqual(taskOutcomes,[]);assert.match(chatOperationStatus.textContent,/navázané úlohy nejsou dostupné/);
+ mode='history-failure';await loadChat();assert.equal(rendered.at(-1),null);
+ assert.match(chatStatus.textContent,/Historii chatů nelze načíst/);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        subprocess.run(['node', '-e', harness + function + checks], check=True)
+
     def test_orchestration_only_shows_actionable_configuration_warnings(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
         self.assertIn("warnings.push('Vyberte backend a model běhu.')", JS)

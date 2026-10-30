@@ -45,19 +45,39 @@ class Git:
 
     def snapshot(self, commit, *, env_extra=None):
         """Read artifact/registry bytes from a fixed commit or tree under PoC limits."""
-        entries = self.run('ls-tree', '-r', '-z', commit, '--', 'artifacts/',
+        entries = self.run('ls-tree', '-r', '-l', '-z', commit, '--', 'artifacts/',
                            'registries/', env_extra=env_extra).stdout
-        files = {}
+        objects = []
         total = 0
         for entry in filter(None, entries.split('\0')):
             info, path = entry.split('\t', 1)
-            mode, kind, oid = info.split()
+            mode, kind, oid, length = info.split()
             require(mode in {'100644', '100755'} and kind == 'blob', 'Non-regular Git entry')
-            size = int(self.run('cat-file', '-s', oid, env_extra=env_extra).stdout)
+            require(len(oid) in {40, 64} and all(c in '0123456789abcdef' for c in oid),
+                    'Invalid Git object ID')
+            size = int(length)
             total += size
-            require(size <= MAX_FILE and total <= MAX_SNAPSHOT and len(files) < 10000, 'Snapshot exceeds limits')
-            files[path] = self.run('cat-file', 'blob', oid, binary=True,
-                                   env_extra=env_extra).stdout
+            require(0 <= size <= MAX_FILE and total <= MAX_SNAPSHOT and len(objects) < 10000,
+                    'Snapshot exceeds limits')
+            objects.append((path, oid, size))
+        if not objects:
+            return {}
+        # Preflight all limits before requesting bytes. One process reads only
+        # fixed object IDs; filenames and blob content never enter its protocol.
+        output = self.run('cat-file', '--batch', binary=True, env_extra=env_extra,
+                          input=''.join(oid + '\n' for _, oid, _ in objects).encode('ascii')).stdout
+        files = {}
+        offset = 0
+        for path, oid, size in objects:
+            end = output.find(b'\n', offset)
+            require(end >= 0 and output[offset:end] == f'{oid} blob {size}'.encode('ascii'),
+                    'Invalid Git batch header')
+            offset = end + 1
+            end = offset + size
+            require(end < len(output) and output[end:end + 1] == b'\n', 'Truncated Git batch object')
+            files[path] = output[offset:end]
+            offset = end + 1
+        require(offset == len(output), 'Unexpected Git batch data')
         return files
 
 
