@@ -464,7 +464,13 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   audity a zdědit human-review override. Navazující run
   `/tmp/dev-01-source-rebuild-20261030-v7-m5-audit` převzal 185 extrakcí a 180
   nezměněných auditů; k opakování zbývá pět auditů. Cílený modul po změně:
-  21/21 prošlo; `git diff --check` prošel.
+  21/21 prošlo; `git diff --check` prošel. Selektivní audit doběhl 185/185 bez
+  selhání a uzavřel report s fidelity 99,73 (coverage 99,95, hierarchy 99,78,
+  status 99,30, provenance 99,89, dependencies 99,73), verdicts 172 `correct`
+  a 13 `equivalent`; žádný `distorted` ani `misplaced`. Candidate zůstává
+  fail-closed `import_ready=false` kvůli nezměněným 304 strukturálním review
+  položkám (211 parent, 42 combined-source-ids, 42 source-ambiguity,
+  6 dependency a 3 reconciliation ambiguity), nikoli kvůli fidelity auditu.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow
