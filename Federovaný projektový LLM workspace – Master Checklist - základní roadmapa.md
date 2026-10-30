@@ -1315,6 +1315,13 @@ Gate M3 proto není vydáván za celý uzavřený.
   `503` souběžného zápisu, restart a `unknown` po odpojení bez redispatch.
   Dávka byla doručena PR #91 jako merge commit `25d065f`; evidence je ve
   WORK_LOG.
+  Automatické kontroly dostupnosti Ollamy nově odděluje navazující
+  `OPS-BACKEND-AVAILABILITY-01` (samostatný worker, paměťová cache a krátký
+  status endpoint), ověřený na úrovni PoC validated v izolovaných lokálních
+  scénářích. Evidence a dosud otevřené doručení PR jsou ve
+  [WORK_LOG](WORK_LOG.md#ops-backend-availability-01--oddělené-automatické-kontroly-dostupnosti-ollamy--2026-10-30).
+  Ruční test nastavení a serializace zápisů zůstávají
+  podle [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md).
 - [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
   explicitní SearXNG
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
