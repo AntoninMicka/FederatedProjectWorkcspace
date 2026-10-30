@@ -53,9 +53,12 @@ async function activate(context) {
     busy = true;
     try {
       const config = await configuration();
+      let summary, warning = false;
       if (config.legacy) {
         const result = await bridge.sync(mailbox(config.pairing.session_id), config.pairing, config.repository, config.ca);
         status.text = result.stale ? 'Workspace: zastaralé zadání' : 'Workspace: propojeno';
+        warning = result.stale;
+        summary = result.stale ? 'Zadání je zastaralé. Pro aktuální revizi použijte Workspace: Nastavení projektů.' : 'Workspace synchronizován: 1 projekt.';
       } else {
         const current = await catalog(config);
         let count = 0, stale = 0, failed = 0;
@@ -68,8 +71,15 @@ async function activate(context) {
           } catch (error) { failed++; output.appendLine(mapping.title + ': ' + error.message); }
         }
         status.text = `${current.name}: ${count} projektů` + (stale ? ` · ${stale} zastaralých` : '') + (failed ? ` · ${failed} chyb` : '');
+        warning = Boolean(stale || failed || !count);
+        summary = `Synchronizace Workspace: ${count} projektů, ${stale} zastaralých, ${failed} chyb.`;
+        if (stale || !count) summary += ' Použijte Workspace: Nastavení projektů.';
+        if (failed) summary += ' Podrobnosti najdete ve výstupu Workspace bridge.';
       }
-      if (!quiet) vscode.window.showInformationMessage('Workspace synchronizován.');
+      if (!quiet) {
+        if (warning) vscode.window.showWarningMessage(summary);
+        else vscode.window.showInformationMessage(summary);
+      }
     } catch (error) {
       status.text = error.code === 'ECONNREFUSED' ? 'Workspace: čeká na spuštění' : 'Workspace: chyba spojení';
       output.appendLine(error.message);

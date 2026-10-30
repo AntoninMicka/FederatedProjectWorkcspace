@@ -581,6 +581,26 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   reload; fyzické zotavení konkrétního spojení zatím neověřeno. Dlouhodobě
   obsazený backend zůstává chybou, tato změna řeší přechodné odmítnutí.
   Celá závěrečná brána DEV-01 nad finálním kódem nadále zbývá.
+  Další hlášení 30. 10. 2026 („jeden projekt, zastaralý“, `socket hang up`):
+  read-only kontrola skutečné IDE schránky potvrdila 5 testovacích uzlů,
+  `STATUS.stale=true` a poslední sync 18:14:51 UTC; aktivní serverové mapování
+  zůstává na `c36af3e`. Druhý importovaný projekt nemá aktivní přiřazení.
+  Pět neautentizovaných GET sond na discovery loopback endpoint uspělo;
+  autentizovaný exchange ani příčina konkrétního přerušení nejsou ověřené.
+  Bridge 0.2.3 adaptuje existující UI synchronizace: ruční výsledek varuje
+  při stale, částečném/celkovém selhání i nulovém počtu projektů místo
+  bezpodmínečného „Workspace synchronizován“. Recovery a persistence podle
+  ADR 0060 se nemění; nové mapování ani přepis immutable snapshotu neproběhl.
+  Cílených 6/6 Node testů prošlo mimo sandbox, včetně stale, částečného a
+  úplného `socket hang up`, nulového přiřazení a úspěšné synchronizace.
+  `/tmp/workspace-bridge-update-0.2.3.vsix` byl úspěšně nainstalován do
+  stejného VSCodium profilu; aktivace v běžícím okně vyžaduje reload.
+  Uživatel výslovně schválil aktualizaci hlavního projektu při zachování
+  cílového repozitáře. Dokončení vyžaduje příkaz Nastavení projektů v IDE:
+  existující rozšíření při remapu ukládá novou relaci do svého SecretStorage
+  a potvrzuje lokální cíl. Tento běžící extension host z CLI ovládaný není;
+  jednostranný remap backendu by zanechal IDE s odvolaným lokálním přiřazením.
+  Fyzické načtení nové revize v IDE a obnovení konkrétního spojení zbývá.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.

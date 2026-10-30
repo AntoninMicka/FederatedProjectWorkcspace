@@ -78,6 +78,10 @@ server nemůže sám otevřít libovolnou lokální složku.
 Nastavení rozšíření **Workspace bridge → Auto Sync** řídí automatickou
 synchronizaci. Výběr projektů a cíle spravují uvedené dva příkazy. Otevření
 TODO a odeslání zprávy nabídne při více přiřazeních výběr konkrétního projektu.
+Ruční synchronizace od verze 0.2.3 hlásí počet synchronizovaných projektů,
+zastaralých zadání a chyb. Zastaralé zadání, chyba části projektů i nulový
+počet přiřazení vyvolají varování. Synchronizace sama připnutou revizi
+neobnovuje; aktuální revizi potvrďte přes **Workspace: Nastavení projektů**.
 Rozšíření v jednom profilu používá jedno aktivní připojení Workspace; přepnutí
 na nové připojení odstraní starý aktivní credential, soubory ponechá.
 

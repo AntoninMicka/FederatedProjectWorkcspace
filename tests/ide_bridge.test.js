@@ -91,7 +91,8 @@ test('plugin settings map multiple projects and restore them after restart', asy
   const projects = [first, second].map((f, index) => ({project_id: f.pairing.project_id,
     title: 'Project ' + index, expected_head: 'b'.repeat(40)}));
   let mappings = [], folderPick = 0, selection = 'both';
-  const synchronizations = [];
+  const synchronizations = [], notices = [];
+  let syncMode = 'ok';
   const originalRequest = bridge.connectionRequest, originalSync = bridge.sync;
   bridge.connectionRequest = async (_pairing, request) => {
     if (request.action === 'status') return {connection_id: pairing.connection_id, name: pairing.name, projects, mappings};
@@ -111,7 +112,9 @@ test('plugin settings map multiple projects and restore them after restart', asy
     throw new Error('Unexpected request');
   };
   bridge.sync = async (root, child, repository) => {
-    synchronizations.push({root, session: child.session_id, repository}); return {stale: false};
+    synchronizations.push({root, session: child.session_id, repository});
+    if (syncMode === 'failed' || (syncMode === 'partial' && repository === first.repo)) throw new Error('socket hang up');
+    return {stale: syncMode === 'stale'};
   };
   const vscode = {env: {}, StatusBarAlignment: {Left: 1},
     commands: {registerCommand: (name, callback) => {commands.set(name, callback);return {dispose(){}};}},
@@ -119,9 +122,9 @@ test('plugin settings map multiple projects and restore them after restart', asy
       getConfiguration: () => ({get: () => false})},
     window: {createOutputChannel: () => ({appendLine(){},dispose(){}}),
       createStatusBarItem: () => ({show(){},dispose(){}}),
-      showInformationMessage: async () => undefined,
+      showInformationMessage: async message => { notices.push({kind: 'info', message}); },
       showErrorMessage: message => {throw new Error(message);},
-      showWarningMessage: async () => 'Přiřadit',
+      showWarningMessage: async (message, options) => { if (!options?.modal) notices.push({kind: 'warning', message}); return 'Přiřadit'; },
       showQuickPick: async (items, options) => options.canPickMany ? (selection==='both' ? items : []) : items[folderPick++]}}
   ;
   Module._load = function(name, parent, isMain) {return name === 'vscode' ? vscode : load.call(this, name, parent, isMain);};
@@ -151,8 +154,22 @@ test('plugin settings map multiple projects and restore them after restart', asy
   synchronizations.length=0;
   await extension.activate(context());
   assert.equal(synchronizations.length,2,'restart must restore both mappings');
+  for (const [mode, pattern] of [['stale', /2 projektů, 2 zastaralých, 0 chyb/],
+      ['partial', /1 projektů, 0 zastaralých, 1 chyb/], ['failed', /0 projektů, 0 zastaralých, 2 chyb/]]) {
+    syncMode = mode; notices.length = 0;
+    await commands.get('workspaceBridge.sync')();
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].kind, 'warning');
+    assert.match(notices[0].message, pattern);
+  }
+  syncMode = 'ok'; notices.length = 0;
+  await commands.get('workspaceBridge.sync')();
+  assert.equal(notices[0].kind, 'info');
+  assert.match(notices[0].message, /2 projektů, 0 zastaralých, 0 chyb/);
   selection='none';
   await commands.get('workspaceBridge.configure')();
+  assert.equal(notices.at(-1).kind, 'warning');
+  assert.match(notices.at(-1).message, /Nastavení projektů/);
   assert.deepEqual(mappings,[]);
   assert.deepEqual(JSON.parse(secrets.get('connection:'+pairing.connection_id)).mappings,{});
 });
