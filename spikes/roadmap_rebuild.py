@@ -233,6 +233,17 @@ def validate_extraction(raw, block):
                 'line_start': entity['line_start'], 'line_end': entity['line_end'],
                 'reason': 'Model použil neformální maturity test-validated; '
                           'hodnota byla ponechána unknown k lidskému rozhodnutí.'})
+        disallowed = [item for item in entity['source_ids']
+                      if item not in block['allowed_source_ids']]
+        if disallowed:
+            require(len(value['ambiguities']) < 128,
+                    'Cannot preserve rejected source ID ambiguity')
+            entity['source_ids'] = [item for item in entity['source_ids']
+                                    if item in block['allowed_source_ids']]
+            value['ambiguities'].append({
+                'line_start': entity['line_start'], 'line_end': entity['line_end'],
+                'reason': 'Model navrhl source ID mimo deterministický allowlist: '
+                          + ', '.join(disallowed) + '; ID bylo odebráno k lidskému review.'})
         require(isinstance(entity['entity_key'], str) and LOCAL_KEY.fullmatch(entity['entity_key'])
                 and entity['entity_key'] not in keys, 'Invalid or duplicate local entity key')
         keys.add(entity['entity_key'])
@@ -446,6 +457,53 @@ class RoadmapRebuild:
         _atomic_json(root/'catalog.json', catalog); _atomic_json(root/'manifest.json', manifest)
         (root/'results').mkdir(mode=0o700); (root/'raw').mkdir(mode=0o700)
         (root/'ollama-runs').mkdir(mode=0o700)
+        return cls(node, root)
+
+    @classmethod
+    def derive(cls, node, run_dir, source_run):
+        source_root = _secure_directory(source_run)
+        root = Path(run_dir).absolute()
+        require(not root.exists(), 'Rebuild run directory already exists')
+        catalog = json.loads((source_root/'catalog.json').read_text(encoding='utf-8'))
+        source_manifest = json.loads((source_root/'manifest.json').read_text(encoding='utf-8'))
+        frozen = dict(catalog); catalog_sha256 = frozen.pop('catalog_sha256')
+        require(hashlib.sha256(canonical(frozen)).hexdigest() == catalog_sha256
+                and source_manifest['catalog_sha256'] == catalog_sha256,
+                'Source rebuild catalog or manifest is inconsistent')
+        binding = OllamaBindings(Path(node).absolute().parent / ('.' + Path(node).name + '.chat')).load()
+        require(binding.boundary == 'same-node', 'Source rebuild requires same-node Ollama')
+        prompts = dict(
+            extraction_sha256=hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
+            audit_sha256=hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
+            extraction_repair_sha256=hashlib.sha256(
+                EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
+            audit_repair_sha256=hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest())
+        manifest = dict(schema=SCHEMA, revision=REVISION, created_at=_now(),
+                        catalog_sha256=catalog_sha256,
+                        binding=dict(adapter='ollama', binding_id=binding.binding_id,
+                                     revision=binding.revision, boundary=binding.boundary,
+                                     target_id=binding.target_id, model=binding.model),
+                        prompts=prompts, state='preparing-derived')
+        root = _secure_directory(root, create=True)
+        (root/'results').mkdir(mode=0o700); (root/'raw').mkdir(mode=0o700)
+        (root/'ollama-runs').mkdir(mode=0o700)
+        reused = []
+        block_by_id = {item['block_id']: item for item in catalog['blocks']}
+        for path in sorted((source_root/'results').glob('extract-*.json')):
+            if '.attempt-' in path.name or path.name.endswith('.failed.json'):
+                continue
+            block_id = path.name[len('extract-'):-len('.json')]
+            require(block_id in block_by_id, 'Source run contains an unknown extraction block')
+            value = validate_extraction(path.read_text(encoding='utf-8'), block_by_id[block_id])
+            _atomic_json(root/'results'/path.name, value)
+            reused.append({'block_id': block_id,
+                           'result_sha256': hashlib.sha256(canonical(value)).hexdigest()})
+        manifest['derived_from'] = {
+            'run_dir': str(source_root),
+            'manifest_sha256': hashlib.sha256(canonical(source_manifest)).hexdigest(),
+            'reused_extractions': reused}
+        manifest['state'] = 'prepared'
+        _atomic_json(root/'catalog.json', catalog); _atomic_json(root/'manifest.json', manifest)
         return cls(node, root)
 
     def _load(self, name):

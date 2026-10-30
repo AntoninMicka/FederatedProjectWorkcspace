@@ -393,6 +393,13 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   odděluje zmíněná ID použitelná jen jako reference a zachovává každou
   ambiguity jako blokátor kandidáta. Vymyšlené ID a obsah mimo blok zůstávají
   fail-closed. Cílená migrační sada: 40/40 prošlo. Zbývá čistý fyzický v7 běh.
+  V7 dokončila extraction se 178/185 validními bloky, 15 opravnými voláními a
+  7 terminálními chybami: šestkrát source ID mimo allowlist a jednou neurčitý
+  transport. ID mimo allowlist se nyní odstraní se zachováním obsahu a
+  povinným `source-ambiguity` blokátorem. Nový `derive --from-run` přebírá jen
+  znovu validované extraction výsledky, eviduje jejich hashe a lineage a
+  nechává znovu zpracovat pouze chybějící bloky; candidate a audity vzniknou
+  vždy znovu. Cílená migrační sada po změně: 42/42 prošlo.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

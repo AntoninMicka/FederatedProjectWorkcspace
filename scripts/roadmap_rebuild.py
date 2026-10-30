@@ -54,12 +54,17 @@ def main(argv=None):
     prepare.add_argument('--revision', default='HEAD')
     prepare.add_argument('--module', nargs=3, action='append', default=[],
                          metavar=('MODULE_ID', 'REPOSITORY', 'REVISION'))
+    derive = sub.add_parser('derive')
+    derive.add_argument('--from-run', required=True)
     run = sub.add_parser('run'); run.add_argument('--limit', type=int, default=1)
     sub.add_parser('status')
     args = parser.parse_args(argv)
     if args.command == 'prepare':
         service = RoadmapRebuild.prepare(args.node, args.run_dir, args.repository,
                                          revision=args.revision, modules=args.module)
+        result = service.status()
+    elif args.command == 'derive':
+        service = RoadmapRebuild.derive(args.node, args.run_dir, args.from_run)
         result = service.status()
     else:
         service = RoadmapRebuild(args.node, args.run_dir)

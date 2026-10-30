@@ -255,6 +255,34 @@ class RoadmapRebuildTests(unittest.TestCase):
         self.assertFalse(candidate['ready'])
         self.assertEqual('source-ambiguity', candidate['issues'][0]['kind'])
 
+    def test_disallowed_model_id_preserves_content_as_blocking_ambiguity(self):
+        block = {'block_id': 'block-1', 'source': 'BACKLOG.md',
+                 'line_start': 1, 'line_end': 5, 'allowed_source_ids': []}
+        value = {'schema': 'fpw-roadmap-source-extraction-v2', 'block_id': 'block-1',
+                 'entities': [dict(entity_key='e1', kind='task', source_ids=['INVENTED-01'],
+                     title='Obsah bez doloženého ID', status='planned', maturity='unknown',
+                     parent_ref=None, dependency_refs=[], line_start=1, line_end=5,
+                     summary='Obsah zůstane zachován.')],
+                 'ambiguities': [], 'summary': 'Nejisté ID.'}
+        extraction = validate_extraction(json.dumps(value), block)
+        self.assertEqual([], extraction['entities'][0]['source_ids'])
+        candidate = build_candidate({'blocks': [block]}, [extraction])
+        self.assertEqual('source-ambiguity', candidate['issues'][0]['kind'])
+        self.assertFalse(candidate['ready'])
+
+    def test_derived_run_reuses_only_valid_extractions_with_lineage(self):
+        RoadmapRebuild.prepare(self.node, self.run_dir, self.repository,
+                               revision=self.commit)
+        RoadmapRebuild(self.node, self.run_dir, adapter_factory=self.factory).run(limit=1)
+        derived_dir = self.base/'derived'
+        derived = RoadmapRebuild.derive(self.node, derived_dir, self.run_dir)
+        status = derived.status()
+        self.assertEqual(1, status['extracted'])
+        self.assertEqual(0, status['failed_extractions'])
+        manifest = json.loads((derived_dir/'manifest.json').read_text(encoding='utf-8'))
+        self.assertEqual(str(self.run_dir), manifest['derived_from']['run_dir'])
+        self.assertEqual(1, len(manifest['derived_from']['reused_extractions']))
+
     def test_combined_source_ids_create_review_issue_instead_of_failure(self):
         block = {'block_id': 'block-1', 'source': 'BACKLOG.md', 'line_start': 1,
                  'line_end': 5, 'allowed_source_ids': ['ER-01', 'ER-03']}

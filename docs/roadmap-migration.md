@@ -115,6 +115,26 @@ python3 -m scripts.roadmap_rebuild \
   --run-dir /tmp/dev-01-source-rebuild run --limit 100000
 ```
 
+Po dokončeném běhu s terminálními chybami lze založit odvozený run, aniž by se
+znovu volal model pro validní extraction bloky:
+
+```bash
+python3 -m scripts.roadmap_rebuild \
+  --node /home/antonin/.local/state/federated-workspace/node.json \
+  --run-dir /tmp/dev-01-source-rebuild-retry-1 \
+  derive --from-run /tmp/dev-01-source-rebuild
+```
+
+`derive` znovu validuje každý přebíraný výsledek proti připnutému katalogu,
+kopíruje pouze validní extraction JSON a v manifestu zaznamená zdrojový run,
+hash jeho manifestu a hash každého převzatého výsledku. Terminální failures,
+raw odpovědi, candidate ani audit nepřebírá. Následné `run` proto odešle jen
+chybějící extraction bloky, znovu deterministicky sestaví celý candidate a
+provede všechny dosud neprovedené audity. Operace zapisuje pouze nový run
+adresář: jednotlivé JSON soubory publikuje atomicky a manifest se stavem
+`prepared` až nakonec. Pád před manifestem zanechá neaktivní neúplný adresář,
+který se nesmí vydávat za připravený run; zdrojový run se nikdy nemění.
+
 Během každého modelového volání CLI průběžně ukazuje fázi
 `extract`/`audit`, blok, opravný pokus, hotové logické jednotky, procenta, dobu
 běhu aktuálního příkazu a orientační ETA. ETA vznikne až po první dokončené
@@ -160,6 +180,9 @@ vymyšlené modelem se do allowlistu nedostane. Neformální maturity
 `test-validated` se nepovýší na PoC: uloží se jako `unknown` a povinná
 `source-ambiguity`. Všechny ambiguity z extraction se přenášejí mezi blokátory
 kandidáta a nemohou vést k `import_ready=true`.
+Stejně se zachová obsah entity, pokud model navrhne source ID mimo allowlist:
+ID se odstraní, přesný problém se zapíše jako `source-ambiguity` a candidate
+zůstane blokovaný k lidskému review namísto zahození celého zdrojového bloku.
 
 ## 1. Připnutá inventura a náhled bez zápisu
 
