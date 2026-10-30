@@ -95,6 +95,46 @@ class LocalAPITests(unittest.TestCase):
             self.assertFalse(blocked.is_alive())
             self.assertIn(b' 200 ', result['response'].split(b'\r\n', 1)[0])
 
+    def test_merged_readonly_routes_keep_independent_lanes(self):
+        routes = {
+            '/v1/counter': 'application_lane',
+            '/v1/node-telemetry/status': 'telemetry_lane',
+            '/v1/chat/availability': 'availability_lane',
+            '/v1/roadmap-refinement/list': 'review_lane',
+            '/v1/roadmap-refinement/detail': 'review_lane',
+            '/v1/roadmap-refinement/reconcile/preview': 'review_lane',
+        }
+
+        class LaneHandler(Handler):
+            post_paths = set(routes)
+
+            def dispatch(self, request):
+                return self.reply(200, {'path': self.path})
+
+        with running_api('http', handler=LaneHandler, lane_timeout=0.05) as server:
+            for path, own_lane in routes.items():
+                with self.subTest(path=path):
+                    blocked = [getattr(server, name) for name in set(routes.values())
+                               if name != own_lane]
+                    for lock in blocked:
+                        lock.acquire()
+                    try:
+                        response = self.request(server, path=path, body=b'{}')
+                    finally:
+                        for lock in reversed(blocked):
+                            lock.release()
+                    head, body = response.split(b'\r\n\r\n', 1)
+                    self.assertIn(b' 200 ', head)
+                    self.assertEqual({'path': path}, json.loads(body))
+            # Similar-looking paths must retain normal application admission.
+            server.application_lane.acquire()
+            try:
+                response = self.request(server, path='/v1/chat/availability?probe=1',
+                                        body=b'{}')
+                self.assertIn(b' 503 ', response.split(b'\r\n', 1)[0])
+            finally:
+                server.application_lane.release()
+
     def test_concurrent_write_is_rejected_before_dispatch(self):
         entered = threading.Event()
         release = threading.Event()

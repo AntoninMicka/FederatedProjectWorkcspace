@@ -601,6 +601,21 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   a potvrzuje lokální cíl. Tento běžící extension host z CLI ovládaný není;
   jednostranný remap backendu by zanechal IDE s odvolaným lokálním přiřazením.
   Fyzické načtení nové revize v IDE a obnovení konkrétního spojení zbývá.
+  Doplnění 30. 10. 2026 po PR #114: probíhající lokální merge `develop`
+  `c75b96529ffc95333aec93be8f3dfe1b03d5fe5a` přebírá oddělené automatické
+  kontroly dostupnosti backendu. Konflikty TODO, WORK_LOG, desktop UI a
+  local API jsou řešeny zachováním aktivní DEV-01, historie obou opravných
+  dávek a nezávislých linek application/telemetry/review/availability.
+  Zápisy mají původní serializaci; sampler je pouze paměťový, recovery podle
+  ADR 0003/0050 se nemění. Cílené ověření kombinovaného kódu: 49/49 testů
+  dostupnosti, UI JS, HTTP/HTTPS linek, roadmapového grafu, IDE bridge a
+  rebuild bundle prošlo (`/tmp/dev-01-merge-114-targeted.log`). Nová regrese
+  ve `tests.test_local_api` navíc ověřila každý přesný endpoint se všemi třemi
+  ostatními linkami zamčenými a odmítnutí podobné query cesty přes aplikační
+  limit: 1/1 OK (`/tmp/dev-01-merge-114-lanes.log`). Kontrola grafové projekce,
+  syntaxe a diffu prošla. Konflikty jsou vyřešené a připravené v indexu;
+  merge commit nevytváří agent. Celá finální brána DEV-01 ani fyzický restart /
+  IDE akceptace tím nejsou nahrazené a nadále zbývají.
 - [ ] [planned] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
   Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
   jeden PR do develop; spuštění další feature není součástí této dávky.

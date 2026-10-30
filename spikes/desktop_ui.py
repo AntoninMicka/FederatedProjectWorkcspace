@@ -20,7 +20,7 @@ from spikes.presentation_visual import SLIDE_JS
 from spikes.presentation_documents import public_content
 from spikes.presentation_closing import closing_slide
 from spikes.document_patterns import DocumentPatterns
-from spikes.ollama_backend import OllamaResponseError, UnknownRun
+from spikes.ollama_backend import OllamaBinding, OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
 from spikes.public_source import (PublicSourceError, PublicSourceRejected,
@@ -2310,7 +2310,8 @@ function clearProject(){
  document.querySelector('#project-commit').textContent='';
 }
 async function projectRequest(path,body,timeout=60000){
- const monitorRequest=path.startsWith('/v1/node-telemetry/') || path.startsWith('/v1/roadmap-refinement/') || path==='/v1/chat/test' ||
+ const monitorRequest=path.startsWith('/v1/node-telemetry/') || path.startsWith('/v1/roadmap-refinement/') ||
+  path==='/v1/chat/test' || path==='/v1/chat/availability' ||
   path==='/v1/chat/status' || path==='/v1/external/status' || path==='/v1/media/status' ||
   path==='/v1/google-drive/status' || path.startsWith('/v1/backend-metrics/');
  try{
@@ -4698,8 +4699,8 @@ for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET']){
 const RESOURCE_ACTIVITY_INTERVAL=2000,RESOURCE_CAPACITY_INTERVAL=15000;
 const BACKEND_AVAILABILITY_INTERVAL=30000;
 let resourceActivityTimer=null,resourceCapacityTimer=null,backendAvailabilityTimer=null;
-let backendRefreshTimer=null,backendProbeRunning=false;
-let latestOllamaRuntime=null,ollamaAvailability=null;
+let backendRefreshTimer=null,backendProbeRunning=false,backendAvailabilityPoll=null;
+let latestOllamaRuntime=null,ollamaAvailability=null,availabilityBindingKey=null;
 function metricText(metric){
  if(!metric||metric.status!=='available')return 'neznámé';
  if(metric.unit==='percent')return `${metric.value.toFixed(1)} %`;
@@ -4774,6 +4775,11 @@ resourceMonitorDialog.addEventListener('click',event=>{
  if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)resourceMonitorDialog.close();
 });
 function renderLocalProviderAvailability(binding){
+ const key=binding?JSON.stringify(binding):null;
+ if(key!==availabilityBindingKey){
+  ollamaAvailability=null;latestOllamaRuntime=null;availabilityBindingKey=key;
+  clearTimeout(backendAvailabilityPoll);
+ }
  if(!binding){ollamaAvailability=null;latestOllamaRuntime=null;}
  renderOllamaProvider();
 }
@@ -4781,7 +4787,8 @@ function renderOllamaProvider(){
  if(!chatBinding){localProviderIndicator.classList.remove('runtime-warning-compact');
   localProviderIndicator.textContent='Lokální AI · nenastaveno';
   localProviderAvailability.textContent='Lokální provider není nakonfigurován; dostupnost není ověřena.';return;}
- const availability=!ollamaAvailability?'neověřeno':ollamaAvailability.available?
+ const availability=!ollamaAvailability||ollamaAvailability.available===null?
+  (ollamaAvailability?.checking?'ověřuji':'neověřeno'):ollamaAvailability.available?
   (ollamaAvailability.model_available?'dostupná':'model chybí'):'nedostupná';
  const runtimeWarning=latestOllamaRuntime?.assessment==='warning-gpu-expected-cpu-observed';
  localProviderIndicator.classList.toggle('runtime-warning-compact',runtimeWarning);
@@ -4791,16 +4798,21 @@ function renderOllamaProvider(){
  const runtime=latestOllamaRuntime?
   `${runtimeEvidenceText(latestOllamaRuntime.runtime_evidence)} Run ${latestOllamaRuntime.run_id}.`:
   'Zatím není uložená runtime evidence dokončeného běhu.';
- localProviderAvailability.textContent=`Dostupnost: ${availability}. ${runtime}`;
+ const sampled=ollamaAvailability?.checked_at?` Poslední ověření: ${ollamaAvailability.checked_at}.`:'';
+ const freshness=ollamaAvailability?.stale?' Výsledek čeká na obnovení.':'';
+ localProviderAvailability.textContent=`Dostupnost: ${availability}.${sampled}${freshness} ${runtime}`;
 }
 async function probeBackendAvailability(){
+ clearTimeout(backendAvailabilityPoll);
  if(document.hidden||backendProbeRunning||document.querySelector('#resource-monitor').hidden||!chatBinding)return;
- backendProbeRunning=true;
- try{const result=await projectRequest('/v1/chat/test',chatBinding,15000);
-  ollamaAvailability={available:true,model_available:result.model_available,
-   checked_at:new Date().toISOString()};
- }catch(error){ollamaAvailability={available:false,checked_at:new Date().toISOString()};}
- finally{backendProbeRunning=false;renderOllamaProvider();}
+ backendProbeRunning=true;const binding=chatBinding;
+ try{const result=await projectRequest('/v1/chat/availability',binding,5000);
+  if(chatBinding!==binding)return;
+  ollamaAvailability=result;
+  if(result.retry_after_ms)backendAvailabilityPoll=setTimeout(probeBackendAvailability,result.retry_after_ms);
+ }catch(error){
+  if(chatBinding===binding)ollamaAvailability={...(ollamaAvailability||{available:null,checked_at:null}),checking:false,stale:true};
+ }finally{backendProbeRunning=false;renderOllamaProvider();}
 }
 function scheduleBackendStateRefresh(delay=500){
  clearTimeout(backendRefreshTimer);backendRefreshTimer=setTimeout(()=>{
@@ -7476,7 +7488,7 @@ class DesktopHandler(Handler):
         '/v1/chat/status', '/v1/chat/configure', '/v1/chat/models',
         '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
         '/v1/node-telemetry/run',
-        '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test',
+        '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test', '/v1/chat/availability',
         '/v1/search/status', '/v1/search/configure', '/v1/search/test',
         '/v1/chat/send', '/v1/chat/send-stream',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
@@ -8113,6 +8125,9 @@ class DesktopHandler(Handler):
             if self.path == '/v1/chat/response-language' and isinstance(request, dict):
                 return self.reply(200,
                     self.server.chat_service.configure_response_language(request))
+            if self.path == '/v1/chat/availability' and isinstance(request, dict):
+                binding = OllamaBinding.parse(request)
+                return self.reply(200, self.server.backend_availability.status(binding))
             if self.path == '/v1/chat/test' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.test_binding(request))
             if (self.path == '/v1/chat/orchestration' and isinstance(request, dict)

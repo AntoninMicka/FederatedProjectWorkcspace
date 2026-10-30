@@ -5,6 +5,91 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## OPS-BACKEND-AVAILABILITY-01 — oddělené automatické kontroly dostupnosti Ollamy — 2026-10-30
+
+Doručení aktualizováno 30. 10. 2026: [PR #114](https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/114)
+je sloučený do `develop` jako `c75b96529ffc95333aec93be8f3dfe1b03d5fe5a`
+(19:01:45 UTC / 20:01:45 CET). Níže uvedené čekání na PR je historický stav
+při předání. Opravu nyní přebírá probíhající lokální merge do DEV-01;
+uzavření opravné dávky neuzavírá migraci.
+
+Dokončená feature: **Oddělené automatické kontroly dostupnosti Ollamy**.
+Původ: hlášení občasného zpomalení Workspace a schválení implementace dne
+30. 10. 2026. Milník: provozní návaznost M1/M3, ADR 0049/0050.
+Větev `feature/ops-backend-availability`, základ `develop` `03d76ee`
+(PR #113), cíl jediného PR `develop`. Checkout je v hlavní projektové složce
+pod `.worktrees/ops-backend-availability` (lokálně ignorovaný).
+Úroveň výsledku: **implemented / PoC validated** v izolovaných lokálních
+HTTP a HTTPS scénářích. Technická akceptace splněna; doručení je otevřené:
+PR není vytvořen ani sloučen, commit ani push nebyl proveden.
+Rozpracovaná DEV-01 zůstává beze změny na vlastní větvi v hlavním checkoutu.
+
+Rozsah: automatické kontroly dostupnosti Ollamy a jejich monitorovací UI.
+Ruční `/v1/chat/test`, ostatní providery, serializace projektových zápisů a
+obecná paralelizace čtení se nemění. Nový sampler neřeší všechny možné zdroje
+latence aplikace. Předchozí čekací TODO opravy IDE bylo administrativně
+zastaralé; oprava předání PR #113 je zaznamenaná u její původní evidence níže
+jako první administrativní krok této samostatně schválené nové dávky.
+
+- [x] [completed] **OPS-BACKEND-AVAILABILITY-01-A (designed)** — vymezený
+  lifecycle paměťového sampleru, nezávislá krátká status linka, oprávnění,
+  crash boundaries a drain během shutdownu; doplnění ADR 0050.
+- [x] [completed] **OPS-BACKEND-AVAILABILITY-01-B (implemented)** — jediná
+  automatická sonda bez fronty, TTL 30 s a cache nejvýše osmi celých immutable
+  bindingů včetně endpointu/revize/modelu/TLS pinu. HTTP handler ihned vrací
+  vzorek, čas měření, checking/stale a neověřený stav; nečeká na síť.
+  UI již automaticky nevolá blokující ruční test, zachovává stáří vzorku,
+  neoznačuje chybu status endpointu za selhání backendu a nepřevezme výsledek
+  jiného bindingu. Web má read-only autentizaci a zachované admin oprávnění.
+  Doplněna povinná anotace feature a její historické závislosti v roadmapovém
+  grafu. Reuse/adapt: bounded HTTP server, stdlib Thread/Condition, existující
+  Ollama validátor a TLS-pinned `/api/tags`, autentizace a monitor UI.
+  Nová závislost, databáze, framework ani externí kód nejsou potřeba.
+- [x] [completed] **OPS-BACKEND-AVAILABILITY-01-C (PoC validated)** — cílené
+  scénáře, celá závěrečná sada, finální konzistence dokumentů a předání.
+
+Ověření:
+
+- Cílený běh sampleru, UI JS skutečně provedeného v Node, local API,
+  HTTPS read-only autentizace a RBAC: **22 testů OK**;
+  `/tmp/backend-availability-targeted.log`. Kryje single-flight bez fronty,
+  přesný binding, omezení cache, TTL, selhání, změnu bindingu, nepřevzetí staré
+  odpovědi, uvolněné HTTP workery i drain/timeout shutdownu.
+- Oprava napojení roadmapy: **15 testů OK**, včetně projekce, HTTPS SVG exportu
+  a nových monitorovacích scénářů; `/tmp/backend-availability-roadmap-targeted.log`.
+  První plná sada nalezla chybějící anotaci nové dávky a tím dvě selhání
+  roadmapových scénářů; `/tmp/backend-availability-full-first.log`. Doplněna
+  anotace a kanonická hlavička aktivní feature. Nešlo o selhání sampleru.
+- Finální `python3 -m unittest discover -s tests -v`: **986 testů, 947 úspěšných,
+  39 přeskočených, bez selhání**, exit 0, 258.108 s;
+  `/tmp/backend-availability-full.log`. Běh byl po poslední změně kódu, testů
+  i grafové konfigurace, z trvalého checkoutu. Pozdější úpravy jsou pouze
+  dokumentační předání; syntaxe Pythonu a finální `git diff --check` prošly.
+  Sada vypisuje také ResourceWarning pro neuzavřené SQLite connections;
+  úspěšný běh není tvrzením, že tato obecná upozornění byla odstraněna.
+- Skutečný izolovaný HTTP smoke: backend zadržel odpověď `/api/tags`, zatím
+  uspělo 10 status dotazů (maximum 0,88 ms) a 10 GET `/app.css` (maximum
+  0,65 ms); první status 1,18 ms. Po uvolnění backendu sampler potvrdil
+  dostupný model. `/tmp/workspace-availability-probe.json`, reproduktor
+  `/tmp/workspace-availability-probe.py`. Socketové testy i smoke běžely mimo
+  sandbox, který bind zakazuje; první omezený pokus není validační důkaz.
+  Původní dočasný checkout byl přesunut kopírováním a `git worktree repair`
+  přes hranici filesystémů; bajty implementace i testů byly porovnány.
+
+Recovery: sampler mění pouze paměť. Pád před, během i po read-only sondě
+zahodí vzorek a nový proces začne neověřeně; Git, index a journal se nemění.
+Shutdown zavře admission a ve společné grace čeká na requesty i sondu.
+Vypršení lhůty je `shutdown_clean=false`, po uzavření se nové sondy nepřijímají
+ani nepublikují pozdní výsledky. Workspace/provider recovery podle ADR 0003/0050
+zůstává původní. Jediný background worker nevlastní klientský handler/socket.
+
+Omezení: běžící uživatelský desktop ani web nebyl nasazením této větve změněn;
+fyzické zrychlení konkrétního uživatelova okna, native Qt klikání a vzdálená
+produkční síť nejsou nově akceptované. Projev změny vyžaduje doručení a restart
+aplikace z nového kódu. Jedna feature a jeden PR do develop, bez navazujícího
+nezávislého úkolu; žádné nové odklady k předání do BACKLOG nevznikly.
+
+
 ## DEV-IDE-RECONNECT-01 — automatické obnovení desktopového IDE bridge — 2026-10-30
 
 Doručení aktualizováno 30. 10. 2026: [PR #113](https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/113)
@@ -13,6 +98,13 @@ v 17:56:55 UTC (18:56:55 CET), po úspěchu čtyř CI shardů, souhrnného `test
 a `licensing`. Níže uvedené čekání na PR je historický stav při předání,
 nikoli aktuální stav doručení. Při pokračování DEV-01 je oprava přebírána
 z develop; aktivní migrační TODO se zachovává.
+
+Administrativní doplnění při zahájení `OPS-BACKEND-AVAILABILITY-01` dne
+30. 10. 2026: předchozí čekací TODO již neodpovídalo Gitu. PR #113 je sloučený
+v `develop` jako `03d76ee111c1195fc23ea50bf0926b603a6ddbde`, který je základem
+nové, uživatelem samostatně schválené větve. Níže zůstává původní evidence
+předání před merge; nevyjadřuje aktuální stav doručení. Aktivní DEV-01 v jiném
+checkoutu se tím neuzavírá ani nepřenáší do této opravy.
 
 Dokončená feature dávka: **Automatické obnovení desktopového IDE bridge**.
 Původ: uživatelská chyba spojení VSCodia a výslovný požadavek 30. 10. 2026

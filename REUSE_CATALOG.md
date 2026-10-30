@@ -864,3 +864,15 @@ SecretStorage a mapování, přidává ověření podepsané lokální adresy p�
 požadavkem. Obecný VSIX reuse stávajícího balení umožňuje update bez párování.
 Pevný společný port byl odmítnut kvůli kolizím více lokálních uzlů; externí
 komponenta se nepřebírá. Recovery: [ADR 0060](docs/adr/0060-local-file-ide-bridge.md).
+
+
+OPS-BACKEND-AVAILABILITY-01 **reuse/adaptuje** `BoundedHTTPServer`, stdlib
+`Thread`/`Condition`, immutable `OllamaBinding`, původní TLS-pinned
+`OllamaAdapter.probe` a read-only administrační autentizaci. Automatické sondy
+mají vlastní jediný procesní worker bez fronty a cache osmi přesných bindingů;
+HTTP handler vlastní jen krátkou odpověď. Stávající monitor UI načítá vzorek
+místo blokujícího ručního testu. Nová databáze, externí framework, obecný pool,
+provider fallback a paralelní projektové zápisy se odmítají. Soukromá inventura
+nepřináší komponentu se stejným lifecycle a request ownership kontraktem;
+žádný externí kód ani neveřejný detail se nepřebírá. Rozhodnutí a recovery:
+[ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md#rozšíření-2026-10-30--automatická-dostupnost-backendu).

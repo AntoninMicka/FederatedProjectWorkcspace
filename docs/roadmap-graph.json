@@ -1,6 +1,8 @@
 {
   "schema": "fpw-roadmap-graph-v1",
   "nodes": [
+    {"id": "OPS-WEB-CONCURRENCY-01", "milestone": "M3", "depends_on": []},
+    {"id": "OPS-BACKEND-AVAILABILITY-01", "milestone": "M3", "depends_on": ["OPS-WEB-CONCURRENCY-01"]},
     {"id": "F-M3-MODEL-CATALOG-01", "milestone": "M3", "depends_on": []},
     {"id": "F-M3-ATLASCLOUD-01", "milestone": "M3", "depends_on": ["F-M3-MODEL-CATALOG-01"]},
     {"id": "UX-BACKEND-MODEL-01", "milestone": "M3", "depends_on": ["F-M3-MODEL-CATALOG-01", "F-M3-ATLASCLOUD-01"]},

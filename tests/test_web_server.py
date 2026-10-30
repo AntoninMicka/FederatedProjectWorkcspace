@@ -60,6 +60,40 @@ class WebTests(unittest.TestCase):
         self.dns_authority = f'workspace.cacke.internal:{self.server.server_port}'
         self.context = ssl.create_default_context(cafile=self.cert)
 
+    def test_availability_is_readonly_and_does_not_wait_for_application_lane(self):
+        from unittest.mock import patch
+        from tests.test_ollama_backend import OllamaBindingTests
+        release, entered = threading.Event(), threading.Event()
+        def probe(*args, **kwargs):
+            entered.set()
+            self.assertTrue(release.wait(3))
+            return {'model_available': True}
+        # Initial bootstrap is a normal serialized operation. Availability must
+        # subsequently authenticate without entering the mutable admin path.
+        self.assertEqual(200, self.create_project('Availability test')[0])
+        code, data, _ = self.request(path='/v1/administration', body='{"action":"list"}')
+        self.assertEqual(200, code, data)
+        state = json.loads(data)
+        code, data, _ = self.request(path='/v1/administration', body=json.dumps({
+            'action': 'create-user', 'expected_commit': state['commit_id'],
+            'name': 'Availability admin', 'node_role': 'node-admin'}))
+        self.assertEqual(200, code, data)
+        headers = {'Authorization': 'Bearer ' + json.loads(data)['access_key']}
+        with patch('spikes.backend_availability.OllamaAdapter.probe', side_effect=probe) as call:
+            self.server.application_lane.acquire()
+            try:
+                with patch.object(self.server.administration, 'authenticate',
+                                  side_effect=AssertionError('mutable authentication')):
+                    code, data, _ = self.request(path='/v1/chat/availability',
+                        body=json.dumps(OllamaBindingTests().binding()), headers=headers)
+                    self.assertEqual(code, 200, data)
+                    self.assertIsNone(json.loads(data)['available'])
+                    self.assertTrue(entered.wait(1))
+                    self.assertEqual(call.call_count, 1)
+            finally:
+                self.server.application_lane.release()
+                release.set()
+
     def stop(self):
         self.server.shutdown(); self.thread.join(); self.server.server_close()
 
@@ -812,6 +846,7 @@ class WebTests(unittest.TestCase):
             body='{"automatic_enabled":false,"expected_revision":0}',
             headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/chat/availability', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/models', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/atlascloud/configure', body='{}', headers=headers)[0], 403)
