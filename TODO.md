@@ -740,6 +740,31 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
 
 ## K předání do backlogu
 
+**Doplnění existující DEV-03 — schválený směr UI, 31. 10. 2026 (designed).**
+Uživatel přijal návrh panelu Workspace v boční liště VS Code/VSCodia.
+Při předání zapracovat do stávající DEV-03 v BACKLOG, nikoli založit druhý
+stavový záznam. První samostatná UI/review dávka má zahrnout:
+- Úkoly: strom projekt → milník → dávka → úkol, filtr otevřených položek
+  a detail v editorové ploše s popisem, checklistem, závislostmi a akceptací.
+- Zprávy: dotaz, poznámka a návrh dokončení k úkolu i obecná zpráva projektu;
+  historie a rozlišení čeká na odeslání / doručeno / čeká na posouzení /
+  potvrzeno či odmítnuto. Výsledek review se promítne zpět do IDE;
+  doručení samo nemění autoritativní stav úkolu.
+- Podklady: dokumenty připojené k úkolu, bezpečný náhled exportované revize
+  a otevření lokálního souboru pouze při ověřeném mapování.
+Navržené provedení: nativní stromové pohledy nad existujícím bridge,
+zachování obyčejné souborové schránky mimo Git, připojení a projektových
+mapování. Zobrazovat projekt, exportovanou revizi, neaktuálnost a chyby
+spojení; odpojení nesmí vypadat jako úspěšná synchronizace.
+Akceptace musí ověřit aktualizaci zadání, izolaci projektů, restart a retry
+bez duplicitních zpráv, stale/revoked přístup, bezpečné zobrazení podkladů
+a celý tok návrh → review ve Workspace → výsledek v IDE. Instalaci a UI
+ověřit odděleně ve VS Code a VSCodiu. Před implementací dopracovat chybějící
+kontrakt projektových zpráv, podkladů a návratu review; současný transport
+není důkaz jejich implementace. Spouštění coding agenta zůstává navazujícím
+DEV-02/DEV-04. Implementace této samostatné feature naváže po předání DEV-01
+ve vlastní větvi z aktuálního develop; tímto se nová dávka neaktivuje.
+
 - [ ] [planned] **PLAN-SEMANTIC-AUDIT-01 — obecný sémantický audit a proposal
   engine roadmapy (cílová úroveň: implemented).** Uživatelský požadavek
   2026-10-28 navazuje na fyzické dotřídění importu: integrovat do Workspace
