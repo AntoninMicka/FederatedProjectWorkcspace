@@ -256,6 +256,53 @@ znovu projít modelem; samotné strukturální „ready“ tedy nestačí k
 ani Workspace: jednotlivé výsledky jsou resumovatelné a projektový zápis zde
 stále neexistuje.
 
+### Převod přijatého rebuildu do nativního importního balíku
+
+`roadmap_rebuild_bundle` je adaptační vrstva, nikoli druhý writer. Přijme pouze
+rebuild s `candidate_ready=true`, `import_ready=true`, shodným candidate a
+catalog hashem a bez blokujících issues. Znovu sestaví úplnou commit-pinned
+inventuru, převede roadmapové uzly a supporting records do stávajícího task
+plan kontraktu, připojí původní zdrojové bajty a sváže read-only diff s přesným
+HEAD každého existujícího cílového projektu:
+
+```bash
+python3 -m scripts.roadmap_rebuild_bundle \
+  --run-dir /tmp/dev-01-source-rebuild-final \
+  --node /home/antonin/.local/state/federated-workspace/node.json \
+  --target-project-id HOST_PROJECT_ID \
+  --existing-target MODULE_ID MODULE_PROJECT_ID \
+  --source-root federated-workspace HOST_REPOSITORY \
+  --source-root MODULE_ID MODULE_REPOSITORY \
+  --privacy project \
+  --output /tmp/dev-01-source-rebuild-final-bundle
+```
+
+Existující importní source artefakt lze nahradit jen tehdy, pokud jeho živá
+metadata nesou `roadmap-import`; immutable source obsah a import provenance se
+zachovají. Nové podpůrné LLM summary se ukládá jako inertní text a autoritativní
+odkazy zůstávají v původních source snapshotech. Sestavení čte local author
+přímo z read-only SQLite připojení a nevytváří writer lock, journal ani commit.
+Pád před publikací `operation.json` zanechá pouze neúplný, neaplikovatelný
+adresář; zdrojový run a oba Workspace projekty se nemění.
+
+Nový bundle vyžaduje nový bundle-bound source review. Přesně shodná rozhodnutí
+`key + SHA-256` lze převzít, změněný zdroj ale musí dostat explicitní novou
+klasifikaci a důvod:
+
+```bash
+python3 -m scripts.roadmap_rebuild_review \
+  --bundle /tmp/dev-01-source-rebuild-final-bundle \
+  --prior-review docs/roadmap-migration-source-review.json \
+  --classify SOURCE_KEY project 'Konkrétní nový review důvod.' \
+  --output /tmp/dev-01-source-rebuild-final-source-review.json
+```
+
+Příkaz odmítne neznámý/duplicitní zdroj a také nové nebo jinak četné externí
+URL bez samostatného review. Teprve následný `roadmap_migration_validate` musí
+vrátit nula `blocked`, nula `needs-review` a `prewrite_checks_passed=true`.
+Samotný zápis nadále provádí výhradně `roadmap_migration_apply` s explicitním
+bundle SHA a novým receipt souborem.
+
 ## 1. Připnutá inventura a náhled bez zápisu
 
 Výchozí checkout: `develop` po PR #112, commit

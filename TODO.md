@@ -494,6 +494,22 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   `251c015289a6382f0e367e68bba487d2a9ddfec44e97c314fcea3abdaeb16e54`,
   fidelity 99,12, verdicts 166 `correct` a 19 `equivalent`, žádný negativní
   verdict ani candidate issue. Fyzický import zůstává oddělený potvrzený krok.
+  Implementován adaptér přijatého rebuildu do stávajícího nativního bundle,
+  validátoru a recoverable importeru; nevznikl druhý writer. Adaptér ověřuje
+  lineage/hash/`import_ready`, regeneruje připnutou inventuru, váže read-only
+  diff hostu i existujícího modulového projektu, zachovává immutable metadata
+  již importovaných source artefaktů a ukládá supporting summary jako inertní
+  text. Local author čte přes SQLite `mode=ro` bez writer locku. Reálný bundle
+  `/tmp/dev-01-source-rebuild-final-bundle-v4` má SHA-256
+  `47c1137e52661cb986eb0e904c378e3f2854d434872d21e0abfd57f95ed650c5`,
+  host 709 uzlů / 150 artefaktů a modul 19 uzlů / 9 artefaktů; oba cílové HEAD
+  zůstaly beze změny. Read-only prověrka má 14 passed, 0 blocked a 2
+  needs-review pouze pro privacy 13 zdrojů. Review rebind může převzít 12
+  přesně shodných `key+SHA`; změnil se jen připnutý TODO. Jeho kontrola nenašla
+  credentials, privátní klíče, tokeny ani osobní e-mail, ale našla historickou
+  lokální cestu `/home/antonin/Projekty/publication-experiment-registry`;
+  klasifikace proto čeká na explicitní potvrzení uživatele. Workspace apply
+  neproběhl.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

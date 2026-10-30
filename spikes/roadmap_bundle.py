@@ -95,6 +95,8 @@ def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy, ta
         require(project.get('graph') is not None, 'Project hierarchy is missing')
         own_sources = [s for s in value['sources'] if s['repository_id'] == scope]
         files, entries, artifact_roles = {}, [], {}
+        replace_artifact_ids = set(project.get('replace_artifact_ids', []))
+        replacement_metadata = project.get('replacement_metadata', {})
 
         def add(id_, filename, content, role, title, *, source_revision=None, source_mime=None, root_meta=None):
             uuid(id_)
@@ -104,16 +106,20 @@ def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy, ta
             original_title = title
             if len(title) > 200:
                 title = 'Podklad ' + id_
-            if root_meta is not None:
+            preserved_meta = root_meta if root_meta is not None else replacement_metadata.get(id_)
+            if preserved_meta is not None:
                 # Preserve immutable identity/origin fields while discarding
                 # optional test-plan labels, descriptions and relationships.
-                meta = {key: root_meta[key] for key in (
+                meta = {key: preserved_meta[key] for key in (
                     'schema_version', 'id', 'kind', 'created_at', 'author_id', 'privacy', 'provenance')}
-                require(meta['id'] == id_ and meta['kind'] == 'document', 'Existing main TODO identity differs')
+                require(meta['id'] == id_ and meta['kind'] in {'document', 'source'},
+                        'Existing replacement identity differs')
                 require(PRIVACY_ORDER[privacy] >= PRIVACY_ORDER[meta['privacy']], 'Proposed privacy would relax existing root')
                 meta.update(file=filename, title=title, privacy=privacy, tags=['main-todo', 'roadmap-import'])
-                if 'import' in root_meta:
-                    meta['import'] = root_meta['import']
+                if root_meta is None:
+                    meta['tags'] = list(preserved_meta.get('tags', ['roadmap-import', role]))
+                if 'import' in preserved_meta:
+                    meta['import'] = preserved_meta['import']
             else:
                 meta = dict(schema_version=2, id=id_, title=title,
                             kind='source' if role in {'original-source', 'identity-map', 'source-manifest'} else 'document',
@@ -135,7 +141,8 @@ def assemble_bundle(value, mapping, roots, *, author_id, created_at, privacy, ta
                 files[path] = data
                 entries.append(dict(path=path, sha256=blob(data), size=len(data), artifact_id=id_,
                                     role=payload_role, artifact_role=role,
-                                    action='replace' if root_meta is not None else 'create'))
+                                    action='replace' if preserved_meta is not None or id_ in replace_artifact_ids
+                                    else 'create'))
             artifact_roles[id_] = dict(role=role, title=title, original_title=original_title, path=prefix + filename)
 
         manifest_sources = []
