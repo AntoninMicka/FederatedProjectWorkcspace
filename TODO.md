@@ -503,12 +503,15 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   `/tmp/dev-01-source-rebuild-final-bundle-v4` má SHA-256
   `47c1137e52661cb986eb0e904c378e3f2854d434872d21e0abfd57f95ed650c5`,
   host 709 uzlů / 150 artefaktů a modul 19 uzlů / 9 artefaktů; oba cílové HEAD
-  zůstaly beze změny. Read-only prověrka má 14 passed, 0 blocked a 2
-  needs-review pouze pro privacy 13 zdrojů. Review rebind může převzít 12
-  přesně shodných `key+SHA`; změnil se jen připnutý TODO. Jeho kontrola nenašla
-  credentials, privátní klíče, tokeny ani osobní e-mail, ale našla historickou
-  lokální cestu `/home/antonin/Projekty/publication-experiment-registry`;
-  klasifikace proto čeká na explicitní potvrzení uživatele. Workspace apply
+  zůstaly beze změny. Review rebind převzal 12 přesně shodných `key+SHA` ze
+  staršího rozhodnutí; změnil se jen připnutý TODO. Jeho kontrola nenašla
+  credentials, privátní klíče, tokeny ani osobní e-mail, ale zachytila
+  historickou lokální cestu
+  `/home/antonin/Projekty/publication-experiment-registry`. Uživatel výslovně
+  potvrdil privacy `project`; bundle-bound manifest je
+  `/tmp/dev-01-source-rebuild-final-source-review-v4.json`. Opakovaná read-only
+  prověrka `/tmp/dev-01-source-rebuild-final-review-v4-complete` má 16 passed,
+  0 blocked, 0 needs-review a `prewrite_checks_passed=true`. Workspace apply
   neproběhl.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
