@@ -828,3 +828,11 @@ settings panely a tabulky; parent connection a projektová mapování zůstávaj
 v témže node-local SQLite journalu. Reuse původních sessions/messages
 zachovává receipts a schema-v1 kompatibilitu. Nepřidává se další server,
 framework ani projektový writer; změnu scope a atomické recovery drží ADR 0060.
+
+
+DEV-IDE-RECONNECT-01 **adaptuje** existující IdeBridge SQLite credentialy,
+privátní ordinary-file publikaci a desktop running_api. Rozšíření zachovává
+SecretStorage a mapování, přidává ověření podepsané lokální adresy před HTTP
+požadavkem. Obecný VSIX reuse stávajícího balení umožňuje update bez párování.
+Pevný společný port byl odmítnut kvůli kolizím více lokálních uzlů; externí
+komponenta se nepřebírá. Recovery: [ADR 0060](docs/adr/0060-local-file-ide-bridge.md).

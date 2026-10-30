@@ -7419,6 +7419,8 @@ class DesktopHandler(Handler):
         '/v1/publication-cms/deployment/preview', '/v1/publication-cms/deployment/confirm'}
 
     def ide_bridge(self):
+        if getattr(self.server, 'ide_bridge_service', None) is not None:
+            return self.server.ide_bridge_service
         from spikes.ide_bridge import IdeBridge
         projects = self.server.projects
         return IdeBridge(projects.node_path, network=getattr(projects, 'network', False))

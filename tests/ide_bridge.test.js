@@ -127,3 +127,44 @@ test('plugin settings map multiple projects and restore them after restart', asy
   assert.deepEqual(mappings,[]);
   assert.deepEqual(JSON.parse(secrets.get('connection:'+pairing.connection_id)).mappings,{});
 });
+
+test('signed desktop discovery recovers old credentials and refuses unsafe destinations', async t => {
+  const f = await fixture(t);
+  const root = path.join(f.base, 'discovery');
+  await fs.mkdir(root, {mode: 0o700});
+  const id = f.pairing.session_id;
+  const file = path.join(root, id + '.json');
+  const write = async (endpoint, changes = {}) => {
+    const key = crypto.createHash('sha256').update(f.pairing.token).digest();
+    const signature = crypto.createHmac('sha256', key).update(id + '\n' + endpoint).digest('hex');
+    await bridge.atomic(file, JSON.stringify({id, endpoint, signature, ...changes}));
+  };
+  assert.deepEqual(await bridge.discover(f.pairing, root), f.pairing);
+  await write('http://127.0.0.1:12345');
+  assert.equal((await bridge.discover(f.pairing, root)).endpoint, 'http://127.0.0.1:12345');
+  await write('http://127.0.0.1:12346');
+  assert.equal((await bridge.discover(f.pairing, root)).endpoint, 'http://127.0.0.1:12346');
+  await write('http://127.0.0.1:12346', {signature: '0'.repeat(64)});
+  await assert.rejects(bridge.discover(f.pairing, root), /Podpis/);
+  await write('http://127.0.0.1:12346', {id: crypto.randomUUID()});
+  await assert.rejects(bridge.discover(f.pairing, root), /Neplatná/);
+  for (const endpoint of ['http://evil.example:1234', 'https://127.0.0.1:1234',
+      'http://127.0.0.1:1234/other', 'http://user:password@127.0.0.1:1234']) {
+    await write(endpoint);
+    await assert.rejects(bridge.discover(f.pairing, root));
+  }
+  await write('http://127.0.0.1:12346');
+  await fs.chmod(file, 0o644);
+  await assert.rejects(bridge.discover(f.pairing, root), /oprávnění/);
+  await fs.chmod(file, 0o600);
+  const alias = path.join(f.base, 'discovery-alias');
+  await fs.symlink(root, alias);
+  await assert.rejects(bridge.discover(f.pairing, alias), /adresář/);
+  await fs.writeFile(file, '{');
+  await assert.rejects(bridge.discover(f.pairing, root), SyntaxError);
+  const web = {...f.pairing, endpoint: 'https://example.test:4433'};
+  assert.deepEqual(await bridge.discover(web, root), web);
+  await fs.rm(file);
+  await fs.symlink(path.join(f.base, 'other'), file);
+  await assert.rejects(bridge.discover(f.pairing, root), /soubor/);
+});

@@ -5,6 +5,83 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## DEV-IDE-RECONNECT-01 — automatické obnovení desktopového IDE bridge — 2026-10-30
+
+Dokončená feature dávka: **Automatické obnovení desktopového IDE bridge**.
+Původ: uživatelská chyba spojení VSCodia a výslovný požadavek 30. 10. 2026
+zachovat nastavení po restartu desktopu. Milník: vlastní rozvoj / návaznost M6.
+Větev `feature/dev-ide-reconnect-desktop`, základ `develop` `83d882d`
+(obsahuje PR #112); cíl jediného PR `develop`. PR není vytvořen ani sloučen.
+Hlavní projektová složka je přepnutá na opravnou větev pro běžné CLI spuštění.
+Rozpracovaná DEV-01 zůstává zachovaná na `feature/dev-01-roadmap-migration`
+(`a849bd9`); její změny nejsou součástí opravy.
+Předchozí čekací TODO bylo zastaralé: DEV-IDE-TODO-01 je v základu přes PR #112.
+Cíl: **implemented → PoC validated**. Rozsah: obnova adresy desktopu,
+zachování credentials, projektových mapování a schránky; aktualizace rozšíření
+bez nového párování. Expirace a odvolání přístupů zůstávají platné.
+
+- [x] [completed] **DEV-IDE-RECONNECT-01-A (implemented)** — podepsaná lokální
+  discovery z dosavadních záznamů včetně existujících propojení. Žádný token
+  v souboru s adresou, pouze přesný loopback endpoint. TLS připojení se nemění.
+- [x] [completed] **DEV-IDE-RECONNECT-01-B (PoC validated)** — restart na jiném
+  portu bez párování, offline/retry, více uzlů/projektů, odmítnutí poškozené
+  discovery a odvolaného přístupu; cílené testy, plná sada a IDE smoke.
+- [x] [completed] **DEV-IDE-RECONNECT-01-C (implemented)** — návod, ADR/recovery,
+  review diffu a předání. Fyzické uživatelské prostředí vykázat odděleně.
+
+Reuse/adapt: stávající IdeBridge SQLite záznamy, privátní adresáře a atomické
+soubory, desktop running_api, transport rozšíření a dosavadní instalační CLI.
+Nový provider ani externí komponenta nejsou potřeba.
+
+Crash boundaries (doplnění ADR 0060): SQLite credentials/mapování zůstávají
+trvalou autoritou. Discovery je obnovitelná projekce bez projektového zápisu.
+Pád před zveřejněním souboru ponechá starou adresu; další start obnoví celý
+soubor přes fsync/rename. Pád po vzniku credentialu před publikací může
+zanechat nepoužité připojení jako dosud; startup ho znovu zveřejní. Neúplný
+`.tmp` se nečte. Chyba sítě nemaže credentials, mapování, inbox ani receipts.
+
+### Ověření — 30. 10. 2026
+
+- Cílené `python3 -m unittest tests.test_ide_bridge -v`: 16 testů OK;
+  zahrnuje Node transport/soubory, restart s původním credentialem a stejným
+  mapováním, offline/retry, revokaci, pád před rename a první start bez dat.
+- `python3 -m unittest tests.test_roadmap_graph -v`: 6 testů OK.
+- `python3 -m scripts.ide_bridge_smoke --editor codium`: skutečně instalovaný
+  VSIX, jiný port po restartu, stejný credential, mapování a receipt/retry OK.
+- Izolovaný Qt probe `/tmp/fw-ide-qt-probe.py`: dva skutečné starty desktopu
+  `--smoke --node <temporary>` prošly; oba zveřejnily podepsanou novou adresu
+  pro stejné existující připojení. Uživatelská projektová data nezměněna.
+- Uživatelské VSCodium má nainstalované obecné rozšíření 0.2.1 bez pairing.json;
+  read-only kontrola potvrdila zachovaný aktivní connection ID odpovídající
+  běžnému lokálnímu uzlu. Ještě je potřeba načíst novou verzi rozšíření
+  (Developer: Reload Window). Opravený desktop již běží z hlavní složky;
+  read-only ověření potvrdilo platný podpis descriptoru původního připojení
+  a dostupný TCP server. Uživatelský sync po reloadu zatím není ověřen.
+- Syntaxe Python/Node a `git diff --check` OK. Zdrojový balíček lze sestavit.
+- Závěrečná plná sada `python3 -m unittest discover -s tests -v`: **977 testů,
+  938 úspěšných, 39 přeskočených, bez selhání**, exit 0, 263.925 s. Log:
+  `/tmp/fw-ide-full-final.log`. Testováno v izolované pracovní kopii; bajty
+  kódu, testů a konfigurace byly porovnány s hlavní složkou a jsou shodné.
+  První průběžný běh byl přerušen pro anotaci nové dávky v roadmapovém grafu;
+  uvedený závěrečný výsledek je nad finálním kódem a konfigurací.
+
+Technická akceptace: **PoC validated** pro lokální Linux/VSCodium. Obnova
+stejného připojení po změně portu, zachování mapování a recovery jsou ověřené;
+aktualizované rozšíření je instalované v uživatelském profilu a opravený
+desktop běží z běžné projektové složky. Uživatelský sync po reloadu okna není
+fyzicky potvrzený. Windows, VS Code, odlišní OS uživatelé a remote IDE nejsou
+nově akceptované. Dosavadní 30denní expirace a revokace zůstávají platné.
+
+Doručení: PR není vytvořen, push ani commit nebyl proveden; větev čeká na
+jediný PR do `develop`. Žádný milník ani produkční gate se touto opravou
+neuzavírá. Předchozí čekací TODO bylo administrativně nahrazeno až po ověření,
+že `develop` obsahuje merge původního bridge v PR #112; historický záznam
+DEV-IDE-TODO-01 zachovává své tehdejší údaje. Původní migrační větev zůstává
+zachovaná, nesouvisející migrace nebyla do této opravy přenesena.
+
+Nález DEV-IDE-RECONNECT-OBS-01 byl předán pod UX-FEDERATION-02-D v BACKLOG;
+nebyl implementován v této feature a není její podmínkou dokončení.
+
 ## DEV-IDE-TODO-01 — lokální souborový IDE bridge — 2026-10-28
 
 Akceptace této fáze byla uživatelem uzavřena 28. 10. 2026 po skutečném

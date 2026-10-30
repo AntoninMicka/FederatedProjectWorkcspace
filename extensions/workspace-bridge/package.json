@@ -2,7 +2,7 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace file bridge",
   "description": "Local TODO, instructions and durable messages for Federated Workspace",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {

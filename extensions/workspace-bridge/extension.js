@@ -71,7 +71,8 @@ async function activate(context) {
       }
       if (!quiet) vscode.window.showInformationMessage('Workspace synchronizován.');
     } catch (error) {
-      status.text = 'Workspace: chyba spojení'; output.appendLine(error.message);
+      status.text = error.code === 'ECONNREFUSED' ? 'Workspace: čeká na spuštění' : 'Workspace: chyba spojení';
+      output.appendLine(error.message);
       if (!quiet) vscode.window.showErrorMessage(error.message);
     } finally { busy = false; }
   }
