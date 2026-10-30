@@ -400,6 +400,13 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   znovu validované extraction výsledky, eviduje jejich hashe a lineage a
   nechává znovu zpracovat pouze chybějící bloky; candidate a audity vzniknou
   vždy znovu. Cílená migrační sada po změně: 42/42 prošlo.
+  První selektivní run převzal 178 bloků, šest opravil bez correction volání a
+  jediný 23 080B blok `WORK_LOG.md:4153-4265` podruhé skončil jako durable
+  `unknown` na obecném 180s response timeoutu; nevznikla raw odpověď, nejde
+  tedy o doloženou obsahovou chybu. Rebuild má nyní vlastní manifestem
+  připnutý limit 600 sekund bez změny globálního Ollama adapteru. Druhý
+  selektivní run `/tmp/dev-01-source-rebuild-20261030-v7-retry-2` převzal 184
+  validních extrakcí a čeká pouze na tento blok; poté poprvé provede audity.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

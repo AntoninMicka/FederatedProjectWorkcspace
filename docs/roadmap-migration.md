@@ -135,6 +135,14 @@ adresář: jednotlivé JSON soubory publikuje atomicky a manifest se stavem
 `prepared` až nakonec. Pád před manifestem zanechá neaktivní neúplný adresář,
 který se nesmí vydávat za připravený run; zdrojový run se nikdy nemění.
 
+Roadmap rebuild používá pro lokální ne-streamovanou Ollama odpověď vlastní
+timeout 600 sekund, zapsaný a kontrolovaný v run manifestu. Obecný Ollama
+adapter si ponechává svůj kratší výchozí limit; delší čekání se tedy netýká
+chatu ani jiných provider workflow. Překročení limitu po odeslání zůstává
+durable `unknown` bez automatického opakování. Nový explicitně odvozený run je
+bezpečný, protože extraction je read-only výpočet bez externí mutace, a přesto
+zachovává oba neurčité pokusy v jejich původních run journalech.
+
 Během každého modelového volání CLI průběžně ukazuje fázi
 `extract`/`audit`, blok, opravný pokus, hotové logické jednotky, procenta, dobu
 běhu aktuálního příkazu a orientační ETA. ETA vznikne až po první dokončené

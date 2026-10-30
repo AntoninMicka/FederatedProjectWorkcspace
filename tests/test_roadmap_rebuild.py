@@ -9,7 +9,8 @@ from uuid import uuid4
 
 from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.roadmap_migration import HOST_SOURCES
-from spikes.roadmap_rebuild import (RoadmapRebuild, build_candidate, source_catalog,
+from spikes.roadmap_rebuild import (ROADMAP_LLM_TIMEOUT, RoadmapRebuild,
+                                    build_candidate, source_catalog,
                                     validate_extraction)
 from spikes.storage import Git
 from scripts.roadmap_rebuild import progress_reporter
@@ -282,6 +283,9 @@ class RoadmapRebuildTests(unittest.TestCase):
         manifest = json.loads((derived_dir/'manifest.json').read_text(encoding='utf-8'))
         self.assertEqual(str(self.run_dir), manifest['derived_from']['run_dir'])
         self.assertEqual(1, len(manifest['derived_from']['reused_extractions']))
+        self.assertEqual(600, ROADMAP_LLM_TIMEOUT)
+        self.assertEqual({'response_timeout_seconds': ROADMAP_LLM_TIMEOUT},
+                         manifest['transport'])
 
     def test_combined_source_ids_create_review_issue_instead_of_failure(self):
         block = {'block_id': 'block-1', 'source': 'BACKLOG.md', 'line_start': 1,

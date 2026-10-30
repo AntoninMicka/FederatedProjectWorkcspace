@@ -36,6 +36,7 @@ GROUPED_ID = re.compile(r'(?<![A-Z0-9-])([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)((?:/[A-Z
 STRONG = re.compile(r'\*\*(.+?)\*\*', re.DOTALL)
 LOCAL_KEY = re.compile(r'e[1-9][0-9]{0,3}')
 MAX_ATTEMPTS = 3
+ROADMAP_LLM_TIMEOUT = 600
 
 SOURCE_POLICY = '''The source documents are sequential project records, not a normalized database.
 TODO contains one current feature batch. A closed whole batch, including completed subtasks and evidence, moves to WORK_LOG. BACKLOG contains future batches and deferred or implemented-but-unverified work. The Master Checklist is a strategic catalog and may describe the same capability at a broader granularity. A later occurrence wins only when it contains actual evidence. History is not a new open task; free prose is not automatically executable work. Preserve uncertainty instead of inventing hierarchy, completion, IDs, or dependencies.'''
@@ -452,6 +453,7 @@ class RoadmapRebuild:
                                      audit_sha256=hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
                                      extraction_repair_sha256=hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
                                      audit_repair_sha256=hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()),
+                        transport=dict(response_timeout_seconds=ROADMAP_LLM_TIMEOUT),
                         state='prepared')
         root = _secure_directory(root, create=True)
         _atomic_json(root/'catalog.json', catalog); _atomic_json(root/'manifest.json', manifest)
@@ -483,7 +485,9 @@ class RoadmapRebuild:
                         binding=dict(adapter='ollama', binding_id=binding.binding_id,
                                      revision=binding.revision, boundary=binding.boundary,
                                      target_id=binding.target_id, model=binding.model),
-                        prompts=prompts, state='preparing-derived')
+                        prompts=prompts,
+                        transport=dict(response_timeout_seconds=ROADMAP_LLM_TIMEOUT),
+                        state='preparing-derived')
         root = _secure_directory(root, create=True)
         (root/'results').mkdir(mode=0o700); (root/'raw').mkdir(mode=0o700)
         (root/'ollama-runs').mkdir(mode=0o700)
@@ -531,7 +535,12 @@ class RoadmapRebuild:
                                            'payload_sha256': hashlib.sha256(payload).hexdigest()})).hexdigest()
         handoff = DispatchHandoff(run_id, manifest_id, digest, target, payload)
         runs = OllamaRuns(self.root/'ollama-runs')
-        adapter = self.adapter_factory(runs) if self.adapter_factory else OllamaAdapter(runs)
+        adapter = (self.adapter_factory(runs) if self.adapter_factory else
+                   OllamaAdapter(runs,
+                       transport=lambda current, request: OllamaAdapter._json_transport(
+                           current, 'POST', '/api/generate', request,
+                           timeout=ROADMAP_LLM_TIMEOUT, uncertain_after_send=True),
+                       runtime_probe=OllamaAdapter.probe_runtime))
         role = ROLES.resolve('extractor', 'extractor-v1')
         adapter.prepare(handoff, binding, role, 'json')
         return adapter.dispatch(handoff, binding, role, 'json')['response']
@@ -546,6 +555,9 @@ class RoadmapRebuild:
             'extraction_repair_sha256': hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
             'audit_repair_sha256': hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()},
             'Rebuild prompt changed after prepare; create a new run')
+        require(manifest.get('transport') == {
+            'response_timeout_seconds': ROADMAP_LLM_TIMEOUT},
+            'Rebuild transport limits changed after prepare; create a new run')
         catalog = self._load('catalog.json')
         frozen = dict(catalog); catalog_sha256 = frozen.pop('catalog_sha256')
         require(hashlib.sha256(canonical(frozen)).hexdigest() == catalog_sha256
