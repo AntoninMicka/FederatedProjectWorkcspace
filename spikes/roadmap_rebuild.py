@@ -869,7 +869,14 @@ class RoadmapRebuild:
                 and manifest['catalog_sha256'] == catalog_sha256,
                 'Rebuild source catalog changed after prepare')
         calls = 0
-        if self.adapter_factory is None:
+        result_dir = self.root/'results'
+        pending_extraction = any(not (result_dir/('extract-' + item['block_id'] + '.json')).exists()
+                                 and not (result_dir/('extract-' + item['block_id'] + '.failed.json')).exists()
+                                 for item in catalog['blocks'])
+        pending_audit = any(not (result_dir/('audit-' + item['block_id'] + '.json')).exists()
+                            and not (result_dir/('audit-' + item['block_id'] + '.failed.json')).exists()
+                            for item in catalog['blocks'])
+        if self.adapter_factory is None and (pending_extraction or pending_audit):
             binding = self._binding()
             availability = OllamaAdapter.probe(binding)
             require(availability['model_available'],

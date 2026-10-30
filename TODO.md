@@ -482,6 +482,18 @@ pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový 
   kořenových milestone, 49 legacy batch a 20 legacy task karanténních
   placementů. Zbývá selektivně zopakovat 155 auditů změněné hierarchie; bez
   nich se strukturální `ready` nesmí vydávat za `import_ready`.
+  Strukturální reaudit doběhl 185/185 bez selhání. Čtyři nové raw verdicts
+  `misplaced` byly po kontrole zdroje a candidate records odmítnuty jako falešně
+  pozitivní: detailní planned requirements nejsou dokončená implementace,
+  `implemented` maturity M1-AH není completed status, M3-UB-01 má kanonickou
+  WORK_LOG provenance a podpůrné záznamy WF-03 již správně odkazují na WF-03.
+  Finální odvozený run `/tmp/dev-01-source-rebuild-20261030-v7-final` zachovává
+  všech pět human-review override v manifestu a bez dalšího modelového volání
+  sestavil report: `complete=true`, `candidate_ready=true`,
+  `import_ready=true`, candidate SHA-256
+  `251c015289a6382f0e367e68bba487d2a9ddfec44e97c314fcea3abdaeb16e54`,
+  fidelity 99,12, verdicts 166 `correct` a 19 `equivalent`, žádný negativní
+  verdict ani candidate issue. Fyzický import zůstává oddělený potvrzený krok.
 - [ ] [planned] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
   Potvrzený konkrétní náhled → existující Workspace projekt, ověření obsahu
   v aplikaci i IDE. Samostatně akceptovat úplnost modulů a úpravu workflow

@@ -350,6 +350,20 @@ class RoadmapRebuildTests(unittest.TestCase):
                          len(manifest['derived_from']['reused_audits']))
         self.assertEqual('Human review', manifest['audit_overrides'][0]['reason'])
 
+    def test_complete_reused_results_publish_report_without_runtime_probe(self):
+        RoadmapRebuild.prepare(self.node, self.run_dir, self.repository,
+                               revision=self.commit)
+        status = {}
+        while not status.get('complete'):
+            status = RoadmapRebuild(self.node, self.run_dir,
+                                    adapter_factory=self.factory).run(limit=100)
+        derived_dir = self.base/'offline-report'
+        RoadmapRebuild.derive(self.node, derived_dir, self.run_dir)
+        result = RoadmapRebuild(self.node, derived_dir).run(limit=1)
+        self.assertTrue(result['complete'])
+        self.assertTrue(result['candidate'])
+        self.assertEqual(0, result['processed'])
+
     def test_candidate_renderer_marks_unresolved_dependency_and_cycle(self):
         nodes = [
             {'candidate_id': 'BATCH-01', 'title': 'Dávka', 'status': 'planned',
