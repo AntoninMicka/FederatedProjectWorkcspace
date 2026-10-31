@@ -683,7 +683,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <h3>Zprávy z IDE</h3><p>Výsledky a dotazy čekají na vaše posouzení. Přijetí zprávy samo nemění stav úkolu.</p><div id="ide-bridge-sessions"></div>
 </section>
 <section id="settings-roadmap-panel" class="settings-card roadmap-card" role="tabpanel" aria-labelledby="settings-roadmap-tab" hidden>
-<div class="roadmap-heading"><div><h2>Roadmapa a závislosti</h2><p>Read-only projekce autoritativní roadmapy, TODO, backlogu a pracovního logu.</p></div>
+<div class="roadmap-heading"><div><h2>Historická roadmapa vývoje produktu</h2><p>Archivovaný přehled dávek a závislostí. Aktuální plán otevřete v roadmapě příslušného projektu Workspace.</p></div>
 <button id="roadmap-export" type="button" disabled>Stáhnout SVG</button></div>
 <div class="roadmap-controls" aria-label="Filtry roadmapy"><label>Milník <select id="roadmap-lane-filter"><option value="">Všechny</option></select></label>
 <label>Stav <select id="roadmap-status-filter"><option value="">Všechny</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="completed">Dokončeno</option><option value="blocked">Blokováno</option><option value="deferred">Odloženo</option></select></label>

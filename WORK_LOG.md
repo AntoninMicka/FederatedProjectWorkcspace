@@ -5,6 +5,963 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+> **Archivovaný snapshot po předání DEV-01.** Aktuální plán a stavy drží
+> Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`; modulový plán
+> má vlastní projekt podle [předání](docs/dev-01-handoff-review.md).
+> Tento obsah zachovává historii a katalog požadavků, dále se neudržuje
+> jako souběžný živý plán.
+
+## DEV-01 — roadmapa jako projektová data a export úkolů — 2026-10-31
+
+Uživatel 31. 10. 2026 výslovně akceptoval obsah hostitelského i modulového
+plánu a běžný desktop/IDE tok po restartu: „Ano, obsah i běžný tok přijímám“.
+Konkrétní předání autority a zachování novějších zdrojových změn potvrdil:
+„Schvaluji předání podle připraveného návrhu“.
+Výsledek: **implemented / PoC validated**, feature akceptována a předání
+autority provedeno. Větev `feature/dev-01-roadmap-migration`, základ/cíl
+jediného PR `develop`. Doručení je oddělené a otevřené: PR není vytvořen ani
+sloučen; agent neprovedl commit, push, otevření PR ani merge ve zdrojovém
+vývojovém repozitáři. Následující projektové commity vytvořil schválený
+nativní Workspace lifecycle v datovém projektu, nikoli v tomto checkoutu.
+
+- Původní přijatý import: host `549153757576f24fb5244c313818a08bb2273ce6`,
+  modul `e9eea387918ed726daf7ee8c40ff309bd6fd8418`.
+- Předání pěti novějších pracovních source snapshotů, specifikace DEV-03
+  včetně pravidel agentů a rozcestníku: host commit
+  `35dfc351e001353635050766b7668725489cb61b`, operation
+  `6db660d3-43ba-4405-8f7e-253e0b264650`, preview SHA-256
+  `3e436a09ff56cac4ec79aa327c6d617a87c3ea60e86577fc4775c8f5ef417d7a`.
+- Zápis přijaté akceptace, původních ID ad-hoc úkolů a uzavření DEV-01:
+  host commit `32a3bc04a6b00bfa0557f204ab662d2f9576e598`, operation
+  `17b3eef7-f0be-4bf9-8592-e4acbfc531de`, preview SHA-256
+  `2afdb43cd42201865f77a8f3a2c378839cffe1ed2d5d4f396825ecbe23e638d0`.
+  Akceptační artefakt: `41573b20-5d8d-53f8-8c01-c8985caab118`.
+  Host má validní graf 712 uzlů, všech 14 podúkolů DEV-01 uzavřených,
+  čistý strom a 0 pending / unfinished v journalu. Modul se neměnil.
+
+Konsolidace původních ID a úrovní:
+
+- **DEV-01-A / B (designed)** — schválený návrh, source-first manifest
+  a mapování byly použité v přijatém fyzickém importu.
+- **DEV-01-C / D / E (implemented / PoC validated)** — připnutý preview,
+  stabilní identity, nativní apply/replay/recovery, následná zdrojová revize
+  s třícestným review a izolované ověření i export.
+- **DEV-01-E-REFINE-01 / DEV-01-E-RECONCILE-01** — historické experimenty
+  byly administrativně ukončeny a nahrazeny uživatelem schváleným source-first
+  postupem. Původní import byl odmítnut a nezměnil se na akceptovaný výstup;
+  původní popisy a pokusy zůstávají v archivu. Obecný auditní engine tím
+  není dokončený; jeho aktuální otevřený stav má PLAN-SEMANTIC-AUDIT-01.
+- **DEV-01-E-REPLAN-01 (designed) / DEV-01-E-REBUILD-01 (implemented /
+  PoC validated)** — přijatá náhrada původního postupu a import bundle v4.
+- **DEV-01-F / DEV-01-F-IDE-01 / DEV-01-F-IDE-02 /
+  DEV-01-F-PERF-01 (PoC validated)** — fyzický import, aktuální IDE export,
+  obnova zadání, odezva i uživatelská restartová akceptace.
+- **DEV-01-G (PoC validated)** — přijaté předání autority, archivace původní
+  evidence, zachování odkladů a čekací TODO. Doručení PR zůstává otevřené.
+
+Ověření posledního kódu: cílená source-update/import/rebuild sada **17 testů
+OK**. Po poslední změně UI označení historické roadmapy a její anotace
+prošla celá závěrečná sada: **1101 testů, 39 skipped, bez chyby**, 246,532 s,
+exit 0, `/tmp/dev-01-authority-final-tests.log`. Cílená kontrola roadmapového
+grafu a SPDX po doplnění anotace předaného PLAN-SEMANTIC-AUDIT-01:
+**7 testů OK** (`/tmp/dev-01-handoff-docs-final.log`). Předchozí úspěšná
+celá sada 245,499 s je historický mezivýsledek před poslední úpravou UI;
+nenahrazuje uvedenou finální bránu. Kopie finálního a cílených logů jsou
+uložené také v lokálním předávacím balíku mimo Git. Před apply se shodoval přesný
+preview digest, po obou operacích byly porovnány všechny kandidátní bajty,
+graph/ID/parent vazby, receipt HEAD, čistý strom a idle journal. Source
+snapshots jsou označené jako pracovní snapshoty s přesnými digesty; nejsou
+vydávané za obsah commitu. Původní immutable sources zůstaly zachované.
+Oba SQLite indexy prošly read-only `quick_check=ok` a nesou přesný aktuální
+HEAD svého projektu. Živá IDE schránka převzala host HEAD `32a3bc04` a
+všech 712 task záznamů se přesně shoduje s aktuálním grafem;
+`stale=false`, sync `2026-10-30T23:59:19.788Z`. Jde o konkrétní runtime
+vzorek doplňující uživatelskou akceptaci, nikoli tvrzení o všech platformách.
+Finální kontrola zachování původního WORK_LOG, celé feature evidence a obou
+odkladů prošla; TODO obsahuje jen doručovací pointer. Ověřeny byly dotčené
+odkazy, historická roadmapová projekce a `git diff --check`. Po těchto čistě
+dokumentačních doplněních se úspěšná celá sada neopakovala.
+
+Recovery: ADR 0003 a kontrakt v docs/roadmap-migration.md. Každá z obou
+projektových operací má stabilní ID a samostatný native receipt; mezi
+projektem a úpravou zdrojových pointerů není předstíraná atomicita.
+Původní requests/previews a skutečné receipts zůstávají lokálně mimo Git v
+`.worktrees/dev-01-handoff-evidence/`; rozhodující stavy a akceptace jsou
+v projektovém Gitu, receipts v jeho journalu a tento souhrn v historii zdroje.
+Nejde o production-ready claim ani potvrzení všech platforem; původní
+omezení a neúspěšné izolované VSCodium smoke pokusy zůstávají níže.
+
+Podklady: [závěrečné review](docs/dev-01-handoff-review.md).
+Odklady DEV-03 a PLAN-SEMANTIC-AUDIT-01 byly zachovány se stejnými ID
+v archivovaném BACKLOG a živém projektu, s odkazy na předané podklady.
+Historický snapshot níže záměrně zachovává původní stavy a neúspěšné pokusy;
+není autoritou dalšího plánování. Výše uvedený závěr nahrazuje jeho tehdejší
+otevřené podmínky; nejsou pokynem znovu provést již přijatý import.
+
+### Archiv původní evidence DEV-01
+
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# TODO — DEV-01
+
+Aktivní feature dávka: **Roadmapa jako projektová data a export úkolů**.
+Milník: vlastní rozvoj produktu, návaznost M6. Původní požadavek: DEV-01,
+uživatelská upřesnění 28. 10. 2026 — roadmapa včetně vložených modulů;
+po PR #112 připravit nejprve plán migrace.
+Skutečná větev: `feature/dev-01-roadmap-migration`, založena z čistého
+`develop` `83d882d` po merge DEV-IDE-TODO-01 v PR #112.
+Základ/cíl jediného PR: `develop`. PR této dávky není vytvořen ani sloučen.
+Cíl dávky: **implemented → PoC validated**; návrh je **designed**,
+read-only inventura **implemented**.
+Návrh: [plán migrace](docs/roadmap-migration.md). Potvrzený source-first
+bundle v4 je fyzicky importovaný do hostitelského i modulového projektu;
+uživatel ověřil zobrazení hostitelské roadmapy. Aktuální IDE export je
+ověřený proti živému Workspace. Zbývá akceptace úplnosti modulů,
+bezpečné následné aktualizace zdroje
+a konkrétní předání autority. Původní evidenci zatím nenahrazujeme archivem.
+
+### Potvrzený společný rozsah — 30. 10. 2026
+
+Uživatel výslovně požaduje dokončit migraci, její nezbytný IDE bridge
+i opravu zasekávání Workspace v této jediné větvi a jediném PR DEV-01.
+Větve se kvůli těmto podmínkám akceptace nepřepínají. Jde o schválené
+upřesnění rozsahu; další nezávislé funkce IDE/agenta se tím neaktivují.
+Pořadí práce: odstranit doložené zpomalování → ověřit bridge na aktuálním
+importovaném zadání → dokončit zbývající migrační akceptaci a předání.
+Samotný aktuální soubor v IDE není důkaz srozumitelného celého workflow.
+
+Obnovení dávky 30. 10. 2026: PR #113 s opravou desktopového bridge byl
+sloučen do `develop` jako `03d76ee111c1195fc23ea50bf0926b603a6ddbde`
+(GitHub potvrzuje merge 17:56:55 UTC / 18:56:55 CET). Všechna čtyři CI
+shard jobs, souhrnná kontrola `tests` a `licensing` prošly. Při požadovaném
+merge přes gh byl PR již sloučen; agent neprováděl druhý merge na GitHubu.
+Aktuální větev DEV-01 převzala tento develop lokálním merge commitem
+`76fa08c`; konflikty pouze v TODO a reuse katalogu byly vyřešeny zachováním
+aktivní migrace a obou reuse evidencí. Migrační větev nebyla pushnuta.
+
+## Původní rozsah a akceptace DEV-01
+
+Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty. Uživatelské doplnění 28. 10. 2026: migrovat také vložené moduly a doplňkové roadmapy s jejich úkoly a popisy; zachovat hierarchii, include vazby, stabilní ID a provenance. Před migrací určit kanonický zdroj každé definice, ověřit úplnost vložených modulů a stanovit přechod autority do Workspace bez konkurenčního živého plánu ve zdrojovém repozitáři.
+
+Hranice: import vybraných dokumentů do existujícího projektu, explicitní
+mapování modulů na cílové projekty, úplná provenance, bez druhého živého plánu.
+UI úkolů v IDE a automatické review zpráv zůstávají v DEV-02/DEV-03.
+Závislosti PLAN-TASK-GRAPH-01, ADR 0059 / file-plan editor a bridge jsou
+začleněné do základu. Nové entity požadavků/rozhodnutí/rizik se neprohlašují
+za implementované místo jejich zachování v podpůrných dokumentech.
+
+## Upřesnění uživatele v rámci DEV-01
+
+Cílová roadmapa ve Workspace je celá testovací a není zdrojem dat. Uživatel
+výslovně autorizoval její kompletní nahrazení; nepřenášet testovací úkoly,
+vazby ani stavy a nevytvářet z nich povinné migrační konflikty. Staré zprávy
+jsou transportní historie, nikoli požadavek zachovat testovací plán.
+Migrace má zahrnout i historické a realizované úkoly a dávky. Obecné myšlenky
+mají být volným popisem pod jasným milníkem/dávkou; nejednoznačný obsah
+samostatnými `.md` podklady. Nevyrábět pro něj umělé úkoly ani dávky.
+První fyzický import a jeho deep-check výsledky uživatel 29. 10. 2026 odmítl
+jako celek: nepřebírat z nich uzly, IDs ani schválené proposals a neopravovat je
+ručně. Nová migrace vznikne source-first pouze z původních sekvenčních dat
+pomocí lokálního LLM; starý import kompletně nahradí až potvrzený nový bundle.
+
+## Úkoly dávky
+
+- [x] [completed] **DEV-01-A — návrh migrace (designed).**
+  Inventura zdrojů a existujících kontraktů, mapování ID/typů, moduly,
+  preview, konflikty, recovery a předání autority. Podrobný návrh v odkazu výše.
+  Návrh byl uživatelem schválen a následně upřesněn výše; fyzická migrace
+  zatím akceptována ani provedena nebyla.
+- [ ] [in progress] **DEV-01-B — potvrzený manifest a mapování (designed).**
+  Přesné soubory/revize, cílový existující projekt, seznam a cíle externích
+  modulů, ID bez identity, konflikty a zacházení s ukázkovým cílovým plánem.
+  Výstup: úplný coverage report; žádné tiché vynechání nebo automatické smazání.
+  První konkrétní report: `/tmp/dev-01-inventory-final-20261028/summary.md`
+  a `inventory.json`. Zdrojový host commit `27d88d4`, explicitně vybraný
+  publikační modul commit `446d980`; 13 souborů, 1361 checkbox výskytů,
+  570 explicitních ID v rámci zdrojových repozitářů a 864 checkboxů bez ID.
+  Nejde o počty samostatných úkolů. Návrh mapuje 821 anonymních bodů na
+  požadavky, 4 na strategické požadavky a 39 na historické důkazy;
+  18 opakovaně zmíněných ID má navržené jediné místo definice a zachované
+  všechny zdrojové výskyty. Všechny 75 existující dependency uzly mají
+  dohledatelnou definici, graf je validovaný. Nebyl nalezen rozpor samotných
+  checkbox stavů; shoda stavu není důkaz sémantické shody popisů.
+  Mapování zůstává návrhem (`mapping_approved: false`), nikoli potvrzeným
+  plánem: zbývá obsahové rozlišení typů/hierarchie a konkrétní cíle modulů
+  modulových projektů. Nakládání s testovacím cílem již není otevřená otázka:
+  úplně ho nahradit bez používání jeho obsahu jako zdroje. Zdrojové bajty a hashe zůstávají
+  dohledatelné; chybějící ID nejsou bez review vydávána za executable tasky.
+  Předběžná MIG-REQ ID platí jen pro tento připnutý návrh; před importem se
+  musí schválená mapa persistovat, ne generovat znovu po přejmenování.
+  Reuse/adapt: Git wrapper, validátor modulového manifestu a topologické
+  ověření existujícího roadmapového grafu. Žádná síťová volání ani zápis
+  do projektu, Gitu, SQLite indexu či journalu. Pád inventury cílová data
+  nemění; neúplný lokální report lze vytvořit znovu v novém adresáři.
+- [ ] [in progress] **DEV-01-C — import preview a stabilní identity (implemented).**
+  Deterministický náhled, přesné source bajty, provenance, mapování existujících
+  a nových ID, validace úplného bundle a kontrola limitů před zápisem.
+  Historický náhled v1: `/tmp/dev-01-hierarchy-reviewed/summary.md` a `mapping.json`.
+  Aktualizovaná inventura čte host commit `f55c0ec`, stejný modulový commit
+  `446d980`; zdrojové bajty jsou součástí privátního reportu. Pokryto je všech
+  1456 výskytů včetně nadpisových definic, nikoli jen 1361 checkboxů.
+  Profilovaná podmnožina prošla stávajícím task-graph validátorem: hlavní
+  projekt 3 milestone / 16 batch / 82 task, modul 1 milestone / 1 batch / 8 task.
+  Strategické požadavky a nezahrnuté historické položky zůstávají v katalogu
+  s původními ID/provenance; nejsou automaticky povýšeny na feature dávky.
+  Checklist podmínky mají vlastníka v tasku, nikoli duplicitní požadavek.
+  Celková akceptace dávky se neodvozuje z počtu zaškrtnutých podúkolů.
+  Dva historicky completed uzly `F-M5-CHAT-HISTORY-01` a
+  `F-M5-SYNC-CONTROLS-01` mají dependency hranici proti plánovanému rozsahu;
+  rozporné hrany i původní stavy se zachovaly, do nové profilované části se
+  bez rozhodnutí nepromítají. Nejde o nové rozhodnutí jejich stav změnit.
+  Read-only načtení skutečného cíle potvrdilo HEAD `c36af3e` a čistý strom.
+  Report obsahuje původní hlavní TODO a konkrétní `federated-workspace/target.diff`.
+  Původní ukázkové MILESTONE-01/02/03, BATCH-01 a TASK-01 nejsou v novém návrhu:
+  tehdy se uvažovalo o archivaci v novém plánu. Tuto podmínku nyní ruší
+  výslovný pokyn uživatele: testovací plán není zdroj a nepřebírá se. Git
+  historie/transportní receipts se tím automaticky nemažou; aliasy nejsou potřeba.
+  Zmrazený mapping je svázán s inventory SHA-256; replay dal totožný výsledek,
+  změněný zdroj vyžaduje explicitní rebase. Návrhy ID a definic nejsou tímto
+  uživatelsky schválené a `import_ready` zůstává false.
+  Zbývá úplný náhled metadat/operace přes všechny artefakty, review širokých
+  požadavků, potvrzení modulového cíle a zdrojové identity při změně revize;
+  samotný validní task graf není validací celého importu.
+  Reuse/adapt: existující source katalog `_catalog`, profilovaný task graph,
+  Projects.repository (bez inicializace indexu/journalu). Zápisový lifecycle
+  ADR 0003 se nemění; tento krok zapisuje jen nový privátní report do /tmp.
+  Pád při vytváření reportu nemění zdroj ani cílový projekt a není receipt
+  importu. Další report používá nový adresář, původní se nepřepisuje.
+  Aktuální náhled v2: `/tmp/dev-01-history-inclusive-preview/summary.md`,
+  host source commit `145a02e`, module source commit `446d980`. Profilovaný
+  hlavní plán má 10 milníků / 93 dávek / 384 úkolů; modul 10 / 1 / 8.
+  Podporovaná část nyní zahrnuje všechny kanonické historické nadpisové
+  záznamy WORK_LOG, i mimo starý graf. Samostatné starší úkoly bez doložené
+  dávky zůstávají s původními ID/stavy v Markdown textu u milníku nebo v
+  samostatném podkladu; nevytváříme fiktivní feature batch.
+  Celkem 193 popisových Markdown dokumentů: 111 přiřazených vlastníkovi,
+  82 samostatných. Volné myšlenky nejsou vykazované jako implementační tasky.
+  M0/M1 mají stav převzatý jen z explicitních gate důkazů hlavní roadmapy.
+  Historicky dokončená F-M5-CHAT-HISTORY-01 zůstává v roadmapě; vazba na
+  plánovanou F-M5-TRUST-01 je historický kontext, nikoli důkaz dokončení TRUST.
+  Politika `replace-test-plan` má autorizaci uživatele, ale `apply_validated`
+  zůstává false, dokud není připraven celý artefaktový zápis. Testovací cílový
+  obsah není v source_refs, normalizovaných uzlech ani odvozených podkladech.
+  Aktuální report prošel task-graph validací; zůstávají otevřené úplné metadata,
+  přemapování zdrojových odkazů, zápis/recovery a skutečné nasazení migrace.
+  Bod 1 požadovaný uživatelem — sestavení celé logické operace — je připraven:
+  `/tmp/dev-01-import-operation/summary.md` a `operation.json`. Zdrojový host
+  commit `06ffda3`, modul `446d980`; inputy jsou připnuté v
+  `/tmp/dev-01-step1-source` a `/tmp/dev-01-step1-mapping`.
+  Hlavní projekt: 196 artefaktů / 392 souborů; modul: 17 / 34.
+  Payload obsahuje hlavní plány, 193 Markdown popisů/podkladů, přesné
+  originální zdroje, sidecar metadata, scoped mapování ID, source manifesty
+  a propojení na navržený modulový projekt. Root ID a immutable metadata
+  hlavního TODO zůstávají zachované; testovací text ani mutable popisky
+  nejsou importovanými zdroji. Interní text modulu zůstává v modulovém payloadu.
+  Manifest obsahuje samostatné operation ID, dependency modul → host,
+  create/replace akce a hashe všech souborů; žádné implicitní mazání ostatních
+  entit. Module project UUID je návrh podporovaný seeded create, fyzická
+  cesta se ještě nezadává ani nevytváří.
+  Základní schema a task graph celých payloadů prošly, včetně zachování
+  ID/typů/rodičů a checkbox stavů. Bod 2 (úplná kontextová předzápisová
+  validace) byl proveden read-only validátorem proti celému živému snapshotu;
+  report je `/tmp/dev-01-prewrite-review-3/summary.md` a `review.json`.
+  Devět kontrol prošlo: uzavření manifestu/blobů/payload mirror, lokální
+  autor, modulový seed a jeho task graph, nativní replica policy, čistý
+  očekávaný host HEAD, prázdný journal a celý sloučený snapshot včetně
+  `validate_transition` a task graphu.
+  První prověrku blokovalo 184 nepřevedených relativních odkazů v odvozených
+  host dokumentech (72 odlišných cílů) a nezvolená fyzická cesta nového modulu.
+  Oba blokátory jsou v opraveném balíku odstraněné. Vybrané zdroje se
+  odkazují na importované artifact cesty; nevybrané cíle zůstávají čitelnou,
+  neaktivní zdrojovou cestou. Modulová operace explicitně drží cíl
+  `/home/antonin/Projekty/publication-experiment-registry`; read-only kontrola
+  mimo vývojový sandbox potvrdila volný cíl, state adresář, skutečná práva
+  parentu a nepřekrývání chráněných cest. Nic nebylo vytvořeno.
+  Nový balík `/tmp/dev-01-import-operation-v3` má SHA-256
+  `ae0df1d730259fa233ef87f6a253969674d96e6b2e08c7bc080a0476fa558e99`;
+  `/tmp/dev-01-prewrite-review-v3-host` hlásí 11 passed / 0 blocked /
+  3 needs-review. Tyto review body jsou nyní uzavřené manifestem
+  `docs/roadmap-migration-source-review.json`, který je svázaný s bundle SHA,
+  hashem každého zdroje a přesnou množinou URL/výskytů. Všech 13 zdrojů je
+  po obsahové kontrole `project`: nejsou v nich credentials, privátní klíče,
+  osobní e-maily ani domácí cesty; interní testovací IP a popisy secret
+  lifecycle nejsou hodnotami tajemství. Osm unikátních externích URL
+  (devět výskytů) bylo dohledáno na oficiálních cílech; OpenAI Help URL má
+  doložené přesměrování a GitHub API potvrdilo sloučený PR #68.
+  `/tmp/dev-01-prewrite-review-v4-host` hlásí 14 passed / 0 blocked /
+  0 needs-review a `prewrite_checks_passed: true`. Validátor je uzavřený,
+  nic nevytváří v projektu ani state a neakceptuje nesvázané nebo neúplné
+  review vstupy.
+  Writer/recovery a fyzický import zůstávají otevřené.
+  `import_ready` je false. Vznik balíku nepoužívá projektový journal ani
+  zapisující Workspace: pád před finálním manifestem zanechá jen neúplný
+  report, který není importním receiptem. Retry použije zmrazené payloady.
+- [x] [completed] **DEV-01-D — bezpečný apply a opakovaný import (PoC validated).**
+  Stávající autorizovaný writer, expected HEAD/digest, víceartefaktová
+  transakce, receipts, idempotence, třícestné porovnání, rename/removal review
+  a crash recovery podle plánu. Žádné přímé SQL nebo obcházení Workspace.
+  Implementace používá `ProjectCreation.create` pro přesný seeded modul a
+  jednu `Workspace.transact` operaci pro všechny hostitelské cesty. Vyžaduje
+  exact bundle SHA a bundle-bound review; create/replace kolize i expected HEAD
+  se znovu kontrolují pod nativními zámky. Stabilní operation ID a request
+  digest vracejí nativní receipts při lost-response retry. Mezi projekty není
+  předstíraná atomicita: dokončený modul se nerollbackuje, navazující host
+  operace se bezpečně dokončí při retry. Souhrnný receipt není nový store.
+  Izolovaně ověřen normální apply/replay bez druhého commitu, pád mezi
+  projekty, recovery hostu od `prepared` a odmítnutí nesprávného explicitního
+  bundle SHA před zápisem. Fyzický apply na skutečný projekt patří DEV-01-F
+  a jeho výsledek je doložen níže. Původní one-shot balík žádné deletion akce
+  neobsahuje; následný import nové source revize byl doplněn a ověřen
+  31. 10. 2026 přes `RoadmapSourceUpdate` a explicitní same-node CLI.
+  Třícestný náhled baseline / current / incoming zachovává lokální změny,
+  vyžaduje rozhodnutí keep/source pro konflikty a každé odstranění,
+  zachovává stabilní artifact ID při rename a celý kandidát validuje pod
+  nativním writer lockem. Apply váže exact preview SHA a operation ID;
+  retry/recovery vrací stejný receipt, immutable source data se nepřepisují.
+  Návrh a rozhraní: [kontrakt následné revize](docs/roadmap-migration.md#následná-zdrojová-revize--kontrakt-dev-01-d-31-10-2026).
+  Nejde o automatický rebase zmrazeného mappingu ani nové UI. Cílené scénáře
+  pokrývají ruční změnu, souběžný konflikt, rename/removal review, dirty/stale
+  stav, změnu preview, neplatný graf a recovery prepared/ref-updated/
+  index-published/completed. Výsledky závěrečného běhu jsou níže.
+- [ ] [in progress] **DEV-01-E — izolovaná zkouška a export (PoC validated).**
+  Reálné připnuté zdroje a modulový vzorek, Markdown/strojový task export,
+  konflikty, změny revizí, limity a injektované pády. Po poslední relevantní
+  změně spustit celou unittest bránu.
+- [ ] [in progress] **DEV-01-E-REFINE-01 — iterativní lokální dotřídění (implemented).**
+  Ad-hoc doplnění uživatele po fyzickém importu: resumovatelný same-node
+  Ollama crawl, který navrhuje dávky oprav, vyžaduje lidské potvrzení a lze jej
+  opakovat do konvergence. První bezpečný řez umí pouze připojit samostatný
+  podklad pod existující milestone/batch/task nebo jej ponechat samostatně;
+  nemění ID/stavy/text, nemaže a nepovyšuje zachované požadavky na uzly.
+  Proposal queue je privátní node-local SQLite, vstup má Context Manifest a
+  exact HEAD. `unknown`/`failed` se automaticky neopakují; fingerprint zahrnuje
+  obsah, katalog cílů a revizi analyzátoru. Accepted dávka se zapisuje jednou
+  `Workspace.transact` operací a znovu prochází task-graph validací.
+  Izolovaně ověřen proposal-only scan, deduplikace, terminální reject, odmítnutí
+  vymyšleného cíle, jediný validovaný apply a striktní oddělení sdílené lokální
+  queue podle project ID. První živý běh nad 82
+  samostatnými podklady: starý velký kontext `unknown`, zmenšený kontext
+  uspěl; revize v3 vytvořila 1 dismissed / 1 pending / 1 failed. Pending
+  `COMP-01-A` je obsahově chybný a nebyl potvrzen ani aplikován. Failed
+  rozpoznání `IMP-03` bezpečně odmítla absence tohoto ID v executable grafu.
+  Návod a evidence: `docs/roadmap-refinement.md`. Zbývá lidské review první
+  dávky, delší crawl a podle jeho nálezů explicitní proposal typy pro
+  promotion/split/merge; nejsou součástí aktuálního bezpečného apply.
+  Jednorázové stdlib `curses` TUI nyní poskytuje list/detail, explicitní bounded
+  scan, accept/reject a dvoukrokově potvrzený apply bez druhého storu či writeru.
+  Review z přesného proposal HEAD doplňuje čitelný název a cestu zdroje,
+  `zdroj → cíl`, název/typ cíle, popis dopadu a náhled zdrojového textu;
+  technická UUID a HEAD zůstávají v auditní části. Tabulka a detail mají
+  přepínatelný fokus a samostatné stránkování; filtr umí skrýt accepted,
+  rejected, dismissed a applied položky bez ztráty jejich stavu nebo apply.
+  Scan běží v background threadu s živým UI a chráněným ukončením; tabulkové
+  buňky jsou ohraničené, víceřádkové a vybraný blok se drží uprostřed viewportu.
+  Vykreslovací hranice normalizuje newline/tab/CR a další řídicí znaky, takže
+  importovaný víceřádkový text nemůže posunem kurzoru rozbít sousední buňky.
+  TUI lze spustit i bez project ID: read-only katalog nabídne lokální projekty
+  názvem a UUID, nedostupný projekt odmítne a po potvrzení otevře jeho oddělenou
+  proposal queue. Přímé `--project` a povinné UUID neinteraktivních příkazů
+  zůstávají zachované.
+- [ ] [in progress] **DEV-01-E-RECONCILE-01 — úplná jednorázová sémantická
+  reconciliation importu (implemented proposal scan).** Uživatelský požadavek 2026-10-28:
+  popsat původní sekvenční workflow TODO → celý batch ve WORK_LOG, význam
+  BACKLOGu/Master Checklistu a požadovaný nový kanonický stav; nad všemi
+  hostitelskými i vybranými modulovými roadmapami nejprve vytvořit konečnou
+  resumovatelnou source-cluster queue a poté ji nechat přes noc zpracovat
+  same-node Ollamou. Výstupem jsou pouze typované návrhy keep-history/
+  description/canonical, promote, residual, split/merge, update, dependency a
+  conflict s exact source/target provenance; žádný průběžný zápis. Human review
+  složí přijaté návrhy do jednoho kandidáta, celý graf validuje a teprve jedna
+  potvrzená `Workspace.transact` operace proti původnímu HEAD může změnit plán.
+  Crash boundaries, noční recovery, coverage a akceptace jsou v
+  `docs/roadmap-reconciliation.md`. Režim `scan --deep-check` nyní před dispatch
+  zmrazí kompletní source-cluster inventuru proti exact HEAD, dohledá stejné ID
+  v podpůrných Markdown podkladech, dávkově vytváří striktně validované návrhy
+  ve stejné SQLite queue a používá společné list/decide/TUI. Restart pokračuje
+  jen z `queued`, zbylé `running` fail-closed převede na `unknown`; paralelní
+  deep scan blokuje node-local lock. Accepted strukturovaný návrh zatím `apply`
+  odmítne před zápisem. Otevřené zůstává skládání a validace společného
+  kandidáta, transakční writer, fyzický úplný scan a review; obecná produktová
+  integrace je nadále samostatný `PLAN-SEMANTIC-AUDIT-01` k předání do backlogu.
+  Cílené ověření 2026-10-28: `python3 -m unittest
+  tests.test_roadmap_refinement tests.test_roadmap_refinement_tui -v` — 20/20
+  testů prošlo; CLI help potvrzuje `scan --deep-check`, `git diff --check`
+  prošel. Fyzický Ollama běh nad importovaným projektem nebyl v tomto kroku
+  spuštěn.
+  Následně přibyla explicitní volba `--forget-previous`: pod node-local lockem
+  smaže pouze deep-check queue vybraného projektu a z aktuálního HEAD ji znovu
+  vytvoří; detached rozhodnutí ani Git nemění.
+  Ad-hoc oprava pomalého otevření TUI: `refresh()` již nestaví exact-revision
+  snapshot a task graph pro každý řádek fronty. Detail se načítá lazy jen pro
+  vybranou položku, cachuje se v session a úvodní obrazovka oznamuje načítání.
+  Ad-hoc požadavek 2026-10-29 integruje review do Workspace UI: projekt s řádky
+  fronty dostane pod Nástroji samostatnou stránku s tabulkou, lazy detailem,
+  filtrem, jednotlivým a potvrzeným hromadným accept/reject. UI používá stejnou
+  queue a nevystavuje apply; reader smí číst, rozhodovat smí editor/admin.
+  Cílené ověření 2026-10-29: 24/24 testů roadmap refinement/TUI/API/UI prošlo;
+  celý `tests.test_desktop`: 52 testů OK, 6 fyzických Qt/WebEngine smoke testů
+  přeskočeno podle opt-in podmínky; celý `tests.test_web_server`: 41 testů OK,
+  8 opt-in browser smoke testů přeskočeno. Sdílený JavaScript prošel
+  `node --check`. Read-only živá projekce skutečné queue projektu načetla 1581
+  řádků; žádné rozhodnutí ani projektový zápis při kontrole nevznikly.
+  Oprava po fyzickém startu 2026-10-29: původní UI při otevření projektu
+  materializovalo všech 1581 řádků (přibližně 8000 DOM buněk) a každý review
+  request plánoval nesouvisející backend probe, což mohlo zahltit jedinou
+  application lane. Tabulka je nyní stránkovaná po 100, úvodní projekce je
+  menší a review requesty backend refresh neplánují. Odpojený WebEngine klient
+  při odpovědi nezapisuje BrokenPipe traceback. Transportní sada 13/13 prošla
+  mimo sandbox; první sandbox běh byl neplatný kvůli zákazu loopback/Unix socketů.
+  Celý desktop modul po opravě: 52 testů OK, 6 opt-in smoke přeskočeno. Pokus o
+  real-WebEngine smoke nad skutečným projektem se k UI nedostal: jiný proces
+  držel Workspace journal lock (`BlockingIOError`); proces ani zámek nebyly
+  násilně ukončeny. GBM hlášení bylo pouze fallback na Vulkan.
+  Navazující traceback odhalil chybějící recovery hranici automatického
+  federation catalog scheduleru: očekávaná kolize se sdíleným node writer
+  lockem ukončila jeho daemon vlákno. Scheduler nyní přechodné selhání zachytí,
+  nejvýše pět sekund vyčká a pokus bezpečně opakuje; stav journalu ani zámek
+  nemění. Regresní test prvního selhání a následného zotavení prošel spolu
+  s kontrolou automatického výběru peerů (2/2).
+  Stejná recovery mezera byla nalezena a opravena v project replication
+  scheduleru; audit periodických daemon smyček potvrdil, že content sync již
+  odpovídající retry hranici měl. Replication worker nyní po node-lock/startup
+  kolizi rovněž pokračuje a cílený test zotavení i běžného control-plane toku
+  prošel (2/2).
+  Následná kontrola prázdného review UI potvrdila 1581 řádků ve skutečné
+  node-local queue. Klient však při přechodném selhání úvodního list requestu
+  odstranil odkaz na nástroj a chybu ponechal jen ve skrytém panelu. Chybový
+  stav je nyní fail-visible v levém panelu, stránka zůstane dostupná a nabízí
+  opakování přes „Obnovit seznam“; úspěšné načtení stav chyby odstraní.
+  Read-only list/detail byly následně odděleny do vlastní serializované HTTP
+  lane, takže startovní backend kontroly v application lane již nevracejí
+  `server busy`; rozhodovací zápisy zůstávají v application lane a atomické
+  SQLite transakci. Regresní test načetl seznam i při explicitně obsazené hlavní
+  lane. Detailní panel navíc resetuje obecné styly levého `<aside>`, využívá celý
+  pravý sloupec a při užším viewportu se dále skládá pod tabulku.
+  Review tabulka nyní nabízí kombinovatelný checklist všech skutečně nalezených
+  stavů s počty a rychlou volbou všech/žádných. Stabilní řazení podporuje původní
+  pořadí, stav, návrh, zdroj, cíl a jistotu vzestupně i sestupně; změna ovládání
+  vrací stránkování na začátek a filtry se při obnovení fronty zachovají.
+  Stejný kombinovatelný checklist s počty a volbou všech/žádných byl doplněn
+  také pro hodnotu návrhu (`attach`, `keep-detached`, deep-check outcomes aj.).
+  Globální „Provést schválené“ nyní po potvrzení používá existující exact-HEAD
+  `Workspace.transact` apply a při nejasném timeoutu zachová operation ID pro
+  idempotentní opakování. Deep-check nyní nejprve skládá exact diff: evidenční
+  výsledky nemění Git, create/update/dependency změny se aplikují po jedné a po
+  každé se validuje celý task graph; preview SHA stale-protectuje potvrzení.
+  Scan nově odmítá neplatný typ rodiče, změnu typu/rodiče existujícího uzlu a
+  dependency bez existujícího cíle už před lidským review.
+  Review UI umí vrátit jednotlivé i všechny accepted návrhy zpět do pending,
+  označuje evidence/mutation a orientační riziko a dovoluje preview a provedení
+  pouze vybraného accepted záznamu bez ovlivnění ostatních rozhodnutí.
+  Živá kontrola 2026-10-29 našla 87 accepted deep-check, 0 accepted detached a
+  1271 pending položek. Nejméně jeden přijatý create-node návrh navíc navrhuje
+  task přímo pod milestone. Read-only preview nad živou queue jej zachytil bez
+  zápisu: 87 proposals, 50 evidenčních výsledků, 25 strukturovaných změn a 16
+  blokátorů (14 chybných typů rodiče, 2 neplatné kořenové tasky). Opakovaný scan
+  s `--forget-previous` tyto staré odpovědi nahradí návrhy podle přísnějšího
+  kontraktu; samotné UI apply DEV-01 neuzavírá.
+  Migrační použití tohoto scanu je po fyzickém vyhodnocení odmítnuté:
+  lokální cluster proti chybnému cíli nezachoval sekvenční kontext. Queue se
+  neaplikuje. Implementace zůstává podkladem pro pozdější omezení na audit
+  kanonické task roadmapy bez původních dat a obecných artefaktů.
+- [x] [completed] **DEV-01-E-REPLAN-01 — opravený source-first návrh migrace
+  (designed).** Zdokumentováno úplné odmítnutí prvního importu, oddělení
+  migration/refinement/document-to-plan workflow a nový tok: deterministický
+  source catalog se sekvenčním kontextem → LLM extraction bez cíle → globální
+  mezimodel → nezávislý source-vs-candidate audit → metriky věrnosti → review
+  po logických celcích → jediná úplná náhrada. Návrh je v
+  `docs/roadmap-migration.md`; v tomto kroku se data ani queue nemažou.
+- [ ] [in progress] **DEV-01-E-REBUILD-01 — lokální LLM source-first migrační
+  utility (cílová úroveň: implemented).** Implementovat resumovatelný katalog,
+  provider-neutral extraction a audit run manifest, validovaný mezimodel,
+  deterministický kandidát a coverage/fidelity report. První krok nesmí měnit
+  Workspace projekt; apply úplné náhrady zůstává odděleným potvrzeným krokem.
+  Implementovány CLI `prepare/run/status`, commit-pinned sekvenční bloky s
+  okolím, striktní extraction/audit schémata, stabilní Ollama run IDs,
+  atomické resumovatelné výsledky, bounded oprava a terminální evidence vadné odpovědi,
+  deterministické sloučení kompatibilních ID, validace hierarchie/dependency a
+  JSON/Markdown candidate i fidelity report. Utility nečte existující cílový
+  projekt a nemá writer. Zbývá fyzický běh nad připnutými reálnými zdroji,
+  vyhodnocení schopnosti zvoleného modelu a review výsledného kandidáta.
+  Read-only fyzické `prepare` nad host HEAD `692e47a` a modulem
+  `cz.proofofidea.publication-experiment-registry` `446d980` vytvořilo v
+  `/tmp/dev-01-source-rebuild-20261029-v5-final` katalog 6 souborů / 607109 bajtů /
+  185 logických bloků; největší blok má 24477 bajtů. První smoke dispatch
+  odhalil nedostupný Ollama endpoint ještě před modelovou odpovědí; utility
+  proto nyní před prvním blokem ověří endpoint i připnutý model a
+  nedostupnost už nekonzumuje blokový run. Fyzický v4 extraction dokončil
+  140/185 bloků; 23 rodičů odhalilo chybějící lokální reference ve schema v1,
+  16 entit míchalo ID/maturity a 6 citovalo řádky mimo blok. Schema v2 proto
+  zavádí `entity_key`, lokální/source refs, deterministický ID allowlist,
+  oddělenou maturity a nejvýše dva correction průchody. První fyzický blok
+  čistého v5 prošel bez opravy a správně zachoval licenční preambuli jako
+  description bez falešného ID.
+  CLI nyní při každém volání zobrazuje fázi, blok, pokus, logický postup,
+  procenta, elapsed a průběžnou ETA. Fyzický druhý blok ověřil 2/370 (0,5 %)
+  bez opravy; trval přibližně 70 sekund a první hrubý odhad celého zbytku
+  byl 7 h 10 min, při dalších blocích se bude zpřesňovat.
+  Celý v5 extraction skončil 94/185 validními bloky a 91 terminálními chybami;
+  audit se správně nespustil bez úplného kandidáta. Diagnostika 241 opravných
+  volání odhalila tři chyby kontraktu utility: 55 obsahově správných
+  neexekučních záznamů odmítla kvůli rodiči, 7 explicitních skupin více ID
+  odmítla místo předání k review a všech 16 odpovědí s odlišnými poli pouze
+  zopakovalo pomocné `validation_error`, protože opravný prompt neopakoval
+  cílové schéma. Opravený kontrakt dovoluje kontextový `parent_ref`, skupině
+  source ID přidělí `MIG-*` a blokátor `combined-source-ids`, používá samostatný
+  úplný repair prompt pro extraction/audit a vrací podrobnější validační chyby.
+  Zbývající skutečné odchylky (zejména citace řádků mimo blok a neplatné refs)
+  zůstávají fail-closed. Cílená migrační sada (`roadmap_rebuild`,
+  `roadmap_migration`, `roadmap_mapping`, `roadmap_importer`): 37/37 prošlo.
+  Čistý v6 nad stejnými připnutými revizemi je připraven v
+  `/tmp/dev-01-source-rebuild-20261030-v6`: extraction zlepšila výsledek na
+  155/185 validních bloků a 30 terminálních chyb po 99 opravných voláních.
+  Z nich bylo 21 mechanických parent refs (`"null"` nebo UUID obálky), 8
+  nepřesných rozsahů řádků, 6 source ID mimo allowlist, 3 bezpečně neurčité
+  transporty a 1 neformální maturity; některé bloky měly více vad. V7 proto
+  předává očíslovaný zdroj, normalizuje pouze dvě jednoznačné transportní
+  reprezentace rodiče, rozpozná historické shorthand ID z deklarovaných názvů,
+  odděluje zmíněná ID použitelná jen jako reference a zachovává každou
+  ambiguity jako blokátor kandidáta. Vymyšlené ID a obsah mimo blok zůstávají
+  fail-closed. Cílená migrační sada: 40/40 prošlo. Zbývá čistý fyzický v7 běh.
+  V7 dokončila extraction se 178/185 validními bloky, 15 opravnými voláními a
+  7 terminálními chybami: šestkrát source ID mimo allowlist a jednou neurčitý
+  transport. ID mimo allowlist se nyní odstraní se zachováním obsahu a
+  povinným `source-ambiguity` blokátorem. Nový `derive --from-run` přebírá jen
+  znovu validované extraction výsledky, eviduje jejich hashe a lineage a
+  nechává znovu zpracovat pouze chybějící bloky; candidate a audity vzniknou
+  vždy znovu. Cílená migrační sada po změně: 42/42 prošlo.
+  První selektivní run převzal 178 bloků, šest opravil bez correction volání a
+  jediný 23 080B blok `WORK_LOG.md:4153-4265` podruhé skončil jako durable
+  `unknown` na obecném 180s response timeoutu; nevznikla raw odpověď, nejde
+  tedy o doloženou obsahovou chybu. Rebuild má nyní vlastní manifestem
+  připnutý limit 600 sekund bez změny globálního Ollama adapteru. Druhý
+  selektivní run `/tmp/dev-01-source-rebuild-20261030-v7-retry-2` převzal 184
+  validních extrakcí. Poslední blok uspěl za přibližně 3 min 29 s, takže
+  extraction je úplná 185/185. První sestavení kandidáta odhalilo čistě
+  prezentační chybu: dva vědomě nerozřešené dependency blokátory byly v JSON
+  `null`, ale Markdown renderer je před auditem zkoušel přímo spojit jako
+  řetězce. Renderer nyní zobrazuje `<unresolved>` a bezpečně označí případný
+  cyklus; autoritativní candidate JSON ani modelové výsledky se nemění.
+  Audit dokončil 182/185 validních bloků; tři terminální chyby byly pouze
+  redundantní pozitivní findings druhu `correct` při celkovém verdictu
+  `correct` a skóre 100. Z validních auditů bylo 170 `correct`, 8 `equivalent`,
+  3 `distorted` a 1 `missing`; skutečné výhrady se soustředily do čtyř bloků.
+  Původní globální sloučení mělo 793 blokátorů, protože každý odlišný
+  sekvenční výskyt stejného ID považovalo za konflikt. Autoritativní
+  reconciliation nyní zachovává 261 variant u 90 uzlů, preferuje dokončenou
+  historickou evidenci a vytváří jen jedinou skutečnou stejně autoritativní
+  `reconciliation-ambiguity` (`M0-06`). Deterministický náhled nad stejnými 185
+  extrakcemi klesl na 296 blokátorů: 205 neplatných/neurčených rodičů, 42
+  kombinovaných ID, 42 zdrojových nejasností, 6 dependency a 1 reconciliation
+  konflikt. Nový audit uvidí i varianty přes `provenance_all`. Odvozený run
+  `/tmp/dev-01-source-rebuild-20261030-v7-reconciled` převzal všech 185
+  extrakcí a čeká pouze na nové audity; cílená migrační sada: 46/46 prošlo.
+  Reconciled audit dokončil všech 185 bloků s fidelity 97,87: 164 `correct`,
+  14 `equivalent`, 6 `misplaced` a 1 `distorted`. Šest ze sedmi výhrad
+  pocházelo z vloženého modulu, jehož lokální M0–M6 byly chybně sloučeny s
+  hostitelskými milníky. Reconciliation nyní klíčuje identitu dvojicí
+  repository/ID, parent i dependency řeší pouze uvnitř stejného projektu a
+  candidate nese explicitní `repository_id`. Deterministický náhled má 697
+  hostitelských a 18 modulových uzlů; odhaluje tři skutečné lokální
+  reconciliation ambiguity místo cross-project kolizí. Odvozený run
+  `/tmp/dev-01-source-rebuild-20261030-v7-scoped` převzal 185 extrakcí a 166
+  auditů s kanonicky shodným vstupem; zbývá jen 19 auditů dotčených novým
+  scoped kandidátem. Cílená migrační sada: 48/48 prošlo.
+  Scoped audit je úplný: fidelity 99,57, coverage 99,84, hierarchy 99,59,
+  status 99,14, provenance 99,84 a dependencies 99,46; verdicts 172 `correct`,
+  11 `equivalent`, 1 `misplaced` a 1 `distorted`. Jediné `misplaced` XREF-01
+  odporuje přímo zdrojové formulaci, podle níž master roadmap drží strategický
+  požadavek a konkrétní budoucí dávku BACKLOG; jde proto o auditní návrh k
+  odmítnutí, nikoli automatickou změnu. `distorted` blok M5 je věcný: chybí
+  několik plánovaných trust/chat/backend/conflict požadavků a vyžaduje cílené
+  doplnění ze zdrojových řádků 1460–1501. Candidate zůstává `import_ready=false`
+  také kvůli 304 strukturálním blokátorům: 211 parent, 42 combined-source-ids,
+  42 source-ambiguity, 6 dependency a 3 reconciliation ambiguity. Žádný apply
+  před jejich cíleným reconciliation/review neproběhne.
+  Implementován audit-guided selektivní retry jednoho extraction bloku a
+  manifestovaný human-review audit override. Run
+  `/tmp/dev-01-source-rebuild-20261030-v7-m5-repair` převzal 184 extrakcí,
+  znovu odešle pouze M5 s předchozí extrakcí a findings a eviduje explicitní
+  odmítnutí XREF-01 `misplaced`; původní run ani raw evidence se nemění.
+  První guided odpověď porušila extraction schema; druhý opravný pokus již
+  prošel strukturou entit, ale v obou ambiguity obrátil rozsah řádků. Validátor
+  nyní hlásí index a konkrétní vadný rozsah a při resume znovu odvodí přesnou
+  chybu z uchované raw odpovědi, takže poslední bounded repair dostane
+  použitelnou zpětnou vazbu bez změny katalogu nebo evidence. Cílený modul
+  `tests.test_roadmap_rebuild`: 20/20 prošlo. Třetí pokus M5 uspěl a vytvořil
+  kandidáta se všemi 185 extrakcemi. `derive --audit-from-run` nyní umí oddělit
+  lineage extrakcí od auditního zdroje, kanonicky převzít pouze kompatibilní
+  audity a zdědit human-review override. Navazující run
+  `/tmp/dev-01-source-rebuild-20261030-v7-m5-audit` převzal 185 extrakcí a 180
+  nezměněných auditů; k opakování zbývá pět auditů. Cílený modul po změně:
+  21/21 prošlo; `git diff --check` prošel. Selektivní audit doběhl 185/185 bez
+  selhání a uzavřel report s fidelity 99,73 (coverage 99,95, hierarchy 99,78,
+  status 99,30, provenance 99,89, dependencies 99,73), verdicts 172 `correct`
+  a 13 `equivalent`; žádný `distorted` ani `misplaced`. Candidate zůstává
+  fail-closed `import_ready=false` kvůli nezměněným 304 strukturálním review
+  položkám (211 parent, 42 combined-source-ids, 42 source-ambiguity,
+  6 dependency a 3 reconciliation ambiguity), nikoli kvůli fidelity auditu.
+  Strukturální resolver nyní používá `roadmap-graph.json` z přesně připnutého
+  host commitu, platné zachované varianty a stabilní milestone ID; neurčité
+  zbytky ukládá do explicitní `MILESTONE-LEGACY` karantény a veškeré původní
+  problémy zachovává jako `resolution_warnings`. Run
+  `/tmp/dev-01-source-rebuild-20261030-v7-structured-v2` převzal všech 185
+  extrakcí a 30 kanonicky nezměněných auditů. Deterministický preview má nula
+  fatálních parent/dependency chyb: 74 pinned-graph placementů, 32 placementů
+  ze zachované varianty, 21 ze stabilního milestone ID, 16 normalizovaných
+  kořenových milestone, 49 legacy batch a 20 legacy task karanténních
+  placementů. Zbývá selektivně zopakovat 155 auditů změněné hierarchie; bez
+  nich se strukturální `ready` nesmí vydávat za `import_ready`.
+  Strukturální reaudit doběhl 185/185 bez selhání. Čtyři nové raw verdicts
+  `misplaced` byly po kontrole zdroje a candidate records odmítnuty jako falešně
+  pozitivní: detailní planned requirements nejsou dokončená implementace,
+  `implemented` maturity M1-AH není completed status, M3-UB-01 má kanonickou
+  WORK_LOG provenance a podpůrné záznamy WF-03 již správně odkazují na WF-03.
+  Finální odvozený run `/tmp/dev-01-source-rebuild-20261030-v7-final` zachovává
+  všech pět human-review override v manifestu a bez dalšího modelového volání
+  sestavil report: `complete=true`, `candidate_ready=true`,
+  `import_ready=true`, candidate SHA-256
+  `251c015289a6382f0e367e68bba487d2a9ddfec44e97c314fcea3abdaeb16e54`,
+  fidelity 99,12, verdicts 166 `correct` a 19 `equivalent`, žádný negativní
+  verdict ani candidate issue. Fyzický import zůstává oddělený potvrzený krok.
+  Implementován adaptér přijatého rebuildu do stávajícího nativního bundle,
+  validátoru a recoverable importeru; nevznikl druhý writer. Adaptér ověřuje
+  lineage/hash/`import_ready`, regeneruje připnutou inventuru, váže read-only
+  diff hostu i existujícího modulového projektu, zachovává immutable metadata
+  již importovaných source artefaktů a ukládá supporting summary jako inertní
+  text. Local author čte přes SQLite `mode=ro` bez writer locku. Reálný bundle
+  `/tmp/dev-01-source-rebuild-final-bundle-v4` má SHA-256
+  `47c1137e52661cb986eb0e904c378e3f2854d434872d21e0abfd57f95ed650c5`,
+  host 709 uzlů / 150 artefaktů a modul 19 uzlů / 9 artefaktů; oba cílové HEAD
+  zůstaly beze změny. Review rebind převzal 12 přesně shodných `key+SHA` ze
+  staršího rozhodnutí; změnil se jen připnutý TODO. Jeho kontrola nenašla
+  credentials, privátní klíče, tokeny ani osobní e-mail, ale zachytila
+  historickou lokální cestu
+  `/home/antonin/Projekty/publication-experiment-registry`. Uživatel výslovně
+  potvrdil privacy `project`; bundle-bound manifest je
+  `/tmp/dev-01-source-rebuild-final-source-review-v4.json`. Opakovaná read-only
+  prověrka `/tmp/dev-01-source-rebuild-final-review-v4-complete` má 16 passed,
+  0 blocked, 0 needs-review a `prewrite_checks_passed=true`.
+- [ ] [in progress] **DEV-01-F — fyzická migrace a předání autority (PoC validated).**
+  Uživatel výslovně potvrdil fyzický import bundle v4 do obou projektů. Nativní
+  recoverable writer jej dokončil a uložil orchestrující receipt
+  `/tmp/dev-01-source-rebuild-final-import-receipt-v4.json`: modul přešel z
+  `10a9cfad` na `e9eea387`, hostitelský projekt z `6754f147` na `54915375`.
+  Oba commity odpovídají receipt, snapshoty prošly `validate_snapshot`, pracovní
+  stromy jsou čisté a oba journaly mají 0 pending souborů a 0 nedokončených
+  operací. Read-only evidenční audit
+  `/tmp/dev-01-source-rebuild-final-import-evidence-v4` uzavřel výsledek
+  `complete-no-loss-detected`: 13/13 připnutých zdrojů (6 roadmapových a 7
+  doprovodných), 185/185 zdrojových bloků, 728/728 uzlů a 294/294 podpůrných
+  záznamů je dohledáno v byte-for-byte ověřených importovaných souborech; nebyl
+  proveden další zápis ani LLM scan. Cílený modul
+  `tests.test_roadmap_rebuild_bundle`: 4/4 prošly. Uživatel po importu fyzicky
+  ověřil funkční zobrazení roadmapy ve Workspace. Zbývá ověření v IDE a
+  samostatná akceptace úplnosti modulů a úpravy workflow zdrojového repozitáře;
+  původní evidence se zatím neodstraňuje.
+- [x] [completed] **DEV-01-F-IDE-01 — obnovení ověření po opravě bridge
+  (PoC validated).** Původ: chyba spojení VSCodia a uživatelský pokyn
+  30. 10. 2026 pokračovat po merge opravy. Převzít PR #113 z develop,
+  zachovat existující připojení a ověřit export importované revize v IDE.
+  Read-only audit `/tmp/dev-01-post-bridge-merge-evidence-20261030`
+  znovu potvrdil `complete-no-loss-detected`: 13/13 zdrojů, 185/185 bloků,
+  728 uzlů, 294 podpůrných záznamů, oba původní import commity a 0 pending /
+  unfinished operací. Nevznikl další import, zápis do projektů ani LLM scan.
+  Existující aktivní IDE mapování je stále bound k historickému testovacímu
+  HEAD `c36af3e` s 5 uzly, nikoli k importovanému host HEAD `54915375`.
+  Připojení se znovu nepáruje; pro aktuální plán je nutné explicitní review
+  nové připnuté exportní revize podle ADR 0060. Staré zprávy zůstanou zachované.
+  Izolované začlenění opravy do migrace: 26 cílených testů bridge,
+  rebuild bundle a roadmap graph prošlo; log
+  `/tmp/dev-01-bridge-merged-targeted-final.log`. Celá závěrečná brána DEV-01
+  nad finálním kódem zbývá; nejde o akceptaci celé migrace.
+  Nativní `IdeBridge.snapshot` nyní skutečně exportoval oba importované
+  projekty nad receiptem připnutými HEAD: host 709 uzlů / 798 674 bajtů,
+  modul 19 uzlů / 20 947 bajtů. Oba exporty jsou pod limitem 1 MiB, mají
+  jedinečná ID a vznikly jako Markdown TODO + strojový snapshot JSON v
+  `/tmp/dev-01-ide-export-current-20261030` se souhrnem `summary.json`.
+  Nebyl přepsán aktivní IDE mapping ani jeho lokální konfigurace. Jde o
+  ověření skutečného backendového exportu, nikoli již o načtení nové revize
+  v uživatelově běžícím okně VSCodia.
+  Doplnění 30. 10. 2026 po hlášení „Workspace odmítl synchronizaci (503)“
+  z desktopového propojení: bridge 0.2.2 opakuje pouze explicitní
+  pre-dispatch `503 server busy` nejvýše třikrát s odstupem 250/500/1000 ms.
+  Reuse/adapt: stávající HTTP transport rozšíření a serializovaná application
+  lane; žádná nová fronta ani obcházení writer locku. Jiné HTTP chyby a
+  nejasné síťové selhání se neopakují. Recovery zůstává podle ADR 0060:
+  inbox/receipts a SQLite idempotence beze změny, odmítnutí nastává před
+  dispatch a retry znovu ověřuje podepsanou discovery adresu.
+  Ověření: 6/6 Node testů včetně zotavení po dvou 503, limitu čtyř pokusů,
+  nereplikování jiných 503/403 a existujících mailbox recovery scénářů;
+  17/17 cílených Python testů bridge a odmítnutí souběžného zápisu prošlo
+  mimo sandbox (`/tmp/dev-01-ide-busy-tests.log`). Balíček
+  `/tmp/workspace-bridge-update-0.2.2.vsix` byl úspěšně nainstalován příkazem
+  `codium --install-extension … --force`. Aktivace v již běžícím okně vyžaduje
+  reload; fyzické zotavení konkrétního spojení zatím neověřeno. Dlouhodobě
+  obsazený backend zůstává chybou, tato změna řeší přechodné odmítnutí.
+  Celá závěrečná brána DEV-01 nad finálním kódem nadále zbývá.
+  Další hlášení 30. 10. 2026 („jeden projekt, zastaralý“, `socket hang up`):
+  read-only kontrola skutečné IDE schránky potvrdila 5 testovacích uzlů,
+  `STATUS.stale=true` a poslední sync 18:14:51 UTC; aktivní serverové mapování
+  zůstává na `c36af3e`. Druhý importovaný projekt nemá aktivní přiřazení.
+  Pět neautentizovaných GET sond na discovery loopback endpoint uspělo;
+  autentizovaný exchange ani příčina konkrétního přerušení nejsou ověřené.
+  Bridge 0.2.3 adaptuje existující UI synchronizace: ruční výsledek varuje
+  při stale, částečném/celkovém selhání i nulovém počtu projektů místo
+  bezpodmínečného „Workspace synchronizován“. Recovery a persistence podle
+  ADR 0060 se nemění; nové mapování ani přepis immutable snapshotu neproběhl.
+  Cílených 6/6 Node testů prošlo mimo sandbox, včetně stale, částečného a
+  úplného `socket hang up`, nulového přiřazení a úspěšné synchronizace.
+  `/tmp/workspace-bridge-update-0.2.3.vsix` byl úspěšně nainstalován do
+  stejného VSCodium profilu; aktivace v běžícím okně vyžaduje reload.
+  Uživatel výslovně schválil aktualizaci hlavního projektu při zachování
+  cílového repozitáře. Dokončení vyžaduje příkaz Nastavení projektů v IDE:
+  existující rozšíření při remapu ukládá novou relaci do svého SecretStorage
+  a potvrzuje lokální cíl. Tento běžící extension host z CLI ovládaný není;
+  jednostranný remap backendu by zanechal IDE s odvolaným lokálním přiřazením.
+  Fyzické načtení nové revize v IDE a obnovení konkrétního spojení zbývá.
+  Doplnění 30. 10. 2026 po PR #114: probíhající lokální merge `develop`
+  `c75b96529ffc95333aec93be8f3dfe1b03d5fe5a` přebírá oddělené automatické
+  kontroly dostupnosti backendu. Konflikty TODO, WORK_LOG, desktop UI a
+  local API jsou řešeny zachováním aktivní DEV-01, historie obou opravných
+  dávek a nezávislých linek application/telemetry/review/availability.
+  Zápisy mají původní serializaci; sampler je pouze paměťový, recovery podle
+  ADR 0003/0050 se nemění. Cílené ověření kombinovaného kódu: 49/49 testů
+  dostupnosti, UI JS, HTTP/HTTPS linek, roadmapového grafu, IDE bridge a
+  rebuild bundle prošlo (`/tmp/dev-01-merge-114-targeted.log`). Nová regrese
+  ve `tests.test_local_api` navíc ověřila každý přesný endpoint se všemi třemi
+  ostatními linkami zamčenými a odmítnutí podobné query cesty přes aplikační
+  limit: 1/1 OK (`/tmp/dev-01-merge-114-lanes.log`). Kontrola grafové projekce,
+  syntaxe a diffu prošla. Konflikty jsou vyřešené a připravené v indexu;
+  merge commit nevytváří agent. Celá finální brána DEV-01 ani fyzický restart /
+  IDE akceptace tím nejsou nahrazené a nadále zbývají.
+  Aktuální výsledek po opravách odezvy 30. 10. 2026: skutečná běžící IDE
+  schránka odpovídá celým JSON snapshotem aktuálnímu nativnímu
+  `IdeBridge.snapshot` pro host HEAD `54915375`, včetně všech 709 uzlů.
+  `STATUS.stale=false`, stáří heartbeat při kontrole 0,6 s, aktuální inbox
+  je prázdný. `/tmp/dev-01-bridge-live-after-perf.json`. Původní neověření
+  aktuálního exportu výše je tím nahrazené; historická relace a receipts
+  zůstaly zachované. Jde o fyzický přenos do schránky živého IDE, nikoli
+  automatické předání zadání do běžící konverzace agenta.
+  Samostatný izolovaný VSCodium extension-host smoke nyní skončil timeoutem
+  podle DEV-01-F-PERF-01; za úspěšnou kompletní IDE smoke sadu se nevydává.
+- [x] [completed] **DEV-01-F-IDE-02 — automatická obnova změněného zadání
+  (PoC validated, 30. 10. 2026).** Původ: uživatel požaduje automatický
+  přenos změny textu zadání místo hlášky „zastaralé“ a ručního nastavení.
+  Rozsah: nezbytná oprava otevřené IDE akceptace DEV-01-F-IDE-01, žádná
+  obecná orchestrace agenta. Rozšíření 0.2.4 po doručení čekajících zpráv
+  automaticky obnoví již potvrzené schema-v2 přiřazení nad aktuálním HEAD,
+  zachová repozitář, editor workspace a instrukce a otevře nový export,
+  pokud bylo viditelné původní TODO. Nová immutable relace používá vlastní
+  schránku; staré zprávy a receipts se nepřepisují ani nerevidují.
+  Persistovaný intent v SecretStorage obnoví map/bind i po ztrátě odpovědi
+  či restartu; odvolání nebo změněný cíl se nepřepisují. Hranice a recovery:
+  [ADR 0060](docs/adr/0060-local-file-ide-bridge.md#doplnění-30-10-2026--automatická-obnova-zadání-dev-01-f-ide-02).
+  Reuse/adapt: existující katalog, map CAS, bind a privátní mailbox;
+  nový endpoint, databáze, writer ani externí kód nejsou potřeba.
+  Dokončení: ověřit automatický refresh, zachování cíle a historie,
+  čekající frontu, recovery map/bind/SecretStorage a odmítnutí změny cíle.
+  Ověření finálního kódu: `python3 -m unittest tests.test_ide_bridge -v`
+  — 17/17 OK (14,022 s), včetně vnořených 6/6 Node testů a nového
+  integračního testu s reálným HTTP backendem, persistovaným intentem,
+  ztracenou odpovědí map a přerušením prvního exportu nové relace.
+  `node --check` pro rozšíření a nový integrační helper i
+  `git diff --check` prošly. Obecný VSIX bez pairing.json
+  `/tmp/workspace-bridge-update-0.2.4.vsix` byl úspěšně nainstalován;
+  `codium --list-extensions --show-versions` potvrdilo
+  `federated-workspace.workspace-file-bridge@0.2.4`.
+  Běžící okno vyžaduje `Developer: Reload Window`; načtení aktuálního
+  skutečného projektu tímto oknem zatím nebylo fyzicky ověřeno.
+  Celá závěrečná testovací brána DEV-01 nebyla v tomto kroku spuštěna;
+  dávka se neuzavírá a doporučení PR se nevydává.
+  Fyzická aktivace v uživatelově běžícím okně IDE zůstává oddělená od
+  izolované PoC validace a od celkové DEV-01-F-IDE-01 akceptace.
+  Schema-v1 zůstává ruční. Agent čtoucí starou cestu ani jeho běžící
+  konverzace se tím automaticky nepřesměruje; agent handoff patří DEV-02/04.
+  Pozdě zapsané zprávy ve staré schránce zůstávají pro ruční posouzení.
+- [ ] [in progress] **DEV-01-F-PERF-01 — odezva Workspace nad importovaným
+  projektem (cílová úroveň: PoC validated).** Původ: uživatelské hlášení
+  zasekávání a výslovné zařazení opravy mezi podmínky uzavření DEV-01.
+  Rozsah: změřit skutečný běžící desktop, najít opakovanou drahou cestu
+  a opravit ji bez obcházení serializace, privacy či recovery.
+  Výchozí krátký vzorek procesu `python3 -m spikes.desktop` ukázal 24 %
+  jednoho jádra CPU; není důkaz příčiny. Akceptace: doložená příčina,
+  srovnatelné měření před/po, regresní test relevantního chování a chybových
+  cest, zachování aktuálnosti dat a ověření odezvy skutečného projektu.
+  Implementace a izolované ověření 30. 10. 2026:
+  - Git snapshot načítal 670 souborů / 4 556 447 B přes 1 341 procesů.
+    `spikes.storage.Git.snapshot` nyní preflightuje typy/počty/velikosti přes
+    `ls-tree -l` a čte přesné blob ID jedním `cat-file --batch`. Kontroluje
+    hlavičky, velikosti, ukončení a úplné spotřebování odpovědi; zachovává
+    env_extra, deadline a stejné PoC limity. Před/po nad stejným host HEAD
+    `54915375`: 2,874 s → 0,0404 s a 1 341 → 2 příkazy. Nezávislé porovnání
+    původním čtenářem potvrdilo shodu všech 670 souborů bajt po bajtu.
+    Reporty `/tmp/dev-01-perf-before.json` a `/tmp/dev-01-perf-after.json`.
+    Celý nativní `Projects.open`: 3,105 s → 0,2109 s, stále 709 uzlů;
+    `/tmp/dev-01-open-before.json` a `/tmp/dev-01-open-after.json`.
+  - Normální otevření dále blokoval `/v1/julia/definitions`: pro každý
+    JSON včetně metadat znovu načítal a validoval celý projekt. Katalog nyní
+    sdílí jeden request-local validovaný snapshot, vynechá metadata a znovu
+    ověří HEAD; mode/ID/descriptor/privacy kontroly platných definic zůstaly.
+    Nezavádí se cache přežívající požadavek ani čtení nevalidovaného indexu.
+  - Qt kontrola poté odhalila `restored is not defined` v `loadChat`:
+    proměnná obnoveného vlákna byla deklarovaná pouze uvnitř try bloku,
+    ale použila se i po načtení doplňkových stavů. Má nyní rozsah celé funkce.
+    Regrese skutečně spouští JS pro prázdnou historii, obnovení vlákna,
+    jeho vlastní úlohy a selhání hlavního i volitelného požadavku.
+  - Reuse/adapt: stávající Git CLI wrapper, parser/validátor Julia definic
+    a UI loader; bez nové závislosti, procesu na pozadí či persistentního
+    storu. Read-only změna nepřidává crash boundary: při vadném čtení
+    nevznikne snapshot ani zápis do projektu/indexu. ADR 0003 se nemění.
+  - Cílená storage/Workspace/index/bridge sada: 50/50 OK, log
+    `/tmp/dev-01-perf-targeted.log`. Následující Julia/UI sada: 34 testů,
+    32 OK / 2 opt-in skipped, `/tmp/dev-01-open-workflow-targeted.log`.
+  - Izolovaný skutečný Qt/WebEngine nad importovaným projektem dokončil
+    standardní `openRegisteredProject` za 424,7 ms, zobrazil přesný HEAD,
+    709 uzlů a 335 podkladů. Výsledek a snímek:
+    `/tmp/dev-01-current-project-ui-after-perf/browser-result.json`,
+    `browser-screenshot.png`, log `browser-final.log` v témže adresáři.
+    Test měl vlastní konfiguraci/profil a nepřesměroval uživatelův bridge.
+    První obecný desktop smoke selhal na nepřítomnosti cíle mezi prvními
+    čtyřmi kartami; po opravě izolované registrace odhalil blokující Julia
+    načtení. Za úspěšnou plnou smoke akceptaci se tyto pokusy nevydávají.
+  - Samostatný reálný VSCodium smoke tentokrát skončil 90s timeoutem
+    extension test hostu (`/tmp/dev-01-bridge-current-smoke.log`); výsledek
+    se neoznačuje jako pass. Izolované HTTP/Node bridge regrese prošly.
+  - Modulový projekt prošel týmž Qt tokem za 190,1 ms: přesný HEAD
+    `e9eea387`, 19 uzlů / 22 podkladů, `module-browser-result.json` a
+    `module-browser-screenshot.png` v témže evidenčním adresáři.
+    Opakovaný read-only audit
+    `/tmp/dev-01-closure-evidence-after-perf-20261030` potvrdil všech 13
+    zdrojů, 185 bloků, 728 uzlů a 294 podpůrných záznamů v obou projektech;
+    projektové commity zůstaly shodné s importním receiptem a oba journály
+    mají 0 pending / unfinished operací. Nevznikl další import ani LLM scan.
+  Uživatelská fyzická akceptace odezvy 30. 10. 2026: „Ano, odezva je teď
+  v pořádku“. Běžný desktop byl uživatelem znovu spuštěný nad aktuálním
+  checkoutem; agent nespouštěl druhou instanci ani neukončoval jeho proces.
+  Finální celá testovací brána po všech třech opravách prošla při kontrole
+  po výpadku napájení (výsledek níže). Zbývá ověření běžného desktopu/IDE
+  workflow po restartu s aktuálním checkoutem.
+- [ ] [in progress] **DEV-01-G — závěrečná akceptace a předání dávky (PoC validated).**
+  Konsolidovat důkazy, archivovat dávku a odklady, vyčistit TODO a připravit
+  jeden PR do develop; spuštění další feature není součástí této dávky.
+  Pořadí výslovně potvrzené uživatelem 31. 10. 2026: nejprve dokončit předání
+  DEV-01, potom widget DEV-03; stacked větev nebyla schválena.
+  [Podklady k review](docs/dev-01-handoff-review.md) obsahují nově ověřené
+  trvalé zdroje a zbývající akceptaci. Read-only audit znovu potvrdil přesné
+  bajty všech 13 zdrojů, shodu všech 728 mapping/graph ID, čisté pracovní
+  stromy a prázdné journály obou projektů. Uložený IDE snapshot se shoduje
+  se všemi 709 uzly hostitelského grafu; tato kontrola sama nedokazuje
+  funkčnost všech klikacích toků po restartu.
+  Připraven je lokální předávací balík `.worktrees/dev-01-handoff-evidence/`
+  mimo verzovaný obsah: přesný source delta diff, request/preview pro
+  zachování pěti novějších pracovních snapshotů a návrhu DEV-03 včetně
+  pravidel agentů, a `authority-handoff.patch` pro pravidla AGENTS, archivaci
+  evidence a čekací TODO. `git apply --check` návrhu prošel; patch se dosud
+  neuplatnil. Pracovní snapshoty jsou jako takové označené, nikoli vydávané
+  za bajty Git commitu. Projektový preview prošel celou transition/graph
+  validací, nic neaplikoval a nemění původní neměnné source artefakty.
+  Zbývá lidská akceptace modulového obsahu a konkrétního předání autority,
+  ověření běžného desktop/IDE toku a teprve poté skutečné předání zdrojového
+  rozdílu, konsolidace nahrazených historických pokusů a úklid evidence.
+  Staré odmítnuté REFINE/RECONCILE výsledky se tím nezmění na akceptovaný
+  import; jejich nahrazení source-first postupem i důvody zůstanou v archivu.
+
+## Ověření aktuálního kroku
+
+31. 10. 2026 — následná source aktualizace a příprava předání: cílený běh
+`python3 -m unittest tests.test_roadmap_source_update tests.test_roadmap_importer
+tests.test_roadmap_rebuild_bundle -v`: 17 testů OK, log
+`/tmp/dev-01-source-update-targeted-final.log`. Nových 9 testů zdrojové
+aktualizace pokrývá i CLI preview/apply, přesný obsah review a čtyři native
+crash boundaries. První vývojový běh měl chybný očekávaný text chyby pro
+neměnný source; validátor správně odmítl kandidáta již na importní provenance.
+Po opravě očekávání a doplnění dalších scénářů prošel uvedený finální běh.
+Celá sada po poslední změně kódu/testů:
+`python3 -m unittest discover -s tests -v` mimo socketově omezený sandbox —
+1101 testů za 245,499 s, OK / 39 skipped, exit 0;
+`/tmp/dev-01-handoff-full-20261031.log`. Syntaxe nového service/CLI/test modulu
+a `git diff --check` prošly. Po následných změnách pouze dokumentace se
+celá sada neopakuje. Dávka přesto zůstává otevřená kvůli akceptaci DEV-01-F/G.
+
+Kontrola po výpadku napájení 30. 10. 2026: všechny tři poslední opravy
+(Git batch snapshot, request-local Julia katalog a obnova chatu) i jejich
+regresní testy jsou zachované v pracovním stromu; nejsou commitované.
+`git fsck --full` skončil s exit 0, pouze s dangling objekty, bez hlášení
+poškozených či chybějících objektů. `git diff --check` prošel.
+Nový běh `python3 -m unittest tests.test_storage tests.test_julia_computation
+tests.test_desktop -v` mimo socketově omezený sandbox: 94 testů,
+OK / 8 skipped; log `/tmp/dev-01-power-recovery-targeted-permitted.log`.
+První sandboxový běh měl 15 chyb při zakázaných socketech a nenahrazuje
+úspěšný opakovaný běh. Read-only kontrola živých projektů potvrdila host
+HEAD `549153757576f24fb5244c313818a08bb2273ce6` (670 souborů / 335 entit)
+a modul HEAD `e9eea387918ed726daf7ee8c40ff309bd6fd8418` (44 / 22),
+validní snapshoty, čisté stromy a v obou journálech 0 pending / unfinished.
+Historické reporty, bundle/receipt a snímky odkazované v `/tmp` nejsou po
+restartu dostupné; jejich dřívější výsledky výše jsou historická evidence,
+nikoli nyní opakovaný byte-for-byte audit zdrojů. Živá projektová data se
+při kontrole neměnila. Akceptace celé DEV-01 a běžného desktop/IDE workflow
+po restartu zůstává otevřená.
+Celá závěrečná sada `python3 -m unittest discover -s tests -v` následně
+mimo sandbox prošla: 1092 testů za 246,817 s, OK / 39 skipped, exit 0;
+log `/tmp/dev-01-power-recovery-full-permitted.log`. Původní celosadový běh
+v sandboxu byl přerušen po zjištění socketového omezení z cíleného běhu;
+není vykazován jako dokončené ověření. Starší poznámky níže o zbývající
+celé bráně popisují tehdejší stav a nahrazuje je tento nový výsledek.
+
+`python3 -m unittest tests.test_roadmap_refinement tests.test_roadmap_importer
+tests.test_roadmap_validation tests.test_roadmap_bundle tests.test_roadmap_mapping
+tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph
+tests.test_spdx -v`: po doplnění projektového selektoru 72 testů OK.
+Původní 4 refinement testy
+ověřují proposal-only scan a deduplikaci, terminální reject, odmítnutí
+vymyšleného cíle a jedinou autorizovanou Workspace transakci po akceptaci.
+Následný cílený běh `python3 -m unittest tests.test_roadmap_refinement -v`:
+5 testů OK; pátý test kryje izolaci jedné lokální queue mezi dvěma projekty.
+`python3 -m unittest tests.test_roadmap_refinement_tui -v`: 10 testů OK;
+ověřeno explicitní spuštění scanu, review přes existující service, zákaz apply
+bez druhého potvrzení, bezpečný quit, terminál bez podpory skrytí kurzoru,
+samostatné stránkování tabulky/detailu, filtr rozhodnutých stavů a živé UI
+po dobu blokovaného background scanu se zákazem předčasného ukončení. Devátý
+test vkládá newline, tab a CR do všech víceřádkových polí a ověřuje, že curses
+nedostane žádný řídicí znak. Desátý ověřuje výběr dostupného projektu podle
+názvu/UUID a odmítnutí nedostupného projektu.
+Skutečný PTY smoke otevřel TUI nad hostitelským projektem a ukončil jej přes
+`q` s exit 0; scan, rozhodnutí ani apply při smoke spuštěny nebyly.
+`python3 -m py_compile spikes/roadmap_refinement.py
+scripts/roadmap_refinement.py`: OK. Celá finální unittest brána zůstává pro
+uzavření dávky.
+
+`python3 -m unittest tests.test_roadmap_validation -v`: 3 nové validační
+testy OK. Pokrývají úspěšné sloučení celého živého snapshotu bez zápisu,
+ponechání chybějící cesty/privacy jako otevřených stavů a rozlišení
+relativního a neexistujícího artifact odkazu. Skutečný report nad aktuálním
+balíkem potvrdil nezměněný živý HEAD a nulový rozpracovaný journal.
+Společný cílený běh validačních, bundle, mapping, inventory, task-graph,
+roadmap-graph a SPDX testů po poslední změně: 57 testů OK. Log:
+`/tmp/dev-01-writer-tests.log`. Celá finální unittest brána zůstává pro
+uzavření dávky.
+
+`python3 -m unittest tests.test_roadmap_bundle tests.test_roadmap_mapping tests.test_roadmap_migration tests.test_task_graph tests.test_roadmap_graph tests.test_spdx -v`:
+47 testů OK, z toho 6 balíkových testů. Pokryto je sestavení celých metadat,
+shoda plánu, zachování přesných source bajtů a původní identity rootu,
+nepoužití testovacích dat, izolace modulového obsahu, navržený seed root,
+deterministický rebuild, ochrana proti relaxaci privacy a odmítnutí chybějících,
+změněných či nadbytečných blobů i přepsání existujícího balíku. Dřívější
+historické/grafové testy zůstávají. Skutečný běh vytvořil 213 artefaktů /
+426 souborů (3 589 550 bajtů logických payloadů); z disku byly zpětně
+porovnány přesné bajty všech souborů. Živý projekt se nezměnil.
+Celá finální runtime brána zbývá před dokončením dávky; bod 2 a zápis/recovery
+nejsou těmito shape testy označené za dokončené.
+
+
+---
+
+# Záznam dokončené práce
+
 ## OPS-BACKEND-AVAILABILITY-01 — oddělené automatické kontroly dostupnosti Ollamy — 2026-10-30
 
 Doručení aktualizováno 30. 10. 2026: [PR #114](https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/114)

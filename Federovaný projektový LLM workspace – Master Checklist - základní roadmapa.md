@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
+> **Archivovaný snapshot po předání DEV-01.** Aktuální plán a stavy drží
+> Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`; modulový plán
+> má vlastní projekt podle [předání](docs/dev-01-handoff-review.md).
+> Tento obsah zachovává historii a katalog požadavků, dále se neudržuje
+> jako souběžný živý plán.
+
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
@@ -849,7 +855,9 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 profilovaný souborový plán, editor a milestone/batch pohled jsou implemented;
 DEV-IDE-TODO-01 včetně odděleného připojení Workspace a projektových mapování
 na plné stránce Nastavení je PoC validated v Linux/VSCodium a webovém profilu;
-DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace
+DEV-01 je implemented / PoC validated, obsah i předání autority byly
+uživatelem akceptované 31. 10. 2026; evidence je ve WORK_LOG, doručení jejího
+PR zůstává otevřené. DEV-02 až DEV-04 zůstávají designed / plánované.** Workspace
 má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a
 evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual
 Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci

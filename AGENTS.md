@@ -5,17 +5,17 @@ SPDX-License-Identifier: MPL-2.0
 
 # Pokyny pro práci v repozitáři
 
-Projekt je aktivně vyvíjený **Git-backed federated project knowledge & decision workspace**. Nevytvářej jej znovu jako greenfield. Zachovej existující práci, experimenty, testy, dokumentaci a historii ADR. Aktuální milník a stav práce čti z roadmapy a TODO.
+Projekt je aktivně vyvíjený **Git-backed federated project knowledge & decision workspace**. Nevytvářej jej znovu jako greenfield. Zachovej existující práci, experimenty, testy, dokumentaci a historii ADR. Aktuální milník a stav práce čti z kanonického Workspace projektu podle docs/dev-01-handoff-review.md.
 
 ## Zahájení a rozsah úkolu
 
 1. Zkontroluj `git status --short`, relevantní diff a změny od poslední kontroly. Nepřepisuj nesouvisející práci uživatele. Přečti platné pokyny pro dotčené adresáře.
-2. Zjisti aktuální milník a nejbližší úkol z `TODO.md`; z dokumentu `Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md` a ADR čti relevantní části. `WORK_LOG.md` a `BACKLOG.md` prohledej jen pro konkrétní potřebné důkazy či návaznosti; nenačítej automaticky celý archiv. Již přečtené podklady v rámci konverzace použij znovu, pokud se nezměnily; při chybějícím kontextu je znovu načti. Nevytvářej druhou konkurenční roadmapu.
+2. Aktuální dávku, úkol, akceptaci a revizi čti z aktuálního exportu kanonického Workspace projektu. Ověř project ID, přiřazený repozitář, snapshot revizi a stav synchronizace. Archivované TODO/BACKLOG/WORK_LOG ani roadmapa nedokládají aktuální stav. Při nedostupném či stale exportu zachovej dosavadní práci a vyžádej aktuální zadání; neaktivuj další feature podle archivu. ADR a vývojové návody čti podle rozsahu.
 3. Vymez konkrétní výstup a ověření. U návrhu nebo review prováděj potřebné čtení; soubory měň pouze v rozsahu zadání. U dokumentační změny ověř dotčené podklady, konzistenci a odkazy. Při změně kódu nebo jeho chování navíc přečti odpovídající implementaci a testy.
 4. Před přidáním či nahrazením funkce prověř existující řešení. Pokud může být dostupné jinde, použij `REUSE_CATALOG.md` a uvedené zdrojové komponenty; zaznamenej důvod reuse/adapt/rewrite/reject. Je-li dostupný lokální `REUSE_CATALOG.private.md`, použij také jeho inventuru; soubor je ignorovaný Gitem a jeho soukromé názvy, cesty ani detaily nepřenášej do verzovaných dokumentů. Do veřejného katalogu zařazuj externí repozitáře až po ověření veřejné dostupnosti. Chybějící zdroj označ jako neověřený; nekopíruj kód automaticky ani neopakuj již doloženou inventuru beze změny podkladů.
 5. U operace přes více persistentních vrstev (filesystem, Git, SQLite index, journal) před implementací explicitně popiš crash boundaries a očekávané recovery. Pokud je již popisuje platné ADR, odkaž na ně a popiš pouze změny. Úspěšný happy-path test nestačí k dokončení takové operace.
 
-Pokud uživatel požádá o „další úkol“ bez upřesnění, pokračuj nejbližší otevřenou položkou aktuální dávky v TODO. Dokonči ji včetně ověření a dokumentace; další samostatný úkol automaticky nezahajuj. Dokončenou položku ponech v TODO do uzavření celé dávky. Je-li dávka dokončená, proveď předání popsané níže; samotné naplnění TODO další dávkou není pokynem ji celou implementovat.
+Pokud uživatel požádá o „další úkol“ bez upřesnění, vyber nejbližší otevřený úkol aktuální dávky v aktuálním Workspace exportu. Dokonči pouze tento rozsah včetně ověření a návrhu výsledku k review. Zpráva v bridge není akceptace ani oprávnění k automatickému dokončení autoritativního úkolu.
 
 Skutečný kód a ověřené testy dokládají současný stav. Roadmapa není důkaz implementace a starý nezaškrtnutý bod není důvod zopakovat hotový experiment. Rozpor s architektonickým rozhodnutím pojmenuj; nepovažuj jej automaticky za nové rozhodnutí.
 
@@ -37,63 +37,41 @@ Role jsou nezávislé na modelech a providerech: creator, opponent, analyst, res
 
 Externí LLM požadavek musí mít explicitní Context Manifest. RBAC a privacy kontroluj aplikačně před voláním backendu. Privacy třídy zahrnují public, project, confidential, local-only. Data local-only nesmí opustit lokální hranici důvěry bez explicitní reklasifikace. Tyto požadavky jsou závazný návrh; neoznačuj je za implementované jen proto, že je validátor přijímá jako metadata.
 
-## Roadmapa a práce po dávkách
+## Plánování po předání DEV-01
 
-- **Roadmapa** drží strategii, milníky, schopnosti a gates. Zachovej původní katalog požadavků; není to průběžný pracovní deník ani druhý backlog.
-- **TODO.md** obsahuje jednu aktuální feature dávku, nikoli celý milník. **Jedna dávka = jedna ucelená feature = jedna feature větev = jeden PR do `develop`.** Nemá pevný limit počtu podúkolů. Zahrnuje návrh, implementaci, UI/backend/deploy podle rozsahu, recovery, testy a dokumentaci stejné feature. Hotové podúkoly a důkazy zde zůstávají do uzavření dávky.
-- **BACKLOG.md** připravuje zpravidla tři nejbližší feature dávky podle roadmapy a závislostí. Milníky jsou strategický horizont, ne automatické dávky. Vzdálenější široké požadavky zachovej odděleně; před načtením do TODO je rozděl na reviewovatelnou feature s jedním PR. Nezahazuj původní ID, rozsah ani důkazy.
-- **WORK_LOG.md** obsahuje uzavřené dávky, jejich dokončené úkoly, ověření a historická gate review. Starší jednotlivé záznamy zachovej; nově archivuj po dávkách, nejnovější nahoru.
-
-### Během dávky
-
-Každá dávka má stabilní ID/název feature, původní požadavky/ID, milník, konkrétní výstup i hranici rozsahu, závislosti, cílovou úroveň, větev `feature/<id>-<slug>`, základ/cíl PR `develop` a akceptační podmínky. Při uživatelem schváleném zahájení nové feature dávky automaticky vytvoř a přepni její feature větev z `develop` ještě před aplikačními změnami; další samostatný souhlas se založením větve není potřeba. Pouhé plánování backlogu nebo úprava pravidel větev nezakládá. Push, otevření PR a merge prováděj pouze na výslovný požadavek. Dávka může mít více commitů, všechny ale patří jedné feature a jednomu PR.
-
-Před automatickým založením zkontroluj pracovní strom, základ `develop` a začlenění závislostí. Pokud už správná feature větev existuje, pokračuj v ní po ověření jejího rozsahu; nevytvářej druhou větev pro stejnou dávku. Při nesouvisejících změnách, nejasném základu, chybějícím `develop` nebo kolizi názvu zastav a domluv bezpečné předání. Nikdy automaticky nestashuj, nezahazuj změny, nepřepisuj existující větev ani nezahajuj feature přímo v `develop`. Skutečný název a stav větve zaznamenej do TODO, plánovaný název není důkaz vytvoření ani sloučení PR.
-
-Nesouvisející feature nepřidávej do aktivní dávky ani její větve. Ad-hoc oprava patří do dávky jen pokud je nutná pro její akceptaci. Nezávisle dodávatelnou nebo příliš velkou práci rozděl před implementací na navazující feature dávky s vlastními větvemi a PR. Dokončení feature neuzavírá automaticky celý milník.
-
-Z těchto pracovních evidencí aktualizuj pouze TODO: stav, výsledky, ověření, omezení a nová zjištění. BACKLOG a WORK_LOG průběžně nesynchronizuj. To neomezuje potřebné změny kódu, testů, návodů či ADR; roadmapu měň jen při skutečné změně rozsahu nebo rozhodnutí, nikoli kvůli každému hotovému úkolu.
-
-Ad-hoc úkol zapiš se stabilním ID, původem/požadavkem, rozsahem, cílovou úrovní a podmínkou dokončení. Patří-li do aktuální dávky, zařaď jej podle priority mezi její úkoly. Práci pro později zachyť v TODO v sekci „K předání do backlogu“; tato sekce není součástí podmínek dokončení dávky. Při novém zjištění k existujícímu backlogovému úkolu odkaž na jeho ID a zaznamenej doplnění, nevytvářej druhý stavový záznam. Nezařazuj spekulativní úkoly do počtu.
-
-### Uzavření a načtení další dávky
-
-Po dokončení a relevantním ověření všech úkolů aktuální dávky:
-
-Závěrečné vyhodnocení, konsolidace důkazů, přesun dokončené evidence do
-WORK_LOG, předání odkladů do BACKLOG, úklid TODO a aktualizace roadmapy patří
-ještě do stejné feature větve a jejího jediného PR. WORK_LOG při tom zaznamená
-skutečný stav předání a nesmí před merge tvrdit, že PR už byl sloučen. Stav
-feature akceptace a stav doručení PR eviduj odděleně; odmítnutá nebo změněná
-akceptace dávku znovu otevře. Po merge se nová dávka aktivuje na vlastní větvi
-z aktuálního `develop`. Výjimku lze výslovně schválit, například když už byla
-předchozí feature sloučena: tehdy se její administrativní úklid provede jako
-první krok nové dávky a důvod se zapíše do WORK_LOG.
-
-1. Vyhodnoť podmínky feature dávky a relevantní část gate. Neověřenou práci neoznačuj za hotovou. Připrav předání jednoho PR do `develop`: rozsah, důkazy ověření, recovery a omezení. Rozlišuj implemented/validated výstup od stavu PR (není vytvořen / otevřen / sloučen); bez důkazu neuváděj merge. Feature evidenci lze po splnění akceptace uzavřít a archivovat v jejím finálním diffu, ale doručení zůstává výslovně neuzavřené do merge nebo do jiného uživatelem schváleného předání. Nezačínej nesouvisející feature ve stejné větvi.
-2. Přesuň dokončenou dávku z TODO do WORK_LOG s ID úkolů, daty dokončení, úrovní výsledků, důkazy ověření a omezeními; zachovej i ad-hoc úkoly a důvody změn rozsahu.
-3. Přenes odložené úkoly a poznámky z „K předání do backlogu“ do odpovídajících dávek BACKLOG; aktualizuj stávající položky podle ID. Nedokončené úkoly zůstávají otevřené.
-4. Ve finálním diffu feature ponech TODO pouze s informací, že její akceptovaná evidence byla archivována a čeká se na doručení PR; neaktivuj v její větvi nesouvisející další feature. Po merge založ další větev z aktuálního `develop` a jako její první administrativní krok přesuň jednu další dávku z BACKLOG do TODO se stejnými ID, rozsahem, feature větví a cílem PR `develop`. Backlog doplň na přibližně tři další konkrétní feature dávky, nikoli celé milníky, bez vymýšlení práce. Stacked PR jsou pouze výslovně schválená výjimka. Není-li další dávka doložená, ponech TODO prázdné a uveď to.
-5. Ve stejné změně oprav odkazy a případný stav milníku/gate v roadmapě. Jeden úkol má jediný aktuální záznam; odkazy a historické důkazy nejsou konkurenčními kopiemi stavů.
-
-**Povinné čištění při předání:** ve finálním diffu uzavírané feature nahraď obsah TODO pouze hlavičkou a informací o čekání na doručení jejího PR. Odstraň odtud přenesené dokončené úkoly, výsledky starých testů, odložené úkoly, vyřízenou sekci „K předání do backlogu“ i přechodové přílohy. Nic nezahazuj: dokončené důkazy patří do WORK_LOG, otevřené stavy a odložené požadavky do BACKLOG. Po merge nový feature branch nahradí čekací TODO jedinou nově aktivovanou dávkou a jejími relevantními poznámkami. Žádný podúkol mimo aktuální feature nesmí v TODO zůstat „pro jistotu“.
-
-Předání není hotové, dokud není zkontrolováno, že TODO drží právě jednu dávku, každý přesunutý úkol má zachované ID a jediný aktuální stav, staré důkazy se neztratily a odkazy míří na nové umístění. Úklid dokumentů není důkaz testů, uzavření milníku ani sloučení PR. Jednorázovou migraci staré široké dávky označ jako administrativní přesun evidence; její neověřené části zůstávají otevřené.
-
-Stavy používej přesně:
-
-- `[ ] [planned]` — zbývající práce.
-- `[ ] [in progress]` — skutečně probíhající práce v TODO.
-- `[x] [completed]` — dokončený a relevantně ověřený výstup; do uzavření dávky v TODO, poté ve WORK_LOG.
-- `[ ] [blocked]` — konkrétní překážka s důvodem a podmínkou odblokování.
-
-U položek uváděj úroveň: designed, implemented, PoC validated nebo production-ready. Návrh ani spike neznamená produkční implementaci. Chybějící ověření ponech otevřené nebo výslovně neověřené. Závislost na plánovaném úkolu sama není důvod vše označit jako blocked.
+- Workspace je jediná autorita aktuálního plánu. Zdrojový Git zůstává autoritou
+  implementace, AGENTS, ADR, návodů a historie kódu; Git-backed projekt Workspace
+  je autoritou jeho plánovacích artefaktů. Lokální SQLite index tuto autoritu nenahrazuje.
+- Rozlišuj připojení Workspace, projektové mapování a konkrétní připnutý task balíček.
+  Export a zprávy zůstávají v obyčejných souborech mimo zdrojový Git podle ADR 0060.
+  Nikdy z nich nevytvářej druhé živé TODO ve zdrojovém repozitáři.
+- Jedna dávka = jedna ucelená feature = jedna feature větev = jeden PR do develop.
+  Před implementací načti stabilní ID, rozsah, závislosti, cílovou úroveň,
+  akceptaci a explicitní předání kontextu. Historický source snapshot není nové zadání.
+- Při schváleném zahájení nové feature ověř čistý strom, aktuální develop a začlenění
+  závislostí; vytvoř a přepni její feature větev. Správnou existující větev použij
+  znovu. Při kolizi či nesouvisejících změnách domluv bezpečné předání. Automatický
+  stash, reset a práce na nesouvisející feature v develop nejsou povolené.
+- Nesouvisející feature nepřidávej do aktivní dávky. Stacked PR vyžaduje výslovnou
+  výjimku. Push, otevření PR, merge a commity ve vývojovém repozitáři vyžadují
+  výslovný požadavek uživatele podle sekce Commity.
+- Průběžné výsledky, nové požadavky a odklady předávej jako zprávy či návrhy se
+  stabilním task ID, přesnou exportní revizí, repository HEAD a důkazy. Pokud
+  současný transport potřebný typ nepodporuje, připrav konkrétní návrh k review;
+  neoznačuj jej za doručený ani uložený. Změna autoritativního plánu používá
+  výhradně schválený Workspace lifecycle a oprávnění.
+- Po dokončení celé dávky připrav review rozsahu, výsledků, recovery, omezení
+  a odkladů. Akceptaci feature eviduj odděleně od doručení PR. Další dávku
+  aktivuj až po merge na vlastní větvi z aktuálního develop.
+- Root TODO.md slouží jen jako informace o předání zdrojové větve, nikoli plán.
+  BACKLOG.md, WORK_LOG.md a původní Master Checklist zachovávají archivovanou
+  evidenci a požadavky; neaktualizuj je jako konkurenční plán Workspace.
+- Dokončení neodvozuj od checkboxu nebo hlášení agenta. Rozlišuj designed,
+  implemented, PoC validated a production-ready; ověřené chování a stav review
+  musí odpovídat skutečným důkazům. Stale a unknown se nesmějí tiše vydávat za úspěch.
 
 ## Dokončení a ověření
 
-- Průběžný stav a výsledky ověření zapisuj do TODO, včetně dokončených a ad-hoc úkolů aktuální dávky. BACKLOG a WORK_LOG aktualizuj při předání dávky. Kosmetické mezikroky nepotřebují vlastní položky.
-- Roadmapu aktualizuj pouze při skutečné změně milníku, rozsahu nebo stavu schopnosti/gate. Na důkazy odkazuj do TODO u aktuální dávky, do WORK_LOG u uzavřených dávek; při přesunu oprav odkazy. Celkový počet testů nekopíruj do dalších dokumentů.
-- Architekturu či ADR měň pouze při skutečném návrhovém rozhodnutí nebo opravě konkrétního věcného rozporu. Do ADR patří důkazy příslušného rozhodnutí; jejich historické výsledky zachovej. Průběžná evidence patří do TODO.
 - Během implementace spouštěj cílené testy chování i chybových cest přes explicitní unittest selektory. Celou současnou sadu spusť jednou po poslední relevantní změně kódu, testů či konfigurace před dokončením dávky a předáním PR: lokálně `python3 -m unittest discover -s tests -v`, v CI ekvivalentními izolovanými shardy `scripts/test_shards.py` (Linux, Python 3.11+, závislosti z `requirements.txt`; instalace viz README). Shardy dohromady musí zahrnout každý top-level testovací modul právě jednou; cílený běh plnou závěrečnou bránu nenahrazuje. Relevantní existující build/lint spusť, pokud je nakonfigurovaný; samostatný build/lint nyní není nakonfigurovaný.
 - Po úspěšném běhu opakuj ověření pouze při relevantní změně kódu, testů, závislostí či konfigurace nebo nové pochybnosti. Po následných čistě dokumentačních úpravách stačí kontrola dokumentace a diffu. Pokud deklaruješ nové výsledky testů, skutečně je spusť; neprovedené kontroly označ jako neověřené.
 - U čistě dokumentačních změn zkontroluj věcnou konzistenci, odkazy a diff. Před dokončením každé ucelené změny zkontroluj `git diff --check`, finální diff i nově vytvořené soubory. Shrň výsledek, ověření a relevantní zbývající omezení.

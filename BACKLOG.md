@@ -3,6 +3,12 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
+> **Archivovaný snapshot po předání DEV-01.** Aktuální plán a stavy drží
+> Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`; modulový plán
+> má vlastní projekt podle [předání](docs/dev-01-handoff-review.md).
+> Tento obsah zachovává historii a katalog požadavků, dále se neudržuje
+> jako souběžný živý plán.
+
 # Backlog — další dávky
 
 Aktuální dávku drží [TODO](TODO.md), uzavřené dávky [WORK_LOG](WORK_LOG.md), milníky a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>). Pravidla určuje [AGENTS](AGENTS.md).
@@ -188,6 +194,94 @@ DEV-01 je aktivována v [TODO](TODO.md); její návrh migrace drží
   Před aktivací vymezit samostatný reviewovatelný UI/review řez z širšího
   DEV-03; spuštění agentů nepřimíchávat automaticky do stejného PR.
 - [ ] [planned] **DEV-04 — Codex adaptér pro implementaci (cílová úroveň: PoC validated).** Nad DEV-02/DEV-03 ověřit v době implementace podporované oficiální rozhraní Codexu a připojit je jako vyměnitelný coding-agent adaptér, nikoli jako hostitele pluginu. Akceptace: export jednoho schváleného úkolu z IDE, implementace v izolované feature větvi, návrat diffu, změněných souborů a skutečných testů, vazba na původní task/revizi, odmítnutí nepovoleného kontextu/akce a lidské rozhodnutí před aktualizací autoritativního plánu. První end-to-end kandidát může být vlastní repozitář workspace, ale bez jakékoli privilegované výjimky.
+
+**Doplnění existující DEV-03 — schválený směr UI, 31. 10. 2026 (designed).**
+Uživatel přijal návrh panelu Workspace v boční liště VS Code/VSCodia.
+Při předání zapracovat do stávající DEV-03 v BACKLOG, nikoli založit druhý
+stavový záznam. První samostatná UI/review dávka má zahrnout:
+- Úkoly: strom projekt → milník → dávka → úkol, filtr otevřených položek
+  a detail v editorové ploše s popisem, checklistem, závislostmi a akceptací.
+- Zprávy: dotaz, poznámka a návrh dokončení k úkolu i obecná zpráva projektu;
+  historie a rozlišení čeká na odeslání / doručeno / čeká na posouzení /
+  potvrzeno či odmítnuto. Výsledek review se promítne zpět do IDE;
+  doručení samo nemění autoritativní stav úkolu.
+- Podklady: dokumenty připojené k úkolu, bezpečný náhled exportované revize
+  a otevření lokálního souboru pouze při ověřeném mapování.
+- Pravidla pro agenty (doplnění uživatele 31. 10. 2026): v Podkladech
+  samostatná skupina projektových pravidel a instrukcí vybraného úkolu.
+  U každého dokumentu zobrazit původ, rozsah platnosti (projekt / adresář /
+  úkol), zdrojovou revizi a aktuálnost; odlišit pravidla exportovaná
+  Workspace od existujících lokálních pravidel repozitáře, např. AGENTS.md.
+  Exportovat schválené dokumenty jako obyčejné soubory mimo Git a přidat
+  jejich seznam, identitu, revizi a digest do exportního manifestu.
+  Stávající INSTRUCTIONS.md adaptovat jako rozcestník transportních pokynů
+  a pravidel; obsah pravidel udržet dohledatelný v samostatných dokumentech.
+  Nabídnout otevření pravidel a kopírování předání vybraného úkolu s cestami
+  k zadání, pravidlům a podkladům. Součástí předání je přesná revize exportu;
+  neúplný nebo neaktuální export se nesmí prezentovat jako aktuální zadání.
+  Schránka mimo Git sama nezaručuje automatické načtení agentem: UI nesmí
+  tvrdit, že agent pravidla převzal. Existující AGENTS.md ani konfiguraci
+  jiného agenta nepřepisovat. Rozporná pravidla zobrazit k rozhodnutí,
+  nepřekrývat je tiše. Privacy/RBAC kontrolovat před exportem; samotný text
+  pravidel nerozšiřuje oprávnění. Ověřit izolaci projektů, scope adresářů,
+  zachování přesných bajtů, odmítnutí nepovolených cest a obnovu po pádu
+  mezi zápisem dokumentů a zveřejněním manifestu. Při implementaci rozšířit
+  recovery kontrakt ADR 0060 tak, aby čtenář nikdy nepřijal smíšené revize.
+Navržené provedení: nativní stromové pohledy nad existujícím bridge,
+zachování obyčejné souborové schránky mimo Git, připojení a projektových
+mapování. Zobrazovat projekt, exportovanou revizi, neaktuálnost a chyby
+spojení; odpojení nesmí vypadat jako úspěšná synchronizace.
+Akceptace musí ověřit aktualizaci zadání, izolaci projektů, restart a retry
+bez duplicitních zpráv, stale/revoked přístup, bezpečné zobrazení podkladů
+a celý tok návrh → review ve Workspace → výsledek v IDE. Instalaci a UI
+ověřit odděleně ve VS Code a VSCodiu. Před implementací dopracovat chybějící
+kontrakt projektových zpráv, podkladů a návratu review; současný transport
+není důkaz jejich implementace. Spouštění coding agenta zůstává navazujícím
+DEV-02/DEV-04. Implementace této samostatné feature naváže po předání DEV-01
+ve vlastní větvi z aktuálního develop; tímto se nová dávka neaktivuje.
+
+
+- [ ] [planned] **PLAN-SEMANTIC-AUDIT-01 — obecný sémantický audit a proposal
+  engine roadmapy (cílová úroveň: implemented).** Uživatelský požadavek
+  2026-10-28 navazuje na fyzické dotřídění importu: integrovat do Workspace
+  opakovatelný scan hlubší logické a sémantické správnosti roadmapy a změněných
+  podkladů. Samostatné striktně validované typy návrhů mají nejprve pokrýt
+  `add/remove-dependency`, `create-task`, `update-description`,
+  `flag-contradiction` a `flag-duplicate/orphan`; `split/merge` zůstane
+  navazující rozšíření podle reálných nálezů. Speciální varianta
+  `derive/update-subplan` zpracuje nový nebo změněný podklad do návrhu dílčího
+  plánu a `integrate-subplan` navrhne jeho začlenění do kanonické roadmapy:
+  mapování na existující milestone/batch/task, nové uzly, dependency hrany,
+  rozpory a body, které mají zůstat pouze volným popisem. Dílčí plán je
+  verzovaný projektový artefakt s vlastní stabilní identitou, ale nikoli druhá
+  autorita stavu; jeho uzly nesmějí být současně vydávány za samostatný aktuální
+  plán a za integrované kanonické uzly. Vazba source artifact ID + source digest
+  + analyzer revision + subplan ID umožní opakovaný běh bez duplikace. Změna
+  zdroje se porovnává s předchozí zdrojovou revizí i posledním odvozeným plánem;
+  ruční úpravy dílčího či hlavního plánu se nesmějí tiše přepsat a odstraněný
+  požadavek vznikne jako explicitní removal/deprecation proposal, nikoli jako
+  automatické smazání. Review nejprve potvrdí obsah dílčího plánu a samostatně
+  jeho integrační diff; podle rozsahu lze obě potvrzené části zapsat jednou
+  Workspace transakcí proti témuž expected HEAD. Každý proposal zachová exact
+  HEAD, analyzer revision, zdrojové artefakty/revize a citované úseky, dotčená
+  stabilní ID, strukturovaný before/after náhled, důvod, confidence, rizika a
+  validační dopad. Nový úkol vyžaduje validovaný typ, rodiče, rozsah, akceptaci,
+  provenance
+  a kolizně bezpečné provisional ID; LLM nesmí samo měnit stav dokončení ani
+  obejít katalog/ID validaci. Statické kontroly musí předcházet LLM návrhům:
+  neznámé cíle, cykly, orphan uzly, duplicity ID, neplatná hierarchie a chybějící
+  povinná pole se nemají řešit volným textem modelu. Scan pouze plní projektově
+  izolovanou node-local proposal queue; `unknown` se tiše neopakuje. Human review
+  podporuje jednotlivé i dávkové accept/reject a jasný source → change → target
+  diff. Accepted návrhy se proti nezměněnému expected HEAD aplikují jednou
+  autorizovanou `Workspace.transact` operací, celý kandidát znovu prochází
+  schématem a task-graph validací; stale návrh se neaplikuje a musí být znovu
+  vyhodnocen. Pád před commitem obnovuje Workspace journal, po commitu receipt a
+  projekce z HEAD; proposal queue není druhá autorita roadmapy. Integrace patří
+  do sdíleného Workspace UI a později může být zpřístupněna IDE bridge, nikoli
+  ponechána jako trvalý migrační TUI skript. Jde o samostatnou feature dávku,
+  větev a PR po uzavření `DEV-01`; není součástí akceptace aktuální migrace.
+
 
 ## Externí vztahy a disclosure — navazující strategický backlog
 

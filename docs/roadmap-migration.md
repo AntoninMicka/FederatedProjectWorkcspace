@@ -5,14 +5,16 @@ SPDX-License-Identifier: MPL-2.0
 
 # DEV-01 — plán migrace roadmapy do Workspace
 
-Návrh: **designed**, 28. 10. 2026; implementační stav aktualizován
-30. 10. 2026. Pracovní plán jediné feature DEV-01, nikoli druhá roadmapa
-produktu. Aktuální stav a úkoly drží [TODO](../TODO.md). Nativní recoverable
-importér je implementovaný a potvrzený source-first bundle v4 je fyzicky
-importovaný do obou cílových projektů. Následující původní návrhové kroky
-zachovávají svůj kontext; nejsou tvrzením, že se mají znovu provádět.
-Předání autority, akceptace modulů, aktuální export v uživatelově IDE a
-scénáře následné změny zdroje zůstávají otevřené podle TODO.
+Návrh z 28. 10. 2026 byl implementovaný a **PoC validated**; uživatel
+31. 10. 2026 akceptoval obsah obou projektů, běžný desktop/IDE tok i
+konkrétní předání autority. Přijatý source-first bundle v4 je importovaný,
+následná zdrojová aktualizace a předání novější evidence jsou ověřené.
+Plánovací autoritu nyní drží kanonické Workspace projekty uvedené v
+[předání](dev-01-handoff-review.md). Uzavřenou evidenci DEV-01 drží
+[WORK_LOG](../WORK_LOG.md#dev-01--roadmapa-jako-projektová-data-a-export-úkolů--2026-10-31);
+root TODO pouze čekání na doručení PR. PR není vytvořen ani sloučen.
+Následující původní návrhové kroky zachovávají historický kontext;
+nejsou pokynem znovu provádět přijatý import ani druhou živou roadmapou.
 
 ## Výstup a hranice
 
@@ -465,6 +467,56 @@ existující API neumí, nejprve rozšířit konkrétní doménovou operaci a je
 recovery testy. Nepoužít přímé editace projektového Gitu ani SQL indexu.
 
 ## 6. Izolovaná zkouška a skutečné předání
+
+### Následná zdrojová revize — kontrakt DEV-01-D, 31. 10. 2026
+
+Následná aktualizace používá explicitní seznam spravovaných cest z předchozího
+importu, jeho projektový commit a nový připnutý source commit. Nový kandidát
+musí být předem připravený a zkontrolovaný; tento krok nevolá model a neodvozuje
+identity podle názvů. Porovnání baseline / současný HEAD / kandidát zachová
+ruční změny, pokud se zdroj nezměnil. Souběžná rozdílná změna a každé odstranění
+vyžadují explicitní rozhodnutí keep/source. Přejmenování zdrojového bodu
+zachovává schválené stabilní ID; změna názvu sama nesmí přidělit nové ID.
+Změny fyzických cest mají viditelný create/remove diff a odstranění vyžaduje
+review. Nevybrané projektové artefakty se zachovávají. Neměnné source artefakty
+se nepřepisují ani nemažou; nová zdrojová revize potřebuje nový source artefakt.
+
+Read-only preview váže úplné before/after bajty a rozhodnutí na SHA-256,
+projekt, baseline, expected HEAD a source commit. Celý kandidát projde
+`validate_transition`, `committed_project` a `project_task_graph` před zápisem
+a znovu pod writer lockem. Není to automatický rebase zmrazeného mappingu.
+
+Crash boundaries beze změny ADR 0003: preview a rozhodnutí samy nic nezapisují;
+před native transakcí lze preview znovu sestavit. `Workspace.transact` váže
+operation ID na celý request digest. Po `prepared` obnovuje rozpracovaný zápis
+jeho journal; po Git commitu je index obnovitelný z HEAD. Retry stejného requestu
+vrací původní receipt a nesmí vytvořit druhý commit. Jiný request se stejným ID
+se odmítne. Jedna aktualizace má jednu projektovou transakci; mezi moduly není
+předstírána atomicita. Další modul má vlastní preview a receipt.
+
+Reuse/adapt: stávající Git snapshot, validační kontrakty a jediný
+`Workspace.transact` writer. Druhý journal, automatické textové slučování
+a náhrada nativního writeru jsou odmítnuty; nová externí závislost není potřeba.
+
+Implementace: `RoadmapSourceUpdate` v `spikes/roadmap_source_update.py` a
+explicitní same-node CLI (bez UI a bez automatického rebuildu mappingu):
+
+```bash
+python3 -m scripts.roadmap_source_update --request update.json preview
+python3 -m scripts.roadmap_source_update --request update.json apply \
+  --operation-id OPERATION_UUID --expected-preview-sha256 REVIEWED_PREVIEW_SHA256
+```
+
+Request schema `fpw-roadmap-source-update-v1` obsahuje `project_id`,
+`baseline_commit`, `expected_head`, `source_root`, `source_revision`,
+`managed_paths`, `incoming_files` (úplné kandidátní bajty v base64) a
+`decisions` (cesta → keep/source). Baseline cesty musí tvořit celé artefakty.
+Request lze sestavit přes `RoadmapSourceUpdate.preview(...)["request"]`;
+preview vrací přesné baseline/current/incoming/result bajty v base64,
+konflikty, odstranění, validační chybu, ready a digest. `ready=false` není
+souhlas s apply. Potvrzení jiného digestu se odmítne a retry musí zachovat
+stejný operation ID i celý request. Uložený request i preview mohou obsahovat
+projektová data: patří do soukromého lokálního adresáře, nikoli do PR.
 
 Nejprve migrovat připnutý reálný vzorek do izolovaného projektu: obsahující
 hlavní sekci, dávku, checklist, historický důkaz a samostatný modulový plán.
