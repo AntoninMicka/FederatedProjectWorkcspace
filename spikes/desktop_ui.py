@@ -930,7 +930,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Roadmapa projektu</h1></div>
 <p id="plan-status" role="status">Otevřete projekt.</p>
 <div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
-<section aria-label="Fronta úkolů"><h2>Fronta úkolů</h2><button id="task-queue-refresh" type="button">Obnovit frontu</button> <button id="task-queue-revalidate" type="button" disabled>Znovu ověřit</button><p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></section>
+<section aria-label="Fronta úkolů"><p><button id="task-queue-publish" type="button">Předat frontu do IDE</button></p><h2>Fronta úkolů</h2><button id="task-queue-refresh" type="button">Obnovit frontu</button> <button id="task-queue-revalidate" type="button" disabled>Znovu ověřit</button><p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></section>
 <div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite"></div><aside id="plan-detail" class="roadmap-detail"><h3>Detail položky</h3><p>Vyberte milník nebo dávku.</p></aside></div>
 </div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
@@ -4105,7 +4105,7 @@ function renderTaskQueue(){
  document.querySelector('#task-queue-revalidate').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
  if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu; pokud se změnila roadmapa, znovu otevřete projekt.';return;}
  status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
- for(const item of taskQueueView.items){const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button');open.type=remove.type='button';open.textContent=`${item.id} · ${item.title}`;open.addEventListener('click',()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node)showTaskPlanDetail(node);});remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,remove);list.append(row);}
+ for(const item of taskQueueView.items){const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button');open.type=remove.type='button';open.textContent=`${item.id} · ${item.title}${item.user_confirmed?' · Přijato uživatelem':item.agent_confirmed?' · Agent hlásí splnění':''}`;open.addEventListener('click',()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node)showTaskPlanDetail(node);});remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,remove);list.append(row);}
 }
 async function loadTaskQueue(){
  if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;
@@ -4121,6 +4121,17 @@ async function changeTaskQueue(action,taskId){
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
  finally{taskQueueBusy=false;renderTaskQueue();}
 }
+document.querySelector('#task-queue-publish').addEventListener('click',async()=>{
+ if(!queueIsCurrent()||!taskQueueView.valid||activeProject.readOnly||taskQueueBusy)return;
+ const project=activeProject,view=taskQueueView,target=document.querySelector('#task-queue-status');
+ try{const state=await projectRequest('/v1/ide-bridge/status',{project_id:project.id});
+ const choices=state.sessions.filter(s=>s.connection_id&&!s.revoked&&s.commit_id===project.head);if(!choices.length)throw Error('Nastavte aktuální přiřazení projektu v Nastavení → IDE a povolte export podkladů.');
+ const selected=choices.length===1?choices[0]:choices.find(s=>s.session_id===window.prompt('Vyberte ID mapování: '+choices.map(s=>s.session_id+' '+s.repository).join('; ')));if(!selected)return;
+ const commit=window.prompt('Přesný Git HEAD zdrojového repozitáře pro předání:','');if(commit===null)return;
+ const result=await projectRequest('/v1/ide-queue/publish',{project_id:project.id,session_id:selected.session_id,expected_head:project.head,queue_revision:view.revision,repository_commit:commit.trim()});
+ if(activeProject!==project)return;target.textContent=result.blockers.length?'Balíček je neúplný: '+result.blockers.join('; '):'Balíček '+result.packet_id.slice(0,12)+' připraven. Synchronizujte VSCodium.';
+ }catch(error){if(activeProject===project)target.textContent=error.message;}
+});
 document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
 document.querySelector('#task-queue-revalidate').addEventListener('click',()=>changeTaskQueue('revalidate'));
 
@@ -4227,12 +4238,12 @@ async function showIdeBridgeMessages(projectId){
   for(const entry of session.messages){
    const box=document.createElement('article'),message=document.createElement('pre');
    const selections=(entry.message.checklist||[]).map(item=>`${item.checked?'☑':'☐'} ${(entry.task_preview?.checklist||[])[item.index]?.text||`Položka ${item.index+1}`}`).join('\\n');
-   message.textContent=`${entry.message.kind} · ${entry.message.task_id||'Projekt'} · ${entry.receipt.status}\n${entry.message.body}\n${selections}\nZdrojový commit: ${entry.message.repository_commit}`;box.append(message);
+   message.textContent=`${entry.message.kind} · ${entry.message.task_id||'Projekt'} · ${entry.receipt.status}\n${entry.message.body}\n${selections}\n${entry.message.queue_packet_id?'Hlášení agenta · balíček '+entry.message.queue_packet_id+' · testy: '+entry.message.evidence.tests+' · diff: '+entry.message.evidence.diff:''}\nZdrojový commit: ${entry.message.repository_commit}`;box.append(message);
    if(entry.review?.state==='completed'){const outcome=document.createElement('p');outcome.textContent=`${entry.review.outcome==='stale'?'Zastaralé – nebylo aplikováno':entry.review.request.decision==='accepted'?'Přijato':'Odmítnuto'}: ${entry.review.request.note}`;box.append(outcome);}
    else for(const decision of entry.review?['resume']:['accepted','rejected']){
     const button=document.createElement('button');button.type='button';button.textContent=decision==='resume'?'Dokončit připravené review':decision==='accepted'?'Přijmout po posouzení':'Odmítnout';
     const changesTask=['completed','progress'].includes(entry.message.kind);
-    if(decision==='accepted'&&changesTask&&(session.revoked||session.commit_id!==result.current_head)){button.disabled=true;button.title='Návrh je ze staré revize nebo odvolané relace; nelze jej aplikovat.';}
+    if(decision==='accepted'&&changesTask&&(session.revoked||(entry.message.queue_packet_id?entry.queue_reviewable!==true:session.commit_id!==result.current_head))){button.disabled=true;button.title='Návrh je ze staré revize nebo odvolané relace; nelze jej aplikovat.';}
     button.addEventListener('click',async()=>{
      let request=entry.review?.request;
      if(!request){const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
@@ -7597,7 +7608,7 @@ class DesktopHandler(Handler):
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
         '/v1/document-patterns',
-        '/v1/roadmap/graph', '/v1/task-queue',
+        '/v1/roadmap/graph', '/v1/task-queue', '/v1/ide-queue/publish',
         '/v1/roadmap-refinement/list', '/v1/roadmap-refinement/detail',
         '/v1/roadmap-refinement/decide', '/v1/roadmap-refinement/decide-all',
         '/v1/roadmap-refinement/reconcile/preview', '/v1/roadmap-refinement/apply',
@@ -7737,6 +7748,13 @@ class DesktopHandler(Handler):
             return self.dispatch_ide_bridge(request)
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/ide-queue/publish':
+            try:
+                from spikes.ide_queue import publish
+                from spikes.ide_bridge import IdeBridge
+                return self.reply(200, publish(IdeBridge(self.server.projects.node_path, network=getattr(self.server.projects, 'network', False)), getattr(self, 'actor', None), request))
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/task-queue':
             try:
                 from spikes.task_queue import TaskQueue

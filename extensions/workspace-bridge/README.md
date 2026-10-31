@@ -2,6 +2,29 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 # Workspace file bridge
 
+## Aktualizace od verze 0.4.1
+
+Rozšíření při spuštění a poté nejvýše jednou za hodinu kontroluje verzi
+na připojeném backendu Workspace. Novou verzi nabídne tlačítkem
+**Aktualizovat**; bez kliknutí ji neinstaluje. Ruční kontrolu spustí
+**Workspace: Zkontrolovat aktualizace rozšíření**, nezávisle na Auto Sync.
+Po instalaci nabídne **Obnovit okno**. Obnovení lze odložit, běžící verze
+a synchronizace pokračují do obnovení okna.
+
+Volitelné aplikační nastavení **Workspace bridge → Auto Update** dovolí
+instalaci bez potvrzení; výchozí je vypnuté. Obnovení okna se potvrzuje
+vždy. Zdroj spustitelného kódu je připojený důvěryhodný backend Workspace,
+nikoli Marketplace. Balíček neobsahuje párování ani credentials a instaluje
+se do profilu běžícího IDE. SecretStorage, mapování a schránky se zachovají.
+
+Backend i rozšíření musí tuto funkci podporovat. Verzi 0.4.0 a starší je
+nutné jednou aktualizovat ručně přes VSIX; bez updateru se samy neaktualizují.
+Původní schema-v1 připojení automatické aktualizace nepodporuje. Při selhání
+otevřete výstup **Workspace bridge** a použijte ruční kontrolu. Aktualizace
+neprovádí downgrade ani instalaci stejné verze.
+
+## Připojení a synchronizace
+
 Připojte lokální VS Code/VSCodium k webovému nebo desktopovému Workspace.
 Aplikace připraví VSIX v **Nastavení → IDE a editory**. Po instalaci spusťte
 **Workspace: Připojit Workspace**. Tento krok ještě nevyžaduje projekt.
@@ -93,3 +116,19 @@ poznámku, přijmout nebo odmítnout. Dokončení a checklist zapisuje jediný
 nativní writer až po ověření původního HEAD. Zastaralý návrh se neaplikuje;
 částečný checklist nedokončí celý úkol. Při přerušení review je dostupná
 obnova stejné operace. Výsledek se vrací do panelu IDE po synchronizaci.
+
+## Fronta od verze 0.4.0
+
+Workspace připraví neměnný balíček fronty přes **Předat frontu do IDE**.
+Povolte export podkladů v aktuálním mappingu; následně synchronizujte IDE.
+Pohled **Fronta úkolů** rozlišuje zahajitelné položky, navazující pouze pro
+náhled, agentní hlášení a lidské přijetí. Předání agentovi kopíruje cesty
+manifestu a AGENT.md. Agent hlásí splnění ordinary-file zprávou; oprávněný
+člověk ji přijímá ve Workspace. Doručení není dokončení.
+
+Podklady se ověřují hashy a znovu používají z pinned exportní cache přes
+hardlink, bezpečný symlink nebo copy fallback. Nepropojují se s pracovními
+soubory Workspace. Balíček se kvůli změně plánu tiše nepřepisuje a mapping
+s aktivním packetem se automaticky nepřipíná na jiný commit.
+Podrobný postup, completion schema a recovery: `docs/ide-queue-handoff.md`
+v projektu Workspace; architektonické hranice: ADR 0062.

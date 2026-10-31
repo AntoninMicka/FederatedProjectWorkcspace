@@ -2,7 +2,7 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace",
   "description": "Tasks, messages, documents and agent rules for Federated Workspace",
-  "version": "0.3.0",
+  "version": "0.4.1",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {
@@ -78,6 +78,18 @@
         "command": "workspaceBridge.handoff",
         "title": "Workspace: Zkopírovat předání úkolu a pravidel",
         "icon": "$(copy)"
+      },
+      {
+        "command": "workspaceBridge.showQueueTask",
+        "title": "Workspace: Zobrazit položku fronty"
+      },
+      {
+        "command": "workspaceBridge.queueHandoff",
+        "title": "Workspace: Předat položku fronty agentovi"
+      },
+      {
+        "command": "workspaceBridge.checkUpdates",
+        "title": "Workspace: Zkontrolovat aktualizace rozšíření"
       }
     ],
     "configuration": {
@@ -88,6 +100,12 @@
           "default": true,
           "scope": "application",
           "markdownDescription": "Automaticky synchronizovat přiřazené projekty. Pro výběr propagovaných projektů spusťte **Workspace: Nastavení projektů**; pro změnu cíle **Workspace: Přiřadit projekt v IDE**."
+        },
+        "workspaceBridge.autoUpdate": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "Automaticky instalovat nové verze rozšíření z připojeného důvěryhodného backendu Workspace. Při vypnutí se aktualizace pouze nabídne. Obnovení okna vždy vyžaduje potvrzení."
         }
       }
     },
@@ -117,6 +135,10 @@
         {
           "id": "workspaceBridge.rules",
           "name": "Pravidla agentů"
+        },
+        {
+          "id": "workspaceBridge.queue",
+          "name": "Fronta úkolů"
         }
       ]
     },
@@ -162,6 +184,11 @@
         {
           "command": "workspaceBridge.compose",
           "when": "viewItem == project && view == workspaceBridge.messages",
+          "group": "inline"
+        },
+        {
+          "command": "workspaceBridge.queueHandoff",
+          "when": "view == workspaceBridge.queue && viewItem == queueTask",
           "group": "inline"
         }
       ]

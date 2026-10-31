@@ -32,7 +32,7 @@ const ui=require('../extensions/workspace-bridge/sidebar');
  });}
  try{
   const api=await extension.activate(context),sidebar=api.sidebar;
-  assert.equal(views.size,4);assert.equal(sidebar.projects().length,2);assert.deepEqual(errors,[]);
+  assert.equal(views.size,5);assert.equal(sidebar.projects().length,2);assert.deepEqual(errors,[]);
   let project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
   assert.equal(project.panel.export_documents,false);
   const catalog=await bridge.connectionRequest(fixture.pairing,{action:'status'}),mapping=catalog.mappings.find(m=>m.project_id===fixture.project_id);

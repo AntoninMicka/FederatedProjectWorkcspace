@@ -905,3 +905,12 @@ podle ADR 0060. Fronta je lokální uspořádaný výběr task ID mimo Git, niko
 plán nebo index. Vlastní malá služba doplňuje kontrolu revize a kaskádové odebrání;
 nová databáze či broker by duplikovaly existující hranice. Recovery a omezení:
 [fronta úkolů](docs/task-queue.md).
+
+PLAN-QUEUE-02 **reuse/adaptuje** `TaskQueue`, `IdeBridge`, jeho scoped
+messages/receipts/review, `Workspace.transact`, metadata a task graph,
+content-addressed export a nativní sidebar. Nový modul izoluje immutable packet,
+řetězec přijatých receipts a omezený průchod odkazy; nový běhový framework,
+agent runner ani projektový writer nejsou potřebné. Frontové flags se odvozují
+z existujícího review journalu, nepřidává se druhý completion writer.
+Hardlinky/symlinky míří pouze do exportní cache, nikdy do kanonického Gitu.
+Recovery: [ADR 0062](docs/adr/0062-pinned-queue-handoff.md).

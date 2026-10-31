@@ -15,7 +15,7 @@ exports.run = async function () {
   assert.ok(commands.includes('workspaceBridge.connect'));
   assert.ok(commands.includes('workspaceBridge.configure'));
   assert.ok(commands.includes('workspaceBridge.assign'));
-  for (const command of ['compose','handoff','refreshPanel','filterOpen','allDocuments'])
+  for (const command of ['compose','handoff','refreshPanel','filterOpen','allDocuments','queueHandoff','showQueueTask'])
     assert.ok(commands.includes('workspaceBridge.' + command));
   assert.ok(extension.exports.sidebar, 'native sidebar must activate');
   await vscode.commands.executeCommand('workbench.view.extension.workspaceBridge');
@@ -25,6 +25,23 @@ exports.run = async function () {
   const originalHome = os.homedir;
   os.homedir = () => fixture.discovery_home;
   const bridge = require(path.join(extension.extensionPath, 'bridge.js'));
+  let updated = false;
+  if (fixture.update) {
+    const {createUpdater} = require(path.join(extension.extensionPath, 'updater.js'));
+    const reports = [];
+    const api = {workspace: {isTrusted: true, getConfiguration: () => ({get: () => true})},
+      Uri: vscode.Uri, commands: vscode.commands,
+      window: {showInformationMessage: async () => undefined,
+        showErrorMessage: async message => reports.push(message)}};
+    const updater = createUpdater(api, {extension},
+      download => bridge.connectionRequest(fixture.pairing, {action: 'extension-update', download}),
+      message => reports.push(message));
+    await updater(true);
+    assert.deepEqual(reports, []);
+    const installed = JSON.parse(await fs.readFile(path.join(fixture.extensions, 'extensions.json'), 'utf8'));
+    assert.ok(installed.some(item => item.identifier.id === extension.id && item.version === '0.4.1'));
+    updated = true;
+  }
   assert.equal(fixture.pairing.schema_version,2);
   const catalog = await bridge.connectionRequest(fixture.pairing,{action:'status'});
   assert.deepEqual(catalog.mappings,[],'Workspace must connect without a project mapping');
@@ -44,5 +61,5 @@ exports.run = async function () {
   await bridge.sync(fixture.mailbox, pairing, fixture.repository);
   assert.equal(await bridge.git(fixture.repository, 'status', '--porcelain'), '');
   os.homedir = originalHome;
-  await fs.writeFile(fixture.result, JSON.stringify({active: true, receipt: response.receipts[0], todo: await fs.readFile(path.join(fixture.mailbox, 'TODO.md'), 'utf8')}));
+  await fs.writeFile(fixture.result, JSON.stringify({active: true, updated, receipt: response.receipts[0], todo: await fs.readFile(path.join(fixture.mailbox, 'TODO.md'), 'utf8')}));
 };

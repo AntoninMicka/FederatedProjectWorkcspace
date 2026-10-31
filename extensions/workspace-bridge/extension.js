@@ -7,6 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const bridge = require('./bridge');
 const {createSidebar} = require('./sidebar');
+const {createUpdater} = require('./updater');
 
 async function activate(context) {
   if (vscode.env.remoteName) { vscode.window.showWarningMessage('Workspace bridge zatím vyžaduje lokální IDE bez Remote SSH/WSL.'); return; }
@@ -82,6 +83,11 @@ async function activate(context) {
   async function catalog(config) {
     return bridge.connectionRequest(config.pairing, {action: 'status'}, config.ca);
   }
+  const checkUpdates = createUpdater(vscode, context, async download => {
+    if (!context.globalState.get('connection')) return null;
+    const config = await configuration();
+    return bridge.connectionRequest(config.pairing, {action: 'extension-update', download}, config.ca);
+  }, text => output.appendLine(text));
   async function projectConnection() {
     const config = await configuration();
     if (config.legacy) return {...config, root: mailbox(config.pairing.session_id)};
@@ -125,7 +131,7 @@ async function activate(context) {
             if (local.refresh) mapping = await refreshProject(config, current, session, local);
             let result = await bridge.sync(mailbox(mapping.session_id), {...config.pairing, ...mapping}, local.repository, config.ca);
             const project = current.projects.find(item => item.project_id === mapping.project_id);
-            if (!local.refresh && result.stale && project && project.expected_head !== mapping.expected_head
+            if (!local.refresh && !result.has_queue && result.stale && project && project.expected_head !== mapping.expected_head
                 && !await hasPendingMessages(mapping.session_id)) {
               // Persist intent before map can revoke the previous session.
               local.refresh = {...mapping, expected_head: project.expected_head};
@@ -338,6 +344,8 @@ async function activate(context) {
     const selected = await vscode.window.showQuickPick(snapshot.tasks.map(task => ({label: task.id, description: task.title})), {placeHolder: 'Úkol'});
     if (!selected) return;
     const kind = await vscode.window.showQuickPick(['completed', 'clarification', 'message'], {placeHolder: 'Typ zprávy'}); if (!kind) return;
+    let queue;try{queue=JSON.parse(await bridge.read(path.join(config.root,'queue.json')));}catch(error){if(error.code!=='ENOENT')throw error;}
+    if(kind==='completed'&&queue?.items.some(i=>i.id===selected.label))throw Error('Položka fronty vyžaduje hlášení agenta podle packets/<id>/AGENT.md a lidské přijetí ve Workspace.');
     const body = await vscode.window.showInputBox({prompt: 'Výsledek a důkazy, dotaz nebo zpráva', ignoreFocusOut: true}); if (!body) return;
     if (await vscode.window.showWarningMessage(`${kind} · ${selected.label}\n${body}`, {modal: true}, 'Odeslat') !== 'Odeslat') return;
     const message = {message_id: crypto.randomUUID(), task_id: selected.label, kind, body,
@@ -355,6 +363,10 @@ async function activate(context) {
     sidebar.clear?.();
     vscode.window.showInformationMessage('Lokální synchronizace zastavena. Přístup odvolejte také ve Workspace. Soubory zůstaly zachovány.');
   });
+  command('checkUpdates', () => checkUpdates(true));
+  const updateTimer = setInterval(() => { void checkUpdates(); }, 60000);
+  context.subscriptions.push({dispose: () => clearInterval(updateTimer)});
+  void checkUpdates();
   const timer = setInterval(() => {
     if (vscode.workspace.getConfiguration('workspaceBridge').get('autoSync', true)) synchronize(true);
   }, 10000);

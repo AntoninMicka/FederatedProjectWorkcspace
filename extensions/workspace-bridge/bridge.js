@@ -187,6 +187,7 @@ async function sync(root, pairing, repoRoot, ca, transport = request) {
     + 'Povolené kind: completed, clarification, message. task_id vyberte ze snapshot.json.\n'
     + 'message_id je nové UUID; revision je snapshot.revision; repository_commit je skutečný Git HEAD.\n'
     + 'Přihlašovací údaje do schránky nepatří.\n'
+    + 'Fronta: queue.json a neměnné packets/<id>/manifest.json s AGENT.md. Navazující položky jsou pouze k prohlížení; postup určuje lidské přijetí ve Workspace.\n'
     + 'Pravidla a připnutý kontext: agent-context.json vzniká pouze explicitním předáním z panelu.\n');
   // The snapshot is published last. Recovery reruns the same immutable export.
   await atomic(path.join(root, 'snapshot.json'), JSON.stringify(result.snapshot, null, 2));
