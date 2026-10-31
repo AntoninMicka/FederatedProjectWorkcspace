@@ -889,3 +889,12 @@ v rozšíření — pro lokální export nejsou potřebné a zavedly by další 
 recovery/plánovací autority. Žádný externí kód se nekopíroval.
 Viz [ADR 0060](docs/adr/0060-local-file-ide-bridge.md) a
 [kontrakt panelu](docs/ide-workspace-sidebar.md).
+
+## Dependency-only scan roadmapy (2026-10-31)
+
+Řez `PLAN-SEMANTIC-AUDIT-01` **reuse/adaptuje** stávající
+`RoadmapRefinement` queue/reconciliation, task graph, ContextBuilder,
+OllamaAdapter/OllamaRuns, webové review, TUI a Workspace.transact.
+Zaměření a evidence se izolují v `roadmap_dependencies`; další plánovací
+databáze, broker ani alternativní projektový writer nejsou potřeba.
+Viz [ADR 0061](docs/adr/0061-focused-roadmap-dependency-review.md).

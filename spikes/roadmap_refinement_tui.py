@@ -63,12 +63,17 @@ class ProjectSelector:
 class RefinementTUI:
     """Small interaction controller; durable state remains in the service."""
     def __init__(self, service, *, scan_limit=5, operation_factory=None,
-                 background=None, deep_check=False):
+                 background=None, deep_check=False, dependencies_only=False):
         self.service = service
         self.scan_limit = scan_limit
         self.operation_factory = operation_factory or (lambda: str(uuid4()))
         self.background = background or self._thread
         self.deep_check = deep_check
+        if deep_check and dependencies_only:
+            raise ValueError('Choose one scan mode')
+        self.dependencies_only = dependencies_only
+        self.apply_preview = None
+        self.apply_operation = None
         self.all_rows = []
         self.rows = []
         self.selected = 0
@@ -89,7 +94,8 @@ class RefinementTUI:
 
     def _scan(self):
         try:
-            result = (self.service.scan(limit=self.scan_limit, deep_check=True)
+            result = (self.service.scan(limit=self.scan_limit, dependencies_only=True)
+                      if self.dependencies_only else self.service.scan(limit=self.scan_limit, deep_check=True)
                       if self.deep_check else self.service.scan(limit=self.scan_limit))
             self.scan_results.put(('ok', result))
         except Exception as exc:
@@ -152,7 +158,13 @@ class RefinementTUI:
             self.confirm_apply = False
             if key in (ord('y'), ord('Y')):
                 try:
-                    result = self.service.apply(self.operation_factory())
+                    if self.apply_preview:
+                        result = self.service.apply(self.apply_operation,
+                            preview_sha256=self.apply_preview['preview_sha256'],
+                            proposal_ids=self.apply_preview['proposal_ids'])
+                    else:
+                        result = self.service.apply(self.operation_factory())
+                    self.apply_preview = None; self.apply_operation = None
                     self.message = 'Apply dokoncen: ' + result['operation_id']
                 except Exception as exc:
                     self.message = 'Apply selhal: ' + str(exc)
@@ -214,8 +226,26 @@ class RefinementTUI:
                     self.message = 'Rozhodnuti selhalo: ' + str(exc)
                 self.refresh()
         elif key == ord('p'):
-            accepted = sum(row['state'] == 'accepted' for row in self.all_rows)
+            self.apply_preview = None; self.apply_operation = None
+            rows = [row for row in self.all_rows if row['state'] == 'accepted']
+            accepted = len(rows)
             if accepted:
+                if any(row.get('mode') == 'dependency-check' for row in rows):
+                    try:
+                        pending = next((context['pending_apply'] for row in rows
+                            for context in [self.service.review_context(row)]
+                            if context.get('pending_apply')), None)
+                        if pending:
+                            self.apply_operation = pending['operation_id']
+                            self.apply_preview = dict(preview_sha256=pending['preview_sha256'],
+                                proposal_ids=pending['proposals'], diff='Obnova drive potvrzeneho zapisu.')
+                        else:
+                            preview = self.service.reconciliation_preview([r['proposal_id'] for r in rows])
+                            if preview['blockers']:
+                                self.message = 'Zapis blokovan: ' + str(preview['blockers']); return True
+                            self.apply_preview = preview; self.apply_operation = self.operation_factory()
+                    except Exception as exc:
+                        self.message = 'Nahled selhal: ' + str(exc); return True
                 self.confirm_apply = True
                 self.message = f'Zapsat {accepted} prijatych navrhu? y = ano, jina klavesa = ne'
             else:
@@ -304,7 +334,8 @@ def draw(screen, ui):
     for position, row in enumerate(ui.rows[start:start + visible], start=start):
         proposal = row['proposal']
         decision = proposal.get('decision', proposal.get('action', proposal.get('outcome', '')))
-        target = proposal.get('target_id') or ','.join(proposal.get('target_ids', [])) or '-'
+        target = (proposal.get('target_id') or ','.join(proposal.get('target_ids', []))
+                  or ','.join(e['target_id'] for e in proposal.get('edges', [])) or '-')
         context = ui.contexts.get(row['proposal_id'], {})
         frozen = row.get('input') or {}
         source = (context.get('source_title') or frozen.get('stable_id')
@@ -341,6 +372,9 @@ def draw(screen, ui):
         elif row.get('mode') == 'deep-check' and row['state'] == 'queued':
             effect = 'Zmrazeny source cluster ceka ve stejne proposal queue na bounded Ollama scan.'
             action = 'CEKA NA DEEP-CHECK'
+        elif row.get('mode') == 'dependency-check':
+            effect = proposal.get('reason') or 'Zamereny navrh zavislosti nebo chybejiciho kontextu.'
+            action = str(decision or row['state']).upper()
         elif action_value:
             effect = proposal.get('summary') or 'Typovany navrh semanticke reconciliation.'
             action = action_value.upper()
@@ -355,6 +389,8 @@ def draw(screen, ui):
                 target_label += ' — ' + target['title'] + ' (' + target['type'] + ')'
         elif proposal.get('target_ids'):
             target_label = ', '.join(proposal['target_ids'])
+        elif proposal.get('edges'):
+            target_label = ', '.join(e['target_id'] for e in proposal['edges'])
         detail = [
             context.get('project_title', ui.service.project_id),
             'STAV: ' + row['state'] + '    JISTOTA: ' + str(proposal.get('confidence', '-')),
@@ -368,8 +404,8 @@ def draw(screen, ui):
             'ODUVODNENI MODELU:',
             proposal.get('reason') or proposal.get('error') or '-',
             *(['', 'STRUKTUROVANE ZMENY:', json.dumps(
-                proposal.get('changes'), ensure_ascii=False, sort_keys=True)]
-              if proposal.get('changes') else []),
+                proposal.get('changes') or proposal.get('edges'), ensure_ascii=False, sort_keys=True)]
+              if proposal.get('changes') or proposal.get('edges') else []),
             '',
             'NAHLED ZDROJOVEHO TEXTU:',
             context.get('source_excerpt') or context.get('context_error') or '-',
@@ -377,6 +413,10 @@ def draw(screen, ui):
             'AUDIT: proposal ' + row['proposal_id'],
             'HEAD: ' + row['expected_head'],
         ]
+        if ui.confirm_apply and ui.apply_preview:
+            detail = ['NAHLED ZAPISU / OBNOVY', ui.apply_preview['diff'],
+                      'Preview SHA-256: ' + ui.apply_preview['preview_sha256'],
+                      'y = potvrdit, jina klavesa = zrusit']
         rendered = []
         for value in detail:
             for line in _lines(value, width - split - 2):
@@ -396,7 +436,7 @@ def draw(screen, ui):
     screen.refresh()
 
 
-def run(screen, service, *, scan_limit=5, deep_check=False):
+def run(screen, service, *, scan_limit=5, deep_check=False, dependencies_only=False):
     try:
         curses.curs_set(0)
     except curses.error:
@@ -407,7 +447,8 @@ def run(screen, service, *, scan_limit=5, deep_check=False):
     _put(screen, 0, 0, 'Nacitam proposal list; detail se docte az pro vybrany radek...',
          max(1, screen.getmaxyx()[1] - 1), curses.A_BOLD)
     screen.refresh()
-    ui = RefinementTUI(service, scan_limit=scan_limit, deep_check=deep_check)
+    ui = RefinementTUI(service, scan_limit=scan_limit, deep_check=deep_check,
+                       dependencies_only=dependencies_only)
     active = True
     while active:
         ui.poll()
@@ -418,11 +459,12 @@ def run(screen, service, *, scan_limit=5, deep_check=False):
     return ui
 
 
-def launch(service, *, scan_limit=5, deep_check=False):
-    return curses.wrapper(run, service, scan_limit=scan_limit, deep_check=deep_check)
+def launch(service, *, scan_limit=5, deep_check=False, dependencies_only=False):
+    return curses.wrapper(run, service, scan_limit=scan_limit, deep_check=deep_check,
+                          dependencies_only=dependencies_only)
 
 
-def launch_project_selector(node, *, scan_limit=5, deep_check=False,
+def launch_project_selector(node, *, scan_limit=5, deep_check=False, dependencies_only=False,
                             service_factory=RoadmapRefinement):
     def session(screen):
         try:
@@ -436,5 +478,5 @@ def launch_project_selector(node, *, scan_limit=5, deep_check=False,
             return None
         screen.clear()
         return run(screen, service_factory(node, project_id), scan_limit=scan_limit,
-                   deep_check=deep_check)
+                   deep_check=deep_check, dependencies_only=dependencies_only)
     return curses.wrapper(session)

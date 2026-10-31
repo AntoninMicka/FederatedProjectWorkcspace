@@ -19,7 +19,7 @@ from spikes.backend_contract import BackendUnknown
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ProjectInput, TaskInstruction)
-from spikes.markdown_documents import main_todo_id
+from spikes.markdown_documents import main_todo_id, document
 from spikes.metadata import MAX_FILE, pairs, require, uuid, validate_snapshot
 from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings, OllamaRuns
 from spikes.project_creation import ProjectCreation
@@ -265,6 +265,9 @@ def _deep_change(files, entities, project_id, head, change):
     require(graph['status'] == 'ready', 'Reconciliation candidate task graph is invalid')
     nodes = {item['id']: item for item in graph['nodes']}
     kind, node_id = change['kind'], change['node_id']
+    if kind == 'add-dependency':
+        from spikes.roadmap_dependencies import add_dependency
+        return add_dependency(files, entities, project_id, head, node_id, change['target_id'])
     if kind == 'create-node':
         require(node_id not in nodes, 'Reconciliation creates a duplicate node ID')
         parent_id = change['parent_id']; node_type = change['node_type']
@@ -321,28 +324,23 @@ def _deep_change(files, entities, project_id, head, change):
             lines[line_index] = match.group(1) + f"- [{'x' if checked else ' '}] [{node_id}] {title}"
         else:
             target = change['target_id']; require(target in nodes, 'Dependency target disappeared')
-            block_end = line_index + 1; indent = len(match.group(1).expandtabs(4))
-            while block_end < len(lines):
-                following = TASK.match(lines[block_end])
-                if following and len(following.group(1).expandtabs(4)) <= indent: break
-                block_end += 1
+            indent = len(match.group(1).expandtabs(4))
+            block_end = min((item['line'] - 1 for item in nodes.values()
+                             if item['source']['path'] == path and item['line'] - 1 > line_index),
+                            default=len(lines))
             relation_rows = []
             for index in range(line_index + 1, block_end):
                 relation = RELATION.match(lines[index])
                 if relation and ALIASES.get(relation.group(2).strip().lower()) == 'depends_on':
                     relation_rows.append((index, relation, [item.strip() for item in relation.group(3).split(',')]))
             existing = {item for _, _, values in relation_rows for item in values}
-            if kind == 'add-dependency':
-                require(target not in existing, 'Dependency already exists')
-                lines.insert(line_index + 1, ' ' * (indent + 2) + '- depends_on: ' + target)
+            require(kind == 'remove-dependency' and target in existing, 'Removed dependency does not exist')
+            index, relation, values = next(row for row in relation_rows if target in row[2])
+            values.remove(target)
+            if values:
+                lines[index] = relation.group(1) + '- ' + relation.group(2) + ': ' + ', '.join(values)
             else:
-                require(target in existing, 'Removed dependency does not exist')
-                index, relation, values = next(row for row in relation_rows if target in row[2])
-                values.remove(target)
-                if values:
-                    lines[index] = relation.group(1) + '- ' + relation.group(2) + ': ' + ', '.join(values)
-                else:
-                    del lines[index]
+                del lines[index]
         candidate = _replace_body(files, path, lines, trailing)
     checked = project_task_graph(candidate, entities, project_id, head)
     require(checked['status'] == 'ready', 'Reconciliation change makes task graph invalid: ' + checked.get('error', 'unknown error'))
@@ -379,6 +377,8 @@ class RoadmapRefinement:
                    'id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE NOT NULL,project_id TEXT NOT NULL,'
                    'expected_head TEXT NOT NULL,document_id TEXT NOT NULL,document_sha256 TEXT NOT NULL,'
                    'response TEXT NOT NULL,state TEXT NOT NULL,created_at TEXT NOT NULL,receipt TEXT)')
+        db.execute('CREATE TABLE IF NOT EXISTS dependency_applies('
+                   'id TEXT PRIMARY KEY,record TEXT NOT NULL)')
         columns = {row[1] for row in db.execute('PRAGMA table_info(proposals)')}
         if 'mode' not in columns:
             db.execute("ALTER TABLE proposals ADD COLUMN mode TEXT NOT NULL DEFAULT 'detached'")
@@ -419,7 +419,7 @@ class RoadmapRefinement:
         view = workspace.read_project(self.project_id)
         head = view['commit_id']; files = workspace.git.snapshot(head); entities = validate_snapshot(files)
         root_id = main_todo_id(self.project_id); require(root_id in entities, 'Main plan is unavailable')
-        body = _content(files, entities[root_id]).decode('utf-8')
+        body = document(files, entities, root_id)['body']
         graph = project_task_graph(files, entities, self.project_id, head)
         require(graph['status'] == 'ready', 'Project task graph is invalid')
         targets = {item['id']: {'type': item['type'], 'title': item['title'],
@@ -427,8 +427,15 @@ class RoadmapRefinement:
                    for item in graph['nodes']}
         return workspace, head, files, entities, root_id, body, targets
 
-    def scan(self, *, limit=1, deep_check=False, forget_previous=False):
+    def scan(self, *, limit=1, deep_check=False, forget_previous=False, dependencies_only=False,
+             focus_ids=None):
         require(type(forget_previous) is bool, 'Invalid forget-previous flag')
+        require(type(dependencies_only) is bool, 'Invalid dependency scan flag')
+        if dependencies_only:
+            require(not deep_check and not forget_previous, 'Dependency mode cannot reset or mix scans')
+            from spikes.roadmap_dependencies import scan
+            return scan(self, limit, focus_ids=focus_ids)
+        require(focus_ids is None, 'Focus selection requires dependency mode')
         if deep_check:
             return self._scan_deep(limit=limit, forget_previous=forget_previous)
         require(not forget_previous, 'Forget-previous requires deep-check mode')
@@ -648,13 +655,28 @@ class RoadmapRefinement:
         """Resolve human review labels from the exact proposal revision."""
         require(isinstance(row, dict) and row.get('state') in {
             'pending', 'accepted', 'rejected', 'applied', 'dismissed',
-            'queued', 'running', 'unknown', 'failed'}, 'Invalid refinement review row')
+            'queued', 'running', 'unknown', 'failed', 'needs-context'}, 'Invalid refinement review row')
         proposal_id = row.get('proposal_id'); uuid(proposal_id)
         require(self.get(proposal_id) is not None, 'Proposal is unavailable for this project')
         head = row.get('expected_head')
         workspace = Projects(self.node).workspace(self.project_id, blocking=False)
         files = workspace.git.snapshot(head); entities = validate_snapshot(files)
         project = committed_project(workspace.git, head, self.project_id)
+        if row.get('mode') == 'dependency-check':
+            frozen = row.get('input') or {}
+            evidence = frozen.get('evidence', [])
+            with self._connect() as db:
+                active = [dict(json.loads(raw), operation_id=i)
+                          for i, raw in db.execute('SELECT id,record FROM dependency_applies')]
+            intent = next((i for i in active if i['project_id'] == self.project_id
+                           and proposal_id in i['proposals'] and not i.get('outcome')
+                           and not i.get('cancelled')), None)
+            return dict(project_title=project['title'], source_title=frozen.get('stable_id', '-'),
+                        source_path=', '.join(e['path'] for e in evidence),
+                        source_excerpt='\n\n'.join(
+                            f"Podklad {e['id']}: {e['path']}:{e['line_start']}-{e['line_end']} · SHA-256 {e['sha256']}\n{e['text']}"
+                            for e in evidence), target=frozen.get('focus'), targets=[],
+                        citations=row['proposal'].get('edges', []), pending_apply=intent)
         if row.get('mode') == 'deep-check':
             cluster = row.get('input') or {}
             occurrences = cluster.get('occurrences', [])
@@ -716,6 +738,11 @@ class RoadmapRefinement:
                 'decision', 'action', 'outcome', 'confidence', 'summary', 'target_id',
                 'target_ids') if key in proposal}
             changes = proposal.get('changes') or []
+            if row['mode'] == 'dependency-check':
+                from spikes.roadmap_dependencies import changes as dependency_changes
+                changes = dependency_changes(proposal) if proposal.get('edges') else []
+                summary.update(action=proposal.get('decision', proposal.get('outcome', 'queued')),
+                               target_ids=[e['target_id'] for e in proposal.get('edges', [])])
             impact = 'evidence' if not changes else 'mutation'
             risky = any(change.get('kind') in {'create-node', 'add-dependency',
                                                 'remove-dependency'}
@@ -731,6 +758,8 @@ class RoadmapRefinement:
         row = self.get(proposal_id)
         require(row is not None, 'Proposal is unavailable for this project')
         public_row = {key: value for key, value in row.items() if key != 'input'}
+        if row['mode'] == 'dependency-check':
+            public_row['proposal'] = dict(row['proposal'], changes=row['proposal'].get('edges', []))
         return {'row': public_row, 'context': self.review_context(row)}
 
     def decide(self, proposal_id, decision):
@@ -738,6 +767,12 @@ class RoadmapRefinement:
         source = 'accepted' if decision == 'reset' else 'pending'
         target = 'pending' if decision == 'reset' else ('accepted' if decision == 'accept' else 'rejected')
         with self._connect() as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            frozen = {p for (raw,) in db.execute('SELECT record FROM dependency_applies')
+                      for intent in [json.loads(raw)] if intent['project_id'] == self.project_id
+                      and not intent.get('outcome') and not intent.get('cancelled')
+                      for p in intent['proposals']}
+            require(proposal_id not in frozen, 'Review has a pending apply; recover or cancel it first')
             row = db.execute('SELECT state FROM proposals WHERE id=? AND project_id=?',
                              (proposal_id, self.project_id)).fetchone()
             require(row is not None and row[0] == source,
@@ -759,6 +794,11 @@ class RoadmapRefinement:
             # Serialize validation and the whole batch update. A concurrent
             # CLI/TUI decision cannot slip between the pending check and write.
             db.execute('BEGIN IMMEDIATE')
+            frozen = {p for (raw,) in db.execute('SELECT record FROM dependency_applies')
+                      for intent in [json.loads(raw)] if intent['project_id'] == self.project_id
+                      and not intent.get('outcome') and not intent.get('cancelled')
+                      for p in intent['proposals']}
+            require(not frozen.intersection(proposal_ids), 'Review has a pending apply; recover or cancel it first')
             available = {row[0] for row in db.execute(
                 'SELECT id FROM proposals WHERE project_id=? AND state=?',
                 (self.project_id, source))}
@@ -797,7 +837,7 @@ class RoadmapRefinement:
             blockers.append({'proposal_id': None,
                              'reason': 'Project HEAD changed after accepted proposals'})
         root_id = main_todo_id(self.project_id); meta = entities[root_id]
-        root_path = 'artifacts/' + root_id + '/' + meta['file']
+        root_path = document(files, entities, root_id)['path']
         for row in accepted:
             try:
                 if row['mode'] == 'detached':
@@ -808,9 +848,18 @@ class RoadmapRefinement:
                         body, proposal['document_id'], proposal['target_id']).encode('utf-8')
                     mutations.append((row['proposal_id'], {'kind': 'attach-document'}))
                     continue
-                require(row['mode'] == 'deep-check', 'Unknown accepted proposal mode')
-                proposal = validate_deep_proposal(json.dumps(row['proposal'], ensure_ascii=False),
-                                                  row['input'], targets)
+                if row['mode'] == 'dependency-check':
+                    from spikes.roadmap_dependencies import focus_input, validate, changes as dependency_changes
+                    task = next((t for t in graph['nodes'] if t['id'] == row['input'].get('stable_id')), None)
+                    require(task is not None, 'Dependency focus disappeared')
+                    require(row['input'] == focus_input(task, graph, files, entities),
+                            'Dependency evidence differs from pinned snapshot')
+                    value = validate(json.dumps(row['proposal'], ensure_ascii=False), row['input'])
+                    proposal = {'changes': dependency_changes(value)}
+                else:
+                    require(row['mode'] == 'deep-check', 'Unknown accepted proposal mode')
+                    proposal = validate_deep_proposal(json.dumps(row['proposal'], ensure_ascii=False),
+                                                      row['input'], targets)
                 if not proposal['changes']:
                     evidence.append(row['proposal_id']); continue
                 for change in proposal['changes']:
@@ -864,8 +913,33 @@ class RoadmapRefinement:
     def reconciliation_preview(self, proposal_ids=None):
         return self._reconciliation(proposal_ids)[0]
 
-    def apply(self, operation_id, preview_sha256=None, proposal_ids=None):
+    def cancel_dependency_apply(self, operation_id):
+        """An unstarted intent may be cancelled while holding the native writer lock."""
         uuid(operation_id)
+        workspace = Projects(self.node).workspace(self.project_id)
+        with workspace.journal.lock(), workspace.journal.connect() as native:
+            require(not native.execute('SELECT 1 FROM operations WHERE id=?', (operation_id,)).fetchone(),
+                    'Native apply has started; recover it instead of cancelling')
+            with self._connect() as db, db:
+                row = db.execute('SELECT record FROM dependency_applies WHERE id=?', (operation_id,)).fetchone()
+                require(row is not None, 'Dependency apply is unavailable')
+                intent = json.loads(row[0])
+                require(intent['project_id'] == self.project_id and not intent.get('outcome'),
+                        'Dependency apply cannot be cancelled')
+                intent['cancelled'] = True
+                db.execute('UPDATE dependency_applies SET record=? WHERE id=?',
+                           (json.dumps(intent, sort_keys=True), operation_id))
+        return dict(operation_id=operation_id, state='cancelled')
+
+    def apply(self, operation_id, preview_sha256=None, proposal_ids=None, *, checkpoint=lambda stage: None):
+        uuid(operation_id)
+        with self._connect() as db:
+            intent = db.execute('SELECT record FROM dependency_applies WHERE id=?', (operation_id,)).fetchone()
+        selected = [row for row in self.list() if row['state'] == 'accepted'
+                    and (proposal_ids is None or row['proposal_id'] in proposal_ids)]
+        if intent or any(row['mode'] == 'dependency-check' for row in selected):
+            from spikes.roadmap_dependencies import apply_review
+            return apply_review(self, operation_id, preview_sha256, proposal_ids, checkpoint)
         preview, changes = self._reconciliation(proposal_ids)
         require(not preview['blockers'], 'Reconciliation preview has blockers')
         if preview_sha256 is not None:
