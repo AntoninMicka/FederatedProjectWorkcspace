@@ -1,13 +1,23 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import shutil
+import os
+from pathlib import Path
 import subprocess
+import sys
 import unittest
 
 from spikes.desktop_ui import JS
 
 
 class RoadmapHotfixTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_full_conflict_layout_keeps_confirmation_above_prompt(self):
+        result = subprocess.run([sys.executable, '-m', 'tests.roadmap_layout_smoke'],
+                                cwd=Path(__file__).resolve().parent.parent,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
     def test_project_links_open_nested_documents_and_keep_unsafe_text_inert(self):
         helper = JS[JS.index('function appendProjectArtifactLinks('):JS.index('const projectConflicts=')]

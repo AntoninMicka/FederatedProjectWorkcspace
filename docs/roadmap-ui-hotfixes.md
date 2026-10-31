@@ -46,3 +46,43 @@ Závěrečná celá sada `python3 -m unittest discover -s tests -v`:
 1 115 testů, OK, 39 podmíněných skipů, 270,818 s. Běh proběhl s povolenými
 lokálními sockety; původní sandboxový běh byl přerušen po chybách API testů.
 `node --check` emitovaného JS, místní odkazy a `git diff --check` prošly.
+
+## Oprava po uživatelském ověření
+
+První izolovaný smoke neověřil celý shell s promptem ani zdrojový dokument
+nad 2 000 řádků. Uživatelské snímky doložily obě mezery; předchozí výsledky
+neznamenají akceptaci těchto scénářů.
+
+Markdown nyní používá stránky po nejvýše 2 000 zdrojových řádcích v rámci
+stávajícího celkového limitu 4 MiB. Přepínače stránek jsou před obsahem;
+podklady zůstávají klikatelné na každé stránce. Při přechodu uvnitř fenced
+bloku náhled obnoví jeho kontext, aby kód nezačal vykreslovat jako aktivní
+odkazy. Každá stránka nadále vyžaduje očekávaný HEAD. PDF zachovává rozsah
+1–100; Markdown dovoluje nejvýše 4 096 stránek a odmítá neexistující stránku.
+HTML/JSON náhledy své dosavadní limity nemění.
+
+Konfliktní panel nyní rozděluje dostupnou výšku celým flex řetězcem až
+k seznamu. Kompaktní hlavička a společný řádek potvrzení ponechávají tlačítko
+nad promptem. Scrolluje pouze seznam; ostatní ovládání se při jeho posunu
+nehýbe. Na nízkém viewportu se seznam zmenší podle zbývajícího prostoru.
+
+Nový opakovatelný test `tests.roadmap_layout_smoke` používá skutečné HTML/CSS,
+702 položek, viditelný sidebar, prompt a neprázdný stav nevyřešeného konfliktu.
+Při 1545 × 863 i 1326 × 678 kontroluje pozici potvrzení vůči promptu a posun
+seznamu. Spouští se selektorem
+`M0_DESKTOP_TEST=1 python3 -m unittest tests.test_roadmap_hotfix.RoadmapHotfixTests.test_full_conflict_layout_keeps_confirmation_above_prompt -v`.
+Samostatné Qt ověření skutečné roadmapy (2 369 řádků) provedlo přechod na
+stránku 2/2 produkční funkcí `openPreview`; druhá stránka obsahovala
+119 odkazů a neprázdný text. Projektová data se při ověření neměnila.
+
+Starší volitelný `test_real_main_panel_markdown_image_pdf` skončil timeoutem
+v kroku `sidebarStage=todo`, ještě před zahájením náhledu. Stejný timeout byl
+zopakován v izolované kopii původního commitu `6c7a8b7`; nejde o nový důkaz
+regrese stránkování. Tento obecný desktop smoke zůstává neúspěšný a není
+vydáván za úspěšné end-to-end ověření.
+
+Po poslední relevantní změně prošla cílená sada: 30 testů OK, 2 podmíněné
+skipy; nový úplný layout test byl navíc spuštěn samostatně a prošel.
+Závěrečná celá sada: `python3 -m unittest discover -s tests -v` —
+1 117 testů, OK, 40 podmíněných skipů, 271,860 s. Emitovaný JS prošel
+`node --check`; místní odkazy a finální `git diff --check` jsou v pořádku.

@@ -895,17 +895,18 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <ul id="project-overview-task-list" aria-label="Nehotové úkoly projektu"></ul>
 <button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div>
 <section id="project-conflicts" hidden aria-labelledby="project-conflicts-title">
-<button id="project-conflicts-back" type="button" class="back-button">← Zpět na projekt</button>
-<span class="dashboard-kicker">FEDEROVANÁ HISTORIE</span><h2 id="project-conflicts-title">Vyřešit konflikt</h2>
+<header class="conflict-heading"><button id="project-conflicts-back" type="button" class="back-button">← Zpět na projekt</button>
+<h2 id="project-conflicts-title">Vyřešit konflikt</h2></header>
 <p>Výsledek je zatím pouze místní návrh. Projekt se změní až po kontrole a výslovném potvrzení.</p>
 <p id="project-conflicts-status" role="status" aria-live="polite"></p>
 <div class="conflict-toolbar"><label>Protější historie <select id="project-conflicts-select"></select></label></div>
 <div id="project-conflicts-workspace" hidden>
-<h3>Konfliktní soubory</h3><p id="project-conflicts-files-summary"></p>
+<div class="conflict-files-heading"><h3>Konfliktní soubory</h3><p id="project-conflicts-files-summary"></p></div>
 <ul id="project-conflicts-files" class="conflict-file-list" tabindex="0" aria-label="Soubory v konfliktu"></ul>
 <p id="project-conflicts-unresolved" role="status"></p>
-<label class="confirm"><input id="project-conflicts-confirm" type="checkbox"> Zkontroloval(a) jsem všechny výsledné soubory a potvrzuji vytvoření dvourodičového merge commitu.</label>
+<div class="conflict-confirmation"><label class="confirm"><input id="project-conflicts-confirm" type="checkbox"> Zkontroloval(a) jsem všechny výsledné soubory a potvrzuji vytvoření dvourodičového merge commitu.</label>
 <button id="project-conflicts-publish" type="button" disabled>Vytvořit merge commit</button>
+</div>
 </div>
 <dialog id="project-conflicts-dialog" class="conflict-dialog" aria-labelledby="project-conflicts-dialog-title">
 <div class="conflict-dialog-shell"><header class="conflict-dialog-header"><div><span class="dashboard-kicker">ŘEŠENÍ SOUBORU</span><h2 id="project-conflicts-dialog-title"></h2></div><button id="project-conflicts-dialog-close" type="button" class="secondary-button" aria-label="Zavřít řešitel konfliktu">Zavřít</button></header>
@@ -933,7 +934,9 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 </div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
-<h2 id="preview-title"></h2><div id="preview-content"></div>
+<h2 id="preview-title"></h2>
+<div id="text-preview-controls" hidden><button id="text-preview-previous" type="button">Předchozí stránka</button><span id="text-preview-position"></span><button id="text-preview-next" type="button">Další stránka</button></div>
+<div id="preview-content"></div>
 <div id="pdf-controls" hidden><label for="pdf-page">Stránka PDF (1–100)</label>
 <input id="pdf-page" type="number" min="1" max="100" value="1"><button id="pdf-show">Zobrazit stránku</button></div>
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
@@ -1337,6 +1340,19 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .conflict-button{margin-top:10px;background:#a33b32}.conflict-button:hover{background:#842f28}#project-conflicts{width:100%;max-width:1800px;margin:0 auto;padding:10px 0 30px}.conflict-toolbar{display:flex;gap:12px;align-items:end;justify-content:space-between;flex-wrap:wrap;margin:14px 0}.conflict-toolbar label{flex:1;min-width:260px}.conflict-toolbar select{display:block;width:100%;padding:9px}.conflict-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}.conflict-pane{min-width:0;border:1px solid #dce3e9;border-radius:10px;background:#fff;overflow:hidden}.conflict-pane>header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:30px;padding:10px 12px;border-bottom:1px solid #dce3e9;background:#f5f8fa}.conflict-pane h3{margin:0;font-size:15px}.conflict-result{border-color:#77a99e;box-shadow:0 0 0 1px #77a99e}.conflict-result>header{background:#e8f4f0}.conflict-summary{font-size:11px;font-weight:600;color:#526675;text-align:right}.conflict-code,.conflict-editor-stack{height:440px;min-height:260px;overflow:auto;background:#fff}.conflict-code pre,.conflict-editor-stack pre,.conflict-editor-stack textarea{box-sizing:border-box;margin:0;padding:12px;width:100%;min-width:100%;min-height:100%;border:0;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4;white-space:pre}.conflict-code pre{overflow:visible}.conflict-editor-stack{display:grid;position:relative}.conflict-editor-stack pre,.conflict-editor-stack textarea{grid-area:1/1;overflow:auto}.conflict-editor-stack pre{pointer-events:none;color:transparent;background:#fff}.conflict-editor-stack textarea{position:relative;resize:none;outline:0;background:transparent;color:#213746}.conflict-editor-stack textarea:focus{box-shadow:inset 0 0 0 2px #176b60}.conflict-line{display:block;min-height:1.55em;padding:0 3px}.diff-local{background:#dceeff;border-left:4px solid #2674a8}.diff-remote{background:#fff0cf;border-left:4px solid #c17b16}.diff-both{background:linear-gradient(90deg,#dceeff 0 50%,#fff0cf 50%);border-left:4px solid #7c5ba7}.conflict-legend{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;font-size:12px}.conflict-legend span{display:inline-block;padding:5px 8px;border-radius:5px}.conflict-rendered [data-conflict-preview]{padding:12px;font-weight:400;overflow-wrap:anywhere;max-height:440px;overflow:auto}.conflict-rendered pre{white-space:pre-wrap}.conflict-rendered p{white-space:pre-wrap}.conflict-rendered .diff-local,.conflict-rendered .diff-remote,.conflict-rendered .diff-both{padding-left:8px}.conflict-missing{color:#6b7780;font-style:italic}#project-conflicts-unresolved{font-weight:700;color:#9b4f30}
 .conflict-code{overflow:auto}.conflict-editor-stack{overflow:hidden}
 .conflict-file-list{display:grid;gap:8px;margin:12px 0;padding:0;list-style:none;max-height:clamp(120px,32vh,420px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}.conflict-file-list button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:12px 14px;text-align:left;background:#f5f8fa;color:#213746;border:1px solid #dce3e9}.conflict-file-list button:hover,.conflict-file-list button:focus-visible{background:#e8f4f0;border-color:#77a99e}.conflict-file-path{min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.conflict-file-status{flex:none;padding:4px 7px;border-radius:999px;font-size:11px;font-weight:700}.conflict-file-status.unresolved{background:#fde2dc;color:#8c2e26}.conflict-file-status.resolved{background:#dff2e9;color:#176b60}.conflict-file-status.automatic{background:#e8eef2;color:#456276}.conflict-dialog{box-sizing:border-box;width:min(1760px,calc(100vw - 32px));max-width:none;max-height:92vh;margin:auto;padding:0;border:1px solid #77a99e;border-radius:14px;background:#f8fafb;box-shadow:0 18px 60px #14263855}.conflict-dialog::backdrop{background:#14263899}.conflict-dialog-shell{box-sizing:border-box;max-height:92vh;padding:18px;overflow:auto}.conflict-dialog-header{display:flex;align-items:start;justify-content:space-between;gap:16px}.conflict-dialog-header h2{margin:4px 0 0;overflow-wrap:anywhere}.conflict-dialog-header button{flex:none}
+#project-overview-panel:has(#project-conflicts:not([hidden])){padding:0;min-height:0}
+#main-panel-content:has(#project-conflicts:not([hidden])){padding-bottom:0}
+#project-conflicts:not([hidden]){display:flex;flex-direction:column;flex:1;min-height:0;padding:4px 0 0}
+#project-conflicts>p{margin:4px 0}#project-conflicts>h2{margin:6px 0}#project-conflicts .conflict-toolbar{margin:6px 0}
+#project-conflicts-workspace:not([hidden]){display:flex;flex-direction:column;flex:1;min-height:0}
+#project-conflicts-workspace>h3,#project-conflicts-workspace>p{margin:4px 0}
+#project-conflicts>p,.conflict-files-heading p,#project-conflicts-unresolved{font-size:13px;line-height:1.35}
+#project-conflicts-files{flex:1;min-height:32px;max-height:none;margin:6px 0}
+#project-conflicts .conflict-heading{flex:none;justify-content:flex-start;gap:24px;color:inherit}
+#project-conflicts .conflict-heading h2{margin:4px 0}
+.conflict-files-heading{display:flex;align-items:baseline;gap:16px;flex:none;flex-wrap:wrap}.conflict-files-heading h3,.conflict-files-heading p{margin:4px 0}
+#project-conflicts>.conflict-toolbar label{display:flex;align-items:center;gap:12px}#project-conflicts>.conflict-toolbar select{flex:1;min-width:0;width:auto}
+.conflict-confirmation{display:flex;align-items:center;gap:12px;flex:none}.conflict-confirmation .confirm{flex:1;padding:8px;font-size:13px}.conflict-confirmation button{flex:none}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
@@ -4407,6 +4423,7 @@ function clearPreview(){
  document.querySelector('#preview-metadata').replaceChildren();
  document.querySelector('#preview-details').hidden=true;
  document.querySelector('#pdf-controls').hidden=true;
+ document.querySelector('#text-preview-controls').hidden=true;
  previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
 function addConflictLineClasses(element,lineClasses,index){for(const name of lineClasses?.get(index)||[])element.classList.add(name);}
@@ -4613,6 +4630,13 @@ async function openPreview(id,page=1){
    }
   }
   document.querySelector('#preview-details').hidden=false;
+  const textPages=result.format==='markdown'?(result.pages||1):1;
+  document.querySelector('#text-preview-controls').hidden=textPages<=1;
+  document.querySelector('#text-preview-position').textContent=`Stránka ${page}/${textPages}`;
+  document.querySelector('#text-preview-previous').disabled=page<=1;
+  document.querySelector('#text-preview-next').disabled=page>=textPages;
+  document.querySelector('#text-preview-previous').onclick=()=>openPreview(id,page-1);
+  document.querySelector('#text-preview-next').onclick=()=>openPreview(id,page+1);
   if(result.format==='markdown')renderMarkdown(result.text);
   else if(result.format==='json'){
    const pre=document.createElement('pre');pre.textContent=result.text;previewContent.append(pre);
