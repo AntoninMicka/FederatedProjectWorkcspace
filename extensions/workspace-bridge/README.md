@@ -35,8 +35,8 @@ CA lze vybrat při připojení; TLS validace se nevypíná. Starší projektové
 VSIX schema-v1 zůstávají podporované. V jednom profilu je aktivní jedno
 připojení Workspace, obsahující více projektových mapování.
 
-První fyzicky ověřený profil je Linux/VSCodium. Windows a VS Code vyžadují
-samostatné ověření. Webový Workspace funguje přes HTTPS, rozšíření běží
+Instalace a aktivace jsou ověřené na Linux ARM64 v izolovaných profilech
+VSCodium 1.105.17075 a VS Code 1.144.0. Windows a macOS vyžadují samostatné ověření. Webový Workspace funguje přes HTTPS, rozšíření běží
 v lokálním IDE. Remote SSH, WSL a browser-only IDE nejsou podporované.
 Bridge nespouští coding agenta ani mu automaticky nepřidává práva k souborům.
 
@@ -51,3 +51,45 @@ bez pairing.json lze použít pro aktualizaci stejného profilu bez párování.
 Při vypnutém desktopu stav ukazuje čekání na spuštění; Auto Sync opakuje pokus
 každých 10 sekund. Odvolání a 30denní expirace zůstávají platné. Podrobný
 postup a omezení: docs/ide-file-bridge.md ve zdrojovém repozitáři.
+
+## Panel Workspace od verze 0.3.0
+
+Po aktualizaci stejného profilu použijte **Developer: Reload Window**.
+V activity baru otevřete **Workspace**: čtyři pohledy zobrazují **Úkoly**,
+**Zprávy**, **Podklady** a **Pravidla agentů**. U úkolů lze filtrovat otevřené
+položky a otevřít bezpečný detail s checklistem a závislostmi. Akce úkolu
+nabízí zprávu, dotaz, částečné splnění checklistu nebo návrh dokončení.
+Na projektu lze odeslat obecnou zprávu bez úkolu. Rozpracovaná zpráva se při
+změně revize během psaní zachová jako neodeslaný koncept.
+
+Podklady a exportovaná pravidla jsou výchozím stavem vypnuté. Člověk je
+povolí zvlášť pro projekt v **Workspace → Nastavení → IDE a editory →
+Podklady a pravidla**. IDE credential si toto oprávnění nemůže přidělit.
+Při zachování stejného lokálního cíle sync převezme nové mapování; při
+změně cíle je nutné nové potvrzení. Aktualizujte také backend Workspace.
+
+Podklady ukazují dokumenty odkazované vybraným úkolem; příkaz **Workspace:
+Zobrazit všechny podklady** rozšíří katalog. Otevírá se ověřená UTF-8 kopie
+s neutrální příponou `.txt` mimo Git, nejvýše 1 MiB na soubor. Binární,
+local-only a neplatný obsah se nevydává. Historie zpráv je omezená na 100
+položek a velikost panelu; starší záznamy zůstávají v bridge databázi.
+
+Pravidla Workspace musí mít tag `agent-rules`. Markdown má projektový rozsah.
+Strukturovaný JSON může vypadat takto:
+
+```json
+{"schema":"fpw-agent-rules-v1","scope":{"kind":"directory","path":"src"},"body":"Používej existující komponenty."}
+```
+
+Další scope jsou `{"kind":"project"}` a `{"kind":"task","task_id":"TASK-01"}`.
+Panel přidá lokální AGENTS.md z ověřeného repozitáře. Žádný AGENTS.md nepřepisuje.
+**Workspace: Zkopírovat předání úkolu a pravidel** uloží neměnné kopie a manifest
+`fpw-ide-context-v1`, potom zkopíruje jeho cestu. Rozpory pravidel zůstávají
+viditelné bez automatické priority. Manifest má privacy `local-only`;
+nevytváří souhlas s externím LLM ani nespouští agenta.
+
+Návrhy posuzuje člověk ve Workspace v přehledu zpráv připojení. Může přidat
+poznámku, přijmout nebo odmítnout. Dokončení a checklist zapisuje jediný
+nativní writer až po ověření původního HEAD. Zastaralý návrh se neaplikuje;
+částečný checklist nedokončí celý úkol. Při přerušení review je dostupná
+obnova stejné operace. Výsledek se vrací do panelu IDE po synchronizaci.

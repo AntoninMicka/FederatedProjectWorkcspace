@@ -679,7 +679,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="ide-bridge-status" role="status"></p><div id="ide-bridge-connections"></div>
 <h3>Projekty v IDE</h3><label>Připojený editor<select id="ide-bridge-connection"><option value="">Nejprve připojte editor</option></select></label>
 <p>Zapněte propagaci projektu a přiřaďte mu složku nebo soubor .code-workspace. Přiřazení můžete dokončit také příkazem Workspace: Nastavení projektů v IDE.</p>
-<div class="settings-table-wrap"><table id="ide-bridge-projects"><thead><tr><th>Projekt Workspace</th><th>Propagovat</th><th>Projekt v IDE</th><th>Repozitář a instrukce</th><th>Stav</th><th>Akce</th></tr></thead><tbody></tbody></table></div>
+<div class="settings-table-wrap"><table id="ide-bridge-projects"><thead><tr><th>Projekt Workspace</th><th>Propagovat</th><th>Projekt v IDE</th><th>Repozitář a instrukce</th><th>Podklady a pravidla</th><th>Stav</th><th>Akce</th></tr></thead><tbody></tbody></table></div>
 <h3>Zprávy z IDE</h3><p>Výsledky a dotazy čekají na vaše posouzení. Přijetí zprávy samo nemění stav úkolu.</p><div id="ide-bridge-sessions"></div>
 </section>
 <section id="settings-roadmap-panel" class="settings-card roadmap-card" role="tabpanel" aria-labelledby="settings-roadmap-tab" hidden>
@@ -4168,7 +4168,27 @@ async function loadIdeBridge(){
 async function showIdeBridgeMessages(projectId){
  const target=document.querySelector('#ide-bridge-sessions');target.replaceChildren();
  try{const result=await projectRequest('/v1/ide-bridge/status',{project_id:projectId});
- for(const session of result.sessions){if(!session.connection_id&&!session.revoked){const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Odvolat starší projektové propojení';revoke.addEventListener('click',async()=>{try{await projectRequest('/v1/ide-bridge/revoke',{project_id:projectId,session_id:session.session_id});await showIdeBridgeMessages(projectId);}catch(error){target.textContent=error.message;}});target.append(revoke);}for(const entry of session.messages){const message=document.createElement('pre');message.textContent=`${entry.message.kind} · ${entry.message.task_id} · ${entry.receipt.status}\n${entry.message.body}\nZdrojový commit: ${entry.message.repository_commit}`;target.append(message);}}
+ for(const session of result.sessions){
+  if(!session.connection_id&&!session.revoked){const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Odvolat starší projektové propojení';revoke.addEventListener('click',async()=>{try{await projectRequest('/v1/ide-bridge/revoke',{project_id:projectId,session_id:session.session_id});await showIdeBridgeMessages(projectId);}catch(error){target.textContent=error.message;}});target.append(revoke);}
+  for(const entry of session.messages){
+   const box=document.createElement('article'),message=document.createElement('pre');
+   const selections=(entry.message.checklist||[]).map(item=>`${item.checked?'☑':'☐'} ${(entry.task_preview?.checklist||[])[item.index]?.text||`Položka ${item.index+1}`}`).join('\\n');
+   message.textContent=`${entry.message.kind} · ${entry.message.task_id||'Projekt'} · ${entry.receipt.status}\n${entry.message.body}\n${selections}\nZdrojový commit: ${entry.message.repository_commit}`;box.append(message);
+   if(entry.review?.state==='completed'){const outcome=document.createElement('p');outcome.textContent=`${entry.review.outcome==='stale'?'Zastaralé – nebylo aplikováno':entry.review.request.decision==='accepted'?'Přijato':'Odmítnuto'}: ${entry.review.request.note}`;box.append(outcome);}
+   else for(const decision of entry.review?['resume']:['accepted','rejected']){
+    const button=document.createElement('button');button.type='button';button.textContent=decision==='resume'?'Dokončit připravené review':decision==='accepted'?'Přijmout po posouzení':'Odmítnout';
+    const changesTask=['completed','progress'].includes(entry.message.kind);
+    if(decision==='accepted'&&changesTask&&(session.revoked||session.commit_id!==result.current_head)){button.disabled=true;button.title='Návrh je ze staré revize nebo odvolané relace; nelze jej aplikovat.';}
+    button.addEventListener('click',async()=>{
+     let request=entry.review?.request;
+     if(!request){const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
+      if(!window.confirm(`${decision==='accepted'?'Přijmout':'Odmítnout'} ${entry.message.task_id||'projektovou zprávu'}?\n${entry.message.body}\n${selections}\n${decision==='accepted'&&changesTask?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
+      request={project_id:projectId,session_id:session.session_id,message_id:entry.message.message_id,decision,note,expected_head:result.current_head,operation_id:crypto.randomUUID()};}
+     button.disabled=true;try{await projectRequest('/v1/ide-bridge/review',request,120000);await showIdeBridgeMessages(projectId);}catch(error){const failure=document.createElement('p');failure.textContent=error.message+' Obnovte seznam; připravené review lze bezpečně dokončit.';box.append(failure);button.disabled=false;}
+    });box.append(button);
+   }target.append(box);
+  }
+ }
  if(!target.children.length)target.textContent='Projekt zatím nemá žádné přijaté zprávy.';
  }catch(error){target.textContent=error.message;}
 }
@@ -4180,12 +4200,14 @@ function renderIdeBridgeProjects(){
  const editor=document.createElement('input');editor.value=mapping?.editor_workspace||'';editor.placeholder='Složka nebo .code-workspace';editor.setAttribute('aria-label',`Projekt v IDE pro ${project.title}`);
  const repository=document.createElement('input');repository.value=mapping?.repository||'';repository.placeholder='URL origin nebo cesta (volitelné)';repository.setAttribute('aria-label',`Repozitář pro ${project.title}`);
  const instructions=document.createElement('textarea');instructions.value=mapping?.instructions||'';instructions.placeholder='Instrukce pro tento projekt';instructions.setAttribute('aria-label',`Instrukce pro ${project.title}`);
+ const documents=document.createElement('input');documents.type='checkbox';documents.checked=Boolean(mapping?.export_documents);documents.setAttribute('aria-label',`Povolit export podkladů a pravidel pro ${project.title}`);documents.title='Povolí čtení projektových podkladů a pravidel v tomto IDE; local-only se neexportuje.';
  const flag=document.createElement('td');flag.textContent=!mapping?'Nepropaguje se':mapping.expected_head!==project.expected_head?'Zadání se změnilo':mapping.bound?'Přiřazeno v IDE':'Čeká na přiřazení v IDE';
  const actions=document.createElement('td'),save=document.createElement('button'),messages=document.createElement('button');save.type=messages.type='button';save.textContent='Uložit přiřazení';messages.textContent='Zprávy';save.disabled=!connection||connection.revoked||Date.now()/1000>=connection.expires_at;
- save.addEventListener('click',async()=>{save.disabled=true;try{await projectRequest('/v1/ide-bridge/connection/map',{connection_id:connection.connection_id,project_id:project.project_id,enabled:enabled.checked,expected_head:project.expected_head,repository:repository.value.trim(),editor_workspace:editor.value.trim(),instructions:instructions.value,expected_mapping:mapping?.session_id||null});await loadIdeBridge();}catch(error){document.querySelector('#ide-bridge-status').textContent=error.message;save.disabled=false;}});
+ if(project.pending_operation){save.disabled=true;flag.textContent='Nedokončená operace – otevřete Zprávy a obnovte review.';}
+ save.addEventListener('click',async()=>{save.disabled=true;try{await projectRequest('/v1/ide-bridge/connection/map',{connection_id:connection.connection_id,project_id:project.project_id,enabled:enabled.checked,expected_head:project.expected_head,repository:repository.value.trim(),editor_workspace:editor.value.trim(),instructions:instructions.value,export_documents:documents.checked,expected_mapping:mapping?.session_id||null});await loadIdeBridge();}catch(error){document.querySelector('#ide-bridge-status').textContent=error.message;save.disabled=false;}});
  messages.addEventListener('click',()=>showIdeBridgeMessages(project.project_id));actions.append(save,messages);
  function cell(...elements){const td=document.createElement('td');td.append(...elements);return td;}
- row.append(title,cell(enabled),cell(editor),cell(repository,instructions),flag,actions);body.append(row);
+ row.append(title,cell(enabled),cell(editor),cell(repository,instructions),cell(documents),flag,actions);body.append(row);
  }
 }
 document.querySelector('#ide-bridge-connection').addEventListener('change',renderIdeBridgeProjects);
@@ -7467,7 +7489,7 @@ class DesktopHandler(Handler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
-        '/v1/ide-bridge/revoke', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
+        '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
         '/v1/projects/repair/check', '/v1/projects/repair/preview',
         '/v1/projects/repair/confirm', '/v1/projects/repair/receipt',
@@ -7582,6 +7604,8 @@ class DesktopHandler(Handler):
                     self.request_origin(self.request_authority())))
             if self.path == '/v1/ide-bridge/connection/map':
                 return self.reply(200, service.configure_mapping(actor, request))
+            if self.path == '/v1/ide-bridge/review':
+                return self.reply(200, service.review(actor, request))
             if self.path == '/v1/ide-bridge/connection/revoke' and isinstance(request, dict) and set(request) == {'connection_id'}:
                 return self.reply(200, service.connection_revoke(actor, request['connection_id']))
             if self.path == '/v1/ide-bridge/connection/exchange':

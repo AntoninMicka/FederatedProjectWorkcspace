@@ -1,8 +1,8 @@
 {
   "name": "workspace-file-bridge",
-  "displayName": "Workspace file bridge",
-  "description": "Local TODO, instructions and durable messages for Federated Workspace",
-  "version": "0.2.4",
+  "displayName": "Workspace",
+  "description": "Tasks, messages, documents and agent rules for Federated Workspace",
+  "version": "0.3.0",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {
@@ -53,6 +53,31 @@
       {
         "command": "workspaceBridge.assign",
         "title": "Workspace: Přiřadit projekt v IDE"
+      },
+      {
+        "command": "workspaceBridge.refreshPanel",
+        "title": "Workspace: Obnovit panel",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "workspaceBridge.filterOpen",
+        "title": "Workspace: Přepnout filtr otevřených úkolů",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "workspaceBridge.allDocuments",
+        "title": "Workspace: Zobrazit všechny podklady",
+        "icon": "$(files)"
+      },
+      {
+        "command": "workspaceBridge.compose",
+        "title": "Workspace: Napsat zprávu nebo návrh",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "workspaceBridge.handoff",
+        "title": "Workspace: Zkopírovat předání úkolu a pravidel",
+        "icon": "$(copy)"
       }
     ],
     "configuration": {
@@ -65,6 +90,81 @@
           "markdownDescription": "Automaticky synchronizovat přiřazené projekty. Pro výběr propagovaných projektů spusťte **Workspace: Nastavení projektů**; pro změnu cíle **Workspace: Přiřadit projekt v IDE**."
         }
       }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workspaceBridge",
+          "title": "Workspace",
+          "icon": "workspace.svg"
+        }
+      ]
+    },
+    "views": {
+      "workspaceBridge": [
+        {
+          "id": "workspaceBridge.tasks",
+          "name": "Úkoly"
+        },
+        {
+          "id": "workspaceBridge.messages",
+          "name": "Zprávy"
+        },
+        {
+          "id": "workspaceBridge.documents",
+          "name": "Podklady"
+        },
+        {
+          "id": "workspaceBridge.rules",
+          "name": "Pravidla agentů"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "workspaceBridge.refreshPanel",
+          "when": "view =~ /^workspaceBridge\\./",
+          "group": "navigation@1"
+        },
+        {
+          "command": "workspaceBridge.filterOpen",
+          "when": "view == workspaceBridge.tasks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "workspaceBridge.compose",
+          "when": "view == workspaceBridge.messages",
+          "group": "navigation@2"
+        },
+        {
+          "command": "workspaceBridge.allDocuments",
+          "when": "view == workspaceBridge.documents",
+          "group": "navigation@2"
+        },
+        {
+          "command": "workspaceBridge.configure",
+          "when": "view == workspaceBridge.tasks",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "workspaceBridge.compose",
+          "when": "view == workspaceBridge.tasks && viewItem == task",
+          "group": "inline@1"
+        },
+        {
+          "command": "workspaceBridge.handoff",
+          "when": "view == workspaceBridge.tasks && viewItem == task",
+          "group": "inline@2"
+        },
+        {
+          "command": "workspaceBridge.compose",
+          "when": "viewItem == project && view == workspaceBridge.messages",
+          "group": "inline"
+        }
+      ]
     }
   }
 }

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""Node-local, scoped IDE mailboxes. No project writer and no agent invocation."""
+"""Node-local IDE mailboxes; only explicit human review invokes the native project writer."""
 import base64
 from contextlib import contextmanager, closing
 import hashlib
@@ -81,6 +81,8 @@ class IdeBridge:
                        '(session TEXT, id TEXT, digest TEXT, record TEXT, receipt TEXT, PRIMARY KEY(session,id))')
             db.execute('CREATE TABLE IF NOT EXISTS connections '
                        '(id TEXT PRIMARY KEY, digest TEXT UNIQUE, record TEXT NOT NULL, revoked INTEGER DEFAULT 0)')
+            db.execute('CREATE TABLE IF NOT EXISTS reviews '
+                       '(session TEXT, id TEXT, record TEXT NOT NULL, PRIMARY KEY(session,id))')
             yield db
 
     def publish_endpoints(self):
@@ -177,12 +179,12 @@ class IdeBridge:
         manifest = json.loads((EXTENSION / 'package.json').read_text())
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for name in ('package.json', 'extension.js', 'bridge.js', 'README.md', 'LICENSE'):
+            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'workspace.svg', 'README.md', 'LICENSE'):
                 archive.writestr('extension/' + name, (EXTENSION / name).read_bytes())
             if pairing is not None:
                 archive.writestr('extension/pairing.json', canonical(pairing))
             archive.writestr('[Content_Types].xml', '''<?xml version="1.0"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="json" ContentType="application/json"/><Default Extension="js" ContentType="application/javascript"/><Default Extension="md" ContentType="text/markdown"/><Default Extension="vsixmanifest" ContentType="text/xml"/><Default Extension="" ContentType="text/plain"/></Types>''')
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="json" ContentType="application/json"/><Default Extension="js" ContentType="application/javascript"/><Default Extension="svg" ContentType="image/svg+xml"/><Default Extension="md" ContentType="text/markdown"/><Default Extension="vsixmanifest" ContentType="text/xml"/><Default Extension="" ContentType="text/plain"/></Types>''')
             archive.writestr('extension.vsixmanifest', f'''<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"><Metadata><Identity Language="en-US" Id="{manifest['name']}" Version="{manifest['version']}" Publisher="{manifest['publisher']}"/><DisplayName>Workspace file bridge</DisplayName><Description xml:space="preserve">Local TODO and message bridge</Description><Tags>workspace</Tags><Categories>Other</Categories><GalleryFlags>Public</GalleryFlags><Properties><Property Id="Microsoft.VisualStudio.Code.Engine" Value="{manifest['engines']['vscode']}"/><Property Id="Microsoft.VisualStudio.Code.ExtensionDependencies" Value=""/><Property Id="Microsoft.VisualStudio.Code.ExtensionPack" Value=""/><Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="workspace"/></Properties><License>extension/LICENSE</License></Metadata><Installation><InstallationTarget Id="Microsoft.VisualStudio.Code"/></Installation><Dependencies/><Assets><Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true"/></Assets></PackageManifest>''')
         return output.getvalue()
@@ -210,13 +212,19 @@ class IdeBridge:
         stale = view['commit_id'] != record['snapshot']['commit_id']
         receipts = []
         for message in messages:
-            require(isinstance(message, dict) and set(message) == {
-                'message_id', 'task_id', 'kind', 'body', 'revision', 'repository_commit'}, 'Invalid message')
+            require(isinstance(message, dict) and {'message_id', 'task_id', 'kind', 'body',
+                'revision', 'repository_commit'} <= set(message)
+                and set(message) <= {'message_id', 'task_id', 'kind', 'body', 'revision',
+                                     'repository_commit', 'checklist'}, 'Invalid message')
             uuid(message['message_id'])
-            require(isinstance(message['kind'], str) and message['kind'] in {'completed', 'clarification', 'message'}, 'Invalid message kind')
+            require(isinstance(message['kind'], str) and message['kind'] in {'completed', 'progress', 'clarification', 'message'}, 'Invalid message kind')
             require(isinstance(message['body'], str) and 0 < len(message['body'].encode()) <= MAX_MESSAGE
                     and '\0' not in message['body'], 'Invalid message body')
-            require(isinstance(message['task_id'], str) and message['task_id'] in {t['id'] for t in record['snapshot']['tasks']}, 'Unknown task')
+            require((message['task_id'] is None and message['kind'] == 'message')
+                    or isinstance(message['task_id'], str) and message['task_id'] in {
+                        t['id'] for t in record['snapshot']['tasks']}, 'Unknown task')
+            from spikes.ide_bridge_panel import validate_checklist
+            validate_checklist(message, record['snapshot']['tasks'])
             require(message['revision'] == record['snapshot']['revision'], 'Wrong source revision')
             require(isinstance(message['repository_commit'], str) and re.fullmatch(
                 r'[0-9a-f]{40}|[0-9a-f]{64}', message['repository_commit']), 'Invalid repository commit')
@@ -248,19 +256,37 @@ class IdeBridge:
 
     def status(self, project_id):
         uuid(project_id)
-        self.projects.open(project_id)
+        from spikes.workspace import PendingOperation
+        pending = False
+        try:
+            view = self.projects.open(project_id)
+        except PendingOperation:
+            from spikes.metadata import validate_snapshot
+            git = self.projects.repository(project_id)
+            head = git.head()
+            entities = validate_snapshot(git.snapshot(head))
+            require(all(m['privacy'] != 'local-only' for m in entities.values()), 'Project contains local-only data')
+            require(git.head() == head, 'Project changed during review recovery read')
+            view = {'commit_id': head}; pending = True
         with self.database() as db:
-            sessions = []
+            sessions = []; remaining = 100
             for row in db.execute('SELECT id,record,revoked FROM sessions ORDER BY rowid DESC LIMIT 200'):
                 record = json.loads(row['record'])
                 if record['project_id'] != project_id:
                     continue
-                messages = [dict(message=json.loads(m['record']), receipt=json.loads(m['receipt']))
-                            for m in db.execute('SELECT record,receipt FROM messages WHERE session=? ORDER BY rowid DESC LIMIT 100', (row['id'],))]
+                messages = [dict(message=json.loads(m['record']), receipt=json.loads(m['receipt']),
+                                 task_preview=next((t for t in record['snapshot']['tasks']
+                                     if t['id'] == json.loads(m['record'])['task_id']), None),
+                                 review=next((json.loads(r['record']) for r in db.execute(
+                                     'SELECT record FROM reviews WHERE session=? AND id=?', (row['id'], m['id']))), None))
+                            for m in db.execute('SELECT id,record,receipt FROM messages WHERE session=? ORDER BY rowid DESC LIMIT ?', (row['id'], remaining))]
+                remaining -= len(messages)
                 sessions.append(dict(session_id=row['id'], connection_id=record.get('connection_id'), repository=record['repository'],
                                      revision=record['snapshot']['revision'], revoked=bool(row['revoked']),
+                                     commit_id=record['snapshot']['commit_id'],
                                      expires_at=record['expires_at'], messages=messages))
-        return dict(sessions=sessions)
+        from spikes.ide_bridge_panel import bounded_history
+        return bounded_history(dict(sessions=sessions, current_head=view['commit_id'], pending_operation=pending), sessions=True)
 
     def revoke(self, project_id, session_id, *, actor=None):
         uuid(project_id); uuid(session_id)
@@ -272,6 +298,10 @@ class IdeBridge:
                 require(Administration.is_admin(actor) or record['owner'] == actor.get('id'), 'Mapping belongs to another account')
             db.execute('UPDATE sessions SET revoked=1 WHERE id=?', (session_id,))
         return dict(session_id=session_id, revoked=True)
+
+    def review(self, actor, request, *, checkpoint=lambda stage: None):
+        from spikes.ide_bridge_panel import review
+        return review(self, actor, request, checkpoint=checkpoint)
 
     def connection_actor(self, record):
         if not self.network or record['owner'] is None:
@@ -327,13 +357,24 @@ class IdeBridge:
         return dict(record, revoked=bool(row['revoked']))
 
     def eligible_projects(self, actor):
+        from spikes.workspace import PendingOperation
         result = []
         for row in self.projects.catalog():
             if not row['available']:
                 continue
             if not Administration.is_admin(actor) and (actor or {}).get('memberships', {}).get(row['id']) not in {'editor', 'project-admin'}:
                 continue
-            view = self.projects.open(row['id'])
+            try:
+                view = self.projects.open(row['id'])
+            except PendingOperation:
+                # A human must still be able to reach the durable review intent.
+                # This is only a label/HEAD, never an old index projection.
+                replica = self.projects.replication(row['id'])
+                if replica and replica['role'] == 'read-only-replica':
+                    continue
+                result.append(dict(project_id=row['id'], title=row['title'],
+                    expected_head=self.projects.repository(row['id']).head(), pending_operation=True))
+                continue
             if view['read_only']:
                 continue
             result.append(dict(project_id=row['id'], title=row['title'], expected_head=view['commit_id']))
@@ -351,6 +392,7 @@ class IdeBridge:
                 result.append(dict(session_id=row['id'], project_id=record['project_id'],
                     title=record['snapshot']['project_title'], repository=record['repository'],
                     editor_workspace=record.get('editor_workspace', ''), instructions=record['instructions'],
+                    export_documents=record.get('export_documents', False),
                     revision=record['snapshot']['revision'], expected_head=record['snapshot']['commit_id'],
                     bound=record.get('bound', False)))
         return result
@@ -372,10 +414,11 @@ class IdeBridge:
                 mappings=self.connection_mappings(record['connection_id'], actor, eligible=eligible)))
         return dict(connections=connections, projects=projects)
 
-    def configure_mapping(self, actor, request):
+    def configure_mapping(self, actor, request, *, allow_document_export=True):
         fields = {'connection_id', 'project_id', 'enabled', 'expected_head',
                   'repository', 'editor_workspace', 'instructions', 'expected_mapping'}
-        require(isinstance(request, dict) and set(request) == fields, 'Invalid project mapping')
+        require(isinstance(request, dict) and fields <= set(request) <= fields | {'export_documents'}, 'Invalid project mapping')
+        require('export_documents' not in request or type(request['export_documents']) is bool, 'Invalid document export scope')
         actor = actor or {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
         parent = self.managed_connection(actor, request['connection_id'])
         require(not parent['revoked'] and parent['expires_at'] > time.time(), 'Workspace connection unavailable')
@@ -403,9 +446,13 @@ class IdeBridge:
                        and item['project_id'] == request['project_id']]
             require(len(current) <= 1, 'Conflicting active mappings')
             previous = current[0] if current else None
+            record['export_documents'] = request.get('export_documents', previous[1].get('export_documents', False) if previous else False)
+            require(allow_document_export or not record['export_documents']
+                    or previous and previous[1].get('export_documents', False),
+                    'Document export must be enabled by a human in Workspace settings')
             # A lost response may be retried with its original expected_mapping.
             if previous and request['enabled'] and all(previous[1].get(k) == record.get(k) for k in
-                ('snapshot', 'repository', 'editor_workspace', 'instructions')):
+                ('snapshot', 'repository', 'editor_workspace', 'instructions')) and previous[1].get('export_documents', False) == record['export_documents']:
                 return dict(session_id=previous[0], enabled=True)
             if not previous and not request['enabled'] and request['expected_mapping']:
                 tombstone = db.execute('SELECT record,revoked FROM sessions WHERE id=?', (request['expected_mapping'],)).fetchone()
@@ -438,7 +485,7 @@ class IdeBridge:
         if action == 'map' and set(request) == {'connection_id', 'action', 'mapping'}:
             mapping = request['mapping']
             require(isinstance(mapping, dict) and mapping.get('connection_id') == parent['connection_id'], 'Wrong connection mapping')
-            return self.configure_mapping(actor, mapping)
+            return self.configure_mapping(actor, mapping, allow_document_export=False)
         if action == 'bind' and set(request) == {'connection_id', 'action', 'session_id', 'repository', 'editor_workspace'}:
             uuid(request['session_id'])
             for key in ('repository', 'editor_workspace'):
@@ -461,7 +508,7 @@ class IdeBridge:
             return dict(session_id=record['session_id'], project_id=record['project_id'],
                         repository=record['repository'], editor_workspace=record['editor_workspace'],
                         expires_at=record['expires_at'])
-        if action == 'exchange' and set(request) == {'connection_id', 'action', 'request'}:
+        if action in {'exchange', 'panel', 'document'} and set(request) == {'connection_id', 'action', 'request'}:
             child = request['request']
             require(isinstance(child, dict), 'Invalid project exchange')
             uuid(child.get('session_id'))
@@ -471,6 +518,13 @@ class IdeBridge:
             record = json.loads(row['record'])
             require(record.get('connection_id') == parent['connection_id'] and record.get('bound'), 'Project not bound to this connection')
             self.require_editor(actor, record['project_id'])
+            if action != 'exchange':
+                from spikes.ide_bridge_panel import panel, read_document
+                if action == 'panel' and set(child) == {'session_id'}:
+                    return panel(self, record)
+                if action == 'document' and set(child) == {'session_id', 'artifact_id'}:
+                    return read_document(self, record, child['artifact_id'])
+                raise ValueError('Invalid panel request')
             return self.exchange(record, child)
         raise ValueError('Unsupported connection action')
 

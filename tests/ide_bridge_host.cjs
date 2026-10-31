@@ -15,6 +15,11 @@ exports.run = async function () {
   assert.ok(commands.includes('workspaceBridge.connect'));
   assert.ok(commands.includes('workspaceBridge.configure'));
   assert.ok(commands.includes('workspaceBridge.assign'));
+  for (const command of ['compose','handoff','refreshPanel','filterOpen','allDocuments'])
+    assert.ok(commands.includes('workspaceBridge.' + command));
+  assert.ok(extension.exports.sidebar, 'native sidebar must activate');
+  await vscode.commands.executeCommand('workbench.view.extension.workspaceBridge');
+  await extension.exports.sidebar.refresh();
 
   const os = require('node:os');
   const originalHome = os.homedir;
@@ -31,7 +36,7 @@ exports.run = async function () {
   const pairing = {...fixture.pairing,...bound};
   const result = await bridge.sync(fixture.mailbox, pairing, fixture.repository);
   const message = {message_id: crypto.randomUUID(), task_id: 'TASK-01', kind: 'completed',
-    body: 'Real VSCodium extension host smoke', revision: result.snapshot.revision,
+    body: 'Real IDE extension host smoke', revision: result.snapshot.revision,
     repository_commit: await bridge.git(fixture.repository, 'rev-parse', 'HEAD')};
   await bridge.atomic(path.join(fixture.mailbox, 'inbox', message.message_id + '.json'), JSON.stringify(message));
   const response = await bridge.sync(fixture.mailbox, pairing, fixture.repository);

@@ -13,8 +13,9 @@ projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`; modulový plán drží projekt
 platného exportu, ne z archivovaných zdrojových dokumentů.
 
 Uzavřenou feature evidenci drží [WORK_LOG](../WORK_LOG.md#dev-01--roadmapa-jako-projektová-data-a-export-úkolů--2026-10-31).
-[TODO](../TODO.md) pouze čeká na doručení PR do develop; PR není vytvořen ani
-sloučen. Tento dokument je předávací záznam, nikoli nový plán.
+Doručení následně dokončil uživatel: PR #115 byl sloučen do `develop`
+31. 10. 2026 v 00:08:28 UTC, merge `7954000`. [TODO](../TODO.md) nyní
+eviduje zdrojovou větev navazující DEV-03. Tento dokument je předávací záznam, nikoli nový plán.
 
 ## Obnovené důkazy po ztrátě dočasných reportů
 
@@ -117,9 +118,9 @@ uložených souborů, nikoli důkaz všech uživatelských UI operací po restar
 
 ## Doručení zdrojové feature
 
-Čeká se na jediný PR `feature/dev-01-roadmap-migration -> develop`.
-Push, otevření PR, merge ani commit v tomto vývojovém repozitáři nebyly
-provedeny a vyžadují výslovný požadavek. Nová DEV-03 se aktivuje až po
-merge na vlastní větvi z aktuálního develop; stacked výjimka nebyla schválena.
-Před zahájením se načte aktuální schválené zadání z Workspace a vymezí
-UI/review část DEV-03 podle přijatých podkladů.
+Při původním předání čekal jediný PR `feature/dev-01-roadmap-migration -> develop`.
+Následně uživatel doručení dokončil v PR #115, merge `7954000`
+(31. 10. 2026, 00:08:28 UTC). Živé Git ověření potvrzuje tento merge jako
+základ nové větve `feature/dev-03-workspace-sidebar`; stacked výjimka nebyla
+potřeba. Rozsah navazujícího UI/review řezu a jeho aktuální stav drží Workspace.
+Agent neprovedl zdrojový commit, push, otevření PR ani merge.

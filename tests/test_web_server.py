@@ -146,8 +146,29 @@ class WebTests(unittest.TestCase):
         self.assertEqual(200, code, status); self.assertEqual([project_id], [p['project_id'] for p in status['projects']])
         code, assigned = post('/v1/ide-bridge/connection/exchange', dict(status_request, action='map', mapping=mapping), token)
         self.assertEqual(200, code, assigned)
-        for path in ('/v1/projects', '/v1/ide-bridge/connections', '/v1/ide-bridge/exchange'):
+        for path in ('/v1/projects', '/v1/ide-bridge/connections', '/v1/ide-bridge/exchange', '/v1/ide-bridge/review'):
             self.assertEqual(401, post(path, {}, token)[0])
+        proposed = mapping | {'expected_mapping': assigned['session_id'], 'export_documents': True}
+        self.assertEqual(422, post('/v1/ide-bridge/connection/exchange',
+            dict(status_request, action='map', mapping=proposed), token)[0])
+        code, granted = post('/v1/ide-bridge/connection/map', proposed, key)
+        self.assertEqual(200, code, granted)
+        repository = str(self.server.projects.repository(project_id).root)
+        code, bound = post('/v1/ide-bridge/connection/exchange', dict(status_request, action='bind',
+            session_id=granted['session_id'], repository=repository, editor_workspace=repository), token)
+        self.assertEqual(200, code, bound)
+        code, panel = post('/v1/ide-bridge/connection/exchange', dict(status_request, action='panel',
+            request={'session_id': granted['session_id']}), token)
+        self.assertEqual(200, code, panel); self.assertTrue(panel['documents'])
+        message = dict(message_id=str(uuid4()),task_id='TASK-01',kind='completed',body='Verified by editor',
+                       revision=panel['revision'],repository_commit=head)
+        code, _ = post('/v1/ide-bridge/connection/exchange', dict(status_request,action='exchange',
+            request={'session_id':granted['session_id'],'messages':[message]}), token)
+        self.assertEqual(200, code)
+        code, reviewed = post('/v1/ide-bridge/review', dict(project_id=project_id,session_id=granted['session_id'],
+            message_id=message['message_id'],decision='accepted',note='Actual user review',expected_head=head,operation_id=str(uuid4())), key)
+        self.assertEqual(200, code, reviewed); head=reviewed['result']['commit_id']
+        self.assertEqual(user['id'],reviewed['reviewed_by'])
         code, other = post('/v1/ide-bridge/connection/create', {'name': 'Admin IDE'})
         self.assertEqual(200, code, other)
         self.assertEqual(422, post('/v1/ide-bridge/connection/revoke',
