@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const bridge = require('./bridge');
+const queueBridge = require('./queue');
 const hash = data => crypto.createHash('sha256').update(data).digest('hex');
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const idPattern = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/;
@@ -94,6 +95,7 @@ function createSidebar(vscode, context, hooks) {
         const next=await hooks.projects();if(version!==generation)return;projects=next;
         for (const project of projects) {
           validateSnapshot(project.snapshot);
+          try{project.queue=queueBridge.validate(JSON.parse(await bridge.read(path.join(project.root,'queue.json'))),project);}catch(error){if(error.code!=='ENOENT')project.error=error.message;}
           try {project.localRules = await localRules(project);} catch (error) {project.error = error.message;}
           try {
             project.panel = JSON.parse(await bridge.read(path.join(project.root, 'panel.json')));
@@ -106,6 +108,7 @@ function createSidebar(vscode, context, hooks) {
               if (value.session_id !== project.session || value.project_id !== project.snapshot.project_id
                   || value.revision !== project.snapshot.revision || !Array.isArray(value.documents) || !Array.isArray(value.messages))
                 throw Error('Neshoda projektového panelu.');
+              await queueBridge.synchronize(project,hooks.request);
               project.panel = value;
               await bridge.atomic(path.join(project.root, 'panel.json'), JSON.stringify(value));
             } catch (error) {project.error = error.message;}
@@ -125,6 +128,7 @@ function createSidebar(vscode, context, hooks) {
   function children(kind, item) {
     if (!item) return projects.map(project => row(project, 'project', {view: kind}));
     const project = find(item); if (!project) return [];
+    if(kind==='queue')return (project.queue?.items||[]).map((entry,index)=>row(project,'queueTask',{entry,taskId:entry.id,index}));
     if (kind === 'tasks') {
       const tasks = project.snapshot.tasks;
       function show(task) {return !openOnly || !task.checked || tasks.some(t => t.parent_id===task.id && show(t));}
@@ -150,6 +154,8 @@ function createSidebar(vscode, context, hooks) {
       label = project.snapshot.project_title; description = project.error ? 'Nedostupné · uložený export' : project.state?.stale || project.panel?.stale ? 'Zastaralé' : project.snapshot.commit_id.slice(0,8);
       if(item.view==='messages'&&project.panel?.history_truncated)description+=' · poslední zprávy';
       icon = project.error || project.state?.stale || project.panel?.stale ? 'warning' : 'project'; collapsed = vscode.TreeItemCollapsibleState.Expanded;
+    } else if(item.kind==='queueTask'){
+      label=(item.index+1)+'. '+item.entry.title;description=item.entry.user_confirmed?'Přijato uživatelem':item.entry.agent_confirmed?'Agent hlásí splnění':project.error||project.queue?.blockers.length?'Blokováno':item.entry.eligible?'Zahajitelné':'Navazující · pouze náhled';icon=item.entry.user_confirmed?'pass':'list-ordered';command='workspaceBridge.showQueueTask';
     } else if (item.kind === 'task') {
       const task = taskOf(item); label = task.title; description = task.id; icon = task.checked ? 'pass' : 'circle-outline';
       if (project.snapshot.tasks.some(t => t.parent_id===task.id)) collapsed = vscode.TreeItemCollapsibleState.Collapsed;
@@ -167,10 +173,11 @@ function createSidebar(vscode, context, hooks) {
     else {label = 'INSTRUCTIONS.md'; description = 'Pokyny připojení'; icon = 'law'; command = 'workspaceBridge.showInstructions';}
     const result = new vscode.TreeItem(label, collapsed); result.id = `${item.projectId}:${item.kind}:${item.taskId || item.doc?.artifact_id || item.rule?.relative || item.entry?.message.message_id || ''}:${item.view || ''}`;
     result.description = description; result.tooltip = label+'\n'+description; result.iconPath = new vscode.ThemeIcon(icon); result.contextValue = item.kind;
+    if(item.kind==='queueTask'&&(!item.entry.eligible||project.error||project.queue?.blockers.length))result.contextValue='queueBlocked';
     if (command) result.command = {command, title: label, arguments: [item]};
     return result;
   }
-  for (const kind of ['tasks','messages','documents','rules']) {
+  for (const kind of ['tasks','messages','documents','rules','queue']) {
     const event = new vscode.EventEmitter(); events.push(event); context.subscriptions.push(event);
     const view = vscode.window.createTreeView('workspaceBridge.'+kind, {treeDataProvider: {
       onDidChangeTreeData: event.event, getTreeItem: treeItem, getChildren: item => children(kind,item)}});
@@ -219,11 +226,23 @@ function createSidebar(vscode, context, hooks) {
   });
   register('filterOpen',async()=>{openOnly=!openOnly;refreshEvents();});
   register('allDocuments',async()=>{selected=null;refreshEvents();});
+  register('showQueueTask',async item=>{
+    const project=find(item);if(!project||!project.queue)return;
+    const task=project.queue.manifest.tasks.find(t=>t.id===item.taskId);if(!task)return;
+    const panel=vscode.window.createWebviewPanel('workspaceQueue',task.id,vscode.ViewColumn.Active,{enableScripts:false});
+    panel.webview.html=detailHTML({...project,state:{stale:false},panel:{stale:false},error:project.error||project.queue.blockers.join('; ')},task).replace('</body>',`<h2>Fronta</h2><pre>${escape(JSON.stringify(item.entry,null,2))}\n${escape(project.queue.blockers.join('; '))}</pre><p>Předpoklady musí přijmout člověk ve Workspace. Agent zapisuje hlášení přes ordinary-file kontrakt balíčku.</p></body>`);context.subscriptions.push(panel);
+  });
+  register('queueHandoff',async item=>{
+    const project=find(item);if(!project||project.error)throw Error('Nejdříve obnovte připojení.');
+    const result=await queueBridge.handoff(project,item.taskId,hooks.request);
+    await vscode.env.clipboard.writeText(`Úkol ${item.taskId}. Context Manifest: ${result.manifest}\nInstrukce agenta: ${result.instructions}\nCompletion inbox: ${result.inbox}\nBalíček: ${result.packet_id}`);
+    await vscode.window.showInformationMessage('Připnuté předání fronty zkopírováno; agent musí manifest a instrukce explicitně načíst.');
+  });
   register('refreshPanel',async()=>{await hooks.synchronize();await refresh();});
   register('compose',async item => {
     item=await selectedItem(item,false);if(!item)return;const project=find(item);assertCurrent(project);
     const task=taskOf(item);
-    const options=!task?['message']:task.type&&task.type!=='task'?['message','clarification']:['message','clarification','progress','completed'];
+    const options=!task?['message']:project.queue?.items.some(i=>i.id===task.id)?['message','clarification']:task.type&&task.type!=='task'?['message','clarification']:['message','clarification','progress','completed'];
     const choiceKind=await vscode.window.showQuickPick(options.map(kind=>({label:kinds[kind],kind})),{placeHolder:'Typ zprávy'});
     const kind=choiceKind?.kind;if(!kind)return;
     let checklist;
@@ -253,7 +272,9 @@ function createSidebar(vscode, context, hooks) {
     await hooks.synchronize();await refresh();
   });
   register('handoff',async item => {
-    item=await selectedItem(item);if(!item)return;const project=find(item);assertCurrent(project);const task=taskOf(item);
+    item=await selectedItem(item);if(!item)return;const project=find(item);const task=taskOf(item);
+    if(project.queue?.items.some(i=>i.id===task.id))return vscode.commands.executeCommand('workspaceBridge.queueHandoff',item);
+    assertCurrent(project);
     const fresh=await hooks.request(project,'panel',{});
     if(fresh.stale||fresh.project_id!==project.snapshot.project_id||fresh.session_id!==project.session
         ||fresh.revision!==project.snapshot.revision||fresh.current_head!==project.snapshot.commit_id)throw Error('Neaktuální zadání nebo změněné oprávnění.');

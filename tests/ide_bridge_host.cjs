@@ -15,7 +15,7 @@ exports.run = async function () {
   assert.ok(commands.includes('workspaceBridge.connect'));
   assert.ok(commands.includes('workspaceBridge.configure'));
   assert.ok(commands.includes('workspaceBridge.assign'));
-  for (const command of ['compose','handoff','refreshPanel','filterOpen','allDocuments'])
+  for (const command of ['compose','handoff','refreshPanel','filterOpen','allDocuments','queueHandoff','showQueueTask'])
     assert.ok(commands.includes('workspaceBridge.' + command));
   assert.ok(extension.exports.sidebar, 'native sidebar must activate');
   await vscode.commands.executeCommand('workbench.view.extension.workspaceBridge');

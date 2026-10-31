@@ -25,14 +25,14 @@ def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
 
 
-def assess(task_ids, graph):
+def assess(task_ids, graph, accepted=()):
     nodes = {n['id']: n for n in graph['nodes']}
     seen = set(); issues = []
     for identifier in task_ids:
         node = nodes.get(identifier)
         if node is None:
             issues.append(identifier + ': položka již není v roadmapě')
-        elif node['checked']:
+        elif node['checked'] and identifier not in accepted:
             issues.append(identifier + ': položka je dokončená')
         elif any(not nodes[d]['checked'] and d not in seen for d in node['depends_on']):
             issues.append(identifier + ': nesplněný předpoklad chybí před položkou')
@@ -133,6 +133,9 @@ class TaskQueue:
         view = self.projects.open(project_id); graph = view['plan']
         require(graph['status'] == 'ready', 'Roadmapa nemá platný graf.')
         require(action == 'status' or not view.get('read_only'), 'Projekt je pouze pro čtení.')
+        from spikes.ide_queue import queue_projection
+        projection = queue_projection(self.node, project_id, actor_id, view)
+        accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)
         with self._lock(project_id, actor_id) as path, workspace.journal.lock(), workspace.journal.connect() as db:
             require(not workspace._active(db) and not db.execute('SELECT 1 FROM pending').fetchone(),
@@ -140,9 +143,11 @@ class TaskQueue:
             head = view['commit_id']
             require(workspace.git.head() == head, 'Projekt se změnil; načtěte jej znovu.')
             state = self._read(path, project_id, actor_id)
-            issues, following = assess(state['task_ids'], graph)
+            issues, following = assess(state['task_ids'], graph, accepted)
             nodes = {n['id']: n for n in graph['nodes']}
             stale = state['project_head'] not in (None, head)
+            if projection and state['revision'] == projection['manifest']['queue_revision'] and state['task_ids'] == [t['id'] for t in projection['manifest']['tasks']]:
+                stale = False
             if action != 'status':
                 require(type(request['revision']) is int and request['revision'] == state['revision'],
                         'Fronta se změnila; načtěte ji znovu.')
@@ -174,7 +179,7 @@ class TaskQueue:
                 require(request['preview_sha256'] == digest, 'Dopad odebrání se změnil; načtěte nový náhled.')
                 state['task_ids'] = [i for i in state['task_ids'] if i not in removed]
             if action != 'status':
-                issues, following = assess(state['task_ids'], graph)
+                issues, following = assess(state['task_ids'], graph, accepted)
                 if action != 'remove': require(not issues, '; '.join(issues))
                 state.update(revision=state['revision'] + 1, project_head=head)
                 require(workspace.git.head() == head, 'Roadmapa se změnila před zápisem.')
@@ -186,5 +191,7 @@ class TaskQueue:
             return dict(project_id=project_id, revision=state['revision'], expected_head=head,
                         stale=stale, valid=not stale and not issues, issues=issues,
                         task_ids=state['task_ids'], following=following if not stale and not issues else [],
-                        items=[dict(id=i, title=nodes[i]['title'] if i in nodes else 'Nedostupná položka')
+                        items=[dict(id=i, title=nodes[i]['title'] if i in nodes else 'Nedostupná položka',
+                                    agent_confirmed=bool(projection and any(x['id'] == i and x['agent_confirmed'] for x in projection['items'])),
+                                    user_confirmed=i in accepted)
                                for i in state['task_ids']])

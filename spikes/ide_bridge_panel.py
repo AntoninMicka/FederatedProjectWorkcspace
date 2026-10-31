@@ -194,7 +194,11 @@ def _changes(files, project_id, head, message):
     require(graph['status'] == 'ready', 'Invalid project task graph')
     task = next((t for t in graph['nodes'] if t['id'] == message['task_id']), None)
     require(task is not None, 'Review task disappeared')
-    require(task['type'] in {None, 'task'}, 'Only leaf task proposals can change completion')
+    require(task['type'] in {None, 'task'} or message.get('queue_packet_id') and task['type'] in {'batch', 'milestone'}, 'Only leaf tasks or reviewed queue containers can change completion')
+    if message['kind'] == 'completed' and message.get('queue_packet_id'):
+        nodes = {n['id']: n for n in graph['nodes']}
+        require(not task['checked'] and all(nodes[d]['checked'] for d in task['depends_on'])
+                and all(n['checked'] for n in graph['nodes'] if n['parent_id'] == task['id']), 'Task has unfinished prerequisites or children')
     validate_checklist(message, graph['nodes'])
     candidate = dict(files)
     doc = document(files, entities, task['source']['artifact_id'])
@@ -273,7 +277,9 @@ def review(service, actor, request, *, checkpoint=lambda stage: None):
         mutate = request['decision'] == 'accepted' and message['kind'] in {'completed', 'progress'}
         if mutate:
             authorize(service, record)
-            require(record['snapshot']['commit_id'] == view['commit_id']
+            from spikes.ide_queue import validate_completion
+            validate_completion(service, record, message, current_head=view['commit_id'])
+            require((message.get('queue_packet_id') or record['snapshot']['commit_id'] == view['commit_id'])
                     and message['revision'] == record['snapshot']['revision'],
                     'Stale proposal must be reviewed again')
             require(_changes(workspace.git.snapshot(view['commit_id']), request['project_id'],
@@ -310,6 +316,8 @@ def review(service, actor, request, *, checkpoint=lambda stage: None):
         def prepare(active):
             authorize(service, record)
             require(active.git.head() == request['expected_head'], 'Review HEAD changed')
+            from spikes.ide_queue import validate_prepared
+            validate_prepared(service, record, message)
             changes = _changes(active.git.snapshot(request['expected_head']), request['project_id'],
                                request['expected_head'], message)
             require(changes, 'Proposal produces no project change')

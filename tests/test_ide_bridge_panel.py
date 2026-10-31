@@ -271,6 +271,10 @@ async function projectRequest(route,body){if(route.endsWith('/status'))return da
  assert.equal(prompts,1);assert.deepEqual(requests.at(-1),intent);
  delete data.sessions[0].messages[0].review;data.current_head='c'.repeat(40);
  await showIdeBridgeMessages('project');assert.equal(target.children[0].children.find(e=>e.tag==='button').disabled,true);
+ const entry=data.sessions[0].messages[0];entry.message.kind='completed';entry.message.queue_packet_id='d'.repeat(64);entry.message.evidence={tests:'passed',diff:'commit'};entry.queue_reviewable=true;
+ await showIdeBridgeMessages('project');assert.notEqual(target.children[0].children.find(e=>e.tag==='button').disabled,true);
+ await target.children[0].children.find(e=>e.tag==='button').click();assert.equal(requests.at(-1).expected_head,data.current_head);
+ entry.queue_reviewable=false;await showIdeBridgeMessages('project');assert.equal(target.children[0].children.find(e=>e.tag==='button').disabled,true);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 '''
         result=subprocess.run(['node','-e',harness+function+checks],capture_output=True,text=True,timeout=20)

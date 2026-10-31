@@ -27,7 +27,7 @@ potvrzením zneplatní náhled.
 
 **Obnovit frontu** pouze načte aktuální stav. Po změně roadmapy znovu otevřete
 projekt a použijte **Znovu ověřit**. Obnova ze staré revize není automatické
-přijetí nových závislostí: chybějící ID, dokončená položka nebo předpoklad,
+přijetí nových závislostí: chybějící ID, dokončená položka bez navázaného přijatého receiptu nebo předpoklad,
 který chybí před úkolem, zablokují přidávání. Vadné položky lze odebrat
 s náhledem dopadu a zbývající frontu znovu ověřit. Pokud referencované ID
 zmizelo, staré vztahy se nevymýšlejí; případné zbývající chyby jsou výslovně
@@ -128,3 +128,8 @@ Ruční akceptace běžného profilu zůstává otevřená. Běžící uživatel
 se v rámci implementace nerestartoval; testovací prohlížeč používal izolovaný
 server. Zdrojový commit, push ani PR nevznikly. Autoritativní task se tímto
 technickým ověřením automaticky neoznačil za dokončený.
+
+Od rozšíření 0.4.0 navazuje [předání fronty a potvrzování](ide-queue-handoff.md).
+Agentní a uživatelské flags se obnovují z bridge/native receipts; roadmapa
+zůstává autoritou dokončení. Vlastní přijaté výsledky balíčku mají explicitně
+ověřenou návaznost, jiné změny HEAD nadále vyžadují revalidaci/nové předání.

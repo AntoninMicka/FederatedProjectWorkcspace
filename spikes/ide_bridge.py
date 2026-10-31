@@ -83,6 +83,7 @@ class IdeBridge:
                        '(id TEXT PRIMARY KEY, digest TEXT UNIQUE, record TEXT NOT NULL, revoked INTEGER DEFAULT 0)')
             db.execute('CREATE TABLE IF NOT EXISTS reviews '
                        '(session TEXT, id TEXT, record TEXT NOT NULL, PRIMARY KEY(session,id))')
+            db.execute('CREATE TABLE IF NOT EXISTS queue_packets (id TEXT PRIMARY KEY, session TEXT NOT NULL, record TEXT NOT NULL)')
             yield db
 
     def publish_endpoints(self):
@@ -179,7 +180,7 @@ class IdeBridge:
         manifest = json.loads((EXTENSION / 'package.json').read_text())
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'workspace.svg', 'README.md', 'LICENSE'):
+            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'queue.js', 'workspace.svg', 'README.md', 'LICENSE'):
                 archive.writestr('extension/' + name, (EXTENSION / name).read_bytes())
             if pairing is not None:
                 archive.writestr('extension/pairing.json', canonical(pairing))
@@ -215,7 +216,7 @@ class IdeBridge:
             require(isinstance(message, dict) and {'message_id', 'task_id', 'kind', 'body',
                 'revision', 'repository_commit'} <= set(message)
                 and set(message) <= {'message_id', 'task_id', 'kind', 'body', 'revision',
-                                     'repository_commit', 'checklist'}, 'Invalid message')
+                                     'repository_commit', 'checklist', 'queue_packet_id', 'reported_by', 'evidence'}, 'Invalid message')
             uuid(message['message_id'])
             require(isinstance(message['kind'], str) and message['kind'] in {'completed', 'progress', 'clarification', 'message'}, 'Invalid message kind')
             require(isinstance(message['body'], str) and 0 < len(message['body'].encode()) <= MAX_MESSAGE
@@ -228,8 +229,13 @@ class IdeBridge:
             require(message['revision'] == record['snapshot']['revision'], 'Wrong source revision')
             require(isinstance(message['repository_commit'], str) and re.fullmatch(
                 r'[0-9a-f]{40}|[0-9a-f]{64}', message['repository_commit']), 'Invalid repository commit')
+            from spikes.ide_queue import validate_completion
+            with self.database() as db:
+                existing = db.execute('SELECT digest FROM messages WHERE session=? AND id=?', (record['session_id'], message['message_id'])).fetchone()
+            if not existing and (message['kind'] == 'completed' or any(k in message for k in ('queue_packet_id', 'reported_by', 'evidence'))):
+                validate_completion(self, record, message)
             digest = hashlib.sha256(canonical(message).encode()).hexdigest()
-            receipt = dict(message_id=message['message_id'], status='stale' if stale else 'received',
+            receipt = dict(message_id=message['message_id'], status='received' if message.get('queue_packet_id') else 'stale' if stale else 'received',
                            project_id=record['project_id'], revision=message['revision'],
                            acceptance='pending-human-review')
             with self.database() as db:
@@ -250,7 +256,8 @@ class IdeBridge:
                                (record['session_id'], message['message_id'], digest,
                                 canonical(message), canonical(receipt)))
             receipts.append(receipt)
-        return dict(session_id=record['session_id'], stale=stale, receipts=receipts,
+        from spikes.ide_queue import load
+        return dict(session_id=record['session_id'], has_queue=load(self, record['session_id']) is not None, stale=stale, receipts=receipts,
                     snapshot=record['snapshot'], repository=record['repository'],
                     instructions=record['instructions'])
 
@@ -269,9 +276,10 @@ class IdeBridge:
             require(git.head() == head, 'Project changed during review recovery read')
             view = {'commit_id': head}; pending = True
         with self.database() as db:
-            sessions = []; remaining = 100
+            sessions = []; records = {}; remaining = 100
             for row in db.execute('SELECT id,record,revoked FROM sessions ORDER BY rowid DESC LIMIT 200'):
                 record = json.loads(row['record'])
+                records[row['id']] = record
                 if record['project_id'] != project_id:
                     continue
                 messages = [dict(message=json.loads(m['record']), receipt=json.loads(m['receipt']),
@@ -285,6 +293,18 @@ class IdeBridge:
                                      revision=record['snapshot']['revision'], revoked=bool(row['revoked']),
                                      commit_id=record['snapshot']['commit_id'],
                                      expires_at=record['expires_at'], messages=messages))
+        from spikes.ide_queue import status as queue_status
+        for session in sessions:
+            queued = [e for e in session['messages'] if e['message'].get('queue_packet_id')]
+            if not queued: continue
+            value = None
+            if not pending and not session['revoked']:
+                try: value = queue_status(self, records[session['session_id']])
+                except (ValueError, OSError, sqlite3.Error, PendingOperation): pass
+            for entry in queued:
+                entry['queue_reviewable'] = bool(value and not value['blockers'] and
+                    entry['message']['queue_packet_id'] == value['packet_id'] and any(
+                        i['id'] == entry['message']['task_id'] and i['eligible'] for i in value['items']))
         from spikes.ide_bridge_panel import bounded_history
         return bounded_history(dict(sessions=sessions, current_head=view['commit_id'], pending_operation=pending), sessions=True)
 
@@ -508,7 +528,7 @@ class IdeBridge:
             return dict(session_id=record['session_id'], project_id=record['project_id'],
                         repository=record['repository'], editor_workspace=record['editor_workspace'],
                         expires_at=record['expires_at'])
-        if action in {'exchange', 'panel', 'document'} and set(request) == {'connection_id', 'action', 'request'}:
+        if action in {'exchange', 'panel', 'document', 'queue', 'queue-document'} and set(request) == {'connection_id', 'action', 'request'}:
             child = request['request']
             require(isinstance(child, dict), 'Invalid project exchange')
             uuid(child.get('session_id'))
@@ -520,6 +540,12 @@ class IdeBridge:
             self.require_editor(actor, record['project_id'])
             if action != 'exchange':
                 from spikes.ide_bridge_panel import panel, read_document
+                if action == 'queue' and set(child) == {'session_id'}:
+                    from spikes.ide_queue import status
+                    return {'queue': status(self, record)}
+                if action == 'queue-document' and set(child) == {'session_id', 'packet_id', 'artifact_id'}:
+                    from spikes.ide_queue import read_document as queue_document
+                    return queue_document(self, record, child['packet_id'], child['artifact_id'])
                 if action == 'panel' and set(child) == {'session_id'}:
                     return panel(self, record)
                 if action == 'document' and set(child) == {'session_id', 'artifact_id'}:

@@ -93,3 +93,19 @@ poznámku, přijmout nebo odmítnout. Dokončení a checklist zapisuje jediný
 nativní writer až po ověření původního HEAD. Zastaralý návrh se neaplikuje;
 částečný checklist nedokončí celý úkol. Při přerušení review je dostupná
 obnova stejné operace. Výsledek se vrací do panelu IDE po synchronizaci.
+
+## Fronta od verze 0.4.0
+
+Workspace připraví neměnný balíček fronty přes **Předat frontu do IDE**.
+Povolte export podkladů v aktuálním mappingu; následně synchronizujte IDE.
+Pohled **Fronta úkolů** rozlišuje zahajitelné položky, navazující pouze pro
+náhled, agentní hlášení a lidské přijetí. Předání agentovi kopíruje cesty
+manifestu a AGENT.md. Agent hlásí splnění ordinary-file zprávou; oprávněný
+člověk ji přijímá ve Workspace. Doručení není dokončení.
+
+Podklady se ověřují hashy a znovu používají z pinned exportní cache přes
+hardlink, bezpečný symlink nebo copy fallback. Nepropojují se s pracovními
+soubory Workspace. Balíček se kvůli změně plánu tiše nepřepisuje a mapping
+s aktivním packetem se automaticky nepřipíná na jiný commit.
+Podrobný postup, completion schema a recovery: `docs/ide-queue-handoff.md`
+v projektu Workspace; architektonické hranice: ADR 0062.

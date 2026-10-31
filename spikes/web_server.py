@@ -218,6 +218,9 @@ class WebHandler(DesktopHandler):
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
             return self.dispatch_ide_bridge(request)
+        if self.path == '/v1/ide-queue/publish':
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')): return self.send_error(403)
+            return super().dispatch(request)
         if self.path == '/v1/task-queue':
             if not isinstance(request, dict): return self.send_error(400)
             allowed = (self.server.administration.allowed(self.actor, request.get('project_id'))

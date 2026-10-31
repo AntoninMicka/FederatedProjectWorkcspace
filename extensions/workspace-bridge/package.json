@@ -2,7 +2,7 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace",
   "description": "Tasks, messages, documents and agent rules for Federated Workspace",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {
@@ -78,6 +78,14 @@
         "command": "workspaceBridge.handoff",
         "title": "Workspace: Zkopírovat předání úkolu a pravidel",
         "icon": "$(copy)"
+      },
+      {
+        "command": "workspaceBridge.showQueueTask",
+        "title": "Workspace: Zobrazit položku fronty"
+      },
+      {
+        "command": "workspaceBridge.queueHandoff",
+        "title": "Workspace: Předat položku fronty agentovi"
       }
     ],
     "configuration": {
@@ -117,6 +125,10 @@
         {
           "id": "workspaceBridge.rules",
           "name": "Pravidla agentů"
+        },
+        {
+          "id": "workspaceBridge.queue",
+          "name": "Fronta úkolů"
         }
       ]
     },
@@ -162,6 +174,11 @@
         {
           "command": "workspaceBridge.compose",
           "when": "viewItem == project && view == workspaceBridge.messages",
+          "group": "inline"
+        },
+        {
+          "command": "workspaceBridge.queueHandoff",
+          "when": "view == workspaceBridge.queue && viewItem == queueTask",
           "group": "inline"
         }
       ]
