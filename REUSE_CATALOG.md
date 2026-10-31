@@ -898,3 +898,10 @@ OllamaAdapter/OllamaRuns, webové review, TUI a Workspace.transact.
 Zaměření a evidence se izolují v `roadmap_dependencies`; další plánovací
 databáze, broker ani alternativní projektový writer nejsou potřeba.
 Viz [ADR 0061](docs/adr/0061-focused-roadmap-dependency-review.md).
+
+PLAN-QUEUE-01 **reuse/adaptuje** `Projects.open`, `project_task_graph`,
+`Journal.lock`, `private_directory`, `sync_dir` a privátní souborovou publikaci
+podle ADR 0060. Fronta je lokální uspořádaný výběr task ID mimo Git, nikoli další
+plán nebo index. Vlastní malá služba doplňuje kontrolu revize a kaskádové odebrání;
+nová databáze či broker by duplikovaly existující hranice. Recovery a omezení:
+[fronta úkolů](docs/task-queue.md).
