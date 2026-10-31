@@ -218,6 +218,18 @@ class WebHandler(DesktopHandler):
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
             return self.dispatch_ide_bridge(request)
+        if self.path.startswith('/v1/roadmap-refinement/'):
+            if not isinstance(request, dict):
+                return self.send_error(400)
+            project_id = request.get('project_id')
+            read_only = self.path in {'/v1/roadmap-refinement/list',
+                                      '/v1/roadmap-refinement/detail',
+                                      '/v1/roadmap-refinement/reconcile/preview'}
+            allowed = (self.server.administration.allowed(self.actor, project_id)
+                       if read_only else self._can_write(project_id))
+            if not allowed:
+                return self.send_error(403)
+            return super().dispatch(request)
         if self.path.startswith('/v1/projects/repair/'):
             return self.send_error(404)
         if self.path.startswith('/v1/julia/'):

@@ -10,6 +10,35 @@ const {execFileSync} = require('node:child_process');
 const crypto = require('node:crypto');
 const bridge = require('../extensions/workspace-bridge/bridge');
 
+test('HTTP retries only pre-dispatch busy responses and bounds persistent overload', async t => {
+  const http = require('node:http');
+  let calls = 0, mode = 'recover';
+  const server = http.createServer((req, res) => {
+    req.resume();
+    calls++;
+    res.setHeader('Content-Type', 'application/json');
+    if (mode === 'recover' && calls > 2) return res.end('{"ok":true}');
+    res.statusCode = mode === 'forbidden' ? 403 : 503;
+    res.end(mode === 'other' ? '{"error":"unavailable"}' : '{"error":"server busy"}');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const pairing = {schema_version: 2, connection_id: crypto.randomUUID(), name: 'Test IDE',
+    token: 'a'.repeat(43), endpoint: `http://127.0.0.1:${server.address().port}`,
+    expires_at: Math.floor(Date.now()/1000) + 1000};
+  assert.deepEqual(await bridge.connectionRequest(pairing, {action: 'status'}), {ok: true});
+  assert.equal(calls, 3);
+  mode = 'busy'; calls = 0;
+  await assert.rejects(bridge.connectionRequest(pairing, {action: 'status'}), /zaneprázdněný/);
+  assert.equal(calls, 4);
+  for (const value of ['other', 'forbidden']) {
+    mode = value; calls = 0;
+    await assert.rejects(bridge.connectionRequest(pairing, {action: 'status'}),
+      value === 'other' ? /\(503\)/ : /\(403\)/);
+    assert.equal(calls, 1);
+  }
+});
+
 async function fixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'ide-bridge-'));
   t.after(() => fs.rm(base, {recursive: true, force: true}));
@@ -62,27 +91,37 @@ test('plugin settings map multiple projects and restore them after restart', asy
   const projects = [first, second].map((f, index) => ({project_id: f.pairing.project_id,
     title: 'Project ' + index, expected_head: 'b'.repeat(40)}));
   let mappings = [], folderPick = 0, selection = 'both';
-  const synchronizations = [];
+  const synchronizations = [], notices = [];
+  let syncMode = 'ok';
+  let loseMapResponse = false, loseBindResponse = false, mapCalls = 0, failStore = '';
   const originalRequest = bridge.connectionRequest, originalSync = bridge.sync;
   bridge.connectionRequest = async (_pairing, request) => {
     if (request.action === 'status') return {connection_id: pairing.connection_id, name: pairing.name, projects, mappings};
     if (request.action === 'map') {
+      mapCalls++;
       const previous = mappings.find(item => item.project_id === request.mapping.project_id);
       assert.equal(request.mapping.expected_mapping, previous?.session_id || null);
       mappings = mappings.filter(item => item.project_id !== request.mapping.project_id);
       if (!request.mapping.enabled) return {enabled: false, session_id: null};
       const item = {...request.mapping, session_id: crypto.randomUUID(), bound: false,
         title: projects.find(p => p.project_id === request.mapping.project_id).title};
-      mappings.push(item);return {enabled: true, session_id: item.session_id};
+      mappings.push(item);
+      if (loseMapResponse) { loseMapResponse = false; throw new Error('lost map response'); }
+      return {enabled: true, session_id: item.session_id};
     }
     if (request.action === 'bind') {
       const item = mappings.find(m => m.session_id === request.session_id);item.bound = true;
+      if (loseBindResponse) { loseBindResponse = false; throw new Error('lost bind response'); }
       return item;
     }
     throw new Error('Unexpected request');
   };
   bridge.sync = async (root, child, repository) => {
-    synchronizations.push({root, session: child.session_id, repository}); return {stale: false};
+    synchronizations.push({root, session: child.session_id, repository});
+    if (syncMode === 'failed' || (syncMode === 'partial' && repository === first.repo)) throw new Error('socket hang up');
+    await fs.mkdir(path.join(root, 'inbox'), {recursive: true});
+    await fs.mkdir(path.join(root, 'receipts'), {recursive: true});
+    return {stale: syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
   };
   const vscode = {env: {}, StatusBarAlignment: {Left: 1},
     commands: {registerCommand: (name, callback) => {commands.set(name, callback);return {dispose(){}};}},
@@ -90,9 +129,9 @@ test('plugin settings map multiple projects and restore them after restart', asy
       getConfiguration: () => ({get: () => false})},
     window: {createOutputChannel: () => ({appendLine(){},dispose(){}}),
       createStatusBarItem: () => ({show(){},dispose(){}}),
-      showInformationMessage: async () => undefined,
+      showInformationMessage: async message => { notices.push({kind: 'info', message}); },
       showErrorMessage: message => {throw new Error(message);},
-      showWarningMessage: async () => 'Přiřadit',
+      showWarningMessage: async (message, options) => { if (!options?.modal) notices.push({kind: 'warning', message}); return 'Přiřadit'; },
       showQuickPick: async (items, options) => options.canPickMany ? (selection==='both' ? items : []) : items[folderPick++]}}
   ;
   Module._load = function(name, parent, isMain) {return name === 'vscode' ? vscode : load.call(this, name, parent, isMain);};
@@ -103,7 +142,13 @@ test('plugin settings map multiple projects and restore them after restart', asy
   function context() {
     const result = {subscriptions: [], globalStorageUri: {fsPath: path.join(first.base, 'storage')},
       globalState: {get: key => state.get(key), update: async (key,value) => state.set(key,value)},
-      secrets: {get: async key => secrets.get(key), store: async (key,value) => secrets.set(key,value), delete: async key => secrets.delete(key)}};
+      secrets: {get: async key => secrets.get(key), store: async (key,value) => {
+        const pending = Object.values(JSON.parse(value).mappings).some(local => local.refresh);
+        if ((failStore === 'intent' && pending) || (failStore === 'final' && !pending)) {
+          failStore = ''; throw new Error('SecretStorage unavailable');
+        }
+        secrets.set(key,value);
+      }, delete: async key => secrets.delete(key)}};
     contexts.push(result);return result;
   }
   t.after(() => {
@@ -122,8 +167,85 @@ test('plugin settings map multiple projects and restore them after restart', asy
   synchronizations.length=0;
   await extension.activate(context());
   assert.equal(synchronizations.length,2,'restart must restore both mappings');
+  for (const [mode, pattern] of [['stale', /2 projektů, 2 zastaralých, 0 chyb/],
+      ['partial', /1 projektů, 0 zastaralých, 1 chyb/], ['failed', /0 projektů, 0 zastaralých, 2 chyb/]]) {
+    syncMode = mode; notices.length = 0;
+    await commands.get('workspaceBridge.sync')();
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].kind, 'warning');
+    assert.match(notices[0].message, pattern);
+  }
+  syncMode = 'ok'; notices.length = 0;
+  await commands.get('workspaceBridge.sync')();
+  assert.equal(notices[0].kind, 'info');
+  assert.match(notices[0].message, /2 projektů, 0 zastaralých, 0 chyb/);
+  // A changed assignment follows HEAD without picking a folder or changing its identity.
+  syncMode = 'refresh';
+  const previous = {...mappings[0]}, picksBefore = folderPick;
+  const historical = path.join(first.base, 'storage', 'bridge-private', 'sessions', previous.session_id);
+  const messageName = crypto.randomUUID() + '.json';
+  await fs.writeFile(path.join(historical, 'inbox', messageName), '{"old":"message"}');
+  projects[0].expected_head = 'c'.repeat(40);
+  await commands.get('workspaceBridge.sync')();
+  assert.equal(mappings[0].session_id, previous.session_id, 'pending old messages postpone refresh');
+  await fs.writeFile(path.join(historical, 'receipts', messageName), JSON.stringify({message_id: messageName.slice(0, -5), status: 'stale'}));
+  await commands.get('workspaceBridge.sync')();
+  let refreshed = mappings.find(m => m.project_id === previous.project_id);
+  assert.notEqual(refreshed.session_id, previous.session_id);
+  assert.equal(refreshed.expected_head, projects[0].expected_head);
+  assert.equal(refreshed.repository, previous.repository);
+  assert.equal(refreshed.editor_workspace, previous.editor_workspace);
+  assert.equal(folderPick, picksBefore, 'revision refresh must not prompt for a target');
+  assert.equal(await fs.readFile(path.join(historical, 'inbox', messageName), 'utf8'), '{"old":"message"}');
+  assert.equal(notices.at(-1).kind, 'info');
+  // Server commit with lost map/bind response is resumed from persisted intent on restart.
+  for (const stage of ['map', 'bind']) {
+    projects[0].expected_head = (stage === 'map' ? 'd' : 'e').repeat(40);
+    if (stage === 'map') loseMapResponse = true; else loseBindResponse = true;
+    await commands.get('workspaceBridge.sync')();
+    assert.match(notices.at(-1).message, /1 projektů, 0 zastaralých, 1 chyb/);
+    const saved = JSON.parse(secrets.get('connection:'+pairing.connection_id));
+    assert.ok(Object.values(saved.mappings).some(local => local.refresh));
+    const callsBefore = mapCalls;
+    // A newer server HEAD does not cause the lost response to create yet another session.
+    if (stage === 'map') projects[0].expected_head = 'f'.repeat(40);
+    await extension.activate(context());
+    assert.equal(mapCalls, callsBefore);
+    const recovered = JSON.parse(secrets.get('connection:'+pairing.connection_id));
+    assert.ok(Object.values(recovered.mappings).every(local => !local.refresh));
+    assert.equal(Object.keys(recovered.mappings).length, 2);
+    await commands.get('workspaceBridge.sync')();
+    assert.equal(notices.at(-1).kind, 'info');
+  }
+  // Do not adopt an intervening target change after a lost response.
+  projects[0].expected_head = '1'.repeat(40); loseMapResponse = true;
+  await commands.get('workspaceBridge.sync')();
+  refreshed = mappings.find(m => m.project_id === previous.project_id);
+  refreshed.editor_workspace = '/different-target';
+  const callsBeforeConflict = mapCalls;
+  await commands.get('workspaceBridge.sync')();
+  assert.equal(mapCalls, callsBeforeConflict);
+  assert.match(notices.at(-1).message, /1 projektů, 0 zastaralých, 1 chyb/);
+  refreshed.editor_workspace = previous.editor_workspace;
+  await commands.get('workspaceBridge.sync')();
+  assert.equal(notices.at(-1).kind, 'info');
+  for (const stage of ['intent', 'final']) {
+    projects[0].expected_head = (stage === 'intent' ? '2' : '3').repeat(40);
+    failStore = stage;
+    const callsBefore = mapCalls;
+    await commands.get('workspaceBridge.sync')();
+    assert.match(notices.at(-1).message, /1 projektů, 0 zastaralých, 1 chyb/);
+    assert.equal(mapCalls, callsBefore + (stage === 'intent' ? 0 : 1));
+    await extension.activate(context());
+    assert.ok(Object.values(JSON.parse(secrets.get('connection:'+pairing.connection_id)).mappings)
+      .every(local => !local.refresh));
+    await commands.get('workspaceBridge.sync')();
+    assert.equal(notices.at(-1).kind, 'info');
+  }
   selection='none';
   await commands.get('workspaceBridge.configure')();
+  assert.equal(notices.at(-1).kind, 'warning');
+  assert.match(notices.at(-1).message, /Nastavení projektů/);
   assert.deepEqual(mappings,[]);
   assert.deepEqual(JSON.parse(secrets.get('connection:'+pairing.connection_id)).mappings,{});
 });

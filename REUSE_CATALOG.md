@@ -75,6 +75,13 @@ existující prezentační encoder/validator a Julia computation validátor pro
 coverage i kontextový help panel; nový help framework, renderer Markdownu,
 template engine ani zápisová služba nejsou potřeba.
 
+DEV-01-E-REFINE-01 **reuse/adaptuje** Python stdlib `curses` pouze jako
+jednorázovou interaktivní vrstvu nad existujícím `RoadmapRefinement`. TUI nemá
+vlastní store, modelový dispatch ani writer; rozhodnutí a dvoukrokově potvrzený
+apply používají tutéž projektově izolovanou node-local queue a jedinou
+`Workspace.transact` hranici. Externí TUI framework se pro tento omezený
+workflow nepřidává.
+
 F-M5-CHAT-HISTORY-01 **reuse/adaptuje** přímo obousměrný podepsaný
 `federation_sync` z ADR 0042, `ChatThreads` a bilaterální mapování ADR 0021.
 Projektová historie je druhý bounded payload téže sync operace a po přesném
@@ -828,6 +835,27 @@ settings panely a tabulky; parent connection a projektová mapování zůstávaj
 v témže node-local SQLite journalu. Reuse původních sessions/messages
 zachovává receipts a schema-v1 kompatibilitu. Nepřidává se další server,
 framework ani projektový writer; změnu scope a atomické recovery drží ADR 0060.
+
+DEV-01-E-RECONCILE-REVIEW **reuse/adaptuje** existující projektový sidebar
+Nástroje, hlavní tabpanely, bezpečné DOM vykreslení a RBAC hranice sdíleného
+desktop/web UI. Data i rozhodnutí zůstávají v jediné existující node-local
+roadmap refinement SQLite queue; detail používá exact proposal HEAD a bulk
+accept/reject jednu SQLite transakci nad explicitními pending ID. Nový UI store,
+projektový writer, framework nebo kopie proposal stavu jsou **reject**.
+Reconciliation rozšíření **adaptuje** stejný `task_graph` parser/validátor a
+jediný `Workspace.transact` writer: accepted návrhy skládá do exact kandidáta,
+po každé typované změně znovu validuje celý graf a potvrzení váže na preview
+SHA-256. Vlastní obecný Markdown framework, druhý projektový store a zápis mimo
+journal/Git/index recovery hranici jsou **reject**.
+
+DEV-01-E-REBUILD-01 **reuse/adaptuje** commit-pinned `roadmap_migration`
+inventuru a `PinnedRepository`, validovaný same-node `OllamaBinding`, existující
+`OllamaAdapter`/`OllamaRuns` exactly-once journal a stdlib JSON/SHA/atomický
+rename. Starý mapping builder, refinement proposal queue a importovaný cíl jsou
+pro novou source-first transformaci **reject**, protože by znovu zavedly
+chybnou cílovou autoritu a lokální clusterovou korekci. Nový LLM framework,
+vektorová DB, RAG, druhý projektový writer a přímé modelové editace Markdownu
+se nepřidávají; kandidát vzniká deterministicky z validovaného mezimodelu.
 
 
 DEV-IDE-RECONNECT-01 **adaptuje** existující IdeBridge SQLite credentialy,

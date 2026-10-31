@@ -324,8 +324,15 @@ class CatalogScheduler:
 
     def _run(self):
         while not self.stopping.is_set():
-            self.control.run_automatic()
-            self.stopping.wait(self.interval)
+            try:
+                self.control.run_automatic()
+                delay = self.interval
+            except Exception:
+                # Node registry reads share the node writer lock with project
+                # operations. A transient lock conflict must not permanently
+                # terminate catalog synchronization for this process.
+                delay = min(self.interval, 5)
+            self.stopping.wait(delay)
 
     def stop(self):
         self.stopping.set()

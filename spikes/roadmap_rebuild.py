@@ -1,0 +1,1085 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+"""Source-first local-LLM roadmap reconstruction without Workspace writes."""
+from base64 import b64encode
+from collections import Counter
+from copy import deepcopy
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import stat
+from uuid import NAMESPACE_URL, uuid4, uuid5
+
+from spikes.backend_contract import ROLES
+from spikes.context_builder import DispatchHandoff
+from spikes.metadata import pairs, require
+from spikes.ollama_backend import OllamaAdapter, OllamaBindings, OllamaRuns
+from spikes.roadmap_migration import (HEADING, PinnedRepository, canonical,
+                                      inventory)
+
+SCHEMA = 'fpw-roadmap-source-rebuild-v1'
+CATALOG_SCHEMA = 'fpw-roadmap-source-catalog-v1'
+EXTRACTION_SCHEMA = 'fpw-roadmap-source-extraction-v2'
+AUDIT_SCHEMA = 'fpw-roadmap-source-audit-v1'
+REVISION = 'source-first-v2'
+MAX_BLOCK = 96 * 1024
+KINDS = {'milestone', 'batch', 'task', 'checklist', 'history', 'description'}
+STATUSES = {'planned', 'in-progress', 'completed', 'blocked', 'unknown'}
+MATURITIES = {'designed', 'implemented', 'poc-validated', 'production-ready', 'unknown'}
+VERDICTS = {'correct', 'equivalent', 'misplaced', 'distorted', 'missing',
+            'duplicated', 'unsupported-target', 'ambiguous'}
+STABLE_ID = re.compile(r'[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+')
+SOURCE_ID = re.compile(r'(?<![A-Z0-9-])(?:M\d+(?:\.\d+)?|[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)(?![A-Z0-9-])')
+GROUPED_ID = re.compile(r'(?<![A-Z0-9-])([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)((?:/[A-Z0-9-]+)+)')
+STRONG = re.compile(r'\*\*(.+?)\*\*', re.DOTALL)
+LOCAL_KEY = re.compile(r'e[1-9][0-9]{0,3}')
+MAX_ATTEMPTS = 3
+ROADMAP_LLM_TIMEOUT = 600
+STRUCTURAL_RESOLUTION_POLICY = 'pinned-graph-variants-and-explicit-legacy-quarantine-v1'
+
+SOURCE_POLICY = '''The source documents are sequential project records, not a normalized database.
+TODO contains one current feature batch. A closed whole batch, including completed subtasks and evidence, moves to WORK_LOG. BACKLOG contains future batches and deferred or implemented-but-unverified work. The Master Checklist is a strategic catalog and may describe the same capability at a broader granularity. A later occurrence wins only when it contains actual evidence. History is not a new open task; free prose is not automatically executable work. Preserve uncertainty instead of inventing hierarchy, completion, IDs, or dependencies.'''
+
+EXTRACTION_INSTRUCTION = SOURCE_POLICY + '''
+Extract the supplied complete logical source block without using any existing imported target.
+Return exactly one JSON object:
+{"schema":"fpw-roadmap-source-extraction-v2","block_id":"exact block ID","entities":[{"entity_key":"e1","kind":"milestone|batch|task|checklist|history|description","source_ids":["exact allowed source ID"],"title":"text","status":"planned|in-progress|completed|blocked|unknown","maturity":"designed|implemented|poc-validated|production-ready|unknown","parent_ref":"entity:e1|source:EXACT-ID|null","dependency_refs":["entity:e1|source:EXACT-ID"],"line_start":1,"line_end":1,"summary":"Czech meaning preserved from source"}],"ambiguities":[{"line_start":1,"line_end":1,"reason":"Czech explanation"}],"summary":"Czech block summary"}.
+entity_key values are unique local references e1, e2, ... inside this response. Use entity:KEY to express hierarchy between anonymous entities. Use source:ID only for an ID copied exactly from allowed_source_ids; parent and dependency refs may also use an ID from reference_source_ids. source_ids is empty when there is no exact allowed ID; never put titles, grouped A/B ranges, prose, block UUIDs or validation fields into source_ids. Historical shorthand labels are already expanded in allowed_source_ids. When one source entity explicitly groups multiple exact allowed IDs, keep those IDs together; the candidate builder will assign a migration ID and require human review. Status and maturity are independent; designed is maturity, not status. Use checklist only for an actual checkbox acceptance item; copyright, license, headings and introductory prose are descriptions. A non-executable entity may use parent_ref to preserve where its context belongs, but it cannot define dependencies. The source text is supplied as numbered_text; copy its displayed absolute line numbers and never calculate or continue them beyond the block. Do not invent completion, implementation evidence, dependencies, or IDs. Preserve descriptions and history as non-executable entities. Return JSON only.'''
+
+AUDIT_INSTRUCTION = SOURCE_POLICY + '''
+Audit whether the candidate records faithfully represent the supplied original source block. Source evidence has priority; do not merely judge whether the candidate sounds reasonable.
+Return exactly one JSON object:
+{"schema":"fpw-roadmap-source-audit-v1","block_id":"exact block ID","verdict":"correct|equivalent|misplaced|distorted|missing|duplicated|unsupported-target|ambiguous","scores":{"coverage":0,"hierarchy":0,"status":0,"provenance":0,"dependencies":0},"findings":[{"line_start":1,"line_end":1,"candidate_id":"ID or null","kind":"missing|misplaced|distorted|duplicated|unsupported-target|ambiguous","reason":"Czech evidence-based explanation"}],"summary":"Czech audit summary"}.
+Every score is an integer 0..100 and must be justified by the findings and absolute original-document line numbers from source_block.line_start through source_block.line_end. Findings contain problems only: never emit a finding with kind correct or equivalent; use an empty findings list when no problem exists. A different representation can be equivalent, but missing or changed meaning must not be excused. Return JSON only.'''
+
+REPAIR_POLICY = '''
+The request contains source_block, previous_response and validation_error. Repair the previous response using the unchanged source evidence. Do not copy validation_error or request wrapper fields into the response. Do not add facts, lines, IDs, parents, dependencies, completion, or maturity merely to satisfy validation. Drop or mark ambiguous anything unsupported. Return only the complete corrected JSON object in the exact schema above.'''
+EXTRACTION_REPAIR_INSTRUCTION = EXTRACTION_INSTRUCTION + REPAIR_POLICY
+AUDIT_REPAIR_INSTRUCTION = AUDIT_INSTRUCTION + REPAIR_POLICY
+AUDIT_GUIDED_EXTRACTION_INSTRUCTION = EXTRACTION_INSTRUCTION + '''
+This is a targeted re-extraction. The request also contains previous_extraction and source_audit. Correct only omissions or distortions that the audit supports from numbered_text. Preserve valid prior entities, exact source scope and uncertainty. Do not satisfy an incorrect audit claim by inventing content. Return the complete extraction JSON, not a patch.'''
+
+
+def _now():
+    return datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
+
+
+def _atomic_json(path, value):
+    path = Path(path); temporary = path.with_name('.' + path.name + '.' + str(uuid4()) + '.tmp')
+    data = json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2).encode() + b'\n'
+    try:
+        with open(temporary, 'xb') as stream:
+            os.chmod(temporary, 0o600); stream.write(data); stream.flush(); os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _secure_directory(path, *, create=False):
+    path = Path(path).absolute()
+    if create:
+        path.mkdir(mode=0o700)
+    info = path.lstat()
+    require(path == path.resolve() and stat.S_ISDIR(info.st_mode)
+            and info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700,
+            'Rebuild run directory requires owned mode 0700')
+    return path
+
+
+def _sections(raw):
+    """Split on H2 logical units; oversized units recursively split on H3+ headings."""
+    text = raw.decode('utf-8'); lines = text.splitlines(keepends=True)
+    offsets, total = [], 0
+    for line in lines:
+        offsets.append(total); total += len(line.encode())
+    headings = []
+    for index, line in enumerate(lines):
+        match = HEADING.match(line.rstrip('\r\n'))
+        if match:
+            headings.append((index, len(match.group(1)), match.group(2)))
+    starts = [item for item in headings if item[1] == 2]
+    if not starts:
+        starts = [(0, 1, headings[0][2] if headings else 'Dokument')]
+    elif starts[0][0] > 0:
+        starts.insert(0, (0, 1, headings[0][2] if headings else 'Úvod'))
+
+    def emit(start, end, title, level):
+        begin = offsets[start]; finish = offsets[end] if end < len(lines) else len(raw)
+        if finish - begin <= MAX_BLOCK:
+            return [(start, end, title)]
+        children = [item for item in headings if start < item[0] < end and item[1] == level + 1]
+        if not children:
+            raise ValueError('Logical source block exceeds local-LLM context limit: ' + title)
+        boundaries = [(start, level, title)] + children
+        result = []
+        for index, child in enumerate(boundaries):
+            child_end = boundaries[index + 1][0] if index + 1 < len(boundaries) else end
+            result.extend(emit(child[0], child_end, child[2], child[1]))
+        return result
+
+    result = []
+    for index, item in enumerate(starts):
+        end = starts[index + 1][0] if index + 1 < len(starts) else len(lines)
+        result.extend(emit(item[0], end, item[2], item[1]))
+    return [(start + 1, end, title, ''.join(lines[start:end])) for start, end, title in result]
+
+
+def _declared_ids(body, known):
+    """Retain catalog IDs plus historical IDs declared in emphasized task labels."""
+    discovered = set(SOURCE_ID.findall(body))
+    allowed = (discovered & known) | {
+        item for item in discovered if re.fullmatch(r'M\d+(?:\.\d+)?', item)}
+    for label in STRONG.findall(body):
+        allowed |= {item for item in SOURCE_ID.findall(label)
+                    if re.fullmatch(r'V-\d+', item)}
+        for match in GROUPED_ID.finditer(label):
+            first, tails = match.groups(); prefix = first.rsplit('-', 1)[0]
+            allowed.add(first)
+            allowed |= {prefix + '-' + tail for tail in tails.split('/') if tail}
+    return discovered, allowed
+
+
+def _prompt_block(block):
+    value = {key: item for key, item in block.items() if key != 'text'}
+    value['numbered_text'] = ''.join(
+        f'{number}: {line}' for number, line in enumerate(
+            block['text'].splitlines(keepends=True), block['line_start']))
+    return value
+
+
+def source_catalog(host_root, *, revision='HEAD', modules=()):
+    selected = tuple(modules)
+    base = inventory(host_root, revision=revision, modules=selected)
+    repositories = {'federated-workspace': PinnedRepository(host_root, 'federated-workspace', revision)}
+    for module_id, root, module_revision in selected:
+        repositories[module_id] = PinnedRepository(root, module_id, module_revision)
+    sources, blocks = [], []
+    known_by_repository = {}
+    for definition in base['definitions']:
+        known_by_repository.setdefault(definition['repository_id'], set()).add(definition['id'])
+    for node in base['dependency_hints']:
+        known_by_repository.setdefault('federated-workspace', set()).add(node['id'])
+    for source in base['sources']:
+        if source['role'] not in {'requirements', 'active', 'backlog', 'history'} \
+                or not source['path'].endswith('.md'):
+            continue
+        raw = repositories[source['repository_id']].read(source['path'])
+        source_row = dict(source)
+        source_row['sequence_policy'] = source['role']
+        sources.append(source_row)
+        sections = _sections(raw)
+        for index, (line_start, line_end, title, body) in enumerate(sections):
+            digest = hashlib.sha256((source['key'] + '\0' + str(line_start) + '\0' + body).encode()).hexdigest()
+            block_id = str(uuid5(NAMESPACE_URL, 'roadmap-source-block:' + digest))
+            discovered, allowed = _declared_ids(
+                body, known_by_repository.get(source['repository_id'], set()))
+            blocks.append(dict(block_id=block_id, source=source['key'], role=source['role'],
+                               repository_id=source['repository_id'],
+                               order=index, title=title, line_start=line_start,
+                               line_end=line_end, sha256=hashlib.sha256(body.encode()).hexdigest(),
+                               allowed_source_ids=sorted(allowed),
+                               reference_source_ids=sorted(discovered | allowed),
+                               text=body))
+    by_source = {}
+    for block in blocks:
+        by_source.setdefault(block['source'], []).append(block)
+    for rows in by_source.values():
+        for index, block in enumerate(rows):
+            block['previous'] = rows[index - 1]['block_id'] if index else None
+            block['next'] = rows[index + 1]['block_id'] if index + 1 < len(rows) else None
+    value = dict(schema=CATALOG_SCHEMA, revision=REVISION,
+                 inventory_sha256=base['inventory_sha256'], sources=sources, blocks=blocks,
+                 summary=dict(source_files=len(sources), blocks=len(blocks),
+                              source_bytes=sum(item['size'] for item in sources)))
+    value['catalog_sha256'] = hashlib.sha256(canonical(value)).hexdigest()
+    return value
+
+
+def _strict_json(raw, schema, fields):
+    require(isinstance(raw, str) and len(raw.encode()) <= 256 * 1024,
+            'Local-LLM response is invalid or oversized')
+    try:
+        value = json.loads(raw, object_pairs_hook=pairs)
+    except (ValueError, RecursionError) as exc:
+        raise ValueError('Local-LLM response is not strict JSON') from exc
+    require(isinstance(value, dict) and set(value) == fields and value['schema'] == schema,
+            'Local-LLM response fields differ')
+    return value
+
+
+def validate_extraction(raw, block):
+    value = _strict_json(raw, EXTRACTION_SCHEMA,
+        {'schema', 'block_id', 'entities', 'ambiguities', 'summary'})
+    require(value['block_id'] == block['block_id'] and isinstance(value['summary'], str)
+            and isinstance(value['entities'], list) and len(value['entities']) <= 512
+            and isinstance(value['ambiguities'], list) and len(value['ambiguities']) <= 128,
+            'Invalid source extraction identity')
+    keys = set()
+    for entity in value['entities']:
+        require(isinstance(entity, dict) and set(entity) == {'entity_key', 'kind',
+                'source_ids', 'title', 'status', 'maturity', 'parent_ref',
+                'dependency_refs', 'line_start', 'line_end', 'summary'},
+                'Invalid extracted entity fields')
+        if entity['parent_ref'] in {'null', 'source:' + block['block_id']}:
+            entity['parent_ref'] = None
+        if entity['maturity'] == 'test-validated':
+            require(len(value['ambiguities']) < 128,
+                    'Cannot preserve normalized maturity ambiguity')
+            entity['maturity'] = 'unknown'
+            value['ambiguities'].append({
+                'line_start': entity['line_start'], 'line_end': entity['line_end'],
+                'reason': 'Model použil neformální maturity test-validated; '
+                          'hodnota byla ponechána unknown k lidskému rozhodnutí.'})
+        disallowed = [item for item in entity['source_ids']
+                      if item not in block['allowed_source_ids']]
+        if disallowed:
+            require(len(value['ambiguities']) < 128,
+                    'Cannot preserve rejected source ID ambiguity')
+            entity['source_ids'] = [item for item in entity['source_ids']
+                                    if item in block['allowed_source_ids']]
+            value['ambiguities'].append({
+                'line_start': entity['line_start'], 'line_end': entity['line_end'],
+                'reason': 'Model navrhl source ID mimo deterministický allowlist: '
+                          + ', '.join(disallowed) + '; ID bylo odebráno k lidskému review.'})
+        require(isinstance(entity['entity_key'], str) and LOCAL_KEY.fullmatch(entity['entity_key'])
+                and entity['entity_key'] not in keys, 'Invalid or duplicate local entity key')
+        keys.add(entity['entity_key'])
+        require(entity['kind'] in KINDS, 'Invalid extracted entity kind')
+        require(entity['status'] in STATUSES, 'Invalid extracted entity status')
+        require(entity['maturity'] in MATURITIES, 'Invalid extracted entity maturity')
+        require(isinstance(entity['title'], str) and bool(entity['title'].strip())
+                and isinstance(entity['summary'], str), 'Invalid extracted entity text')
+        require(isinstance(entity['source_ids'], list)
+                and all(isinstance(item, str) for item in entity['source_ids'])
+                and len(entity['source_ids']) == len(set(entity['source_ids'])),
+                'Invalid extracted source ID list')
+        require(set(entity['source_ids']) <= set(block['allowed_source_ids']),
+                'Extracted source ID is not in allowed_source_ids')
+        require(isinstance(entity['dependency_refs'], list),
+                'Invalid extracted dependency list')
+        if entity['kind'] not in {'milestone', 'batch', 'task'}:
+            require(not entity['dependency_refs'],
+                    'Non-executable entity cannot define dependencies')
+        require(type(entity['line_start']) is int and type(entity['line_end']) is int
+                and block['line_start'] <= entity['line_start'] <= entity['line_end'] <= block['line_end'],
+                'Extracted entity cites lines outside source block')
+    allowed_refs = {'entity:' + key for key in keys} | {
+        'source:' + source_id for source_id in block.get(
+            'reference_source_ids', block['allowed_source_ids'])}
+    for entity in value['entities']:
+        require(entity['parent_ref'] is None or entity['parent_ref'] in allowed_refs,
+                'Invalid extracted parent reference')
+        require(all(isinstance(item, str) and item in allowed_refs
+                    for item in entity['dependency_refs'])
+                and len(entity['dependency_refs']) == len(set(entity['dependency_refs'])),
+                'Invalid extracted dependency reference')
+        require(entity['parent_ref'] != 'entity:' + entity['entity_key']
+                and 'entity:' + entity['entity_key'] not in entity['dependency_refs'],
+                'Extracted entity cannot reference itself')
+    for index, item in enumerate(value['ambiguities'], 1):
+        require(isinstance(item, dict),
+                f'Invalid extraction ambiguity {index}: expected an object')
+        require(set(item) == {'line_start', 'line_end', 'reason'},
+                f'Invalid extraction ambiguity {index}: fields differ')
+        require(type(item['line_start']) is int and type(item['line_end']) is int,
+                f'Invalid extraction ambiguity {index}: line range must contain integers')
+        require(block['line_start'] <= item['line_start'] <= item['line_end'] <= block['line_end'],
+                f'Invalid extraction ambiguity {index}: line range '
+                f"{item['line_start']}-{item['line_end']} is outside or reversed; "
+                f"use an ordered range within {block['line_start']}-{block['line_end']}")
+        require(isinstance(item['reason'], str) and bool(item['reason'].strip()),
+                f'Invalid extraction ambiguity {index}: reason must be non-empty text')
+    return value
+
+
+def validate_audit(raw, block):
+    value = _strict_json(raw, AUDIT_SCHEMA,
+        {'schema', 'block_id', 'verdict', 'scores', 'findings', 'summary'})
+    require(value['block_id'] == block['block_id'] and value['verdict'] in VERDICTS
+            and isinstance(value['summary'], str) and isinstance(value['findings'], list),
+            'Invalid source audit identity')
+    require(isinstance(value['scores'], dict) and set(value['scores']) == {
+        'coverage', 'hierarchy', 'status', 'provenance', 'dependencies'}
+        and all(type(score) is int and 0 <= score <= 100 for score in value['scores'].values()),
+        'Invalid audit scores')
+    value['findings'] = [item for item in value['findings']
+                         if not (isinstance(item, dict)
+                                 and item.get('kind') in {'correct', 'equivalent'})]
+    for item in value['findings']:
+        require(isinstance(item, dict) and set(item) == {'line_start', 'line_end',
+                'candidate_id', 'kind', 'reason'} and item['kind'] in VERDICTS - {'correct', 'equivalent'}
+                and (item['candidate_id'] is None or isinstance(item['candidate_id'], str))
+                and type(item['line_start']) is int and type(item['line_end']) is int
+                and block['line_start'] <= item['line_start'] <= item['line_end'] <= block['line_end']
+                and isinstance(item['reason'], str) and bool(item['reason'].strip()),
+                'Invalid audit finding')
+    return value
+
+
+def build_candidate(catalog, extractions):
+    support, conflicts = [], []
+    block_by_id = {item['block_id']: item for item in catalog['blocks']}
+    def repository(block):
+        return block.get('repository_id', block['source'].split(':', 1)[0]
+                         if ':' in block['source'] else 'federated-workspace')
+    local_ids, source_ids, grouped_mappings = {}, {}, []
+    for extraction in extractions:
+        block = block_by_id[extraction['block_id']]
+        for index, entity in enumerate(extraction['entities']):
+            if entity['kind'] not in {'milestone', 'batch', 'task'}:
+                local_ids[(block['block_id'], entity['entity_key'])] = None
+                continue
+            if len(entity['source_ids']) == 1:
+                source_id = entity['source_ids'][0]
+                candidate_id = (source_id if STABLE_ID.fullmatch(source_id) else
+                                'MILESTONE-' + source_id.replace('.', '-'))
+                source_ids[(repository(block), source_id)] = candidate_id
+            else:
+                digest = hashlib.sha256((block['block_id'] + ':' + entity['entity_key']
+                                         + ':' + str(index)).encode()).hexdigest()[:12].upper()
+                candidate_id = 'MIG-' + entity['kind'].upper() + '-' + digest
+                grouped_mappings.append((repository(block), candidate_id,
+                                         entity['source_ids']))
+            local_ids[(block['block_id'], entity['entity_key'])] = candidate_id
+    for repository_id, candidate_id, grouped_ids in grouped_mappings:
+        for source_id in grouped_ids:
+            previous = source_ids.get((repository_id, source_id))
+            if previous is None:
+                source_ids[(repository_id, source_id)] = candidate_id
+            elif previous.startswith('MIG-') and previous != candidate_id:
+                conflicts.append({'kind': 'source-id-mapping',
+                                  'repository_id': repository_id, 'source_id': source_id,
+                                  'candidates': sorted({previous, candidate_id})})
+
+    def resolve(block_id, reference):
+        if reference is None:
+            return None
+        kind, value = reference.split(':', 1)
+        return (local_ids.get((block_id, value)) if kind == 'entity' else
+                source_ids.get((repository(block_by_id[block_id]), value)))
+
+    occurrences = {}
+    for extraction in extractions:
+        block = block_by_id[extraction['block_id']]
+        for entity in extraction['entities']:
+            row = {key: entity[key] for key in ('entity_key', 'kind', 'source_ids',
+                   'title', 'status', 'maturity', 'line_start', 'line_end', 'summary')}
+            row['candidate_id'] = local_ids[(block['block_id'], entity['entity_key'])]
+            row['repository_id'] = repository(block)
+            row['parent_id'] = resolve(block['block_id'], entity['parent_ref'])
+            row['depends_on'] = [resolve(block['block_id'], item)
+                                 for item in entity['dependency_refs']]
+            row['provenance'] = dict(block_id=block['block_id'], source=block['source'],
+                                     role=block.get('role', 'unknown'),
+                                     order=block.get('order', 0),
+                                     line_start=entity['line_start'], line_end=entity['line_end'])
+            if entity['kind'] not in {'milestone', 'batch', 'task'}:
+                support.append(row); continue
+            node_id = row['candidate_id']
+            if len(entity['source_ids']) > 1:
+                conflicts.append({'kind': 'combined-source-ids', 'id': node_id,
+                                  'repository_id': row['repository_id'],
+                                  'source_ids': entity['source_ids'],
+                                  'provenance': row['provenance']})
+            occurrences.setdefault((row['repository_id'], node_id), []).append(row)
+
+    status_rank = {'unknown': 0, 'planned': 1, 'blocked': 2,
+                   'in-progress': 3, 'completed': 4}
+    maturity_rank = {'unknown': 0, 'designed': 1, 'implemented': 2,
+                     'poc-validated': 3, 'production-ready': 4}
+
+    def authority(row):
+        role = row['provenance']['role']
+        role_rank = (5 if role == 'history' and row['status'] == 'completed' else
+                     4 if role == 'active' else 3 if role == 'backlog' else
+                     2 if role == 'requirements' else 1)
+        return role_rank, status_rank[row['status']], maturity_rank[row['maturity']]
+
+    nodes = {}
+    structural = ('kind', 'status', 'maturity', 'parent_id', 'depends_on')
+    variant_fields = ('kind', 'title', 'status', 'maturity', 'parent_id',
+                      'depends_on', 'summary')
+    for node_key, rows in occurrences.items():
+        repository_id, node_id = node_key
+        best = max(authority(row) for row in rows)
+        strongest = [row for row in rows if authority(row) == best]
+        signatures = {canonical({key: row[key] for key in structural})
+                      for row in strongest}
+        strongest.sort(key=lambda row: (row['provenance']['source'],
+                                        row['provenance']['line_start']))
+        selected = dict(strongest[0])
+        selected['provenance_all'] = [row['provenance'] for row in rows]
+        selected['variants'] = [
+            {**{key: row[key] for key in variant_fields},
+             'provenance': row['provenance']}
+            for row in rows if any(row[key] != selected[key] for key in variant_fields)]
+        if len(signatures) > 1:
+            conflicts.append({'kind': 'reconciliation-ambiguity', 'id': node_id,
+                              'repository_id': repository_id,
+                              'authority': list(best),
+                              'provenance': [row['provenance'] for row in strongest]})
+        nodes[node_key] = selected
+    normalizations = []
+    for node_key, node in nodes.items():
+        repository_id, node_id = node_key
+        expected = {'batch': 'milestone', 'task': 'batch'}.get(node['kind'])
+        original = node['parent_id']; current = original; seen = {node_id}
+        while expected is not None and (repository_id, current) in nodes \
+                and nodes[(repository_id, current)]['kind'] != expected and current not in seen:
+            seen.add(current); current = nodes[(repository_id, current)]['parent_id']
+        if expected is not None and (repository_id, current) in nodes \
+                and nodes[(repository_id, current)]['kind'] == expected and current != original:
+            node['source_parent_id'] = original; node['parent_id'] = current
+            normalizations.append({'kind': 'flatten-parent', 'id': node_id,
+                                   'repository_id': repository_id,
+                                   'source_parent_id': original, 'parent_id': current})
+
+    issues = list(conflicts)
+    for extraction in extractions:
+        block = block_by_id[extraction['block_id']]
+        for ambiguity in extraction['ambiguities']:
+            issues.append({'kind': 'source-ambiguity', 'reason': ambiguity['reason'],
+                           'provenance': {'block_id': block['block_id'],
+                                          'source': block['source'],
+                                          'line_start': ambiguity['line_start'],
+                                          'line_end': ambiguity['line_end']}})
+    allowed = {'milestone': {None}, 'batch': {'milestone'}, 'task': {'batch'}}
+    for node_key, node in nodes.items():
+        repository_id, node_id = node_key
+        parent = nodes.get((repository_id, node['parent_id'])) if node['parent_id'] else None
+        parent_kind = parent['kind'] if parent else None
+        if parent_kind not in allowed[node['kind']]:
+            issues.append({'kind': 'invalid-parent', 'id': node_id,
+                           'repository_id': repository_id,
+                           'parent_id': node['parent_id']})
+        for dependency in node['depends_on']:
+            if (dependency is None or (repository_id, dependency) not in nodes
+                    or dependency == node_id):
+                issues.append({'kind': 'invalid-dependency', 'id': node_id,
+                               'repository_id': repository_id,
+                               'dependency': dependency})
+    ordered = sorted(nodes.values(), key=lambda item: (
+        item['provenance']['source'], item['provenance']['line_start'], item['candidate_id']))
+    candidate = dict(schema='fpw-roadmap-rebuild-candidate-v1', nodes=ordered,
+                     supporting_records=support, normalizations=normalizations, issues=issues,
+                     ready=not issues and bool(ordered))
+    candidate['candidate_sha256'] = hashlib.sha256(canonical(candidate)).hexdigest()
+    return candidate
+
+
+def resolve_candidate(candidate, graph_nodes):
+    """Apply pinned structural evidence and quarantine unresolved legacy placement."""
+    require(isinstance(graph_nodes, list), 'Invalid structural resolution graph')
+    hints = {}
+    for item in graph_nodes:
+        require(isinstance(item, dict) and set(item) == {'id', 'milestone', 'depends_on'}
+                and isinstance(item['id'], str) and isinstance(item['milestone'], str)
+                and isinstance(item['depends_on'], list)
+                and all(isinstance(value, str) for value in item['depends_on']),
+                'Invalid structural resolution hint')
+        require(item['id'] not in hints, 'Duplicate structural resolution hint')
+        hints[item['id']] = item
+    value = deepcopy(candidate)
+    nodes = {(item['repository_id'], item['candidate_id']): item
+             for item in value['nodes']}
+    warnings = deepcopy(value['issues'])
+    normalizations = value.setdefault('normalizations', [])
+
+    def synthetic(repository_id, node_id, kind, parent_id, title):
+        key = (repository_id, node_id)
+        if key not in nodes:
+            row = dict(entity_key='resolution', kind=kind, source_ids=[node_id],
+                       title=title, status='unknown', maturity='unknown',
+                       line_start=0, line_end=0, summary='Deterministický migrační kontejner.',
+                       candidate_id=node_id, repository_id=repository_id,
+                       parent_id=parent_id, depends_on=[],
+                       provenance=dict(block_id='structural-resolution',
+                           source='pinned:docs/roadmap-graph.json', role='graph', order=0,
+                           line_start=0, line_end=0), provenance_all=[], variants=[])
+            nodes[key] = row
+            value['nodes'].append(row)
+        return nodes[key]
+
+    def lane_from_id(node_id):
+        match = re.match(r'(?:F-)?M([0-9]+)(?:-|$)', node_id)
+        return 'M' + match.group(1) if match else None
+
+    def milestone(repository_id, lane):
+        node_id = 'MILESTONE-' + lane
+        return synthetic(repository_id, node_id, 'milestone', None, lane)
+
+    graph_repository = 'federated-workspace'
+    for node_id, hint in hints.items():
+        node = nodes.get((graph_repository, node_id))
+        if node is None:
+            continue
+        parent_id = milestone(graph_repository, hint['milestone'])['candidate_id']
+        if node['kind'] != 'batch' or node['parent_id'] != parent_id:
+            normalizations.append({'kind': 'pinned-graph-placement', 'id': node_id,
+                'repository_id': graph_repository, 'source_kind': node['kind'],
+                'source_parent_id': node['parent_id'], 'parent_id': parent_id})
+        node['kind'] = 'batch'; node['parent_id'] = parent_id
+        node['depends_on'] = list(dict.fromkeys(hint['depends_on']))
+
+    for (repository_id, node_id), node in list(nodes.items()):
+        if node_id.startswith('MILESTONE-') or node['kind'] == 'milestone':
+            if node['kind'] != 'milestone' or node['parent_id'] is not None:
+                normalizations.append({'kind': 'milestone-root', 'id': node_id,
+                    'repository_id': repository_id, 'source_kind': node['kind'],
+                    'source_parent_id': node['parent_id'], 'parent_id': None})
+            node['kind'] = 'milestone'; node['parent_id'] = None
+
+    for (repository_id, node_id), node in list(nodes.items()):
+        if node['kind'] == 'milestone':
+            continue
+        expected = 'milestone' if node['kind'] == 'batch' else 'batch'
+        parent = nodes.get((repository_id, node['parent_id']))
+        if parent is not None and parent['kind'] == expected and node['parent_id'] != node_id:
+            continue
+        variant_parents = []
+        for variant in node.get('variants', []):
+            candidate_parent = nodes.get((repository_id, variant.get('parent_id')))
+            if candidate_parent is not None and candidate_parent['kind'] == expected \
+                    and candidate_parent['candidate_id'] != node_id:
+                variant_parents.append(candidate_parent['candidate_id'])
+        variant_parents = list(dict.fromkeys(variant_parents))
+        if len(variant_parents) == 1:
+            replacement = variant_parents[0]
+            basis = 'preserved-structural-variant'
+        elif node['kind'] == 'batch' and lane_from_id(node_id):
+            replacement = milestone(repository_id, lane_from_id(node_id))['candidate_id']
+            basis = 'stable-id-milestone'
+        elif node['kind'] == 'batch':
+            replacement = milestone(repository_id, 'LEGACY')['candidate_id']
+            basis = 'legacy-quarantine'
+        else:
+            legacy = milestone(repository_id, 'LEGACY')['candidate_id']
+            replacement = synthetic(repository_id, 'MIGRATION-UNPLACED-BATCH', 'batch',
+                                    legacy, 'Nezařazené historické úkoly')['candidate_id']
+            basis = 'legacy-task-quarantine'
+        normalizations.append({'kind': basis, 'id': node_id,
+            'repository_id': repository_id, 'source_parent_id': node['parent_id'],
+            'parent_id': replacement})
+        node['parent_id'] = replacement
+
+    for (repository_id, node_id), node in nodes.items():
+        valid = []
+        for dependency in node['depends_on']:
+            if dependency != node_id and (repository_id, dependency) in nodes:
+                valid.append(dependency)
+            else:
+                warnings.append({'kind': 'dropped-unresolved-dependency', 'id': node_id,
+                                 'repository_id': repository_id,
+                                 'dependency': dependency})
+        node['depends_on'] = list(dict.fromkeys(valid))
+
+    fatal = []
+    allowed = {'milestone': {None}, 'batch': {'milestone'}, 'task': {'batch'}}
+    for (repository_id, node_id), node in nodes.items():
+        parent = nodes.get((repository_id, node['parent_id'])) if node['parent_id'] else None
+        if (parent['kind'] if parent else None) not in allowed[node['kind']]:
+            fatal.append({'kind': 'invalid-parent', 'id': node_id,
+                          'repository_id': repository_id, 'parent_id': node['parent_id']})
+        for dependency in node['depends_on']:
+            if (repository_id, dependency) not in nodes or dependency == node_id:
+                fatal.append({'kind': 'invalid-dependency', 'id': node_id,
+                              'repository_id': repository_id, 'dependency': dependency})
+    value['nodes'] = sorted(nodes.values(), key=lambda item: (
+        item['provenance']['source'], item['provenance']['line_start'], item['candidate_id']))
+    value['resolution_warnings'] = warnings
+    value['issues'] = fatal
+    value['ready'] = not fatal and bool(value['nodes'])
+    value.pop('candidate_sha256', None)
+    value['candidate_sha256'] = hashlib.sha256(canonical(value)).hexdigest()
+    return value
+
+
+def render_candidate(candidate):
+    lines = ['# Source-first roadmap candidate', '',
+             f'Ready: {str(candidate["ready"]).lower()}', '']
+    children = {}
+    rendered = set()
+    for node in candidate['nodes']:
+        repository_id = node.get('repository_id', 'federated-workspace')
+        children.setdefault((repository_id, node['parent_id']), []).append(node)
+    def add(repository_id, parent, indent=0):
+        for node in children.get((repository_id, parent), []):
+            node_key = (repository_id, node['candidate_id'])
+            if node_key in rendered:
+                lines.append(' ' * indent + '- [cycle] ' + node['candidate_id'])
+                continue
+            rendered.add(node_key)
+            checked = 'x' if node['status'] == 'completed' else ' '
+            lines.append(' ' * indent + f'- [{checked}] [{node["candidate_id"]}] {node["title"]}')
+            lines.append(' ' * (indent + 2) + '- type: ' + node['kind'])
+            if node['depends_on']:
+                dependencies = (item if item is not None else '<unresolved>'
+                                for item in node['depends_on'])
+                lines.append(' ' * (indent + 2) + '- depends_on: '
+                             + ', '.join(dependencies))
+            add(repository_id, node['candidate_id'], indent + 2)
+    for repository_id in sorted({node.get('repository_id', 'federated-workspace')
+                                 for node in candidate['nodes']}):
+        lines += ['## ' + repository_id, '']
+        add(repository_id, None)
+    lines += ['', '## Nezařazené popisy a historie', '']
+    for item in candidate['supporting_records']:
+        lines += [f'- **{item["kind"]}: {item["title"]}**',
+                  f'  - {item["summary"]}',
+                  f'  - source: {item["provenance"]["source"]}:{item["line_start"]}', '']
+    if candidate['issues']:
+        lines += ['## Blokátory kandidáta', '', '```json',
+                  json.dumps(candidate['issues'], ensure_ascii=False, indent=2), '```', '']
+    return '\n'.join(lines)
+
+
+def candidate_records(candidate, block_id):
+    return [item for item in candidate['nodes'] + candidate['supporting_records']
+            if item['provenance']['block_id'] == block_id
+            or any(provenance['block_id'] == block_id
+                   for provenance in item.get('provenance_all', []))]
+
+
+def audit_projection(records):
+    """Remove project routing metadata that does not change source fidelity."""
+    return [{key: value for key, value in item.items() if key != 'repository_id'}
+            for item in records]
+
+
+class RoadmapRebuild:
+    def __init__(self, node, run_dir, *, adapter_factory=None):
+        self.node = Path(node).absolute(); self.root = Path(run_dir).absolute()
+        self.adapter_factory = adapter_factory
+
+    @classmethod
+    def prepare(cls, node, run_dir, host_root, *, revision='HEAD', modules=()):
+        root = Path(run_dir).absolute()
+        require(not root.exists(), 'Rebuild run directory already exists')
+        catalog = source_catalog(host_root, revision=revision, modules=modules)
+        binding = OllamaBindings(Path(node).absolute().parent / ('.' + Path(node).name + '.chat')).load()
+        require(binding.boundary == 'same-node', 'Source rebuild requires same-node Ollama')
+        manifest = dict(schema=SCHEMA, revision=REVISION, created_at=_now(),
+                        catalog_sha256=catalog['catalog_sha256'],
+                        binding=dict(adapter='ollama', binding_id=binding.binding_id,
+                                     revision=binding.revision, boundary=binding.boundary,
+                                     target_id=binding.target_id, model=binding.model),
+                        prompts=dict(extraction_sha256=hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
+                                     audit_sha256=hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
+                                     guided_extraction_sha256=hashlib.sha256(AUDIT_GUIDED_EXTRACTION_INSTRUCTION.encode()).hexdigest(),
+                                     extraction_repair_sha256=hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
+                                     audit_repair_sha256=hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()),
+                        transport=dict(response_timeout_seconds=ROADMAP_LLM_TIMEOUT),
+                        state='prepared')
+        root = _secure_directory(root, create=True)
+        _atomic_json(root/'catalog.json', catalog); _atomic_json(root/'manifest.json', manifest)
+        (root/'results').mkdir(mode=0o700); (root/'raw').mkdir(mode=0o700)
+        (root/'ollama-runs').mkdir(mode=0o700)
+        return cls(node, root)
+
+    @classmethod
+    def derive(cls, node, run_dir, source_run, *, retry_extractions=(), audit_overrides=(),
+               audit_source_run=None, structure_repository=None):
+        source_root = _secure_directory(source_run)
+        audit_source_root = (_secure_directory(audit_source_run)
+                             if audit_source_run is not None else source_root)
+        root = Path(run_dir).absolute()
+        require(not root.exists(), 'Rebuild run directory already exists')
+        catalog = json.loads((source_root/'catalog.json').read_text(encoding='utf-8'))
+        source_manifest = json.loads((source_root/'manifest.json').read_text(encoding='utf-8'))
+        audit_source_manifest = json.loads(
+            (audit_source_root/'manifest.json').read_text(encoding='utf-8'))
+        frozen = dict(catalog); catalog_sha256 = frozen.pop('catalog_sha256')
+        require(hashlib.sha256(canonical(frozen)).hexdigest() == catalog_sha256
+                and source_manifest['catalog_sha256'] == catalog_sha256
+                and audit_source_manifest['catalog_sha256'] == catalog_sha256,
+                'Source rebuild catalog or manifest is inconsistent')
+        binding = OllamaBindings(Path(node).absolute().parent / ('.' + Path(node).name + '.chat')).load()
+        require(binding.boundary == 'same-node', 'Source rebuild requires same-node Ollama')
+        prompts = dict(
+            extraction_sha256=hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
+            audit_sha256=hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
+            guided_extraction_sha256=hashlib.sha256(AUDIT_GUIDED_EXTRACTION_INSTRUCTION.encode()).hexdigest(),
+            extraction_repair_sha256=hashlib.sha256(
+                EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
+            audit_repair_sha256=hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest())
+        manifest = dict(schema=SCHEMA, revision=REVISION, created_at=_now(),
+                        catalog_sha256=catalog_sha256,
+                        binding=dict(adapter='ollama', binding_id=binding.binding_id,
+                                     revision=binding.revision, boundary=binding.boundary,
+                                     target_id=binding.target_id, model=binding.model),
+                        prompts=prompts,
+                        transport=dict(response_timeout_seconds=ROADMAP_LLM_TIMEOUT),
+                        state='preparing-derived')
+        if structure_repository is not None:
+            host_commits = {item['commit_id'] for item in catalog['sources']
+                            if item['repository_id'] == 'federated-workspace'}
+            require(len(host_commits) == 1, 'Pinned host revision is ambiguous')
+            host = PinnedRepository(structure_repository, 'federated-workspace',
+                                    next(iter(host_commits)))
+            graph_raw = host.read('docs/roadmap-graph.json')
+            graph = json.loads(graph_raw)
+            require(graph.get('schema') == 'fpw-roadmap-graph-v1'
+                    and isinstance(graph.get('nodes'), list),
+                    'Unsupported structural resolution graph')
+            manifest['structural_resolution'] = {
+                'schema': graph['schema'], 'commit_id': host.commit,
+                'path': 'docs/roadmap-graph.json',
+                'sha256': hashlib.sha256(graph_raw).hexdigest(),
+                'policy': STRUCTURAL_RESOLUTION_POLICY,
+                'nodes': graph['nodes']}
+        root = _secure_directory(root, create=True)
+        (root/'results').mkdir(mode=0o700); (root/'raw').mkdir(mode=0o700)
+        (root/'ollama-runs').mkdir(mode=0o700)
+        reused = []
+        block_by_id = {item['block_id']: item for item in catalog['blocks']}
+        retry_extractions = set(retry_extractions)
+        require(retry_extractions <= set(block_by_id), 'Unknown extraction retry block')
+        inherited_overrides = [(item['block_id'], item['reason'])
+                               for item in source_manifest.get('audit_overrides', [])]
+        combined_overrides = inherited_overrides + list(audit_overrides)
+        override_map = {block_id: reason for block_id, reason in combined_overrides}
+        require(len(override_map) == len(combined_overrides)
+                and set(override_map) <= set(block_by_id), 'Invalid audit override')
+        for path in sorted((source_root/'results').glob('extract-*.json')):
+            if '.attempt-' in path.name or path.name.endswith('.failed.json'):
+                continue
+            block_id = path.name[len('extract-'):-len('.json')]
+            require(block_id in block_by_id, 'Source run contains an unknown extraction block')
+            if block_id in retry_extractions:
+                continue
+            value = validate_extraction(path.read_text(encoding='utf-8'), block_by_id[block_id])
+            _atomic_json(root/'results'/path.name, value)
+            reused.append({'block_id': block_id,
+                           'result_sha256': hashlib.sha256(canonical(value)).hexdigest()})
+        reused_audits = []
+        if len(reused) == len(catalog['blocks']) and (audit_source_root/'candidate.json').exists() \
+                and audit_source_manifest.get('prompts', {}).get('audit_sha256') \
+                == prompts['audit_sha256']:
+            extractions = [json.loads((root/'results'/(
+                'extract-' + block['block_id'] + '.json')).read_text(encoding='utf-8'))
+                for block in catalog['blocks']]
+            previous_candidate = json.loads((audit_source_root/'candidate.json').read_text(
+                encoding='utf-8'))
+            current_candidate = build_candidate(catalog, extractions)
+            if 'structural_resolution' in manifest:
+                current_candidate = resolve_candidate(
+                    current_candidate, manifest['structural_resolution']['nodes'])
+            for block in catalog['blocks']:
+                previous = audit_projection(candidate_records(
+                    previous_candidate, block['block_id']))
+                current = audit_projection(candidate_records(
+                    current_candidate, block['block_id']))
+                audit_path = audit_source_root/'results'/('audit-' + block['block_id'] + '.json')
+                if canonical(previous) != canonical(current) or not audit_path.exists():
+                    continue
+                value = validate_audit(audit_path.read_text(encoding='utf-8'), block)
+                _atomic_json(root/'results'/audit_path.name, value)
+                reused_audits.append({'block_id': block['block_id'],
+                    'result_sha256': hashlib.sha256(canonical(value)).hexdigest()})
+        manifest['derived_from'] = {
+            'run_dir': str(source_root),
+            'manifest_sha256': hashlib.sha256(canonical(source_manifest)).hexdigest(),
+            'reused_extractions': reused, 'reused_audits': reused_audits}
+        if audit_source_root != source_root:
+            manifest['audit_source'] = {
+                'run_dir': str(audit_source_root),
+                'manifest_sha256': hashlib.sha256(
+                    canonical(audit_source_manifest)).hexdigest()}
+        manifest['guided_extractions'] = {}
+        for block_id in sorted(retry_extractions):
+            extraction_path = source_root/'results'/('extract-' + block_id + '.json')
+            audit_path = source_root/'results'/('audit-' + block_id + '.json')
+            require(extraction_path.exists() and audit_path.exists(),
+                    'Guided retry requires prior extraction and audit')
+            manifest['guided_extractions'][block_id] = {
+                'previous_extraction': json.loads(extraction_path.read_text(encoding='utf-8')),
+                'source_audit': json.loads(audit_path.read_text(encoding='utf-8'))}
+        manifest['audit_overrides'] = [
+            {'block_id': block_id, 'verdict': 'equivalent', 'reason': reason}
+            for block_id, reason in sorted(override_map.items())]
+        manifest['state'] = 'prepared'
+        _atomic_json(root/'catalog.json', catalog); _atomic_json(root/'manifest.json', manifest)
+        return cls(node, root)
+
+    def _load(self, name):
+        _secure_directory(self.root)
+        return json.loads((self.root/name).read_text(encoding='utf-8'))
+
+    def _binding(self):
+        binding = OllamaBindings(self.node.parent / ('.' + self.node.name + '.chat')).load()
+        manifest = self._load('manifest.json')['binding']
+        require(dict(adapter='ollama', binding_id=binding.binding_id, revision=binding.revision,
+                     boundary=binding.boundary, target_id=binding.target_id,
+                     model=binding.model) == manifest, 'Local-LLM binding changed after prepare')
+        return binding
+
+    def _dispatch(self, stage, item_id, instruction, value):
+        binding = self._binding(); target = binding.target()
+        payload = canonical({'inputs': [{'input_id': item_id,
+                                         'content_b64': b64encode(canonical(value)).decode()}],
+                             'task': {'role_id': 'extractor', 'role_revision': 'extractor-v1',
+                                      'instruction': instruction, 'focus_input_id': item_id}})
+        run_id = str(uuid5(NAMESPACE_URL, f'roadmap-rebuild:{self._load("manifest.json")["catalog_sha256"]}:{stage}:{item_id}'))
+        manifest_id = str(uuid5(NAMESPACE_URL, 'roadmap-rebuild-manifest:' + run_id))
+        digest = hashlib.sha256(canonical({'stage': stage, 'item_id': item_id,
+                                           'binding': self._load('manifest.json')['binding'],
+                                           'payload_sha256': hashlib.sha256(payload).hexdigest()})).hexdigest()
+        handoff = DispatchHandoff(run_id, manifest_id, digest, target, payload)
+        runs = OllamaRuns(self.root/'ollama-runs')
+        adapter = (self.adapter_factory(runs) if self.adapter_factory else
+                   OllamaAdapter(runs,
+                       transport=lambda current, request: OllamaAdapter._json_transport(
+                           current, 'POST', '/api/generate', request,
+                           timeout=ROADMAP_LLM_TIMEOUT, uncertain_after_send=True),
+                       runtime_probe=OllamaAdapter.probe_runtime))
+        role = ROLES.resolve('extractor', 'extractor-v1')
+        adapter.prepare(handoff, binding, role, 'json')
+        return adapter.dispatch(handoff, binding, role, 'json')['response']
+
+    def run(self, *, limit=1, progress=None):
+        require(type(limit) is int and 1 <= limit <= 100000, 'Run limit must be 1..100000')
+        require(progress is None or callable(progress), 'Invalid progress callback')
+        manifest = self._load('manifest.json')
+        require(manifest['prompts'] == {
+            'extraction_sha256': hashlib.sha256(EXTRACTION_INSTRUCTION.encode()).hexdigest(),
+            'audit_sha256': hashlib.sha256(AUDIT_INSTRUCTION.encode()).hexdigest(),
+            'guided_extraction_sha256': hashlib.sha256(AUDIT_GUIDED_EXTRACTION_INSTRUCTION.encode()).hexdigest(),
+            'extraction_repair_sha256': hashlib.sha256(EXTRACTION_REPAIR_INSTRUCTION.encode()).hexdigest(),
+            'audit_repair_sha256': hashlib.sha256(AUDIT_REPAIR_INSTRUCTION.encode()).hexdigest()},
+            'Rebuild prompt changed after prepare; create a new run')
+        require(manifest.get('transport') == {
+            'response_timeout_seconds': ROADMAP_LLM_TIMEOUT},
+            'Rebuild transport limits changed after prepare; create a new run')
+        if 'structural_resolution' in manifest:
+            require(manifest['structural_resolution'].get('policy')
+                    == STRUCTURAL_RESOLUTION_POLICY,
+                    'Structural resolution policy changed after prepare; create a new run')
+        catalog = self._load('catalog.json')
+        frozen = dict(catalog); catalog_sha256 = frozen.pop('catalog_sha256')
+        require(hashlib.sha256(canonical(frozen)).hexdigest() == catalog_sha256
+                and manifest['catalog_sha256'] == catalog_sha256,
+                'Rebuild source catalog changed after prepare')
+        calls = 0
+        result_dir = self.root/'results'
+        pending_extraction = any(not (result_dir/('extract-' + item['block_id'] + '.json')).exists()
+                                 and not (result_dir/('extract-' + item['block_id'] + '.failed.json')).exists()
+                                 for item in catalog['blocks'])
+        pending_audit = any(not (result_dir/('audit-' + item['block_id'] + '.json')).exists()
+                            and not (result_dir/('audit-' + item['block_id'] + '.failed.json')).exists()
+                            for item in catalog['blocks'])
+        if self.adapter_factory is None and (pending_extraction or pending_audit):
+            binding = self._binding()
+            availability = OllamaAdapter.probe(binding)
+            require(availability['model_available'],
+                    'Pinned local-LLM model is unavailable: ' + binding.model)
+        extractions = []
+        logical_done = sum((self.root/'results'/('extract-' + item['block_id'] + '.json')).exists()
+                           or (self.root/'results'/('extract-' + item['block_id'] + '.failed.json')).exists()
+                           for item in catalog['blocks'])
+        logical_done += sum((self.root/'results'/('audit-' + item['block_id'] + '.json')).exists()
+                            or (self.root/'results'/('audit-' + item['block_id'] + '.failed.json')).exists()
+                            for item in catalog['blocks'])
+        logical_total = len(catalog['blocks']) * 2
+
+        def notify(**event):
+            if progress is not None:
+                progress(dict(logical_done=logical_done, logical_total=logical_total, **event))
+
+        for block_index, block in enumerate(catalog['blocks'], 1):
+            path = self.root/'results'/('extract-' + block['block_id'] + '.json')
+            failure = self.root/'results'/('extract-' + block['block_id'] + '.failed.json')
+            if path.exists():
+                value = validate_extraction(path.read_text(encoding='utf-8'), block)
+            elif failure.exists():
+                continue
+            else:
+                focused = dict(schema='fpw-roadmap-source-block-v1', policy=SOURCE_POLICY,
+                               block=_prompt_block(block),
+                               allowed_source_ids=block['allowed_source_ids'],
+                               reference_source_ids=block.get(
+                                   'reference_source_ids', block['allowed_source_ids']),
+                               previous_title=next((item['title'] for item in catalog['blocks']
+                                   if item['block_id'] == block['previous']), None),
+                               next_title=next((item['title'] for item in catalog['blocks']
+                                   if item['block_id'] == block['next']), None))
+                guidance = manifest.get('guided_extractions', {}).get(block['block_id'])
+                prior = sorted((self.root/'results').glob(
+                    'extract-' + block['block_id'] + '.attempt-*.failed.json'))
+                attempt = len(prior) + 1; value = None
+                while attempt <= MAX_ATTEMPTS and calls < limit:
+                    raw = None
+                    instruction = (AUDIT_GUIDED_EXTRACTION_INSTRUCTION
+                                   if attempt == 1 and guidance else
+                                   EXTRACTION_INSTRUCTION if attempt == 1
+                                   else EXTRACTION_REPAIR_INSTRUCTION)
+                    if attempt == 1:
+                        request = ({'source_block': focused, **guidance}
+                                   if guidance else focused)
+                    else:
+                        previous_response = (self.root/'raw'/(
+                            'extract-' + block['block_id']
+                            + f'.attempt-{attempt - 1}.json')).read_text(encoding='utf-8')
+                        validation_error = json.loads(
+                            prior[-1].read_text(encoding='utf-8'))['error']
+                        try:
+                            validate_extraction(previous_response, block)
+                        except Exception as exc:
+                            validation_error = str(exc)
+                        request = dict(source_block=focused,
+                                       previous_response=previous_response,
+                                       validation_error=validation_error)
+                    try:
+                        notify(event='dispatch', phase='extract', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt)
+                        raw = self._dispatch('extract-' + str(attempt), block['block_id'],
+                                             instruction, request)
+                        (self.root/'raw'/('extract-' + block['block_id']
+                         + f'.attempt-{attempt}.json')).write_text(raw, encoding='utf-8')
+                        value = validate_extraction(raw, block); _atomic_json(path, value)
+                        calls += 1; logical_done += 1
+                        notify(event='result', phase='extract', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='completed')
+                        break
+                    except Exception as exc:
+                        attempt_failure = self.root/'results'/('extract-' + block['block_id']
+                                                               + f'.attempt-{attempt}.failed.json')
+                        error = {'stage': 'extract', 'attempt': attempt,
+                                 'block_id': block['block_id'], 'error': str(exc),
+                                 'failed_at': _now()}
+                        _atomic_json(attempt_failure, error); prior.append(attempt_failure); calls += 1
+                        if raw is None or attempt == MAX_ATTEMPTS:
+                            _atomic_json(failure, error); logical_done += 1
+                            notify(event='result', phase='extract', block=block_index,
+                                   blocks=len(catalog['blocks']), attempt=attempt, outcome='failed')
+                            break
+                        notify(event='result', phase='extract', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='repair')
+                        attempt += 1
+                if value is None:
+                    continue
+            extractions.append(value)
+        if len(extractions) != len(catalog['blocks']):
+            return self.status() | {'processed': calls}
+        candidate = build_candidate(catalog, extractions)
+        if 'structural_resolution' in manifest:
+            candidate = resolve_candidate(candidate, manifest['structural_resolution']['nodes'])
+        _atomic_json(self.root/'candidate.json', candidate)
+        (self.root/'candidate.md').write_text(render_candidate(candidate), encoding='utf-8')
+        audits = []
+        for block_index, block in enumerate(catalog['blocks'], 1):
+            path = self.root/'results'/('audit-' + block['block_id'] + '.json')
+            failure = self.root/'results'/('audit-' + block['block_id'] + '.failed.json')
+            if path.exists():
+                value = validate_audit(path.read_text(encoding='utf-8'), block)
+            elif failure.exists():
+                continue
+            else:
+                records = candidate_records(candidate, block['block_id'])
+                focused = {'source_block': _prompt_block(block),
+                           'candidate_records': records}
+                prior = sorted((self.root/'results').glob(
+                    'audit-' + block['block_id'] + '.attempt-*.failed.json'))
+                attempt = len(prior) + 1; value = None
+                while attempt <= MAX_ATTEMPTS and calls < limit:
+                    raw = None
+                    instruction = (AUDIT_INSTRUCTION if attempt == 1
+                                   else AUDIT_REPAIR_INSTRUCTION)
+                    request = focused if attempt == 1 else dict(
+                        source_block=focused, previous_response=(self.root/'raw'/(
+                            'audit-' + block['block_id'] + f'.attempt-{attempt - 1}.json')).read_text(
+                                encoding='utf-8'),
+                        validation_error=json.loads(prior[-1].read_text(encoding='utf-8'))['error'])
+                    try:
+                        notify(event='dispatch', phase='audit', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt)
+                        raw = self._dispatch('audit-' + str(attempt), block['block_id'],
+                                             instruction, request)
+                        (self.root/'raw'/('audit-' + block['block_id']
+                         + f'.attempt-{attempt}.json')).write_text(raw, encoding='utf-8')
+                        value = validate_audit(raw, block); _atomic_json(path, value)
+                        calls += 1; logical_done += 1
+                        notify(event='result', phase='audit', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='completed')
+                        break
+                    except Exception as exc:
+                        attempt_failure = self.root/'results'/('audit-' + block['block_id']
+                                                               + f'.attempt-{attempt}.failed.json')
+                        error = {'stage': 'audit', 'attempt': attempt,
+                                 'block_id': block['block_id'], 'error': str(exc),
+                                 'failed_at': _now()}
+                        _atomic_json(attempt_failure, error); prior.append(attempt_failure); calls += 1
+                        if raw is None or attempt == MAX_ATTEMPTS:
+                            _atomic_json(failure, error); logical_done += 1
+                            notify(event='result', phase='audit', block=block_index,
+                                   blocks=len(catalog['blocks']), attempt=attempt, outcome='failed')
+                            break
+                        notify(event='result', phase='audit', block=block_index,
+                               blocks=len(catalog['blocks']), attempt=attempt, outcome='repair')
+                        attempt += 1
+                if value is None:
+                    continue
+            override = next((item for item in manifest.get('audit_overrides', [])
+                             if item['block_id'] == block['block_id']), None)
+            if override is not None:
+                value = dict(value, verdict=override['verdict'], findings=[],
+                             summary='Human review override: ' + override['reason'])
+            audits.append(value)
+        if len(audits) == len(catalog['blocks']):
+            dimensions = {key: round(sum(item['scores'][key] for item in audits) / len(audits), 2)
+                          for key in ('coverage', 'hierarchy', 'status', 'provenance', 'dependencies')}
+            report = dict(schema='fpw-roadmap-rebuild-report-v1', catalog_sha256=catalog['catalog_sha256'],
+                          candidate_sha256=candidate['candidate_sha256'], blocks=len(audits),
+                          verdicts=dict(Counter(item['verdict'] for item in audits)),
+                          scores=dimensions, fidelity=round(sum(dimensions.values()) / len(dimensions), 2),
+                          candidate_ready=candidate['ready'], candidate_issues=candidate['issues'],
+                          audit_overrides=manifest.get('audit_overrides', []),
+                          import_ready=candidate['ready'] and all(item['verdict'] in {'correct', 'equivalent'}
+                                                                 for item in audits))
+            _atomic_json(self.root/'report.json', report)
+            lines = ['# Source-first roadmap rebuild report', '',
+                     f'- blocks: {report["blocks"]}',
+                     f'- candidate_ready: {str(report["candidate_ready"]).lower()}',
+                     f'- import_ready: {str(report["import_ready"]).lower()}',
+                     f'- fidelity: {report["fidelity"]} %', '',
+                     '## Fidelity dimensions', '']
+            lines += [f'- {key}: {value} %' for key, value in report['scores'].items()]
+            lines += ['', '## Verdicts', '']
+            lines += [f'- {key}: {value}' for key, value in sorted(report['verdicts'].items())]
+            lines += ['', '## Candidate blockers', '', '```json',
+                      json.dumps(report['candidate_issues'], ensure_ascii=False, indent=2), '```', '']
+            (self.root/'report.md').write_text('\n'.join(lines), encoding='utf-8')
+        return self.status() | {'processed': calls}
+
+    def status(self):
+        catalog = self._load('catalog.json'); result_dir = self.root/'results'
+        extracted = sum((result_dir/('extract-' + item['block_id'] + '.json')).exists()
+                        for item in catalog['blocks'])
+        audited = sum((result_dir/('audit-' + item['block_id'] + '.json')).exists()
+                      for item in catalog['blocks'])
+        failed_extractions = sum((result_dir/('extract-' + item['block_id'] + '.failed.json')).exists()
+                                 for item in catalog['blocks'])
+        failed_audits = sum((result_dir/('audit-' + item['block_id'] + '.failed.json')).exists()
+                            for item in catalog['blocks'])
+        extraction_repairs = sum(1 for item in (self.root/'raw').glob('extract-*.attempt-*.json')
+                                 if '.attempt-1.' not in item.name)
+        audit_repairs = sum(1 for item in (self.root/'raw').glob('audit-*.attempt-*.json')
+                            if '.attempt-1.' not in item.name)
+        report = self._load('report.json') if (self.root/'report.json').exists() else None
+        logical_completed = extracted + failed_extractions + audited + failed_audits
+        logical_total = len(catalog['blocks']) * 2
+        return dict(run_dir=str(self.root), blocks=len(catalog['blocks']), extracted=extracted,
+                    failed_extractions=failed_extractions, audited=audited,
+                    failed_audits=failed_audits, extraction_repairs=extraction_repairs,
+                    audit_repairs=audit_repairs, candidate=(self.root/'candidate.json').exists(),
+                    logical_completed=logical_completed, logical_total=logical_total,
+                    progress_percent=round(logical_completed * 100 / logical_total, 2),
+                    complete=report is not None, report=report)

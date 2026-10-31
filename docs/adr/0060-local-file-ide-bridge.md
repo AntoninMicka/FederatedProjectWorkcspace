@@ -72,8 +72,9 @@ akceptace. Codex není hostitelem rozšíření; orchestrace a spuštění patř
 Export vyžaduje validní plán se stabilními ID; obsahuje přesný projektový
 commit, revizi plánu a všechny kanonické definice včetně zahrnutých souborů.
 Je immutable v rámci relace, nejvýše 1 MiB. Při změně HEAD je relace stale a
-nové zprávy mají stale receipt. Uživatel připraví nové propojení, nepřepisuje
-se zadání pod běžícím agentem. Zdrojový repozitář zůstává oddělený: zpráva
+nové zprávy mají stale receipt. Původní kontrakt vyžadoval ruční vytvoření
+nového propojení; automatickou obnovu již potvrzeného cíle od 0.2.4 vymezuje
+doplnění níže. Snapshot běžící relace se nepřepisuje. Zdrojový repozitář zůstává oddělený: zpráva
 nese jeho skutečný commit, nikoli tvrzení backendu o ověřeném obsahu diffu.
 
 Zpráva obsahuje message_id (UUID), task_id, kind completed/clarification/message,
@@ -186,3 +187,41 @@ Crash boundaries rozšiřují původní body výše:
 
 Recovery testy a skutečný IDE smoke této opravy jsou evidovány u samostatné
 feature dávky; původní historické důkazy zůstávají platné v původním rozsahu.
+
+## Doplnění 30. 10. 2026 — automatická obnova zadání (DEV-01-F-IDE-02)
+
+Uživatel požaduje, aby změna zadání ve Workspace nevyžadovala opakované
+ruční přiřazení stejného projektu. Schema-v2 sync proto po doručení čekajících
+zpráv automaticky použije existující map/bind kontrakt pro aktuální HEAD.
+Zachová přesný projekt, repository, editor_workspace a instructions.
+Původní relace zůstává immutable, nová má vlastní ID a schránku; nevzniká
+další Git writer ani změna autoritativního plánu. První přiřazení a změna
+cíle stále vyžadují potvrzení. Schema-v1 se nemění. Toto rozhodnutí mění
+původní požadavek ručního potvrzení každé nové revize pro stejný cíl.
+
+Crash boundaries navazují na body 8–10:
+
+1. Po úspěšném exchange a doručení celé čekající fronty klient persistuje
+   do SecretStorage původní session, požadovaný HEAD a přesný cíl obnovy.
+   Selhání tohoto zápisu nesmí spustit map. Staré zprávy se nerevidují.
+2. Map atomicky odvolá starou session a vytvoří novou unbound. Pád před
+   commitem ponechá starou; další cyklus znovu ověří aktuální HEAD. Pád po
+   commitu či ztracená odpověď ponechá lokální intent: klient v katalogu
+   přijme pouze nové mapování se shodným projektem, HEAD, cílem i instrukcemi.
+   Jinou změnu nebo odvolání nepřepíše. Pokud se HEAD mezitím posunul,
+   nejprve dokončí rozpracovanou revizi a novější převezme v dalším cyklu.
+3. Přesný bind je idempotentní. Teprve po jeho odpovědi se lokální mapování
+   přepne v SecretStorage. Selhání bind či finálního store ponechá původní
+   intent pro další cyklus/restart. Serverové unbound okno není úspěšná obnova.
+4. Nový snapshot se publikuje do nové schránky podle bodu 5; výpadek
+   uprostřed opraví další sync. Původní adresář, inbox a receipts se nemažou.
+   Klient si u nového lokálního přiřazení ponechá ID předchozí relace,
+   aby i po pádu mezi uložením mapování a exportem přepnul viditelné TODO
+   při dalším úspěšném sync. Agent používající starou
+   cestu se sám nepřesměruje; pozdě zapsané historické zprávy zůstávají pro
+   ruční posouzení. Obnova není automatické spuštění či přerušení agenta;
+   řízené předání běhu patří DEV-02/DEV-04.
+
+Reuse/adapt: stávající katalog, map CAS, bind a immutable mailbox; nový
+serverový endpoint, databázové schéma ani závislost nejsou potřeba.
+Regrese a fyzická aktivace rozšíření se evidují odděleně v TODO.

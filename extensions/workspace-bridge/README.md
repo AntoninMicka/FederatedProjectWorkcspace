@@ -12,6 +12,14 @@ a přiřadí jim lokální složku či `.code-workspace` a Git repozitář.
 Přiřazení lze spravovat také v tabulce na stránce Workspace; lokální cíl
 potvrdíte v IDE. Jeden editor synchronizuje více samostatných projektů.
 Nastavení **Workspace bridge → Auto Sync** umožní vypnout automatický sync.
+Od verze 0.2.4 sync také obnoví změněné zadání již přiřazeného schema-v2
+projektu při zachování cílového repozitáře a instrukcí. Nejprve doručí
+čekající zprávy pod původní revizí; nová revize dostane vlastní schránku.
+Viditelné původní TODO se otevře v nové revizi. Staré soubory i receipts
+zůstávají zachované. Restart dokončí rozpracované mapování bez nového
+párování; změna cíle či odvolání přístupu se automaticky neobchází.
+Zprávy vytvořené ve staré schránce po přepnutí vyžadují ruční posouzení.
+Aktualizace exportu sama nevkládá nové zadání do běžící konverzace agenta.
 
 **Workspace: Otevřít komunikační soubory** nabídne projekt, otevře jeho TODO
 a zkopíruje cestu ke složce mimo Git. Ta obsahuje TODO.md, INSTRUCTIONS.md,
@@ -31,6 +39,10 @@ První fyzicky ověřený profil je Linux/VSCodium. Windows a VS Code vyžadují
 samostatné ověření. Webový Workspace funguje přes HTTPS, rozšíření běží
 v lokálním IDE. Remote SSH, WSL a browser-only IDE nejsou podporované.
 Bridge nespouští coding agenta ani mu automaticky nepřidává práva k souborům.
+
+Od verze 0.2.2 se přechodná odpověď `503 server busy` opakuje nejvýše třikrát
+s odstupem 250, 500 a 1000 ms. Trvalé vytížení se zobrazí jako chyba;
+jiné HTTP chyby ani nejasné síťové selhání se automaticky neopakují.
 
 Od verze 0.2.1 se při restartu aktualizovaného desktopu automaticky obnoví
 jeho adresa z lokální podepsané discovery. Uložené projekty a credentials

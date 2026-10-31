@@ -452,6 +452,50 @@ raise SystemExit(app.exec())
         self.assertNotIn('juliaEditorDefinition', JS)
         self.assertNotIn('julia-output-value.innerHTML', JS)
 
+    def test_roadmap_refinement_review_is_a_conditional_project_tool(self):
+        self.assertIn('id="roadmap-refinement-tab"', HTML)
+        self.assertIn('id="roadmap-refinement-panel"', HTML)
+        self.assertIn('id="roadmap-review-table"', HTML)
+        self.assertIn('id="roadmap-review-detail"', HTML)
+        self.assertIn('Schválit všechny pending', HTML)
+        self.assertIn('Zamítnout všechny pending', HTML)
+        self.assertIn('Zrušit všechna schválení', HTML)
+        self.assertIn('id="roadmap-review-reset"', HTML)
+        self.assertIn('id="roadmap-review-apply-selected"', HTML)
+        self.assertIn('id="roadmap-review-apply"', HTML)
+        self.assertIn('id="roadmap-review-previous"', HTML)
+        self.assertIn('id="roadmap-review-next"', HTML)
+        self.assertIn('id="roadmap-review-state-filters"', HTML)
+        self.assertIn('id="roadmap-review-action-filters"', HTML)
+        self.assertIn('id="roadmap-review-sort"', HTML)
+        self.assertIn('id="roadmap-review-sort-direction"', HTML)
+        self.assertNotIn('id="roadmap-review-hide-decided"', HTML)
+        self.assertIn('roadmapReviewTab.hidden=!roadmapReviewRows.length', JS)
+        self.assertIn('if(roadmapReviewRows.length)', JS)
+        self.assertIn('roadmapReviewRows.length||roadmapReviewError', JS)
+        self.assertIn('Načtení selhalo:', JS)
+        self.assertIn('Použijte Obnovit seznam.', JS)
+        self.assertIn('ROADMAP_REVIEW_PAGE_SIZE=100', JS)
+        self.assertIn("localeCompare(String(right),'cs'", JS)
+        self.assertIn('roadmapReviewStates.has(item.row.state)', JS)
+        self.assertIn('roadmapReviewActions.has(roadmapReviewAction(item.row))', JS)
+        self.assertIn('function roadmapReviewFiltersChanged()', JS)
+        self.assertIn("path.startsWith('/v1/roadmap-refinement/')", JS)
+        for path in ('list', 'detail', 'decide', 'decide-all',
+                     'reconcile/preview', 'apply'):
+            self.assertIn(f"projectRequest('/v1/roadmap-refinement/{path}'", JS)
+            self.assertIn('/v1/roadmap-refinement/' + path, DesktopHandler.post_paths)
+        self.assertIn('roadmapReviewApplyOperation=roadmapReviewApplyOperation||crypto.randomUUID()', JS)
+        self.assertIn('preview.blockers.length', JS)
+        self.assertIn('preview.preview_sha256', JS)
+        self.assertIn("decideRoadmapReview('reset'", JS)
+        self.assertIn('proposal_ids:selected', JS)
+        self.assertIn('.roadmap-review-layout{display:grid', CSS)
+        self.assertIn('.roadmap-review-detail{position:sticky;top:8px;display:block;width:100%;height:auto', CSS)
+        review_js = JS[JS.index('function renderRoadmapReviewRows'):
+                       JS.index('function renderJuliaParameters')]
+        self.assertNotIn('.innerHTML=', review_js)
+
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
         with tempfile.TemporaryDirectory() as directory:
@@ -1418,6 +1462,51 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Chaty nelze načíst:', load_chat)
         self.assertIn('++chatLoadRevision', JS)
         self.assertIn('expectedProjectId!==(activeProject?.id || null)', JS)
+
+    def test_project_chat_restoration_finishes_after_optional_requests(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js required')
+        function = 'async function loadChat(){' + JS.split('async function loadChat(){', 1)[1].split(
+            '\n}\nfunction backendCandidate()', 1)[0] + '\n}'
+        harness = r'''
+const assert=require('node:assert/strict');
+let chatLoadRevision=0,chatSelectionRevision=0,activeProject={id:'project'},activeThread=null,
+ activeTaskThreadId=null,taskOutcomes=[],modelSelectionProjection=null,externalBinding=null,
+ externalStreaming=false,atlasCloudBinding=null,atlasCloudStreaming=false;
+let mode='empty',rendered=[],selected={textContent:'',value:''};
+const document={querySelector:()=>selected},chatStatus={textContent:''},chatOperationStatus={textContent:''};
+const thread={thread_id:'thread',project_id:'project',status:'active',classification:'brainstorming'};
+const renderModelSelection=()=>{},renderChatRunSelectors=()=>{},fillBinding=()=>{},fillSearchBinding=()=>{},
+ applyOllamaStreamingStatus=()=>{},applyResponseLanguageStatus=()=>{},renderThreadList=()=>{},
+ renderTaskPublicSources=()=>{},refreshChatModeControls=()=>{},fillExternalModels=()=>{},fillAtlasCloudOffers=()=>{};
+function renderChat(value){rendered.push(value);}
+async function loadAutonomyQueue(){return true;}
+async function projectRequest(url){
+ if(url==='/v1/chat/status'){
+  if(mode==='history-failure')throw Error('unavailable');
+  return {threads:mode==='empty'?[]:[thread]};
+ }
+ if(url==='/v1/tasks/list'){
+  if(mode==='task-failure')throw Error('unavailable');
+  return {outcomes:[{thread_id:'thread',id:'belongs'},{thread_id:'other',id:'foreign'}]};
+ }
+ return {};
+}
+'''
+        checks = r'''
+(async()=>{
+ await loadChat();assert.equal(rendered.at(-1),null);assert.deepEqual(taskOutcomes,[]);
+ mode='thread';await loadChat();assert.equal(rendered.at(-1),thread);
+ assert.equal(activeTaskThreadId,'thread');assert.deepEqual(taskOutcomes.map(item=>item.id),['belongs']);
+ assert.match(chatOperationStatus.textContent,/Obnoveno poslední/);
+ mode='task-failure';await loadChat();assert.equal(rendered.at(-1),thread);
+ assert.deepEqual(taskOutcomes,[]);assert.match(chatOperationStatus.textContent,/navázané úlohy nejsou dostupné/);
+ mode='history-failure';await loadChat();assert.equal(rendered.at(-1),null);
+ assert.match(chatStatus.textContent,/Historii chatů nelze načíst/);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        subprocess.run(['node', '-e', harness + function + checks], check=True)
 
     def test_orchestration_only_shows_actionable_configuration_warnings(self):
         self.assertIn('id="chat-orchestration-target"', HTML)

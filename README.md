@@ -327,7 +327,13 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Aktuální dávku (milník), její průběžné výsledky a ad-hoc úkoly drží [TODO](TODO.md), další dávky [BACKLOG](BACKLOG.md) a uzavřené dávky s ověřením [WORK_LOG](WORK_LOG.md). Archivace a načtení další dávky probíhají až při jejím uzavření. Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC jsou ověřené v rozsahu M0. M1 nyní propojuje čtení registrovaných projektů s desktopem; produkční release zůstává otevřený.
+Po přijatém [předání DEV-01](docs/dev-01-handoff-review.md) drží aktuální plán,
+úkoly a jejich stavy kanonický projekt Workspace. [TODO](TODO.md) pouze
+informuje o doručení zdrojové větve; [BACKLOG](BACKLOG.md), [WORK_LOG](WORK_LOG.md)
+a Master Checklist zachovávají archivovanou evidenci a původní požadavky.
+Aktuální zadání načtěte z platného projektového exportu podle [AGENTS](AGENTS.md).
+Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC
+jsou ověřené v rozsahu M0; produkční release zůstává otevřený.
 
 ## Ruční deploy na Omnii
 

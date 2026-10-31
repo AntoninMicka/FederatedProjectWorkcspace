@@ -44,6 +44,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self._worker_slots = threading.BoundedSemaphore(max_workers)
         self.application_lane = threading.Lock()
         self.telemetry_lane = threading.Lock()
+        self.review_lane = threading.Lock()
         self.availability_lane = threading.Lock()
         self.backend_availability = BackendAvailability()
         self.request_lane_timeout = lane_timeout
@@ -140,7 +141,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Connection', 'close')
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError, socket.timeout):
+            # The browser can close an in-flight request while a page/profile
+            # is shutting down. The response has no durable effect to recover.
+            self.close_connection = True
 
     def send_error(self, code, message=None, explain=None):
         self.reply(code, {'error': 'request rejected'})
@@ -168,9 +174,8 @@ class Handler(BaseHTTPRequestHandler):
         self.server.counter += 1
         self.reply(200, {'value': self.server.counter})
 
-    def _in_request_lane(self, operation, *, telemetry=False, availability=False):
-        lane = getattr(self.server, 'availability_lane' if availability else
-                       'telemetry_lane' if telemetry else 'application_lane', None)
+    def _in_request_lane(self, operation, *, lane_name='application_lane'):
+        lane = getattr(self.server, lane_name, None)
         if lane is None:
             # Small unit fixtures may compose this handler with an already
             # sequential HTTPServer; only BoundedHTTPServer enables concurrency.
@@ -183,10 +188,15 @@ class Handler(BaseHTTPRequestHandler):
             lane.release()
 
     def do_POST(self):
+        lane_name = ('availability_lane' if self.path == '/v1/chat/availability'
+                     else 'telemetry_lane' if self.path == '/v1/node-telemetry/status'
+                     else 'review_lane' if self.path in {
+                         '/v1/roadmap-refinement/list',
+                         '/v1/roadmap-refinement/detail',
+                         '/v1/roadmap-refinement/reconcile/preview'}
+                     else 'application_lane')
         return self._in_request_lane(
-            self._do_POST,
-            telemetry=self.path == '/v1/node-telemetry/status',
-            availability=self.path == '/v1/chat/availability')
+            self._do_POST, lane_name=lane_name)
 
     def _do_POST(self):
         authority = self.request_authority()
@@ -278,6 +288,7 @@ def running_api(transport, runtime=None, *, handler=Handler, projects=None,
         server.authority = 'workspace.local'
         server.application_lane = threading.Lock()
         server.telemetry_lane = threading.Lock()
+        server.review_lane = threading.Lock()
         server.availability_lane = threading.Lock()
         server.backend_availability = BackendAvailability()
         server.request_lane_timeout = REQUEST_LANE_TIMEOUT
