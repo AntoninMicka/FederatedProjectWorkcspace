@@ -44,6 +44,22 @@ PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 
 class PreviewTests(unittest.TestCase):
+    def test_long_markdown_is_paged_without_losing_links_or_fence_context(self):
+        link = '[Podklad](artifacts/12345678-1234-1234-1234-123456789abc/content.md)'
+        body = '\n'.join([f'Řádek {i}' for i in range(1999)] + ['```', link, '```', link])
+        id_ = self.add('roadmap.md', body.encode())
+        head = self.git.head()
+        first = self.projects.preview(self.id, id_, head)
+        second = self.projects.preview(self.id, id_, head, 2)
+        self.assertEqual(first['format'], 'markdown')
+        self.assertEqual(first['pages'], 2)
+        self.assertEqual(second['pages'], 2)
+        self.assertTrue(second['text'].startswith('```\n' + link))
+        self.assertTrue(second['text'].endswith(link))
+        self.assertEqual(first['text'] + second['text'][4:], body)
+        with self.assertRaises(ValueError):
+            self.projects.preview(self.id, id_, head, 3)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name); self.node = self.base / 'node.json'; self.root = self.base / 'project'
@@ -87,7 +103,7 @@ class PreviewTests(unittest.TestCase):
     def test_images_pdf_and_unsupported_limits(self):
         for name, raw, format_ in [('image.png', PNG, 'image'), ('source.pdf', pdf_bytes(), 'pdf'),
                                    ('unsafe.svg', b'<svg onload="evil()"/>', 'unsupported'),
-                                   ('bad.md', b'\xff', 'unsupported'), ('lines.md', b'line\n' * 2001, 'unsupported'), ('bad.pdf', b'bad', 'unsupported'),
+                                   ('bad.md', b'\xff', 'unsupported'), ('lines.md', b'line\n' * 2001, 'markdown'), ('bad.pdf', b'bad', 'unsupported'),
                                    ('large.md', b'x' * (4 * 1024 * 1024 + 1), 'unsupported')]:
             with self.subTest(name=name):
                 id_ = self.add(name, raw); head = self.git.head()

@@ -146,7 +146,7 @@ class Projects:
         uuid(project_id); uuid(artifact_id)
         require(isinstance(expected_head, str) and re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', expected_head),
                 'Invalid preview commit')
-        require(type(page) is int and 1 <= page <= 100, 'Invalid preview page')
+        require(type(page) is int and 1 <= page <= 4096, 'Invalid preview page')
         ws = self.workspace(project_id, blocking=False, deadline=time.monotonic() + 30)
         item = ws.read_project(project_id, artifact_id=artifact_id, expected_head=expected_head,
                                network=self.network)

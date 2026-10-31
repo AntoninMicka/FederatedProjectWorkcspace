@@ -150,9 +150,10 @@ def pdf_text(raw):
 
 
 def preview(item, page=1):
-    require(type(page) is int and 1 <= page <= 100, 'Invalid preview page')
+    require(type(page) is int and 1 <= page <= 4096, 'Invalid preview page')
     raw = item.pop('raw')
     suffix = PurePosixPath(item.pop('path')).suffix.lower()
+    require(suffix == '.md' or page <= 100, 'Invalid preview page')
     result = dict(item, format='unsupported', page=page)
     if len(raw) > MAX_PREVIEW:
         result['message'] = 'Soubor přesahuje limit náhledu 4 MiB.'
@@ -164,7 +165,20 @@ def preview(item, page=1):
             raw = b''.join(lines[end + 1:])
         try:
             text = raw.decode('utf-8')
-            _bounded_text(result, 'markdown', text)
+            lines = text.splitlines(keepends=True)
+            pages = max(1, (len(lines) + MAX_PREVIEW_LINES - 1) // MAX_PREVIEW_LINES)
+            require(page <= pages, 'Invalid preview page')
+            start = (page - 1) * MAX_PREVIEW_LINES
+            fence = None
+            for line in lines[:start]:
+                marker = re.match(r'^\s*(`{3,}|~{3,})(.*)$', line.rstrip('\r\n'))
+                if marker and (fence is None or (marker[1][0] == fence[0]
+                        and len(marker[1]) >= len(fence) and not marker[2].strip())):
+                    fence = None if fence else marker[1]
+            result.update(format='markdown', text=(fence + '\n' if fence else '')
+                          + ''.join(lines[start:start + MAX_PREVIEW_LINES]), pages=pages)
+            if pages > 1:
+                result['message'] = f'Stránka {page}/{pages} · uložená verze · pouze pro čtení'
         except UnicodeError:
             result['message'] = 'Markdown není platný UTF-8.'
     elif suffix == '.json':
