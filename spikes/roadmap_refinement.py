@@ -852,7 +852,8 @@ class RoadmapRefinement:
                     from spikes.roadmap_dependencies import focus_input, validate, changes as dependency_changes
                     task = next((t for t in graph['nodes'] if t['id'] == row['input'].get('stable_id')), None)
                     require(task is not None, 'Dependency focus disappeared')
-                    require(row['input'] == focus_input(task, graph, files, entities),
+                    require(row['input'] == focus_input(task, graph, files, entities)
+                            or row['input'] == focus_input(task, graph, files, entities, legacy=True),
                             'Dependency evidence differs from pinned snapshot')
                     value = validate(json.dumps(row['proposal'], ensure_ascii=False), row['input'])
                     proposal = {'changes': dependency_changes(value)}

@@ -12,7 +12,7 @@ from spikes.projects import Projects
 from spikes.desktop_ui import DesktopHandler, JS
 from spikes.local_api import running_api
 from spikes.context_builder import ContextBuilder
-from spikes.roadmap_dependencies import SCHEMA, MODE, validate, focus_input
+from spikes.roadmap_dependencies import SCHEMA, MODE, validate, focus_input, source_block
 from spikes.roadmap_refinement import RoadmapRefinement
 from spikes.roadmap_refinement_tui import RefinementTUI
 from spikes.task_graph import project_task_graph
@@ -371,3 +371,39 @@ assert.equal(calls[0].body.preview_sha256,DIGEST);});
                         dict(dependencies_only=True, focus_ids=['FAKE-01']),
                         dict(focus_ids=['TASK-01'])]:
             with self.assertRaises(ValueError): self.service.scan(**request)
+
+    def test_source_block_prefers_definition_and_stops_before_neighbor(self):
+        lines = ['Mention TASK-01 before its declaration.', '```',
+                 '- [ ] [TASK-01] Not a real declaration', '```', '',
+                 '- [ ] [planned] **TASK-01 — Work**', '  Actual prerequisite text.',
+                 '  - [ ] Nested acceptance condition', '',
+                 '- [ ] **[planned] TASK-02 — Neighbor**', '  Unrelated requirements.']
+        self.assertEqual(source_block(lines, 'TASK-01'), (5, 9))
+        self.assertIsNone(source_block(lines, 'TASK-99'))
+        self.assertIsNone(source_block(lines + ['- [ ] [TASK-01] Ambiguous duplicate'], 'TASK-01'))
+
+    def test_new_policy_preserves_old_review_and_counts_only_current_inputs(self):
+        source = str(uuid4())
+        self.docs.save(dict(project_id=self.project_id, artifact_id=source, base_head=self.git.head(),
+            title='Legacy source', body='Mention TASK-01 before the actual definition.\n\n'
+            '- [ ] [planned] **TASK-01 — Work**\n  ' + self.phrase + '\n\n'
+            '- [ ] [planned] **TASK-02 — Other**\n  Other evidence.\n',
+            new=True, metadata={'tags':['original-source']}), str(uuid4()))
+        root = main_todo_id(self.project_id);path=f'artifacts/{root}/content.md'
+        body=self.git.snapshot(self.git.head())[path].decode().replace(self.phrase,
+            self.phrase + f'\n      - Zdroj: [Source](artifacts/{source}/content.md)',1)
+        self.docs.save(dict(project_id=self.project_id, artifact_id=root, base_head=self.git.head(),
+                           title='Roadmap', body=body, new=False),str(uuid4()))
+        original=focus_input
+        with patch('spikes.roadmap_dependencies.POLICY','focused-dependencies-v1'), \
+                patch('spikes.roadmap_dependencies.focus_input',side_effect=lambda *a:original(*a,legacy=True)):
+            old=self.row(self.scan())
+        current=self.scan();new=self.row(current)
+        self.assertNotEqual(old['proposal_id'],new['proposal_id'])
+        self.assertNotEqual(old['input'],new['input'])
+        self.assertEqual(current['total']*2,len(self.service.list()))
+        self.assertEqual(self.scan()['created'],[])
+        self.service.decide(old['proposal_id'],'accept')
+        preview=self.service.reconciliation_preview([old['proposal_id']])
+        self.assertEqual(preview['blockers'],[])
+        self.service.apply(str(uuid4()),preview['preview_sha256'],[old['proposal_id']])

@@ -106,7 +106,53 @@ jsou v pořádku. Neproběhla ruční akceptace v běžném profilu ani nasazen�
 focus IDs, bez přijímání návrhů. První odpověď navrhla již existující hranu:
 stav failed, nikoli zapsaná změna. Druhá prošla mechanickými kontrolami a
 zůstala pending; její citace však sama neprokazuje nezbytnost závislosti,
-takže nejde o sémantickou akceptaci. Aktuální scope má 166 otevřených položek:
+takže nejde o sémantickou akceptaci. Při prvním ověření měl scope 166 otevřených položek:
 164 queued, 1 failed, 1 pending. `complete=false`, `review_complete=false`.
 Roadmapový HEAD se při těchto bězích neměnil. Celý scan nebyl proveden;
 nové hrany nebyly lidsky schválené ani aplikované.
+
+## Malý hodnoticí vzorek a policy v2
+
+Před dalším spuštěním byla připnutá pracovní očekávání pro osm položek:
+XREF-01, ER-04, ER-00, IP-02, DEV-02, DEV-04, PLAN-SEMANTIC-AUDIT-01 a ER-07.
+U ER-07 uživatel předběžně upřesnil dostatečnost transportní vrstvy; vzorek
+proto nevyžaduje závislost na celém M5. Tato očekávání nejsou změnou roadmapy.
+Dva dřívější výsledky se převzaly bez retry, šest queued případů bylo nově
+analyzovaných. Očekávání se podle odpovědí modelu neupravovala.
+
+Výchozí výsledek: 1/8 odpovědí odpovídá pracovním očekáváním. XREF-01 našel
+výslovně doloženou chybějící hranu. Pět odpovědí opakovalo existující hrany,
+jedna obrátila směr a vytvořila by cyklus; tyto odpovědi validátor odmítl.
+Jedna mechanicky platná odpověď neměla citací doloženou nezbytnost hrany
+a zůstala pending. Nic se automaticky nepřijalo do roadmapy. Tento záměrně
+malý vzorek není statistickým odhadem přesnosti nad celou roadmapou.
+
+`focused-dependencies-v2` řeší dvě konkrétní příčiny: výňatek vybírá
+jednoznačnou deklaraci focus ID místo první zmínky a končí před sousední
+položkou/sekcí. Ignoruje fenced příklady při zachování původních čísel řádků;
+nejednoznačné či chybějící definice v archivech nevydává za vlastní podklad.
+Instrukce navíc explicitně vysvětlují delta režim a směr hran na obecných
+příkladech, bez přidávání odpovědí konkrétního vzorku do promptu.
+
+Nová policy má nové fingerprinty. Staré výsledky, včetně pending a unknown,
+zůstávají zachované; stejná nezměněná revize se automaticky neopakuje.
+Coverage/remaining počítá jen aktuální množinu fingerprintů, nikoli součet
+historie všech verzí policy na stejném HEAD. Starší review lze stále provést,
+pokud jeho původní připnuté podklady odpovídají snapshotu; neprovádí se tiché
+přepsání jeho vstupu novým výňatkem.
+
+Následné omezené ověření v2 zachovalo původní očekávání pro ER-00 a ER-04
+a připnulo nové vstupy ještě před jejich modelovými odpověďmi. Výsledek
+**0/2 odpovídá očekávání**: model stále obracel směr u ER-00 a opakoval
+existující hrany u ER-04. Oba návrhy validátor odmítl. Oprava výběru podkladů
+je regresně ověřená, ale zlepšení sémantické kvality modelu prokázané není.
+Hromadné spuštění zbývající roadmapy se na základě tohoto testu nedoporučuje.
+Jediná doložená hrana XREF-01 → F-M1-SOURCE-02 zůstává samostatným návrhem
+k ručnímu přijetí; tento krok ji automaticky neaplikoval.
+
+Po poslední změně v2 prošlo 36 cílených dependency/refinement testů a celá
+závěrečná sada `python3 -m unittest discover -s tests -v`: **1 141 testů OK,
+40 podmíněných skipů**, 287,553 s. Regrese ověřuje i přesné řádky při
+ignorování fenced příkladů, výběr deklarace místo první zmínky, ukončení
+před sousední položkou, odmítnutí nejednoznačné definice, zachování starého
+review a coverage pouze aktuální policy. `git diff --check` prošel.
