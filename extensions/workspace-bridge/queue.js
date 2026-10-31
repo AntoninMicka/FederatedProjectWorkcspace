@@ -56,14 +56,28 @@ async function link(source,target,sha,cache,io=fs){
  }finally{await fs.rm(temporary,{force:true});}
  return method;
 }
+async function sourceBaseline(project,value){
+ const repo=await bridge.repository(project.repository,project.identity);
+ const file=path.join(project.root,'packets',value.packet_id,'source-baseline.json');
+ let baseline;
+ try{baseline=JSON.parse(await bridge.read(file));}
+ catch(error){if(error.code!=='ENOENT')throw error;}
+ if(baseline!==undefined&&(!baseline||baseline.packet_id!==value.packet_id||baseline.repository!==project.identity
+  ||typeof baseline.commit!=='string'||!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(baseline.commit)))throw Error('Neplatný výchozí commit předání.');
+ const commit=baseline?.commit??value.manifest.repository_commit??repo.commit;
+ if(typeof commit!=='string'||!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit))throw Error('Neplatný zdrojový commit.');
+ try{await bridge.git(repo.root,'merge-base','--is-ancestor',commit,repo.commit);}
+ catch(error){throw Error('Zdrojová historie nenavazuje na předání nebo není dostupná. Obnovte historii nebo předejte nový balíček.');}
+ if(!baseline)await bridge.atomic(file,JSON.stringify({packet_id:value.packet_id,repository:project.identity,commit}));
+ return {commit,current_commit:repo.commit};
+}
 async function synchronize(project,request){
  const response=await request(project,'queue',{}),value=validate(response.queue,project);
  project.queue=value;
  if(value&&!value.blockers.length){
   const root=path.join(project.root,'packets',value.packet_id),cache=path.join(project.root,'queue-cache');
-  let exists=false;try{const old=JSON.parse(await bridge.read(path.join(root,'manifest.json')));if(hash(Buffer.from(stable(old)))!==value.packet_id)throw Error('Manifest byl změněn.');exists=true;}catch(error){if(error.code!=='ENOENT')throw error;}
-  const repo=await bridge.repository(project.repository,project.identity);
-  if(!exists&&repo.commit!==value.manifest.repository_commit)throw Error('Zdrojový HEAD nesouhlasí s předáním. Publikujte nový balíček.');
+  try{const old=JSON.parse(await bridge.read(path.join(root,'manifest.json')));if(hash(Buffer.from(stable(old)))!==value.packet_id)throw Error('Manifest byl změněn.');}catch(error){if(error.code!=='ENOENT')throw error;}
+  await sourceBaseline(project,value);
   for(const doc of value.manifest.documents){
    if(!/^[a-f0-9]{64}$/.test(doc.sha256))throw Error('Neplatný digest podkladu.');
    const target=path.join(root,'documents',doc.sha256+'.txt');
@@ -96,4 +110,4 @@ async function handoff(project,taskId,request){
  for(const doc of value.manifest.documents)await verified(path.join(root,'documents',doc.sha256+'.txt'),doc.sha256,path.join(project.root,'queue-cache'));
  return {manifest:path.join(root,'manifest.json'),instructions:path.join(root,'AGENT.md'),inbox:path.join(project.root,'inbox'),packet_id:value.packet_id};
 }
-module.exports={stable,validate,verified,blob,link,synchronize,handoff};
+module.exports={sourceBaseline,stable,validate,verified,blob,link,synchronize,handoff};

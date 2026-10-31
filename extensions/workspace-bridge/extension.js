@@ -6,6 +6,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const bridge = require('./bridge');
+const queueBridge = require('./queue');
 const {createSidebar} = require('./sidebar');
 const {createUpdater} = require('./updater');
 
@@ -146,6 +147,15 @@ async function activate(context) {
                   await vscode.window.showTextDocument(vscode.Uri.file(path.join(mailbox(mapping.session_id), 'TODO.md')),
                     {viewColumn: editor.viewColumn, preserveFocus: true, preview: false});
               }
+            }
+            if (result.queue_refresh_error) throw Error(result.queue_refresh_error);
+            // Export queue/context even when the sidebar views are closed.
+            if (result.has_queue) {
+              const project = {root: mailbox(mapping.session_id), session: mapping.session_id,
+                snapshot: result.snapshot, repository: local.repository, identity: mapping.repository};
+              const queue = await queueBridge.synchronize(project, (p, action, data) =>
+                bridge.connectionRequest(config.pairing, {action, request: {session_id: p.session, ...data}}, config.ca));
+              if (queue?.blockers.length) throw Error(queue.blockers.join('; '));
             }
             count++; if (result.stale) stale++;
           } catch (error) { failed++; await unavailable(mapping?.session_id || session,error); output.appendLine((mapping?.title || local.refresh?.title || session) + ': ' + error.message); }

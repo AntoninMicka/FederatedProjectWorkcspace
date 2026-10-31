@@ -4127,8 +4127,7 @@ document.querySelector('#task-queue-publish').addEventListener('click',async()=>
  try{const state=await projectRequest('/v1/ide-bridge/status',{project_id:project.id});
  const choices=state.sessions.filter(s=>s.connection_id&&!s.revoked&&s.commit_id===project.head);if(!choices.length)throw Error('Nastavte aktuální přiřazení projektu v Nastavení → IDE a povolte export podkladů.');
  const selected=choices.length===1?choices[0]:choices.find(s=>s.session_id===window.prompt('Vyberte ID mapování: '+choices.map(s=>s.session_id+' '+s.repository).join('; ')));if(!selected)return;
- const commit=window.prompt('Přesný Git HEAD zdrojového repozitáře pro předání:','');if(commit===null)return;
- const result=await projectRequest('/v1/ide-queue/publish',{project_id:project.id,session_id:selected.session_id,expected_head:project.head,queue_revision:view.revision,repository_commit:commit.trim()});
+ const result=await projectRequest('/v1/ide-queue/publish',{project_id:project.id,session_id:selected.session_id,expected_head:project.head,queue_revision:view.revision,repository_commit:null});
  if(activeProject!==project)return;target.textContent=result.blockers.length?'Balíček je neúplný: '+result.blockers.join('; '):'Balíček '+result.packet_id.slice(0,12)+' připraven. Synchronizujte VSCodium.';
  }catch(error){if(activeProject===project)target.textContent=error.message;}
 });
