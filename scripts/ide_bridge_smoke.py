@@ -53,7 +53,7 @@ def main():
                             manifest = json.loads(data); manifest['version'] = '0.4.0'
                             data = json.dumps(manifest).encode()
                         elif name == 'extension.vsixmanifest':
-                            data = data.replace(b'Version="0.4.1"', b'Version="0.4.0"')
+                            data = data.replace(b'Version="0.4.3"', b'Version="0.4.0"')
                         target.writestr(name, data)
                 raw = output_zip.getvalue()
             package = root / result['filename']; package.write_bytes(raw)
@@ -84,9 +84,9 @@ def main():
             if args.update:
                 entries = json.loads((root / 'extensions' / 'extensions.json').read_text())
                 assert any(item['identifier']['id'] == 'federated-workspace.workspace-file-bridge'
-                           and item['version'] == '0.4.1' for item in entries)
+                           and item['version'] == '0.4.3' for item in entries)
                 assert evidence['updated']
-                print('Updater installed 0.4.0 -> 0.4.1 through the real IDE command in an isolated profile; reload deferred; bridge sync still works.')
+                print('Updater installed 0.4.0 -> 0.4.3 through the real IDE command in an isolated profile; reload deferred; bridge sync still works.')
             print('VSIX installed; desktop restarted on different port without pairing; Workspace connection and project mapping verified; extension host active; ordinary files and receipt/retry verified; project Git unchanged.')
     return 0
 

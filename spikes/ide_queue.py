@@ -41,29 +41,38 @@ def load(service, session_id, packet_id=None):
     return packet
 
 
-def publish(service, actor, request, *, checkpoint=lambda stage: None):
+def publish(service, actor, request, *, checkpoint=lambda stage: None, automatic=False):
     require(isinstance(request, dict) and set(request) == {
         'project_id', 'session_id', 'expected_head', 'queue_revision', 'repository_commit'}, 'Invalid queue publication')
     actor = reviewer(service, actor, request['project_id'])
-    require(isinstance(request['repository_commit'], str) and re.fullmatch(r'[a-f0-9]{40}|[a-f0-9]{64}', request['repository_commit']),
-            'Exact source repository commit required')
+    require(request['repository_commit'] is None or isinstance(request['repository_commit'], str) and re.fullmatch(r'[a-f0-9]{40}|[a-f0-9]{64}', request['repository_commit']),
+            'Source repository commit must be an exact hash or null for IDE discovery')
     with service.database() as db:
         row = db.execute('SELECT record FROM sessions WHERE id=?', (request['session_id'],)).fetchone()
     require(row is not None, 'Unknown mapping')
     record = json.loads(row[0])
+    original_record = record
     require(record['project_id'] == request['project_id'] and record.get('connection_id') and record.get('bound'), 'Wrong or unbound mapping')
     require(record['owner'] == (actor or {}).get('id'), 'Publish the queue of the mapping owner')
     require(record.get('export_documents'), 'Enable document export in Workspace settings first')
     view = live(service, record); head = view['commit_id']
+    if automatic:
+        record = dict(record, snapshot=service.snapshot(record['project_id'], head, writable=True))
     require(request['expected_head'] == head == record['snapshot']['commit_id'], 'Refresh mapping and queue before publication')
     queue = TaskQueue(service.node, network=service.network); actor_id = owner(record, service.node)
     git = service.projects.repository(record['project_id']); files = git.snapshot(head); entities = validate_snapshot(files)
     graph = view['plan']; nodes = {n['id']: n for n in graph['nodes']}
+    previous = load(service, record['session_id'])
+    accepted = set()
+    if previous:
+        _, accepted = lineage(service, record, previous, view)
+        accepted.update(previous['manifest'].get('accepted_task_ids', []))
+        accepted = {i for i in accepted if i in nodes and nodes[i]['checked']}
     with queue._lock(record['project_id'], actor_id) as path:
         state = queue._read(path, record['project_id'], actor_id)
         require(type(request['queue_revision']) is int and state['revision'] == request['queue_revision']
-                and state['project_head'] == head and state['task_ids'], 'Queue changed, stale or empty')
-        issues, _ = assess(state['task_ids'], graph)
+                and (automatic or state['project_head'] == head) and (automatic or state['task_ids']), 'Queue changed, stale or empty')
+        issues, _ = assess(state['task_ids'], graph, accepted)
         require(not issues, '; '.join(issues))
         catalog = {d['artifact_id']: d for d in descriptors(files, entities, record['snapshot']['tasks'])}
         source_ids = {nodes[i]['source']['artifact_id'] for i in state['task_ids']}
@@ -102,6 +111,8 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None):
             'Write one UUID-named agent completion to inbox atomically; include queue_packet_id, reported_by=agent, '
             'evidence.tests and evidence.diff, original revision and actual repository_commit. '
             'Delivery is not acceptance; only human Workspace review completes the roadmap. No automatic retry after unknown outcome.')
+        if accepted.intersection(state['task_ids']):
+            manifest.update(accepted_task_ids=sorted(accepted.intersection(state['task_ids'])), previous_packet_id=previous['packet_id'])
         require(len(canonical(manifest).encode()) <= 1024*1024, 'Queue manifest exceeds limit')
         packet = dict(packet_id=digest(manifest), manifest=manifest)
         require(git.head() == head, 'Project changed during queue publication')
@@ -110,12 +121,59 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None):
             db.execute('BEGIN IMMEDIATE')
             authorize_row = db.execute('SELECT revoked,record FROM sessions WHERE id=?', (record['session_id'],)).fetchone()
             parent = db.execute('SELECT revoked FROM connections WHERE id=?', (record['connection_id'],)).fetchone()
-            require(authorize_row and not authorize_row['revoked'] and json.loads(authorize_row['record']) == record
+            require(authorize_row and not authorize_row['revoked'] and json.loads(authorize_row['record']) == original_record
                     and parent and not parent['revoked'], 'Mapping changed before publication')
             require(not any(json.loads(r[0]).get('state') == 'prepared' for r in db.execute('SELECT record FROM reviews WHERE session=?', (record['session_id'],))), 'Finish prepared review before publishing')
+            if automatic:
+                require(not waiting_review(db, record['session_id']), 'Queue refresh waits for human review')
+                db.execute('UPDATE sessions SET record=? WHERE id=?', (canonical(record), record['session_id']))
+                checkpoint('queue-snapshot-updated')
+            require(git.head() == head, 'Project changed before queue publication')
             db.execute('INSERT OR IGNORE INTO queue_packets VALUES (?,?,?)', (packet['packet_id'], record['session_id'], canonical(packet)))
         checkpoint('queue-packet-published')
     return dict(packet_id=packet['packet_id'], blockers=manifest['blockers'], context_status=manifest['context_status'])
+
+
+def waiting_review(db, session_id):
+    for message, review in db.execute('SELECT m.record,r.record FROM messages m LEFT JOIN reviews r '
+                                    'ON r.session=m.session AND r.id=m.id WHERE m.session=?', (session_id,)):
+        if json.loads(message)['kind'] in {'completed', 'progress'} and (not review or json.loads(review)['state'] != 'completed'):
+            return True
+    return False
+
+
+def refresh(service, record, *, checkpoint=lambda stage: None):
+    """Derive a new generation on an idle IDE poll; never accept work or mutate the plan."""
+    if not record.get('connection_id') or not record.get('bound') or not record.get('export_documents'):
+        return record, None
+    view = live(service, record)
+    packet = load(service, record['session_id'])
+    queue = TaskQueue(service.node, network=service.network)
+    with queue._lock(record['project_id'], owner(record, service.node)) as path:
+        state = queue._read(path, record['project_id'], owner(record, service.node))
+    # No queue selected yet: preserve the existing non-queue mapping workflow.
+    if not packet and not state['task_ids']:
+        return record, None
+    if packet:
+        value = status(service, record, packet, view=view)
+        if not value['blockers'] and record['snapshot']['commit_id'] == view['commit_id']:
+            return record, None
+        if (packet['manifest']['project_head'] == view['commit_id']
+                and packet['manifest']['queue_revision'] == state['revision']
+                and state['task_ids'] == [t['id'] for t in packet['manifest']['tasks']]):
+            return record, '; '.join(value['blockers'])
+    with service.database() as db:
+        if waiting_review(db, record['session_id']):
+            return record, 'Queue refresh waits for human review'
+    try:
+        publish(service, service.connection_actor(record), dict(project_id=record['project_id'], session_id=record['session_id'],
+            expected_head=view['commit_id'], queue_revision=state['revision'], repository_commit=None),
+            automatic=True, checkpoint=checkpoint)
+    except ValueError as error:
+        return record, str(error)
+    with service.database() as db:
+        updated = json.loads(db.execute('SELECT record FROM sessions WHERE id=?', (record['session_id'],)).fetchone()[0])
+    return updated, None
 
 
 def lineage(service, record, packet, view):
@@ -148,6 +206,7 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
     view = view or live(service, record)
     require(packet['manifest']['project_id'] == record['project_id'], 'Queue project differs')
     latest = load(service, record['session_id']); current, accepted = lineage(service, record, packet, view)
+    accepted.update(packet['manifest'].get('accepted_task_ids', []))
     blockers = list(packet['manifest']['blockers'])
     if not record.get('export_documents'): blockers.append('Document export is disabled')
     if not current: blockers.append('Roadmap changed outside accepted packet results')
