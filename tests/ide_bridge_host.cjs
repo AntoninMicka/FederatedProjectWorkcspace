@@ -39,7 +39,7 @@ exports.run = async function () {
     await updater(true);
     assert.deepEqual(reports, []);
     const installed = JSON.parse(await fs.readFile(path.join(fixture.extensions, 'extensions.json'), 'utf8'));
-    assert.ok(installed.some(item => item.identifier.id === extension.id && item.version === '0.4.1'));
+    assert.ok(installed.some(item => item.identifier.id === extension.id && item.version === '0.4.3'));
     updated = true;
   }
   assert.equal(fixture.pairing.schema_version,2);

@@ -10,14 +10,15 @@ from spikes.artifacts import Artifacts
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.task_queue import TaskQueue
-from spikes.ide_queue import publish, load, status, read_document, digest
+from spikes.ide_queue import publish, load, status, read_document, digest, refresh
 from tests import test_ide_bridge_panel as panel_tests
 
 
 class QueuePacketTests(unittest.TestCase):
     def setUp(self):
         panel_tests.BridgePanelTests.setUp(self)
-        self.head = self.save('- [ ] [TASK-01] First\n- [ ] [TASK-02] Second\n  - depends_on: TASK-01\n- [ ] [TASK-03] Third\n  - depends_on: TASK-02\n')
+        self.body = '- [ ] [TASK-01] First\n- [ ] [TASK-02] Second\n  - depends_on: TASK-01\n- [ ] [TASK-03] Third\n  - depends_on: TASK-02\n'
+        self.head = self.save(self.body)
         self.record = panel_tests.BridgePanelTests.session(self)
         self.owner = ProjectCreation(self.node).author_id(); self.queue = TaskQueue(self.node)
         for task in ['TASK-01','TASK-02','TASK-03']: self.act('add',task)
@@ -125,6 +126,143 @@ class QueuePacketTests(unittest.TestCase):
             if stage=='queue-packet-published':raise RuntimeError('lost publication reply')
         with self.assertRaises(RuntimeError):publish(self.service,None,self.request,checkpoint=stop)
         p=load(self.service,self.record['session_id']);self.assertEqual(p,self.packet())
+
+    def poll(self):
+        with self.service.database() as db:
+            self.record = json.loads(db.execute('SELECT record FROM sessions WHERE id=?', (self.record['session_id'],)).fetchone()[0])
+        return self.service.exchange(self.record, dict(session_id=self.record['session_id'], messages=[]))
+
+    def test_idle_poll_publishes_initial_queue_and_refreshes_selection_without_plan_write(self):
+        first = self.poll(); packet = load(self.service, self.record['session_id'])
+        self.assertTrue(first['has_queue']); self.assertIsNone(first['queue_refresh_error'])
+        self.assertIsNone(packet['manifest']['repository_commit'])
+        preview = self.act('remove-preview', 'TASK-03')
+        self.act('remove', 'TASK-03', preview_sha256=preview['preview_sha256'])
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        updated = load(self.service, self.record['session_id'])
+        self.assertNotEqual(packet['packet_id'], updated['packet_id'])
+        self.assertEqual(['TASK-01', 'TASK-02'], [t['id'] for t in updated['manifest']['tasks']])
+        self.assertEqual(packet, load(self.service, self.record['session_id'], packet['packet_id']))
+        self.assertEqual(self.head, Projects(self.node).repository(self.project).head())
+        with self.service.database() as db:
+            count = db.execute('SELECT count(*) FROM queue_packets').fetchone()[0]
+        self.poll()
+        with self.service.database() as db:
+            self.assertEqual(count, db.execute('SELECT count(*) FROM queue_packets').fetchone()[0])
+
+    def test_task_and_document_edits_refresh_snapshot_atomically_and_keep_receipt_replay(self):
+        old = self.packet()
+        message = self.message(old) | dict(kind='message')
+        message = {k:v for k,v in message.items() if k not in {'queue_packet_id','reported_by','evidence'}}
+        receipt = self.send(message)['receipts']
+        self.head = self.save(self.body.replace('First', 'Updated task'))
+        result = self.poll()
+        self.assertIsNone(result['queue_refresh_error']); self.assertFalse(result['stale'])
+        self.assertEqual(self.head, result['snapshot']['commit_id'])
+        new = load(self.service, self.record['session_id'])
+        self.assertEqual('Updated task', new['manifest']['tasks'][0]['title'])
+        self.assertNotEqual(old['packet_id'], new['packet_id'])
+        self.poll()  # Load the new mapping record for the replay.
+        with self.assertRaises(ValueError):
+            self.send(self.message(old) | dict(revision=old['manifest']['revision']))
+        self.assertEqual(receipt, self.send(message)['receipts'])
+        with self.assertRaises(ValueError): self.send(message | dict(body='Changed bytes'))
+        # A content-only commit must refresh even when the task text stays the same.
+        self.head = Artifacts(self.node).save(dict(project_id=self.project, artifact_id=str(uuid4()),
+            base_head=self.head, title='Unrelated document', body='Document content', new=True), str(uuid4()))['commit_id']
+        result = self.poll()
+        self.assertEqual(self.head, result['snapshot']['commit_id'])
+
+    def test_refresh_preserves_review_and_verified_acceptance_across_generations(self):
+        packet = self.packet(); message = self.message(packet); self.send(message)
+        self.head = self.save(self.body.replace('Third', 'Changed third'))
+        self.assertIn('human review', self.poll()['queue_refresh_error'])
+        self.assertEqual(packet, load(self.service, self.record['session_id']))
+        self.review(message, decision='rejected')
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        self.poll(); current = load(self.service, self.record['session_id'])
+        report = self.message(current); self.send(report); self.review(report)
+        # Change the queue after human acceptance; TASK-01 remains accepted in the new packet.
+        preview = self.act('remove-preview', 'TASK-03')
+        self.act('remove', 'TASK-03', preview_sha256=preview['preview_sha256'])
+        self.assertIsNone(self.poll()['queue_refresh_error']); self.poll()
+        value = status(self.service, self.record)
+        self.assertTrue(value['items'][0]['user_confirmed'])
+        self.assertTrue(value['items'][1]['eligible'])
+
+    def test_human_acceptance_is_reflected_by_next_idle_poll_without_stale_snapshot(self):
+        packet = self.packet(); message = self.message(packet); self.send(message)
+        accepted = self.review(message)
+        result = self.poll()
+        self.assertFalse(result['stale']); self.assertIsNone(result['queue_refresh_error'])
+        self.assertEqual(accepted['result']['commit_id'], result['snapshot']['commit_id'])
+        self.poll(); value = status(self.service, self.record)
+        self.assertTrue(value['items'][0]['user_confirmed'])
+        self.assertTrue(value['items'][1]['eligible'])
+        self.assertNotEqual(packet['packet_id'], value['packet_id'])
+
+    def test_refresh_crash_before_insert_and_after_commit_replays_one_generation(self):
+        packet = self.packet(); self.head = self.save(self.body.replace('First', 'Changed'))
+        def before(stage):
+            if stage == 'queue-packet-before-insert': raise RuntimeError('before insert')
+        with self.assertRaises(RuntimeError): refresh(self.service, self.record, checkpoint=before)
+        self.assertEqual(packet, load(self.service, self.record['session_id']))
+        with self.service.database() as db:
+            self.assertEqual(self.record, json.loads(db.execute('SELECT record FROM sessions WHERE id=?', (self.record['session_id'],)).fetchone()[0]))
+        def inside(stage):
+            if stage == 'queue-snapshot-updated': raise RuntimeError('uncommitted snapshot')
+        with self.assertRaises(RuntimeError): refresh(self.service, self.record, checkpoint=inside)
+        with self.service.database() as db:
+            self.assertEqual(self.record, json.loads(db.execute('SELECT record FROM sessions WHERE id=?', (self.record['session_id'],)).fetchone()[0]))
+        self.assertEqual(packet, load(self.service, self.record['session_id']))
+        def after(stage):
+            if stage == 'queue-packet-published': raise RuntimeError('lost reply')
+        with self.assertRaises(RuntimeError): refresh(self.service, self.record, checkpoint=after)
+        committed = load(self.service, self.record['session_id'])
+        self.assertNotEqual(packet['packet_id'], committed['packet_id'])
+        self.poll(); self.assertEqual(committed, load(self.service, self.record['session_id']))
+
+    def test_invalid_selection_and_disabled_export_stay_blocked(self):
+        packet = self.packet()
+        self.head = self.save('- [ ] [TASK-01] First\n')
+        self.assertIsNotNone(self.poll()['queue_refresh_error'])
+        self.assertEqual(packet, load(self.service, self.record['session_id']))
+        with self.service.database() as db:
+            record = dict(self.record, export_documents=False)
+            db.execute('UPDATE sessions SET record=? WHERE id=?', (json.dumps(record), record['session_id']))
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        self.assertEqual(packet, load(self.service, self.record['session_id']))
+
+    def test_scoped_document_refresh_exports_new_bytes_without_repeated_incomplete_packets(self):
+        identifier = str(uuid4())
+        self.head = Artifacts(self.node).save(dict(project_id=self.project, artifact_id=identifier,
+            base_head=self.head, title='Context', body='Original context', new=True), str(uuid4()))['commit_id']
+        self.head = self.save(self.body.replace('First\n', 'First\n  - [Context](artifacts/'+identifier+'/content.md)\n'))
+        self.assertIsNone(self.poll()['queue_refresh_error']); self.poll()
+        original = load(self.service, self.record['session_id'])
+        self.head = Artifacts(self.node).save(dict(project_id=self.project, artifact_id=identifier,
+            base_head=self.head, title='Context', body='Changed context', new=False), str(uuid4()))['commit_id']
+        self.assertIsNone(self.poll()['queue_refresh_error']); self.poll()
+        current = load(self.service, self.record['session_id'])
+        self.assertEqual(original['manifest']['tasks'], current['manifest']['tasks'])
+        self.assertNotEqual(original['packet_id'], current['packet_id'])
+        exported = read_document(self.service, self.record, current['packet_id'], identifier)
+        self.assertEqual(b'Changed context', base64.b64decode(exported['content_base64']))
+        # An unsupported link produces one blocked generation, not a new packet every poll.
+        self.head = Artifacts(self.node).save(dict(project_id=self.project, artifact_id=identifier,
+            base_head=self.head, title='Context', body='[Missing](artifacts/'+str(uuid4())+'/content.md)', new=False), str(uuid4()))['commit_id']
+        self.poll(); blocked = load(self.service, self.record['session_id'])
+        self.assertTrue(blocked['manifest']['blockers'])
+        self.assertIsNotNone(self.poll()['queue_refresh_error'])
+        self.assertEqual(blocked, load(self.service, self.record['session_id']))
+
+    def test_source_commit_can_be_discovered_by_ide_but_invalid_values_fail(self):
+        self.request['repository_commit'] = None
+        self.assertIsNone(self.packet()['manifest']['repository_commit'])
+        for invalid in ['', 'HEAD', 123, False]:
+            with self.subTest(commit=invalid):
+                self.request['repository_commit'] = invalid
+                with self.assertRaises(ValueError): publish(self.service, None, self.request)
 
     def test_real_node_http_queue_handoff_agent_report_and_human_receipts(self):
         import shutil, subprocess

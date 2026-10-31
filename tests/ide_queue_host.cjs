@@ -10,8 +10,10 @@ async function post(endpoint,route,body,token){return new Promise((resolve,rejec
  const f=JSON.parse(await fs.readFile(process.argv[2],'utf8'));
  const project={root:f.storage,session:f.record.session_id,snapshot:f.record.snapshot,repository:f.record.repository,identity:f.record.repository};
  const pairing={...f.pairing,...f.record},request=async(p,action,data)=>bridge.connectionRequest(f.pairing,{action,request:{session_id:p.session,...data}});
- const published=await post(f.pairing.endpoint,'/v1/ide-queue/publish',f.publication,f.admin_token);
- await bridge.sync(project.root,pairing,project.repository);
+ const initial=await bridge.sync(project.root,pairing,project.repository);
+ assert.equal(initial.queue_refresh_error,null);
+ const published=(await request(project,'queue',{})).queue;
+ assert.equal(published.manifest.repository_commit,null);
  const broken=async(p,action,data)=>{if(action==='queue-document')throw Error('interrupted download');return request(p,action,data);};
  await assert.rejects(queue.synchronize(project,broken),/interrupted download/);
  await assert.rejects(fs.access(path.join(project.root,'packets',published.packet_id,'manifest.json')));
@@ -36,5 +38,16 @@ async function post(endpoint,route,body,token){return new Promise((resolve,rejec
  }
  assert.equal((await queue.synchronize(project,request)).items[2].eligible,true);
  assert.equal(await fs.readFile(context.manifest,'utf8'),manifestBefore);
- console.log('queue HTTP/filesystem: pinned manifest, hardlinks, agent inbox, human review, replay and A/B/C progression OK');
+ let front=await post(f.pairing.endpoint,'/v1/task-queue',{project_id:f.record.project_id,action:'status'},f.admin_token);
+ const removal={project_id:f.record.project_id,revision:front.revision,expected_head:front.expected_head,task_id:'TASK-03'};
+ const preview=await post(f.pairing.endpoint,'/v1/task-queue',{...removal,action:'remove-preview'},f.admin_token);
+ await post(f.pairing.endpoint,'/v1/task-queue',{...removal,action:'remove',preview_sha256:preview.preview_sha256},f.admin_token);
+ const changed=await bridge.sync(project.root,pairing,project.repository);assert.equal(changed.queue_refresh_error,null);project.snapshot=changed.snapshot;
+ const refreshed=await queue.synchronize(project,request);
+ assert.notEqual(refreshed.packet_id,original.packet_id);
+ assert.deepEqual(refreshed.items.map(i=>i.id),['TASK-01','TASK-02']);
+ assert.ok(refreshed.items.every(i=>i.user_confirmed));
+ assert.equal(await fs.readFile(context.manifest,'utf8'),manifestBefore);
+ assert.equal((await bridge.sync(project.root,pairing,project.repository)).snapshot.commit_id,changed.snapshot.commit_id);
+ console.log('queue HTTP/filesystem: automatic initial publication and selection refresh, immutable manifests, hardlinks, agent inbox, human review, replay and A/B/C progression OK');
 })().catch(e=>{console.error(e);process.exit(1);});

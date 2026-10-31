@@ -207,6 +207,8 @@ class IdeBridge:
                 and request['session_id'] == record['session_id'], 'Wrong bridge session')
         messages = request['messages']
         require(isinstance(messages, list) and len(messages) <= 20, 'Too many messages')
+        from spikes.ide_bridge_panel import authorize
+        authorize(self, record)
         # Revalidate privacy/current HEAD even for credential-only polls and retries.
         view = self.projects.open(record['project_id'])
         require(not record.get('connection_id') or not view['read_only'], 'Project is read-only')
@@ -221,6 +223,15 @@ class IdeBridge:
             require(isinstance(message['kind'], str) and message['kind'] in {'completed', 'progress', 'clarification', 'message'}, 'Invalid message kind')
             require(isinstance(message['body'], str) and 0 < len(message['body'].encode()) <= MAX_MESSAGE
                     and '\0' not in message['body'], 'Invalid message body')
+            # A refresh must not invalidate an already durable receipt after a lost reply.
+            with self.database() as db:
+                prior = db.execute('SELECT digest,receipt FROM messages WHERE session=? AND id=?',
+                                   (record['session_id'], message['message_id'])).fetchone()
+            if prior:
+                require(prior['digest'] == hashlib.sha256(canonical(message).encode()).hexdigest(),
+                        'Message ID reused with different content')
+                receipts.append(json.loads(prior['receipt']))
+                continue
             require((message['task_id'] is None and message['kind'] == 'message')
                     or isinstance(message['task_id'], str) and message['task_id'] in {
                         t['id'] for t in record['snapshot']['tasks']}, 'Unknown task')
@@ -256,8 +267,13 @@ class IdeBridge:
                                (record['session_id'], message['message_id'], digest,
                                 canonical(message), canonical(receipt)))
             receipts.append(receipt)
-        from spikes.ide_queue import load
+        from spikes.ide_queue import load, refresh
+        queue_refresh_error = None
+        if not messages:
+            record, queue_refresh_error = refresh(self, record)
+            stale = self.projects.repository(record['project_id']).head() != record['snapshot']['commit_id']
         return dict(session_id=record['session_id'], has_queue=load(self, record['session_id']) is not None, stale=stale, receipts=receipts,
+                    queue_refresh_error=queue_refresh_error,
                     snapshot=record['snapshot'], repository=record['repository'],
                     instructions=record['instructions'])
 
