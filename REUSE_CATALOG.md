@@ -876,3 +876,16 @@ provider fallback a paralelní projektové zápisy se odmítají. Soukromá inve
 nepřináší komponentu se stejným lifecycle a request ownership kontraktem;
 žádný externí kód ani neveřejný detail se nepřebírá. Rozhodnutí a recovery:
 [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md#rozšíření-2026-10-30--automatická-dostupnost-backendu).
+
+## DEV-03 — sidebar Workspace (2026-10-31)
+
+**Reuse/adapt:** `IdeBridge`, parent connection/map/bind a ordinary-file mailbox;
+`Projects`, task graph validátor, `Workspace.transact` a native journal pro
+explicitní lidské review; společné desktop/web UI; nativní TreeView/Webview
+API editoru. Nové scoped panel/document akce, review intent/outcome a
+content-addressed manifest doplňují existující kontrakt, nový runtime ani
+závislost nejsou nutné. **Reject:** FUSE/FileSystemProvider a přímý Git writer
+v rozšíření — pro lokální export nejsou potřebné a zavedly by další správu
+recovery/plánovací autority. Žádný externí kód se nekopíroval.
+Viz [ADR 0060](docs/adr/0060-local-file-ide-bridge.md) a
+[kontrakt panelu](docs/ide-workspace-sidebar.md).

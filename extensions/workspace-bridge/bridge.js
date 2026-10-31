@@ -14,6 +14,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 async function git(root, ...args) {
   return (await exec('git', ['-C', root, ...args], {timeout: 5000, maxBuffer: 65536})).stdout.trim();
 }
+async function ruleFiles(root) {
+  const result = await exec('git', ['-C', root, 'ls-files', '-z', '--', 'AGENTS.md', '**/AGENTS.md'],
+    {timeout: 5000, maxBuffer: 65536});
+  return result.stdout.split('\0').filter(Boolean);
+}
 async function outsideGit(root) {
   try { await git(root, 'rev-parse', '--show-toplevel'); }
   catch (error) { if (error.code === 128) return; throw error; }
@@ -42,6 +47,10 @@ async function atomic(file, data) {
   const handle = await fs.open(temporary, 'wx', 0o600);
   try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
   await fs.rename(temporary, file);
+  if (process.platform !== 'win32') {
+    const directory = await fs.open(path.dirname(file), 'r');
+    try {await directory.sync();} finally {await directory.close();}
+  }
 }
 function validatePairing(pairing) {
   if (!pairing || ![1, 2].includes(pairing.schema_version) || !/^[A-Za-z0-9_-]{43}$/.test(pairing.token)
@@ -167,6 +176,9 @@ async function sync(root, pairing, repoRoot, ca, transport = request) {
       throw new Error('Neočekávané potvrzení.');
     await atomic(path.join(root, 'receipts', receipt.message_id + '.json'), JSON.stringify(receipt, null, 2));
   }
+  await atomic(path.join(root, 'SESSION.json'), JSON.stringify({session_id: pairing.session_id,
+    connection_id: pairing.connection_id || null, project_id: pairing.project_id,
+    repository: result.repository, revision: result.snapshot.revision}));
   await atomic(path.join(root, 'TODO.md'), result.snapshot.todo);
   await atomic(path.join(root, 'INSTRUCTIONS.md'),
     '# Instrukce\n\n' + result.instructions + '\n\nTODO je export připnuté revize. Neupravujte jej jako autoritativní plán.\n'
@@ -174,10 +186,11 @@ async function sync(root, pairing, repoRoot, ca, transport = request) {
     + 'Doručení a lidská akceptace jsou oddělené. Přijetí ověřte v receipts/.\n'
     + 'Povolené kind: completed, clarification, message. task_id vyberte ze snapshot.json.\n'
     + 'message_id je nové UUID; revision je snapshot.revision; repository_commit je skutečný Git HEAD.\n'
-    + 'Přihlašovací údaje do schránky nepatří.\n');
+    + 'Přihlašovací údaje do schránky nepatří.\n'
+    + 'Pravidla a připnutý kontext: agent-context.json vzniká pouze explicitním předáním z panelu.\n');
   // The snapshot is published last. Recovery reruns the same immutable export.
   await atomic(path.join(root, 'snapshot.json'), JSON.stringify(result.snapshot, null, 2));
   await atomic(path.join(root, 'STATUS.json'), JSON.stringify({stale: result.stale, synchronized_at: new Date().toISOString()}, null, 2));
   return result;
 }
-module.exports = {discover, git, outsideGit, safeDirectory, read, atomic, validatePairing, repository, request, connectionRequest, sync};
+module.exports = {discover, git, ruleFiles, outsideGit, safeDirectory, read, atomic, validatePairing, repository, request, connectionRequest, sync};

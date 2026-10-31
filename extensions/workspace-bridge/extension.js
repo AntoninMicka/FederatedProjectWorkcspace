@@ -6,6 +6,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const bridge = require('./bridge');
+const {createSidebar} = require('./sidebar');
 
 async function activate(context) {
   if (vscode.env.remoteName) { vscode.window.showWarningMessage('Workspace bridge zatím vyžaduje lokální IDE bez Remote SSH/WSL.'); return; }
@@ -17,6 +18,52 @@ async function activate(context) {
   context.subscriptions.push(status);
   const privateRoot = path.join(context.globalStorageUri.fsPath, 'bridge-private');
   const mailbox = session => path.join(privateRoot, 'sessions', session);
+  const sidebar = createSidebar(vscode, context, {projects: panelProjects, request: panelRequest,
+    synchronize: () => synchronize(true), error: text => output.appendLine(text)});
+  async function panelProjects() {
+    if (!(context.globalState.get('connection') || context.globalState.get('session'))) return [];
+    const config = await configuration(), result = [];
+    const mappings = config.legacy ? {[config.pairing.session_id]: {repository: config.repository}} : config.mappings || {};
+    for (const [session, local] of Object.entries(mappings)) {
+      const root = mailbox(session);
+      try {
+        const snapshot = JSON.parse(await bridge.read(path.join(root, 'snapshot.json')));
+        const state = JSON.parse(await bridge.read(path.join(root, 'STATUS.json')));
+        const identity = JSON.parse(await bridge.read(path.join(root, 'SESSION.json')));
+        if (identity.session_id !== session || identity.project_id !== snapshot.project_id || identity.revision !== snapshot.revision)
+          throw Error('Neshoda identity lokálního exportu.');
+        const pending = [];
+        const histories=(await fs.readdir(path.join(privateRoot,'sessions'))).filter(n=>/^[a-f0-9-]{36}$/.test(n)).slice(-200);
+        for(const prior of histories){
+          const priorRoot=mailbox(prior);let info;
+          try{info=JSON.parse(await bridge.read(path.join(priorRoot,'SESSION.json')));}catch(error){if(error.code==='ENOENT')continue;throw error;}
+          if(info.project_id!==snapshot.project_id||info.connection_id!==(config.pairing.connection_id||null)||info.repository!==identity.repository)continue;
+          for(const directory of ['inbox','drafts']){
+            let names;try{names=await fs.readdir(path.join(priorRoot,directory));}catch(error){if(error.code==='ENOENT')continue;throw error;}
+            for(const name of names.filter(n=>/^[a-f0-9-]{36}\.json$/.test(n)).slice(-100)){
+              const message=JSON.parse(await bridge.read(path.join(priorRoot,directory,name)));
+              if(message.message_id+'.json'!==name)throw Error('Neshoda identity lokální zprávy.');
+              let receipt;try{receipt=JSON.parse(await bridge.read(path.join(priorRoot,'receipts',name)));}catch(error){if(error.code!=='ENOENT')throw error;}
+              pending.push({message,receipt,session_id:prior,draft:directory==='drafts',old_session:prior!==session});
+            }
+          }
+        }
+        result.push({session,root,repository:local.repository,identity:identity.repository,snapshot,state,pending,
+          legacy:config.legacy,error:state.error || (config.legacy?'Původní spojení: pro plný panel připojte Workspace schema-v2.':null)});
+      } catch (error) {output.appendLine('Panel '+session+': '+error.message);}
+    }
+    return result;
+  }
+  async function panelRequest(project, action, payload) {
+    const config = await configuration();
+    if (config.legacy || !config.mappings?.[project.session]) throw Error('Projekt již není přiřazený.');
+    await bridge.repository(project.repository,project.identity);
+    return bridge.connectionRequest(config.pairing,{action,request:{session_id:project.session,...payload}},config.ca);
+  }
+  async function unavailable(session, error) {
+    try {await bridge.atomic(path.join(mailbox(session),'STATUS.json'),JSON.stringify({stale:true,error:error.message,
+      failed_at:new Date().toISOString()}));} catch (_) { /* original error is reported */ }
+  }
   async function configuration() {
     const parent = context.globalState.get('connection');
     const key = parent || context.globalState.get('session');
@@ -30,7 +77,7 @@ async function activate(context) {
       JSON.stringify({pairing: config.pairing, ca: config.ca, mappings: config.mappings || {}}));
     const previous = context.globalState.get('connection');
     await context.globalState.update('connection', config.pairing.connection_id);
-    if (previous && previous !== config.pairing.connection_id) await context.secrets.delete('connection:' + previous);
+    if (previous && previous !== config.pairing.connection_id) {sidebar.clear?.();await context.secrets.delete('connection:' + previous);}
   }
   async function catalog(config) {
     return bridge.connectionRequest(config.pairing, {action: 'status'}, config.ca);
@@ -64,6 +111,15 @@ async function activate(context) {
         let count = 0, stale = 0, failed = 0;
         for (const [session, local] of Object.entries(config.mappings || {})) {
           let mapping = current.mappings.find(item => item.session_id === session);
+          if (!mapping && !local.refresh) {
+            try {
+              const prior=JSON.parse(await bridge.read(path.join(mailbox(session),'SESSION.json')));
+              const updated=current.mappings.find(item=>item.project_id===prior.project_id);
+              if(updated&&updated.repository===prior.repository&&updated.editor_workspace===local.editor_workspace){
+                local.refresh={...updated};await persist(config);
+              }
+            }catch(error){if(error.code!=='ENOENT')output.appendLine(error.message);}
+          }
           if (!local.refresh && (!mapping || !mapping.bound)) continue;
           try {
             if (local.refresh) mapping = await refreshProject(config, current, session, local);
@@ -86,7 +142,7 @@ async function activate(context) {
               }
             }
             count++; if (result.stale) stale++;
-          } catch (error) { failed++; output.appendLine((mapping?.title || local.refresh?.title || session) + ': ' + error.message); }
+          } catch (error) { failed++; await unavailable(mapping?.session_id || session,error); output.appendLine((mapping?.title || local.refresh?.title || session) + ': ' + error.message); }
         }
         status.text = `${current.name}: ${count} projektů` + (stale ? ` · ${stale} zastaralých` : '') + (failed ? ` · ${failed} chyb` : '');
         warning = Boolean(stale || failed || !count);
@@ -99,10 +155,11 @@ async function activate(context) {
         else vscode.window.showInformationMessage(summary);
       }
     } catch (error) {
+      try {const config=await configuration();for(const session of config.legacy?[config.pairing.session_id]:Object.keys(config.mappings||{}))await unavailable(session,error);}catch(_){}
       status.text = error.code === 'ECONNREFUSED' ? 'Workspace: čeká na spuštění' : 'Workspace: chyba spojení';
       output.appendLine(error.message);
       if (!quiet) vscode.window.showErrorMessage(error.message);
-    } finally { busy = false; }
+    } finally { await sidebar.refresh(); busy = false; }
   }
   async function hasPendingMessages(session) {
     const root = mailbox(session);
@@ -130,11 +187,12 @@ async function activate(context) {
       next = await bridge.connectionRequest(config.pairing, {action: 'map', mapping: {
         connection_id: config.pairing.connection_id, project_id: intent.project_id, enabled: true,
         expected_head: intent.expected_head, expected_mapping: session, repository: intent.repository,
-        editor_workspace: intent.editor_workspace, instructions: intent.instructions}}, config.ca);
+        editor_workspace: intent.editor_workspace, instructions: intent.instructions,
+        export_documents: Boolean(intent.export_documents)}}, config.ca);
     } else {
       // Recover only the exact result of our persisted intent, never a changed target.
       if (!active || !['project_id', 'expected_head', 'repository', 'editor_workspace', 'instructions']
-          .every(key => active[key] === intent[key])) throw new Error('Přiřazení se změnilo během obnovy zadání.');
+          .every(key => active[key] === intent[key]) || Boolean(active.export_documents)!==Boolean(intent.export_documents)) throw new Error('Přiřazení se změnilo během obnovy zadání.');
       next = active;
     }
     const bound = await bridge.connectionRequest(config.pairing, {action: 'bind', session_id: next.session_id,
@@ -146,6 +204,7 @@ async function activate(context) {
     delete updated.mappings[session];
     await persist(updated);
     config.mappings = updated.mappings;
+    sidebar.clear?.(true);
     return mapping;
   }
   function command(name, action) {
@@ -293,6 +352,7 @@ async function activate(context) {
       await context.globalState.update(type, undefined);
     }
     status.text = 'Workspace: odpojeno';
+    sidebar.clear?.();
     vscode.window.showInformationMessage('Lokální synchronizace zastavena. Přístup odvolejte také ve Workspace. Soubory zůstaly zachovány.');
   });
   const timer = setInterval(() => {
@@ -303,9 +363,13 @@ async function activate(context) {
   else {
     try {
       await fs.access(path.join(context.extensionPath, 'pairing.json'));
-      if (await vscode.window.showInformationMessage('Workspace bridge je připraven k připojení.', 'Připojit') === 'Připojit')
-        await vscode.commands.executeCommand('workspaceBridge.connect');
+      // Startup activation must finish even while the invitation remains open.
+      vscode.window.showInformationMessage('Workspace bridge je připraven k připojení.', 'Připojit')
+        .then(choice => choice === 'Připojit' ? vscode.commands.executeCommand('workspaceBridge.connect') : undefined)
+        .catch(error => output.appendLine(error.message));
     } catch (_) { /* generic package without pairing */ }
   }
+  await sidebar.refresh();
+  return {sidebar};
 }
 module.exports = {activate};

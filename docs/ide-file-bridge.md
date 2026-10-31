@@ -2,6 +2,17 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 # IDE bridge přes běžné lokální soubory
 
+## Panel úkolů, zpráv a podkladů
+
+Od verze **0.3.0** rozšíření nabízí čtyři pohledy v activity baru Workspace.
+Postup zapnutí podkladů, formát pravidel, lidské review a lokální předání
+agentovi popisuje [návod rozšíření](../extensions/workspace-bridge/README.md#panel-workspace-od-verze-030).
+Backend i VSIX musí být aktualizované; po instalaci obnovte okno IDE.
+Dosavadní párování a cesty zůstávají zachované. Generický aktualizační VSIX
+neobsahuje credential. Podklady povoluje pouze člověk ve Workspace pro
+jednotlivý projekt; samotná aktualizace toto oprávnění nezapne.
+Kontrakt, recovery a rozsah ověření: [DEV-03](ide-workspace-sidebar.md).
+
 ## Připojení editoru k Workspace
 
 Otevřete **Nastavení → IDE a editory** v levém panelu. Jde o samostatnou

@@ -19,9 +19,10 @@ Konkrétní předání autority a zachování novějších zdrojových změn pot
 „Schvaluji předání podle připraveného návrhu“.
 Výsledek: **implemented / PoC validated**, feature akceptována a předání
 autority provedeno. Větev `feature/dev-01-roadmap-migration`, základ/cíl
-jediného PR `develop`. Doručení je oddělené a otevřené: PR není vytvořen ani
-sloučen; agent neprovedl commit, push, otevření PR ani merge ve zdrojovém
-vývojovém repozitáři. Následující projektové commity vytvořil schválený
+jediného PR `develop`. Při původním předání zůstalo doručení oddělené a otevřené.
+Následně uživatel doručil změny přes PR #115: merge do `develop`
+`7954000` dne 31. 10. 2026 v 00:08:28 UTC. Agent tento zdrojový commit,
+push, otevření PR ani merge neprováděl. Následující projektové commity vytvořil schválený
 nativní Workspace lifecycle v datovém projektu, nikoli v tomto checkoutu.
 
 - Původní přijatý import: host `549153757576f24fb5244c313818a08bb2273ce6`,

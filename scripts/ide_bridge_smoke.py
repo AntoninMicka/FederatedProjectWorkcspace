@@ -21,7 +21,9 @@ from spikes.projects import Projects
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--editor', choices=['code', 'codium'], default='codium')
+    parser.add_argument('--editor-path', help='explicit portable IDE CLI for the isolated smoke')
     args = parser.parse_args()
+    editor = args.editor_path or args.editor
     checkout = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix='workspace-ide-smoke-') as temporary:
         root = Path(temporary); node = root / 'node.json'; repo = root / 'project'
@@ -39,7 +41,7 @@ def main():
             assert server.origin != result['pairing']['endpoint']
             package = root / result['filename']; package.write_bytes(base64.b64decode(result['package_base64']))
             common = ['--user-data-dir', str(root / 'profile'), '--extensions-dir', str(root / 'extensions')]
-            installed = subprocess.run([args.editor, *common, '--install-extension', str(package), '--force'],
+            installed = subprocess.run([editor, *common, '--install-extension', str(package), '--force'],
                                       capture_output=True, text=True, timeout=60)
             if installed.returncode:
                 raise RuntimeError(installed.stdout + installed.stderr)
@@ -49,7 +51,7 @@ def main():
                                                mailbox=str(root / 'mailbox'), result=str(output), project_id=project, head=head, discovery_home=str(discovery_home))))
             fixture.chmod(0o600)
             env = dict(os.environ, WORKSPACE_BRIDGE_SMOKE=str(fixture))
-            process = subprocess.run([args.editor, *common, '--disable-workspace-trust',
+            process = subprocess.run([editor, *common, '--disable-workspace-trust',
                 '--skip-welcome', '--skip-release-notes', '--no-sandbox', '--wait',
                 '--extensionDevelopmentPath=' + str(extension),
                 '--extensionTestsPath=' + str(checkout / 'tests/ide_bridge_host.cjs'), str(repo)],

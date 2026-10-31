@@ -225,3 +225,45 @@ Crash boundaries navazují na body 8–10:
 Reuse/adapt: stávající katalog, map CAS, bind a immutable mailbox; nový
 serverový endpoint, databázové schéma ani závislost nejsou potřeba.
 Regrese a fyzická aktivace rozšíření se evidují odděleně v TODO.
+
+## Doplnění 31. 10. 2026 — panel a explicitní lidské review (DEV-03)
+
+Nativní TreeViews zobrazují úkoly, zprávy, podklady a pravidla. Detail má
+escapovaný obsah, CSP bez skriptů a žádné projektové aktivní HTML. Panel
+znovu používá scoped parent connection / mapping; nové panel/document akce
+neotevírají obecné API. Export dokumentů je samostatný příznak mapování,
+výchozí false, který rozšiřuje pouze oprávněný člověk ve Workspace.
+IDE credential si přístup k dokumentům sám nepřidělí. Čtení kontroluje
+připnutou i aktuální privacy, revokaci, účet, projekt a artifact ID.
+
+Dokumenty jsou UTF-8 do 1 MiB, přesné bajty ověřené SHA-256 v neutrálních
+content-addressed souborech mimo Git. Explicitně označená pravidla mají
+project/directory/task scope. Lokální AGENTS.md se pouze čte v ověřeném
+repozitáři; export nic nepřepisuje a neurčuje tichou prioritu pravidel.
+Manifest `fpw-ide-context-v1` vzniká až po úplných souborech a poslední
+kontrole aktuálního mapování/HEAD. Je local-only a neopravňuje externí LLM.
+Pád před manifestem ponechá nejvýše neodkazované kopie, po manifestu zůstává
+jedna úplná připnutá revize. Spuštění agenta je samostatný budoucí kontrakt.
+
+Zprávy jsou nadále lidské návrhy. Projektová zpráva má `task_id: null`;
+completion/progress se týkají konkrétního leaf úkolu a checklistu. Human-only
+review endpoint kontroluje živý účet a práva; IDE credential je odmítnut.
+Přijetí completion/progress používá výhradně `Workspace.transact` a validaci
+celého graphu, přesné zdrojové revize a checklistu. Partial progress nemůže
+sám dokončit otevřený úkol. Zachovává se frontmatter i neovlivněný obsah.
+
+Review má explicitní crash boundaries: bridge SQLite commitne neměnný
+intent s operation ID, uvolní writer lock, native journal provede projektovou
+transakci a bridge uloží outcome. Obnova použije tentýž native operation ID
+včetně receiptu po commitu; nevytvoří druhý commit. Intent bez zahájené native
+operace a s mezitím změněným HEAD končí jako stale bez aplikace. Připravené
+review může obnovit původní reviewer nebo administrátor; oprávnění se znovu
+ověří. Pending projekt neznepřístupní přehled s tlačítkem obnovy: label/HEAD
+se čtou z validovaného Gitu, nikoli ze zastaralé indexové projekce.
+Odmítnutí a přijetí obecné zprávy neprovádějí projektový Git zápis.
+
+Reuse/adapt: existing mailbox, SQLite, native journal/writer, task graph,
+společné desktop/web UI a editorová API. Žádný nový provider ani závislost.
+FUSE, FileSystemProvider a přímý bridge Git writer byly odmítnuty: nejsou
+potřeba pro lokální export a obcházely by stávající recovery hranice.
+Důkazy a platformní omezení drží [specifikace DEV-03](../ide-workspace-sidebar.md).
