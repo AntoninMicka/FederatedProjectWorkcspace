@@ -33,6 +33,12 @@ v novém mapování odmítají. Credentials jsou v SecretStorage editoru.
 
 ## Restart desktopu a aktualizace bez nového párování
 
+Od **0.4.1** rozšíření samo nabídne novou verzi z aktualizovaného backendu
+a po kliknutí na **Aktualizovat** nainstaluje generický VSIX do běžícího
+profilu. Obnovení okna vyžaduje zvláštní potvrzení. Ruční kontrola a volba
+automatické instalace: [návod aktualizace](../extensions/workspace-bridge/README.md#aktualizace-od-verze-041).
+Níže uvedený ruční postup zůstává potřebný pro první přechod ze starší verze.
+
 Od rozšíření **0.2.1** a odpovídajícího desktopu se změna portu při restartu
 obnovuje automaticky. Připojení, přiřazené projekty, credentials i komunikační
 soubory zůstávají zachované. Při vypnutém desktopu rozšíření čeká; při zapnutém
@@ -53,6 +59,48 @@ desktop se stejnými daty uzlu. Znovu nepárujte ani nenastavujte projekty;
 obecný balíček neobsahuje `pairing.json` a zachovává dosavadní SecretStorage
 na stejném ID rozšíření. Starší desktop bez této opravy sám adresu neobnoví.
 Odvolání a dosavadní 30denní platnost credentialu platí i nadále.
+
+### Kontrakt a recovery updateru (hotfix PLAN-QUEUE-02)
+
+Reuse/adapt: stávající `IdeBridge.package()` vytváří generický VSIX;
+`connectionRequest()` zachovává autentizaci, TLS/CA a podepsanou lokální
+discovery podle ADR 0060. Nová akce `extension-update` vrací jen identitu
+a verzi, na explicitní požadavek také VSIX a SHA-256. Instalaci provede
+[oficiální příkaz IDE](https://code.visualstudio.com/api/references/commands)
+`workbench.extensions.installExtension`; vlastní installer ani shell se
+nepřidává. Token je nadále kontrolovaný běžným connection endpointem včetně
+expirace a revokace. Oprávnění k projektům se nemění. SHA-256 kontroluje
+integritu přenosu; není nezávislým podpisem vydavatele. Backend je důvěryhodný
+zdroj aktualizačního kódu.
+
+Updater povoluje jen vyšší stabilní číselnou verzi stejného rozšíření,
+omezuje balíček na 2 MiB, ověřuje SHA-256 a shodu metadat mezi kontrolou
+a stažením. Dočasný adresář je privátní, soubor má 0600 a po skončení
+instalačního příkazu se odstraní. Při změně verze během stahování se
+instalace odmítne. Souběžné kontroly jednoho hostu se sloučí; automatické
+pokusy včetně odmítnuté nabídky a chyb mají hodinový odstup. Ruční kontrola
+odstup obchází. Zastaralý backend chybu zapíše do výstupu, sync pokračuje.
+
+Crash boundaries: před předáním ověřeného VSIX installeru se instalace
+nemění; chyba stahování či checksumu ponechá starou verzi. Při pádu procesu
+může zůstat privátní dočasný soubor bez credentialu. Atomické nahrazení
+a recovery instalace vlastní IDE. Po chybě installeru se úspěch nehlásí
+a ruční kontrola dovolí opakování. Po úspěšné instalaci a před obnovením
+okna běží původní kód; další kontrola v témže hostu nabídne obnovení bez
+opakované instalace. Při restartu hostu se verze znovu porovná, případné
+opakování stejné instalace je bezpečné. Projektový filesystem, Git, index
+a journal tato operace nemění; recovery transakcí podle ADR 0003/0060
+zůstává beze změny. Nové párování se nevytváří.
+
+Ověření hotfixu 31. 10. 2026: cílená sada bridge/panelu 32 testů OK;
+závěrečný `python3 -m unittest discover -s tests -v` 1166 testů,
+40 skipped, OK. Node testy pokrývají potvrzení instalace a obnovení,
+checksum, nesprávnou identitu, změnu verze, downgrade, souběh, selhání
+installeru a retry. `scripts/ide_bridge_smoke.py --update` ověřil v
+izolovaném profilu VSCodia skutečný instalační příkaz z testovacího VSIX
+0.4.0 se stejným updaterem na 0.4.1 a následnou synchronizaci; dialogy byly
+řízené testem a obnovení odložené. Nejde o automatický bootstrap původní
+0.4.0 bez updateru ani o lidskou akceptaci v běžném profilu.
 
 Desktop při startu obnoví podepsané adresy existujících připojení v
 `~/.local/state/federated-workspace/ide-discovery/<connection-or-session-id>.json`.

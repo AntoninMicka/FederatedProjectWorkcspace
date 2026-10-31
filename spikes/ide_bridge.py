@@ -180,7 +180,7 @@ class IdeBridge:
         manifest = json.loads((EXTENSION / 'package.json').read_text())
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'queue.js', 'workspace.svg', 'README.md', 'LICENSE'):
+            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'queue.js', 'updater.js', 'workspace.svg', 'README.md', 'LICENSE'):
                 archive.writestr('extension/' + name, (EXTENSION / name).read_bytes())
             if pairing is not None:
                 archive.writestr('extension/pairing.json', canonical(pairing))
@@ -497,6 +497,16 @@ class IdeBridge:
         require(isinstance(request, dict) and request.get('connection_id') == parent['connection_id'], 'Wrong Workspace connection')
         action = request.get('action')
         actor = self.connection_actor(parent)
+        if action == 'extension-update' and set(request) == {'connection_id', 'action', 'download'}:
+            require(type(request['download']) is bool, 'Invalid update request')
+            manifest = json.loads((EXTENSION / 'package.json').read_text())
+            result = dict(extension_id=manifest['publisher'] + '.' + manifest['name'],
+                          version=manifest['version'])
+            if request['download']:
+                package = self.package()
+                result.update(package_base64=base64.b64encode(package).decode(),
+                              sha256=hashlib.sha256(package).hexdigest())
+            return result
         if action == 'status' and set(request) == {'connection_id', 'action'}:
             projects = self.eligible_projects(actor)
             return dict(connection_id=parent['connection_id'], name=parent['name'],

@@ -7,6 +7,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const bridge = require('./bridge');
 const {createSidebar} = require('./sidebar');
+const {createUpdater} = require('./updater');
 
 async function activate(context) {
   if (vscode.env.remoteName) { vscode.window.showWarningMessage('Workspace bridge zatím vyžaduje lokální IDE bez Remote SSH/WSL.'); return; }
@@ -82,6 +83,11 @@ async function activate(context) {
   async function catalog(config) {
     return bridge.connectionRequest(config.pairing, {action: 'status'}, config.ca);
   }
+  const checkUpdates = createUpdater(vscode, context, async download => {
+    if (!context.globalState.get('connection')) return null;
+    const config = await configuration();
+    return bridge.connectionRequest(config.pairing, {action: 'extension-update', download}, config.ca);
+  }, text => output.appendLine(text));
   async function projectConnection() {
     const config = await configuration();
     if (config.legacy) return {...config, root: mailbox(config.pairing.session_id)};
@@ -357,6 +363,10 @@ async function activate(context) {
     sidebar.clear?.();
     vscode.window.showInformationMessage('Lokální synchronizace zastavena. Přístup odvolejte také ve Workspace. Soubory zůstaly zachovány.');
   });
+  command('checkUpdates', () => checkUpdates(true));
+  const updateTimer = setInterval(() => { void checkUpdates(); }, 60000);
+  context.subscriptions.push({dispose: () => clearInterval(updateTimer)});
+  void checkUpdates();
   const timer = setInterval(() => {
     if (vscode.workspace.getConfiguration('workspaceBridge').get('autoSync', true)) synchronize(true);
   }, 10000);

@@ -139,6 +139,35 @@ class IdeBridgeTests(unittest.TestCase):
             enabled=True, expected_head=self.head, repository='', editor_workspace='',
             instructions='Use focused tests.', expected_mapping=None), **changes)
 
+    def test_extension_update_is_credential_free_and_preserves_project_state(self):
+        created, parent = self.parent()
+        request = dict(connection_id=parent['connection_id'], action='extension-update', download=False)
+        metadata = self.service.connection_exchange(parent, request)
+        self.assertEqual('federated-workspace.workspace-file-bridge', metadata['extension_id'])
+        self.assertNotIn('package_base64', metadata)
+        package = self.service.connection_exchange(parent, dict(request, download=True))
+        raw = base64.b64decode(package['package_base64'])
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), package['sha256'])
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            self.assertNotIn('extension/pairing.json', archive.namelist())
+            self.assertIn('extension/updater.js', archive.namelist())
+            manifest = json.loads(archive.read('extension/package.json'))
+            self.assertEqual(metadata['version'], manifest['version'])
+        self.assertNotIn(created['pairing']['token'].encode(), raw)
+        with self.assertRaises(ValidationError):
+            self.service.connection_exchange(parent, dict(request, download='yes'))
+        with self.assertRaises(ValidationError):
+            self.service.connection_exchange(parent, dict(request, connection_id=str(uuid4())))
+        self.service.connection_revoke(None, parent['connection_id'])
+        with self.assertRaises(ValidationError): self.service.connection(created['pairing']['token'])
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required for updater tests')
+    def test_extension_updater_failure_paths(self):
+        result = subprocess.run(['node', '--test', 'tests/ide_updater.test.js'],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_workspace_connection_without_project_and_legacy_compatibility(self):
         created, parent = self.parent()
         self.assertEqual(2, created['pairing']['schema_version'])

@@ -2,6 +2,29 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 # Workspace file bridge
 
+## Aktualizace od verze 0.4.1
+
+Rozšíření při spuštění a poté nejvýše jednou za hodinu kontroluje verzi
+na připojeném backendu Workspace. Novou verzi nabídne tlačítkem
+**Aktualizovat**; bez kliknutí ji neinstaluje. Ruční kontrolu spustí
+**Workspace: Zkontrolovat aktualizace rozšíření**, nezávisle na Auto Sync.
+Po instalaci nabídne **Obnovit okno**. Obnovení lze odložit, běžící verze
+a synchronizace pokračují do obnovení okna.
+
+Volitelné aplikační nastavení **Workspace bridge → Auto Update** dovolí
+instalaci bez potvrzení; výchozí je vypnuté. Obnovení okna se potvrzuje
+vždy. Zdroj spustitelného kódu je připojený důvěryhodný backend Workspace,
+nikoli Marketplace. Balíček neobsahuje párování ani credentials a instaluje
+se do profilu běžícího IDE. SecretStorage, mapování a schránky se zachovají.
+
+Backend i rozšíření musí tuto funkci podporovat. Verzi 0.4.0 a starší je
+nutné jednou aktualizovat ručně přes VSIX; bez updateru se samy neaktualizují.
+Původní schema-v1 připojení automatické aktualizace nepodporuje. Při selhání
+otevřete výstup **Workspace bridge** a použijte ruční kontrolu. Aktualizace
+neprovádí downgrade ani instalaci stejné verze.
+
+## Připojení a synchronizace
+
 Připojte lokální VS Code/VSCodium k webovému nebo desktopovému Workspace.
 Aplikace připraví VSIX v **Nastavení → IDE a editory**. Po instalaci spusťte
 **Workspace: Připojit Workspace**. Tento krok ještě nevyžaduje projekt.
