@@ -33,13 +33,16 @@ class Element {
 const previewContent=new Element('preview'),detail=new Element('detail'),opened=[];
 const document={createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),querySelector:()=>detail};
 const openPreview=id=>opened.push(id),addConflictLineClasses=()=>{};
+const taskQueueBusy=false,queueIsCurrent=()=>false,taskQueueView=null,activeProject=null;
+const changeTaskQueue=()=>assert.fail('Unloaded queue must not mutate');
 const buttons=el=>[...(el.tag==='button'?[el]:[]),...el.children?.flatMap(buttons)||[]];
 ''' + helper + detail + r'''
 const id='12345678-1234-1234-1234-123456789abc';
 const link='[Podklad](artifacts/'+id+'/content.md)';
 showTaskPlanDetail({id:'DEV-02',title:'Task',description:link,depends_on:[],source:{artifact_id:id}});
-assert.equal(buttons(detail).length,2);
-buttons(detail)[0].listeners.click();buttons(detail)[1].listeners.click();
+assert.equal(buttons(detail).length,3);
+assert.equal(buttons(detail)[0].disabled,true);
+buttons(detail)[1].listeners.click();buttons(detail)[2].listeners.click();
 assert.deepEqual(opened,[id,id]);
 renderMarkdown('- '+link,previewContent);
 assert.equal(buttons(previewContent).length,1);buttons(previewContent)[0].listeners.click();

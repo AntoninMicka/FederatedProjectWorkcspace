@@ -220,6 +220,39 @@ class WebTests(unittest.TestCase):
         self.assertEqual(401, self.request(path='/v1/ide-bridge/exchange', body=json.dumps(request), headers=scoped)[0])
         self.assertEqual(head, self.server.projects.open(project_id)['commit_id'])
 
+    def test_task_queue_roles_owner_isolation_and_confirmation(self):
+        code, data, _ = self.create_project('Task queue')
+        self.assertEqual(200, code, data); pid = json.loads(data)['id']
+        view = self.server.projects.open(pid)
+        head = Artifacts(self.root/'node.json').save(dict(project_id=pid,
+            artifact_id=main_todo_id(pid), base_head=view['commit_id'], title='Roadmap',
+            body='- [ ] [TASK-A] A\n- [ ] [TASK-B] B\n  - depends_on: TASK-A\n', new=True), str(uuid4()))['commit_id']
+        def queue(action, extra=None, headers=None):
+            return self.request(path='/v1/task-queue', body=json.dumps(dict(
+                project_id=pid, action=action, **(extra or {}))), headers=headers)
+        self.assertEqual(200, queue('status')[0])
+        extra = dict(task_id='TASK-A', expected_head=head, revision=0)
+        code, data, _ = queue('add', extra); self.assertEqual(200, code, data)
+        self.assertEqual(['TASK-B'], json.loads(data)['following'])
+        def admin(body):
+            code, data, _ = self.request(path='/v1/administration', body=json.dumps(body))
+            self.assertEqual(200, code, data); return json.loads(data)
+        state = admin({'action': 'list'})
+        state = admin({'action': 'create-user', 'expected_commit': state['commit_id'],
+                       'name': 'Queue user', 'node_role': 'member'})
+        user, key = state['users'][0], state['access_key']; headers = {'Authorization': 'Bearer ' + key}
+        self.assertEqual(403, queue('status', headers=headers)[0])
+        state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {pid: 'reader'}})
+        code, data, _ = queue('status', headers=headers); self.assertEqual(200, code, data)
+        self.assertEqual([], json.loads(data)['task_ids'])
+        self.assertEqual(403, queue('add', extra, headers)[0])
+        state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {pid: 'editor'}})
+        self.assertEqual(200, queue('add', extra, headers)[0])
+        self.assertEqual(422, queue('remove', dict(extra, revision=1, preview_sha256='bad'), headers)[0])
+        self.assertEqual(head, self.server.projects.repository(pid).head())
+
     def test_roadmap_graph_projection_and_revision_pinned_svg_export(self):
         code, data, _ = self.request(path='/v1/roadmap/graph',
                                      body=json.dumps({'format': 'json'}))

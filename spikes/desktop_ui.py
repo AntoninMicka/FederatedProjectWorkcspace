@@ -929,7 +929,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="plan-panel" role="tabpanel" aria-labelledby="plan-main-tab" hidden>
 <div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Roadmapa projektu</h1></div>
 <p id="plan-status" role="status">Otevřete projekt.</p>
-<div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
+<div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
+<section aria-label="Fronta úkolů"><h2>Fronta úkolů</h2><button id="task-queue-refresh" type="button">Obnovit frontu</button> <button id="task-queue-revalidate" type="button" disabled>Znovu ověřit</button><p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></section>
 <div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite"></div><aside id="plan-detail" class="roadmap-detail"><h3>Detail položky</h3><p>Vyberte milník nebo dávku.</p></aside></div>
 </div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
@@ -1282,6 +1283,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 .settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}
+.task-queue-list{max-height:30vh;overflow-y:auto;overscroll-behavior:contain}.task-queue-list li{display:flex;align-items:center;gap:8px;margin:6px 0}.task-queue-list li button:first-child{text-align:left;overflow-wrap:anywhere}
 .roadmap-card{max-width:none}.roadmap-heading,.roadmap-controls,.roadmap-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.roadmap-heading{justify-content:space-between}.roadmap-heading h2{margin-bottom:4px}.roadmap-heading p{margin-top:0}.roadmap-controls{padding:12px 0}.roadmap-controls label:not(.roadmap-check){display:flex;align-items:center;gap:7px}.roadmap-check{display:flex;align-items:center;gap:7px}.roadmap-legend{margin:10px 0;font-size:12px}.roadmap-legend span{padding:4px 8px;border:2px solid #557384;border-radius:999px;background:#fff}.roadmap-legend .completed{background:#e2f3eb;border-color:#26735e}.roadmap-legend .in-progress{background:#fff2c7;border-color:#9a6900}.roadmap-legend .deferred{background:#eef1f3;border-color:#87939a}.roadmap-legend .critical{border-width:4px}.roadmap-legend .ready{border-color:#176b60;border-style:dashed}.roadmap-graph{min-height:360px;max-height:62vh;overflow:auto;border:1px solid #cbd7de;border-radius:12px;background:#f7fafb;overscroll-behavior:contain}.roadmap-graph svg{display:block;min-width:100%}.roadmap-node{cursor:pointer}.roadmap-node:focus rect,.roadmap-node:hover rect{filter:drop-shadow(0 3px 4px #17334255);stroke:#0d6b5d;stroke-width:4}.roadmap-detail{margin-top:12px;padding:12px 14px;border-left:4px solid #176b60;background:#eff8f5}.roadmap-detail h3{margin:0 0 6px}.roadmap-detail dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;margin:0}.roadmap-detail dt{font-weight:700}.roadmap-detail dd{margin:0;overflow-wrap:anywhere}
 .plan-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px}.plan-layout .roadmap-graph{min-width:0}.plan-layout .roadmap-detail{margin-top:0}.roadmap-detail dd{white-space:pre-line}#sidebar-plan h3{font-size:13px;margin:16px 0 0}#sidebar-plan-list button{width:100%;text-align:left;background:transparent;color:#dce8f1;padding:9px 7px}#sidebar-plan-tree{max-height:55%;overflow:auto}#sidebar-plan-tree,#sidebar-plan-tree ul{list-style:none;padding:0;margin:8px 0}#sidebar-plan-tree ul{margin:2px 0 2px 12px;padding-left:10px;border-left:1px solid #496072}#sidebar-plan-tree button{width:100%;padding:7px 6px;background:transparent;color:#dce8f1;text-align:left;font-size:12px}#sidebar-plan-tree button:hover,#sidebar-plan-tree button[aria-current="true"]{background:#274154}#sidebar-plan-tree button[aria-current="true"]{border-left:3px solid #79c9ac}
 .plan-roadmap-canvas{position:relative;min-width:100%;background:#f7fafb}.plan-milestone-lane{position:absolute;left:0;border-radius:11px;background:#edf3f5}.plan-milestone-lane:nth-of-type(even){background:#f1f5f6}.plan-milestone-label{position:sticky;left:0;z-index:4;box-sizing:border-box;width:220px;height:100%;padding:16px 18px;border:0;border-right:1px solid #cfdae0;border-radius:11px 0 0 11px;background:#edf3f5;color:#18384a;text-align:left}.plan-milestone-label strong,.plan-milestone-label span{display:block}.plan-milestone-label span{margin-top:7px;color:#526b79;font-size:12px;line-height:1.35;white-space:pre-line}.plan-milestone-label:hover,.plan-milestone-label:focus-visible{background:#e2eeeb;outline:2px solid #176b60;outline-offset:-2px}.plan-roadmap-edges{position:absolute;inset:0;z-index:1;pointer-events:none}.plan-batch-card{position:absolute;z-index:2;box-sizing:border-box;width:220px;min-height:70px;padding:10px;border:2px solid #557384;border-radius:10px;background:#fff;color:#152b38;text-align:left}.plan-batch-card strong,.plan-batch-card span,.plan-batch-card small{display:block}.plan-batch-card span{margin-top:4px;color:#385160;font-size:12px}.plan-batch-card small{max-height:2.6em;margin-top:5px;overflow:hidden;color:#607987;font-size:11px;line-height:1.25;white-space:pre-line}.plan-batch-card[data-completed="true"]{background:#e2f3eb}.plan-batch-card[data-blocked="true"]{background:#f8dddd}.plan-batch-card[data-ready="true"]{border-color:#176b60;border-style:dashed}.plan-batch-card[data-critical="true"]{border-width:4px}.plan-batch-card:hover,.plan-batch-card:focus-visible{border-color:#0d6b5d;box-shadow:0 3px 6px #17334233;outline:none}
@@ -4095,8 +4097,36 @@ function renderRoadmap(){
  graph.append(svg);document.querySelector('#roadmap-status').textContent=`${nodes.length}/${roadmapProjection.nodes.length} dávek · ${roadmapProjection.parallel_ready.length} souběžně připravených · revize ${roadmapProjection.revision.slice(0,12)}`;
 }
 let taskPlanProjection=null,taskPlanSelection=null;
+let taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='';
+function queueIsCurrent(){return taskQueueView&&activeProject&&taskQueueView.project_id===activeProject.id&&taskQueueView.expected_head===activeProject.head;}
+function taskPlanMatches(item,mode){return !mode||(mode==='completed'?item.checked:mode==='following'?Boolean(queueIsCurrent()&&taskQueueView.valid&&taskQueueView.following.includes(item.id)):item[mode]);}
+function renderTaskQueue(){
+ const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
+ document.querySelector('#task-queue-revalidate').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
+ if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu; pokud se změnila roadmapa, znovu otevřete projekt.';return;}
+ status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
+ for(const item of taskQueueView.items){const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button');open.type=remove.type='button';open.textContent=`${item.id} · ${item.title}`;open.addEventListener('click',()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node)showTaskPlanDetail(node);});remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,remove);list.append(row);}
+}
+async function loadTaskQueue(){
+ if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;
+ try{const result=await projectRequest('/v1/task-queue',{project_id:project.id,action:'status'});if(generation!==taskQueueGeneration||activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();}
+ catch(error){if(generation===taskQueueGeneration)document.querySelector('#task-queue-status').textContent=error.message;}
+}
+async function changeTaskQueue(action,taskId){
+ if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
+ const project=activeProject,view=taskQueueView;taskQueueBusy=true;renderTaskQueue();
+ try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
+ if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
+ const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();
+ }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
+ finally{taskQueueBusy=false;renderTaskQueue();}
+}
+document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
+document.querySelector('#task-queue-revalidate').addEventListener('click',()=>changeTaskQueue('revalidate'));
+
 function showTaskPlanDetail(item){
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();
+ if(!item.checked){const add=document.createElement('button');add.type='button';add.textContent='Přidat do fronty';add.disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView.valid||Boolean(activeProject?.readOnly)||taskQueueView.task_ids.includes(item.id)||!(item.ready||taskQueueView.following.includes(item.id));add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add);}
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title);
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
  const checklist=(item.checklist||[]).map(value=>(value.checked?'☑ ':'☐ ')+value.text).join('\\n');
@@ -4105,7 +4135,7 @@ function showTaskPlanDetail(item){
 }
 function renderProfiledTaskRoadmap(value,mode,graph,status){
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line);
- const batches=value.nodes.filter(item=>item.type==='batch'&&(!mode||(mode==='completed'?item.checked:item[mode])));
+ const batches=value.nodes.filter(item=>item.type==='batch'&&taskPlanMatches(item,mode));
  const visibleMilestones=mode?milestones.filter(item=>batches.some(batch=>batch.parent_id===item.id)):milestones;
  if(!visibleMilestones.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné dávky.';graph.append(empty);status.textContent='0 dávek';return;}
  const visible=new Set(batches.map(item=>item.id)),labelWidth=220,columnWidth=270,cardWidth=220,cardHeight=96,laneGap=10,lanePadding=18;
@@ -4126,7 +4156,7 @@ function renderProfiledTaskRoadmap(value,mode,graph,status){
 function renderProfiledTaskLevel(value,mode,graph,status,selection){
  const selectedBatches=value.nodes.filter(item=>item.type==='batch'&&(selection.kind==='milestone'?item.parent_id===selection.id:item.id===selection.id));
  const batchIds=new Set(selectedBatches.map(item=>item.id));
- const tasks=value.nodes.filter(item=>item.type==='task'&&batchIds.has(item.parent_id)&&(!mode||(mode==='completed'?item.checked:item[mode])));
+ const tasks=value.nodes.filter(item=>item.type==='task'&&batchIds.has(item.parent_id)&&taskPlanMatches(item,mode));
  const visibleBatches=mode?selectedBatches.filter(batch=>tasks.some(task=>task.parent_id===batch.id)):selectedBatches;
  if(!visibleBatches.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné dávky s odpovídajícími úkoly.';graph.append(empty);status.textContent='0 úkolů';return;}
  const visibleTasks=tasks.filter(task=>visibleBatches.some(batch=>batch.id===task.parent_id)),visible=new Set(visibleTasks.map(item=>item.id));
@@ -4153,7 +4183,7 @@ function renderTaskPlan(){
  const mode=document.querySelector('#plan-state-filter').value,scope=taskPlanSelection?.kind==='subgraph'?new Set(taskPlanSelection.task_ids):null;
  if(value.profile==='software-development/v1'&&!taskPlanSelection){renderProfiledTaskRoadmap(value,mode,graph,status);return;}
  if(value.profile==='software-development/v1'&&['milestone','batch'].includes(taskPlanSelection?.kind)){renderProfiledTaskLevel(value,mode,graph,status,taskPlanSelection);return;}
- const nodes=value.nodes.filter(item=>(!scope||scope.has(item.id))&&(!mode||(mode==='completed'?item.checked:item[mode]))),visible=new Set(nodes.map(item=>item.id));
+ const nodes=value.nodes.filter(item=>(!scope||scope.has(item.id))&&taskPlanMatches(item,mode)),visible=new Set(nodes.map(item=>item.id));
  if(!nodes.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné úkoly.';graph.append(empty);status.textContent='0 úkolů';return;}
  const positions=new Map(),slots=new Map();for(const item of nodes){const slot=slots.get(item.depth)||0;slots.set(item.depth,slot+1);positions.set(item.id,{x:28+item.depth*260,y:28+slot*78});}
  const width=280+Math.max(...nodes.map(item=>item.depth))*260,height=90+Math.max(...slots.values())*78,svg=roadmapElement('svg',{viewBox:`0 0 ${width} ${height}`,width,height,role:'img','aria-label':'Plán projektových úkolů'});
@@ -4164,6 +4194,7 @@ function renderTaskPlan(){
 function updateTaskPlanTreeSelection(){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/'));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
 function openTaskPlan(selection=null){taskPlanSelection=selection;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();}
 function renderTaskPlanSidebar(value){
+ taskQueueView=null;loadTaskQueue();
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();
  if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
@@ -7566,7 +7597,7 @@ class DesktopHandler(Handler):
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
         '/v1/document-patterns',
-        '/v1/roadmap/graph',
+        '/v1/roadmap/graph', '/v1/task-queue',
         '/v1/roadmap-refinement/list', '/v1/roadmap-refinement/detail',
         '/v1/roadmap-refinement/decide', '/v1/roadmap-refinement/decide-all',
         '/v1/roadmap-refinement/reconcile/preview', '/v1/roadmap-refinement/apply',
@@ -7706,6 +7737,15 @@ class DesktopHandler(Handler):
             return self.dispatch_ide_bridge(request)
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/task-queue':
+            try:
+                from spikes.task_queue import TaskQueue
+                node = self.server.projects.node_path
+                actor = getattr(self, 'actor', {}) or {}
+                owner = actor.get('id') or ProjectCreation(node).author_id()
+                return self.reply(200, TaskQueue(node, network=getattr(self.server.projects, 'network', False)).execute(request, owner))
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path.startswith('/v1/roadmap-refinement/'):
             try:
                 if not isinstance(request, dict) or not isinstance(request.get('project_id'), str):
