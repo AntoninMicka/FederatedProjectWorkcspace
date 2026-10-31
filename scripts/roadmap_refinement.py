@@ -16,17 +16,26 @@ def main(argv=None):
     sub = parser.add_subparsers(dest='command', required=True)
     scan = sub.add_parser('scan'); scan.add_argument('--limit', type=int, default=1)
     scan.add_argument('--deep-check', action='store_true')
+    scan.add_argument('--dependencies-only', action='store_true')
+    scan.add_argument('--focus-task', action='append', dest='focus_ids')
     scan.add_argument('--forget-previous', action='store_true')
     sub.add_parser('list')
     decide = sub.add_parser('decide'); decide.add_argument('--proposal', required=True)
     choice = decide.add_mutually_exclusive_group(required=True)
     choice.add_argument('--accept', action='store_true'); choice.add_argument('--reject', action='store_true')
     apply = sub.add_parser('apply'); apply.add_argument('--operation-id', required=True)
+    apply.add_argument('--expected-preview-sha256')
+    sub.add_parser('preview')
+    cancel = sub.add_parser('cancel-apply'); cancel.add_argument('--operation-id', required=True)
     tui = sub.add_parser('tui'); tui.add_argument('--limit', type=int, default=5)
     tui.add_argument('--deep-check', action='store_true')
+    tui.add_argument('--dependencies-only', action='store_true')
     args = parser.parse_args(argv)
+    if args.command == 'tui' and args.deep_check and args.dependencies_only:
+        parser.error('Vyberte jeden rezim scanu')
     if args.command == 'tui' and not args.project:
-        launch_project_selector(args.node, scan_limit=args.limit, deep_check=args.deep_check)
+        launch_project_selector(args.node, scan_limit=args.limit, deep_check=args.deep_check,
+                                dependencies_only=args.dependencies_only)
         return 0
     if not args.project:
         parser.error('--project je povinný pro příkaz ' + args.command)
@@ -35,16 +44,22 @@ def main(argv=None):
         if args.forget_previous and not args.deep_check:
             parser.error('--forget-previous vyžaduje --deep-check')
         result = service.scan(limit=args.limit, deep_check=args.deep_check,
-                              forget_previous=args.forget_previous)
+                              forget_previous=args.forget_previous,
+                              dependencies_only=args.dependencies_only, focus_ids=args.focus_ids)
     elif args.command == 'list':
         result = service.list()
     elif args.command == 'decide':
         result = service.decide(args.proposal, 'accept' if args.accept else 'reject')
     elif args.command == 'tui':
-        launch(service, scan_limit=args.limit, deep_check=args.deep_check)
+        launch(service, scan_limit=args.limit, deep_check=args.deep_check,
+               dependencies_only=args.dependencies_only)
         return 0
+    elif args.command == 'preview':
+        result = service.reconciliation_preview()
+    elif args.command == 'cancel-apply':
+        result = service.cancel_dependency_apply(args.operation_id)
     else:
-        result = service.apply(args.operation_id)
+        result = service.apply(args.operation_id, preview_sha256=args.expected_preview_sha256)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
     return 0
 

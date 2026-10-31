@@ -1097,7 +1097,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="roadmap-review-layout"><div class="roadmap-review-table-wrap"><table id="roadmap-review-table"><thead><tr><th>Stav</th><th>Návrh</th><th>Dopad</th><th>Zdroj</th><th>Cíl</th><th>Jistota</th></tr></thead><tbody></tbody></table></div>
 <aside id="roadmap-review-detail" class="roadmap-review-detail" aria-labelledby="roadmap-review-detail-title"><h3 id="roadmap-review-detail-title">Vyberte záznam</h3><dl></dl>
 <h4>Odůvodnění</h4><p data-review-reason>—</p><h4>Strukturované změny</h4><pre data-review-changes>—</pre><h4>Zdrojový kontext</h4><pre data-review-source>—</pre>
-<div class="form-actions"><button id="roadmap-review-accept" type="button" disabled>Schválit</button><button id="roadmap-review-reject" class="danger-button" type="button" disabled>Zamítnout</button><button id="roadmap-review-reset" class="secondary-button" type="button" disabled>Zrušit schválení</button><button id="roadmap-review-apply-selected" type="button" disabled>Provést vybraný</button></div></aside></div></div>
+<div class="form-actions"><button id="roadmap-review-accept" type="button" disabled>Schválit</button><button id="roadmap-review-reject" class="danger-button" type="button" disabled>Zamítnout</button><button id="roadmap-review-reset" class="secondary-button" type="button" disabled>Zrušit schválení</button><button id="roadmap-review-apply-selected" type="button" disabled>Provést vybraný</button><button id="roadmap-review-recover" type="button" hidden>Obnovit připravený zápis</button></div></aside></div></div>
 <div id="julia-panel" role="tabpanel" aria-labelledby="julia-tab" hidden>
 <header><span class="dashboard-kicker">PŘIPNUTÝ LOKÁLNÍ RUNTIME</span><h2>Julia výpočet</h2>
 <p>Výběr ani náhled nic nespouští. Kód se spustí až po potvrzení přesného preview; publikace výsledku vyžaduje další potvrzení.</p></header>
@@ -3560,11 +3560,17 @@ function renderRoadmapReviewRows(){
 }
 function renderRoadmapReviewDetail(value){
  const row=value.row,proposal=row.proposal,context=value.context,title=document.querySelector('#roadmap-review-detail-title'),list=roadmapReviewDetail.querySelector('dl');title.textContent=context.source_title||row.proposal_id;list.replaceChildren();
+ const recover=document.querySelector('#roadmap-review-recover'),intent=context.pending_apply;
+ recover.hidden=!intent;recover.disabled=Boolean(activeProject?.readOnly);
+ recover.onclick=async()=>{if(!intent||activeProject?.readOnly||!window.confirm('Obnovit dříve potvrzený zápis závislostí?'))return;const projectId=activeProject.id;recover.disabled=true;
+  try{await projectRequest('/v1/roadmap-refinement/apply',{project_id:projectId,operation_id:intent.operation_id,preview_sha256:intent.preview_sha256,proposal_ids:intent.proposals},120000);await openRegisteredProject(projectId);openRoadmapReview();}
+  catch(error){roadmapReviewStatus.textContent=error.message;recover.disabled=false;}};
  const fields=[['Stav',row.state],['Režim',row.mode],['Návrh',proposal.action||proposal.decision||proposal.outcome||'—'],['Dopad',`${row.impact||'—'} / riziko ${row.risk||'—'}`],['Jistota',proposal.confidence||'—'],['Cíl',proposal.target_id||(proposal.target_ids||[]).join(', ')||'—'],['Zdroj',context.source_path||'—'],['Proposal ID',row.proposal_id],['Expected HEAD',row.expected_head]];
  for(const [label,text] of fields){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=text;list.append(dt,dd);}
  roadmapReviewDetail.querySelector('[data-review-reason]').textContent=proposal.reason||proposal.error||proposal.summary||'—';roadmapReviewDetail.querySelector('[data-review-changes]').textContent=proposal.changes?.length?JSON.stringify(proposal.changes,null,2):'—';roadmapReviewDetail.querySelector('[data-review-source]').textContent=context.source_excerpt||context.context_error||'—';updateRoadmapReviewActions();
 }
 async function selectRoadmapReview(proposalId){
+ document.querySelector('#roadmap-review-recover').hidden=true;
  roadmapReviewSelected=proposalId;renderRoadmapReviewRows();const project=activeProject,request=roadmapReviewRequest;
  if(!project||!proposalId)return;selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(roadmapReviewTab);roadmapReviewStatus.textContent='Načítám detail z přesné revize návrhu…';
  try{let value=roadmapReviewDetails.get(proposalId);if(!value){value=await projectRequest('/v1/roadmap-refinement/detail',{project_id:project.id,proposal_id:proposalId});roadmapReviewDetails.set(proposalId,value);}if(request!==roadmapReviewRequest||activeProject!==project||roadmapReviewSelected!==proposalId)return;renderRoadmapReviewDetail(value);renderRoadmapReviewRows();}
