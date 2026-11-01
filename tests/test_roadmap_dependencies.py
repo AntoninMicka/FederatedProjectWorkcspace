@@ -22,6 +22,15 @@ from tests import test_roadmap_refinement as refinement_tests
 from tests import test_local_api
 
 
+def compact(value):
+    """The v3 model answer; schema and focus are supplied by the application."""
+    if not isinstance(value, dict) or 'edges' not in value:
+        return value
+    return dict(reason=value['reason'], decision=value['decision'], prerequisites=[
+        dict(evidence_id=e['evidence_id'], quote=e['quote'], prerequisite_id=e['target_id'], reason=e['reason'])
+        for e in value['edges']])
+
+
 class DependencyScanTests(unittest.TestCase):
     def setUp(self):
         refinement_tests.RoadmapRefinementTests.setUp(self)
@@ -34,6 +43,14 @@ class DependencyScanTests(unittest.TestCase):
                            base_head=self.git.head(), title='Roadmap', body=body, new=False), str(uuid4()))
         self.head = self.git.head()
         self.response = self.proposal()
+        self.wire = []
+        def factory(runs):
+            def transport(binding, raw):
+                self.wire.append(json.loads(raw))
+                return {'model': binding.model, 'response': json.dumps(compact(self.response)),
+                        'done_reason': 'stop'}
+            return OllamaAdapter(runs, transport=transport)
+        self.service.adapter_factory = factory
 
     def proposal(self, focus='TASK-01', target='TASK-02'):
         return dict(schema=SCHEMA, focus_id=focus, decision='propose', reason='Input prerequisite.',
@@ -79,15 +96,18 @@ class DependencyScanTests(unittest.TestCase):
                 if field == 'focus_id': response[field] = value
                 else: response['edges'][0][field] = value
                 with self.assertRaises(ValueError): validate(json.dumps(response), frozen)
-        self.response['focus_id'] = 'TASK-02'
+        # v3: focus comes from the application; an out-of-catalog target still fails closed.
+        self.response['edges'][0]['target_id'] = 'TASK-99'
         row = self.row(self.scan())
         self.assertEqual(row['state'], 'failed')
-        self.assertIn('focus differs', row['proposal']['error'])
+        self.assertIn('Invalid dependency target', row['proposal']['error'])
         self.assertEqual(self.scan()['created'], [])
 
-    def test_duplicate_edge_and_self_edge_are_rejected(self):
+    def test_duplicate_edge_collapses_and_self_edge_is_rejected(self):
         self.response['edges'].append(dict(self.response['edges'][0]))
-        self.assertEqual(self.row(self.scan())['state'], 'failed')
+        row = self.row(self.scan())
+        self.assertEqual(row['state'], 'pending')
+        self.assertEqual(1, len(row['proposal']['edges']))
         self.response = self.proposal(focus='TASK-02', target='TASK-02')
         self.assertEqual(self.row(self.scan('TASK-02'))['state'], 'failed')
 
@@ -407,3 +427,81 @@ assert.equal(calls[0].body.preview_sha256,DIGEST);});
         preview=self.service.reconciliation_preview([old['proposal_id']])
         self.assertEqual(preview['blockers'],[])
         self.service.apply(str(uuid4()),preview['preview_sha256'],[old['proposal_id']])
+
+
+class DependencyPromptV3Tests(unittest.TestCase):
+    setUp = DependencyScanTests.setUp
+    proposal = DependencyScanTests.proposal
+    scan = DependencyScanTests.scan
+    row = DependencyScanTests.row
+
+    def frozen(self, focus='TASK-01'):
+        files = self.git.snapshot(self.head); entities = validate_snapshot(files)
+        graph = project_task_graph(files, entities, self.project_id, self.head)
+        return focus_input(next(t for t in graph['nodes'] if t['id'] == focus), graph, files, entities)
+
+    def test_request_is_schema_constrained_explicit_context_and_plain_text(self):
+        row = self.row(self.scan())
+        self.assertEqual('pending', row['state'])
+        wire = self.wire[0]
+        self.assertEqual(False, wire['think'])
+        self.assertEqual(0, wire['options']['temperature'])
+        self.assertGreater(wire['options']['num_ctx'], 4096)
+        item = wire['format']['properties']['prerequisites']['items']['properties']
+        self.assertEqual(['evidence_id', 'quote', 'prerequisite_id', 'reason'], list(item))
+        self.assertNotIn('TASK-01', item['prerequisite_id']['enum'])
+        self.assertIn('TASK-02', item['prerequisite_id']['enum'])
+        prompt = wire['prompt']
+        self.assertIn('Focus task: TASK-01', prompt)
+        self.assertIn(self.phrase, prompt)
+        self.assertNotIn('"catalog"', prompt)
+        self.assertNotIn('Summary:', prompt)
+        self.assertTrue(prompt.rstrip().endswith('BEFORE the focus task.'))
+
+    def test_recorded_and_cycle_creating_targets_are_not_offered(self):
+        from spikes.roadmap_dependencies import prompt_input
+        frozen = self.frozen()
+        frozen['catalog'] = [dict(n) for n in frozen['catalog']]
+        frozen['focus'] = dict(frozen['focus'], depends_on=['BATCH-01'])
+        for node in frozen['catalog']:
+            if node['id'] == 'TASK-02':
+                node['depends_on'] = ['TASK-01']   # TASK-02 -> TASK-01 already: reverse edge would cycle
+        ids = [c['id'] for c in prompt_input(frozen)['candidates']]
+        self.assertNotIn('TASK-01', ids); self.assertNotIn('BATCH-01', ids); self.assertNotIn('TASK-02', ids)
+        self.assertIn('MILESTONE-M1', ids)
+
+    def test_quote_with_whitespace_or_emphasis_maps_to_exact_source_span(self):
+        from spikes.roadmap_dependencies import expand_response
+        frozen = self.frozen()
+        for quote in ('TASK-02 provides the  validated\ninput required by TASK-01.',
+                      '"TASK-02 provides the **validated** input required by TASK-01."'):
+            with self.subTest(quote=quote):
+                raw = json.dumps(dict(reason='r', decision='propose', prerequisites=[dict(
+                    evidence_id='0', quote=quote, prerequisite_id='TASK-02', reason='needs input')]))
+                value = validate(expand_response(raw, frozen), frozen)
+                self.assertEqual(self.phrase, value['edges'][0]['quote'])
+        raw = json.dumps(dict(reason='r', decision='propose', prerequisites=[dict(
+            evidence_id='0', quote='An invented sentence that is not in the source.', prerequisite_id='TASK-02',
+            reason='x')]))
+        with self.assertRaisesRegex(ValueError, 'citation differs'):
+            validate(expand_response(raw, frozen), frozen)
+
+    def test_legacy_v2_rows_keep_their_input_and_validation(self):
+        from spikes.roadmap_dependencies import POLICY, POLICY_V2
+        self.assertNotEqual(POLICY, POLICY_V2)
+        frozen = self.frozen()
+        self.assertEqual('fpw-roadmap-dependency-input-v1', frozen['schema'])
+        self.assertEqual(self.proposal(), validate(json.dumps(self.proposal()), frozen))
+
+    def test_filled_context_evidence_fails_without_retry(self):
+        def factory(runs):
+            def transport(binding, raw):
+                wire = json.loads(raw); self.wire.append(wire)
+                return {'model': binding.model, 'response': json.dumps(compact(self.response)),
+                        'prompt_eval_count': wire['options']['num_ctx']}
+            return OllamaAdapter(runs, transport=transport)
+        self.service.adapter_factory = factory
+        row = self.row(self.scan())
+        self.assertEqual('failed', row['state'])
+        self.assertIn('neviděl celé zadání', row['proposal']['error'])
+        self.assertEqual(1, len(self.wire))

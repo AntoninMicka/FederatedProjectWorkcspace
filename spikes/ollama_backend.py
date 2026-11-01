@@ -570,6 +570,19 @@ class OllamaAdapter:
                         content, projection = render_prompt(scope), 'Markdown blocks'
                     rendered.append((input_id, content, projection))
                 decoded = rendered
+            dependency_task = task['role_revision'] == 'extractor-dependencies-v1'
+            if dependency_task:
+                from spikes.roadmap_dependencies import PROMPT_SCHEMA as DEPENDENCY_SCHEMA, render_prompt as render_dependencies
+                rendered = []
+                for input_id, content, projection in decoded:
+                    try:
+                        scope = json.loads(content)
+                    except ValueError:
+                        scope = None
+                    if isinstance(scope, dict) and scope.get('schema') == DEPENDENCY_SCHEMA:
+                        content = render_dependencies(scope)
+                    rendered.append((input_id, content, projection))
+                decoded = rendered
             patch_task = (task['role_id'] == 'task-output' and
                           task['role_revision'] in {'task-output-file-edit-patch-v3', 'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5'})
             sections = ['Instruction:\n' + task['instruction']]
@@ -590,7 +603,10 @@ class OllamaAdapter:
                 if (patch_task or block_task) and input_id == task['focus_input_id']:
                     label = 'User edit request ID ' + input_id
                 sections.append(label + ':\n' + content)
-            if block_task and task['role_revision'] == BLOCK_ROLE:
+            if dependency_task:
+                sections.append('Required result: return only the JSON object with decision, reason and '
+                    'prerequisites for the focus task. Prerequisites must be finished BEFORE the focus task.')
+            elif block_task and task['role_revision'] == BLOCK_ROLE:
                 sections.append('Required Markdown result: implement the User edit request using only JSON block operations. '
                     'Use block IDs from the <<marker>> lines. Do not regenerate unchanged blocks.')
             elif block_task:
@@ -655,7 +671,19 @@ class OllamaAdapter:
         body = dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
                     stream=stream)
         if output_format == 'json':
-            if role is not None and role.role_id == 'task-router':
+            if role is not None and role.revision == 'extractor-dependencies-v1':
+                from spikes.roadmap_dependencies import PROMPT_SCHEMA as DEPENDENCY_SCHEMA, output_schema as dependency_schema
+                scopes = []
+                for part in json.loads(handoff.payload).get('inputs', []):
+                    try:
+                        value = json.loads(base64.b64decode(part['content_b64'], validate=True))
+                    except (KeyError, TypeError, ValueError, UnicodeError):
+                        continue
+                    if isinstance(value, dict) and value.get('schema') == DEPENDENCY_SCHEMA:
+                        scopes.append(value)
+                require(len(scopes) == 1, 'Dependency output requires exactly one pinned focus context')
+                body['format'] = dependency_schema(scopes[0])
+            elif role is not None and role.role_id == 'task-router':
                 body['format'] = (_PRESENTATION_PROPOSAL_FORMAT
                                   if role.revision == 'task-router-presentation-v1'
                                   else _TASK_ROUTER_FORMAT)
@@ -692,6 +720,18 @@ class OllamaAdapter:
                 }[role.revision]
             else:
                 body['format'] = 'json'
+        if role is not None and role.revision == 'extractor-dependencies-v1':
+            from spikes.markdown_patch import context_window
+            from spikes.roadmap_dependencies import NUM_PREDICT as DEPENDENCY_PREDICT
+            task = json.loads(handoff.payload).get('task', {})
+            require(task.get('role_revision') == role.revision, 'Dependency role differs from the authorized task')
+            body['system'] = task['instruction']
+            window = context_window(body['prompt'], body['system'])
+            require(window is not None, 'Kontext kontroly závislostí je pro model příliš velký; nic nebylo odesláno')
+            # Explicit window: Ollama would otherwise silently drop the start of a long prompt.
+            body['options'] = {'num_predict': DEPENDENCY_PREDICT, 'temperature': 0, 'num_ctx': window}
+            body['think'] = False
+            body = {key: body[key] for key in sorted(body)}
         ordered_patch = role is not None and role.revision in {'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5', 'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2', 'task-output-markdown-patch-v3'}
         if ordered_patch:
             task = json.loads(handoff.payload).get('task', {})
@@ -712,7 +752,9 @@ class OllamaAdapter:
             # JSON-schema property order guides constrained generation. Sorting recursively
             # puts after before before and encourages writing a replacement without an anchor.
             body = {key: body[key] for key in sorted(body)}
-        request = json.dumps(body, sort_keys=not ordered_patch,
+        # Schema property order guides constrained generation; keep it for structured roles.
+        keep_order = ordered_patch or (role is not None and role.revision == 'extractor-dependencies-v1')
+        request = json.dumps(body, sort_keys=not keep_order,
                              separators=(',', ':')).encode()
         execution = OllamaAdapter._execution(binding, role, output_format, run_selection)
         base = handoff.manifest_sha256.encode() + b'\0' + request

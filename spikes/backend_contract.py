@@ -201,6 +201,7 @@ ROLES = RoleRegistry((
     RoleDefinition(1, 'researcher', 'researcher-v2', 'generate-text', 'json'),
     RoleDefinition(1, 'summarizer', 'summarizer-v1', 'generate-text', 'text'),
     RoleDefinition(1, 'extractor', 'extractor-v1', 'generate-text', 'json'),
+    RoleDefinition(1, 'extractor', 'extractor-dependencies-v1', 'generate-text', 'json'),
     RoleDefinition(1, 'metadata-advisor', 'metadata-advisor-v1', 'generate-text', 'json'),
 ))
 
