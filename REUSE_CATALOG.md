@@ -955,6 +955,12 @@ obecný AST serializer, fuzzy aplikace, nový journal a další transakční
 engine byly odmítnuty. Bez nové závislosti či převzetí externího kódu.
 [Rozhodnutí a limity](docs/adr/0064-markdown-block-patch-engine.md).
 
+Revize blokové role v2 **adaptuje** existující Ollama JSON schéma a připnutou
+projekci Context Manifestu pro výčet povolených ID a dokumentového hashe.
+Nepřidává další výběr cíle, journal, provider ani opravování výstupu modelu;
+autorizace a sémantická validace zůstávají v původním aplikátoru. Role v1
+zachovává původní schéma pro dřívější běhy.
+
 Oprava velkého finálního Ollama rámce **adaptuje** stávající bounded NDJSON
 reader a normalizaci výsledku. Běžný limit rámce se nemění; výjimka pro
 ověřené finální context tokeny sdílí dosavadní celkový limit přenosu a tokeny

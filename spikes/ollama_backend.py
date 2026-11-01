@@ -557,7 +557,7 @@ class OllamaAdapter:
                 selected_ids = [input_id for input_id, _, _ in decoded if input_id in roles]
                 require(selected_ids == [item['message_id'] for item in conversation],
                         'Task conversation does not match input order')
-            block_task = task['role_revision'] == 'task-output-markdown-patch-v1'
+            block_task = task['role_revision'] in {'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2'}
             patch_task = (task['role_id'] == 'task-output' and
                           task['role_revision'] in {'task-output-file-edit-patch-v3', 'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5'})
             sections = ['Instruction:\n' + task['instruction']]
@@ -645,8 +645,21 @@ class OllamaAdapter:
                                   if role.revision == 'task-router-presentation-v1'
                                   else _TASK_ROUTER_FORMAT)
             elif role is not None and role.role_id == 'task-output':
-                from spikes.markdown_patch import output_schema
+                from spikes.markdown_patch import output_schema, SCHEMA as MARKDOWN_SCHEMA
+                markdown_schema = None
+                if role.revision == 'task-output-markdown-patch-v2':
+                    scopes = []
+                    for part in json.loads(handoff.payload).get('inputs', []):
+                        try:
+                            value = json.loads(base64.b64decode(part['content_b64'], validate=True))
+                        except (KeyError, TypeError, ValueError, UnicodeError):
+                            continue
+                        if isinstance(value, dict) and value.get('schema') == MARKDOWN_SCHEMA:
+                            scopes.append(value)
+                    require(len(scopes) == 1, 'Markdown output requires exactly one pinned block context')
+                    markdown_schema = output_schema(scopes[0])
                 body['format'] = {
+                    'task-output-markdown-patch-v2': markdown_schema,
                     'task-output-markdown-patch-v1': output_schema(),
                     'task-output-conversation-v1': _DIRECT_ANSWER_FORMAT,
                     'task-output-document-v1': _DOCUMENT_DRAFT_FORMAT,
@@ -660,7 +673,7 @@ class OllamaAdapter:
                 }[role.revision]
             else:
                 body['format'] = 'json'
-        ordered_patch = role is not None and role.revision in {'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5', 'task-output-markdown-patch-v1'}
+        ordered_patch = role is not None and role.revision in {'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5', 'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2'}
         if ordered_patch:
             task = json.loads(handoff.payload).get('task', {})
             require(task.get('role_revision') == role.revision and task.get('role_id') == role.role_id,

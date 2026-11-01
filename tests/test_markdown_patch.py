@@ -54,7 +54,7 @@ class MarkdownPatchTests(unittest.TestCase):
         self.assertEqual(text.replace('A\n', 'AA\n'), apply(text, proposal(text, change), selected_ids=[one['block_id']]))
         for op in [operation(text, 'BB\n', match=lambda b: b['content'] == 'B\n'),
                    operation(text, None, 'move_section', match=lambda b: b['block_id'] == one['block_id'], destination=two['block_id'])]:
-            with self.assertRaisesRegex(ValueError, 'outside the approved scope'):
+            with self.assertRaisesRegex(ValueError, 'mimo vybraný rozsah'):
                 apply(text, proposal(text, op), selected_ids=[one['block_id']])
 
     def test_move_retains_exact_section_bytes_and_descendants(self):
@@ -116,6 +116,30 @@ class MarkdownPatchTests(unittest.TestCase):
         parsed = AITaskOutcome.parse(value);value['changes'][0]['content'] = 'tampered'
         self.assertEqual('B', parsed.serialize()['changes'][0]['content'])
 
+    def test_schema_restricts_existing_ids_and_keeps_legacy_schema_unchanged(self):
+        from spikes.markdown_patch import output_schema
+        scope = context('# Chapter\nBody\n')
+        schema = output_schema(scope)
+        self.assertEqual([digest('# Chapter\nBody\n')], schema['properties']['document_hash']['enum'])
+        for variant in schema['properties']['changes']['items']['anyOf']:
+            self.assertEqual(scope['allowed_block_ids'], variant['properties']['block_id']['enum'])
+            if variant['properties']['action']['enum'] == ['move_section']:
+                self.assertEqual(scope['allowed_block_ids'], variant['properties']['destination_id']['enum'])
+        legacy = output_schema()
+        self.assertEqual({'type':'string'}, legacy['properties']['document_hash'])
+        for variant in legacy['properties']['changes']['items']['anyOf']:
+            self.assertEqual({'type':'string'}, variant['properties']['block_id'])
+
+    def test_invented_future_id_has_distinct_diagnostic_from_unapproved_existing_id(self):
+        text = '# Chapter\nA\n## Other\nB\n'
+        value = proposal(text, operation(text, 'New\n', 'insert_after'))
+        value['changes'][0]['block_id'] = 'b99999'
+        with self.assertRaisesRegex(ValueError, 'neexistující blok b99999'):
+            apply(text, value)
+        value = proposal(text, operation(text, 'New\n', 'insert_after', match=lambda b: b['content']=='B\n'))
+        with self.assertRaisesRegex(ValueError, 'mimo vybraný rozsah'):
+            apply(text, value, selected_ids=['b00002'])
+
 
 class MarkdownTaskTests(unittest.TestCase):
     setUp = fixtures.FileEditTests.setUp
@@ -147,6 +171,12 @@ class MarkdownTaskTests(unittest.TestCase):
         result = service.task_route(request)
         self.assertEqual(head, self.git.head())
         self.assertEqual([KIND], calls[0]['format']['properties']['kind']['enum'])
+        from spikes.markdown_patch import ROLE
+        self.assertEqual('task-output-markdown-patch-v2', ROLE)
+        scope = context(original, request['task_plan']['edit_block_ids'])
+        for variant in calls[0]['format']['properties']['changes']['items']['anyOf']:
+            self.assertEqual(scope['allowed_block_ids'], variant['properties']['block_id']['enum'])
+        self.assertEqual([digest(original)], calls[0]['format']['properties']['document_hash']['enum'])
         self.assertNotIn('DO_NOT_SEND', calls[0]['prompt'])
         self.assertIn('User edit request', calls[0]['prompt'])
         self.assertEqual(SCHEMA, result['projection']['file_edit_context']['schema'])
@@ -163,7 +193,7 @@ class MarkdownTaskTests(unittest.TestCase):
 
     def test_invalid_model_scope_has_no_outcome_no_write_no_retry(self):
         service, request, calls, _ = self.routed(invalid=True);head = self.git.head()
-        with self.assertRaisesRegex(ValueError, 'outside the approved scope'):service.task_route(request)
+        with self.assertRaisesRegex(ValueError, 'mimo vybraný rozsah'):service.task_route(request)
         self.assertEqual(head, self.git.head())
         self.assertEqual([], service.task_outcomes(project_id=ENTITY))
         self.assertEqual(1, len(calls))

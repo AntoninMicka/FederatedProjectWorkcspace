@@ -14,8 +14,8 @@ Generování celého dokumentu ani kopírování textových kotev neposkytlo
 spolehlivé výsledky nad rozsáhlou roadmapou. To není důkaz obecné neschopnosti
 lokálních modelů. Python nyní připravuje rozsahy původního Markdownu, ID bloků
 a SHA-256. Ollama dostane explicitní projekci v Context Manifestu a vrátí
-`markdown-patch` přes roli `task-output-markdown-patch-v1`. Starší role se
-nemění kvůli již připnutým běhům.
+`markdown-patch`. Nové běhy používají `task-output-markdown-patch-v2`;
+původní role v1 a její výstupní schéma zůstávají kvůli připnutým běhům.
 
 `spikes/markdown_patch.py` je omezený scanner, nikoli úplný CommonMark/GFM
 parser. Rozlišuje ATX/setext nadpisy, sekce, odstavce, položky seznamů,
@@ -29,6 +29,18 @@ se do souboru. Každá operace kontroluje hash svého bloku, přesun i hash
 cílového nadpisu. Sekce používají stejný hash nadpisového bloku: hash celého
 dokumentu již připíná jejich potomky. Nepředává se dvojí očekávaný hash pro
 jeden blok, který model při prvním ověření zaměňoval.
+
+Revize v2 reaguje na skutečný odmítnutý návrh: model vytvořil ID b02509 až
+b02512 v dokumentu s 2508 původními bloky. Nové ID nejsou platné adresy
+vložení. JSON schéma nyní omezuje `block_id` a případné `destination_id`
+výčtem povolených existujících ID z jediné připnuté projekce; `document_hash`
+je také výčet s jednou hodnotou. Vložený text se předává v `content` operace
+nad původním blokem. Neexistující blok a existující blok mimo rozsah mají
+odlišné české hlášky. Aplikátor stále provádí vlastní kontrolu; schéma
+nenahrazuje autorizaci, hash ani sémantickou validaci. Ani platná ID
+nezaručují věcně správné zadání, správné místo či platnou syntaxi roadmapy.
+Původní výstup se neopravuje, povolený rozsah se nerozšiřuje a nedochází
+k automatickému opakování modelu. Recovery hranice se nemění.
 
 Podporované operace jsou `replace`, `delete`, `insert_before`, `insert_after`,
 `replace_section`, `append_section`, `move_section`, `rename_heading`.

@@ -186,6 +186,14 @@ za cílovou sekci stejné úrovně. Aplikátor kontroluje celý snapshot, každ�
 blok, povolený rozsah, překryvy i nové code fences před vytvořením návrhu.
 Roadmapa navíc prochází existující sémantickou validací celého grafu.
 
+Nové běhy s rolí `task-output-markdown-patch-v2` mají ve schématu výčet
+povolených původních ID a přesný hash dokumentu odvozený z Context Manifestu.
+Pro vložení se použije ID existujícího bloku a nový text v `content`;
+model nesmí přidělovat ID novým odstavcům nebo jednotlivým řádkům.
+Hláška „Model použil neexistující blok …“ znamená vymyšlenou adresu,
+„mimo vybraný rozsah“ znamená existující, ale nepovolený cíl. Obě situace
+odmítnou celý návrh. Starší role v1 a uložené návrhy se nemigrují.
+
 Scanner není úplný CommonMark/GFM parser. Podporuje ATX/setext nadpisy,
 odstavce, seznamy, komentáře a uzavřené backtick/tilde fences s odsazením
 do tří mezer. Neuzavřené rozpoznané fences se odmítají. Neznámé konstrukce
