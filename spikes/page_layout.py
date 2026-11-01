@@ -17,24 +17,32 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #prompt-display-controls button:focus-visible{outline:2px solid #176b60;outline-offset:2px}
 #prompt-widget[data-chat-mode=hidden]{min-height:18px}
 .prompt-surface{display:contents}
+.prompt-entry{border:1px solid #bfcdc9;border-radius:10px;background:white}
+.prompt-entry:focus-within{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}
+.prompt-caption{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 10px;padding:5px 12px 0}
+#chat-composer .prompt-caption label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#526675}
+#chat-composer .prompt-caption #chat-orchestration-target{margin:0;font-size:10px;overflow-wrap:anywhere}
+.prompt-entry .prompt-draft-control{border:0;box-shadow:none}
+.prompt-entry #chat-draft{padding-top:5px;min-height:48px}
 #prompt-widget[data-chat-mode=compact] .prompt-surface{display:block;position:relative;border:1px solid #bfcdc9;border-radius:10px;background:white}
 #prompt-widget[data-chat-mode=compact] .prompt-surface:focus-within{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}
+#prompt-widget[data-chat-mode=compact] .prompt-entry{border:0;box-shadow:none;background:transparent}
 #prompt-widget[data-chat-mode=compact] .prompt-draft-control{border:0;box-shadow:none;background:transparent}
-#prompt-widget[data-chat-mode=compact] #chat-draft{min-height:68px;padding-right:48px}
+#prompt-widget[data-chat-mode=compact] #chat-draft{min-height:48px;padding-right:42px}
 #prompt-widget[data-chat-mode=compact] .prompt-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:0;padding:4px 48px 7px 8px}
-#prompt-widget[data-chat-mode=compact] .prompt-control{display:flex;align-items:center;gap:4px;height:29px;border:0;border-radius:5px;background:#f3f7f8;max-width:100%}
+#prompt-widget[data-chat-mode=compact] .prompt-control{display:flex;align-items:center;gap:3px;height:25px;border:0;border-radius:5px;background:#f3f7f8;max-width:100%}
 #prompt-widget[data-chat-mode=compact] .prompt-control>span{position:static;padding-left:6px;font-size:8px;white-space:nowrap}
 #prompt-widget[data-chat-mode=compact] .prompt-control>span::after{content:':' }
-#prompt-widget[data-chat-mode=compact] .prompt-control select{height:29px;min-height:0;width:auto;max-width:155px;padding:2px 18px 2px 0;font-size:10px}
+#prompt-widget[data-chat-mode=compact] .prompt-control select{height:25px;min-height:0;width:auto;max-width:145px;padding:1px 16px 1px 0;font-size:9px}
 #prompt-widget[data-chat-mode=compact] .prompt-routing-controls,#prompt-widget[data-chat-mode=compact] .prompt-execution-controls{display:contents}
 #prompt-widget[data-chat-mode=compact] .prompt-route-arrow{font-size:12px}
-#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary{flex-direction:row;align-items:center;gap:4px;min-width:0;height:29px;padding:2px 18px 2px 6px;border:0;background:#f3f7f8}
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary{flex-direction:row;align-items:center;gap:3px;min-width:0;height:25px;padding:1px 16px 1px 6px;border:0;background:#f3f7f8}
 #prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary span{font-size:8px}
 #prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary span::after{content:':' }
-#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary output{font-size:10px}
-#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary::after{right:5px;bottom:7px}
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary output{font-size:9px}
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary::after{right:5px;bottom:5px}
 #prompt-widget[data-chat-mode=compact] .prompt-input-menu{bottom:35px}
-#prompt-widget[data-chat-mode=compact] #chat-submit{position:absolute;right:8px;bottom:7px;min-height:30px;height:30px;width:30px;font-size:16px}
+#prompt-widget[data-chat-mode=compact] #chat-submit{position:absolute;right:8px;bottom:7px;min-height:26px;height:26px;width:26px;font-size:14px}
 @media(max-width:640px){#prompt-display-controls{right:8px}#prompt-widget[data-chat-mode=compact] .prompt-input-menu{bottom:14px}}
 #project-view{gap:0}.project-header{display:none}
 #main-panel-content{padding:0;overflow:hidden}
@@ -244,6 +252,9 @@ function initializeWorkspacePageLayout(){
  for(const [mode,label] of [['full','Plný'],['compact','Kompaktní'],['hidden','Skrýt']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.chatModeChoice=mode;button.setAttribute('aria-controls','chat-composer');button.addEventListener('click',()=>setPageChatMode(mode,{user:true}));displayControls.append(button);}
  prompt.prepend(displayControls);
  const surface=document.createElement('div');surface.className='prompt-surface';promptForm.prepend(surface);surface.append(get('.prompt-draft-control'),get('.prompt-toolbar'));
+ const entry=document.createElement('div'),caption=document.createElement('div'),draftLabel=document.createElement('label'),draftControl=get('.prompt-draft-control'),draftTitle=draftControl.querySelector('span');
+ entry.className='prompt-entry';caption.className='prompt-caption';draftTitle.id='prompt-draft-title';draftLabel.htmlFor='chat-draft';draftLabel.append(draftTitle);get('#chat-draft').setAttribute('aria-labelledby',draftTitle.id);
+ caption.append(draftLabel,get('#chat-orchestration-target'));surface.prepend(entry);entry.append(caption,draftControl);
  const preview=get('#preview-panel');
  const overview=document.createElement('section'),list=document.createElement('ul'),empty=document.createElement('p');const listStatus=document.createElement('p');listStatus.id='artifact-overview-status';listStatus.setAttribute('role','status');overview.id='artifact-overview';list.id='artifact-overview-list';list.className='workspace-file-list';empty.id='artifact-overview-empty';empty.textContent='Projekt zatím nemá žádné podklady.';overview.append(listStatus,list,empty);preview.append(overview);
  const edit=document.createElement('button');edit.id='preview-edit';edit.type='button';edit.textContent='Editovat';edit.hidden=true;

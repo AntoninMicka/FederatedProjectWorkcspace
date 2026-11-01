@@ -103,7 +103,11 @@ window.layoutTest={done:false};
  check(surface.contains(draft)&&surface.contains(toolbar)&&surface.contains(submit),'Compact prompt replaced form controls');
  check(toolbarBox.top>=draft.getBoundingClientRect().bottom-1&&toolbarBox.bottom<=surfaceBox.bottom,'Controls overlap draft text or leave prompt');
  check(submitBox.right<=surfaceBox.right&&submitBox.bottom<=surfaceBox.bottom&&submitBox.left>=surfaceBox.left,'Send button leaves prompt');
- check(modeControl.getBoundingClientRect().height<=31&&getComputedStyle(modeControl.querySelector('span')).position==='static','Compact label is not beside combo or control is full size');
+ check(modeControl.getBoundingClientRect().height<=25&&submitBox.height<=26&&getComputedStyle(modeControl.querySelector('span')).position==='static','Compact controls were not reduced');
+ const hint=document.querySelector('#chat-orchestration-target'),caption=document.querySelector('.prompt-caption'),hintText=hint.textContent;
+ hint.textContent='Vyberte backend a model běhu. Delší stavová rada se musí zalomit uvnitř promptu.';
+ check(surface.contains(hint)&&hint.previousElementSibling.htmlFor==='chat-draft'&&hint.getAttribute('role')==='status','Hint is not next to accessible draft label');
+ check(hint.getBoundingClientRect().bottom<=draft.getBoundingClientRect().top&&caption.getBoundingClientRect().right<=surfaceBox.right,'Hint overlaps draft text or leaves prompt');hint.textContent=hintText;
  check(document.documentElement.scrollWidth<=innerWidth,'Compact prompt overflows viewport');
  const inputs=document.querySelector('#task-inputs');inputs.open=true;await tick();check(visible(inputs.querySelector('.prompt-input-menu')),'Compact mode hides source picker');inputs.open=false;
  for(const control of toolbar.querySelectorAll('select')){const box=control.getBoundingClientRect();if(box.width)check(box.left>=surfaceBox.left&&box.right<=surfaceBox.right,'Compact combo leaves prompt');}

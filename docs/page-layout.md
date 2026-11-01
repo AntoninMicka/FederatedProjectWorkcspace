@@ -68,6 +68,9 @@ dělicí hraně jsou dostupné ve všech režimech. Ruční volba má přednost 
 výchozími hodnotami stránek až do obnovení aplikace; neukládá se do projektu.
 Přepnutí zachovává původní formulář, jeho ovladače, hodnoty i rozepsaný text.
 Na užších displejích se kompaktní ovladače zalamují uvnitř promptu.
+Kompaktní výběry mají výšku 25 px a odesílací tlačítko 26 px.
+Stavová rada je uvnitř vstupního pole vedle označení Zadání; delší text se
+zalamuje nad rozepsaným zadáním. Zachovává původní živý stavový uzel.
 Existující `data-prompt-default` slouží
 jen jako kompatibilní vstup pro dosavadní záložky; deklarace stránky má přednost.
 
