@@ -28,6 +28,12 @@ v rozbalovacích **Výřezech roadmapy** u grafu; prázdná nabídka se nezobraz
 Fronta používá původní API, revizní kontroly, potvrzení odebrání a read-only
 omezení. Přesun stránky nevytváří další frontu ani zápisovou cestu.
 
+Roadmapa má filtr, export a stav v úsporném záhlaví. Graf vyplňuje zbytek
+stránky a posouvá se ve vlastním rámu. Detail se objeví až po výběru položky,
+posouvá se samostatně a lze jej zavřít pro zvětšení grafu. Na úzkém displeji
+jsou graf a detail nad sebou, stále s nezávislým posouváním. Detail nepoužívá
+styly boční navigace a celá stránka roadmapy se neposouvá.
+
 Akce **Zavřít projekt** je v projektovém panelu mezi Importem a Košem.
 Bez otevřeného projektu je vypnutá. Zavření používá stejnou ochranu
 neuložených změn jako ostatní navigace. Výběr jiného projektu dosavadní

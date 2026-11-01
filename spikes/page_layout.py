@@ -90,6 +90,21 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #task-queue-panel .task-queue-list{max-height:none;overflow:visible;margin:0;padding-left:22px}
 #task-queue-panel .task-queue-list li{flex-wrap:wrap}
 #task-queue-panel .task-queue-list li button:first-child{flex:1;min-width:0}
+#plan-panel>.workspace-page-header{padding:12px 16px 10px;gap:6px}
+#plan-panel>.workspace-page-header .workspace-page-title{font-size:22px!important}
+#plan-panel .roadmap-controls{padding:0;gap:8px}
+#plan-panel #plan-status{margin:0 0 0 auto;font-size:12px}
+#plan-panel>.workspace-page-body{display:flex;flex-direction:column;gap:6px;padding:8px 12px 12px;overflow:hidden}
+#plan-panel #plan-subgraphs{flex:none;max-height:25%;overflow:auto}
+#plan-panel .plan-layout{flex:1;min-height:0;min-width:0;grid-template-columns:minmax(0,1fr) minmax(240px,24%);grid-template-rows:minmax(0,1fr);gap:8px;overflow:hidden}
+#plan-panel .plan-layout:has(#plan-detail[hidden]){grid-template-columns:minmax(0,1fr)}
+#plan-panel #plan-graph{height:100%;min-height:0;max-height:none;min-width:0;box-sizing:border-box;overflow:auto}
+#plan-panel #plan-detail{min-height:0;min-width:0;margin:0;padding:10px 12px;overflow:auto;overscroll-behavior:contain;color:#213746}
+#plan-panel #plan-detail dl{grid-template-columns:minmax(90px,.7fr) minmax(0,1.6fr)}
+@media(max-width:900px){
+ #plan-panel .plan-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,3fr) minmax(0,2fr)}
+ #plan-panel .plan-layout:has(#plan-detail[hidden]){grid-template-rows:minmax(0,1fr)}
+}
 #preview-status:empty,#artifact-overview-status:empty{display:none}
 .workspace-page .layout-label{display:none}
 .workspace-page-body .workspace-page{min-height:320px;height:auto}
@@ -289,7 +304,7 @@ const toolsList=document.createElement('ul');toolsList.id='tools-overview-list';
  for(const panel of mainTabs.map(tab=>document.getElementById(tab.getAttribute('aria-controls'))).filter(panel=>panel?.parentElement===get('#main-panel-content'))){
   if(workspacePageLayouts.has(panel))continue;
   const tab=mainTabs.find(tab=>tab.getAttribute('aria-controls')===panel.id),heading=panel.querySelector('h1,h2');
-  const actions=panel.id==='presentation-panel'?take(panel,['.presentation-editor-head>.form-actions','#presentation-editor-save','#presentation-editor-print','#presentation-editor-use','#presentation-editor-presenter']):panel.id==='project-overview-panel'?take(panel,['#project-overview-edit-todo','#project-conflicts-open']):panel.id==='task-queue-panel'?take(panel,['#task-queue-publish','#task-queue-refresh','#task-queue-revalidate']):[];
+  const actions=panel.id==='presentation-panel'?take(panel,['.presentation-editor-head>.form-actions','#presentation-editor-save','#presentation-editor-print','#presentation-editor-use','#presentation-editor-presenter']):panel.id==='project-overview-panel'?take(panel,['#project-overview-edit-todo','#project-conflicts-open']):panel.id==='task-queue-panel'?take(panel,['#task-queue-publish','#task-queue-refresh','#task-queue-revalidate']):panel.id==='plan-panel'?take(panel,['.roadmap-controls','#plan-status']):[];
   const layout=mountWorkspacePage(panel,{title:tab?.textContent||'Stránka',heading,actions,section:panelSections[panel.id]||'tools-tab',close:!roots.has(panel.id),onClose:panel.id==='presentation-panel'?closePresentationEditorPage:null,closeLabel:panel.id==='presentation-panel'?'Zavřít editor':'Zavřít',kind:panel.id==='presentation-panel'?'editor':roots.has(panel.id)||panel.id==='task-queue-panel'?'list':'page',chat:tab?.dataset.promptDefault==='visible'?'full':'hidden'});
 
  }

@@ -40,9 +40,10 @@ const buttons=el=>[...(el.tag==='button'?[el]:[]),...el.children?.flatMap(button
 const id='12345678-1234-1234-1234-123456789abc';
 const link='[Podklad](artifacts/'+id+'/content.md)';
 showTaskPlanDetail({id:'DEV-02',title:'Task',description:link,depends_on:[],source:{artifact_id:id}});
-assert.equal(buttons(detail).length,3);
-assert.equal(buttons(detail)[0].disabled,true);
-buttons(detail)[1].listeners.click();buttons(detail)[2].listeners.click();
+const detailButtons=buttons(detail),close=detailButtons.find(button=>button.textContent==='Zavřít detail'),add=detailButtons.find(button=>button.textContent==='Přidat do fronty');
+assert(close);assert.equal(detail.hidden,false);assert.equal(add.disabled,true);
+const links=detailButtons.filter(button=>button!==close&&button!==add);assert.equal(links.length,2);
+links.forEach(button=>button.listeners.click());
 assert.deepEqual(opened,[id,id]);
 renderMarkdown('- '+link,previewContent);
 assert.equal(buttons(previewContent).length,1);buttons(previewContent)[0].listeners.click();

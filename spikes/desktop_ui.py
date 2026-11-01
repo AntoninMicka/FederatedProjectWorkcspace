@@ -934,7 +934,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="plan-status" role="status">Otevřete projekt.</p>
 <div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
 <details id="plan-subgraphs" hidden><summary>Výřezy roadmapy</summary><ul id="sidebar-plan-list" aria-label="Výřezy roadmapy"></ul></details>
-<div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite"></div><aside id="plan-detail" class="roadmap-detail"><h3>Detail položky</h3><p>Vyberte milník nebo dávku.</p></aside></div>
+<div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
 </div>
 <div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
 <h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
@@ -4204,7 +4204,7 @@ async function changeTaskQueue(action,taskId){
  const project=activeProject,view=taskQueueView;taskQueueBusy=true;renderTaskQueue();
  try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
  if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
- const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();
+ const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
  finally{taskQueueBusy=false;renderTaskQueue();}
 }
@@ -4222,7 +4222,8 @@ document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQ
 document.querySelector('#task-queue-revalidate').addEventListener('click',()=>changeTaskQueue('revalidate'));
 
 function showTaskPlanDetail(item){
- const detail=document.querySelector('#plan-detail');detail.replaceChildren();
+ const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
+ const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;document.querySelector('#plan-graph').focus();});detail.append(close);
  if(!item.checked){const add=document.createElement('button');add.type='button';add.textContent='Přidat do fronty';add.disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView.valid||Boolean(activeProject?.readOnly)||taskQueueView.task_ids.includes(item.id)||!(item.ready||taskQueueView.following.includes(item.id));add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add);}
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title);
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
@@ -4289,12 +4290,12 @@ function renderTaskPlan(){
  graph.append(svg);status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
 }
 function updateTaskPlanTreeSelection(queueOpen=false){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(!queueOpen&&(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/')));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(!queueOpen&&taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
-async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
+async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
 async function openTaskQueue(){if(!activeProject||!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));selectMainTab(document.querySelector('#task-queue-tab'));closeMobileSidebar();closeCompactSidebarMenu();await loadTaskQueue();}
 document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
 function renderTaskPlanSidebar(value){
  taskQueueView=null;loadTaskQueue();
- taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;
+ taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
  if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
  status.textContent=value.profile==='software-development/v1'?`${milestones.length} milníků · ${batches.length} dávek · ${value.nodes.filter(item=>item.type==='task').length} úkolů`:`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
