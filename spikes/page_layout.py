@@ -10,7 +10,7 @@ main>div{flex:1;min-height:0;height:auto!important}
 main>div.workspace-page{overflow:hidden!important}
 #project-home.workspace-page>.workspace-page-header{display:flex}
 main>#prompt-widget #chat-composer{max-height:48vh;padding-top:18px}
-main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;border:1px solid #dce3e9;border-radius:0 0 14px 14px}
+main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;border:1px solid #dce3e9;border-radius:14px}
 #prompt-display-controls{position:absolute;right:16px;top:-15px;display:flex;gap:3px;padding:2px 4px;background:#fafffd;border:1px solid #bfcdc9;border-radius:16px;z-index:30}
 #prompt-display-controls button{min-height:24px;padding:3px 10px;font-size:11px;line-height:18px;border-radius:12px;background:transparent;color:#526675}
 #prompt-display-controls button[aria-pressed=true]{background:#176b60;color:white}
@@ -35,6 +35,7 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #prompt-widget[data-chat-mode=compact] .prompt-control>span::after{content:':' }
 #prompt-widget[data-chat-mode=compact] .prompt-control select{height:25px;min-height:0;width:auto;max-width:145px;padding:1px 16px 1px 0;font-size:9px}
 #prompt-widget[data-chat-mode=compact] .prompt-routing-controls,#prompt-widget[data-chat-mode=compact] .prompt-execution-controls{display:contents}
+#prompt-widget[data-chat-mode=compact] .prompt-toolbar:has(#task-routing:not([hidden]))>.prompt-privacy-control{margin-left:auto}
 #prompt-widget[data-chat-mode=compact] .prompt-route-arrow{font-size:12px}
 #prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary{flex-direction:row;align-items:center;gap:3px;min-width:0;height:25px;padding:1px 16px 1px 6px;border:0;background:#f3f7f8}
 #prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary span{font-size:8px}
