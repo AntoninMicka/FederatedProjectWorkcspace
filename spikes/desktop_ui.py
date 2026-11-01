@@ -10,6 +10,7 @@ import subprocess
 from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
+from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
 from spikes.artifact_history import ArtifactHistory
 from spikes.conflict_resolution import ConflictResolution
 from spikes.artifact_actions import ArtifactActions
@@ -253,6 +254,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Projekty</h2><div class="sidebar-project-primary-actions">
 <button id="sidebar-create-project" type="button" aria-label="Nový projekt"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 12v5M9.5 14.5h5"/></svg><span class="project-action-label" role="tooltip">Nový projekt</span></button>
 <button id="sidebar-import-project" type="button" aria-label="Importovat projekt" aria-expanded="false" aria-controls="sidebar-project-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 3v10M8.5 9.5 12 13l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat projekt</span></button>
+<button id="sidebar-close-project" type="button" aria-label="Zavřít projekt" disabled><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H4v14h6M10 12h10M16 8l4 4-4 4"/></svg><span class="project-action-label" role="tooltip">Zavřít projekt</span></button>
 <button id="sidebar-project-trash" type="button" aria-label="Koš projektů"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span class="project-action-label" role="tooltip">Koš projektů</span></button></div>
 <div id="sidebar-project-import-options" hidden><button id="sidebar-register-project" type="button" hidden>Projekt z umístění</button><button id="open-notebooklm-import" type="button" hidden>NotebookLM</button></div>
 <p id="sidebar-project-status" role="status">Načítám projekty…</p><button id="sidebar-project-recover" type="button" hidden>Dokončit přerušenou operaci</button><ul id="sidebar-project-list"></ul></div>
@@ -270,7 +272,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <ul id="sidebar-plan-tree" role="tree" aria-label="Hierarchie roadmapy"><li role="treeitem" aria-expanded="true">
 <button id="open-main-plan" type="button" data-plan-selection="/" aria-label="Hlavní graf /">/</button>
 <ul id="sidebar-plan-hierarchy" role="group"></ul></li></ul>
-<h3>Podgrafy</h3><ul id="sidebar-plan-list" aria-label="Podgrafy projektu"></ul></div>
+<button id="open-task-queue" type="button" disabled>Fronta úloh</button></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
 <h2>Podklady</h2><div class="sidebar-artifact-primary-actions"><button id="new-document" type="button">Nový dokument</button>
 <button id="open-source-import" type="button">Importovat zdroj</button></div>
@@ -370,7 +372,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </div>
 <div id="project-trash-view" hidden>
 <header><span class="badge">Projekty</span></header>
-<button id="project-trash-back" type="button" class="back-button">← Zpět na přehled</button>
+
 <section class="standalone-form project-trash-page"><h1>Koš projektů</h1>
 <section id="project-delete-panel" class="creation-preview" hidden><h2 id="project-delete-title">Akce projektu</h2>
 <label id="project-delete-mode-row">Režim <select id="project-delete-mode"><option value="clear-derived">Obnovit odvozený index</option><option value="unregister">Pouze odregistrovat</option><option value="trash" selected>Přesunout do obnovitelného koše</option></select></label>
@@ -382,7 +384,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="project-trash-list"></div><p id="project-trash-status" role="status"></p></section></div>
 <div id="project-repair-view" hidden>
 <header><span class="badge">Projekty</span><span>Desktopová diagnostika</span></header>
-<button id="project-repair-back" type="button" class="back-button">← Zpět na projekty</button>
+
 <section class="standalone-form project-repair-page"><div class="eyebrow">CHECK &amp; REPAIR</div>
 <h1 id="project-repair-heading" tabindex="-1">Zkontrolovat projekt</h1>
 <p id="project-repair-target"></p>
@@ -424,7 +426,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 </div>
 <div id="project-create-view" hidden>
 <header><span class="badge">Nový projekt</span><span>Samostatný průvodce vytvořením</span></header>
-<button id="project-create-back" type="button" class="back-button">← Zpět na projekty</button>
+
 <section class="standalone-form"><div class="eyebrow">NOVÝ PRACOVNÍ PROSTOR</div><h1 id="project-create-heading" tabindex="-1">Vytvořit projekt</h1>
 <p>Nejprve připravíme přesný náhled. Projekt vznikne až po vašem potvrzení názvu a cílového umístění.</p>
 <form id="create-project" aria-label="Vytvořit projekt">
@@ -507,7 +509,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 </form></section></div>
 <div id="notebooklm-import-view" hidden>
 <header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
-<button id="notebooklm-import-back" type="button" class="back-button">← Zpět na projekty</button>
+
 <section id="notebooklm-import" class="standalone-form"><h1>Importovat celý projekt z NotebookLM</h1>
 <p class="notebooklm-server-source">Zadejte absolutní cestu k TGZ souboru uloženému na tomto uzlu. Import je dostupný pouze správci uzlu.</p>
 <label class="notebooklm-server-source">Takeout TGZ na uzlu <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
@@ -776,7 +778,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button type="submit">Uložit profil</button>
 <p id="user-profile-status" role="status" aria-live="polite"></p></form></section>
 '''+ ADMIN_HTML + '''
-<button id="settings-back" class="back-button" type="button">← Zpět</button>
+
 </div>
 <div id="source-import-view" hidden>
 <header><span class="badge">Podklady projektu</span><span>Původní bajty a doložená metadata</span></header>
@@ -818,7 +820,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option id="source-import-local-only" value="local-only">Pouze lokální</option><option value="public">Veřejné</option></select></label>
 <p>Markdown, PNG, JPEG a PDF do 16 MiB. Čas importu se uloží automaticky; čas vzniku vyplňte jen tehdy, když jej zdroj dokládá.</p>
 <label class="confirm"><input name="confirmed" type="checkbox" required> Potvrzuji import původních bajtů, zvolená metadata a soukromí.</label>
-<div class="form-actions"><button type="submit">Importovat původní bajty</button><button id="source-import-back" class="secondary-button" type="button">Zpět do projektu</button></div>
+<div class="form-actions"><button type="submit">Importovat původní bajty</button></div>
 <p id="source-import-status" role="status" aria-live="polite"></p></form>
 </div>
 <div id="history-view" hidden>
@@ -830,7 +832,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="history-choices"><label>Starší / výchozí verze <select id="history-older"></select></label>
 <label>Zobrazená verze <select id="history-newer"></select></label></div>
 <div class="form-actions"><button id="history-compare" type="button">Zobrazit a porovnat</button>
-<button id="history-close" class="secondary-button" type="button">Zavřít historii</button></div>
+</div>
 <h2>Obsah zobrazené verze</h2><pre id="history-body"></pre>
 <details><summary>Technické údaje</summary><pre id="history-metadata"></pre></details>
 <details><summary>Rozdíl uložených souborů</summary><pre id="history-diff"></pre></details>
@@ -880,7 +882,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="outputs-overview-tab" role="tab" aria-controls="outputs-overview-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1" hidden>Výstupy</button>
 <button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Prezentace</button>
 <button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Metadata</button>
-<button id="plan-main-tab" role="tab" aria-controls="plan-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1" hidden>Plán</button></div>
+<button id="plan-main-tab" role="tab" aria-controls="plan-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1" hidden>Plán</button>
+<button id="task-queue-tab" role="tab" aria-controls="task-queue-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1" hidden>Fronta úloh</button></div>
 <div id="main-panel-content">
 <div id="project-overview-panel" role="tabpanel" aria-labelledby="project-overview-tab">
 <header class="project-overview-heading"><span class="dashboard-kicker">Projekt</span><h1 id="project-title"></h1></header>
@@ -930,9 +933,13 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Roadmapa projektu</h1></div>
 <p id="plan-status" role="status">Otevřete projekt.</p>
 <div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
-<section aria-label="Fronta úkolů"><p><button id="task-queue-publish" type="button">Předat frontu do IDE</button></p><h2>Fronta úkolů</h2><button id="task-queue-refresh" type="button">Obnovit frontu</button> <button id="task-queue-revalidate" type="button" disabled>Znovu ověřit</button><p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></section>
-<div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite"></div><aside id="plan-detail" class="roadmap-detail"><h3>Detail položky</h3><p>Vyberte milník nebo dávku.</p></aside></div>
+<details id="plan-subgraphs" hidden><summary>Výřezy roadmapy</summary><ul id="sidebar-plan-list" aria-label="Výřezy roadmapy"></ul></details>
+<div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
 </div>
+<div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
+<h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
+<button id="task-queue-refresh" type="button">Obnovit frontu</button> <button id="task-queue-revalidate" type="button" disabled>Znovu ověřit</button>
+<p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2>
@@ -1053,7 +1060,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <input id="image-title" maxlength="200" value="Vygenerovaný obrázek">
 <button id="image-publish" type="button">Uložit do projektu</button></section></div>
 <div id="tools-panel" role="tabpanel" aria-labelledby="tools-main-tab" hidden>
-<header><span class="dashboard-kicker">NÁSTROJE PROJEKTU</span><h2>Evidence modelových nástrojů</h2>
+<header><span class="dashboard-kicker">NÁSTROJE PROJEKTU</span><h2>Nástroje</h2>
 <p>Vyberte model v levém panelu Nástroje. Otevření, import ani zobrazení nic nespouští.</p></header>
 <p id="julia-tools-status" role="status" aria-live="polite"></p>
 <section id="julia-model-detail" class="tool-model-detail" hidden aria-labelledby="julia-model-detail-title"><div class="julia-editor-heading"><h3 id="julia-model-detail-title"></h3><button id="julia-model-detail-close" class="secondary-button" type="button">Zavřít detail</button></div><dl></dl></section>
@@ -1242,7 +1249,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="form-actions"><button id="presenter-display-identify" type="button" class="secondary-button">Identifikovat displeje</button><button id="presenter-display-cancel" type="button" class="secondary-button">Zrušit</button><button id="presenter-display-apply" type="submit">Použít role</button></div>
 </form></dialog>
 </div>
-</main><script src="/app.js"></script></body></html>'''
+</main><dialog id="editor-leave-dialog" aria-labelledby="editor-leave-title"><h2 id="editor-leave-title">Neuložené změny</h2><p id="editor-leave-message"></p><div class="form-actions"><button type="button" data-leave-choice="cancel" autofocus>Zrušit přechod</button><button type="button" data-leave-choice="save">Uložit a přejít</button><button type="button" class="secondary-button" data-leave-choice="discard">Zahodit a přejít</button></div></dialog><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
 #mobile-sidebar-toggle,#mobile-sidebar-backdrop{display:none}
@@ -1288,7 +1295,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .plan-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px}.plan-layout .roadmap-graph{min-width:0}.plan-layout .roadmap-detail{margin-top:0}.roadmap-detail dd{white-space:pre-line}#sidebar-plan h3{font-size:13px;margin:16px 0 0}#sidebar-plan-list button{width:100%;text-align:left;background:transparent;color:#dce8f1;padding:9px 7px}#sidebar-plan-tree{max-height:55%;overflow:auto}#sidebar-plan-tree,#sidebar-plan-tree ul{list-style:none;padding:0;margin:8px 0}#sidebar-plan-tree ul{margin:2px 0 2px 12px;padding-left:10px;border-left:1px solid #496072}#sidebar-plan-tree button{width:100%;padding:7px 6px;background:transparent;color:#dce8f1;text-align:left;font-size:12px}#sidebar-plan-tree button:hover,#sidebar-plan-tree button[aria-current="true"]{background:#274154}#sidebar-plan-tree button[aria-current="true"]{border-left:3px solid #79c9ac}
 .plan-roadmap-canvas{position:relative;min-width:100%;background:#f7fafb}.plan-milestone-lane{position:absolute;left:0;border-radius:11px;background:#edf3f5}.plan-milestone-lane:nth-of-type(even){background:#f1f5f6}.plan-milestone-label{position:sticky;left:0;z-index:4;box-sizing:border-box;width:220px;height:100%;padding:16px 18px;border:0;border-right:1px solid #cfdae0;border-radius:11px 0 0 11px;background:#edf3f5;color:#18384a;text-align:left}.plan-milestone-label strong,.plan-milestone-label span{display:block}.plan-milestone-label span{margin-top:7px;color:#526b79;font-size:12px;line-height:1.35;white-space:pre-line}.plan-milestone-label:hover,.plan-milestone-label:focus-visible{background:#e2eeeb;outline:2px solid #176b60;outline-offset:-2px}.plan-roadmap-edges{position:absolute;inset:0;z-index:1;pointer-events:none}.plan-batch-card{position:absolute;z-index:2;box-sizing:border-box;width:220px;min-height:70px;padding:10px;border:2px solid #557384;border-radius:10px;background:#fff;color:#152b38;text-align:left}.plan-batch-card strong,.plan-batch-card span,.plan-batch-card small{display:block}.plan-batch-card span{margin-top:4px;color:#385160;font-size:12px}.plan-batch-card small{max-height:2.6em;margin-top:5px;overflow:hidden;color:#607987;font-size:11px;line-height:1.25;white-space:pre-line}.plan-batch-card[data-completed="true"]{background:#e2f3eb}.plan-batch-card[data-blocked="true"]{background:#f8dddd}.plan-batch-card[data-ready="true"]{border-color:#176b60;border-style:dashed}.plan-batch-card[data-critical="true"]{border-width:4px}.plan-batch-card:hover,.plan-batch-card:focus-visible{border-color:#0d6b5d;box-shadow:0 3px 6px #17334233;outline:none}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-#dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
+#dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,clamp(230px,calc((100vh - 166px)/2),312px));grid-auto-rows:clamp(230px,calc((100vh - 166px)/2),312px);gap:16px}
 #project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
 button.dashboard-tile,button.project-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 button.dashboard-tile:hover,button.project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
@@ -1304,7 +1311,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
-.sidebar-project-primary-actions,.sidebar-tool-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.sidebar-project-primary-actions,.sidebar-tool-primary-actions{overflow:visible}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label,.sidebar-tool-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label,.sidebar-tool-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label,.sidebar-tool-primary-actions button:hover .project-action-label,.sidebar-tool-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:first-child:hover .project-action-label,.sidebar-tool-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:last-child:hover .project-action-label,.sidebar-tool-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
+.sidebar-project-primary-actions,.sidebar-tool-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(4,minmax(0,1fr))}.sidebar-project-primary-actions,.sidebar-tool-primary-actions{overflow:visible}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label,.sidebar-tool-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label,.sidebar-tool-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label,.sidebar-tool-primary-actions button:hover .project-action-label,.sidebar-tool-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:first-child:hover .project-action-label,.sidebar-tool-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:last-child:hover .project-action-label,.sidebar-tool-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
 #sidebar-project-import-options,.sidebar-tool-options{margin-top:6px}#sidebar-project-import-options button,.sidebar-tool-options button{width:100%;padding:8px 6px;font-size:11px}.sidebar-tool-options button{text-align:left}.sidebar-tool-options button:disabled{opacity:.48}
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
@@ -1382,9 +1389,10 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .task-plan-editor{margin:12px 0;padding:12px;border:1px solid #b9cec8;border-radius:10px;background:#f5faf8}.task-plan-mode,.task-plan-insert{display:flex;gap:7px;flex-wrap:wrap}.task-plan-mode button[aria-selected="true"]{background:#176b60;color:#fff}.task-plan-insert{margin:10px 0;align-items:end}.task-plan-insert label{display:grid!important;gap:4px;margin:0!important}.task-plan-insert select{padding:8px;max-width:320px}.task-plan-insert button{background:#e5efec;color:#244d47}.task-plan-blocks{display:grid;gap:10px}.task-plan-block{display:grid;grid-template-columns:auto minmax(115px,.55fr) minmax(130px,.65fr) minmax(220px,2fr);gap:8px;align-items:end;padding:10px 12px;border-left:4px solid #6aa298;border-radius:8px;background:#fff}.task-plan-block label{margin:0!important}.task-plan-block small{grid-column:2/-1;color:#566d78}.task-plan-block[data-depth="1"]{margin-left:18px}.task-plan-block[data-depth="2"]{margin-left:36px}.task-plan-block[data-depth="3"]{margin-left:54px}
 .outputs-overview-heading{max-width:760px}.outputs-overview-heading h2{margin:4px 0}.outputs-overview-grid{display:grid;grid-template-columns:minmax(240px,38%) minmax(280px,1fr);gap:16px;margin-top:14px}.outputs-overview-grid>ul{list-style:none;margin:0;padding:0}.outputs-overview-grid>ul button{display:block;width:100%;margin:0 0 8px;padding:12px;text-align:left;background:#edf2f5;color:#213746}.outputs-overview-grid>ul button[aria-current="true"]{background:#176b60;color:#fff}.outputs-overview-grid>ul small{display:block;margin-top:4px;overflow-wrap:anywhere}.outputs-overview-detail{border:1px solid #dce3e9;border-radius:12px;padding:16px;background:#fff}.outputs-overview-detail dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px}.outputs-overview-detail dt{font-weight:700}.outputs-overview-detail dd{margin:0;overflow-wrap:anywhere}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
+#editor-leave-dialog{max-width:min(560px,calc(100vw - 32px));border:1px solid #9babb7;border-radius:14px;padding:22px;color:#162638;background:#f8fbfd}#editor-leave-dialog::backdrop{background:#07131fa8}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 .federation-transfer-page,.federation-network-page,.federation-deployment-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label,.federation-deployment-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]),.federation-deployment-page select,.federation-deployment-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre,.federation-deployment-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning,.federation-deployment-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty,#federation-deployment-log:empty{display:none}
-@media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
+@media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:230px}}
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
 @media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
 @media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.project-header details{max-width:140px}}
@@ -1481,7 +1489,7 @@ PRESENTER_CSS = '''
 .presentation-panel #presentation-slide h3{font-size:28px;color:#79c9ac;margin:0 0 14px}.presentation-panel #presentation-slide p{font-size:18px;line-height:1.5;margin:0}
 .presentation-panel #presentation-slide:fullscreen{display:flex;flex-direction:column;justify-content:center;padding:8vw;background:#10222f;border-radius:0}
 .presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
-.presenter-header{font-size:1.5em;min-height:52px;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:6px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.presenter-header-main{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}.presenter-header-main h1{font-size:24px;color:#162638;margin:0;flex:none}.presenter-header-main p{font-size:12px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.presenter-header-state{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}.presenter-header-state strong{color:#176b60;font-size:12px}.presenter-header-state span{font-size:12px;color:#627183}#presenter-view{height:100%;min-height:0;display:flex;flex-direction:column;gap:8px}.presenter-layout{display:grid;grid-template-columns:15% 25% minmax(0,1fr);gap:14px;min-height:0;flex:1}.presenter-layout>nav,.presenter-layout>section,.presenter-layout>aside{min-width:0;min-height:0}body.presenter-active>aside{display:none}body.presenter-active main{padding-left:22px;padding-right:22px}
+.presenter-header{font-size:1.5em;min-height:52px;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:6px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.presenter-header-main{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}.presenter-header-main h1{font-size:24px;color:#162638;margin:0;flex:none}.presenter-header-main p{font-size:12px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.presenter-header-state{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}.presenter-header-state strong{color:#176b60;font-size:12px}.presenter-header-state span{font-size:12px;color:#627183}#presenter-view{height:100%;min-height:0;display:flex;flex-direction:column;gap:8px}.presenter-layout{display:grid;grid-template-columns:15% 25% minmax(0,1fr);gap:14px;min-height:0;flex:1}.presenter-layout>nav,.presenter-layout>section,.presenter-layout>aside{min-width:0;min-height:0}body.presenter-active main{padding-left:22px;padding-right:22px}
 .presenter-header + #presenter-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .presenter-deck,.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:10px;overflow:auto;height:100%}.presenter-speaker{width:100%;align-self:stretch;display:flex;flex-direction:column}.presenter-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.presenter-panel-head h2{font-size:16px;margin:0}.presenter-panel-head p{font-size:11px;margin:0}.presenter-tab-row{display:flex;align-items:center;gap:6px;margin:4px 0}.presenter-next-selector{flex:0 0 auto;border-bottom:1px solid #dce3e9;padding:4px 0 8px}.presenter-next-selector h3{font-size:12px;margin:0 0 4px}.presenter-next-selector #presenter-next-preview{width:100%;text-align:left;background:#f4f7fa;color:#304657;border:1px solid #dce3e9;padding:8px;border-radius:8px}.presenter-next-selector #presenter-next-preview h2{font-size:14px;color:#176b60;margin:0 0 4px}.presenter-next-selector #presenter-next-preview p{font-size:12px;margin:0}.presenter-tab-content{flex:1;min-height:0;overflow:auto}.presenter-selection-preview{flex:0 0 auto;border-top:1px solid #dce3e9;margin-top:6px;padding-top:6px}.presenter-deck h2{margin-top:0;font-size:16px}.presenter-deck ol{padding-left:24px;margin:0}.presenter-deck li{padding:9px 6px;color:#456276;cursor:pointer;border-radius:6px}.presenter-deck li:hover,.presenter-deck li[aria-current="true"]{background:#e0efe9;color:#176b60}.presenter-deck li.presenter-live{font-weight:700;border-left:3px solid #176b60}.presenter-deck li.presenter-visited{color:#82909d}.presenter-deck button{background:transparent;color:inherit;padding:0;text-align:left;font-weight:inherit;width:100%}.presenter-return-anchor{border-top:1px solid #dce3e9;padding-top:14px;font-size:12px}
 .presenter-audience{background:#10222f;border-radius:14px;padding:16px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}.presenter-kicker{font-size:11px;letter-spacing:1.6px;color:#79c9ac}.presenter-audience #presenter-screen{width:100%;max-width:420px;aspect-ratio:16/9;height:auto;min-height:0;flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;align-self:center;padding:5%;color:#f6faf8;outline:none;border:1px solid #496072}.presenter-audience #presenter-screen:fullscreen{background:#10222f;max-width:none}
@@ -1910,19 +1918,22 @@ async function loadPresenter(){
     applyPresenterRatio(result.ratio);renderPresenterSlide();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');await showPresenterEntry(presenterSequence.current);
  }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
 }
-function openPresenter(){
+async function openPresenter(){
+ if(!await canLeaveWorkspaceEditors())return;
+ showWorkspacePage(presenterView);
  location.hash='presenter-open';
  document.body.classList.add('presenter-active');document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;presenterView.hidden=false;
- document.querySelector('#sidebar-project-tools').hidden=true;loadPresenter();
+ loadPresenter();
 }
 async function closePresenter(){
  let saved=false;
  try{const result=await projectRequest('/v1/presentation/status',{action:'end'},120000);saved=result.saved;}
- catch(error){presenterStatus.textContent=`Záznam relace nelze uzavřít: ${error.message}`;return;}
+ catch(error){presenterStatus.textContent=`Záznam relace nelze uzavřít: ${error.message}`;return false;}
  location.hash='presenter-close';document.body.classList.remove('presenter-active');presenterView.hidden=true;
  document.querySelector('#sidebar-project-tools').hidden=false;
  if(activeProject){const projectId=activeProject.id;projectView.hidden=false;if(saved){await openRegisteredProject(projectId);await loadPresentationEditor(presentationEditorArtifact,false);sidebarPresentationStatus.textContent='Relace byla uložena do projektu.';}}
  else{document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));}
+ return true;
 }
 presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
@@ -2124,13 +2135,44 @@ syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
 let federationNetworkRunning=false;
 let federationDeploymentRunning=false;
+function showWorkspacePage(view){
+ const leavingSettings=view!==settingsView&&!settingsView.hidden;
+ for(const page of document.querySelectorAll('main > div'))page.hidden=page!==view;
+ if(leavingSettings){userProfileLoaded=false;document.dispatchEvent(new Event('settingsclosed'));}
+ if(typeof syncPageLayout==='function')syncPageLayout();
+}
+function showProjectLanding(){
+ selectSidebarTab(document.querySelector('#projects-tab'));
+ showWorkspacePage(activeProject?projectView:document.querySelector('#project-home'));
+ if(activeProject)selectMainTab(document.querySelector('#project-overview-tab'));
+}
+async function navigateSidebarTab(tab){
+ if(!tab||tab.disabled||!await canLeaveWorkspaceEditors())return false;
+ const finish=()=>{closeMobileSidebar();closeCompactSidebarMenu();return true;};
+ if(tab.id==='projects-tab'){showProjectLanding();return finish();}
+ if(tab.id==='settings-sidebar-tab'){await openSettings();return finish();}
+ if(tab.id==='federation-tab'){await openFederationSharing();return finish();}
+ selectSidebarTab(tab);
+ showWorkspacePage(activeProject?projectView:document.querySelector('#project-home'));
+ const destinations={'chats-tab':'chat-tab','todo-tab':'project-overview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
+ if(activeProject&&destinations[tab.id])selectMainTab(document.getElementById(destinations[tab.id]));
+ if(tab.id==='artifacts-tab'&&typeof showArtifactOverview==='function')await showArtifactOverview();
+ if(tab.id==='tools-tab')juliaModelDetail.hidden=true;
+ if(tab.id==='chats-tab')await loadChat();
+ if(tab.id==='plan-tab')await openTaskPlan();
+ if(tab.id==='presentations-tab'&&activeProject)await openOutputsOverview();
+ return finish();
+}
+async function navigateMainTab(tab){
+ if(tab.getAttribute('aria-selected')==='true'&&!projectView.hidden)return true;
+ if(!await canLeaveWorkspaceEditors())return false;
+ showWorkspacePage(projectView);selectMainTab(tab);
+ if(tab.id==='presentation-tab'&&(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head))await loadPresentationEditor();
+ if(tab.id==='outputs-overview-tab')await openOutputsOverview();
+ return true;
+}
 function selectSidebarTab(selected){
  if(!selected || selected.disabled)return;
- if((federationNetworkRunning||federationDeploymentRunning)&&selected.id!=='federation-tab'){
-  if(federationNetworkRunning)document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';
-  if(federationDeploymentRunning)document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';
-  return;
- }
  const federationPages=[document.querySelector('#federation-view'),document.querySelector('#federation-network-view'),document.querySelector('#federation-deployment-view')];
  if(selected.id!=='federation-tab'&&federationPages.some(view=>!view.hidden)){
   for(const view of federationPages)view.hidden=true;
@@ -2143,18 +2185,18 @@ function selectSidebarTab(selected){
  }
 }
 for(const tab of sidebarTabs){
- tab.addEventListener('click',()=>{
-  if(!compactSidebarActive()){selectSidebarTab(tab);return;}
+ tab.addEventListener('click',async()=>{
+  if(!compactSidebarActive()){await navigateSidebarTab(tab);return;}
   const close=tab.getAttribute('aria-selected')==='true'&&workspaceSidebar.classList.contains('sidebar-menu-open');
-  selectSidebarTab(tab);workspaceSidebar.classList.toggle('sidebar-menu-open',!close);syncCompactSidebar();
+  if(await navigateSidebarTab(tab)){workspaceSidebar.classList.toggle('sidebar-menu-open',!close);syncCompactSidebar();}
  });
- tab.addEventListener('keydown',event=>{
+ tab.addEventListener('keydown',async event=>{
   const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled),index=visible.indexOf(tab);
   const next={ArrowRight:(index+1)%visible.length,
    ArrowLeft:(index-1+visible.length)%visible.length,
    Home:0,End:visible.length-1}[event.key];
   if(next===undefined) return;
-  event.preventDefault();selectSidebarTab(visible[next]);visible[next].focus();
+  event.preventDefault();if(await navigateSidebarTab(visible[next])&&!mobileViewport.matches)visible[next].focus();
  });
 }
 let currentArtifacts=[];
@@ -2188,6 +2230,7 @@ function renderSidebarArtifacts(items){
   row.append(title,sidebarItemMenu(item.title,actions,'sidebar-artifact-menu'));
   sidebarArtifacts.append(row);
  }
+ if(typeof renderArtifactOverview==='function')renderArtifactOverview(true);
  renderSummarySources();
  renderWorkflowSources();
  renderExtractionSources();
@@ -2237,7 +2280,7 @@ function renderProjectOverview(todo){
   const button=document.createElement('button');button.type='button';
   const title=document.createElement('span');title.textContent=item.title;
   const detail=document.createElement('small');detail.textContent=item.depth ? `Vnořená úroveň ${item.depth}` : 'Hlavní úroveň';
-  button.append(title,detail);button.addEventListener('click',()=>openMainTodoEditor());row.append(button);list.append(row);
+  button.append(title,detail);button.addEventListener('click',()=>openMainTodoPreview());row.append(button);list.append(row);
  }
  status.textContent=open.length ? `${open.length} nehotových · ${todo.completed} z ${todo.total} hotovo` :
   (todo.total ? 'Všechny úkoly jsou hotové.' : 'Zatím bez úkolů.');
@@ -2261,13 +2304,13 @@ function renderTodo(todo){
  for(let i=0;i<todo.items.length;i++){
   const item=todo.items[i];lists.length=item.depth+1;
   const row=document.createElement('li');row.dataset.depth=item.depth;row.className='sidebar-list-row';
-  const label=document.createElement('span');label.className='todo-label sidebar-list-main';label.tabIndex=0;label.setAttribute('role','button');label.setAttribute('aria-label',`Upravit seznam úkolů: ${item.title}`);
+  const label=document.createElement('span');label.className='todo-label sidebar-list-main';label.tabIndex=0;label.setAttribute('role','button');label.setAttribute('aria-label',`Zobrazit seznam úkolů: ${item.title}`);
   const check=document.createElement('input');check.type='checkbox';check.checked=item.checked;check.disabled=true;
   check.setAttribute('aria-label',item.checked ? 'Hotovo' : 'Nehotovo');
   const title=document.createElement('span');title.className='todo-text';title.textContent=item.title;
   label.append(check,title);
-  label.addEventListener('click',event=>{event.stopPropagation();openMainTodoEditor();});
-  label.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();openMainTodoEditor();});
+  label.addEventListener('click',event=>{event.stopPropagation();openMainTodoPreview();});
+  label.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();openMainTodoPreview();});
   if(item.checked) row.classList.add('todo-done');
   if(todo.items[i+1]?.depth>item.depth){
    const branch=document.createElement('details');branch.open=true;
@@ -2282,6 +2325,8 @@ function renderTodo(todo){
 const projectSidebarTabs=['todo-tab','plan-tab','artifacts-tab','tools-tab','presentations-tab'];
 function syncSidebarProjectAvailability(){
  const available=Boolean(activeProject);
+ document.querySelector('#sidebar-close-project').disabled=!available;
+ document.querySelector('#open-task-queue').disabled=!available;
  for(const id of projectSidebarTabs){const tab=document.getElementById(id);tab.disabled=!available;tab.setAttribute('aria-disabled',String(!available));}
  const writable=available&&!activeProject.readOnly;
  document.querySelector('#chat-new-thread').disabled=!writable;
@@ -2320,12 +2365,17 @@ function clearProject(){
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
  todoStatus.textContent='Otevřete projekt.';createTodo.hidden=true;document.querySelector('#todo-help').hidden=true;
- taskPlanProjection=null;taskPlanSelection=null;document.querySelector('#sidebar-plan-hierarchy').replaceChildren();document.querySelector('#sidebar-plan-list').replaceChildren();document.querySelector('#sidebar-plan-status').textContent='Otevřete projekt.';updateTaskPlanTreeSelection();renderTaskPlan();
+ taskPlanProjection=null;taskPlanSelection=null;document.querySelector('#sidebar-plan-hierarchy').replaceChildren();document.querySelector('#sidebar-plan-list').replaceChildren();document.querySelector('#plan-subgraphs').hidden=true;document.querySelector('#sidebar-plan-status').textContent='Otevřete projekt.';updateTaskPlanTreeSelection();renderTaskPlan();
  renderProjectOverview(null);renderProjectHistory(null);
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
  document.querySelector('#project-description').textContent='';
  document.querySelector('#project-commit').textContent='';
+}
+async function closeProject(){
+ if(!activeProject||!await canLeaveWorkspaceEditors())return false;
+ clearProject();showProjectLanding();closeMobileSidebar();closeCompactSidebarMenu();
+ await loadProjects();return true;
 }
 async function projectRequest(path,body,timeout=60000){
  const monitorRequest=path.startsWith('/v1/node-telemetry/') || path.startsWith('/v1/roadmap-refinement/') ||
@@ -2370,8 +2420,8 @@ function closeSourceImport(){
  if(activeProject)projectView.hidden=false;
  else document.querySelector('#project-home').hidden=false;
 }
-function openSourceImport(){
- if(!activeProject||!canLeaveWorkspaceEditors())return;
+async function openSourceImport(){
+ if(!activeProject||!await canLeaveWorkspaceEditors())return;
  const predecessors=document.querySelector('#source-import-supersedes');predecessors.replaceChildren();
  const standalone=document.createElement('option');standalone.value='';standalone.textContent='Samostatný zdroj';predecessors.append(standalone);
  for(const item of currentArtifacts.filter(item=>item.kind==='source')){
@@ -2379,6 +2429,7 @@ function openSourceImport(){
  }
  sourceImportStatus.textContent='Vyberte soubor; do potvrzení se nic neimportuje.';
  resetGoogleDrivePlan();loadGoogleDriveStatus();
+ showWorkspacePage(sourceImportView);
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
  selectSidebarTab(document.querySelector('#artifacts-tab'));
  document.querySelector('#source-import-heading').focus();
@@ -2495,7 +2546,6 @@ document.querySelector('#google-drive-run').addEventListener('click',async event
  }catch(error){googleDriveStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#open-source-import').addEventListener('click',openSourceImport);
-document.querySelector('#source-import-back').addEventListener('click',closeSourceImport);
 document.querySelector('#google-drive-open-settings').addEventListener('click',async()=>{
  await openSettings();document.querySelector('#google-drive-config-form input[name="client_id"]').focus();
 });
@@ -2627,35 +2677,56 @@ for(const button of document.querySelectorAll('[data-task-pattern]'))button.addE
 artifactEditorForm.elements.body.addEventListener('input',()=>{if(!taskPlanEditor.hidden&&taskPlanMode==='structured')renderTaskPlanEditor();});
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
 function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
-function canLeaveArtifactEditor(){
+const editorLeaveDialog=document.querySelector('#editor-leave-dialog');
+let editorLeavePending=false;
+async function resolveEditorLeave(label,save,discard){
+ if(editorLeavePending)return false;
+ editorLeavePending=true;
+ try{
+  document.querySelector('#editor-leave-message').textContent=`${label}: máte neuložené změny.`;
+  const choice=await new Promise(resolve=>{
+   const finish=choice=>{editorLeaveDialog.removeEventListener('click',click);editorLeaveDialog.removeEventListener('cancel',cancel);editorLeaveDialog.close();resolve(choice);};
+   const click=event=>{const button=event.target.closest('[data-leave-choice]');if(button)finish(button.dataset.leaveChoice);};
+   const cancel=event=>{event.preventDefault();finish('cancel');};
+   editorLeaveDialog.addEventListener('click',click);editorLeaveDialog.addEventListener('cancel',cancel);editorLeaveDialog.showModal();
+  });
+  if(choice==='cancel')return false;
+  if(choice==='save')return await save(false);
+  discard();return true;
+ }finally{editorLeavePending=false;}
+}
+async function canLeaveArtifactEditor(){
  if(artifactEditorView.hidden||(!artifactEditorDirty&&!artifactEditorAttempt))return true;
- return window.confirm('Zahodit rozepsané změny dokumentu? Neuložený text zůstává pouze v tomto editoru.');
+ return resolveEditorLeave('Dokument',saveArtifactEditor,()=>{artifactEditorDirty=false;artifactEditorAttempt=null;artifactEditorItem=null;artifactEditorView.hidden=true;});
 }
-function canLeaveFederationTools(){
- if(federationNetworkRunning){document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';return false;}
- if(federationDeploymentRunning){document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';return false;}
- return true;
+async function canLeaveWorkspaceEditors(){
+ if(editorLeavePending)return false;
+ if(!presenterView.hidden&&!await closePresenter())return false;
+ const allowed=await canLeaveArtifactEditor()&&await canLeaveJuliaEditor()&&await canLeavePresentationEditor()&&await canLeaveConflictEditor();
+ if(allowed){juliaEditor.hidden=true;if(!projectConflicts.hidden)resetProjectConflicts();}
+ return allowed;
 }
-function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeaveJuliaEditor()&&canLeavePresentationEditor()&&canLeaveFederationTools();}
 function fillArtifactEditor(doc,isNew=false){
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
  document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
- artifactEditorBaseline=artifactEditorState();artifactEditorDirty=isNew;artifactEditorAttempt=null;
+ artifactEditorBaseline=artifactEditorState();artifactEditorDirty=false;artifactEditorAttempt=null;const properties=artifactEditorForm.querySelector('.workspace-file-properties');if(properties)properties.open=isNew;
  const taskPlan=Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false}).then(()=>configureTaskPlanEditor(taskPlan));
 }
 async function closeArtifactEditor(){
- if(!canLeaveWorkspaceEditors())return;
- const item=artifactEditorItem;artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;
- if(activeProject){projectView.hidden=false;if(item&&!item.new)await openPreview(item.id);}
+ const item=artifactEditorItem;
+ if(!await canLeaveWorkspaceEditors())return;
+ artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;
+ if(activeProject){showWorkspacePage(projectView);if(item&&!item.new)await openPreview(item.id);else if(typeof showArtifactOverview==='function')await showArtifactOverview();}
 }
 async function openArtifactEditor(item,deleteMode=false){
  if(!activeProject||activeProject.readOnly||item.kind!=='document')return;
- if(!artifactEditorView.hidden&&!canLeaveWorkspaceEditors())return;
+ if(!await canLeaveWorkspaceEditors())return;
  await openPreview(item.id);if(selectedArtifact!==item.id)return;
  const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
+ showWorkspacePage(artifactEditorView);
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
  selectSidebarTab(document.querySelector('#artifacts-tab'));
  artifactEditorStatus.textContent='Načítám uložený dokument…';
@@ -2663,13 +2734,14 @@ async function openArtifactEditor(item,deleteMode=false){
   if(activeProject!==project||artifactEditorItem!==item)return;
   fillArtifactEditor(result.document);
   artifactEditorStatus.textContent='Uložená verze je připravena k úpravě.';
-  if(deleteMode)await prepareArtifactDeletion();else artifactEditorForm.elements.title.focus();
+  if(deleteMode)await prepareArtifactDeletion();else{const field=taskPlanEditor.hidden||taskPlanMode==='raw'?artifactEditorForm.elements.body:taskPlanEditor.querySelector('input,textarea,select,button');field?.focus();}
  }catch(error){artifactEditorStatus.textContent=error.message;}
 }
-function openNewArtifactEditor({todo=false}={}){
- if(!activeProject||activeProject.readOnly||(!artifactEditorView.hidden&&!canLeaveWorkspaceEditors()))return;
+async function openNewArtifactEditor({todo=false}={}){
+ if(!activeProject||activeProject.readOnly||!await canLeaveWorkspaceEditors())return;
  const id=todo?activeProject.mainTodoId:crypto.randomUUID();
  artifactEditorItem={id,kind:'document',new:true};hideArtifactDeletion();
+ showWorkspacePage(artifactEditorView);
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
  selectSidebarTab(document.querySelector(todo?'#todo-tab':'#artifacts-tab'));
  fillArtifactEditor(todo?{title:'Hlavní seznam úkolů',filename:'content.md',body:'<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] První milník\\n  - type: milestone\\n'}:{title:'',filename:'content.md',body:''},true);
@@ -2681,16 +2753,17 @@ function openMainTodoEditor(){
 }
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
 artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
-artifactEditorForm.addEventListener('submit',async event=>{
- event.preventDefault();if(!activeProject||!artifactEditorItem)return;const button=artifactEditorForm.querySelector('button[type="submit"]');
- if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return;}}}
- if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return;}const fields=new FormData(artifactEditorForm);
+async function saveArtifactEditor(navigate=true){
+ if(!activeProject||!artifactEditorItem||!artifactEditorForm.reportValidity())return false;const button=artifactEditorForm.querySelector('button[type="submit"]');
+ if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return false;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return false;}}}
+ if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return false;}const fields=new FormData(artifactEditorForm);
  const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
- try{const id=artifactEditorItem.id,projectId=activeProject.id;await projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document},120000);artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;await openRegisteredProject(projectId);await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}
- catch(error){artifactEditorStatus.textContent=error.message;}finally{button.disabled=false;}
-});
+ try{const id=artifactEditorItem.id,projectId=activeProject.id;const result=await projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document},120000);artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem.new=false;artifactEditorItem=null;activeProject.head=result.commit_id;artifactEditorView.hidden=true;if(navigate){await openRegisteredProject(projectId);await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}return true;}
+ catch(error){artifactEditorStatus.textContent=error.message;return false;}finally{button.disabled=false;}
+}
+artifactEditorForm.addEventListener('submit',async event=>{event.preventDefault();await saveArtifactEditor();});
 async function prepareArtifactDeletion(){
  if(!activeProject||!artifactEditorItem)return;hideArtifactDeletion();artifactEditorStatus.textContent='Připravuji přesný náhled smazání…';
  try{artifactDeletePreview=await projectRequest('/v1/artifacts/delete/preview',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head});
@@ -2781,13 +2854,13 @@ async function runProjectRepairCheck(){
  catch(error){document.querySelector('#project-repair-report').hidden=true;projectRepairStatus.textContent=error.message;}
 }
 async function openProjectRepair(item){
- if(!canLeaveWorkspaceEditors())return;clearProject();projectRepairTarget=item;
+ if(!await canLeaveWorkspaceEditors())return;projectRepairTarget=item;
+ showWorkspacePage(projectRepairView);
  document.querySelector('#project-home').hidden=true;projectRepairView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
  document.querySelector('#project-repair-target').textContent=`${item.title} · ${item.id}`;
  document.querySelector('#project-repair-heading').focus();await runProjectRepairCheck();
 }
 document.querySelector('#project-repair-check').addEventListener('click',runProjectRepairCheck);
-document.querySelector('#project-repair-back').addEventListener('click',()=>loadProjects());
 document.querySelector('#project-repair-location').addEventListener('click',()=>{if(projectRepairTarget)repairProjectLocation(projectRepairTarget);});
 projectRepairPreview.addEventListener('click',async()=>{
  const action=repairAction(projectRepairReport||{});if(!projectRepairTarget||!action)return;
@@ -2820,7 +2893,7 @@ function rememberRecentProject(projectId){
  recentProjectOrder=[projectId,...recentProjectOrder.filter(id=>id!==projectId)].slice(0,12);
 }
 async function openRegisteredProject(projectId){
- if(!canLeaveWorkspaceEditors())return;
+ if(!await canLeaveWorkspaceEditors())return;
  ++catalogRequest;
  clearProject();const request=viewRequest;
  projectStatus.textContent='Otevírám projekt…';
@@ -2840,7 +2913,7 @@ async function openRegisteredProject(projectId){
   await loadRoadmapReview();
   await loadChat();
   syncSidebarProjectAvailability();
-  selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
+  showProjectLanding();
   document.querySelector('#preview-status').textContent=result.read_only ?
    'Read-only replika: podklady lze prohlížet, změny provádějte na primárním uzlu.' : result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
@@ -2925,8 +2998,8 @@ async function refreshProjectDeletion(){
  try{showDeletionPlan(await projectRequest('/v1/projects/delete/preview',{project_id:projectDeleteTarget.id,mode:projectDeleteMode.value}),'delete');}
  catch(error){document.querySelector('#project-delete-status').textContent=error.message;}
 }
-function openProjectDeletion(item){
- if(!openProjectTrashView())return;
+async function openProjectDeletion(item){
+ if(!await openProjectTrashView())return;
  projectDeleteTarget=item;projectDeleteMode.value='trash';document.querySelector('#project-delete-mode-row').hidden=false;
  document.querySelector('#project-delete-title').textContent=`Akce projektu: ${item.title}`;refreshProjectDeletion();
 }
@@ -2936,7 +3009,7 @@ document.querySelector('#project-delete-cancel').addEventListener('click',()=>{p
 projectDeleteConfirm.addEventListener('click',async()=>{
  if(!projectDeletePlan||!projectDeleteCheck.checked)return;projectDeleteConfirm.disabled=true;
  const path=projectDeleteKind==='restore'?'/v1/projects/delete/restore/confirm':projectDeleteKind==='purge'?'/v1/projects/delete/purge/confirm':'/v1/projects/delete/confirm';
- try{await projectRequest(path,{preview:projectDeletePlan,operation_id:crypto.randomUUID()},120000);projectDeletePanel.hidden=true;projectDeletePlan=null;projectDeleteTarget=null;await loadProjects();}
+ try{const removedProject=projectDeleteKind!=='restore'?projectDeletePlan.project_id:null;await projectRequest(path,{preview:projectDeletePlan,operation_id:crypto.randomUUID()},120000);if(removedProject&&activeProject?.id===removedProject)clearProject();projectDeletePanel.hidden=true;projectDeletePlan=null;projectDeleteTarget=null;await loadProjects();}
  catch(error){document.querySelector('#project-delete-status').textContent=error.message;projectDeleteConfirm.disabled=false;}
 });
 async function prepareTrashAction(item,kind){
@@ -2956,27 +3029,27 @@ async function loadProjectTrash(){
    document.querySelector('#dashboard-trash-summary').textContent=result.projects.length?`${result.projects.length} položek`:'Koš je prázdný';
  }catch(error){document.querySelector('#project-trash-status').textContent=error.message;document.querySelector('#dashboard-trash-summary').textContent='Koš není dostupný';}
 }
-function openProjectTrashView(){
- if(!canLeaveWorkspaceEditors())return false;
- clearProject();document.querySelector('#project-home').hidden=true;projectTrashView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));loadProjectTrash();
+async function openProjectTrashView(){
+ if(!await canLeaveWorkspaceEditors())return false;
+ showWorkspacePage(projectTrashView);document.querySelector('#project-home').hidden=true;projectTrashView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));loadProjectTrash();
  return true;
 }
 async function loadProjects(selectedId=null){
- if(!canLeaveWorkspaceEditors())return;
+ if(!await canLeaveWorkspaceEditors())return;
  const request=++catalogRequest;
- clearProject();projectCards.replaceChildren();sidebarProjects.replaceChildren();
+ if(!activeProject)clearProject();showProjectLanding();projectCards.replaceChildren();sidebarProjects.replaceChildren();
  projectStatus.textContent='Načítám projekty…';document.querySelector('#sidebar-project-status').textContent='Načítám projekty…';
  try{
   const result=await projectRequest('/v1/projects',{details:true});
   if(request!==catalogRequest)return;
   renderProjectCatalog(result.projects);
-  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),loadChat()]);
+  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),...(!activeProject?[loadChat()]:[])]);
   projectStatus.textContent=result.projects.length ? 'Přehled je připravený.' : 'Zatím nemáte žádný projekt.';
   if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
-document.querySelector('#projects-tab').addEventListener('click',()=>loadProjects());
-document.querySelector('#chats-tab').addEventListener('click',()=>loadChat());
+
+
 document.addEventListener('contentsynccompleted',event=>{
  if(activeProject?.id===event.detail?.projectId)loadChat();
 });
@@ -2987,17 +3060,17 @@ document.querySelector('#sidebar-register-project').addEventListener('click',()=
  requestNativeAction('register-project-location');
 });
 document.querySelector('#sidebar-project-trash').addEventListener('click',openProjectTrashView);
+document.querySelector('#sidebar-close-project').addEventListener('click',closeProject);
 document.querySelector('#dashboard-trash').addEventListener('click',openProjectTrashView);
-document.querySelector('#project-trash-back').addEventListener('click',()=>loadProjects());
 document.querySelector('#dashboard-date').textContent=new Intl.DateTimeFormat('cs-CZ',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
 document.querySelector('#sidebar-create-project').addEventListener('click',async()=>{
+ if(!await canLeaveWorkspaceEditors())return;
  if(activeProject)await loadProjects();
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;projectRepairView.hidden=true;
  sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;
- projectCreateView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
+ showWorkspacePage(projectCreateView);projectCreateView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
  resetProjectCreationPreview();document.querySelector('#project-create-heading').focus();
 });
-document.querySelector('#project-create-back').addEventListener('click',()=>loadProjects());
 document.querySelector('#sidebar-import-project').addEventListener('click',event=>{
  const options=document.querySelector('#sidebar-project-import-options'),open=options.hidden;options.hidden=!open;event.currentTarget.setAttribute('aria-expanded',String(open));
 });
@@ -3157,8 +3230,10 @@ function runFederationNetwork(request,message){
  federationNetworkRunning=true;setFederationNetworkLocked(true);federationNetworkStatus.textContent=message;
  requestNativeAction('federation-network-run');
 }
-function openFederationNetwork(){
- if(!canLeaveWorkspaceEditors())return;
+async function openFederationNetwork(){
+ if(!await canLeaveWorkspaceEditors())return;
+ if(federationNetworkRunning){showWorkspacePage(federationNetworkView);selectSidebarTab(document.querySelector('#federation-tab'));return;}
+ showWorkspacePage(federationNetworkView);
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
  historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationDeploymentView.hidden=true;federationNetworkView.hidden=false;
@@ -3249,8 +3324,10 @@ function finishFederationDeployment(success,message){
  resetFederationDeploymentConfirmation(success?'Vzdálená operace byla dokončena. Připravte nový souhrn pro případné opakování.':'Vzdálená operace nebyla dokončena. Zkontrolujte průběh a připravte nový souhrn.');
  if(federationDeploymentConfiguration)document.querySelector('#federation-deployment-preview').disabled=false;
 }
-function openFederationDeployment(){
- if(!canLeaveWorkspaceEditors())return;
+async function openFederationDeployment(){
+ if(!await canLeaveWorkspaceEditors())return;
+ if(federationDeploymentRunning){showWorkspacePage(federationDeploymentView);selectSidebarTab(document.querySelector('#federation-tab'));return;}
+ showWorkspacePage(federationDeploymentView);
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
  historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=false;
@@ -3288,9 +3365,9 @@ federationDeploymentForm.addEventListener('submit',event=>{
  federationDeploymentRunning=true;setFederationDeploymentLocked(true);
  federationDeploymentStatus.textContent='Předávám potvrzené nasazení nativní vrstvě…';requestNativeAction('federation-deployment-start');
 });
-function openNotebookLMImport(){
- if(!canLeaveWorkspaceEditors())return;
- clearProject();
+async function openNotebookLMImport(){
+ if(!await canLeaveWorkspaceEditors())return;
+ showWorkspacePage(notebookImportView);
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
  sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;notebookImportView.hidden=false;
  selectSidebarTab(document.querySelector('#projects-tab'));
@@ -3298,7 +3375,6 @@ function openNotebookLMImport(){
 }
 function closeNotebookLMImport(){notebookImportView.hidden=true;document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));}
 document.querySelector('#open-notebooklm-import').addEventListener('click',openNotebookLMImport);
-document.querySelector('#notebooklm-import-back').addEventListener('click',closeNotebookLMImport);
 function notebookArchiveRequest(){
  return {archive_path:document.body.dataset.runtime==='server' ? document.querySelector('#notebooklm-archive').value.trim() : null,
   archive_capability:notebookArchiveCapability?.archive_capability||null};
@@ -3389,12 +3465,12 @@ document.querySelector('#notebooklm-run').addEventListener('click',async event=>
 """
 
 JS += """
-let activeProject=null, selectedArtifact=null, previewRequest=0;
+let activeProject=null, selectedArtifact=null, selectedPreviewMetadata=null, previewRequest=0;
 const previewStatus=document.querySelector('#preview-status');
 const previewContent=document.querySelector('#preview-content');
 const mainTabs=[...document.querySelectorAll('#main-tabs [role="tab"]')];
 const promptForm=document.querySelector('#chat-composer');
-function setPromptVisible(visible){promptForm.hidden=!visible;}
+function setPromptVisible(visible){if(typeof setPageChatMode==='function'&&window.workspacePageLayoutReady)setPageChatMode(visible?'full':'hidden');else promptForm.hidden=!visible;}
 function selectMainTab(tab){
  for(const item of mainTabs){
   const active=item===tab;item.setAttribute('aria-selected',String(active));item.tabIndex=active?0:-1;
@@ -3402,15 +3478,16 @@ function selectMainTab(tab){
  }
  document.querySelector('#main-panel-content').classList.toggle('project-overview-active',tab.id==='project-overview-tab');
  setPromptVisible(tab.dataset.promptDefault!=='hidden');
+ if(typeof syncPageLayout==='function')syncPageLayout();
 }
 for(const tab of mainTabs){
- tab.addEventListener('click',()=>selectMainTab(tab));
- tab.addEventListener('keydown',event=>{
+ tab.addEventListener('click',async()=>{await navigateMainTab(tab);});
+ tab.addEventListener('keydown',async event=>{
   const visible=mainTabs.filter(item=>!item.hidden),index=visible.indexOf(tab);
-  const next={ArrowRight:(index+1)%visible.length,
-   ArrowLeft:(index+visible.length-1)%visible.length,Home:0,End:visible.length-1}[event.key];
+  const next={ArrowRight:(index+1)%visible.length,ArrowDown:(index+1)%visible.length,
+   ArrowLeft:(index+visible.length-1)%visible.length,ArrowUp:(index+visible.length-1)%visible.length,Home:0,End:visible.length-1}[event.key];
   if(next===undefined)return;
- event.preventDefault();selectMainTab(visible[next]);visible[next].focus();
+ event.preventDefault();if(await navigateMainTab(visible[next]))visible[next].focus();
  });
 }
 const juliaDefinition=document.querySelector('#julia-definition');
@@ -3437,9 +3514,9 @@ let juliaEditorModel=null,juliaEditorBaseline=null,juliaEditorDirty=false,juliaE
 let juliaDeletePreview=null,juliaDeleteOperation=null;
 const juliaSourceRawWidget=createRawEditorWidget(document.querySelector('#julia-source-raw-widget'),{textarea:juliaEditor.elements.julia_code,onInput:()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;}});
 function juliaEditorState(){return JSON.stringify(Object.fromEntries(new FormData(juliaEditor).entries()));}
-function canLeaveJuliaEditor(){
+async function canLeaveJuliaEditor(){
  if(juliaEditor.hidden||(!juliaEditorDirty&&!juliaEditorAttempt))return true;
- return window.confirm('Zahodit rozepsané změny Julia modelu? Neuložený kód zůstává pouze v editoru.');
+ return resolveEditorLeave('Julia model',saveJuliaEditor,()=>{juliaEditor.hidden=true;juliaEditorModel=null;juliaEditorDirty=false;juliaEditorAttempt=null;});
 }
 async function fillJuliaEditor(model){
  juliaEditorModel=model;const fields=juliaEditor.elements;
@@ -3453,11 +3530,12 @@ async function fillJuliaEditor(model){
  fields.title.focus();
 }
 async function openJuliaEditor(create,definitionPath=null){
- if(!activeProject||activeProject.readOnly||(!juliaEditor.hidden&&!canLeaveJuliaEditor()))return false;
+ if(!activeProject||activeProject.readOnly||!await canLeaveWorkspaceEditors())return false;
+ showWorkspacePage(projectView);
  selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));
  const request={project_id:activeProject.id,expected_head:activeProject.head};
  if(!create){const selected=juliaCatalog.find(item=>item.definition.path===definitionPath);if(!selected||!selected.editable)return;request.definition_path=selected.definition.path;}
- juliaEditorStatus.textContent='Načítám editor…';juliaEditor.hidden=false;
+ juliaModelDetail.hidden=true;juliaEditorStatus.textContent='Načítám editor…';juliaEditor.hidden=false;
  try{const model=await projectRequest('/v1/julia/editor/open',request);await fillJuliaEditor(model);return true;}
  catch(error){juliaEditorStatus.textContent=error.message;return false;}
 }
@@ -3469,18 +3547,19 @@ const sidebarToolNewOptions=document.querySelector('#sidebar-tool-new-options'),
 sidebarNewTool.addEventListener('click',()=>toggleToolOptions(sidebarNewTool,sidebarToolNewOptions,sidebarImportTool,sidebarToolImportOptions));
 sidebarImportTool.addEventListener('click',()=>toggleToolOptions(sidebarImportTool,sidebarToolImportOptions,sidebarNewTool,sidebarToolNewOptions));
 document.querySelector('#julia-editor-new').addEventListener('click',()=>{sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');openJuliaEditor(true);});
-document.querySelector('#julia-editor-close').addEventListener('click',event=>{event.preventDefault();if(canLeaveJuliaEditor()){juliaEditor.hidden=true;juliaEditorModel=null;juliaEditorDirty=false;juliaEditorAttempt=null;}});
+document.querySelector('#julia-editor-close').addEventListener('click',async event=>{event.preventDefault();await closeJuliaEditorPage();});
 juliaEditor.addEventListener('input',()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;});
-juliaEditor.addEventListener('submit',async event=>{
- event.preventDefault();if(!activeProject||!juliaEditorModel)return;const fields=new FormData(juliaEditor),button=juliaEditor.querySelector('button[type="submit"]');
+async function saveJuliaEditor(navigate=true){
+ if(!activeProject||!juliaEditorModel||!juliaEditor.reportValidity())return false;const fields=new FormData(juliaEditor),button=juliaEditor.querySelector('button[type="submit"]');
  try{
   const draft={project_id:activeProject.id,base_head:juliaEditorModel.base_head,new:juliaEditorModel.new,artifact_ids:juliaEditorModel.artifact_ids,title:String(fields.get('title')).trim(),privacy:String(fields.get('privacy')),julia_code:String(fields.get('julia_code')),project_toml:String(fields.get('project_toml')),manifest_toml:String(fields.get('manifest_toml')),parameters:JSON.parse(String(fields.get('parameters'))),outputs:JSON.parse(String(fields.get('outputs'))),execution_policy:JSON.parse(String(fields.get('execution_policy')))};
   const signature=JSON.stringify(draft);if(!juliaEditorAttempt||juliaEditorAttempt.signature!==signature)juliaEditorAttempt={signature,request:{operation_id:crypto.randomUUID(),...draft}};const request=juliaEditorAttempt.request;
   button.disabled=true;juliaEditorStatus.textContent='Ukládám atomickou revizi Julia modelu…';
-  const result=await projectRequest('/v1/julia/editor/save',request,120000);juliaEditorDirty=false;juliaEditorAttempt=null;juliaEditor.hidden=true;juliaEditorModel=null;
-  const projectId=activeProject.id;await openRegisteredProject(projectId);selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));juliaEditorStatus.textContent=`Julia model byl uložen v commitu ${result.commit_id||'projektu'}; kód nebyl spuštěn.`;
- }catch(error){juliaEditorStatus.textContent=error.message;}finally{button.disabled=false;}
-});
+  const result=await projectRequest('/v1/julia/editor/save',request,120000);juliaEditorDirty=false;juliaEditorAttempt=null;juliaEditor.hidden=true;juliaEditorModel.new=false;juliaEditorModel.definition_path=result.definition_path;juliaEditorModel=null;
+  activeProject.head=result.commit_id;const projectId=activeProject.id;if(navigate){await openRegisteredProject(projectId);selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));juliaEditorStatus.textContent=`Julia model byl uložen v commitu ${result.commit_id||'projektu'}; kód nebyl spuštěn.`;}return true;
+ }catch(error){juliaEditorStatus.textContent=error.message;return false;}finally{button.disabled=false;}
+}
+juliaEditor.addEventListener('submit',async event=>{event.preventDefault();await saveJuliaEditor();});
 function clearJulia(){
  if(juliaPoll){clearTimeout(juliaPoll);juliaPoll=null;}
  juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();juliaModelList.replaceChildren();
@@ -3501,14 +3580,17 @@ function clearRoadmapReview(){
  document.querySelector('#roadmap-review-detail-title').textContent='Vyberte záznam';document.querySelector('#roadmap-review-accept').disabled=true;document.querySelector('#roadmap-review-reject').disabled=true;document.querySelector('#roadmap-review-reset').disabled=true;document.querySelector('#roadmap-review-apply-selected').disabled=true;
 }
 function selectedJulia(){return juliaCatalog.find(item=>item.definition.path===juliaDefinition.value);}
-function showJuliaModelDetail(model){
+async function showJuliaModelDetail(model){
+ if(!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);
+ juliaModelDetail.dataset.definitionPath=model.definition.path;
  selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));
  const title=juliaModelDetail.querySelector('h3'),list=juliaModelDetail.querySelector('dl');title.textContent=model.computation.title;list.replaceChildren();
  const fields=[['Typ','Julia model'],['Definice',model.definition.path],['Zdroj',model.computation.entrypoint.path],['Project.toml',model.computation.environment.project_path],['Manifest.toml',model.computation.environment.manifest_path],['Parametry',String(model.computation.parameters.length)],['Výstupy',String(model.computation.outputs.length)],['Úpravy',model.editable?'Projektově spravovaný model':'Jen pro čtení']];
  for(const [label,value] of fields){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=label;description.textContent=value;list.append(term,description);}
  juliaModelDetail.hidden=false;document.querySelector('#julia-model-detail-close').focus();
 }
-function prepareJuliaRun(model){
+async function prepareJuliaRun(model){
+ if(!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);
  juliaDefinition.value=model.definition.path;renderJuliaParameters();selectMainTab(document.querySelector('#julia-tab'));juliaStatus.textContent=`${model.computation.title}: připravte read-only náhled; nic nebylo spuštěno.`;document.querySelector('#julia-preview').focus();
 }
 async function requestJuliaDelete(model){
@@ -3525,6 +3607,7 @@ function renderJuliaModelList(){
  }
  if(roadmapReviewRows.length||roadmapReviewError){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),detail=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent='Kontrola roadmapy';detail.className='sidebar-item-id';detail.textContent=roadmapReviewError?'Načtení selhalo · otevřít a obnovit':`${roadmapReviewRows.length} návrhů · node-local`;open.append(title,detail);open.addEventListener('click',openRoadmapReview);row.append(open);juliaModelList.append(row);}
  const total=juliaCatalog.length+(roadmapReviewRows.length||roadmapReviewError?1:0);document.querySelector('#sidebar-tools-status').textContent=roadmapReviewError?'Kontrolu roadmapy se nepodařilo načíst. Otevřete nástroj a zkuste Obnovit seznam.':`Počet nástrojů: ${total}`;
+ if(typeof renderToolsOverview==='function')renderToolsOverview();
 }
 function roadmapReviewAction(row){return row.proposal.action||row.proposal.decision||row.proposal.outcome||'—';}
 function roadmapReviewTargets(row){return row.proposal.target_id||(row.proposal.target_ids||[]).join(', ')||'—';}
@@ -3574,11 +3657,11 @@ function renderRoadmapReviewDetail(value){
 async function selectRoadmapReview(proposalId){
  document.querySelector('#roadmap-review-recover').hidden=true;
  roadmapReviewSelected=proposalId;renderRoadmapReviewRows();const project=activeProject,request=roadmapReviewRequest;
- if(!project||!proposalId)return;selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(roadmapReviewTab);roadmapReviewStatus.textContent='Načítám detail z přesné revize návrhu…';
+ if(!project||!proposalId||!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(roadmapReviewTab);roadmapReviewStatus.textContent='Načítám detail z přesné revize návrhu…';
  try{let value=roadmapReviewDetails.get(proposalId);if(!value){value=await projectRequest('/v1/roadmap-refinement/detail',{project_id:project.id,proposal_id:proposalId});roadmapReviewDetails.set(proposalId,value);}if(request!==roadmapReviewRequest||activeProject!==project||roadmapReviewSelected!==proposalId)return;renderRoadmapReviewDetail(value);renderRoadmapReviewRows();}
  catch(error){if(request===roadmapReviewRequest)roadmapReviewStatus.textContent=error.message;}
 }
-function openRoadmapReview(){if(!roadmapReviewRows.length&&!roadmapReviewError)return;selectSidebarTab(document.querySelector('#tools-tab'));roadmapReviewTab.hidden=false;selectMainTab(roadmapReviewTab);if(roadmapReviewRows.length)selectRoadmapReview(roadmapReviewSelected||roadmapReviewVisibleRows()[0]?.proposal_id);}
+async function openRoadmapReview(){if(!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);if(!roadmapReviewRows.length&&!roadmapReviewError)return;selectSidebarTab(document.querySelector('#tools-tab'));roadmapReviewTab.hidden=false;selectMainTab(roadmapReviewTab);if(roadmapReviewRows.length)selectRoadmapReview(roadmapReviewSelected||roadmapReviewVisibleRows()[0]?.proposal_id);}
 async function loadRoadmapReview(preferred=null){
  if(!activeProject)return;const project=activeProject,request=++roadmapReviewRequest;roadmapReviewStatus.textContent='Načítám lokální proposal queue…';
  try{const result=await projectRequest('/v1/roadmap-refinement/list',{project_id:project.id});if(request!==roadmapReviewRequest||activeProject!==project)return;roadmapReviewRows=result.rows;for(const state of new Set(roadmapReviewRows.map(row=>row.state))){if(!roadmapReviewKnownStates.has(state))roadmapReviewStates.add(state);roadmapReviewKnownStates.add(state);}for(const action of new Set(roadmapReviewRows.map(roadmapReviewAction))){if(!roadmapReviewKnownActions.has(action))roadmapReviewActions.add(action);roadmapReviewKnownActions.add(action);}roadmapReviewError=null;roadmapReviewDetails.clear();roadmapReviewPage=0;roadmapReviewTab.hidden=!roadmapReviewRows.length;roadmapReviewSelected=roadmapReviewRows.some(row=>row.proposal_id===preferred)?preferred:roadmapReviewRows[0]?.proposal_id||null;renderJuliaModelList();renderRoadmapReviewFilters();renderRoadmapReviewRows();}
@@ -3642,7 +3725,7 @@ async function loadJuliaWorkspace(){
 }
 juliaDefinition.addEventListener('change',renderJuliaParameters);
 document.querySelector('#julia-model-detail-close').addEventListener('click',()=>{juliaModelDetail.hidden=true;});
-document.querySelector('#julia-import-file-button').addEventListener('click',()=>{sidebarToolImportOptions.hidden=true;sidebarImportTool.setAttribute('aria-expanded','false');selectMainTab(document.querySelector('#tools-main-tab'));document.querySelector('#julia-import-file').click();});
+document.querySelector('#julia-import-file-button').addEventListener('click',async()=>{if(!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);sidebarToolImportOptions.hidden=true;sidebarImportTool.setAttribute('aria-expanded','false');selectMainTab(document.querySelector('#tools-main-tab'));document.querySelector('#julia-import-file').click();});
 document.querySelector('#julia-import-file').addEventListener('change',async event=>{
  const input=event.currentTarget,file=input.files&&input.files[0];input.value='';if(!file||!activeProject||activeProject.readOnly)return;
  if(!file.name.toLowerCase().endsWith('.jl')){juliaToolsStatus.textContent='Import podporuje zatím pouze Julia soubory .jl.';return;}
@@ -3704,9 +3787,9 @@ const presentationSessionStatus=document.querySelector('#presentation-session-st
 const presentationRawPanel=document.querySelector('#presentation-raw-panel');
 let presentationEditorView=null,presentationEditorDeck=null,presentationEditorArtifact=null,presentationEditorSlide=null;
 let presentationEditorNew=false,presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorLoading=false;
-let presentationEditorMode='special';
+let presentationEditorMode='special',presentationEditorBaseline=null;
 let presentationPrintPlan=null,presentationPrintTarget=null;
-const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=true;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
+const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=presentationRawWidget.dirty||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
 function setPresentationEditorMode(mode){
  presentationEditorMode=mode;const raw=mode==='raw';presentationEditorWorkspace.hidden=raw||!presentationEditorDeck;presentationRawPanel.hidden=!raw||!presentationEditorDeck;
  document.querySelector('#presentation-editor-mode-special').setAttribute('aria-pressed',String(!raw));document.querySelector('#presentation-editor-mode-raw').setAttribute('aria-pressed',String(raw));updatePresentationEditorEnabled();
@@ -3719,7 +3802,7 @@ async function openPresentationRawEditor(){
 async function applyPresentationRaw(){
  const result=await presentationRawWidget.validate();if(!result)return false;
  if(!result.lossless){presentationEditorStatus.textContent='Raw obsah nelze beze změny převést do vizuálního editoru. Použijte kanonický formát z validace.';return false;}
- presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=presentationEditorDirty||presentationRawWidget.dirty;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
+ presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
 }
 function presentationNewSlide(kind='main',layout='content'){
  const template=presentationEditorDeck?.templates?.find(item=>item.id===layout)||presentationEditorView?.layout_presets?.find(item=>item.id===layout)||{background:'#102b36',foreground:'#ffffff'};
@@ -3736,9 +3819,9 @@ function presentationRelink(order){const byId=new Map(presentationEditorDeck.sli
 function presentationCurrentSlide(){return presentationEditorDeck?.slides.find(slide=>slide.id===presentationEditorSlide);}
 function presentationCurrentTemplate(){const selected=document.querySelector('#presentation-template-select')?.value||presentationCurrentSlide()?.layout;return presentationEditorDeck?.templates.find(item=>item.id===selected);}
 function presentationVisualSlide(slide){if(!slide)return slide;return {...slide,layout:structuredClone(presentationEditorDeck.templates.find(item=>item.id===slide.layout)||{})};}
-function canLeavePresentationEditor(){
+async function canLeavePresentationEditor(){
  if(!presentationEditorDirty&&!presentationEditorAttempt)return true;
- return window.confirm(presentationEditorAttempt?'Výsledek uložení není ověřený. Zahodit rozepsanou relaci editoru?':'Zahodit neuložené změny prezentace?');
+ return resolveEditorLeave('Prezentace',savePresentationEditor,()=>{presentationEditorView=null;presentationEditorDeck=null;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationRawPanel.hidden=true;});
 }
 function updatePresentationEditorEnabled(){
  const frozen=Boolean(presentationEditorAttempt),ready=Boolean(presentationEditorDeck),readOnly=Boolean(activeProject?.readOnly);
@@ -3752,7 +3835,7 @@ function updatePresentationEditorEnabled(){
  presentationRawWidget.setDisabled(frozen||readOnly||!ready);document.querySelector('#presentation-editor-mode-special').disabled=frozen||!ready;document.querySelector('#presentation-editor-mode-raw').disabled=frozen||!ready;
 }
 function presentationEditorChanged(rerender=true){
- if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=true;presentationEditorAttempt=null;
+ if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;
  if(rerender)renderPresentationEditor();else{renderSlideVisual(document.querySelector('#presentation-editor-preview'),presentationVisualSlide(presentationCurrentSlide()));const selected=document.querySelector('#presentation-slide-list button[aria-current="true"]');if(selected)selected.textContent=(presentationCurrentSlide().kind==='backup'?'Backup · ':'')+presentationCurrentSlide().title;updatePresentationEditorEnabled();}
 }
 function renderPresentationTemplateForm(preferred=null){
@@ -3816,7 +3899,7 @@ function presentationPdfExportFinished(result){if(!presentationPrintPlan||result
 document.querySelector('#presentation-print-confirm').addEventListener('change',event=>{document.querySelector('#presentation-print-run').disabled=!(event.currentTarget.checked&&presentationPrintTarget&&presentationPrintPlan?.pages.length);});
 document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
- presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
+ presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
 }
 function renderOutputsOverview(preferred=null){
  outputsOverviewList.replaceChildren();
@@ -3826,7 +3909,7 @@ function renderOutputsOverview(preferred=null){
   const item=document.createElement('li'),button=document.createElement('button'),title=document.createElement('strong'),detail=document.createElement('small');
   button.type='button';button.dataset.id=doc.id;button.setAttribute('aria-current',String(doc===selected));
   title.textContent=doc.title+(doc.error?' — neplatná':'');detail.textContent=`Prezentace · ${doc.id}`;
-  button.append(title,detail);button.addEventListener('click',()=>renderOutputsOverview(doc.id));item.append(button);outputsOverviewList.append(item);
+  button.append(title,detail);button.addEventListener('click',()=>openPreview(doc.id));item.append(button);outputsOverviewList.append(item);
  }
  const panel=document.querySelector('#outputs-overview-detail'),properties=document.querySelector('#outputs-overview-properties');properties.replaceChildren();
  if(!selected){panel.hidden=true;outputsOverviewStatus.textContent='Projekt zatím nemá žádnou uloženou definici výstupu.';return;}
@@ -3836,13 +3919,15 @@ function renderOutputsOverview(preferred=null){
  for(const [name,value] of values){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;description.textContent=value;properties.append(term,description);}
 }
 async function openOutputsOverview(preferred=null){
+ if(!await canLeaveWorkspaceEditors())return;
  if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého výstupy patří.';return;}
+ showWorkspacePage(projectView);
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;
  selectSidebarTab(document.querySelector('#presentations-tab'));selectMainTab(outputsOverviewTab);outputsOverviewTab.focus();
  if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head){
-  outputsOverviewStatus.textContent='Načítám definice výstupů…';
+  outputsOverviewStatus.textContent='Načítám definice výstupů…';sidebarPresentationStatus.textContent=outputsOverviewStatus.textContent;
   try{presentationEditorView=await projectRequest('/v1/outputs/definitions',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments(null,false);renderOutputsOverview(preferred);}
-  catch(error){outputsOverviewList.replaceChildren();document.querySelector('#outputs-overview-detail').hidden=true;outputsOverviewStatus.textContent=error.message;}
+  catch(error){outputsOverviewList.replaceChildren();document.querySelector('#outputs-overview-detail').hidden=true;outputsOverviewStatus.textContent=error.message;sidebarPresentationStatus.textContent=error.message;}
  }else renderOutputsOverview(preferred);
 }
 function renderSidebarPresentations(){
@@ -3851,8 +3936,8 @@ function renderSidebarPresentations(){
   const item=document.createElement('li'),main=document.createElement('button'),title=document.createElement('strong'),identity=document.createElement('small');
   item.className='sidebar-list-row sidebar-presentation-row';main.type='button';main.className='sidebar-list-main';title.textContent=doc.title+(doc.error?' — neplatná':'');identity.textContent=doc.id;main.disabled=Boolean(doc.error);
   const web=document.body.dataset.runtime==='server';
-  main.addEventListener('click',()=>web?openOutputsOverview(doc.id):openPresentationEditor(doc.id));main.append(title,identity);
-  const actions=web?[{label:'Zobrazit',run:()=>openOutputsOverview(doc.id)}]:[
+  main.addEventListener('click',()=>openPreview(doc.id));main.append(title,identity);
+  const actions=web?[{label:'Zobrazit',run:()=>openPreview(doc.id)}]:[
    {label:'Upravit',run:()=>openPresentationEditor(doc.id),disabled:Boolean(doc.error)},
    {label:'Spustit',run:()=>usePresentationDocument(doc),disabled:Boolean(doc.error)}];
   const menu=sidebarItemMenu(doc.title,actions,'sidebar-presentation-menu');
@@ -3874,18 +3959,18 @@ async function loadPresentationEditor(preferred=null,openEditor=true){
 }
 async function openPresentationEditor(preferred=null){
  if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého prezentace patří.';return;}
- if(!artifactEditorView.hidden){if(!canLeaveArtifactEditor())return;artifactEditorView.hidden=true;artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorDirty=false;}
+ if(!await canLeaveWorkspaceEditors())return;artifactEditorView.hidden=true;
+ showWorkspacePage(projectView);
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;selectSidebarTab(document.querySelector('#presentations-tab'));
- selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
+ selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!await canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
+ if(presentationEditorDeck)document.querySelector('#presentation-deck-title').focus();
 }
-function createPresentationDocument(confirmDiscard=true){
- if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
+async function createPresentationDocument(confirmDiscard=true){
+ if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
-presentationTab.addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor();else if(!presentationEditorDeck)renderPresentationDocuments();});
-document.querySelector('#presentations-tab').addEventListener('click',()=>{if(document.body.dataset.runtime==='server'){openOutputsOverview();return;}if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor(null,false);else renderSidebarPresentations();});
-presentationEditorDocuments.addEventListener('change',()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
+presentationEditorDocuments.addEventListener('change',async()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(await canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
 document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
-document.querySelector('#presentation-editor-reload').addEventListener('click',()=>{if(canLeavePresentationEditor()){presentationEditorView=null;loadPresentationEditor();}});
+document.querySelector('#presentation-editor-reload').addEventListener('click',async()=>{if(await canLeavePresentationEditor()){presentationEditorView=null;loadPresentationEditor();}});
 document.querySelector('#presentation-editor-mode-raw').addEventListener('click',openPresentationRawEditor);
 document.querySelector('#presentation-editor-mode-special').addEventListener('click',async()=>{if(presentationEditorMode==='raw')await applyPresentationRaw();});
 for(const id of ['presentation-deck-title','presentation-slide-title','presentation-slide-bullets','presentation-slide-notes','presentation-slide-repeat','presentation-slide-reveal','presentation-slide-background','presentation-slide-foreground'])document.querySelector('#'+id).addEventListener('input',()=>{
@@ -3911,13 +3996,14 @@ function movePresentationSlide(delta){const order=presentationMainOrder(),index=
 document.querySelector('#presentation-slide-up').addEventListener('click',()=>movePresentationSlide(-1));document.querySelector('#presentation-slide-down').addEventListener('click',()=>movePresentationSlide(1));
 document.querySelector('#presentation-clear-wallpaper').addEventListener('click',()=>{presentationCurrentSlide().wallpaper='';presentationEditorChanged();});
 document.querySelector('#presentation-slide-wallpaper').addEventListener('change',async event=>{const file=event.currentTarget.files[0];event.currentTarget.value='';if(!file)return;if(file.type!=='image/png'||file.size>190000){presentationEditorStatus.textContent='Vyberte PNG do 190 KiB.';return;}const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});if(String(value).length>262144){presentationEditorStatus.textContent='Zakódovaná tapeta překračuje limit 256 KiB.';return;}presentationCurrentSlide().wallpaper=String(value);presentationEditorChanged();});
-presentationEditorSave.addEventListener('click',async()=>{
- if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
+async function savePresentationEditor(navigate=true){
+ if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return false;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return false;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
  updatePresentationEditorEnabled();presentationEditorStatus.textContent='Ukládám potvrzenou podobu prezentace do projektu…';
- try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;await openRegisteredProject(projectId);await openPresentationEditor(id);presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;}
- catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();}
-});
-async function usePresentationDocument(document){try{presentationEditorUse.disabled=true;await projectRequest('/v1/presentations/use',{project_id:activeProject.id,artifact_id:document.id,expected_head:presentationEditorView.commit_id});sidebarPresentationStatus.textContent=`Prezentace „${document.title}“ je připravena v presenteru.`;presentationEditorStatus.textContent='Uložená prezentace je připravena v presenteru.';openPresenter();}catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;}finally{updatePresentationEditorEnabled();}}
+ try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationRawWidget.markClean();activeProject.head=result.commit_id;presentationEditorView.commit_id=result.commit_id;const saved=presentationEditorView.documents.find(item=>item.id===id);if(saved){saved.deck=structuredClone(presentationEditorDeck);saved.title=presentationEditorDeck.title;}else presentationEditorView.documents.push({id,title:presentationEditorDeck.title,deck:structuredClone(presentationEditorDeck)});if(navigate){await openRegisteredProject(projectId);await openPresentationEditor(id);}presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;return true;}
+ catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();return false;}
+}
+presentationEditorSave.addEventListener('click',()=>savePresentationEditor());
+async function usePresentationDocument(document){if(!await canLeaveWorkspaceEditors())return;try{presentationEditorUse.disabled=true;await projectRequest('/v1/presentations/use',{project_id:activeProject.id,artifact_id:document.id,expected_head:presentationEditorView.commit_id});sidebarPresentationStatus.textContent=`Prezentace „${document.title}“ je připravena v presenteru.`;presentationEditorStatus.textContent='Uložená prezentace je připravena v presenteru.';openPresenter();}catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;}finally{updatePresentationEditorEnabled();}}
 presentationEditorUse.addEventListener('click',()=>usePresentationDocument({id:presentationEditorArtifact,title:presentationEditorDeck.title}));
 document.querySelector('#presentation-editor-presenter').addEventListener('click',openPresenter);
 const applicationAccessForm=document.querySelector('#application-access-form');
@@ -4103,9 +4189,10 @@ function taskPlanMatches(item,mode){return !mode||(mode==='completed'?item.check
 function renderTaskQueue(){
  const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
  document.querySelector('#task-queue-revalidate').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
+ document.querySelector('#task-queue-publish').disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView?.valid||Boolean(activeProject?.readOnly);
  if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu; pokud se změnila roadmapa, znovu otevřete projekt.';return;}
  status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
- for(const item of taskQueueView.items){const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button');open.type=remove.type='button';open.textContent=`${item.id} · ${item.title}${item.user_confirmed?' · Přijato uživatelem':item.agent_confirmed?' · Agent hlásí splnění':''}`;open.addEventListener('click',()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node)showTaskPlanDetail(node);});remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,remove);list.append(row);}
+ for(const item of taskQueueView.items){const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button');open.type=remove.type='button';open.textContent=`${item.id} · ${item.title}${item.user_confirmed?' · Přijato uživatelem':item.agent_confirmed?' · Agent hlásí splnění':''}`;open.addEventListener('click',async()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);});remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,remove);list.append(row);}
 }
 async function loadTaskQueue(){
  if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;
@@ -4117,7 +4204,7 @@ async function changeTaskQueue(action,taskId){
  const project=activeProject,view=taskQueueView;taskQueueBusy=true;renderTaskQueue();
  try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
  if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
- const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();
+ const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
  finally{taskQueueBusy=false;renderTaskQueue();}
 }
@@ -4135,7 +4222,8 @@ document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQ
 document.querySelector('#task-queue-revalidate').addEventListener('click',()=>changeTaskQueue('revalidate'));
 
 function showTaskPlanDetail(item){
- const detail=document.querySelector('#plan-detail');detail.replaceChildren();
+ const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
+ const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;document.querySelector('#plan-graph').focus();});detail.append(close);
  if(!item.checked){const add=document.createElement('button');add.type='button';add.textContent='Přidat do fronty';add.disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView.valid||Boolean(activeProject?.readOnly)||taskQueueView.task_ids.includes(item.id)||!(item.ready||taskQueueView.following.includes(item.id));add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add);}
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title);
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
@@ -4201,11 +4289,13 @@ function renderTaskPlan(){
  for(const item of nodes){const point=positions.get(item.id),group=roadmapElement('g',{class:'roadmap-node',tabindex:0,role:'button','aria-label':`${item.id}, ${item.title}`});group.append(roadmapElement('rect',{x:point.x,y:point.y,width:220,height:54,rx:8,fill:item.checked?'#e2f3eb':item.blocked?'#f8dddd':'#fff',stroke:item.ready?'#176b60':'#557384','stroke-width':item.critical?4:2,'stroke-dasharray':item.ready?'6 3':''}));const id=roadmapElement('text',{x:point.x+9,y:point.y+21,fill:'#152b38','font-size':12,'font-weight':700});id.textContent=item.id;const title=roadmapElement('text',{x:point.x+9,y:point.y+41,fill:'#4e6674','font-size':11});title.textContent=item.title.length>32?item.title.slice(0,31)+'…':item.title;group.append(id,title);const select=()=>showTaskPlanDetail(item);group.addEventListener('click',select);group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});svg.append(group);}
  graph.append(svg);status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
 }
-function updateTaskPlanTreeSelection(){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/'));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
-function openTaskPlan(selection=null){taskPlanSelection=selection;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();}
+function updateTaskPlanTreeSelection(queueOpen=false){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(!queueOpen&&(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/')));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(!queueOpen&&taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
+async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
+async function openTaskQueue(){if(!activeProject||!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));selectMainTab(document.querySelector('#task-queue-tab'));closeMobileSidebar();closeCompactSidebarMenu();await loadTaskQueue();}
+document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
 function renderTaskPlanSidebar(value){
  taskQueueView=null;loadTaskQueue();
- taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();
+ taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
  if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
  status.textContent=value.profile==='software-development/v1'?`${milestones.length} milníků · ${batches.length} dávek · ${value.nodes.filter(item=>item.type==='task').length} úkolů`:`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
@@ -4213,7 +4303,7 @@ function renderTaskPlanSidebar(value){
  for(const subgraph of value.subgraphs){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planSubgraph=subgraph.id;button.textContent=`${subgraph.title} (${subgraph.task_ids.length})`;button.addEventListener('click',()=>openTaskPlan({...subgraph,kind:'subgraph'}));row.append(button);list.append(row);}updateTaskPlanTreeSelection();renderTaskPlan();
 }
 document.querySelector('#open-main-plan').addEventListener('click',()=>openTaskPlan());
-document.querySelector('#plan-tab').addEventListener('click',()=>openTaskPlan(taskPlanSelection));
+
 document.querySelector('#plan-state-filter').addEventListener('change',renderTaskPlan);
 document.querySelector('#plan-export').addEventListener('click',()=>{if(taskPlanProjection?.status!=='ready')return;const blob=new Blob([taskPlanProjection.svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`plan-${taskPlanProjection.revision.slice(0,12)}.svg`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);});
 
@@ -4318,9 +4408,10 @@ function syncSidebarSettingsList(){
  for(const item of document.querySelectorAll('#sidebar-settings-list [data-settings-item]'))item.hidden=document.getElementById(item.dataset.settingsItem).hidden;
 }
 async function openSettings(settingsTabId='settings-backend-tab'){
- if(!canLeaveWorkspaceEditors())return;
+ if(!await canLeaveWorkspaceEditors())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden,trash:!projectTrashView.hidden};
+ showWorkspacePage(settingsView);
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  selectSidebarTab(document.querySelector('#settings-sidebar-tab'));syncSidebarSettingsList();
  const requested=document.getElementById(settingsTabId),selected=requested&&!requested.hidden?requested:document.querySelector('#settings-backend-tab');selectSettingsTab(selected);
@@ -4345,7 +4436,6 @@ async function closeSettings(){
 }
 for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-tab]'))button.addEventListener('click',()=>openSettings(button.dataset.settingsTab));
 for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-menu-tab]'))button.addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openSettings(button.dataset.settingsMenuTab);});
-document.querySelector('#settings-back').addEventListener('click',closeSettings);
 const cmsStatus=document.querySelector('#cms-status');
 const cmsEditor=document.querySelector('#cms-editor');
 const cmsHostname=document.querySelector('#cms-hostname');
@@ -4463,10 +4553,11 @@ userProfileForm.addEventListener('submit',async event=>{
  }finally{submit.disabled=false;}
 });
 function clearPreview(){
- ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
+ ++previewRequest;selectedArtifact=null;selectedPreviewMetadata=null;previewContent.replaceChildren();
  refreshCurrentFileSource();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
- document.querySelector('#preview-title').textContent='';
+ const overview=document.querySelector('#artifact-overview');if(overview)overview.hidden=true;
+ document.querySelector('#preview-title').textContent='';document.querySelector('#preview-panel').dataset.fileFormat='';document.querySelector('#preview-panel').dataset.presentationCandidate='false';
  document.querySelector('#preview-metadata').replaceChildren();
  document.querySelector('#preview-details').hidden=true;
  document.querySelector('#pdf-controls').hidden=true;
@@ -4521,9 +4612,13 @@ function resetProjectConflicts(){
  projectConflictGrid.hidden=false;projectConflictHeading.hidden=false;projectConflictOpen.hidden=true;projectConflictConfirm.checked=false;projectConflictPublish.disabled=true;
 }
 function conflictDraftChanged(){return [...projectConflictDrafts.values()].some(item=>item.choice && item.choice!=='auto');}
-function closeProjectConflicts(){
- if(conflictDraftChanged()&&!window.confirm('Zahodit rozepsané řešení konfliktu? Projekt zatím nebyl změněn.'))return;
- closeConflictDialog();projectConflicts.hidden=true;projectConflictGrid.hidden=false;projectConflictHeading.hidden=false;projectConflictPreview=null;projectConflictDrafts=new Map();projectConflictOperation=null;projectConflictPath=null;
+async function canLeaveConflictEditor(){
+ if(!conflictDraftChanged()&&!projectConflictOperation)return true;
+ return resolveEditorLeave('Řešení konfliktů',saveConflictEditor,()=>{closeConflictDialog();projectConflictDrafts=new Map();projectConflictOperation=null;});
+}
+async function closeProjectConflicts(){
+ if(!await canLeaveConflictEditor())return;
+ resetProjectConflicts();
 }
 async function loadProjectConflictSummary(){
  if(!activeProject)return;const project=activeProject,request=++projectConflictRequest;projectConflictOpen.hidden=true;
@@ -4534,7 +4629,7 @@ async function loadProjectConflictSummary(){
  }catch(error){if(request===projectConflictRequest)projectConflictOpen.hidden=true;}
 }
 async function openProjectConflicts(){
- if(!activeProject)return;projectConflictGrid.hidden=true;projectConflictHeading.hidden=true;projectConflicts.hidden=false;projectConflictWorkspace.hidden=true;
+ if(!activeProject||!await canLeaveWorkspaceEditors())return;projectConflictGrid.hidden=true;projectConflictHeading.hidden=true;projectConflicts.hidden=false;projectConflictWorkspace.hidden=true;
  projectConflictStatus.textContent='Načítám zachované protější historie…';projectConflictSelect.replaceChildren();
  const project=activeProject,request=++projectConflictRequest;
  try{const result=await projectRequest('/v1/projects/conflicts/list',{project_id:project.id,expected_head:project.head});
@@ -4619,6 +4714,9 @@ function renderConflictFile(){
  renderConflictDiffs();renderConflictPreviews();updateConflictCompletion();
 }
 async function loadConflictPreview(){
+ const selected=projectConflictSelect.value;
+ if(!await canLeaveConflictEditor()){projectConflictSelect.value=projectConflictPreview?.incoming_ref||'';return;}
+ projectConflictSelect.value=selected;
  if(!activeProject||!projectConflictSelect.value)return;const project=activeProject,request=++projectConflictRequest;
  closeConflictDialog();projectConflictPath=null;projectConflictStatus.textContent='Sestavuji izolované 3-way porovnání…';projectConflictWorkspace.hidden=true;
  try{const result=await projectRequest('/v1/projects/conflicts/preview',{project_id:project.id,expected_head:project.head,incoming_ref:projectConflictSelect.value},120000);
@@ -4639,15 +4737,17 @@ projectConflictResult.addEventListener('input',()=>{const item=selectedConflictF
 projectConflictResult.addEventListener('scroll',()=>{const highlight=document.querySelector('#project-conflicts-result-highlight');highlight.scrollTop=projectConflictResult.scrollTop;highlight.scrollLeft=projectConflictResult.scrollLeft;});
 for(const [buttonId,panelId,otherId] of [['project-conflicts-raw','project-conflicts-raw-panel','project-conflicts-rendered-panel'],['project-conflicts-rendered','project-conflicts-rendered-panel','project-conflicts-raw-panel']])document.getElementById(buttonId).addEventListener('click',event=>{document.getElementById(panelId).hidden=false;document.getElementById(otherId).hidden=true;for(const button of event.currentTarget.parentElement.querySelectorAll('button')){const active=button===event.currentTarget;button.setAttribute('aria-selected',String(active));button.classList.toggle('secondary-button',!active);}renderConflictPreviews();});
 projectConflictConfirm.addEventListener('change',()=>updateConflictCompletion());
-projectConflictPublish.addEventListener('click',async()=>{
- if(!activeProject||!projectConflictPreview||!projectConflictConfirm.checked)return;projectConflictPublish.disabled=true;projectConflictStatus.textContent='Validuji celý projekt a vytvářím potvrzený merge commit…';
+async function saveConflictEditor(navigate=true){
+ if(!activeProject||!projectConflictPreview)return false;if(projectConflictPreview.files.some(item=>item.conflict&&!projectConflictDrafts.get(item.path)?.choice)){projectConflictStatus.textContent='Nejprve vyřešte všechny konfliktní soubory.';return false;}projectConflictPublish.disabled=true;projectConflictStatus.textContent='Validuji celý projekt a vytvářím potvrzený merge commit…';
  if(!projectConflictOperation)projectConflictOperation=crypto.randomUUID();
  const resolution={project_id:projectConflictPreview.project_id,expected_head:projectConflictPreview.expected_head,incoming_ref:projectConflictPreview.incoming_ref,incoming_head:projectConflictPreview.incoming_head,base:projectConflictPreview.base,preview_sha256:projectConflictPreview.preview_sha256,resolutions:projectConflictPreview.files.map(item=>{const draft=projectConflictDrafts.get(item.path);const row={path:item.path,choice:draft.choice};if(draft.choice==='manual')row.text=draft.text;return row;})};
- try{await projectRequest('/v1/projects/conflicts/confirm',{operation_id:projectConflictOperation,resolution},120000);projectConflictOperation=null;await openRegisteredProject(activeProject.id);}
- catch(error){projectConflictStatus.textContent=error.message;projectConflictPublish.disabled=false;}
-});
+ try{const result=await projectRequest('/v1/projects/conflicts/confirm',{operation_id:projectConflictOperation,resolution},120000);projectConflictOperation=null;resetProjectConflicts();activeProject.head=result.commit_id;if(navigate)await openRegisteredProject(activeProject.id);return true;}
+ catch(error){projectConflictStatus.textContent=error.message;projectConflictPublish.disabled=false;return false;}
+}
+projectConflictPublish.addEventListener('click',()=>{if(projectConflictConfirm.checked)saveConflictEditor();});
 async function openPreview(id,page=1){
- if(!activeProject)return;
+ if(!activeProject||!await canLeaveWorkspaceEditors())return;
+ showWorkspacePage(projectView);
  const project=activeProject;
  clearPreview();selectedArtifact=id;refreshCurrentFileSource();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current',String(button.dataset.id===id));
@@ -4657,7 +4757,7 @@ async function openPreview(id,page=1){
   const result=await projectRequest('/v1/artifacts/preview',{
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
   if(request!==previewRequest || activeProject!==project)return;
-  document.querySelector('#preview-title').textContent=result.metadata.title;
+  selectedPreviewMetadata={...result.metadata,id};document.querySelector('#preview-title').textContent=result.metadata.title;document.querySelector('#preview-panel').dataset.fileFormat=result.format;
   const metadata=document.querySelector('#preview-metadata');
   for(const [key,value] of Object.entries(result.metadata)){
    const entries=key==='import' ? [
@@ -4684,10 +4784,12 @@ async function openPreview(id,page=1){
   document.querySelector('#text-preview-next').disabled=page>=textPages;
   document.querySelector('#text-preview-previous').onclick=()=>openPreview(id,page-1);
   document.querySelector('#text-preview-next').onclick=()=>openPreview(id,page+1);
-  if(result.format==='markdown')renderMarkdown(result.text);
-  else if(result.format==='json'){
-   const pre=document.createElement('pre');pre.textContent=result.text;previewContent.append(pre);
-  }
+  if(result.format==='markdown'&&typeof prepareStoredPresentationPreview==='function'){const warning=await prepareStoredPresentationPreview(id,result.text);if(request!==previewRequest||activeProject!==project)return;if(warning)result.message=[result.message,warning].filter(Boolean).join(' ');}
+  const slides=(result.format==='markdown'||result.format==='json')&&typeof renderStoredPresentationPreview==='function'&&renderStoredPresentationPreview(id);
+  if(slides)document.querySelector('#text-preview-controls').hidden=true;
+  else if(result.format==='markdown')renderMarkdown(result.text);
+  else if(result.format==='json'){const pre=document.createElement('pre');pre.textContent=result.text;previewContent.append(pre);}
+
   else if(result.format==='image' || result.format==='pdf'){
    const image=document.createElement('img');image.alt=result.metadata.title;
    image.addEventListener('error',()=>{if(request===previewRequest)previewStatus.textContent='Obrázek se nepodařilo zobrazit.';});
@@ -4697,7 +4799,8 @@ async function openPreview(id,page=1){
   const isPdf=result.format==='pdf' || result.metadata.file?.toLowerCase().endsWith('.pdf');
   document.querySelector('#pdf-controls').hidden=!isPdf;
   document.querySelector('#pdf-page').value=page;
-  previewStatus.textContent=result.message || (result.format==='pdf'?'Stránka '+page+' · uložená verze':'Uložená verze · pouze pro čtení');
+  previewStatus.textContent=result.message || '';
+  if(typeof syncPageLayout==='function')syncPageLayout();
  }catch(error){if(request===previewRequest){previewStatus.textContent=error.message;}}
 }
 const historyStatus=document.querySelector('#history-status');
@@ -4714,10 +4817,11 @@ function closeHistory(){
  else{document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));}
 }
 async function openHistory(){
- if(!activeProject||!selectedArtifact)return;
+ if(!activeProject||!selectedArtifact||!await canLeaveWorkspaceEditors())return;
  const project=activeProject,artifactId=selectedArtifact,request=++historyRequest;
  historyVersions=[];historyOlder.replaceChildren();historyNewer.replaceChildren();clearHistoryResult();
  document.querySelector('#history-title').textContent=`Historie · ${document.querySelector('#preview-title').textContent||artifactId}`;
+ showWorkspacePage(historyView);
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;projectView.hidden=true;historyView.hidden=false;
  selectSidebarTab(document.querySelector('#artifacts-tab'));
  historyCompare.disabled=true;historyStatus.textContent='Načítám historii…';
@@ -4753,7 +4857,6 @@ historyCompare.addEventListener('click',async()=>{
  }catch(error){if(request===historyRequest)historyStatus.textContent=error.message;}
  finally{if(request===historyRequest)historyCompare.disabled=false;}
 });
-document.querySelector('#history-close').addEventListener('click',closeHistory);
 document.querySelector('#pdf-show').addEventListener('click',()=>{
  const input=document.querySelector('#pdf-page');
  if(input.reportValidity() && selectedArtifact)openPreview(selectedArtifact,Number(input.value));
@@ -4954,6 +5057,7 @@ let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevi
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
 function chatScrollOwner(){
+ const pageBody=chatMessages.closest('.workspace-page-body');if(pageBody)return pageBody;
  return getComputedStyle(mainPanelContent).overflowY==='visible' ?
   document.scrollingElement : mainPanelContent;
 }
@@ -4962,7 +5066,7 @@ function chatScrollNearBottom(){const owner=chatScrollOwner();
 function updateChatAutoFollow(){
  if(!chatStream.hidden || !chatStreamStatus.hidden)streamAutoFollow=chatScrollNearBottom();
 }
-mainPanelContent.addEventListener('scroll',updateChatAutoFollow,{passive:true});
+mainPanelContent.addEventListener('scroll',updateChatAutoFollow,{passive:true,capture:true});
 window.addEventListener('scroll',updateChatAutoFollow,{passive:true});
 function keepChatStreamVisible(){
  if(!streamAutoFollow || streamScrollPending)return;streamScrollPending=true;
@@ -5428,13 +5532,13 @@ function renderResearchPreparation(container,projection,query,parentSearchId){
  mode.addEventListener('change',update);profile.addEventListener('change',update);
  controls.append(legend,profileLabel,modeLabel,countdownLabel,run);container.append(controls);
 }
-function openResearchDraftEditor(draft){
- if(!canLeaveWorkspaceEditors())return;
- openNewArtifactEditor();
+async function openResearchDraftEditor(draft){
+ if(!await canLeaveWorkspaceEditors())return;
+ await openNewArtifactEditor();
  fillArtifactEditor({title:'Výzkumná zpráva',filename:'research-report.md',
   body:draft.markdown,metadata:{description:'Návrh sestavený z ověřených zdrojů.',
    tags:['research']}},true);
- artifactEditorStatus.textContent='Neuložený návrh. Projekt se změní až po stisknutí Uložit.';
+ artifactEditorDirty=true;artifactEditorStatus.textContent='Neuložený návrh. Projekt se změní až po stisknutí Uložit.';
 }
 function renderSearchAutonomy(container,projection,query,parentSearchId,workflowOverride=null){
  const workflow=workflowOverride || searchAutonomyWorkflow(projection.task_id);
@@ -5969,7 +6073,9 @@ document.querySelector('#public-source-confirm').addEventListener('click',async 
   chatOperationStatus.textContent='Veřejný zdroj byl načten jako inertní nedůvěryhodný text.';
  }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
-document.querySelector('#chat-new-thread').addEventListener('click',()=>{
+document.querySelector('#chat-new-thread').addEventListener('click',async()=>{
+ if(!await canLeaveWorkspaceEditors())return;
+ showWorkspacePage(activeProject?projectView:document.querySelector('#project-home'));selectMainTab(document.querySelector('#chat-tab'));
  if(!activeProject){document.querySelector('#sidebar-chat-status').textContent='Pro nové vlákno nejprve vyberte projekt.';return;}
  hideSearchRecovery();
  ++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();
@@ -5981,6 +6087,8 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  draft.focus();
 });
 async function openStoredThread(threadId){
+ if(!await canLeaveWorkspaceEditors())return;
+ showWorkspacePage(activeProject?projectView:document.querySelector('#project-home'));
  if(!activeProject){document.querySelector('#sidebar-chat-status').textContent='Pro otevření vlákna nejprve vyberte projekt.';return;}
  ++chatSelectionRevision;pendingChatRequest=null;pendingThreadDeletion=null;
  document.querySelector('#chat-delete-preview').hidden=true;
@@ -6757,7 +6865,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(!threadWritable()){
   chatOperationStatus.textContent='Archivované vlákno nebo vlákno jiného projektu je pouze pro čtení.';return;
  }
- selectMainTab(document.querySelector('#chat-tab'));
+ if(!await navigateMainTab(document.querySelector('#chat-tab')))return;
+ selectSidebarTab(document.querySelector('#chats-tab'));
  const mode=document.querySelector('#chat-mode').value;
  const offer=selectedRunOffer();
  if(!offer){chatOperationStatus.textContent='Vyberte právě jednu čerstvou kombinaci backendu a modelu.';return;}
@@ -7536,7 +7645,8 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
 refreshImageAdapter();
 if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
-JS += ADMIN_JS
+CSS += PAGE_LAYOUT_CSS
+JS += ADMIN_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
@@ -7597,6 +7707,7 @@ class DesktopHandler(Handler):
         '/v1/gamepad/status', '/v1/presentation/status',
         '/v1/gamepad/settings', '/v1/user-profile',
         '/v1/presentations/open', '/v1/presentations/save', '/v1/presentations/use',
+        '/v1/outputs/definitions',
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
@@ -7911,12 +8022,12 @@ class DesktopHandler(Handler):
                 return self.send_error(400)
             except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
-        if self.path.startswith('/v1/presentations/') and isinstance(request, dict):
+        if (self.path.startswith('/v1/presentations/') or self.path == '/v1/outputs/definitions') and isinstance(request, dict):
             service = getattr(self.server, 'presentation_documents', None)
             if service is None:
                 return self.reply(503, {'error': 'Editor prezentací je dostupný jen v desktopu.'})
             try:
-                if self.path == '/v1/presentations/open' and request.keys() == {'project_id', 'expected_head'}:
+                if self.path in {'/v1/presentations/open', '/v1/outputs/definitions'} and request.keys() == {'project_id', 'expected_head'}:
                     result = service.open(request['project_id'])
                     if result['commit_id'] != request['expected_head']:
                         return self.reply(409, {'error': 'Projekt se od otevření změnil. Načtěte jej znovu.'})

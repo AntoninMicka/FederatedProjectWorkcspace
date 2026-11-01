@@ -730,7 +730,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="outputs-overview-panel" role="tabpanel"', WEB_HTML)
         self.assertIn('id="outputs-overview-list"', WEB_HTML)
         self.assertIn("querySelector('#outputs-overview-tab').hidden=false", WEB_JS)
-        self.assertIn("document.body.dataset.runtime==='server'){openOutputsOverview()", WEB_JS)
+        self.assertIn("if(tab.id==='presentations-tab'&&activeProject)await openOutputsOverview()", WEB_JS)
         self.assertIn("projectRequest('/v1/outputs/definitions'", WEB_JS)
         self.assertNotIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", WEB_JS)
@@ -1357,16 +1357,16 @@ def result(value):
  elif phase==4:
   phase=5;run("artifactEditorForm.elements.title.value='Sdílený dokument';artifactEditorForm.elements.body.value='# Obsah\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
  elif phase==5:
-  phase=6;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-FIRST] První\\n  - type: milestone\\n\\n- [ ] [MILESTONE-LAST] Poslední\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));setTimeout(()=>{const position=document.querySelector('#task-plan-insert-position');position.value='MILESTONE-LAST';document.querySelector('[data-task-pattern=\"task-plan.milestone\"]').click();const text=artifactEditorForm.elements.body.value;if(taskPlanEditor.hidden||taskPlanBlocks.children.length!==3||!(text.indexOf('MILESTONE-FIRST')<text.indexOf('MILESTONE-01')&&text.indexOf('MILESTONE-01')<text.indexOf('MILESTONE-LAST'))){artifactEditorStatus.textContent='FAIL: positioned task insertion unavailable';}else{artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] Ověřit editor\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();}},100);")
+  phase=6;run("(async()=>{await navigateSidebarTab(document.querySelector('#todo-tab'));await openNewArtifactEditor({todo:true});artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-FIRST] První\\n  - type: milestone\\n\\n- [ ] [MILESTONE-LAST] Poslední\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));setTimeout(()=>{const position=document.querySelector('#task-plan-insert-position');position.value='MILESTONE-LAST';document.querySelector('[data-task-pattern=\"task-plan.milestone\"]').click();const text=artifactEditorForm.elements.body.value;if(taskPlanEditor.hidden||taskPlanBlocks.children.length!==3||!(text.indexOf('MILESTONE-FIRST')<text.indexOf('MILESTONE-01')&&text.indexOf('MILESTONE-01')<text.indexOf('MILESTONE-LAST'))){artifactEditorStatus.textContent='FAIL: positioned task insertion unavailable';}else{artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] Ověřit editor\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();}},100);})()")
  elif phase==6:
-  phase=7;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Rozepsáno';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));window.confirm=()=>false;document.querySelector('#artifact-editor-close').click();")
+  phase=7;run("(async()=>{await openNewArtifactEditor();artifactEditorForm.elements.title.value='Rozepsáno';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#artifact-editor-close').click();document.querySelector('[data-leave-choice=cancel]').click();})()")
  elif phase==7:
-  phase=8;run("window.confirm=()=>true;document.querySelector('#artifact-editor-close').click();")
+  phase=8;run("document.querySelector('#artifact-editor-close').click();document.querySelector('[data-leave-choice=discard]').click();")
  elif phase==8: finish('shared editor smoke: pattern, document, TODO and draft guard OK',0)
 def poll():
  global ticks
  ticks+=1
- if ticks>350: finish('shared editor smoke timeout at phase '+str(phase));return
+ if ticks>350: view.page().runJavaScript("JSON.stringify({editor:artifactEditorStatus.textContent,raw:document.querySelector('#artifact-raw-widget [data-raw-status]').textContent,bodyLength:artifactEditorForm.elements.body.value.length})",lambda value:finish('shared editor smoke timeout at phase '+str(phase)+' '+str(value)));return
  checks={
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
@@ -1421,14 +1421,14 @@ def result(value):
  elif phase==3:
   phase=4;run("(()=>{const root=document.querySelector('#julia-source-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]'),textarea=root.querySelector('[data-raw-content]');if(juliaEditor.elements.title.value!=='smoke-model'||!textarea.value.includes('imported smoke')||!juliaToolsStatus.textContent.includes('lokálním konceptu')){juliaEditorStatus.textContent='FAIL: Julia import draft unavailable';return;}if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor je Julia')||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia file help unavailable';return;}select.value='julia.function';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Julia funkce'||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia pattern help unavailable';return;}textarea.setSelectionRange(textarea.value.length,textarea.value.length);root.querySelector('[data-raw-insert]').click();if(!textarea.value.includes('function model')){juliaEditorStatus.textContent='FAIL: Julia pattern insertion unavailable';return;}root.querySelector('[data-raw-validate]').click();})()")
  elif phase==4:
-  phase=5;run("window.confirm=()=>false;document.querySelector('#julia-editor-close').click();")
+  phase=5;run("document.querySelector('#julia-editor-close').click();document.querySelector('[data-leave-choice=cancel]').click();")
  elif phase==5:
-  phase=6;run("window.confirm=()=>true;document.querySelector('#julia-editor-close').click();")
+  phase=6;run("document.querySelector('#julia-editor-close').click();document.querySelector('[data-leave-choice=discard]').click();")
  elif phase==6: finish('Julia pattern editor smoke OK',0)
 def poll():
  global ticks
  ticks+=1
- if ticks>300: finish('Julia pattern editor timeout at phase '+str(phase));return
+ if ticks>300: view.page().runJavaScript("JSON.stringify({hidden:juliaEditor.hidden,title:juliaEditor.elements.title.value,code:juliaEditor.elements.julia_code.value,status:juliaEditorStatus.textContent,tools:juliaToolsStatus.textContent,patterns:[...document.querySelector('#julia-source-raw-widget [data-raw-pattern]').options].map(item=>item.value)})",lambda value:finish('Julia pattern editor timeout at phase '+str(phase)+' '+str(value)));return
  checks={
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",

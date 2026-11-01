@@ -243,7 +243,7 @@ raise SystemExit(app.exec())
         self.assertIn('id="project-trash-view" hidden', HTML)
         self.assertIn('id="sidebar-project-trash"', HTML)
         self.assertIn('id="dashboard-trash"', HTML)
-        self.assertIn("if(!openProjectTrashView())return", JS)
+        self.assertIn("if(!await openProjectTrashView())return", JS)
         for path in ('/v1/projects/delete/preview', '/v1/projects/delete/confirm',
                      '/v1/projects/delete/restore/preview',
                      '/v1/projects/delete/restore/confirm',
@@ -366,7 +366,7 @@ raise SystemExit(app.exec())
         self.assertIn('renderSidebarPresentations', JS)
         self.assertIn("{label:'Upravit',run:()=>openPresentationEditor(doc.id)", JS)
         self.assertIn("{label:'Spustit',run:()=>usePresentationDocument(doc)", JS)
-        self.assertIn("loadPresentationEditor(null,false)", JS)
+        self.assertIn("await openOutputsOverview()", JS)
         self.assertIn("renderSidebarPresentations();if(!openEditor)return", JS)
         self.assertIn('id="presentation-editor-workspace"', HTML)
         self.assertIn('id="presentation-editor-save"', HTML)
@@ -807,7 +807,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
         submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]
         self.assertNotIn('selectMainTab', input_handler)
-        self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", submit_handler)
+        self.assertIn("await navigateMainTab(document.querySelector('#chat-tab'))", submit_handler)
+        self.assertIn("selectSidebarTab(document.querySelector('#chats-tab'))", submit_handler)
 
     def test_project_overview_and_prompt_widget_define_central_layout(self):
         overview = HTML.split('<div id="project-overview-panel"', 1)[1].split(
@@ -905,6 +906,17 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
                                           body=json.dumps(request).encode())
                 head_bytes, body = response.split(b'\r\n\r\n', 1)
                 self.assertIn(b' 200 ', head_bytes); saved = json.loads(body)
+                response = driver.request(server, path='/v1/outputs/definitions', body=json.dumps({
+                    'project_id': project, 'expected_head': saved['commit_id']}).encode())
+                output_head, output_body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b' 200 ', output_head)
+                self.assertEqual(json.loads(output_body), saved)
+                stale_outputs = driver.request(server, path='/v1/outputs/definitions', body=json.dumps({
+                    'project_id': project, 'expected_head': head}).encode())
+                self.assertIn(b' 409 ', stale_outputs.split(b'\r\n\r\n', 1)[0])
+                invalid_outputs = driver.request(server, path='/v1/outputs/definitions', body=json.dumps({
+                    'project_id': project}).encode())
+                self.assertIn(b' 400 ', invalid_outputs.split(b'\r\n\r\n', 1)[0])
                 response = driver.request(server, path='/v1/presentations/use', body=json.dumps({
                     'project_id': project, 'artifact_id': artifact,
                     'expected_head': saved['commit_id']}).encode())
@@ -992,7 +1004,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('#presenter-view{height:100%;min-height:0;display:flex;flex-direction:column', CSS)
         self.assertIn('.presenter-header{font-size:1.5em;min-height:52px', CSS)
         self.assertIn('class="presenter-header-main"', HTML)
-        self.assertIn('body.presenter-active>aside{display:none}', CSS)
+        self.assertNotIn('body.presenter-active>aside{display:none}', CSS)
         self.assertIn("document.body.classList.add('presenter-active')", JS)
         self.assertIn("document.body.classList.remove('presenter-active')", JS)
         self.assertIn('height:100%', CSS)
@@ -1166,16 +1178,16 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
                         projects.index('id="sidebar-register-project"'))
         self.assertLess(projects.index('id="sidebar-register-project"'),
                         projects.index('id="sidebar-project-list"'))
-        self.assertEqual(projects.count('class="project-action-icon"'), 3)
-        self.assertEqual(projects.count('class="project-action-label" role="tooltip"'), 3)
-        for label in ('Nový projekt', 'Importovat projekt', 'Koš projektů'):
+        self.assertEqual(projects.count('class="project-action-icon"'), 4)
+        self.assertEqual(projects.count('class="project-action-label" role="tooltip"'), 4)
+        for label in ('Nový projekt', 'Importovat projekt', 'Zavřít projekt', 'Koš projektů'):
             self.assertIn(f'aria-label="{label}"', projects)
             self.assertIn(f'role="tooltip">{label}</span>', projects)
         register = projects.split('id="sidebar-register-project"', 1)[1].split('</button>', 1)[0]
         self.assertIn('hidden', register)
         self.assertIn('>Projekt z umístění', register)
         self.assertIn("requestNativeAction('register-project-location')", JS)
-        self.assertIn('.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))', CSS)
+        self.assertIn('.sidebar-project-primary-actions{grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
         self.assertNotIn('body[data-runtime="desktop"] .sidebar-project-primary-actions', CSS)
         self.assertIn('.sidebar-project-primary-actions button:hover .project-action-label', CSS)
         self.assertIn('.sidebar-project-primary-actions button:focus-visible .project-action-label', CSS)
@@ -1248,7 +1260,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("renderChat(assigned);rememberThread(assigned)", JS)
         self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", JS)
         self.assertIn("const projectSidebarTabs=['todo-tab','plan-tab','artifacts-tab','tools-tab','presentations-tab']", JS)
-        self.assertIn("async function openSettings(settingsTabId='settings-backend-tab'){\n if(!canLeaveWorkspaceEditors())return;", JS)
+        self.assertIn("async function openSettings(settingsTabId='settings-backend-tab'){\n if(!await canLeaveWorkspaceEditors())return;", JS)
         self.assertIn("document.querySelector('#chat-new-thread').disabled=!writable", JS)
         self.assertIn("End:visible.length-1", JS)
         self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", JS)
@@ -1276,7 +1288,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/projects/open',{project_id:item.id})", JS)
         self.assertIn('recentProjectOrder=[projectId,...recentProjectOrder.filter', JS)
         self.assertIn('<div id="project-create-view" hidden>', HTML)
-        self.assertIn('id="project-create-back"', HTML)
+        self.assertNotIn('id="project-create-back"', HTML)
         self.assertIn("projectCreateView.hidden=false", JS)
         self.assertIn("projectCreateView.hidden=true", JS)
         self.assertIn('id="resource-monitor-open" type="button" aria-haspopup="dialog"', HTML)
@@ -1313,7 +1325,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/sources/import',sourceImportAttempt.request,120000)", JS)
         self.assertIn('id="history-view" hidden', HTML)
         self.assertNotIn('id="preview-history"', HTML)
-        self.assertIn('id="history-close"', HTML)
+        self.assertNotIn('id="history-close"', HTML)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", JS)
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", JS)
         self.assertIn("if(item.kind==='document'&&!activeProject?.readOnly)actions.push(", JS)

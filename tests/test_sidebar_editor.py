@@ -13,7 +13,9 @@ class SidebarEditorTests(unittest.TestCase):
         self.assertIn("querySelector('#new-document').addEventListener", JS)
         self.assertIn('function openMainTodoEditor()', JS)
         self.assertIn("todo ? 'Upravit seznam úkolů' : 'Vytvořit seznam úkolů'", JS)
-        self.assertIn("window.confirm('Zahodit rozepsané změny dokumentu?", JS)
+        self.assertIn("resolveEditorLeave('Dokument',saveArtifactEditor", JS)
+        for choice in ('cancel', 'save', 'discard'):
+            self.assertIn('data-leave-choice="' + choice + '"', HTML)
         self.assertIn("window.addEventListener('beforeunload'", JS)
         self.assertIn('artifactEditorAttempt={signature,operation_id:crypto.randomUUID()', JS)
         self.assertNotIn("location.hash='create-main-todo'", JS)

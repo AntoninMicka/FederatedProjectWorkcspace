@@ -337,7 +337,7 @@ class FederationSyncTests(unittest.TestCase):
         from spikes.desktop_ui import JS
         self.assertNotIn('Synchronizované historie', JS)
         self.assertIn("thread.forked_from_thread_id?' · fork'", JS)
-        self.assertIn("#chats-tab').addEventListener('click',()=>loadChat())", JS)
+        self.assertIn("if(tab.id==='chats-tab')await loadChat()", JS)
         self.assertIn("contentsynccompleted", JS)
         self.assertIn('function contentSyncSummary', ADMIN_JS)
         self.assertIn('chybí aktivní vazba účtů z přihlášení', ADMIN_JS)
