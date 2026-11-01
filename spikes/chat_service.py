@@ -1215,7 +1215,7 @@ class ChatService:
             expected_head=request['expected_head'])
         from spikes.document_patch import requires_patch, instruction as patch_instruction
         patch_edit = edit_target is not None and (plan.edit_format == 'patch' or requires_patch(edit_target['body']))
-        role_revision = 'task-output-file-edit-patch-v1' if patch_edit else plan.role_revision
+        role_revision = 'task-output-file-edit-patch-v2' if patch_edit else plan.role_revision
         authority = Authority('task-route:' + request['task_id'], user_id, node_id,
             role_revision, frozenset(request['selected_artifact_ids']))
         instruction = (patch_instruction(plan.target_artifact_id, request['expected_head'])

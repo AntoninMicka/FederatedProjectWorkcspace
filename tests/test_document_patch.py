@@ -41,6 +41,17 @@ class ExactPatchTests(unittest.TestCase):
             with self.subTest(edits=str(edits)[:80]),self.assertRaises(ValueError):AITaskOutcome.parse(good|{'edits':edits})
         with self.assertRaises(ValueError):AITaskOutcome.parse(good|{'path':'other.md'})
 
+    def test_patch_diagnostics_distinguish_noop_size_anchor_and_overlap(self):
+        from spikes.document_patch import PatchValidationError
+        cases=[('original',[{'before':'original','after':'original'}],'patch-no-change'),
+               ('x'*4097,[{'before':'x'*4097,'after':'new'}],'patch-anchor-too-large'),
+               ('original',[{'before':'absent','after':'new'}],'patch-anchor-mismatch'),
+               ('abcdef',[{'before':'abc','after':'x'},{'before':'bcd','after':'y'}],'patch-overlap')]
+        for original,edits,code in cases:
+            with self.subTest(code=code),self.assertRaises(PatchValidationError) as error:
+                apply_patch(original,edits)
+            self.assertEqual(code,error.exception.code)
+
     def test_large_threshold_counts_bytes_and_lines_at_exact_boundary(self):
         self.assertFalse(requires_patch('x'*(LARGE_BYTES-1)))
         self.assertTrue(requires_patch('x'*LARGE_BYTES))
@@ -178,3 +189,27 @@ service.task_confirm_file_edit(json.loads(sys.argv[3]),checkpoint=stop)
         restarted.task_confirm_file_edit(confirmation)
         self.assertEqual('1',self.git.run('rev-list','--count',before+'..HEAD').stdout.strip())
         self.assertEqual('',self.git.run('status','--porcelain').stdout)
+
+    def test_stream_explains_unchanged_patch_without_reporting_unknown_transport(self):
+        from spikes.desktop_ui import DesktopHandler
+        from spikes.local_api import running_api
+        from spikes.ollama_backend import OllamaRuns
+        from tests import test_local_api
+        service,request,_=self.patch_task();head=self.git.head();calls=[]
+        def stream(binding,raw,delta,status,*,control):
+            calls.append(json.loads(raw))
+            return dict(model=binding.model,response=json.dumps(dict(schema_version=1,kind='artifact-patch',title='Title',edits=[{'before':'Before\n','after':'Before\n'}])))
+        service.adapter_factory=lambda runs:OllamaAdapter(runs,stream_transport=stream)
+        with running_api('http',handler=DesktopHandler) as server:
+            server.chat_service=service;server.projects=service.projects
+            raw=test_local_api.LocalAPITests().request(server,path='/v1/tasks/route-stream',body=json.dumps(request).encode())
+        events=[json.loads(line) for line in raw.split(b'\r\n\r\n',1)[1].splitlines()]
+        error=next(event for event in events if event['type']=='error')
+        self.assertEqual('patch-no-change',error['diagnostic'])
+        self.assertEqual('invalid-proposal',error['outcome']);self.assertEqual(422,error['status'])
+        self.assertIn('text před a po je stejný',error['error'])
+        self.assertNotIn('Původní běh',error['error'])
+        self.assertEqual(1,len(calls));self.assertEqual(head,self.git.head())
+        self.assertEqual(4096,calls[0]['format']['properties']['edits']['items']['properties']['before']['maxLength'])
+        self.assertEqual('succeeded',OllamaRuns(self.chat_state).get(request['run_id'])['state'])
+        self.assertEqual([],service.task_outcomes(project_id=ENTITY,thread_id=request['thread_id']))

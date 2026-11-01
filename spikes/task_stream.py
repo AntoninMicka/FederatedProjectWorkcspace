@@ -131,6 +131,7 @@ def decide(service, request):
 def serve(handler, request):
     import json
     from spikes.ollama_backend import UnknownRun, OllamaResponseError
+    from spikes.document_patch import PatchValidationError
     require(isinstance(request, dict), 'Invalid streamed task request')
     key(handler.server.chat_service, request)
     handler.close_connection = True
@@ -150,6 +151,8 @@ def serve(handler, request):
                 on_delta=lambda delta: emit(dict(type='delta',delta=delta)),
                 on_status=lambda status: emit(dict(type='status',status=status)), control=control)
             emit(dict(type='result',result=result))
+        except PatchValidationError as exc:
+            emit(dict(type='error', status=422, error=str(exc), diagnostic=exc.code, outcome='invalid-proposal'))
         except (UnknownRun, OllamaResponseError, ValueError, OSError) as exc:
             control.stop(control.reason or 'stream-failed')
             try: emit(dict(type='error',status=409 if isinstance(exc, UnknownRun) or control.reason in {

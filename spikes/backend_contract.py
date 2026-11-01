@@ -177,6 +177,8 @@ ROLES = RoleRegistry((
                    'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-document-v1',
                    'generate-text', 'json'),
+    RoleDefinition(1, 'task-output', 'task-output-file-edit-patch-v2',
+                   'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-file-edit-patch-v1',
                    'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-file-edit-v1',

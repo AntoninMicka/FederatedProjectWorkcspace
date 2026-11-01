@@ -80,6 +80,11 @@ _DOCUMENT_PATCH_FORMAT = _closed_object({
         'before': {'type': 'string'}, 'after': {'type': 'string'},
     }, ['before', 'after'])},
 }, ['schema_version', 'kind', 'title', 'edits'])
+_DOCUMENT_PATCH_V2_FORMAT = dict(_DOCUMENT_PATCH_FORMAT, properties=dict(
+    _DOCUMENT_PATCH_FORMAT['properties'], edits=dict(
+        _DOCUMENT_PATCH_FORMAT['properties']['edits'], items=_closed_object({
+            'before': {'type': 'string', 'maxLength': 4096}, 'after': {'type': 'string'},
+        }, ['before', 'after']))))
 _TASK_ROUTER_FORMAT = {
     'type': 'object',
     'oneOf': [
@@ -621,6 +626,7 @@ class OllamaAdapter:
                     'task-output-document-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-file-edit-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-file-edit-patch-v1': _DOCUMENT_PATCH_FORMAT,
+                    'task-output-file-edit-patch-v2': _DOCUMENT_PATCH_V2_FORMAT,
                     'task-output-presentation-v1': _PRESENTATION_PROPOSAL_FORMAT,
                 }[role.revision]
             else:

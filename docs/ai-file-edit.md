@@ -94,8 +94,10 @@ Patch má uzavřený výstup `artifact-patch` s `schema_version:1`, `title` a
 `edits:[{"before":"původní úsek","after":"nový úsek"}]`. Název přebírá backend
 z cílového dokumentu. `ExplicitTaskPlan` přijímá volitelné `edit_format:patch|full`;
 bez této volby zachovává serializaci a digest dosavadního plánu. Skutečný patch
-připíná samostatná role `task-output-file-edit-patch-v1` v Context Manifestu;
-starší role pro celé tělo zůstává beze změny.
+připíná role `task-output-file-edit-patch-v2` v Context Manifestu; předchozí
+patch role v1 i role pro celé tělo zůstávají zachované pro původní běhy.
+Revize v2 výslovně zakazuje stejné bloky před/po a omezuje délku kotvy také
+v modelovém JSON schématu. Autoritativní limit 4096 UTF-8 bajtů dál ověřuje backend.
 
 Každý blok `before` musí v původním těle odpovídat přesně jednou, včetně
 Unicode, mezer a konců řádků. Všechny bloky míří do původního těla; neaplikují
@@ -118,6 +120,14 @@ Nevzniká nová crash boundary persistentního zápisu. Schválení stále trval
 připíná přesné výsledné tělo a operation ID před nativní operací. Obnova
 použije toto tělo; patch se po částečném zápisu ani po commitu podruhé
 neaplikuje. Neuložený patch nepřepisuje novější HEAD ani rozpracovaný editor.
+Návrh bez změny se odmítá jako `patch-no-change`, příliš velká kotva jako
+`patch-anchor-too-large`, nenalezená či nejednoznačná kotva jako
+`patch-anchor-mismatch` a překryv jako `patch-overlap`. Stream vrací konkrétní
+českou diagnostiku a `outcome:invalid-proposal` se stavem 422. Úspěšně přijatá
+providerová odpověď s neplatným návrhem není neznámý přenos: OllamaRuns zůstává
+`succeeded`, ale návrh v TaskOutcomes ani zápis dokumentu nevznikne. Další
+modelový požadavek se automaticky nevysílá.
+
 Regrese `tests.test_document_patch` zahrnuje hranice velikosti, vynucení i pro
 starší klienty, přesnost a nejednoznačnost kotev, překryv, limity, cyklus roadmapy,
 ruční úpravu výsledku, zrušení, stale HEAD, ztracenou odpověď a skutečný pád
