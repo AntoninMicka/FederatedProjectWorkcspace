@@ -147,6 +147,11 @@ samostatná; velikost kontextu modelu se touto změnou nezvětšuje.
 
 ## Blokový Markdown Patch Engine
 
+Opakované ladění lze provést mimo ostrý projekt přes
+[izolovanou self-ladicí smyčku](markdown-self-tuning.md). Porovnává první
+pokus, modelovou opravu patche a modelový návrh změny instrukcí/parametrů
+na pevné sadě případů. Produkční chování ani uložené běhy tím nemění.
+
 Výchozí **Upravit vstup → Změny bloků** používá
 [ADR 0064](adr/0064-markdown-block-patch-engine.md). V poli **Rozsah** lze
 zvolit celý dokument, kapitolu včetně podkapitol nebo místo vložení pod

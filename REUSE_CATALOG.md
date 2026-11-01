@@ -961,6 +961,16 @@ Nepřidává další výběr cíle, journal, provider ani opravování výstupu 
 autorizace a sémantická validace zůstávají v původním aplikátoru. Role v1
 zachovává původní schéma pro dřívější běhy.
 
+Izolované self-ladění **reuse/adaptuje** ProjectCreation/Artifacts pro
+syntetické fixtures, ContextBuilder, OllamaAdapter/OllamaRuns, registrované
+role, RunDeadline a původní validaci bloků i celého grafu. Přenosné části
+dočasných ručních smoke skriptů byly nahrazeny omezenou opakovatelnou kampaní.
+Model navrhuje pouze patch či omezený profil; deterministická kritéria,
+autorizační rozsah, source kód a produkční nastavení nemění. Bez přenosu
+cizího kódu, dalšího providera, writeru či modelového soudce. Reuse katalog
+nepřinesl důvod nahrazovat existující execution/recovery mechanismy.
+[Kontrakt a příkaz](docs/markdown-self-tuning.md).
+
 Oprava velkého finálního Ollama rámce **adaptuje** stávající bounded NDJSON
 reader a normalizaci výsledku. Běžný limit rámce se nemění; výjimka pro
 ověřené finální context tokeny sdílí dosavadní celkový limit přenosu a tokeny
