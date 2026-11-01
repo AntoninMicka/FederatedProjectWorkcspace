@@ -226,7 +226,7 @@ class WebTests(unittest.TestCase):
         view = self.server.projects.open(pid)
         head = Artifacts(self.root/'node.json').save(dict(project_id=pid,
             artifact_id=main_todo_id(pid), base_head=view['commit_id'], title='Roadmap',
-            body='- [ ] [TASK-A] A\n- [ ] [TASK-B] B\n  - depends_on: TASK-A\n', new=True), str(uuid4()))['commit_id']
+            body='- [ ] [TASK-A] A\n- [ ] [TASK-B] B\n  - depends_on: TASK-A\n- [ ] [TASK-X] X\n', new=True), str(uuid4()))['commit_id']
         def queue(action, extra=None, headers=None):
             return self.request(path='/v1/task-queue', body=json.dumps(dict(
                 project_id=pid, action=action, **(extra or {}))), headers=headers)
@@ -247,10 +247,17 @@ class WebTests(unittest.TestCase):
         code, data, _ = queue('status', headers=headers); self.assertEqual(200, code, data)
         self.assertEqual([], json.loads(data)['task_ids'])
         self.assertEqual(403, queue('add', extra, headers)[0])
+        self.assertEqual(403, queue('move', dict(extra, target_index=0), headers)[0])
         state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
             'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {pid: 'editor'}})
         self.assertEqual(200, queue('add', extra, headers)[0])
-        self.assertEqual(422, queue('remove', dict(extra, revision=1, preview_sha256='bad'), headers)[0])
+        self.assertEqual(200, queue('add', dict(extra, task_id='TASK-X', revision=1), headers)[0])
+        code, data, _ = queue('move', dict(extra, task_id='TASK-X', revision=2, target_index=0), headers)
+        self.assertEqual(200, code, data)
+        self.assertEqual(['TASK-X', 'TASK-A'], json.loads(data)['task_ids'])
+        self.assertEqual(['TASK-A'], json.loads(queue('status')[1])['task_ids'])
+        self.assertEqual(422, queue('move', dict(extra, task_id='TASK-X', revision=2, target_index=1), headers)[0])
+        self.assertEqual(422, queue('remove', dict(extra, revision=3, preview_sha256='bad'), headers)[0])
         self.assertEqual(head, self.server.projects.repository(pid).head())
 
     def test_roadmap_graph_projection_and_revision_pinned_svg_export(self):

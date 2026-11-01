@@ -90,6 +90,8 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #task-queue-panel .task-queue-list{max-height:none;overflow:visible;margin:0;padding-left:22px}
 #task-queue-panel .task-queue-list li{flex-wrap:wrap}
 #task-queue-panel .task-queue-list li button:first-child{flex:1;min-width:0}
+#task-queue-panel .task-queue-order-controls{display:flex;flex:none;gap:4px}
+#task-queue-panel .task-queue-order-controls button{flex:none;min-width:36px;min-height:36px;padding:6px 10px;margin:0}
 #plan-panel>.workspace-page-header{padding:12px 16px 10px;gap:6px}
 #plan-panel>.workspace-page-header .workspace-page-title{font-size:22px!important}
 #plan-panel .roadmap-controls{padding:0;gap:8px}

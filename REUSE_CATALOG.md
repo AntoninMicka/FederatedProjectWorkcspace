@@ -906,6 +906,13 @@ plán nebo index. Vlastní malá služba doplňuje kontrolu revize a kaskádové
 nová databáze či broker by duplikovaly existující hranice. Recovery a omezení:
 [fronta úkolů](docs/task-queue.md).
 
+PLAN-QUEUE-03 **adaptuje** stejný `TaskQueue.execute`, `assess` a atomický
+JSON writer se zámkem fronty i projektu; přidává revizně kontrolovaný přesun
+jediného ID a ovladače ve stávající stránce fronty. Reuse `IdeBridge` idle
+refresh zachovává staré balíčky a lidské receipts. Nový writer, databáze,
+journal ani samostatný frontend by duplikovaly existující hranice. Recovery
+a akceptaci doplňuje [fronta úkolů](docs/task-queue.md).
+
 PLAN-QUEUE-02 **reuse/adaptuje** `TaskQueue`, `IdeBridge`, jeho scoped
 messages/receipts/review, `Workspace.transact`, metadata a task graph,
 content-addressed export a nativní sidebar. Nový modul izoluje immutable packet,

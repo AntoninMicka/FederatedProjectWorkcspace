@@ -4192,17 +4192,36 @@ function renderTaskQueue(){
  document.querySelector('#task-queue-publish').disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView?.valid||Boolean(activeProject?.readOnly);
  if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu; pokud se změnila roadmapa, znovu otevřete projekt.';return;}
  status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
- for(const item of taskQueueView.items){const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button');open.type=remove.type='button';open.textContent=`${item.id} · ${item.title}${item.user_confirmed?' · Přijato uživatelem':item.agent_confirmed?' · Agent hlásí splnění':''}`;open.addEventListener('click',async()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);});remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,remove);list.append(row);}
+ for(const [index,item] of taskQueueView.items.entries()){
+  const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button'),moves=document.createElement('span');
+  open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.user_confirmed?' · Přijato uživatelem':item.agent_confirmed?' · Agent hlásí splnění':''}`;
+  open.addEventListener('click',async()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);});
+  moves.className='task-queue-order-controls';
+  for(const [direction,offset,symbol,label] of [['up',-1,'↑','Posunout nahoru'],['down',1,'↓','Posunout dolů']]){
+   const button=document.createElement('button');button.type='button';button.className='task-queue-move-'+direction;button.textContent=symbol;button.ariaLabel=`${label}: ${item.id}`;button.title=button.ariaLabel+(item['move_'+direction+'_reason']?' — '+item['move_'+direction+'_reason']:'');
+   button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||!taskQueueView.valid||item['can_move_'+direction]!==true;
+   button.addEventListener('click',async()=>{
+    const projectAtClick=activeProject;await changeTaskQueue('move',item.id,index+offset);
+    if(activeProject!==projectAtClick||document.querySelector('#task-queue-panel').hidden)return;
+    if(!queueIsCurrent()){document.querySelector('#task-queue-refresh').focus();return;}
+    const currentRow=[...list.children].find(row=>row.firstElementChild?.value===item.id),next=currentRow?.querySelector('.task-queue-move-'+direction);
+    (next&&!next.disabled?next:currentRow?.firstElementChild)?.focus();
+   });
+   moves.append(button);
+  }
+  remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,moves,remove);list.append(row);
+ }
 }
 async function loadTaskQueue(){
  if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;
  try{const result=await projectRequest('/v1/task-queue',{project_id:project.id,action:'status'});if(generation!==taskQueueGeneration||activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();}
  catch(error){if(generation===taskQueueGeneration)document.querySelector('#task-queue-status').textContent=error.message;}
 }
-async function changeTaskQueue(action,taskId){
+async function changeTaskQueue(action,taskId,targetIndex){
  if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
  const project=activeProject,view=taskQueueView;taskQueueBusy=true;renderTaskQueue();
  try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
+ if(action==='move')request.target_index=targetIndex;
  if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
  const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
