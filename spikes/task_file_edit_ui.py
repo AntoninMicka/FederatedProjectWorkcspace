@@ -28,9 +28,12 @@ function renderTaskFileEditTargets(){
  for(const item of items)select.append(new Option(item.title,item.id));
  select.value=items.some(item=>item.id===previous)?previous:items.some(item=>item.id===selectedArtifact)?selectedArtifact:'';
  control.hidden=document.querySelector('#chat-mode').value!=='orchestration'||document.querySelector('#task-output-kind').value!=='file-edit';
+ document.querySelector('#task-edit-format-control').hidden=control.hidden;
+ document.querySelector('#task-edit-format').disabled=!activeProject||Boolean(activeProject.readOnly);
  select.disabled=!activeProject||Boolean(activeProject.readOnly);
 }
 document.querySelector('#task-output-kind').addEventListener('change',()=>{pendingChatRequest=null;refreshChatModeControls();});
+document.querySelector('#task-edit-format').addEventListener('change',()=>{pendingChatRequest=null;});
 document.querySelector('#task-edit-target').addEventListener('change',()=>{pendingChatRequest=null;updatePromptInputSummary();});
 
 function resetTaskFileEditEditor(){
@@ -43,7 +46,7 @@ async function openTaskFileEditEditor(projection){
  const project=activeProject;
  try{
   const proposed=projection.file_edit_approval?.body??projection.outcome.content;
-  const preview=await projectRequest('/v1/tasks/file-edit/preview',{project_id:project.id,task_id:projection.task_id,body:proposed});
+  const preview=await projectRequest('/v1/tasks/file-edit/preview',{project_id:project.id,task_id:projection.task_id,...(proposed===undefined?{}:{body:proposed})});
   if(activeProject!==project)return;
   artifactEditorItem={id:preview.confirmation.artifact_id,title:preview.title,kind:'document'};
   showWorkspacePage(artifactEditorView);selectSidebarTab(document.querySelector('#artifacts-tab'));hideArtifactDeletion();

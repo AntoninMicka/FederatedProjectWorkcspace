@@ -936,3 +936,12 @@ UI. `task_stream` přidává pouze volatile owner-scoped deadline a rozhodnutí
 uživatele; hard limit přeruší původní socket. Nevzniká druhý provider client,
 durable writer, scheduler ani retry mechanismus. Viz
 [časové limity](docs/ai-file-edit.md#průběžný-přenos-a-časové-limity).
+
+AI-FILE-EDIT-01 patch doplnění **reuse/adaptuje** uzavřený AI outcome, role a
+Context Manifest, sdílený editor, task graph validátor, TaskOutcomes a původní
+native writer. Malá pure funkce sestavuje přesné neprotínající se změnové bloky
+proti původnímu tělu; nejde o nový merge algoritmus ani obecný patch executor.
+Fuzzy aplikace, shell/`git apply` nad modelovým vstupem a další závislost byly
+odmítnuty: model nesmí vybírat cesty ani přepisovat nejbližší podobný úsek.
+Schválení nadále váže výsledné tělo, takže recovery nepřidává druhou aplikaci
+patche. [Kontrakt](docs/ai-file-edit.md#patch-namísto-celého-dokumentu).

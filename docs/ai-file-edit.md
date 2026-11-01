@@ -33,8 +33,9 @@ a `local-ollama`. Stávající výstupy a jejich serializace zůstávají kompat
 Před voláním modelu se ověří typ cíle, current HEAD, oprávnění, replika a privacy.
 Soukromí cílového dokumentu nesmí být nižší než soukromí kontextu.
 
-`POST /v1/tasks/file-edit/preview` přijímá pouze `project_id`, `task_id`, `body`.
-Vrací původní dokument, výsledné tělo, diff a přesné potvrzení s digestem.
+`POST /v1/tasks/file-edit/preview` přijímá `project_id`, `task_id` a volitelné
+`body`. Bez těla sestaví původní návrh (včetně patche); s tělem ověří aktuální
+obsah společného editoru. Vrací původní dokument, výsledné tělo, diff a přesné potvrzení s digestem.
 `POST /v1/tasks/file-edit/confirm` přijímá pouze `project_id`, `task_id`,
 `artifact_id`, `base_head`, `body`, `approval_digest`, `approved:true` a stabilní
 `operation_id`. Kontroluje vlastnictví úlohy, členství a oprávnění zapisovat,
@@ -79,6 +80,50 @@ Markdown, zadat změnu přes Ollama, zkontrolovat a případně upravit diff,
 potvrdit uložení a ověřit původní ID, obsah a historii. Ověřit i zahození
 návrhu a odchod s neuloženými změnami. Izolované testy tuto akceptaci ani
 ověření skutečného modelu nenahrazují.
+
+## Patch namísto celého dokumentu
+
+Nové UI ve výstupu **Upravit vstup** nabízí volbu **Patch** (výchozí) nebo
+**Celý obsah (jen malé soubory)**. Od **32 KiB UTF-8 těla nebo 500 řádků**
+backend vždy vyžaduje patch, i pokud klient požádal o celé tělo či použil
+starší kontrakt bez volby. Limit se vyhodnocuje ze skutečného dokumentu
+připnutého ke vstupní Git revizi před dispatch. Starší uložené návrhy lze dál
+otevřít a dokončit; jejich obsah se zpětně nepřepisuje na nový formát.
+
+Patch má uzavřený výstup `artifact-patch` s `schema_version:1`, `title` a
+`edits:[{"before":"původní úsek","after":"nový úsek"}]`. Název přebírá backend
+z cílového dokumentu. `ExplicitTaskPlan` přijímá volitelné `edit_format:patch|full`;
+bez této volby zachovává serializaci a digest dosavadního plánu. Skutečný patch
+připíná samostatná role `task-output-file-edit-patch-v1` v Context Manifestu;
+starší role pro celé tělo zůstává beze změny.
+
+Každý blok `before` musí v původním těle odpovídat přesně jednou, včetně
+Unicode, mezer a konců řádků. Všechny bloky míří do původního těla; neaplikují
+se postupně do výstupu předchozí změny. Pořadí návrhu nerozhoduje, překryv,
+chybějící nebo opakovaný úsek se odmítne. Vložení používá existující jednoznačnou
+kotvu, která se ponechá v `after`; smazání má prázdné `after`. Prázdné `before`
+je dovoleno jen pro jedinou změnu prázdného dokumentu. Limit je 64 změn,
+4096 UTF-8 bajtů na kotvu a 64 KiB celého seznamu změn. Patch nepřijímá cesty,
+příkazy ani dodatečná pole. Není zde fuzzy aplikace, shell ani obecné `git apply`.
+
+Po dokončení modelu se patch sestaví proti neměnnému původnímu tělu v paměti.
+Ověří se výsledný Markdown i celý task graph; neplatný patch či celý dokument
+místo vynuceného patche se odmítne bez dalšího modelového požadavku. Návrh se
+uchová jako krátký patch v existujícím TaskOutcomes. Průběžný přenos a karta
+návrhu ukazují čitelné bloky před/po. Společný editor otevře až sestavené tělo,
+které lze dále ručně upravit. Následný diff, souhlas, kontrola HEAD, provenance
+a nativní zápis zůstávají společné s úpravou celého těla.
+
+Nevzniká nová crash boundary persistentního zápisu. Schválení stále trvale
+připíná přesné výsledné tělo a operation ID před nativní operací. Obnova
+použije toto tělo; patch se po částečném zápisu ani po commitu podruhé
+neaplikuje. Neuložený patch nepřepisuje novější HEAD ani rozpracovaný editor.
+Regrese `tests.test_document_patch` zahrnuje hranice velikosti, vynucení i pro
+starší klienty, přesnost a nejednoznačnost kotev, překryv, limity, cyklus roadmapy,
+ruční úpravu výsledku, zrušení, stale HEAD, ztracenou odpověď a skutečný pád
+procesu během nativního zápisu. Qt smoke ověřuje stream patche a otevření či
+zahození sestaveného návrhu. Ruční akceptace se skutečným modelem zůstává
+samostatná; velikost kontextu modelu se touto změnou nezvětšuje.
 
 ## Průběžný přenos a časové limity
 

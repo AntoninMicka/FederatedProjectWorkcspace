@@ -49,6 +49,17 @@ def target_document(service, project_id, target, base_head, *, privacy=None, cur
     return doc, files, entities
 
 
+def validate_patch_proposal(service, request, outcome):
+    from spikes.document_patch import apply_patch
+    doc, files, _ = target_document(service, request['project_id'], request['task_plan']['target_artifact_id'],
+                                   request['expected_head'], current=False)
+    replacement = body(apply_patch(doc['body'], outcome['edits']))
+    files[doc['path']] = replacement.encode()
+    graph = project_task_graph(files, validate_snapshot(files), request['project_id'], request['expected_head'])
+    require(graph['status'] in {'ready', 'missing'}, 'Patch leaves an invalid roadmap: ' + graph.get('error', ''))
+    return replacement
+
+
 def _row(service, task_id):
     uuid(task_id)
     node_id, user_id = service._identity()
@@ -83,15 +94,23 @@ def _preview(service, row, plan, replacement, *, current=True):
 
 
 def preview(service, request):
-    require(isinstance(request, dict) and set(request) == {'project_id', 'task_id', 'body'}, 'Invalid file edit preview')
+    require(isinstance(request, dict) and set(request) in ({'project_id', 'task_id'}, {'project_id', 'task_id', 'body'}), 'Invalid file edit preview')
     _, row, plan = _row(service, request['task_id'])
     require(request['project_id'] == row['project_id'], 'File edit belongs to another project')
-    require(row['state'] == 'prepared' and row['outcome']['kind'] == 'artifact-draft', 'File edit is closed')
+    require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch'}, 'File edit is closed')
     pending = row['result']
+    if 'body' in request:
+        replacement = request['body']
+    elif pending is not None:
+        replacement = pending['request']['body']
+    elif row['outcome']['kind'] == 'artifact-patch':
+        replacement = validate_patch_proposal(service, row['request'], row['outcome'])
+    else:
+        replacement = row['outcome']['content']
     if pending is not None:
-        require(pending.get('kind') == 'file-edit-approval' and pending['request']['body'] == request['body'],
+        require(pending.get('kind') == 'file-edit-approval' and pending['request']['body'] == replacement,
                 'Resume the original approved file edit before editing again')
-    result = _preview(service, row, plan, request['body'], current=pending is None)
+    result = _preview(service, row, plan, replacement, current=pending is None)
     result['pending_confirmation'] = pending is not None
     if pending is not None:
         result['confirmation'] = pending['request']
@@ -114,7 +133,7 @@ def confirm(service, request, *, checkpoint=lambda stage: None):
                 and result.get('body_sha256') == hashlib.sha256(request['body'].encode()).hexdigest(),
                 'File edit was completed differently')
         return row['projection']
-    require(row['state'] == 'prepared' and row['outcome']['kind'] == 'artifact-draft', 'File edit is closed')
+    require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch'}, 'File edit is closed')
     expected = _preview(service, row, plan, request['body'], current=row['result'] is None)
     require(all(request[k] == v for k, v in expected['confirmation'].items()),
             'Confirmation does not match the exact file edit preview')

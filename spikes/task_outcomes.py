@@ -156,7 +156,7 @@ class TaskOutcomes:
 
     def bind_file_edit_approval(self, task_id, node_id, user_id, request):
         current = self.get(task_id, node_id, user_id)
-        require(current['state'] == 'prepared' and current['outcome']['kind'] == 'artifact-draft'
+        require(current['state'] == 'prepared' and current['outcome']['kind'] in {'artifact-draft', 'artifact-patch'}
                 and current['request'].get('task_plan', {}).get('output_kind') == 'file-edit'
                 and isinstance(request, dict) and request.get('task_id') == task_id
                 and request.get('approved') is True, 'Invalid file edit approval')

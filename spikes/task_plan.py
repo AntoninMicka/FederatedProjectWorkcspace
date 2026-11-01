@@ -27,6 +27,7 @@ class ExplicitTaskPlan:
     search_query: str | None
     public_source_run_ids: tuple
     target_artifact_id: str | None = None
+    edit_format: str | None = None
 
     @classmethod
     def parse(cls, value):
@@ -35,6 +36,8 @@ class ExplicitTaskPlan:
         editing = isinstance(value, dict) and value.get('output_kind') == 'file-edit'
         if editing:
             fields.add('target_artifact_id')
+        if editing and 'edit_format' in value:
+            fields.add('edit_format')
         require(isinstance(value, dict) and set(value) == fields
                 and value['schema_version'] == 1,
                 'Unknown or missing explicit task plan field')
@@ -68,12 +71,15 @@ class ExplicitTaskPlan:
             require('artifacts' not in sources,
                     'External task execution cannot include project artifacts')
         target = value.get('target_artifact_id')
+        edit_format = value.get('edit_format')
+        if editing and 'edit_format' in value:
+            require(isinstance(edit_format, str) and edit_format in {'patch', 'full'}, 'Unsupported file edit format')
         if editing:
             uuid(target)
             require('artifacts' in sources and value['execution'] == 'local-ollama',
                     'File editing requires an explicit project input and Ollama execution')
         return cls(tuple(sources), value['output_kind'], value['execution'], query,
-                   tuple(runs), target)
+                   tuple(runs), target, edit_format)
 
     @property
     def acquiring_public_web(self):
@@ -95,6 +101,8 @@ class ExplicitTaskPlan:
                 'public_source_run_ids': list(self.public_source_run_ids)}
         if self.output_kind == 'file-edit':
             result['target_artifact_id'] = self.target_artifact_id
+            if self.edit_format is not None:
+                result['edit_format'] = self.edit_format
         return result
 
     def digest(self):

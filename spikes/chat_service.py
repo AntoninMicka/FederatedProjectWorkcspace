@@ -1213,10 +1213,13 @@ class ChatService:
         public_inputs = self._task_public_source_inputs(plan, node_id=node_id,
             user_id=user_id, project_id=request['project_id'],
             expected_head=request['expected_head'])
-        role_revision = plan.role_revision
+        from spikes.document_patch import requires_patch, instruction as patch_instruction
+        patch_edit = edit_target is not None and (plan.edit_format == 'patch' or requires_patch(edit_target['body']))
+        role_revision = 'task-output-file-edit-patch-v1' if patch_edit else plan.role_revision
         authority = Authority('task-route:' + request['task_id'], user_id, node_id,
             role_revision, frozenset(request['selected_artifact_ids']))
-        instruction = task_output_instruction(plan)
+        instruction = (patch_instruction(plan.target_artifact_id, request['expected_head'])
+                       if patch_edit else task_output_instruction(plan))
         conversation = (ConversationSelection(request['thread_id'], thread['revision'],
             tuple(item['message_id'] for item in prior), tuple(item['role'] for item in prior))
             if prior else None)
@@ -1274,7 +1277,7 @@ class ChatService:
                 value = json.loads(response['response'])
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValidationError('Model returned invalid explicit task JSON') from exc
-            expected = ('presentation-proposal' if plan.output_kind == 'presentation'
+            expected = ('artifact-patch' if patch_edit else 'presentation-proposal' if plan.output_kind == 'presentation'
                         else plan.expected_outcome_kind)
             require(isinstance(value, dict) and value.get('kind') == expected,
                     'Model returned a different output kind than the explicit task plan')
@@ -1289,7 +1292,10 @@ class ChatService:
                     selected_artifact_ids=request['selected_artifact_ids'],
                     node_path=self.node_path)
             outcome = AITaskOutcome.parse(value)
-            require(outcome.kind == plan.expected_outcome_kind,
+            if patch_edit:
+                from spikes.task_file_edit import validate_patch_proposal
+                validate_patch_proposal(self, request, outcome.serialize())
+            require(outcome.kind == ('artifact-patch' if patch_edit else plan.expected_outcome_kind),
                     'Validated output differs from the explicit task plan')
         routed = {'task_id': request['task_id'], 'outcome': outcome.serialize(),
                 'privacy': strongest, 'project_commit': prepared.manifest['project_commit'],

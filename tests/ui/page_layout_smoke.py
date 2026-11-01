@@ -199,6 +199,9 @@ window.layoutTest={done:false};
  taskStreamDraft='';appendTaskStreamDelta('{"schema_version":1,"content":"První\\n');
  appendTaskStreamDelta('druhý řádek"}');check(chatStream.textContent==='První\ndruhý řádek'&&!chatStream.textContent.includes('schema_version'),'Task stream exposes protocol JSON instead of content');chatStream.hidden=true;
  projectRequest=read;
+
+ taskStreamDraft='';appendTaskStreamDelta('{"kind":"artifact-patch","edits":[{"before":"Old","after":"Nov');
+ appendTaskStreamDelta('ý"}]}');check(chatStream.textContent.includes('− Old')&&chatStream.textContent.includes('+ Nový')&&!chatStream.textContent.includes('artifact-patch'),'Patch stream lost readable before/after blocks');chatStream.hidden=true;
  const filePlan={schema_version:1,intent:'revise',execution:'local-ollama',output_kind:'file-edit',source_kinds:['artifacts'],target_artifact_id:'doc'};
  const editProjection={task_id:'edit-task',project_id:activeProject.id,thread_id:'edit-thread',created_at:new Date().toISOString(),state:'prepared',privacy:'project',prompt:{content:'Revise selected document',privacy:'project'},task_plan:filePlan,outcome:{kind:'artifact-draft',title:'Shared document',content:'# Proposed\n'}};
  let editPreviews=0,editWrites=0,editRequests=[];
@@ -226,6 +229,19 @@ window.layoutTest={done:false};
  const previewsBeforeRetry=editPreviews;
  check(await saveArtifactEditor(false)&&editWrites===1&&editRequests.length===2&&editPreviews===previewsBeforeRetry,'Retry generated another preview/write');
  check(!artifactEditorDirty&&artifactEditorTaskEdit===null&&!artifactEditorForm.elements.title.disabled&&!artifactEditorForm.elements.body.readOnly&&activeProject.head==='edit-head','Saved file edit did not reset shared editor');
+
+ projectRequest=async(path,request)=>{
+  if(path==='/v1/tasks/file-edit/preview'){
+   check(!Object.hasOwn(request,'body'),'Patch editor sent patch syntax as document body');
+   return {title:'Shared document',document:{id:'doc',title:'Shared document',body,metadata:{file:'content.md'}},body:'# Patched document\n',diff:'-Old\n+New',pending_confirmation:false,confirmation:{project_id:activeProject.id,task_id:'patch-task',artifact_id:'doc',base_head:activeProject.head,body:'# Patched document\n',approval_digest:'b'.repeat(64),approved:true}};
+  }
+  return await read(path,request);
+ };
+ const patchProjection={...editProjection,task_id:'patch-task',task_plan:{...filePlan,edit_format:'patch'},outcome:{kind:'artifact-patch',title:'Shared document',edits:[{before:'Old',after:'New'}]}};
+ renderTaskOutcome(patchProjection);check(chatMessages.textContent.includes('Návrh změn dokumentu')&&chatMessages.textContent.includes('− Old'),'Patch has no review action or readable changes');
+ await openTaskFileEditEditor(patchProjection);check(artifactEditorForm.elements.body.value==='# Patched document\n'&&artifactEditorDirty,'Patch did not open the assembled Markdown in shared editor');
+ const leavePatch=canLeaveArtifactEditor();await tick();document.querySelector('[data-leave-choice=discard]').click();await leavePatch;
+ check(!artifactEditorTaskEdit&&!artifactEditorDirty&&editWrites===1,'Discarded patch wrote content or kept editor binding');
  projectRequest=read;
  const offerPicker=selectedRunOffer;selectedRunOffer=()=>null;showWorkspacePage(settingsView);draft.value='Show chat result';
  promptForm.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();selectedRunOffer=offerPicker;

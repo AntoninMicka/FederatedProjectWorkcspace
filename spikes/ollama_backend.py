@@ -72,6 +72,14 @@ _DOCUMENT_DRAFT_FORMAT = _closed_object({
     'title': _TEXT,
     'content': _TEXT,
 }, ['schema_version', 'kind', 'artifact_kind', 'title', 'content'])
+_DOCUMENT_PATCH_FORMAT = _closed_object({
+    'schema_version': {'type': 'integer', 'enum': [1]},
+    'kind': {'type': 'string', 'enum': ['artifact-patch']},
+    'title': _TEXT,
+    'edits': {'type': 'array', 'minItems': 1, 'maxItems': 64, 'items': _closed_object({
+        'before': {'type': 'string'}, 'after': {'type': 'string'},
+    }, ['before', 'after'])},
+}, ['schema_version', 'kind', 'title', 'edits'])
 _TASK_ROUTER_FORMAT = {
     'type': 'object',
     'oneOf': [
@@ -612,6 +620,7 @@ class OllamaAdapter:
                     'task-output-conversation-v1': _DIRECT_ANSWER_FORMAT,
                     'task-output-document-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-file-edit-v1': _DOCUMENT_DRAFT_FORMAT,
+                    'task-output-file-edit-patch-v1': _DOCUMENT_PATCH_FORMAT,
                     'task-output-presentation-v1': _PRESENTATION_PROPOSAL_FORMAT,
                 }[role.revision]
             else:
