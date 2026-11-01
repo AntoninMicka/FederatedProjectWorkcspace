@@ -213,3 +213,22 @@ service.task_confirm_file_edit(json.loads(sys.argv[3]),checkpoint=stop)
         self.assertEqual(4096,calls[0]['format']['properties']['edits']['items']['properties']['before']['maxLength'])
         self.assertEqual('succeeded',OllamaRuns(self.chat_state).get(request['run_id'])['state'])
         self.assertEqual([],service.task_outcomes(project_id=ENTITY,thread_id=request['thread_id']))
+
+    def test_patch_prompt_ends_with_user_edit_contract_not_summary(self):
+        service,request,calls=self.patch_task();service.task_route(request)
+        prompt=calls[0]['prompt']
+        self.assertIn('User edit request ID '+request['message_id'],prompt)
+        self.assertIn('Required patch result:',prompt)
+        self.assertIn(request['content'],prompt)
+        self.assertNotIn('Summary:',prompt)
+        self.assertTrue(prompt.endswith('Every after must differ from before.'))
+        self.assertEqual(1,len(calls))
+
+    def test_old_patch_prompt_revision_remains_stable(self):
+        import base64
+        payload=dict(task=dict(role_id='task-output',role_revision='task-output-file-edit-patch-v2',
+            instruction='Return a patch.',focus_input_id='focus'),inputs=[dict(input_id='focus',
+                content_b64=base64.b64encode(b'Edit this document.').decode())])
+        prompt=OllamaAdapter._prompt(json.dumps(payload).encode())
+        self.assertTrue(prompt.endswith('Summary:\n'))
+        self.assertIn('Focus ID focus:',prompt)

@@ -94,10 +94,17 @@ Patch má uzavřený výstup `artifact-patch` s `schema_version:1`, `title` a
 `edits:[{"before":"původní úsek","after":"nový úsek"}]`. Název přebírá backend
 z cílového dokumentu. `ExplicitTaskPlan` přijímá volitelné `edit_format:patch|full`;
 bez této volby zachovává serializaci a digest dosavadního plánu. Skutečný patch
-připíná role `task-output-file-edit-patch-v2` v Context Manifestu; předchozí
-patch role v1 i role pro celé tělo zůstávají zachované pro původní běhy.
+připíná role `task-output-file-edit-patch-v3` v Context Manifestu; předchozí
+patch role v1/v2 i role pro celé tělo zůstávají zachované pro původní běhy.
 Revize v2 výslovně zakazuje stejné bloky před/po a omezuje délku kotvy také
-v modelovém JSON schématu. Autoritativní limit 4096 UTF-8 bajtů dál ověřuje backend.
+v modelovém JSON schématu. Autoritativní limit 4096 UTF-8 bajtů dál ověřuje backend. Revize v3
+navíc označuje vlastní zadání jako `User edit request` a prompt zakončuje
+požadavkem na minimální změny pro toto zadání. Odstraňuje původní zakončení
+`Summary:`, které mohlo podporovat shrnování či kopírování zdrojového textu.
+Zdrojové dokumenty jsou podklady, nikoli další instrukce. Tyto změny promptu
+nejsou důkazem, že model věcně splní zadání; kontrola návrhu uživatelem zůstává
+nezbytná. Volba **Dokument** vytváří nový celý dokument; pro změny existujícího
+souboru slouží **Upravit vstup → Patch**.
 
 Každý blok `before` musí v původním těle odpovídat přesně jednou, včetně
 Unicode, mezer a konců řádků. Všechny bloky míří do původního těla; neaplikují
