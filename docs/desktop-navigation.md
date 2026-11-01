@@ -5,6 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # Navigace a neuložené změny
 
+Rozložení záhlaví, prohlížeče/editoru a chatové části popisuje
+[společný rámec stránky](page-layout.md).
+
 Hlavní navigace přepíná levý panel i hlavní stránku. Z nastavení, historie,
 importu, tvorby či opravy projektu a koše lze odejít výběrem jiné sekce.
 Spodní odkazy Zpět se nepoužívají. Stejné přechody fungují kliknutím

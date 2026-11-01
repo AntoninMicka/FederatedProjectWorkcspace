@@ -1366,7 +1366,7 @@ def result(value):
 def poll():
  global ticks
  ticks+=1
- if ticks>350: finish('shared editor smoke timeout at phase '+str(phase));return
+ if ticks>350: view.page().runJavaScript("JSON.stringify({editor:artifactEditorStatus.textContent,raw:document.querySelector('#artifact-raw-widget [data-raw-status]').textContent,bodyLength:artifactEditorForm.elements.body.value.length})",lambda value:finish('shared editor smoke timeout at phase '+str(phase)+' '+str(value)));return
  checks={
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
