@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR] [--version VERZE]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|julia-setup ARCHIV.tar.gz|test [TEST...]|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
+Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR] [--version VERZE]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
 
   deploy-omnia USER@HOST [--container NAME] [--retries COUNT] [--dry-run] [--web-lan SUBNET] [--web-hostname DNS_NAME] [--regen-tls] [--reset]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
@@ -67,10 +67,6 @@ fi
 if [[ "$command_name" == check || "$command_name" == config || "$command_name" == module-check ]]; then
     if [[ "$command_name" == config ]]; then project_path=$3; else project_path=$2; fi
     if [[ "$project_path" != /* ]]; then project_path="$PWD/$project_path"; fi
-fi
-if [[ "$command_name" == julia-setup ]]; then
-    julia_archive=$2
-    if [[ "$julia_archive" != /* ]]; then julia_archive="$PWD/$julia_archive"; fi
 fi
 if [[ "$command_name" == package-deb || "$command_name" == package-desktop ]]; then
     shift

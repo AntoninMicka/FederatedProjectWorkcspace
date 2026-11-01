@@ -51,65 +51,10 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 `F-M4-PRESENTER-01` PR #68 jako merge commit `aa7fa26` a
 `F-M4-PRESENTER-PDF-01` PR #69 jako merge commit `8338a6c`; jejich evidence je
 ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
-Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
-evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
-merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
-doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
-commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl doručen PR #78 jako commit
-`192e79c`; jeho evidence je ve WORK_LOG. `F-M5-PERSONAL-SYNC-01` bylo doručeno
-PR #79 jako merge commit `61df652`; jeho implementační evidence je ve WORK_LOG
-a cílová fyzická akceptace byla následně naplněna novým obousměrným řezem.
-`F-M5-PROJECT-CATALOG-01` bylo doručeno PR #80 jako merge commit `ae1b25e`;
-evidence je ve WORK_LOG.
-`F-M5-SHARING-SYNC-01` bylo doručeno PR #81 jako merge commit `c884cd2`; jeho
-evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` bylo doručeno PR #82
-jako merge commit `637bf90`; evidence je ve WORK_LOG. `M1-07-C` bylo
-23. 10. 2026 fyzicky naplnilo akceptaci a Gate M1 a bylo doručeno PR #83 jako
-commit `d15cec3`; evidence je ve WORK_LOG.
-`F-M4-AUTONOMY-01` byla 23. 10. 2026 akceptována na úrovni PoC validated a
-doručena PR #85 jako merge commit `7dce1c4`; evidence je ve WORK_LOG.
-`F-M3-SEARCH-03` byla 24. 10. 2026 akceptována na úrovni PoC validated a
-doručena PR #86 jako merge commit `6d12902`; evidence je ve WORK_LOG.
-`F-M3-PUBLIC-SOURCE-READER-02` byla 24. 10. 2026 akceptována na úrovni PoC
-validated a doručena PR #87 jako merge commit `023eae1`; evidence je ve
-WORK_LOG. `F-M4-DYNAMIC-WORKFLOW-01` byla 24. 10. 2026 akceptována na úrovni
-PoC validated a doručena PR #88 jako merge commit `5d74144`; evidence je ve
-WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` byla po opravě fyzické regrese
-25. 10. 2026 akceptována na úrovni PoC validated a její evidence je ve
-WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
-
-`OPS-NODE-MONITOR-01` byla 25. 10. 2026 akceptována na úrovni PoC validated a
-doručena PR #90 jako merge commit `57009e2`; evidence je ve
-[WORK_LOG](WORK_LOG.md). `OPS-WEB-CONCURRENCY-01` byla 25. 10. 2026
-akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
-`25d065f`; evidence je ve WORK_LOG. `F-M3-MODEL-CATALOG-01` byla doručena PR
-#92 jako merge commit `2da2628`; evidence je ve WORK_LOG.
-`F-M3-ATLASCLOUD-01` byla 25. 10. 2026 akceptována na úrovni PoC validated a
-doručena PR #93 jako merge commit `0405d14`; evidence je ve WORK_LOG.
-Nezávislá infrastrukturní dávka `TEST-EXECUTION-01` byla doručena PR #94 jako
-commit `b19d46a`; všechny čtyři CI shardy i souhrnný check uspěly a evidence je ve
-WORK_LOG. Implementovaný rozsah `UX-BACKEND-MODEL-01` byl doručen PR #96 a
-#97 a jeho skutečný stav je ve WORK_LOG. Navazující serverový pinning,
-revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
-26. 10. 2026 úrovně PoC validated a byly doručeny PR #98. Vizualizace
-`DEV-ROADMAP-GRAPH-01` byla doručena PR #99 a obecný plánovací graf PR #100.
-`F-M5-CHAT-HISTORY-01` byla po fyzické akceptaci doručena PR #101 jako merge
-commit `8c08be2`; evidence je ve WORK_LOG. Navazující
-`F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
-evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
-`b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako merge
-commit `507c232`; evidence je ve WORK_LOG. `COMP-03` byla po kontrole
-sidebarového rozvržení uživatelem uzavřena; její evidence je ve WORK_LOG a
-feature byla doručena PR #111 jako merge commit `6eb8614`.
-Editorové a plánovací závislosti byly doručeny PR #107–#110; jejich evidence
-je ve WORK_LOG; následná `COMP-03` byla doručena PR #111.
-
-`DEV-IDE-TODO-01` byla doručena PR #112 (`83d882d`); DEV-01 je aktivní
-v TODO. Nejbližší navazující požadavky jsou `DEV-02`, `DEV-03` a `DEV-04`.
-DEV-03 je před aktivací nutné zúžit na samostatný UI/review řez podle
-uživatelského doplnění níže.
-Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
-zůstává samostatnou feature dávkou a vlastním PR.
+Aktivní navazující dávka V-11 / release 0.1.0 je v TODO; Check & Repair zůstává
+první plánovanou produktovou dávkou po vydání.
+Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
+práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -124,14 +69,89 @@ zůstává samostatnou feature dávkou a vlastním PR.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
-  akceptaci UX-FACELIFT-01 výslovně odložil obecné další kolo faceliftu.
-  Konkrétní řez backendů/modelů byl dokončen dávkami `UX-BACKEND-MODEL-01/02`;
-  tato položka drží pouze zbytek dosud nevybraných stránek. Před jejich
-  aktivací znovu vygenerovat A4 inventuru ze skutečného
-  sdíleného UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit
-  již přijaté vzory bez konkrétní potřeby. Akceptace zachová
-  mobilní/klávesnicovou paritu, RBAC, privacy, potvrzení a recovery a bude
-  zahrnovat fyzický průchod právě upravených stránek.
+  akceptaci UX-FACELIFT-01 výslovně odložil další kolo faceliftu na budoucí
+  dobu. Před aktivací znovu vygenerovat A4 inventuru ze skutečného sdíleného
+  UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit již
+  přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
+  paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
+  právě upravených stránek.
+
+- [ ] [planned] **UX-PROJECT-REPAIR-01 — kontrola a oprava poškozených
+  projektů (cílová úroveň: designed).** Navrhnout obecný nástroj Check &
+  Repair pro registrované projekty nedostupné z jiného důvodu než chybějící
+  umístění. Nejprve bezpečně rozliší a vysvětlí problém repozitáře,
+  metadat, oprávnění, cesty, lokálního stavu nebo indexu; diagnostiku oddělí
+  od oprav a každou persistentní změnu provede až po náhledu a potvrzení s
+  popsanou recovery hranicí.
+
+- [ ] [planned] **UX-WEB-NAV-01 — webové kategorie Výstupy a Federace
+  (cílová úroveň: designed).** Budoucí serverový web dostane kategorii
+  Výstupy a kategorii Federace až s nově navrženou plnohodnotnou správou podle
+  `UX-FEDERATION-02`. Dnešní přechodové desktopové nástroje ani nativní
+  ovladače výstupů se na serverový web nepřenášejí.
+
+- [ ] [planned] **UX-FEDERATION-02 — plnohodnotná správa federace projektů
+  (cílová úroveň: designed).** Nahradit přechodovou stránku jednosměrného
+  veřejného přenosu správou federovaných projektů. Při přípravě dávky
+  konsolidovat otevřené kontrakty M1-AH-14/M1-AH-15 a roadmapu M5; vymezit
+  discovery, vztahy uzlů a projektů, směry operací, oprávnění, konflikty,
+  stav/recovery a audit jako samostatnou reviewovatelnou feature.
+
+- [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
+  (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
+  opt-in kontrakt pro všechny orchestrační akce, nikoli zvláštní automatiku
+  každého modulu. Registry akcí musí fail-closed deklarovat typ účinku,
+  potřebná oprávnění, privacy, vstupy, budget, zda je akce automatizovatelná a
+  jaké potvrzení vyžaduje; neznámá akce se nikdy automaticky nespustí. Uživatel
+  může pro konkrétní workflow zvolit ruční režim nebo bounded automatiku s
+  viditelnou frontou, mezivýsledky, globální pauzou a časem na zásah. LLM pouze
+  navrhuje plán a další akci; oprávnění a dispatch řídí deterministický
+  orchestrátor.
+
+  **Nepřekročitelná výjimka:** vytvoření každého uživatelsky adresovatelného
+  lokálního souboru, dokumentu nebo artefaktu vyžaduje explicitní schválení
+  uživatele nad přesným cílem, typem, obsahem/hash, privacy a provenance.
+  Countdown, předchozí souhlas s automatikou ani modelové označení `final`
+  toto potvrzení nenahrazují a schválení jednoho výstupu se nesmí zobecnit na
+  další. Interní journal/fronta nejsou obsahovým výstupem, ale zůstávají
+  node-local, bounded a recovery-safe. Existující přísnější pravidla pro
+  změnu, publikaci, odeslání nebo smazání se touto schopností neuvolňují.
+
+  Akceptace zahrne kombinovaný workflow s read-only analýzou, externím
+  dotazem, rolovým handoffem a návrhem artefaktu; povolené kroky mohou projít
+  automaticky, ale před vytvořením každého lokálního výstupu se fronta vždy
+  zastaví. Ověřit pause/resume, editaci plánu, změnu oprávnění či privacy,
+  vyčerpaný budget, neznámý typ akce, odpojení UI, restart v každém stavu,
+  souběžná workflow a `unknown` účinek bez automatického retry.
+
+- [ ] [planned] **F-M3-SEARCH-03 — Volitelný automatický dispatch s časem na
+  zásah (cílová úroveň: designed → PoC validated).** Nad iterativním workflow
+  `F-M3-SEARCH-02` a podle obecného kontraktu `F-M4-AUTONOMY-01` nabídnout pro
+  konkrétní hledání volbu ručního potvrzování každého dotazu nebo automatického
+  režimu. Jde o první vertikální použití obecné řízené autonomie. Automaticky
+  navržený dotaz se zobrazí s účelem, privacy, cílem, číslem kola a zbývajícím
+  budgetem a odešle se až po viditelném uživatelsky zvoleném odpočtu **3–5
+  sekund**. Během něj musí jít automatiku pozastavit a dotaz
+  zkontrolovat/upravit, ihned odeslat nebo zrušit; pauza platí i pro další
+  připravené dotazy. Ztráta viditelnosti UI, odpojení klienta nebo restart
+  odpočet fail-closed pozastaví a vyžádá nové vědomé spuštění. Durable fronta
+  odliší `queued`, `countdown`, `paused`, `dispatching` a terminální stavy; po
+  skutečném odeslání už dotaz nelze vzít zpět a neurčitý výsledek se bez nového
+  rozhodnutí neopakuje. Režim ani odpočet nesmějí obejít RBAC, privacy, binding,
+  limity nebo audit přesných odeslaných bajtů.
+
+- [ ] [planned] **F-M2-CHAT-LANGUAGE-01 — Explicitní jazyk odpovědi
+  (cílová úroveň: designed → PoC validated).** Požadavek uživatele po
+  fyzické akceptaci streamu: Gemma občas odpoví slovensky namísto česky.
+  Definovat provider-neutral jazykovou policy, její precedence mezi uzlem,
+  projektem, vláknem a jednotlivým během a explicitní BCP 47 identifikátor v
+  UI, Context Manifestu/provider requestu a run provenance. První akceptace
+  ověří výslovně zvolenou češtinu na reálné Gemmě, navázání vlákna,
+  změnu jazyka pro další běh a restart. Modelové nedodržení se nesmí tiše
+  překládat ani vydávat za deterministicky garantovaný jazyk; UI má ukázat
+  požadovaný jazyk a případnou odchylku.
+
+- [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.

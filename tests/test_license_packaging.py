@@ -27,12 +27,7 @@ def fixture(root):
         'VERSION', 'CHANGELOG.md', 'run.sh', 'requirements.txt', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md',
         'docs/ollama-lan.md', 'docs/searxng-search-acceptance.md',
         'docs/public-source-reader-acceptance.md', 'docs/public-sources-research.md',
-        'docs/release-0.1.0.md', 'docs/roadmap-visualization.md', 'docs/task-planning.md',
-        'docs/project-chat-sync.md', 'docs/julia-runner.md', 'docs/ide-file-bridge.md',
-        'extensions/workspace-bridge/package.json', 'extensions/workspace-bridge/extension.js',
-        'extensions/workspace-bridge/bridge.js', 'extensions/workspace-bridge/README.md',
-        'extensions/workspace-bridge/LICENSE', 'tests/ide_bridge.test.js', 'tests/ide_bridge_host.cjs',
-        'docs/roadmap-graph.json',
+        'docs/release-0.1.0.md',
         'spikes/__init__.py', 'spikes/artifact_preview.py',
         'spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md',
         'AGENTS.md', 'ARCHITECTURE.md', 'DATA_MODEL.md', 'FEDERATION.md',
@@ -50,7 +45,7 @@ def fixture(root):
     (root / 'VERSION').write_text('0.1.0\n', encoding='ascii')
     (root / 'CHANGELOG.md').write_text('# Changelog\n\n## 0.1.0\n', encoding='utf-8')
     for name in ('package_deb.py', 'package_desktop.py', 'license_files.py', 'release_version.py',
-                 'deploy_omnia.py', 'install_web.py', 'julia_runtime_binding.py'):
+                 'deploy_omnia.py', 'install_web.py'):
         path = root / 'scripts' / name
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SOURCE_ROOT / 'scripts' / name, path)
