@@ -20,6 +20,14 @@ není. Přepínání sekcí, obnovení katalogu, koš, import ani kontrola jiné
 projektu otevřený projekt nezavírají. **Plán** se vrací na hlavní graf,
 **Nástroje** na přehled bez detailu modelu a **Výstupy** na přehled definic.
 
+V panelu **Plán** otevírá **Fronta úloh** samostatnou stránku. Náhled roadmapy
+frontu neobsahuje; její obnova, opětovné ověření a předání do IDE jsou v záhlaví
+stránky fronty. Zavřít vrací na hlavní roadmapu a kliknutí na položku fronty
+otevře její detail v roadmapě. Skutečně existující podgrafy zůstávají dostupné
+v rozbalovacích **Výřezech roadmapy** u grafu; prázdná nabídka se nezobrazuje.
+Fronta používá původní API, revizní kontroly, potvrzení odebrání a read-only
+omezení. Přesun stránky nevytváří další frontu ani zápisovou cestu.
+
 Akce **Zavřít projekt** je v projektovém panelu mezi Importem a Košem.
 Bez otevřeného projektu je vypnutá. Zavření používá stejnou ochranu
 neuložených změn jako ostatní navigace. Výběr jiného projektu dosavadní

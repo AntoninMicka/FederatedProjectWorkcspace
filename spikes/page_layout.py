@@ -83,6 +83,13 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #sidebar-page-tools>summary{font-size:12px;color:#c8d4df;padding:8px 0}
 #sidebar-page-tools #main-tabs{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:8px 0;border:0;overflow:visible}
 #sidebar-page-tools #main-tabs button{min-width:0;white-space:normal;text-align:left;padding:9px;font-size:12px}
+#sidebar-plan #open-task-queue{flex:none;width:100%;margin-top:14px;padding:9px 7px;text-align:left;color:#dce8f1;background:transparent}
+#sidebar-plan #open-task-queue:hover,#sidebar-plan #open-task-queue[aria-current=true]{background:#274154}
+#plan-subgraphs #sidebar-plan-list{flex:none;max-height:none;overflow:visible}
+#plan-subgraphs #sidebar-plan-list button{color:#213746;background:#f3f7f8}
+#task-queue-panel .task-queue-list{max-height:none;overflow:visible;margin:0;padding-left:22px}
+#task-queue-panel .task-queue-list li{flex-wrap:wrap}
+#task-queue-panel .task-queue-list li button:first-child{flex:1;min-width:0}
 #preview-status:empty,#artifact-overview-status:empty{display:none}
 .workspace-page .layout-label{display:none}
 .workspace-page-body .workspace-page{min-height:320px;height:auto}
@@ -203,6 +210,8 @@ function syncPageLayout(){
  else if(root===artifactEditorView)root=artifactEditorForm;
  const modeSwitch=document.querySelector('.task-plan-mode');if(modeSwitch&&modeSwitch.hidden!==taskPlanEditor.hidden)modeSwitch.hidden=taskPlanEditor.hidden;
  const layout=workspacePageLayouts.get(root);
+ document.querySelector('#open-task-queue').setAttribute('aria-current',String(root?.id==='task-queue-panel'));
+ if(root?.id==='task-queue-panel'||root?.id==='plan-panel')updateTaskPlanTreeSelection(root.id==='task-queue-panel');
  if(!layout){setPageChatMode('hidden');return;}
  if(!layout.titleNode.textContent.trim())layout.titleNode.textContent=layout.title;
  let chat=root.dataset.chatDefault||'hidden';
@@ -245,7 +254,7 @@ function initializeWorkspacePageLayout(){
  // Keep the existing controller/tab IDs, but put tools navigation in the sidebar.
  get('#main-tabs').setAttribute('aria-orientation','vertical');
  const tools=document.createElement('details'),summary=document.createElement('summary');tools.id='sidebar-page-tools';summary.textContent='Další nástroje';tools.append(summary,get('#main-tabs'));get('#sidebar-tools').append(tools);
- const primaryTabs=new Set(['project-overview-tab','preview-tab','chat-tab','tools-main-tab','outputs-overview-tab','plan-main-tab','presentation-tab']);
+ const primaryTabs=new Set(['project-overview-tab','preview-tab','chat-tab','tools-main-tab','outputs-overview-tab','plan-main-tab','task-queue-tab','presentation-tab']);
  for(const tab of mainTabs)if(primaryTabs.has(tab.id))tab.hidden=true;
  get('#settings-tabs').hidden=true;
  const prompt=get('#prompt-widget');document.querySelector('main').append(prompt);
@@ -275,13 +284,13 @@ function initializeWorkspacePageLayout(){
  get('#julia-model-detail-close').textContent='Zavřít';
  const modelEdit=document.createElement('button');modelEdit.type='button';modelEdit.textContent='Editovat';modelEdit.id='julia-model-detail-edit';modelEdit.addEventListener('click',()=>openJuliaEditor(false,juliaModelDetail.dataset.definitionPath));workspacePageLayouts.get(juliaModelDetail).row.append(modelEdit);
 const toolsList=document.createElement('ul');toolsList.id='tools-overview-list';toolsList.className='workspace-file-list';get('#tools-panel').prepend(toolsList);
- const panelSections={'project-overview-panel':'projects-tab','plan-panel':'plan-tab','preview-panel':'artifacts-tab','chat-panel':'chats-tab','tools-panel':'tools-tab','outputs-overview-panel':'presentations-tab','presentation-panel':'presentations-tab'};
+ const panelSections={'project-overview-panel':'projects-tab','plan-panel':'plan-tab','task-queue-panel':'plan-tab','preview-panel':'artifacts-tab','chat-panel':'chats-tab','tools-panel':'tools-tab','outputs-overview-panel':'presentations-tab','presentation-panel':'presentations-tab'};
  const roots=new Set(['project-overview-panel','plan-panel','chat-panel','tools-panel','outputs-overview-panel']);
  for(const panel of mainTabs.map(tab=>document.getElementById(tab.getAttribute('aria-controls'))).filter(panel=>panel?.parentElement===get('#main-panel-content'))){
   if(workspacePageLayouts.has(panel))continue;
   const tab=mainTabs.find(tab=>tab.getAttribute('aria-controls')===panel.id),heading=panel.querySelector('h1,h2');
-  const actions=panel.id==='presentation-panel'?take(panel,['.presentation-editor-head>.form-actions','#presentation-editor-save','#presentation-editor-print','#presentation-editor-use','#presentation-editor-presenter']):panel.id==='project-overview-panel'?take(panel,['#project-overview-edit-todo','#project-conflicts-open']):panel.id==='plan-panel'?take(panel,['#task-queue-publish','#task-queue-refresh','#task-queue-revalidate']):[];
-  const layout=mountWorkspacePage(panel,{title:tab?.textContent||'Stránka',heading,actions,section:panelSections[panel.id]||'tools-tab',close:!roots.has(panel.id),onClose:panel.id==='presentation-panel'?closePresentationEditorPage:null,closeLabel:panel.id==='presentation-panel'?'Zavřít editor':'Zavřít',kind:panel.id==='presentation-panel'?'editor':roots.has(panel.id)?'list':'page',chat:tab?.dataset.promptDefault==='visible'?'full':'hidden'});
+  const actions=panel.id==='presentation-panel'?take(panel,['.presentation-editor-head>.form-actions','#presentation-editor-save','#presentation-editor-print','#presentation-editor-use','#presentation-editor-presenter']):panel.id==='project-overview-panel'?take(panel,['#project-overview-edit-todo','#project-conflicts-open']):panel.id==='task-queue-panel'?take(panel,['#task-queue-publish','#task-queue-refresh','#task-queue-revalidate']):[];
+  const layout=mountWorkspacePage(panel,{title:tab?.textContent||'Stránka',heading,actions,section:panelSections[panel.id]||'tools-tab',close:!roots.has(panel.id),onClose:panel.id==='presentation-panel'?closePresentationEditorPage:null,closeLabel:panel.id==='presentation-panel'?'Zavřít editor':'Zavřít',kind:panel.id==='presentation-panel'?'editor':roots.has(panel.id)||panel.id==='task-queue-panel'?'list':'page',chat:tab?.dataset.promptDefault==='visible'?'full':'hidden'});
 
  }
  for(const root of [...document.querySelectorAll('main>div')]){

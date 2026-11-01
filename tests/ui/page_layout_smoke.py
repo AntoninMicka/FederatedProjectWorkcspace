@@ -33,8 +33,9 @@ window.layoutTest={done:false};
  const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV1kAAAAASUVORK5CYII=';
  const body='# Shared document\n\nThe original file content stays unchanged.\n';
  const records={doc:{id:'doc',kind:'document',title:'Shared document'},image:{id:'image',kind:'source',title:'Image'},pdf:{id:'pdf',kind:'source',title:'PDF'},deck:{id:'deck',kind:'document',title:'Slides'},json:{id:'json',kind:'document',title:'JSON'}};
- let writes=0;
+ let writes=0,queueItems=[{id:'TASK-1',title:'Queued task'}];
  projectRequest=async(path,request)=>{
+  if(path==='/v1/task-queue'){check(request.action==='status','Page navigation changed queue');return {project_id:activeProject.id,expected_head:activeProject.head,valid:true,issues:[],revision:1,following:[],task_ids:queueItems.map(item=>item.id),items:queueItems};}
   if(path==='/v1/artifacts/preview'){
    const record=records[request.artifact_id];check(record,'Unknown artifact');
    const format=(record.id==='doc'||record.id==='deck'||record.body!==undefined)?'markdown':record.id==='json'?'json':record.id==='pdf'?'pdf':'image';
@@ -49,6 +50,21 @@ window.layoutTest={done:false};
  };
  artifactRawWidget.configure=async()=>{};artifactRawWidget.validate=async()=>({valid:true});loadChat=async()=>{};loadBackendBinding=async()=>{};
  activeProject={id:'project',head:'head',title:'Demo project',mainTodoId:'todo'};syncSidebarProjectAvailability();document.querySelector('#project-title').textContent='Demo project';renderSidebarArtifacts(Object.values(records));
+ const queueNode={id:'TASK-1',title:'Queued task',type:'task',depth:0,checked:false,ready:true,depends_on:[],relations:{},checklist:[]};
+ const plan={status:'ready',nodes:[queueNode],subgraphs:[],ready:['TASK-1'],blocked:[],revision:'head',svg:''};
+ renderTaskPlanSidebar(plan);await tick();await openTaskQueue();await tick();
+ const queuePanel=document.querySelector('#task-queue-panel'),queueLayout=workspacePageLayouts.get(queuePanel);
+ check(!queuePanel.hidden&&queueLayout.header.contains(document.querySelector('#task-queue-publish'))&&queueLayout.header.contains(document.querySelector('#task-queue-refresh')),'Queue has no independent page with actions');
+ check(!document.querySelector('#plan-panel').contains(document.querySelector('#task-queue-list'))&&document.querySelector('#task-queue-list li'),'Queue remains in roadmap or has no items');
+ check(!document.querySelector('#sidebar-plan').textContent.includes('Podgrafy')&&document.querySelector('#plan-subgraphs').hidden,'Obsolete sidebar subgraphs remain');
+ document.querySelector('#task-queue-list li button').click();await tick();check(!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-detail').textContent.includes('Queued task'),'Queue item did not open roadmap detail');
+ await openTaskQueue();queueLayout.closeButton.click();await tick();check(!document.querySelector('#plan-panel').hidden,'Queue close did not return to roadmap');
+ activeProject.readOnly=true;await openTaskQueue();check(document.querySelector('#task-queue-publish').disabled&&document.querySelector('#task-queue-revalidate').disabled&&document.querySelector('#task-queue-list li button:last-child').disabled,'Read-only queue exposes write actions');activeProject.readOnly=false;
+ const queueTransport=projectRequest;projectRequest=async()=>{throw Error('Queue unavailable');};await openTaskQueue();check(!document.querySelector('#task-queue-list li')&&document.querySelector('#task-queue-status').textContent==='Queue unavailable','Queue failure displays stale items');projectRequest=queueTransport;
+ queueItems=[];await openTaskQueue();check(!document.querySelector('#task-queue-list li')&&document.querySelector('#task-queue-status').textContent.includes('0'),'Empty queue is not represented');
+ plan.subgraphs=[{id:'slice',title:'Legacy slice',task_ids:['TASK-1']}];renderTaskPlanSidebar(plan);await tick();check(!document.querySelector('#plan-subgraphs').hidden,'Existing subgraphs became inaccessible');
+ document.querySelector('#sidebar-plan-list button').click();await tick();check(taskPlanSelection?.id==='slice'&&!document.querySelector('#plan-panel').hidden,'Legacy subgraph no longer opens');
+ await navigateSidebarTab(document.querySelector('#projects-tab'));check(activeProject.id==='project','Queue navigation closed project');
  const transport=projectRequest,projectBeforeFailure=activeProject;
  projectRequest=async()=>{throw Error('Failed to fetch');};
  await navigateSidebarTab(document.querySelector('#presentations-tab'));
