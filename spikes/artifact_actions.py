@@ -25,6 +25,7 @@ class ArtifactActions:
                                       expected_head, expected_head)
         require(result['after'] is not None, 'Document is unavailable')
         from spikes.markdown_patch import scan
+        from spikes.document_patch import requires_patch
         try:
             raw = result['after']['body']
             blocks = scan(raw)
@@ -43,7 +44,8 @@ class ArtifactActions:
             outline, scope_error = [], str(exc)
         return dict(project_id=project_id, artifact_id=artifact_id,
                     commit_id=expected_head, document=result['after'],
-                    markdown_outline=outline, markdown_scope_error=scope_error)
+                    markdown_outline=outline, markdown_scope_error=scope_error,
+                    markdown_requires_scope_choice=requires_patch(result['after']['body']))
 
     def save(self, request, operation_id):
         # The read validates current network privacy before any web mutation.

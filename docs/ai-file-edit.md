@@ -154,6 +154,26 @@ milník roadmapy. Poslední varianta předává jen milník a jeho typový řád
 nikoli historické popisy ostatních úkolů. Při chybě načítání rozsahu se
 požadavek neodešle; nedochází k tichému rozšíření na celý dokument.
 
+Od 32 KiB UTF-8 těla nebo 500 řádků UI nejprve vyžaduje vědomou volbu
+rozsahu. Výchozí položka je „Vyberte kapitolu nebo místo vložení“ a nic
+neodešle. Pro přidání úkolu lze vybrat „Vložení pod milník“. Varianta
+„Celý dokument (velký kontext)“ zůstává explicitně dostupná pro globální
+úpravy; UI nevybírá kapitolu za uživatele a nezvyšuje limit generování.
+Malé dokumenty dál používají celý kontext jako výchozí. Velikost určuje
+server ze skutečného těla přes stávající pravidlo `requires_patch`, nikoli
+podle názvu či klientského odhadu. API bez `edit_block_ids` nadále znamená
+vědomý celodokumentový požadavek, nejde o novou autorizační hranici.
+
+Uživatelský běh `d80b5be1-0b4b-4668-8797-bf6513a18302` skončil podle
+providerové evidence na `done_reason:length`, 4096 výstupních tokenech
+a 131074 vstupních tokenech. Začal přepisovat celou kapitolu M5 a již první
+operace měla chybný očekávaný hash. Samotné zvýšení rozpočtu by takový návrh
+neopravilo. Výstup nebyl přijat ani dodatečně opraven. Nová výchozí volba
+brání nechtěnému odeslání velkého dokumentu; nezaručuje věcnou správnost
+dalšího návrhu. Po této úpravě prošlo 42 cílených testů a izolovaný
+Qt/WebEngine smoke volby malého, velkého, úzkého a explicitně celého rozsahu.
+Nový LLM běh ani nová plná testovací sada se nespouštěly.
+
 Požadavek má `edit_format:blocks` a volitelné `edit_block_ids`. ID vrací
 autorizované otevření dokumentu v `markdown_outline` se snapshotem
 `commit_id`. Vybraný nadpis zahrnuje všechny své potomky. Stejná ID nemají

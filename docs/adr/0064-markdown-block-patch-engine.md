@@ -65,6 +65,14 @@ dvojici bloků pro vložení pod milník. Výběr určuje aplikace, nikoli model
 Celodokumentový režim znamená jeden požadavek, nikoli automatické dělení do
 více průchodů. Autonomní agent vybírající sekce se nezavádí.
 
+UI u velkého dokumentu (stejná hranice 32 KiB / 500 řádků jako textové
+patche) nemá implicitně vybraný celý soubor. Vyžaduje výběr kapitoly,
+insertion scope pod milníkem nebo výslovnou volbu celého dokumentu.
+Důvodem je doložený běh se 131074 vstupními tokeny, který začal kopírovat
+celou kapitolu a vyčerpal výstupní limit. Jde o ochranu před nechtěně velkým
+kontextem, nikoli automatický výběr sekce, zákaz globálních úprav či novou
+autorizační/recovery hranici. Rozpočet modelu a jeho aplikátor zůstávají stejné.
+
 Manifest zachovává SHA-256, velikost a privacy skutečného projektového vstupu.
 Projekce doplňuje rozsah, hash těla a hash/velikost odeslané reprezentace.
 Dispatch ji znovu sestaví a ověří. Oprávnění a privacy se kontrolují před

@@ -28,11 +28,21 @@ async function loadTaskFileEditScope(){
   const result=await projectRequest('/v1/artifacts/editor/open',{project_id:activeProject.id,artifact_id:target,expected_head:activeProject.head});
   if(taskFileEditScopeLoading!==key||!activeProject||key!==activeProject.id+':'+activeProject.head+':'+selectedTaskFileEditTarget())return;
   if(result.markdown_scope_error)throw new Error(result.markdown_scope_error);
-  select.replaceChildren(new Option('Celý dokument',''));
+  select.replaceChildren();
+  if(result.markdown_requires_scope_choice)select.append(new Option('Vyberte kapitolu nebo místo vložení','__choose_scope__'));
+  select.append(new Option(result.markdown_requires_scope_choice?'Celý dokument (velký kontext)':'Celý dokument',''));
   for(const heading of result.markdown_outline??[])select.append(new Option('  '.repeat(heading.level-1)+heading.title+' ('+heading.block_id+')',JSON.stringify(heading.block_ids??[heading.block_id])));
   taskFileEditScopeKey=key;select.disabled=false;
  }catch(error){if(taskFileEditScopeLoading===key){select.replaceChildren(new Option('Rozsah nelze načíst',''));chatOperationStatus.textContent=error.message;}}
  finally{if(taskFileEditScopeLoading===key)taskFileEditScopeLoading=null;}
+}
+function selectedMarkdownEditScope(){
+ const target=selectedTaskFileEditTarget();
+ if(!activeProject||taskFileEditScopeKey!==activeProject.id+':'+activeProject.head+':'+target)
+  throw new Error('Vyčkejte na načtení rozsahu dokumentu nebo jej načtěte znovu.');
+ const scope=document.querySelector('#task-edit-scope').value;
+ if(scope==='__choose_scope__')throw new Error('U velkého dokumentu vyberte kapitolu nebo místo vložení pod milník. Celý dokument lze zvolit výslovně; odesílá velký kontext.');
+ return scope?JSON.parse(scope):null;
 }
 function selectedTaskFileEditTarget(){
  return document.querySelector('#chat-mode').value==='orchestration'&&document.querySelector('#task-output-kind').value==='file-edit'?document.querySelector('#task-edit-target').value:null;

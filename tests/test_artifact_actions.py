@@ -27,6 +27,7 @@ class ArtifactActionTests(unittest.TestCase):
     def test_open_save_retry_preview_and_confirm_delete(self):
         opened = self.actions.open(self.project, self.artifact, self.head)
         self.assertEqual(opened['document']['body'], '- [ ] One\n')
+        self.assertFalse(opened['markdown_requires_scope_choice'])
         operation = str(uuid4())
         request = dict(project_id=self.project, artifact_id=self.artifact, base_head=self.head,
             title='Renamed', body='- [x] One\n', new=False, filename='renamed.md',
@@ -43,6 +44,15 @@ class ArtifactActionTests(unittest.TestCase):
                          first['commit_id'], preview['preview_sha256'], delete_operation))
         self.assertEqual(Projects(self.node).open(self.project)['commit_id'], deleted['commit_id'])
         self.assertEqual(Projects(self.node).open(self.project)['artifacts'], [])
+
+    def test_large_document_requires_conscious_scope_choice_without_changing_content(self):
+        text = '# Large\n\n' + ('Preserve original text.\n' * 1500)
+        head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact,
+            base_head=self.head, title='Tasks', body=text, new=False), str(uuid4()))['commit_id']
+        opened = self.actions.open(self.project, self.artifact, head)
+        self.assertTrue(opened['markdown_requires_scope_choice'])
+        self.assertEqual(text, opened['document']['body'])
+        self.assertEqual(head, Projects(self.node).open(self.project)['commit_id'])
 
     def test_create_validates_current_project_and_reuses_receipt(self):
         artifact, operation = str(uuid4()), str(uuid4())

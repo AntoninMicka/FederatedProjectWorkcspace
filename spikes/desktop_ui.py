@@ -7059,10 +7059,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':'external-atlascloud',
    search_query:searchQuery,public_source_run_ids:publicRunIds}};
   if(editing){pendingChatRequest.task_plan.target_artifact_id=editTarget;pendingChatRequest.task_plan.edit_format=document.querySelector('#task-edit-format').value;
-   const scope=document.querySelector('#task-edit-scope').value;
    if(pendingChatRequest.task_plan.edit_format==='blocks'){
-    if(taskFileEditScopeKey!==activeProject.id+':'+activeProject.head+':'+editTarget){pendingChatRequest=null;chatOperationStatus.textContent='Vyčkejte na načtení rozsahu dokumentu nebo jej načtěte znovu.';return;}
-    if(scope)pendingChatRequest.task_plan.edit_block_ids=JSON.parse(scope);
+    try{const scope=selectedMarkdownEditScope();if(scope)pendingChatRequest.task_plan.edit_block_ids=scope;}
+    catch(error){pendingChatRequest=null;chatOperationStatus.textContent=error.message;return;}
    }
   }
  }

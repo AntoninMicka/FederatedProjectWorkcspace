@@ -252,6 +252,13 @@ window.layoutTest={done:false};
  projectRequest=async(path,request)=>{check(path==='/v1/artifacts/editor/open'&&request.expected_head===activeProject.head,'Scope uses an unpinned document');return {markdown_outline:[{block_id:'b00003',title:'Selected chapter',level:2}],markdown_scope_error:null};};
  renderTaskFileEditTargets();document.querySelector('#task-edit-target').value='doc';taskFileEditScopeKey=null;await loadTaskFileEditScope();
  check(document.querySelector('#task-edit-scope').options.length===2&&!document.querySelector('#task-edit-scope').disabled&&taskFileEditScopeKey===activeProject.id+':'+activeProject.head+':doc','Pinned chapter scope did not load');
+ check(selectedMarkdownEditScope()===null,'Small document cannot use its complete context');
+ taskFileEditScopeKey=null;projectRequest=async()=>({markdown_outline:[{block_id:'b00003',block_ids:['b00003','b00004'],title:'Vložení pod milník',level:1}],markdown_scope_error:null,markdown_requires_scope_choice:true});await loadTaskFileEditScope();
+ let missingScopeRejected=false;try{selectedMarkdownEditScope();}catch(error){missingScopeRejected=error.message.includes('velkého dokumentu');}
+ check(missingScopeRejected&&document.querySelector('#task-edit-scope').value==='__choose_scope__','Large document silently defaults to full context');
+ document.querySelector('#task-edit-scope').value='["b00003","b00004"]';
+ check(JSON.stringify(selectedMarkdownEditScope())==='["b00003","b00004"]','Narrow milestone insertion scope is not preserved');
+ document.querySelector('#task-edit-scope').value='';check(selectedMarkdownEditScope()===null,'Explicit full-document scope is unavailable');
  taskFileEditScopeKey=null;projectRequest=async()=>{throw Error('Scope unavailable');};await loadTaskFileEditScope();
  check(taskFileEditScopeKey===null&&document.querySelector('#task-edit-scope').disabled,'Scope failure silently falls back to the whole document');
  currentArtifacts=scopeArtifacts;document.querySelector('#task-output-kind').value=scopeOutput;document.querySelector('#chat-mode').value=scopeMode;projectRequest=read;renderTaskFileEditTargets();
