@@ -16,9 +16,23 @@ stiskněte **Přidat do fronty**. Fronta neobsahuje duplikáty ani dokončené p
 Filtr **Navazující** ukazuje nedokončené položky, které ještě mají nesplněné
 závislosti, ale všechny tyto přímé předpoklady už jsou ve frontě. Úkol bez
 nesplněných závislostí patří mezi Připravené. Přidává se na konec; předpoklady
-proto vždy předcházejí závislým položkám. Libovolné přetahování pořadí se
-v této dávce nezavádí. Filtr respektuje vybranou úroveň roadmapy jako ostatní
-pohledy; dávky vidíte na úrovni milníků, jejich tasky po otevření dávky.
+proto vždy předcházejí závislým položkám. Pořadí lze upravit tlačítky
+**Posunout nahoru / Posunout dolů** na stránce Fronta úloh. Filtr respektuje
+vybranou úroveň roadmapy jako ostatní pohledy; dávky vidíte na úrovni milníků,
+jejich tasky po otevření dávky.
+
+Přesun zachová všechny položky a mění pouze pořadí. Pokud B závisí na
+nedokončeném A a C na B, musí zůstat A před B před C; přesun A za B/C nebo
+B před A se odmítne. Nezávislé položky lze přesouvat a dokončený předpoklad
+nemusí být ve frontě. Neplatný či cyklický graf se odmítá už při načtení;
+přesun samotný nemění vztahy v roadmapě.
+
+Server vrací u položek `can_move_up`, `can_move_down` a vysvětlení
+`move_up_reason` / `move_down_reason`. UI zakáže nepřípustný sousední přesun
+a v popisku uvede konkrétní blokující ID. Po přesunu zůstane fokus na téže
+položce, takže lze pokračovat klávesnicí. Klient zobrazuje nové pořadí až
+po odpovědi serveru. Odmítnutý nebo neznámý výsledek vyžaduje obnovu stavu;
+mutace se automaticky neopakuje a odpověď starého projektu nepřepíše nový.
 
 **Odebrat** nejprve načte aktuální dopad a ukáže seznam všech odebíraných ID.
 Jedno potvrzení odstraní také všechny tranzitivně závislé položky z fronty.
@@ -57,6 +71,11 @@ Webový `Projects.open` navíc vynucuje stávající privacy kontrolu.
 povinná pole. `status` je pouze čtení obsahu fronty. `add` a `remove-preview`
 potřebují `task_id`, `revision`, `expected_head`. `remove` navíc potřebuje
 přesný `preview_sha256`. `revalidate` potřebuje `revision`, `expected_head`.
+`move` potřebuje `task_id`, `target_index`, `revision`, `expected_head`.
+`target_index` je výsledná pozice počítaná od nuly v rozsahu celé fronty;
+musí být celé číslo, nikoli boolean. Například přesun D v A/B/C/D na index 1
+dá A/D/B/C, pokud zůstane platné pořadí závislostí. Stejná cílová pozice nic
+nezapíše a nezvýší revizi; skutečný přesun zvýší revizi právě jednou.
 Owner se nikdy nepřebírá z requestu. Nepodporované akce a další pole se odmítají.
 Status může inicializovat prázdný lokální adresář a lock, nikoli projektový Git.
 
@@ -80,6 +99,12 @@ Crash boundaries:
    zopakování úspěšné mutace. Přidání/odebrání nemění Git, index ani journal;
    journal se používá pouze pro projektový zámek a kontrolu rozpracované operace.
 
+Tyto hranice platí také pro `move`; nepřidává se nový journal ani formát
+fronty. Přesun nemění projektový Git a index ani již zveřejněné IDE balíčky.
+Stávající idle refresh podle [ADR 0062](adr/0062-pinned-queue-handoff.md)
+vytvoří další neměnný balíček s novou revizí a pořadím, zachová původní
+balíčky a ověřená lidská přijetí. Čekající lidský review se nadále respektuje.
+
 PoC používá existující linuxový `fcntl`/fsync model. Trvanlivost při fyzické
 ztrátě napájení závisí na filesystemu a zařízení; fault-injection test není
 nezávislý důkaz chování konkrétního disku. Windows a produkční víceprocesový
@@ -95,6 +120,20 @@ chybu fsync, sdílenou JS logiku bez browseru a skutečné lokální HTTPS RBAC.
 Celou závěrečnou bránu spouští standardní unittest discovery podle AGENTS.
 Ruční akceptace v běžném desktop/web profilu je samostatný krok; headless
 JS nebo automatické API testy ji nenahrazují.
+
+Regrese přesunu navíc ověřuje stale revizi, libovolnou cílovou pozici,
+nezávislé položky, dokončené předpoklady, důvody odmítnutí a read-only režim.
+Procesové testy ukončí writer před i po replace a ověří původní/novou frontu;
+fsync chyba nebo souběžný externí Git commit musí vrátit unknown.
+`tests.test_ide_queue` ověřuje nové pořadí v novém balíčku a neměnnost historie.
+Opt-in Qt test `tests.test_page_layout` ověřuje skutečné ovladače, fokus,
+zotavení po odmítnutí a desktopovou i mobilní šířku.
+
+Pro ruční přijetí `PLAN-QUEUE-03` otevřete Frontu úloh s A, B závislým na A
+a nezávislým D. Přesuňte D nahoru/dolů pomocí klávesnice, ověřte zakázaný
+přesun B před A a vysvětlení v popisku, obnovte/restartujte a zkontrolujte
+pořadí. V read-only projektu musí být změny zakázané. Po synchronizaci IDE
+ověřte nové pořadí v novém balíčku a zachování starého balíčku i přijetí.
 
 Autoritativní zadání: Workspace projekt
 `c898b941-8eb0-4406-8dad-6e2b96c06d59`, `PLAN-QUEUE-01`; při schváleném předání

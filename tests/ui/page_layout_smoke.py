@@ -33,9 +33,16 @@ window.layoutTest={done:false};
  const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV1kAAAAASUVORK5CYII=';
  const body='# Shared document\n\nThe original file content stays unchanged.\n';
  const records={doc:{id:'doc',kind:'document',title:'Shared document'},image:{id:'image',kind:'source',title:'Image'},pdf:{id:'pdf',kind:'source',title:'PDF'},deck:{id:'deck',kind:'document',title:'Slides'},json:{id:'json',kind:'document',title:'JSON'}};
- let writes=0,queueItems=[{id:'TASK-1',title:'Queued task'}];
+ let writes=0,queueItems=[{id:'TASK-1',title:'Queued task'}],queueRevision=1,queueMoves=0,rejectQueueMove=false;
  projectRequest=async(path,request)=>{
-  if(path==='/v1/task-queue'){check(request.action==='status','Page navigation changed queue');return {project_id:activeProject.id,expected_head:activeProject.head,valid:true,issues:[],revision:1,following:[],task_ids:queueItems.map(item=>item.id),items:queueItems};}
+  if(path==='/v1/task-queue'){
+   if(request.action==='move'){
+    queueMoves++;check(request.revision===queueRevision&&request.expected_head===activeProject.head,'Move lacks current revision/head');
+    if(rejectQueueMove)throw Error('Queue changed during move');
+    const index=queueItems.findIndex(item=>item.id===request.task_id);check(index>=0,'Unknown moved item');const [item]=queueItems.splice(index,1);queueItems.splice(request.target_index,0,item);queueRevision++;
+   }else check(request.action==='status','Page navigation changed queue');
+   return {project_id:activeProject.id,expected_head:activeProject.head,valid:true,issues:[],revision:queueRevision,following:[],task_ids:queueItems.map(item=>item.id),items:queueItems.map((item,index)=>({...item,can_move_up:index>0,can_move_down:index+1<queueItems.length}))};
+  }
   if(path==='/v1/artifacts/preview'){
    const record=records[request.artifact_id];check(record,'Unknown artifact');
    const format=(record.id==='doc'||record.id==='deck'||record.body!==undefined)?'markdown':record.id==='json'?'json':record.id==='pdf'?'pdf':'image';
@@ -72,6 +79,14 @@ window.layoutTest={done:false};
  taskPlanProjection=plan;renderTaskPlan();
  await openTaskQueue();queueLayout.closeButton.click();await tick();check(!document.querySelector('#plan-panel').hidden,'Queue close did not return to roadmap');
  activeProject.readOnly=true;await openTaskQueue();check(document.querySelector('#task-queue-publish').disabled&&document.querySelector('#task-queue-revalidate').disabled&&document.querySelector('#task-queue-list li button:last-child').disabled,'Read-only queue exposes write actions');activeProject.readOnly=false;
+ queueItems=[{id:'TASK-1',title:'Queued task'},{id:'TASK-FREE',title:'Independent task'}];await openTaskQueue();
+ const queueList=document.querySelector('#task-queue-list'),moveDown=queueList.querySelector('.task-queue-move-down');
+ check(queueList.querySelector('.task-queue-move-up').disabled&&!moveDown.disabled&&moveDown.getAttribute('aria-label').includes('TASK-1'),'Move controls lack limits or accessible labels');
+ moveDown.focus();moveDown.click();await tick();
+ check(queueItems[1].id==='TASK-1'&&queueMoves===1&&taskQueueView.revision===queueRevision&&document.activeElement.value==='TASK-1','Move did not persist order/revision or lost keyboard focus');
+ activeProject.readOnly=true;renderTaskQueue();check([...queueList.querySelectorAll('.task-queue-order-controls button')].every(button=>button.disabled),'Read-only queue exposes move controls');activeProject.readOnly=false;renderTaskQueue();
+ rejectQueueMove=true;queueList.children[1].querySelector('.task-queue-move-up').click();await tick();await tick();
+ check(queueMoves===2&&taskQueueView===null&&document.querySelector('#task-queue-status').textContent.includes('Queue changed during move')&&document.activeElement.id==='task-queue-refresh','Rejected move retries, hides error or loses recovery focus');rejectQueueMove=false;await loadTaskQueue();
  const queueTransport=projectRequest;projectRequest=async()=>{throw Error('Queue unavailable');};await openTaskQueue();check(!document.querySelector('#task-queue-list li')&&document.querySelector('#task-queue-status').textContent==='Queue unavailable','Queue failure displays stale items');projectRequest=queueTransport;
  queueItems=[];await openTaskQueue();check(!document.querySelector('#task-queue-list li')&&document.querySelector('#task-queue-status').textContent.includes('0'),'Empty queue is not represented');
  plan.subgraphs=[{id:'slice',title:'Legacy slice',task_ids:['TASK-1']}];renderTaskPlanSidebar(plan);await tick();check(!document.querySelector('#plan-subgraphs').hidden,'Existing subgraphs became inaccessible');

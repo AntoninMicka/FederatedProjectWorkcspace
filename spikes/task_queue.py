@@ -34,13 +34,34 @@ def assess(task_ids, graph, accepted=()):
             issues.append(identifier + ': položka již není v roadmapě')
         elif node['checked'] and identifier not in accepted:
             issues.append(identifier + ': položka je dokončená')
-        elif any(not nodes[d]['checked'] and d not in seen for d in node['depends_on']):
-            issues.append(identifier + ': nesplněný předpoklad chybí před položkou')
+        else:
+            missing = [d for d in node['depends_on'] if not nodes[d]['checked'] and d not in seen]
+            if missing:
+                issues.append(identifier + ': nesplněný předpoklad chybí před položkou: ' + ', '.join(missing))
         seen.add(identifier)
     following = [n['id'] for n in graph['nodes'] if not n['checked'] and n['id'] not in seen
                  and any(not nodes[d]['checked'] for d in n['depends_on'])
                  and all(nodes[d]['checked'] or d in seen for d in n['depends_on'])]
     return issues, following
+
+
+def adjacent_moves(task_ids, position, nodes, enabled):
+    """Explain adjacent swaps without recomputing the whole valid queue per row."""
+    result = {}
+    for direction, offset in (('up', -1), ('down', 1)):
+        target = position + offset
+        reason = ''
+        if not enabled:
+            reason = 'Fronta není aktuální nebo upravitelná.'
+        elif not 0 <= target < len(task_ids):
+            reason = 'Položka je na začátku fronty.' if offset < 0 else 'Položka je na konci fronty.'
+        else:
+            before, after = (task_ids[target], task_ids[position]) if offset < 0 else (task_ids[position], task_ids[target])
+            if not nodes[before]['checked'] and before in nodes[after]['depends_on']:
+                reason = f'{after} závisí na {before}; předpoklad musí zůstat před položkou.'
+        result['can_move_' + direction] = not reason
+        result['move_' + direction + '_reason'] = reason
+    return result
 
 
 class TaskQueue:
@@ -126,7 +147,8 @@ class TaskQueue:
         fields = {'status': set(), 'add': {'task_id', 'revision', 'expected_head'},
                   'remove-preview': {'task_id', 'revision', 'expected_head'},
                   'remove': {'task_id', 'revision', 'expected_head', 'preview_sha256'},
-                  'revalidate': {'revision', 'expected_head'}}
+                  'revalidate': {'revision', 'expected_head'},
+                  'move': {'task_id', 'target_index', 'revision', 'expected_head'}}
         require(isinstance(action, str) and action in fields and set(request) == common | fields[action],
                 'Invalid queue action or fields')
         # Native read enforces registered-project/index/privacy state before opening local queue files.
@@ -152,8 +174,22 @@ class TaskQueue:
                 require(type(request['revision']) is int and request['revision'] == state['revision'],
                         'Fronta se změnila; načtěte ji znovu.')
                 require(request['expected_head'] == head, 'Roadmapa se změnila; načtěte ji znovu.')
-                if action in {'add', 'remove-preview', 'remove'}:
+                if action in {'add', 'remove-preview', 'remove', 'move'}:
                     require(isinstance(request['task_id'], str), 'Task ID required')
+            should_write = action != 'status'
+            if action == 'move':
+                require(not stale and not issues, 'Nejprve znovu ověřte frontu vůči roadmapě.')
+                identifier, target = request['task_id'], request['target_index']
+                require(identifier in state['task_ids'], 'Položka není ve frontě.')
+                require(type(target) is int and 0 <= target < len(state['task_ids']),
+                        'Cílová pozice není platná.')
+                reordered = list(state['task_ids'])
+                reordered.remove(identifier)
+                reordered.insert(target, identifier)
+                move_issues, _ = assess(reordered, graph, accepted)
+                require(not move_issues, '; '.join(move_issues))
+                should_write = reordered != state['task_ids']
+                state['task_ids'] = reordered
             if action == 'add':
                 require(not stale and not issues, 'Nejprve znovu ověřte frontu vůči roadmapě.')
                 identifier = request['task_id']; node = nodes.get(identifier)
@@ -178,14 +214,14 @@ class TaskQueue:
                     return dict(preview, preview_sha256=digest)
                 require(request['preview_sha256'] == digest, 'Dopad odebrání se změnil; načtěte nový náhled.')
                 state['task_ids'] = [i for i in state['task_ids'] if i not in removed]
-            if action != 'status':
+            if should_write:
                 issues, following = assess(state['task_ids'], graph, accepted)
                 if action != 'remove': require(not issues, '; '.join(issues))
                 state.update(revision=state['revision'] + 1, project_head=head)
                 require(workspace.git.head() == head, 'Roadmapa se změnila před zápisem.')
                 self._write(path, state, checkpoint); stale = False
             if workspace.git.head() != head:
-                if action != 'status':
+                if should_write:
                     raise QueueOutcomeUnknown('Roadmapa se během změny fronty změnila; znovu načtěte stav.')
                 raise ValueError('Roadmapa se změnila; znovu načtěte stav fronty.')
             return dict(project_id=project_id, revision=state['revision'], expected_head=head,
@@ -193,5 +229,7 @@ class TaskQueue:
                         task_ids=state['task_ids'], following=following if not stale and not issues else [],
                         items=[dict(id=i, title=nodes[i]['title'] if i in nodes else 'Nedostupná položka',
                                     agent_confirmed=bool(projection and any(x['id'] == i and x['agent_confirmed'] for x in projection['items'])),
-                                    user_confirmed=i in accepted)
-                               for i in state['task_ids']])
+                                    user_confirmed=i in accepted,
+                                    **adjacent_moves(state['task_ids'], position, nodes,
+                                                     not stale and not issues and not view.get('read_only')))
+                               for position, i in enumerate(state['task_ids'])])

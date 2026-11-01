@@ -79,6 +79,25 @@ class QueuePacketTests(unittest.TestCase):
         self.head=self.save(self.body+'\nExternal edit.\n')
         self.assertFalse(status(self.service,self.record)['current'])
 
+    def test_reordered_queue_refreshes_packet_without_mutating_history_or_acceptance(self):
+        original = self.packet(); message = self.message(original); self.send(message)
+        accepted = self.review(message); self.poll(); self.poll()
+        pinned = load(self.service, self.record['session_id']); before = self.qstatus()
+        moved = self.act('move', 'TASK-01', target_index=2)
+        self.assertEqual(['TASK-02', 'TASK-03', 'TASK-01'], moved['task_ids'])
+        self.assertEqual(before['revision']+1, moved['revision'])
+        self.assertTrue(next(i for i in moved['items'] if i['id']=='TASK-01')['user_confirmed'])
+        self.assertEqual(accepted['result']['commit_id'], Projects(self.node).repository(self.project).head())
+        self.assertEqual(pinned, load(self.service, self.record['session_id'], pinned['packet_id']))
+        self.assertTrue(status(self.service, self.record, pinned)['blockers'])
+        self.poll(); self.poll()
+        refreshed = load(self.service, self.record['session_id'])
+        self.assertNotEqual(pinned['packet_id'], refreshed['packet_id'])
+        self.assertEqual(moved['task_ids'], [item['id'] for item in refreshed['manifest']['tasks']])
+        self.assertEqual(moved['revision'], refreshed['manifest']['queue_revision'])
+        self.assertIn('TASK-01', refreshed['manifest']['accepted_task_ids'])
+        self.assertEqual(original, load(self.service, self.record['session_id'], original['packet_id']))
+
     def test_export_scope_and_wrong_owner_are_not_silently_expanded(self):
         with self.service.database() as db:
             record=dict(self.record,export_documents=False)

@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import fcntl
+from itertools import permutations
 import json
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,7 +15,7 @@ from spikes.artifacts import Artifacts
 from spikes.markdown_documents import main_todo_id
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
-from spikes.task_queue import TaskQueue, QueueOutcomeUnknown
+from spikes.task_queue import TaskQueue, QueueOutcomeUnknown, adjacent_moves
 
 
 BODY = '''- [ ] [TASK-A] A
@@ -135,8 +138,139 @@ class TaskQueueTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.service.execute(dict(project_id=self.pid, action='status', owner_id=self.owner), self.owner)
         with self.assertRaises(ValueError): self.service.execute(dict(project_id=self.pid, action='add', task_id='TASK-A', revision=False, expected_head=self.head), self.owner)
 
+    def test_move_independent_item_persists_and_noop_keeps_revision(self):
+        for identifier in ['TASK-A', 'TASK-B', 'TASK-C', 'TASK-X', 'TASK-READY']:
+            self.act('add', identifier)
+        before = self.status()
+        moved = self.act('move', 'TASK-X', target_index=0)
+        self.assertEqual(['TASK-X', 'TASK-A', 'TASK-B', 'TASK-C', 'TASK-READY'], moved['task_ids'])
+        self.assertEqual(before['revision'] + 1, moved['revision'])
+        self.assertEqual(moved, TaskQueue(self.node).execute(dict(project_id=self.pid, action='status'), self.owner))
+        self.assertEqual(moved, self.act('move', 'TASK-X', target_index=0))
+        flags = {item['id']: item for item in moved['items']}
+        self.assertFalse(flags['TASK-X']['can_move_up'])
+        self.assertTrue(flags['TASK-A']['can_move_up'])
+        self.assertFalse(flags['TASK-B']['can_move_up'])
+        self.assertIn('TASK-A', flags['TASK-B']['move_up_reason'])
+        self.assertFalse(flags['TASK-B']['can_move_down'])
+        self.assertTrue(flags['TASK-C']['can_move_down'])
+        self.assertFalse(flags['TASK-READY']['can_move_down'])
+        self.assertEqual(self.head, Projects(self.node).repository(self.pid).head())
+
+    def test_move_rejects_direct_and_transitive_order_violations_without_write(self):
+        for identifier in ['TASK-A', 'TASK-B', 'TASK-C', 'TASK-X']:
+            self.act('add', identifier)
+        path = next(self.service.root.glob('*.json')); original = path.read_bytes()
+        for identifier, target, blocked in [('TASK-B', 0, 'TASK-A'), ('TASK-C', 0, 'TASK-B'), ('TASK-A', 2, 'TASK-B')]:
+            with self.subTest(identifier=identifier, target=target):
+                with self.assertRaisesRegex(ValueError, blocked):
+                    self.act('move', identifier, target_index=target)
+                self.assertEqual(original, path.read_bytes())
+        self.assertEqual(self.head, Projects(self.node).repository(self.pid).head())
+
+    def test_move_rejects_invalid_requests_stale_revisions_and_read_only_scope(self):
+        self.act('add', 'TASK-A'); self.act('add', 'TASK-X'); original = self.status()
+        for target in [-1, 2, True, 0.0, '0', None]:
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                self.act('move', 'TASK-X', target_index=target)
+        for identifier in ['UNKNOWN', 'TASK-C', 'TASK-DONE']:
+            with self.subTest(identifier=identifier), self.assertRaises(ValueError):
+                self.act('move', identifier, target_index=0)
+        with self.assertRaises(ValueError): self.act('move', 'TASK-X', target_index=0, extra=True)
+        view = Projects(self.node).open(self.pid)
+        with patch.object(self.service.projects, 'open', return_value=dict(view, read_only=True)):
+            with self.assertRaises(ValueError): self.act('move', 'TASK-X', target_index=0, view=original)
+        with self.assertRaises(ValueError):
+            self.service.execute(dict(project_id=self.pid, action='move', task_id='TASK-X', target_index=0,
+                                      expected_head=self.head, revision=0), str(uuid4()))
+        self.assertEqual(original, self.status())
+        self.act('move', 'TASK-X', target_index=0)
+        with self.assertRaises(ValueError): self.act('move', 'TASK-A', target_index=0, view=original)
+        self.save(BODY + '\nChanged roadmap.\n')
+        stale = self.status()
+        self.assertTrue(stale['stale'])
+        self.assertTrue(all(not item['can_move_up'] and not item['can_move_down'] for item in stale['items']))
+        with self.assertRaises(ValueError): self.act('move', 'TASK-A', target_index=0)
+
+    def test_move_invalid_graph_and_busy_lock_keep_saved_order(self):
+        self.act('add', 'TASK-A'); self.act('add', 'TASK-X')
+        path = next(self.service.root.glob('*.json')); before = path.read_bytes(); view = self.status()
+        with self.service._lock(self.pid, self.owner):
+            with self.assertRaises(ValueError): self.act('move', 'TASK-X', target_index=0, view=view)
+        self.assertEqual(before, path.read_bytes())
+        self.save(BODY.replace('- [ ] [TASK-A] A', '- [ ] [TASK-A] A\n  - depends_on: TASK-C'))
+        with self.assertRaises(ValueError): self.act('move', 'TASK-X', target_index=0, view=view)
+        self.assertEqual(before, path.read_bytes())
+
+    def test_move_process_crashes_recover_old_or_new_order_and_reject_replay(self):
+        self.act('add', 'TASK-A'); self.act('add', 'TASK-X')
+        code = '''
+import json,os,sys
+from spikes.task_queue import TaskQueue
+request=json.loads(sys.argv[3])
+def stop(stage):
+ if stage==sys.argv[4]:os._exit(73)
+TaskQueue(sys.argv[1]).execute(request,sys.argv[2],checkpoint=stop)
+'''
+        for stage in ['queue-before-replace', 'queue-after-replace']:
+            with self.subTest(stage=stage):
+                prior = self.status()
+                request = dict(project_id=self.pid, action='move', task_id='TASK-X', target_index=0,
+                               expected_head=prior['expected_head'], revision=prior['revision'])
+                result = subprocess.run([sys.executable, '-c', code, str(self.node), self.owner,
+                                         json.dumps(request), stage], capture_output=True, timeout=20)
+                self.assertEqual(73, result.returncode, result.stderr)
+                recovered = TaskQueue(self.node).execute(dict(project_id=self.pid, action='status'), self.owner)
+                self.assertTrue(recovered['valid'])
+                self.assertEqual(['TASK-A', 'TASK-X'] if stage=='queue-before-replace' else ['TASK-X', 'TASK-A'], recovered['task_ids'])
+                self.assertEqual(prior['revision'] + (stage=='queue-after-replace'), recovered['revision'])
+                if stage=='queue-after-replace':
+                    with self.assertRaises(ValueError): self.service.execute(request, self.owner)
+                self.assertEqual(self.head, Projects(self.node).repository(self.pid).head())
+
+    def test_move_fsync_failure_and_external_git_change_report_unknown(self):
+        self.act('add', 'TASK-A'); self.act('add', 'TASK-X')
+        before = self.status()
+        with patch('spikes.task_queue.sync_dir', side_effect=OSError('sync failed')):
+            with self.assertRaises(QueueOutcomeUnknown): self.act('move', 'TASK-X', target_index=0, view=before)
+        self.assertEqual(['TASK-X', 'TASK-A'], self.status()['task_ids'])
+        self.act('move', 'TASK-X', target_index=1)
+        prior = self.status()
+        def external_commit(stage):
+            if stage == 'queue-after-replace':
+                from spikes.storage import Git
+                (self.root/'project'/'external.txt').write_text('External Git writer')
+                Git(self.root/'project').commit('External commit during queue move')
+        request = dict(project_id=self.pid, action='move', task_id='TASK-X', target_index=0,
+                       expected_head=prior['expected_head'], revision=prior['revision'])
+        with self.assertRaises(QueueOutcomeUnknown): self.service.execute(request, self.owner, checkpoint=external_commit)
+        self.assertTrue(self.status()['stale'])
+        with self.assertRaises(ValueError): self.service.execute(request, self.owner)
+
 
 class QueueBrowserLogicTests(unittest.TestCase):
+    def test_adjacent_move_controls_match_topological_order_for_all_legal_permutations(self):
+        nodes = {id_: dict(id=id_, checked=False, depends_on=deps) for id_, deps in [
+            ('TASK-A', []), ('TASK-B', ['TASK-A']), ('TASK-C', ['TASK-B']),
+            ('TASK-X', []), ('TASK-READY', ['TASK-DONE'])]}
+        nodes['TASK-DONE'] = dict(id='TASK-DONE', checked=True, depends_on=[])
+        def valid(order):
+            positions = {id_: index for index, id_ in enumerate(order)}
+            return all(nodes[parent]['checked'] or positions[parent] < positions[id_]
+                       for id_ in order for parent in nodes[id_]['depends_on'])
+        for order in permutations([id_ for id_ in nodes if id_!='TASK-DONE']):
+            if not valid(order): continue
+            for position, id_ in enumerate(order):
+                flags = adjacent_moves(order, position, nodes, True)
+                for direction, offset in [('up', -1), ('down', 1)]:
+                    target = position + offset
+                    expected = False
+                    if 0 <= target < len(order):
+                        swapped = list(order); swapped[position], swapped[target] = swapped[target], swapped[position]
+                        expected = valid(swapped)
+                    with self.subTest(order=order, moved=id_, direction=direction):
+                        self.assertEqual(expected, flags['can_move_'+direction])
+
     def test_confirmation_filters_and_unknown_do_not_retry(self):
         import shutil
         import subprocess
@@ -167,6 +301,10 @@ projectRequest=async(path,body)=>{if(body.action==='remove-preview'){calls.push(
 await changeTaskQueue('remove','TASK-A');assert.equal(calls.filter(c=>c.action==='remove').length,1);assert.equal(calls.at(-1).preview_sha256,'digest');
 reject=true;await changeTaskQueue('add','TASK-X');assert.equal(taskQueueView,null);assert(document.querySelector('#task-queue-status').textContent.includes('unknown'));
 let count=calls.length;await changeTaskQueue('add','TASK-X');assert.equal(calls.length,count);
+reject=false;taskQueueView={project_id:'project',expected_head:'head',valid:true,issues:[],revision:9,task_ids:['TASK-A'],items:[]};
+let release,moveRequest;projectRequest=(path,body)=>{moveRequest=body;return new Promise(resolve=>{release=resolve;});};
+const moving=changeTaskQueue('move','TASK-A',0);await Promise.resolve();assert.equal(moveRequest.target_index,0);assert.equal(moveRequest.revision,9);
+activeProject={id:'other-project',head:'other-head'};taskQueueView=null;release(response);await moving;assert.equal(taskQueueView,null);
 })().catch(e=>{console.error(e);process.exit(1);});
 '''
         result = subprocess.run(['node', '-e', prelude+source+checks], capture_output=True, text=True, timeout=20)
