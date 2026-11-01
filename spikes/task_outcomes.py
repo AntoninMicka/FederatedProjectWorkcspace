@@ -84,6 +84,8 @@ class TaskOutcomes:
                                  'privacy': request['privacy']}}
         if isinstance(request.get('task_plan'), dict):
             projection['task_plan'] = request['task_plan']
+        if request.get('file_edit_context') is not None:
+            projection['file_edit_context'] = request['file_edit_context']
         if row[11] == 'prepared':
             projection.update(temporary=True, outcome=outcome)
             if result is not None:
@@ -156,7 +158,7 @@ class TaskOutcomes:
 
     def bind_file_edit_approval(self, task_id, node_id, user_id, request):
         current = self.get(task_id, node_id, user_id)
-        require(current['state'] == 'prepared' and current['outcome']['kind'] in {'artifact-draft', 'artifact-patch'}
+        require(current['state'] == 'prepared' and current['outcome']['kind'] in {'artifact-draft', 'artifact-patch', 'markdown-patch'}
                 and current['request'].get('task_plan', {}).get('output_kind') == 'file-edit'
                 and isinstance(request, dict) and request.get('task_id') == task_id
                 and request.get('approved') is True, 'Invalid file edit approval')

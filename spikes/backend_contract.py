@@ -166,6 +166,8 @@ class RoleRegistry:
 
 
 ROLES = RoleRegistry((
+    RoleDefinition(1, 'task-output', 'task-output-markdown-patch-v1',
+                   'generate-text', 'json'),
     RoleDefinition(1, 'creator', 'creator-v1', 'generate-text', 'text'),
     RoleDefinition(1, 'opponent', 'opponent-v1', 'generate-text', 'text'),
     RoleDefinition(1, 'external-call-planner', 'external-call-planner-v1',
@@ -176,6 +178,10 @@ ROLES = RoleRegistry((
     RoleDefinition(1, 'task-output', 'task-output-conversation-v1',
                    'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-document-v1',
+                   'generate-text', 'json'),
+    RoleDefinition(1, 'task-output', 'task-output-file-edit-patch-v5',
+                   'generate-text', 'json'),
+    RoleDefinition(1, 'task-output', 'task-output-file-edit-patch-v4',
                    'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-file-edit-patch-v3',
                    'generate-text', 'json'),

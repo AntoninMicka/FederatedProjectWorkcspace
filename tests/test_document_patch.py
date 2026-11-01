@@ -52,6 +52,14 @@ class ExactPatchTests(unittest.TestCase):
                 apply_patch(original,edits)
             self.assertEqual(code,error.exception.code)
 
+    def test_generated_v4_blocks_are_bounded_even_if_provider_ignores_schema(self):
+        from spikes.document_patch import validate_generated_edits,PatchValidationError
+        for edit in [{'before':'a'*1025,'after':'b'},{'before':'a','after':'b'*8193}]:
+            with self.subTest(length=len(edit['before'])),self.assertRaises(PatchValidationError) as error:
+                validate_generated_edits([edit])
+            self.assertEqual('patch-generation-limit',error.exception.code)
+        self.assertEqual([{'before':'a','after':'b'}],validate_generated_edits([{'before':'a','after':'b'}]))
+
     def test_large_threshold_counts_bytes_and_lines_at_exact_boundary(self):
         self.assertFalse(requires_patch('x'*(LARGE_BYTES-1)))
         self.assertTrue(requires_patch('x'*LARGE_BYTES))
@@ -210,7 +218,7 @@ service.task_confirm_file_edit(json.loads(sys.argv[3]),checkpoint=stop)
         self.assertIn('text před a po je stejný',error['error'])
         self.assertNotIn('Původní běh',error['error'])
         self.assertEqual(1,len(calls));self.assertEqual(head,self.git.head())
-        self.assertEqual(4096,calls[0]['format']['properties']['edits']['items']['properties']['before']['maxLength'])
+        self.assertEqual(1024,calls[0]['format']['properties']['edits']['items']['properties']['before']['maxLength'])
         self.assertEqual('succeeded',OllamaRuns(self.chat_state).get(request['run_id'])['state'])
         self.assertEqual([],service.task_outcomes(project_id=ENTITY,thread_id=request['thread_id']))
 
@@ -232,3 +240,27 @@ service.task_confirm_file_edit(json.loads(sys.argv[3]),checkpoint=stop)
         prompt=OllamaAdapter._prompt(json.dumps(payload).encode())
         self.assertTrue(prompt.endswith('Summary:\n'))
         self.assertIn('Focus ID focus:',prompt)
+
+    def test_patch_wire_orders_anchor_before_replacement_and_pins_system_and_budget(self):
+        service,request,calls=self.patch_task();service.task_route(request)
+        wire=calls[0]
+        self.assertEqual(['schema_version','kind','title','edits'],list(wire['format']['properties']))
+        properties=wire['format']['properties']['edits']['items']['properties']
+        self.assertEqual(['before','after'],list(properties))
+        self.assertEqual(1024,properties['before']['maxLength'])
+        self.assertEqual(8192,properties['after']['maxLength'])
+        self.assertEqual({'num_predict':4096,'temperature':0},wire['options'])
+        self.assertIn('Select this short before anchor FIRST',wire['system'])
+        self.assertNotIn('Before\nKeep',wire['system'])
+
+    def test_patch_output_budget_exhaustion_is_not_a_complete_proposal(self):
+        from spikes.document_patch import PatchValidationError
+        service,request,_=self.patch_task();head=self.git.head()
+        def transport(binding,raw):
+            return {'model':binding.model,'done_reason':'length','response':json.dumps(dict(
+                schema_version=1,kind='artifact-patch',title='Title',edits=[{'before':'Before','after':'After'}]))}
+        service.adapter_factory=lambda runs:OllamaAdapter(runs,transport=transport)
+        with self.assertRaises(PatchValidationError) as error:service.task_route(request)
+        self.assertEqual('patch-output-limit',error.exception.code)
+        self.assertEqual(head,self.git.head())
+        self.assertEqual([],service.task_outcomes(project_id=ENTITY,thread_id=request['thread_id']))

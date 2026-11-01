@@ -17,6 +17,23 @@ FILE_EDIT_CSS = '''
 '''
 
 FILE_EDIT_JS = r'''
+let taskFileEditScopeKey=null,taskFileEditScopeLoading=null;
+async function loadTaskFileEditScope(){
+ const select=document.querySelector('#task-edit-scope'),target=selectedTaskFileEditTarget();
+ if(!target||!activeProject)return;
+ const key=activeProject.id+':'+activeProject.head+':'+target;
+ if(taskFileEditScopeKey===key||taskFileEditScopeLoading===key)return;
+ taskFileEditScopeLoading=key;taskFileEditScopeKey=null;select.disabled=true;select.replaceChildren(new Option('Načítám rozsah…',''));
+ try{
+  const result=await projectRequest('/v1/artifacts/editor/open',{project_id:activeProject.id,artifact_id:target,expected_head:activeProject.head});
+  if(taskFileEditScopeLoading!==key||!activeProject||key!==activeProject.id+':'+activeProject.head+':'+selectedTaskFileEditTarget())return;
+  if(result.markdown_scope_error)throw new Error(result.markdown_scope_error);
+  select.replaceChildren(new Option('Celý dokument',''));
+  for(const heading of result.markdown_outline??[])select.append(new Option('  '.repeat(heading.level-1)+heading.title+' ('+heading.block_id+')',JSON.stringify(heading.block_ids??[heading.block_id])));
+  taskFileEditScopeKey=key;select.disabled=false;
+ }catch(error){if(taskFileEditScopeLoading===key){select.replaceChildren(new Option('Rozsah nelze načíst',''));chatOperationStatus.textContent=error.message;}}
+ finally{if(taskFileEditScopeLoading===key)taskFileEditScopeLoading=null;}
+}
 function selectedTaskFileEditTarget(){
  return document.querySelector('#chat-mode').value==='orchestration'&&document.querySelector('#task-output-kind').value==='file-edit'?document.querySelector('#task-edit-target').value:null;
 }
@@ -29,12 +46,15 @@ function renderTaskFileEditTargets(){
  select.value=items.some(item=>item.id===previous)?previous:items.some(item=>item.id===selectedArtifact)?selectedArtifact:'';
  control.hidden=document.querySelector('#chat-mode').value!=='orchestration'||document.querySelector('#task-output-kind').value!=='file-edit';
  document.querySelector('#task-edit-format-control').hidden=control.hidden;
+ document.querySelector('#task-edit-scope-control').hidden=control.hidden||document.querySelector('#task-edit-format').value!=='blocks';
+ if(!control.hidden&&document.querySelector('#task-edit-format').value==='blocks')loadTaskFileEditScope();
  document.querySelector('#task-edit-format').disabled=!activeProject||Boolean(activeProject.readOnly);
  select.disabled=!activeProject||Boolean(activeProject.readOnly);
 }
 document.querySelector('#task-output-kind').addEventListener('change',()=>{pendingChatRequest=null;refreshChatModeControls();});
-document.querySelector('#task-edit-format').addEventListener('change',()=>{pendingChatRequest=null;});
-document.querySelector('#task-edit-target').addEventListener('change',()=>{pendingChatRequest=null;updatePromptInputSummary();});
+document.querySelector('#task-edit-format').addEventListener('change',()=>{pendingChatRequest=null;renderTaskFileEditTargets();});
+document.querySelector('#task-edit-scope').addEventListener('change',()=>{pendingChatRequest=null;});
+document.querySelector('#task-edit-target').addEventListener('change',()=>{pendingChatRequest=null;loadTaskFileEditScope();updatePromptInputSummary();});
 
 function resetTaskFileEditEditor(){
  artifactEditorTaskEdit=null;

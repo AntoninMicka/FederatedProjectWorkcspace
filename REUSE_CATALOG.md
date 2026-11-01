@@ -945,3 +945,12 @@ Fuzzy aplikace, shell/`git apply` nad modelovým vstupem a další závislost by
 odmítnuty: model nesmí vybírat cesty ani přepisovat nejbližší podobný úsek.
 Schválení nadále váže výsledné tělo, takže recovery nepřidává druhou aplikaci
 patche. [Kontrakt](docs/ai-file-edit.md#patch-namísto-celého-dokumentu).
+
+AI-FILE-EDIT-01 blokové editace **reuse/adaptují** Context Manifest a jeho
+projekce, Ollama Structured Outputs, AITaskOutcome, společný editor/diff,
+TaskOutcomes a native writer s obnovou dle ADR 0003. Nový omezený scanner
+určuje rozsahy nadpisů, odstavců, seznamů a fences bez serializace celého AST.
+Přesun kopíruje původní text. Textové kotvy neposkytují identitu bloků;
+obecný AST serializer, fuzzy aplikace, nový journal a další transakční
+engine byly odmítnuty. Bez nové závislosti či převzetí externího kódu.
+[Rozhodnutí a limity](docs/adr/0064-markdown-block-patch-engine.md).

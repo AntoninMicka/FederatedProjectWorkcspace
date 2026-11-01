@@ -43,6 +43,7 @@ class AITaskOutcome:
     deck: dict | None = None
     deck_sha256: str | None = None
     edits: tuple = ()
+    markdown_patch: dict | None = None
 
     @classmethod
     def parse(cls, value):
@@ -53,6 +54,10 @@ class AITaskOutcome:
             require(set(value) == {'schema_version', 'kind', 'content'},
                     'Unknown direct answer field')
             return cls(kind, _content(value['content'], 'direct answer'))
+        if kind == 'markdown-patch':
+            from spikes.markdown_patch import validate_proposal
+            validate_proposal(value)
+            return cls(kind, title=value['title'], markdown_patch=json.loads(json.dumps(value)))
         if kind == 'artifact-patch':
             require(set(value) == {'schema_version', 'kind', 'title', 'edits'}, 'Unknown artifact patch field')
             from spikes.document_patch import validate_edits
@@ -108,6 +113,8 @@ class AITaskOutcome:
     def serialize(self):
         if self.kind == 'direct-answer':
             return {'schema_version': 1, 'kind': self.kind, 'content': self.content}
+        if self.kind == 'markdown-patch':
+            return json.loads(json.dumps(self.markdown_patch))
         if self.kind == 'artifact-patch':
             return {'schema_version': 1, 'kind': self.kind, 'title': self.title,
                     'edits': [dict(edit) for edit in self.edits]}

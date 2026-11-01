@@ -74,6 +74,11 @@ class ArtifactActionTests(unittest.TestCase):
             base_head=self.head, title='Tasks', body=body, new=False),
             str(uuid4()))['commit_id']
         before = Projects(self.node).open(self.project)['commit_id']
+        opened = self.actions.open(self.project, self.artifact, head)
+        insertion = next(item for item in opened['markdown_outline']
+                         if item['title'].startswith('Vložení pod milník:'))
+        self.assertEqual(2, len(insertion['block_ids']))
+        self.assertIsNone(opened['markdown_scope_error'])
         result = self.actions.validate_task_plan(
             self.project, self.artifact, head, body.replace('Úkol', 'Upravený úkol'))
         self.assertTrue(result['valid'])

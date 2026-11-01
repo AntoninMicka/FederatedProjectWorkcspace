@@ -24,8 +24,26 @@ class ArtifactActions:
         result = self.history.compare(project_id, artifact_id, expected_head,
                                       expected_head, expected_head)
         require(result['after'] is not None, 'Document is unavailable')
+        from spikes.markdown_patch import scan
+        try:
+            raw = result['after']['body']
+            blocks = scan(raw)
+            outline = [dict(block_id=b.id, block_ids=[b.id], title=b.title, level=b.level)
+                       for b in blocks if b.kind == 'heading']
+            import re
+            for index, block in enumerate(blocks[:-1]):
+                next_ = blocks[index+1]
+                if (block.kind == 'list-item'
+                        and re.match(r'^- \[[ xX]\] \[', raw[block.start:block.end])
+                        and re.fullmatch(r'  - type: milestone\s*', raw[next_.start:next_.end])):
+                    outline.append(dict(block_id=block.id, block_ids=[block.id, next_.id],
+                        title='Vložení pod milník: ' + raw[block.start:block.end].strip(), level=1))
+            scope_error = None
+        except ValueError as exc:
+            outline, scope_error = [], str(exc)
         return dict(project_id=project_id, artifact_id=artifact_id,
-                    commit_id=expected_head, document=result['after'])
+                    commit_id=expected_head, document=result['after'],
+                    markdown_outline=outline, markdown_scope_error=scope_error)
 
     def save(self, request, operation_id):
         # The read validates current network privacy before any web mutation.

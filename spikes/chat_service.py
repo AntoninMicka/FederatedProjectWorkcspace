@@ -36,7 +36,7 @@ from spikes.atlascloud_backend import (AtlasCloudAdapter, AtlasCloudBinding,
 from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
-from spikes.metadata import ValidationError, require, timestamp, uuid
+from spikes.metadata import ValidationError, require, timestamp, uuid, validate_snapshot
 from spikes.model_catalog import ModelDiscoveryStore, ModelKnowledgeStore
 from spikes.node_telemetry import NodeTelemetry, OllamaRuntimePolicy
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
@@ -1214,19 +1214,42 @@ class ChatService:
             user_id=user_id, project_id=request['project_id'],
             expected_head=request['expected_head'])
         from spikes.document_patch import requires_patch, instruction as patch_instruction
-        patch_edit = edit_target is not None and (plan.edit_format == 'patch' or requires_patch(edit_target['body']))
-        role_revision = 'task-output-file-edit-patch-v3' if patch_edit else plan.role_revision
+        from spikes.markdown_patch import ROLE as MARKDOWN_ROLE, SCHEMA as MARKDOWN_SCHEMA, build as markdown_context, instruction as markdown_instruction
+        block_edit = edit_target is not None and plan.edit_format == 'blocks'
+        patch_edit = edit_target is not None and not block_edit and (plan.edit_format == 'patch' or requires_patch(edit_target['body']))
+        role_revision = MARKDOWN_ROLE if block_edit else 'task-output-file-edit-patch-v5' if patch_edit else plan.role_revision
+        from spikes.roadmap_append_context import requests_new_tasks, build as append_context, instruction as append_instruction, SCHEMA as APPEND_SCHEMA
+        append_projection = None
+        if patch_edit and requests_new_tasks(request['content']):
+            snapshot = workspace.git.snapshot(request['expected_head'])
+            append_projection = append_context(snapshot, validate_snapshot(snapshot), request['project_id'],
+                request['expected_head'], plan.target_artifact_id, request['run_id'])
+        stored_request = dict(request)
+        if block_edit:
+            snapshot = workspace.git.snapshot(request['expected_head'])
+            block_projection = markdown_context(snapshot, validate_snapshot(snapshot), request['project_id'],
+                request['expected_head'], plan.target_artifact_id, request['run_id'], plan.edit_block_ids)
+            stored_request['file_edit_context'] = block_projection['metadata']
+        if append_projection is not None:
+            stored_request['file_edit_context'] = append_projection['metadata']
         authority = Authority('task-route:' + request['task_id'], user_id, node_id,
             role_revision, frozenset(request['selected_artifact_ids']))
-        instruction = (patch_instruction(plan.target_artifact_id, request['expected_head'])
+        instruction = (markdown_instruction(plan.target_artifact_id, request['expected_head']) if block_edit
+                       else patch_instruction(plan.target_artifact_id, request['expected_head'])
                        if patch_edit else task_output_instruction(plan))
+        if append_projection is not None:
+            instruction += '\n' + append_instruction()
         conversation = (ConversationSelection(request['thread_id'], thread['revision'],
             tuple(item['message_id'] for item in prior), tuple(item['role'] for item in prior))
             if prior else None)
         builder = ContextBuilder(workspace, request['project_id'])
         prepared = builder.prepare(manifest_id=request['manifest_id'], run_id=request['run_id'],
             authority=authority, target=binding.target(),
-            project_inputs=tuple(ProjectInput(value) for value in request['selected_artifact_ids']),
+            project_inputs=tuple(ProjectInput(value,
+                projection=MARKDOWN_SCHEMA if block_edit and value == plan.target_artifact_id else
+                    APPEND_SCHEMA if append_projection is not None and value == plan.target_artifact_id else None,
+                block_ids=plan.edit_block_ids if block_edit and value == plan.target_artifact_id else None)
+                for value in request['selected_artifact_ids']),
             public_source_inputs=public_inputs,
             ad_hoc_inputs=tuple(AdHocInput(item['message_id'], item['content'].encode(),
                 item['privacy']) for item in prior) + (AdHocInput(request['message_id'],
@@ -1273,11 +1296,14 @@ class ChatService:
             else:
                 adapter.prepare(handoff, binding, role, 'json', run_selection=run_selection)
                 response = adapter.dispatch(handoff, binding, role, 'json', run_selection=run_selection)
+            if (patch_edit or block_edit) and response.get('done_reason') == 'length':
+                from spikes.document_patch import PatchValidationError
+                raise PatchValidationError('patch-output-limit')
             try:
                 value = json.loads(response['response'])
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValidationError('Model returned invalid explicit task JSON') from exc
-            expected = ('artifact-patch' if patch_edit else 'presentation-proposal' if plan.output_kind == 'presentation'
+            expected = ('markdown-patch' if block_edit else 'artifact-patch' if patch_edit else 'presentation-proposal' if plan.output_kind == 'presentation'
                         else plan.expected_outcome_kind)
             require(isinstance(value, dict) and value.get('kind') == expected,
                     'Model returned a different output kind than the explicit task plan')
@@ -1292,10 +1318,15 @@ class ChatService:
                     selected_artifact_ids=request['selected_artifact_ids'],
                     node_path=self.node_path)
             outcome = AITaskOutcome.parse(value)
-            if patch_edit:
+            if block_edit:
                 from spikes.task_file_edit import validate_patch_proposal
-                validate_patch_proposal(self, request, outcome.serialize())
-            require(outcome.kind == ('artifact-patch' if patch_edit else plan.expected_outcome_kind),
+                validate_patch_proposal(self, stored_request, outcome.serialize())
+            if patch_edit:
+                from spikes.document_patch import validate_generated_edits
+                validate_generated_edits(outcome.serialize()['edits'])
+                from spikes.task_file_edit import validate_patch_proposal
+                validate_patch_proposal(self, stored_request, outcome.serialize())
+            require(outcome.kind == ('markdown-patch' if block_edit else 'artifact-patch' if patch_edit else plan.expected_outcome_kind),
                     'Validated output differs from the explicit task plan')
         routed = {'task_id': request['task_id'], 'outcome': outcome.serialize(),
                 'privacy': strongest, 'project_commit': prepared.manifest['project_commit'],
@@ -1305,7 +1336,7 @@ class ChatService:
                 'run_selection': run_selection.public_serialize(),
                 'run_selection_sha256': run_selection.digest()}
         durable = TaskOutcomes(root).prepare(node_id=node_id, user_id=user_id,
-                                             request=request, routed=routed)
+                                             request=stored_request, routed=routed)
         if outcome.kind == 'direct-answer' and durable['state'] == 'prepared':
             durable = TaskOutcomes(root).finish(request['task_id'], node_id, user_id,
                 'completed', result={'schema_version': 1, 'kind': 'direct-answer',

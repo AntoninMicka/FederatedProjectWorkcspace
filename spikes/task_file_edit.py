@@ -53,10 +53,30 @@ def validate_patch_proposal(service, request, outcome):
     from spikes.document_patch import apply_patch
     doc, files, _ = target_document(service, request['project_id'], request['task_plan']['target_artifact_id'],
                                    request['expected_head'], current=False)
-    replacement = body(apply_patch(doc['body'], outcome['edits']))
+    if outcome['kind'] == 'markdown-patch':
+        from spikes.markdown_patch import apply as apply_markdown, build as markdown_context
+        plan = ExplicitTaskPlan.parse(request['task_plan'])
+        require(plan.edit_format == 'blocks', 'Markdown patch requires an explicit block plan')
+        projection = markdown_context(files, validate_snapshot(files), request['project_id'],
+            request['expected_head'], plan.target_artifact_id, request['run_id'], plan.edit_block_ids)
+        require(request.get('file_edit_context') == projection['metadata'], 'Markdown scope differs from the pinned context')
+        replacement = body(apply_markdown(doc['body'], outcome, selected_ids=plan.edit_block_ids))
+    else:
+        replacement = body(apply_patch(doc['body'], outcome['edits']))
     files[doc['path']] = replacement.encode()
     graph = project_task_graph(files, validate_snapshot(files), request['project_id'], request['expected_head'])
+    if outcome['kind'] == 'markdown-patch' and graph['status'] not in {'ready', 'missing'}:
+        from spikes.markdown_patch import MarkdownPatchError
+        raise MarkdownPatchError('Návrh vytváří neplatnou roadmapu: ' + graph.get('error', ''))
     require(graph['status'] in {'ready', 'missing'}, 'Patch leaves an invalid roadmap: ' + graph.get('error', ''))
+    if outcome['kind'] != 'markdown-patch' and request.get('file_edit_context') is not None:
+        from spikes.roadmap_append_context import build, validate
+        original = service.projects.repository(request['project_id']).snapshot(request['expected_head'])
+        projection = build(original, validate_snapshot(original), request['project_id'], request['expected_head'],
+                           request['task_plan']['target_artifact_id'], request['run_id'])
+        require(projection is not None and projection['metadata'] == request['file_edit_context'],
+                'Append context no longer matches the pinned document')
+        validate(projection, outcome['edits'], graph)
     return replacement
 
 
@@ -97,13 +117,13 @@ def preview(service, request):
     require(isinstance(request, dict) and set(request) in ({'project_id', 'task_id'}, {'project_id', 'task_id', 'body'}), 'Invalid file edit preview')
     _, row, plan = _row(service, request['task_id'])
     require(request['project_id'] == row['project_id'], 'File edit belongs to another project')
-    require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch'}, 'File edit is closed')
+    require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch', 'markdown-patch'}, 'File edit is closed')
     pending = row['result']
     if 'body' in request:
         replacement = request['body']
     elif pending is not None:
         replacement = pending['request']['body']
-    elif row['outcome']['kind'] == 'artifact-patch':
+    elif row['outcome']['kind'] in {'artifact-patch', 'markdown-patch'}:
         replacement = validate_patch_proposal(service, row['request'], row['outcome'])
     else:
         replacement = row['outcome']['content']
@@ -133,7 +153,7 @@ def confirm(service, request, *, checkpoint=lambda stage: None):
                 and result.get('body_sha256') == hashlib.sha256(request['body'].encode()).hexdigest(),
                 'File edit was completed differently')
         return row['projection']
-    require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch'}, 'File edit is closed')
+    require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch', 'markdown-patch'}, 'File edit is closed')
     expected = _preview(service, row, plan, request['body'], current=row['result'] is None)
     require(all(request[k] == v for k, v in expected['confirmation'].items()),
             'Confirmation does not match the exact file edit preview')

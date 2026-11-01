@@ -5,6 +5,14 @@ TASK_STREAM_JS = r'''
 let taskRunDeadlineBox=null,taskRunDeadlineIdentity=null,taskStreamDraft='';
 function appendTaskStreamDelta(delta){
  taskStreamDraft+=delta;
+ if(/"kind"\s*:\s*"markdown-patch"/.test(taskStreamDraft)){
+  const parts=[],labels={block_id:'Blok',action:'Operace',content:'Text',destination_id:'Cíl'};
+  for(const token of taskStreamDraft.matchAll(/(?:^|[{,])\s*"(block_id|action|content|destination_id)"\s*:\s*("(?:[^"\\]|\\.)*(?:"|$))/gs)){
+   const text=taskStreamString(token[2]);if(text!==null)parts.push(labels[token[1]]+': '+text);
+  }
+  if(parts.length){chatStream.textContent=parts.join('\n');chatStream.hidden=false;keepChatStreamVisible();}
+  return;
+ }
  const match=taskStreamDraft.match(/(?:^|[{,])\s*"content"\s*:\s*("(?:[^"\\]|\\.)*(?:"|$))/s);
  if(!match){
   const parts=[];

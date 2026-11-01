@@ -1186,7 +1186,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <span class="prompt-route-arrow" aria-hidden="true">→</span>
 <label class="prompt-control" for="task-output-kind"><span>Výsledek</span><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option><option value="file-edit">Upravit vstup</option></select></label>
 <label class="prompt-control" id="task-edit-target-control" for="task-edit-target" hidden><span>Soubor</span><select id="task-edit-target"><option value="">Vyberte Markdown dokument</option></select></label>
-<label class="prompt-control" id="task-edit-format-control" for="task-edit-format" hidden title="Od 32 KiB nebo 500 řádků je patch povinný."><span>Úprava</span><select id="task-edit-format"><option value="patch">Patch</option><option value="full">Celý obsah (jen malé soubory)</option></select></label>
+<label class="prompt-control" id="task-edit-format-control" for="task-edit-format" hidden title="Od 32 KiB nebo 500 řádků je patch povinný."><span>Úprava</span><select id="task-edit-format"><option value="blocks">Změny bloků</option><option value="patch">Textový patch (starší)</option><option value="full">Celý obsah (jen malé soubory)</option></select></label>
+<label class="prompt-control" id="task-edit-scope-control" for="task-edit-scope" hidden><span>Rozsah</span><select id="task-edit-scope"><option value="">Celý dokument</option></select></label>
 </div>
 <label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
 <label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
@@ -5773,7 +5774,7 @@ function renderTaskOutcome(projection,showPrompt=true){
   }
   const card=document.createElement('section');card.className='task-outcome'+(projection.temporary?'':' terminal');
   const heading=document.createElement('h3');
-  heading.textContent=outcome.kind==='artifact-patch'?'Návrh změn dokumentu':outcome.kind==='artifact-draft'?'Návrh artefaktu':
+  heading.textContent=['artifact-patch','markdown-patch'].includes(outcome.kind)?'Návrh změn dokumentu':outcome.kind==='artifact-draft'?'Návrh artefaktu':
    outcome.kind==='presentation-draft'?'Návrh prezentace':
    outcome.kind==='presentation-link'?'Uložená prezentace':
    outcome.kind==='artifact-link'?(projection.task_plan?.output_kind==='file-edit'?'Upravený dokument':'Vytvořený artefakt'):
@@ -5827,10 +5828,12 @@ function renderTaskOutcome(projection,showPrompt=true){
     `${outcome.operation==='create'?'Vytvořeno':'Aktualizováno'} v revizi ${outcome.project_commit.slice(0,12)} · digest ${outcome.deck_sha256.slice(0,12)}`;card.append(detail);
    const actions=document.createElement('div');actions.className='task-actions';
    actions.append(taskButton('Otevřít prezentaci',()=>openPresentationEditor(outcome.artifact_id)));card.append(actions);
-  }else if(outcome.kind==='artifact-draft'||outcome.kind==='artifact-patch'){
+  }else if(outcome.kind==='artifact-draft'||outcome.kind==='artifact-patch'||outcome.kind==='markdown-patch'){
    const title=document.createElement('strong');title.textContent=outcome.title;card.append(title);
+   if(projection.file_edit_context?.schema==='fpw-roadmap-append-context-v1'){const scope=document.createElement('p');scope.textContent='Přidání úkolů: model dostal přesné místo vložení a strukturu plánu; historické popisy nebyly odeslány.';card.append(scope);}
    const body=document.createElement('pre');
-   if(outcome.kind==='artifact-patch')body.textContent=outcome.edits.map(edit=>'− '+edit.before+'\\n+ '+edit.after).join('\\n\\n');
+   if(outcome.kind==='markdown-patch')body.textContent=outcome.changes.map(change=>change.action+' '+change.block_id+(change.destination_id?' → '+change.destination_id:'')+'\\n'+(change.content??'')).join('\\n\\n');
+   else if(outcome.kind==='artifact-patch')body.textContent=outcome.edits.map(edit=>'− '+edit.before+'\\n+ '+edit.after).join('\\n\\n');
    else body.textContent=outcome.content;card.append(body);
    const actions=document.createElement('div');actions.className='task-actions';
    if(projection.task_plan?.output_kind==='file-edit'){
@@ -7054,7 +7057,13 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    output_kind:document.querySelector('#task-output-kind').value,
    execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':'external-atlascloud',
    search_query:searchQuery,public_source_run_ids:publicRunIds}};
-  if(editing){pendingChatRequest.task_plan.target_artifact_id=editTarget;pendingChatRequest.task_plan.edit_format=document.querySelector('#task-edit-format').value;}
+  if(editing){pendingChatRequest.task_plan.target_artifact_id=editTarget;pendingChatRequest.task_plan.edit_format=document.querySelector('#task-edit-format').value;
+   const scope=document.querySelector('#task-edit-scope').value;
+   if(pendingChatRequest.task_plan.edit_format==='blocks'){
+    if(taskFileEditScopeKey!==activeProject.id+':'+activeProject.head+':'+editTarget){pendingChatRequest=null;chatOperationStatus.textContent='Vyčkejte na načtení rozsahu dokumentu nebo jej načtěte znovu.';return;}
+    if(scope)pendingChatRequest.task_plan.edit_block_ids=JSON.parse(scope);
+   }
+  }
  }
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
  const liveProgress=startChatProgress(adapter==='ollama'?

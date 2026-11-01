@@ -1,0 +1,98 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# ADR 0064 — Blokové úpravy Markdownu
+
+Datum: 2026-11-01. Rozhodnutí: přijato pro AI-FILE-EDIT-01 podle výslovného
+zadání uživatele. Doručení a lidská akceptace jsou samostatné.
+
+## Potřeba a rozhodnutí
+
+Generování celého dokumentu ani kopírování textových kotev neposkytlo
+spolehlivé výsledky nad rozsáhlou roadmapou. To není důkaz obecné neschopnosti
+lokálních modelů. Python nyní připravuje rozsahy původního Markdownu, ID bloků
+a SHA-256. Ollama dostane explicitní projekci v Context Manifestu a vrátí
+`markdown-patch` přes roli `task-output-markdown-patch-v1`. Starší role se
+nemění kvůli již připnutým běhům.
+
+`spikes/markdown_patch.py` je omezený scanner, nikoli úplný CommonMark/GFM
+parser. Rozlišuje ATX/setext nadpisy, sekce, odstavce, položky seznamů,
+mezery, komentáře a uzavřené backtick/tilde fences s odsazením do tří mezer.
+Neznámá syntaxe zůstává textem. Původní dokument se neserializuje přes AST;
+nedotčené úseky se kopírují beze změny včetně CRLF, Unicode a koncových mezer.
+Neuzavřené rozpoznané fences vyžadují nejprve ruční opravu.
+
+ID `b00001` apod. platí jen pro snapshot vymezený `document_hash` a nezapisují
+se do souboru. Každá operace kontroluje hash svého bloku, přesun i hash
+cílového nadpisu. Sekce používají stejný hash nadpisového bloku: hash celého
+dokumentu již připíná jejich potomky. Nepředává se dvojí očekávaný hash pro
+jeden blok, který model při prvním ověření zaměňoval.
+
+Podporované operace jsou `replace`, `delete`, `insert_before`, `insert_after`,
+`replace_section`, `append_section`, `move_section`, `rename_heading`.
+Sekce končí před dalším nadpisem stejné či vyšší úrovně. Přesun kopíruje
+původní text za cílovou sekci stejné úrovně; neumožňuje přesun do sebe,
+potomků ani spojení sekcí bez potřebného konce řádku. Přejmenování zachovává
+styl nadpisu. Náhrada sekce zachovává její nadpisovou úroveň; připojení
+nevytváří sourozenecký nadpis mimo zvolenou sekci.
+
+Operace míří do stejného původního snapshotu. Překryvy, nejednoznačné
+vložení, neznámá pole/ID, chybný hash, zásah mimo rozsah a návrh beze změny
+se odmítají jako celek. Není fuzzy matching, shell, `git apply`, ruční
+automatická oprava výstupu ani opakování modelu. Limity: tělo 1 MiB,
+8192 bloků, 64 operací a 64 KiB JSON návrhu.
+
+## Rozsah, oprávnění a review
+
+ExplicitTaskPlan přidává `edit_format:blocks` a volitelné `edit_block_ids`.
+Nadpis zahrne potomky; jiný vybraný blok pouze vlastní text. Bez výběru se
+předá celý dokument jako bloky. UI nabízí kapitolu a u podporované roadmapy
+dvojici bloků pro vložení pod milník. Výběr určuje aplikace, nikoli model.
+Celodokumentový režim znamená jeden požadavek, nikoli automatické dělení do
+více průchodů. Autonomní agent vybírající sekce se nezavádí.
+
+Manifest zachovává SHA-256, velikost a privacy skutečného projektového vstupu.
+Projekce doplňuje rozsah, hash těla a hash/velikost odeslané reprezentace.
+Dispatch ji znovu sestaví a ověří. Oprávnění a privacy se kontrolují před
+voláním modelu. Návrh uchová metadata projekce; náhled operace znovu ověří
+nad připnutou verzí a validuje celý task graph včetně ID, hierarchie a vztahů.
+
+Zachování ostatního textu nezaručuje zachování faktů uvnitř nahrazovaného
+bloku. Platný návrh může být věcně chybný. Uživatel vidí sestavený výsledek
+a unified diff a může jej přijmout, odmítnout nebo ručně upravit ve společném
+editoru. Ruční editace nejsou vydávány za modelové zásahy omezené na bloky.
+
+## Crash boundaries a recovery
+
+Platí [ADR 0003](0003-coordinated-operation.md) a existující
+[AI editace](../ai-file-edit.md#crash-boundaries-a-obnova). Scanner, projekce
+i aplikátor sestavují návrh pouze v paměti. Neplatná odpověď nezaloží návrh
+ani zápis; dokončený providerový přenos se nezmění na neznámý. Stream
+rozlišuje `markdown-patch-invalid` / `invalid-proposal` od chyby přenosu.
+Původní běh se neopakuje.
+
+TaskOutcomes před native operací trvale připne schválené tělo, digest a
+operation ID. Před touto hranicí je při pádu nutné nové potvrzení; po ní
+obnova používá stejné tělo a ID. Workspace journal přebírá soubory, Git a
+index podle ADR 0003. Pád po commitu před dokončením TaskOutcomes obnoví
+receipt bez druhého commitu, aplikace patche nebo modelového požadavku.
+Nevzniká nová persistentní vrstva ani druhý writer. Novější HEAD se odmítá.
+
+## Reuse a ověření
+
+Adaptují se ContextBuilder, Ollama Structured Outputs, AITaskOutcome,
+TaskOutcomes, společný editor, diff a Artifacts.save/Workspace.transact.
+Starší `artifact-patch` a `artifact-draft` zůstávají čitelné. Nová je pouze
+vrstva strukturálního adresování a čistých operací; obecný AST serializer,
+nový writer a kopie externího frameworku byly odmítnuty. Soukromá reuse
+inventura nedává důvod nahrazovat existující zápisovou cestu.
+
+`tests.test_markdown_patch` ověřuje CRLF/Unicode, opakovaný obsah, code fences,
+nadpisy, sekce, přesuny, rozsah, hash, překryvy, neplatný návrh, náhled,
+potvrzení, zrušení a ztracenou odpověď po native commitu. Procesní pády
+sdíleného writeru pokrývají existující `tests.test_task_file_edit`. Qt smoke
+ověřuje čitelné operace, více průběžných změn, výběr rozsahu a odmítnutí jeho
+nedostupnosti bez tichého přechodu na celý dokument. Skutečné LLM pokusy a
+omezení uvádí [kontrakt](../ai-file-edit.md#blokový-markdown-patch-engine).

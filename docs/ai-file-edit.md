@@ -83,6 +83,9 @@ ověření skutečného modelu nenahrazují.
 
 ## Patch namísto celého dokumentu
 
+Aktuální výchozí UI používá níže popsané **Změny bloků**. Tato sekce popisuje
+kompatibilní starší textový patch; uložené návrhy se nemigrují.
+
 Nové UI ve výstupu **Upravit vstup** nabízí volbu **Patch** (výchozí) nebo
 **Celý obsah (jen malé soubory)**. Od **32 KiB UTF-8 těla nebo 500 řádků**
 backend vždy vyžaduje patch, i pokud klient požádal o celé tělo či použil
@@ -141,6 +144,91 @@ ruční úpravu výsledku, zrušení, stale HEAD, ztracenou odpověď a skutečn
 procesu během nativního zápisu. Qt smoke ověřuje stream patche a otevření či
 zahození sestaveného návrhu. Ruční akceptace se skutečným modelem zůstává
 samostatná; velikost kontextu modelu se touto změnou nezvětšuje.
+
+## Blokový Markdown Patch Engine
+
+Výchozí **Upravit vstup → Změny bloků** používá
+[ADR 0064](adr/0064-markdown-block-patch-engine.md). V poli **Rozsah** lze
+zvolit celý dokument, kapitolu včetně podkapitol nebo místo vložení pod
+milník roadmapy. Poslední varianta předává jen milník a jeho typový řádek,
+nikoli historické popisy ostatních úkolů. Při chybě načítání rozsahu se
+požadavek neodešle; nedochází k tichému rozšíření na celý dokument.
+
+Požadavek má `edit_format:blocks` a volitelné `edit_block_ids`. ID vrací
+autorizované otevření dokumentu v `markdown_outline` se snapshotem
+`commit_id`. Vybraný nadpis zahrnuje všechny své potomky. Stejná ID nemají
+význam v novějším snapshotu. Celodokumentové zadání se posílá jedním během;
+automatické dělení nebo další agent vybírající sekce nejsou implementované.
+
+Model vrací například:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "markdown-patch",
+  "title": "Návrh úpravy",
+  "document_hash": "sha256:<hash původního těla>",
+  "changes": [{
+    "block_id": "b00004",
+    "expected_hash": "sha256:<hash původního bloku>",
+    "action": "replace",
+    "content": "Nový text odstavce.\n",
+    "destination_id": null,
+    "destination_hash": null
+  }]
+}
+```
+
+Hash a ID vybírá aplikace, model je pouze kopíruje. Uzavřené schéma rozlišuje
+pole jednotlivých operací: `delete` a `move_section` mají `content:null`,
+pouze přesun má neprázdné cílové ID/hash. Přesun kopíruje původní text sekce
+za cílovou sekci stejné úrovně. Aplikátor kontroluje celý snapshot, každý
+blok, povolený rozsah, překryvy i nové code fences před vytvořením návrhu.
+Roadmapa navíc prochází existující sémantickou validací celého grafu.
+
+Scanner není úplný CommonMark/GFM parser. Podporuje ATX/setext nadpisy,
+odstavce, seznamy, komentáře a uzavřené backtick/tilde fences s odsazením
+do tří mezer. Neuzavřené rozpoznané fences se odmítají. Neznámé konstrukce
+zůstávají textem; jejich význam engine neověřuje. Původní soubor se přes
+parser znovu neformátuje. Limity: 1 MiB těla, 8192 bloků, 64 operací,
+64 KiB návrhu. Počet výstupních tokenů je 4096; příliš dlouhá odpověď se
+odmítá bez dalšího požadavku.
+
+Zpracování modelové odpovědi pouze připraví návrh a unified diff. Společný
+editor dál umožňuje vědomé ruční změny. Potvrzení, provenance, current HEAD
+a recovery používají původní writer; po pádu se znovu nevolá model ani
+neaplikují operace do částečně upraveného dokumentu.
+
+### Skutečné ověření Ollamy — 1. 11. 2026
+
+Izolované kopie s nakonfigurovaným `qwen3-coder:latest` ověřily změnu českého
+odstavce s CRLF, přidání čtyř požadovaných úkolů a přesun sekce včetně code
+fence. Finální společný průchod vytvořil tyto tři platné návrhy přibližně
+za 4,8 / 6,7 / 5,5 sekundy. Žádný návrh nebyl automaticky přijat.
+
+Samostatný pokus nad skutečnou velkou roadmapou přidal dávku se čtyřmi úkoly
+za přibližně 8 sekund; všech 729 původních uzlů zůstalo obsahově zachováno.
+Opakovaný pokus ve finálním společném průchodu selhal po přibližně 7 sekundách:
+model nedodržel typová metadata nového úkolu. Sémantický validátor odmítl
+celý návrh bez zápisu nebo ruční opravy. Kontext tohoto pokusu obsahoval
+pouze dva vybrané bloky velkého dokumentu.
+
+Jde o několik konkrétních experimentů, nikoli statistický benchmark nebo
+důkaz spolehlivého plnění libovolného zadání. Předchozí pokusy o přesun
+odhalily záměnu hashů a neplatnou kombinaci operací; také byly odmítnuty.
+Kanonický projekt se při ověřování neměnil. Běžný uživatelský profil ani
+celá feature tím nejsou lidsky akceptované. Technicky platný návrh stále
+vyžaduje věcnou kontrolu; strukturovaný patch sám nezajišťuje správnost
+typové syntaxe uvnitř generovaného Markdownu roadmapy.
+
+Závěrečné automatické ověření zdrojů: `python3 -m unittest discover -s tests -v`
+prošlo s 1249 testy a 42 přeskočenými kontrolami za přibližně 357 sekund.
+Samostatný Qt/WebEngine `tests/ui/page_layout_smoke.py` prošel v izolovaném
+offscreen režimu. Cílených 15 testů `tests.test_markdown_patch` prošlo;
+nejsou náhradou lidského posouzení modelového návrhu. `git diff --check`,
+kompilace dotčených Python souborů a kontrola cílů dokumentačních odkazů
+prošly. Volitelné přeskočené kontroly a běžný uživatelský profil se tím
+neoznačují za ověřené.
 
 ## Průběžný přenos a časové limity
 
