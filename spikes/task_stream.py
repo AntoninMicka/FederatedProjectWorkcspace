@@ -154,7 +154,16 @@ def serve(handler, request):
             emit(dict(type='result',result=result))
         except (PatchValidationError, MarkdownPatchError) as exc:
             emit(dict(type='error', status=422, error=str(exc), diagnostic=exc.code, outcome='invalid-proposal'))
-        except (UnknownRun, OllamaResponseError, ValueError, OSError) as exc:
+        except OllamaResponseError as exc:
+            messages = {
+                'stream-frame-too-large': 'Ollama vrátila příliš velký rámec průběžného přenosu.',
+                'stream-too-large': 'Odpověď Ollamy překročila celkový limit průběžného přenosu.',
+                'response-too-large': 'Text odpovědi Ollamy překročil povolenou velikost.',
+            }
+            message = messages.get(exc.code, 'Požadavek na Ollamu se nepodařilo dokončit.')
+            emit(dict(type='error', status=422, error=message + ' Původní běh automaticky neopakujte.',
+                      diagnostic=exc.code, outcome='provider-error'))
+        except (UnknownRun, ValueError, OSError) as exc:
             control.stop(control.reason or 'stream-failed')
             try: emit(dict(type='error',status=409 if isinstance(exc, UnknownRun) or control.reason in {
                 'user-stopped','hard-timeout'} else 422,

@@ -335,6 +335,65 @@ class OllamaAdapterTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, code)
                 self.assertEqual(adapter.runs.get(handoff.run_id)['state'], 'unknown')
 
+    def http_frames(self, frames):
+        import io
+        wire = b''.join(json.dumps(frame).encode()+b'\n' for frame in frames)
+        reads = []
+        class Socket:
+            def settimeout(self, value): pass
+        class Response(io.BytesIO):
+            status = 200
+            def readline(self, limit):
+                reads.append(limit)
+                return super().readline(limit)
+        class Connection:
+            def __init__(self, *args, **kwargs): self.sock = Socket()
+            def connect(self): pass
+            def request(self, *args, **kwargs): pass
+            def getresponse(self): return Response(wire)
+            def close(self): pass
+        deltas = []
+        with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+            result = OllamaAdapter._http_stream_transport(self.binding, b'{}', deltas.append, lambda _: None)
+        return result, deltas, reads
+
+    def test_large_final_context_is_accepted_and_discarded_without_losing_text(self):
+        from spikes.ollama_backend import MAX_STREAM_LINE, MAX_STREAM_RESPONSE
+        frames = [dict(model=self.binding.model, created_at='now', response='patch text', done=False),
+                  dict(model=self.binding.model, created_at='later', response='', done=True,
+                       context=[100000]*180000, eval_count=2, prompt_eval_count=180000)]
+        self.assertGreater(len(json.dumps(frames[-1]).encode()), MAX_STREAM_LINE)
+        result, deltas, reads = self.http_frames(frames)
+        self.assertEqual(['patch text'], deltas)
+        self.assertEqual('patch text', result['response'])
+        self.assertEqual(180000, result['prompt_eval_count'])
+        self.assertNotIn('context', result)
+        self.assertEqual(MAX_STREAM_RESPONSE+1, reads[0])
+        self.assertLess(reads[1], reads[0])
+
+    def test_large_normal_frames_and_non_context_final_metadata_still_fail(self):
+        from spikes.ollama_backend import MAX_STREAM_LINE
+        for done, extra in [(False, {'thinking':'x'*MAX_STREAM_LINE}),
+                            (True, {'extra':'x'*MAX_STREAM_LINE}),
+                            (True, {'thinking':'x'*MAX_STREAM_LINE})]:
+            with self.subTest(done=done, field=next(iter(extra))):
+                frame = dict(model=self.binding.model, created_at='now', response='', done=done, **extra)
+                with self.assertRaises(OllamaResponseError) as caught:self.http_frames([frame])
+                self.assertEqual('stream-frame-too-large', caught.exception.code)
+
+    def test_final_context_is_bounded_typed_and_total_stream_limit_is_preserved(self):
+        for context in [None, [True], [-1], ['1'], [2**31], [1,2,3,4]]:
+            with self.subTest(context=context), patch('spikes.ollama_backend.MAX_STREAM_CONTEXT_TOKENS', 3):
+                with self.assertRaises(OllamaResponseError) as caught:
+                    self.http_frames([dict(model=self.binding.model, created_at='now', response='',
+                                           done=True, context=context)])
+                self.assertEqual('invalid-stream-final', caught.exception.code)
+        with patch('spikes.ollama_backend.MAX_STREAM_RESPONSE', 128):
+            with self.assertRaises(OllamaResponseError) as caught:
+                self.http_frames([dict(model=self.binding.model, created_at='now', response='',
+                                       done=True, context=[1]*100)])
+            self.assertEqual('stream-too-large', caught.exception.code)
+
     def test_concurrent_same_run_never_starts_second_transport(self):
         entered = threading.Event(); release = threading.Event(); calls = []
         def transport(binding, request):

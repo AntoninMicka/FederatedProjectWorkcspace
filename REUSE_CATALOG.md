@@ -954,3 +954,9 @@ Přesun kopíruje původní text. Textové kotvy neposkytují identitu bloků;
 obecný AST serializer, fuzzy aplikace, nový journal a další transakční
 engine byly odmítnuty. Bez nové závislosti či převzetí externího kódu.
 [Rozhodnutí a limity](docs/adr/0064-markdown-block-patch-engine.md).
+
+Oprava velkého finálního Ollama rámce **adaptuje** stávající bounded NDJSON
+reader a normalizaci výsledku. Běžný limit rámce se nemění; výjimka pro
+ověřené finální context tokeny sdílí dosavadní celkový limit přenosu a tokeny
+se nezachovávají. Bez nového transportu, závislosti, opakování modelu nebo
+persistentní vrstvy. [Kontrakt](docs/ai-file-edit.md#velikost-providerových-rámců).

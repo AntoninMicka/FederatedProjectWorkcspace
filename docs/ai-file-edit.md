@@ -221,7 +221,8 @@ celá feature tím nejsou lidsky akceptované. Technicky platný návrh stále
 vyžaduje věcnou kontrolu; strukturovaný patch sám nezajišťuje správnost
 typové syntaxe uvnitř generovaného Markdownu roadmapy.
 
-Závěrečné automatické ověření zdrojů: `python3 -m unittest discover -s tests -v`
+Závěrečné automatické ověření blokové implementace v `a987d59`, před následnou
+opravou transportu: `python3 -m unittest discover -s tests -v`
 prošlo s 1249 testy a 42 přeskočenými kontrolami za přibližně 357 sekund.
 Samostatný Qt/WebEngine `tests/ui/page_layout_smoke.py` prošel v izolovaném
 offscreen režimu. Cílených 15 testů `tests.test_markdown_patch` prošlo;
@@ -231,6 +232,37 @@ prošly. Volitelné přeskočené kontroly a běžný uživatelský profil se t�
 neoznačují za ověřené.
 
 ## Průběžný přenos a časové limity
+
+### Velikost providerových rámců
+
+Po uživatelském běhu `89939e8e-832a-43e3-aa0d-80b555c48f9f` byla v journalu
+ověřena transportní chyba `stream-frame-too-large`, nikoli výsledek validace
+patche. Původní rámec nebyl uložen, takže nelze zpětně prokázat, které pole
+jej zvětšilo. Původní běh se neopakoval ani se nezměnil jeho uložený stav.
+
+Ollama `/api/generate` může v závěrečném rámci vracet deprecated pole
+`context` s tokeny konverzace ([oficiální API kontrakt](https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-completion)).
+Jde o providerová metadata, nikoli o Context Manifest Workspace. Běžné
+rámce nadále mají limit 1 MiB; závěrečné pole tokenů se čte v rámci zbývajícího
+celkového rozpočtu 16 MiB. Musí to být pole nejvýše 1 048 576 nezáporných
+31bitových celých čísel. Tokeny se nepředávají do UI, neukládají do výsledku
+a nepoužívají jako další konverzační kontext. Ostatní metadata závěrečného
+rámce stále musí splnit limit 1 MiB. Limity počtu událostí a textu odpovědi
+se nezvyšují.
+
+Transportní chyby nyní zachovávají konkrétní diagnostiku, například
+`stream-frame-too-large`, s výsledkem `provider-error`. UI zobrazí důvod
+namísto obecné hlášky o nepoužitelném průběžném výsledku. Neplatné blokové
+návrhy zůstávají `invalid-proposal`, přerušené nebo nedokončené přenosy
+zůstávají neopakovatelným `unknown`. Oprava nemění zápis projektu ani recovery
+hranice; používá existující normalizaci a journal OllamaRuns.
+
+Po této opravě prošlo 90 cílených testů modulů `tests.test_ollama_backend`,
+`tests.test_task_stream`, `tests.test_document_patch` a
+`tests.test_markdown_patch`. Zahrnují velký finální kontext, běžný přerostlý
+rámec, jiné přerostlé finální pole, neplatné tokeny, celkový limit a HTTP
+diagnostiku bez opakovaného dispatch. Skutečný uživatelský běh se neopakoval;
+celá sada po této opravě nebyla znovu spuštěna.
 
 Lokální explicitní úlohy v UI, včetně **Upravit vstup**, používají
 `/v1/tasks/route-stream` a existující Ollama NDJSON parser. JSON obálka návrhu

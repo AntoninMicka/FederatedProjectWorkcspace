@@ -33,6 +33,7 @@ OLLAMA_IDLE_TIMEOUT = 30
 MAX_STREAM_LINE = 1024 * 1024
 MAX_STREAM_EVENTS = 65536
 MAX_STREAM_RESPONSE = 16 * 1024 * 1024
+MAX_STREAM_CONTEXT_TOKENS = 1024 * 1024
 
 
 def _closed_object(properties, required):
@@ -850,7 +851,10 @@ class OllamaAdapter:
             thinking_seen = False
             while True:
                 try:
-                    raw = response.readline(MAX_STREAM_LINE + 1)
+                    # /api/generate may include a large deprecated context token
+                    # array in its final frame. Bound the read by the remaining
+                    # stream budget; ordinary frames still have the 1 MiB limit.
+                    raw = response.readline(MAX_STREAM_RESPONSE - total + 1)
                 except (TimeoutError, OSError, http.client.HTTPException) as exc:
                     raise _OllamaTransportUnknown(
                         'Ollama stream became idle or was interrupted',
@@ -861,9 +865,6 @@ class OllamaAdapter:
                     raise _OllamaTransportUnknown(
                         'Ollama stream ended before the final frame',
                         code='stream-incomplete')
-                if len(raw) > MAX_STREAM_LINE:
-                    raise OllamaResponseError('Ollama stream frame exceeds 1 MiB',
-                                              code='stream-frame-too-large')
                 total += len(raw); events += 1
                 if total > MAX_STREAM_RESPONSE or events > MAX_STREAM_EVENTS:
                     raise OllamaResponseError('Ollama stream exceeds configured limits',
@@ -871,8 +872,14 @@ class OllamaAdapter:
                 try:
                     frame = json.loads(raw)
                 except (UnicodeError, ValueError) as exc:
+                    if len(raw) > MAX_STREAM_LINE:
+                        raise OllamaResponseError('Ollama stream frame exceeds 1 MiB',
+                                                  code='stream-frame-too-large') from exc
                     raise OllamaResponseError('Invalid Ollama NDJSON frame',
                                               code='invalid-stream-json') from exc
+                if len(raw) > MAX_STREAM_LINE and not (isinstance(frame, dict) and frame.get('done') is True):
+                    raise OllamaResponseError('Ollama stream frame exceeds 1 MiB',
+                                              code='stream-frame-too-large')
                 if not (isinstance(frame, dict) and frame.get('model') == binding.model
                         and isinstance(frame.get('created_at'), str)
                         and isinstance(frame.get('response'), str)
@@ -894,7 +901,19 @@ class OllamaAdapter:
                     if ('done_reason' in frame and not isinstance(frame['done_reason'], str)):
                         raise OllamaResponseError('Invalid Ollama final stream reason',
                                                   code='invalid-stream-final')
-                    result = dict(frame); result.pop('thinking', None)
+                    if 'context' in frame and not (isinstance(frame['context'], list)
+                            and len(frame['context']) <= MAX_STREAM_CONTEXT_TOKENS
+                            and all(type(token) is int and 0 <= token <= 2**31-1 for token in frame['context'])):
+                        raise OllamaResponseError('Invalid Ollama final context tokens',
+                                                  code='invalid-stream-final')
+                    result = dict(frame)
+                    # Context tokens are not our Context Manifest and must never
+                    # become conversational state or durable model output.
+                    result.pop('context', None)
+                    if len(json.dumps(result, ensure_ascii=False).encode()) > MAX_STREAM_LINE:
+                        raise OllamaResponseError('Ollama final metadata exceeds 1 MiB',
+                                                  code='stream-frame-too-large')
+                    result.pop('thinking', None)
                     result['response'] = ''.join(chunks)
                     return result
                 thinking = frame.get('thinking', '')

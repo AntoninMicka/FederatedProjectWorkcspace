@@ -85,6 +85,29 @@ class StreamTaskTests(unittest.TestCase):
         self.assertFalse(service.task_stream_controls)
         self.assertTrue(OllamaRuns(self.chat_state).get(request['run_id'])['response'])
 
+    def test_provider_frame_limit_keeps_its_diagnostic_and_never_redispatches(self):
+        from spikes.ollama_backend import OllamaResponseError
+        calls=[]
+        def oversized(binding,raw,delta,status,control):
+            calls.append(raw)
+            raise OllamaResponseError('Ollama stream frame exceeds 1 MiB', code='stream-frame-too-large')
+        service,request=self.stream_service(oversized);head=self.git.head()
+        with running_api('http',handler=DesktopHandler) as server:
+            server.chat_service=service;server.projects=service.projects
+            driver=local_api.LocalAPITests()
+            for _ in range(2):
+                response=driver.request(server,path='/v1/tasks/route-stream',body=json.dumps(request).encode())
+                events=[json.loads(line) for line in response.split(b'\r\n\r\n',1)[1].splitlines()]
+                error=next(event for event in events if event['type']=='error')
+                self.assertEqual('stream-frame-too-large',error['diagnostic'])
+                self.assertEqual('provider-error',error['outcome'])
+                self.assertIn('příliš velký rámec',error['error'])
+                self.assertNotIn('Průběžný výsledek',error['error'])
+        self.assertEqual(1,len(calls))
+        self.assertEqual(head,self.git.head())
+        self.assertEqual([],service.task_outcomes(project_id=ENTITY))
+        self.assertEqual('failed',OllamaRuns(self.chat_state).get(request['run_id'])['state'])
+
     def test_control_is_owner_project_scoped_and_released_after_run(self):
         service,request=self.stream_service()
         payload={k:request[k] for k in ('project_id','run_id')};payload['action']='extend'
