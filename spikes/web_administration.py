@@ -77,7 +77,8 @@ async function openAdministration(tab){
  catch(error){selectSettingsTab(document.querySelector('#settings-'+tab+'-tab'));showAdminStatus(error.message || 'Správu se nepodařilo načíst.',true);}
 }
 async function openFederationSharing(){
- if(!['desktop','server'].includes(document.body.dataset.runtime)||!canLeaveWorkspaceEditors())return;
+ if(!['desktop','server'].includes(document.body.dataset.runtime)||!await canLeaveWorkspaceEditors())return;
+ showWorkspacePage(document.querySelector('#federation-view'));
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
  historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=true;federationView.hidden=false;

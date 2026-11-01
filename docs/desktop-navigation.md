@@ -1,0 +1,43 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# Navigace a neuložené změny
+
+Hlavní navigace přepíná levý panel i hlavní stránku. Z nastavení, historie,
+importu, tvorby či opravy projektu a koše lze odejít výběrem jiné sekce.
+Spodní odkazy Zpět se nepoužívají. Stejné přechody fungují kliknutím
+i klávesami pro přepínání záložek. Navigace zůstává dostupná také v presenteru;
+odchod uzavře relaci stávajícím postupem.
+
+Dokumentový/TODO editor, Julia editor, editor prezentací a řešení konfliktů
+sdílejí dialog při neuložených změnách:
+
+- **Zrušit přechod** zachová editor i vybranou sekci. Totéž provede Escape.
+- **Uložit a přejít** nejprve validuje a uloží obsah stávající doménovou
+  operací. Teprve úspěšná odpověď povolí přechod. Neplatný obsah nebo chyba
+  uložení ponechá editor otevřený s rozepsaným obsahem a chybovou zprávou.
+- **Zahodit a přejít** odstraní lokální draft bez nového zápisu do projektu.
+
+Nezměněný editor ani editor, jehož obsah byl vrácen do původního stavu,
+dialog neotevírá. Samotné načtení nové šablony není úprava. Při neověřeném
+výsledku zápisu zůstává ochrana aktivní; opakované uložení používá původní
+operation ID. Zahodit draft neznamená vrátit případný již dokončený commit.
+
+Probíhající síťový nástroj či nasazení dovoluje přepnout jinam. Návrat do
+probíhajícího nástroje zachová jeho stav a nevyvolá nový běh.
+
+Řešení adaptuje existující shared shell a doménové save callbacky podle
+[ADR 0058](adr/0058-shared-raw-editor-and-pattern-catalog.md). Nepřidává
+další storage, journal ani obecný save endpoint. Crash boundaries a recovery
+doménových operací zůstávají stejné: před commitem rozhoduje journal, po
+commitu lze obnovit index z HEAD. Draft a navigační dialog jsou pouze v paměti.
+
+Zavření či obnovení celého browserového okna nadále chrání nativní
+`beforeunload` dialog prohlížeče; třícestný dialog patří přechodům uvnitř aplikace.
+
+Automatická regrese: `python3 -m unittest tests.test_workspace_navigation -v`.
+Izolovaný test skutečného Qt/WebEngine shellu lze zapnout pomocí
+`M0_DESKTOP_TEST=1`; transport nahrazuje fixture a neověřuje živý uživatelský
+profil ani backendové transakce.
