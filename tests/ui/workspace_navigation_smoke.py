@@ -65,6 +65,35 @@ window.navigationTest={done:false};
  await navigateSidebarTab(document.querySelector('#chats-tab'));await openFederationDeployment();check(!federationDeploymentView.hidden&&federationDeploymentConfiguration===deploymentConfig,'Deployment return reset running state');federationNetworkRunning=false;federationDeploymentRunning=false;
  projectRequest=async(path)=>{if(path==='/v1/presentation/status')return {saved:false};throw Error('test-offline');};
  await openPresenter();check(!presenterView.hidden&&getComputedStyle(document.querySelector('body>aside')).display!=='none','Presenter hides navigation');await navigateSidebarTab(document.querySelector('#chats-tab'));check(presenterView.hidden&&!document.body.classList.contains('presenter-active'),'Presenter did not allow navigation');
+
+ // Section defaults never close the current project, including Projects itself.
+ seed();const retained=activeProject;
+ projectRequest=async(path)=>{if(path==='/v1/projects'||path==='/v1/projects/delete/trash')return {projects:[]};throw Error('test-offline');};
+ const defaults={'projects-tab':'project-overview-tab','chats-tab':'chat-tab','todo-tab':'project-overview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
+ for(const [section,destination] of Object.entries(defaults)){showWorkspacePage(historyView);await navigateSidebarTab(document.getElementById(section));check(activeProject===retained,'Section closed project: '+section);check(!projectView.hidden&&document.getElementById(destination).getAttribute('aria-selected')==='true','Wrong section default: '+section);}
+ check(document.querySelector('#sidebar-close-project').disabled===false,'Close project not enabled');
+ const actions=[...document.querySelectorAll('.sidebar-project-primary-actions>button')].map(button=>button.id);check(actions.join(',')==='sidebar-create-project,sidebar-import-project,sidebar-close-project,sidebar-project-trash','Wrong project action order');
+ await loadProjects();check(activeProject===retained&&!projectView.hidden,'Catalog refresh closed project');
+ await openProjectTrashView();check(activeProject===retained,'Trash closed project');await navigateSidebarTab(document.querySelector('#projects-tab'));check(!projectView.hidden,'Trash return lost project landing');
+ await openNotebookLMImport();check(activeProject===retained,'Notebook import closed project');
+ await openProjectRepair({id:'other',title:'Other project'});check(activeProject===retained,'Repair closed current project');
+ document.querySelector('#sidebar-create-project').click();await tick();check(activeProject===retained&&!projectCreateView.hidden,'Create project closed current project');
+ await openNewArtifactEditor();artifactEditorForm.elements.title.value='Keep draft';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));
+ let closing=closeProject();await tick();document.querySelector('[data-leave-choice=cancel]').click();check(!await closing&&activeProject===retained&&!artifactEditorView.hidden,'Cancelled close lost project or draft');
+ document.querySelector('#sidebar-close-project').click();await tick();document.querySelector('[data-leave-choice=discard]').click();await tick();check(activeProject===null&&!document.querySelector('#project-home').hidden&&document.querySelector('#sidebar-close-project').disabled,'Explicit close failed');
+ await navigateSidebarTab(document.querySelector('#projects-tab'));check(!document.querySelector('#project-home').hidden,'Projects without open project did not show home');
+ seed();await openNewArtifactEditor();artifactEditorForm.elements.title.value='Save on close';artifactEditorForm.elements.body.value='Saved before close';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));
+ let closeWrites=0;projectRequest=async(path)=>{if(path==='/v1/artifacts/editor/save'){closeWrites++;return {commit_id:'close-head'};}if(path==='/v1/projects'||path==='/v1/projects/delete/trash')return {projects:[]};throw Error('test-offline');};
+ closing=closeProject();await tick();document.querySelector('[data-leave-choice=save]').click();check(await closing&&activeProject===null&&closeWrites===1,'Save and close failed');
+ // Explicitly opening another project replaces the former one and lands on its overview.
+ seed();loadJuliaWorkspace=async()=>{};loadRoadmapReview=async()=>{};loadProjectConflictSummary=async()=>{};
+ projectRequest=async(path,body)=>{check(path==='/v1/projects/open'&&body.project_id==='other','Unexpected replacement request');return {title:'Other',description:'',commit_id:'other-head',main_todo_id:'other-todo',main_todo:null,history:null,plan:null,artifacts:[]};};
+ await openRegisteredProject('other');check(activeProject?.id==='other'&&!projectView.hidden&&document.querySelector('#projects-tab').getAttribute('aria-selected')==='true'&&document.querySelector('#project-overview-tab').getAttribute('aria-selected')==='true','Opening another project did not replace context');
+
+ // Completion of a confirmed removal must not close another project opened meanwhile.
+ let finishRemoval;projectRequest=async(path)=>{if(path==='/v1/projects/delete/confirm')return await new Promise(resolve=>{finishRemoval=resolve;});if(path==='/v1/projects'||path==='/v1/projects/delete/trash')return {projects:[]};throw Error('test-offline');};
+ projectDeletePlan={project_id:'other'};projectDeleteKind='delete';projectDeleteCheck.checked=true;projectDeleteConfirm.disabled=false;projectDeleteConfirm.click();await tick();seed();const replacement=activeProject;finishRemoval({});await tick();check(activeProject===replacement,'Old removal closed replacement project');
+ projectRequest=async(path)=>{if(path==='/v1/projects/delete/confirm')return {};if(path==='/v1/projects'||path==='/v1/projects/delete/trash')return {projects:[]};throw Error('test-offline');};projectDeletePlan={project_id:activeProject.id};projectDeleteCheck.checked=true;projectDeleteConfirm.disabled=false;projectDeleteConfirm.click();await tick();check(activeProject===null,'Removing current project did not close it');
  navigationTest={done:true,ok:true,pages:pages.length};
 })().catch(error=>{navigationTest={done:true,ok:false,error:error.stack.split("\n").map(line=>line.slice(0,180)).join("\n")};});
 '''
@@ -84,5 +113,5 @@ page.loadFinished.connect(loaded)
 prefix="window.fetch=async()=>{throw Error('test-offline')};window.requestAnimationFrame=()=>0;"
 html=HTML.replace('<link rel="stylesheet" href="/app.css">','<style>'+CSS+'</style>').replace('<script src="/app.js"></script>','<script>'+prefix+JS.replace('</script','<\\/script')+'</script>')
 page.setHtml(html,QUrl("http://127.0.0.1/"))
-QTimer.singleShot(20000,lambda:app.exit(3))
+QTimer.singleShot(30000,lambda:app.exit(3))
 raise SystemExit(app.exec())

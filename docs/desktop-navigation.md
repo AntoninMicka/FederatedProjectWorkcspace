@@ -11,6 +11,17 @@ Spodní odkazy Zpět se nepoužívají. Stejné přechody fungují kliknutím
 i klávesami pro přepínání záložek. Navigace zůstává dostupná také v presenteru;
 odchod uzavře relaci stávajícím postupem.
 
+Výběr sekce vždy otevře její výchozí hlavní stránku. **Projekty** zobrazí
+úvodku otevřeného projektu, nebo úvodní přehled, pokud žádný projekt otevřený
+není. Přepínání sekcí, obnovení katalogu, koš, import ani kontrola jiného
+projektu otevřený projekt nezavírají. **Plán** se vrací na hlavní graf,
+**Nástroje** na přehled bez detailu modelu a **Výstupy** na přehled definic.
+
+Akce **Zavřít projekt** je v projektovém panelu mezi Importem a Košem.
+Bez otevřeného projektu je vypnutá. Zavření používá stejnou ochranu
+neuložených změn jako ostatní navigace. Výběr jiného projektu dosavadní
+projekt nahradí; výslovné odstranění otevřeného projektu jej také zavře.
+
 Dokumentový/TODO editor, Julia editor, editor prezentací a řešení konfliktů
 sdílejí dialog při neuložených změnách:
 

@@ -253,6 +253,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Projekty</h2><div class="sidebar-project-primary-actions">
 <button id="sidebar-create-project" type="button" aria-label="Nový projekt"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 12v5M9.5 14.5h5"/></svg><span class="project-action-label" role="tooltip">Nový projekt</span></button>
 <button id="sidebar-import-project" type="button" aria-label="Importovat projekt" aria-expanded="false" aria-controls="sidebar-project-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 3v10M8.5 9.5 12 13l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat projekt</span></button>
+<button id="sidebar-close-project" type="button" aria-label="Zavřít projekt" disabled><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H4v14h6M10 12h10M16 8l4 4-4 4"/></svg><span class="project-action-label" role="tooltip">Zavřít projekt</span></button>
 <button id="sidebar-project-trash" type="button" aria-label="Koš projektů"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span class="project-action-label" role="tooltip">Koš projektů</span></button></div>
 <div id="sidebar-project-import-options" hidden><button id="sidebar-register-project" type="button" hidden>Projekt z umístění</button><button id="open-notebooklm-import" type="button" hidden>NotebookLM</button></div>
 <p id="sidebar-project-status" role="status">Načítám projekty…</p><button id="sidebar-project-recover" type="button" hidden>Dokončit přerušenou operaci</button><ul id="sidebar-project-list"></ul></div>
@@ -1304,7 +1305,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
-.sidebar-project-primary-actions,.sidebar-tool-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.sidebar-project-primary-actions,.sidebar-tool-primary-actions{overflow:visible}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label,.sidebar-tool-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label,.sidebar-tool-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label,.sidebar-tool-primary-actions button:hover .project-action-label,.sidebar-tool-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:first-child:hover .project-action-label,.sidebar-tool-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:last-child:hover .project-action-label,.sidebar-tool-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
+.sidebar-project-primary-actions,.sidebar-tool-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(4,minmax(0,1fr))}.sidebar-project-primary-actions,.sidebar-tool-primary-actions{overflow:visible}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button,.sidebar-tool-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label,.sidebar-tool-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label,.sidebar-tool-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label,.sidebar-tool-primary-actions button:hover .project-action-label,.sidebar-tool-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:first-child:hover .project-action-label,.sidebar-tool-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-tool-primary-actions button:last-child:hover .project-action-label,.sidebar-tool-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
 #sidebar-project-import-options,.sidebar-tool-options{margin-top:6px}#sidebar-project-import-options button,.sidebar-tool-options button{width:100%;padding:8px 6px;font-size:11px}.sidebar-tool-options button{text-align:left}.sidebar-tool-options button:disabled{opacity:.48}
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
@@ -2133,18 +2134,24 @@ function showWorkspacePage(view){
  for(const page of document.querySelectorAll('main > div'))page.hidden=page!==view;
  if(leavingSettings){userProfileLoaded=false;document.dispatchEvent(new Event('settingsclosed'));}
 }
+function showProjectLanding(){
+ selectSidebarTab(document.querySelector('#projects-tab'));
+ showWorkspacePage(activeProject?projectView:document.querySelector('#project-home'));
+ if(activeProject)selectMainTab(document.querySelector('#project-overview-tab'));
+}
 async function navigateSidebarTab(tab){
  if(!tab||tab.disabled||!await canLeaveWorkspaceEditors())return false;
  const finish=()=>{closeMobileSidebar();closeCompactSidebarMenu();return true;};
- if(tab.id==='projects-tab'){await loadProjects();return finish();}
+ if(tab.id==='projects-tab'){showProjectLanding();return finish();}
  if(tab.id==='settings-sidebar-tab'){await openSettings();return finish();}
  if(tab.id==='federation-tab'){await openFederationSharing();return finish();}
  selectSidebarTab(tab);
  showWorkspacePage(activeProject?projectView:document.querySelector('#project-home'));
  const destinations={'chats-tab':'chat-tab','todo-tab':'project-overview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
  if(activeProject&&destinations[tab.id])selectMainTab(document.getElementById(destinations[tab.id]));
+ if(tab.id==='tools-tab')juliaModelDetail.hidden=true;
  if(tab.id==='chats-tab')await loadChat();
- if(tab.id==='plan-tab')openTaskPlan(taskPlanSelection);
+ if(tab.id==='plan-tab')await openTaskPlan();
  if(tab.id==='presentations-tab'&&activeProject)await openOutputsOverview();
  return finish();
 }
@@ -2309,6 +2316,7 @@ function renderTodo(todo){
 const projectSidebarTabs=['todo-tab','plan-tab','artifacts-tab','tools-tab','presentations-tab'];
 function syncSidebarProjectAvailability(){
  const available=Boolean(activeProject);
+ document.querySelector('#sidebar-close-project').disabled=!available;
  for(const id of projectSidebarTabs){const tab=document.getElementById(id);tab.disabled=!available;tab.setAttribute('aria-disabled',String(!available));}
  const writable=available&&!activeProject.readOnly;
  document.querySelector('#chat-new-thread').disabled=!writable;
@@ -2353,6 +2361,11 @@ function clearProject(){
  document.querySelector('#project-title').textContent='';
  document.querySelector('#project-description').textContent='';
  document.querySelector('#project-commit').textContent='';
+}
+async function closeProject(){
+ if(!activeProject||!await canLeaveWorkspaceEditors())return false;
+ clearProject();showProjectLanding();closeMobileSidebar();closeCompactSidebarMenu();
+ await loadProjects();return true;
 }
 async function projectRequest(path,body,timeout=60000){
  const monitorRequest=path.startsWith('/v1/node-telemetry/') || path.startsWith('/v1/roadmap-refinement/') ||
@@ -2830,7 +2843,7 @@ async function runProjectRepairCheck(){
  catch(error){document.querySelector('#project-repair-report').hidden=true;projectRepairStatus.textContent=error.message;}
 }
 async function openProjectRepair(item){
- if(!await canLeaveWorkspaceEditors())return;clearProject();projectRepairTarget=item;
+ if(!await canLeaveWorkspaceEditors())return;projectRepairTarget=item;
  showWorkspacePage(projectRepairView);
  document.querySelector('#project-home').hidden=true;projectRepairView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
  document.querySelector('#project-repair-target').textContent=`${item.title} · ${item.id}`;
@@ -2889,7 +2902,7 @@ async function openRegisteredProject(projectId){
   await loadRoadmapReview();
   await loadChat();
   syncSidebarProjectAvailability();
-  selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
+  showProjectLanding();
   document.querySelector('#preview-status').textContent=result.read_only ?
    'Read-only replika: podklady lze prohlížet, změny provádějte na primárním uzlu.' : result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
@@ -2985,7 +2998,7 @@ document.querySelector('#project-delete-cancel').addEventListener('click',()=>{p
 projectDeleteConfirm.addEventListener('click',async()=>{
  if(!projectDeletePlan||!projectDeleteCheck.checked)return;projectDeleteConfirm.disabled=true;
  const path=projectDeleteKind==='restore'?'/v1/projects/delete/restore/confirm':projectDeleteKind==='purge'?'/v1/projects/delete/purge/confirm':'/v1/projects/delete/confirm';
- try{await projectRequest(path,{preview:projectDeletePlan,operation_id:crypto.randomUUID()},120000);projectDeletePanel.hidden=true;projectDeletePlan=null;projectDeleteTarget=null;await loadProjects();}
+ try{const removedProject=projectDeleteKind!=='restore'?projectDeletePlan.project_id:null;await projectRequest(path,{preview:projectDeletePlan,operation_id:crypto.randomUUID()},120000);if(removedProject&&activeProject?.id===removedProject)clearProject();projectDeletePanel.hidden=true;projectDeletePlan=null;projectDeleteTarget=null;await loadProjects();}
  catch(error){document.querySelector('#project-delete-status').textContent=error.message;projectDeleteConfirm.disabled=false;}
 });
 async function prepareTrashAction(item,kind){
@@ -3007,19 +3020,19 @@ async function loadProjectTrash(){
 }
 async function openProjectTrashView(){
  if(!await canLeaveWorkspaceEditors())return false;
- clearProject();showWorkspacePage(projectTrashView);document.querySelector('#project-home').hidden=true;projectTrashView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));loadProjectTrash();
+ showWorkspacePage(projectTrashView);document.querySelector('#project-home').hidden=true;projectTrashView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));loadProjectTrash();
  return true;
 }
 async function loadProjects(selectedId=null){
  if(!await canLeaveWorkspaceEditors())return;
  const request=++catalogRequest;
- clearProject();projectCards.replaceChildren();sidebarProjects.replaceChildren();
+ if(!activeProject)clearProject();showProjectLanding();projectCards.replaceChildren();sidebarProjects.replaceChildren();
  projectStatus.textContent='Načítám projekty…';document.querySelector('#sidebar-project-status').textContent='Načítám projekty…';
  try{
   const result=await projectRequest('/v1/projects',{details:true});
   if(request!==catalogRequest)return;
   renderProjectCatalog(result.projects);
-  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),loadChat()]);
+  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),...(!activeProject?[loadChat()]:[])]);
   projectStatus.textContent=result.projects.length ? 'Přehled je připravený.' : 'Zatím nemáte žádný projekt.';
   if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
@@ -3036,6 +3049,7 @@ document.querySelector('#sidebar-register-project').addEventListener('click',()=
  requestNativeAction('register-project-location');
 });
 document.querySelector('#sidebar-project-trash').addEventListener('click',openProjectTrashView);
+document.querySelector('#sidebar-close-project').addEventListener('click',closeProject);
 document.querySelector('#dashboard-trash').addEventListener('click',openProjectTrashView);
 document.querySelector('#dashboard-date').textContent=new Intl.DateTimeFormat('cs-CZ',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
 document.querySelector('#sidebar-create-project').addEventListener('click',async()=>{
@@ -3342,7 +3356,6 @@ federationDeploymentForm.addEventListener('submit',event=>{
 });
 async function openNotebookLMImport(){
  if(!await canLeaveWorkspaceEditors())return;
- clearProject();
  showWorkspacePage(notebookImportView);
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
  sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;notebookImportView.hidden=false;

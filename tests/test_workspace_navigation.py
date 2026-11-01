@@ -21,13 +21,36 @@ def function(name):
 
 class WorkspaceNavigationTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
+    def test_close_project_requires_explicit_allowed_exit(self):
+        script = r'''
+const assert=require('node:assert/strict');
+let activeProject={id:'project'},allowed=false,clears=0,refreshes=0,landing=0;
+async function canLeaveWorkspaceEditors(){return allowed;}
+function clearProject(){clears++;activeProject=null;}
+function showProjectLanding(){landing++;}
+function closeMobileSidebar(){}function closeCompactSidebarMenu(){}
+async function loadProjects(){refreshes++;}
+'''
+        script += '\n' + function('closeProject')
+        script += r'''
+(async()=>{
+ const original=activeProject;
+ assert.equal(await closeProject(),false);assert.equal(activeProject,original);assert.equal(clears,0);assert.equal(refreshes,0);
+ allowed=true;assert.equal(await closeProject(),true);assert.equal(activeProject,null);assert.equal(clears,1);assert.equal(refreshes,1);assert.equal(landing,1);
+ assert.equal(await closeProject(),false);assert.equal(clears,1);assert.equal(refreshes,1);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
     def test_sidebar_routes_hide_standalone_pages_only_after_allowed_exit(self):
         script = r'''
 const assert=require('node:assert/strict');
 const ids=['project-home','project-view','settings-view','history-view','source-import-view','project-create-view','project-trash-view','project-repair-view','notebooklm-import-view','federation-view','federation-network-view','federation-deployment-view'];
 const pages=ids.map(id=>({id,hidden:true})),byId=new Map(pages.map(page=>[page.id,page]));
-const document={querySelectorAll:()=>pages,querySelector:id=>byId.get(id.slice(1)),getElementById:id=>({id}),dispatchEvent:()=>{}};
-const projectView=byId.get('project-view'),settingsView=byId.get('settings-view');
+const document={querySelectorAll:()=>pages,querySelector:id=>byId.get(id.slice(1))||{id:id.slice(1)},getElementById:id=>({id}),dispatchEvent:()=>{}};
+const projectView=byId.get('project-view'),settingsView=byId.get('settings-view'),juliaModelDetail={hidden:false};
 let activeProject={id:'project'},userProfileLoaded=true,allowed=true,selected=null,main=null,loads=0;
 async function canLeaveWorkspaceEditors(){return allowed;}
 function selectSidebarTab(tab){selected=tab.id;}
@@ -40,7 +63,7 @@ async function openFederationSharing(){showWorkspacePage(byId.get('federation-vi
 async function openOutputsOverview(){showWorkspacePage(projectView);}
 function openTaskPlan(){}let taskPlanSelection=null;
 '''
-        script += '\n' + function('showWorkspacePage') + '\n' + function('navigateSidebarTab')
+        script += '\n' + function('showWorkspacePage') + '\n' + function('showProjectLanding') + '\n' + function('navigateSidebarTab')
         script += r'''
 (async()=>{
  for(const page of pages){
@@ -55,7 +78,8 @@ function openTaskPlan(){}let taskPlanSelection=null;
  const before=selected;assert.equal(await navigateSidebarTab({id:'tools-tab',disabled:true}),false);assert.equal(selected,before);
  await navigateSidebarTab({id:'settings-sidebar-tab'});assert.equal(settingsView.hidden,false);
  await navigateSidebarTab({id:'federation-tab'});assert.equal(byId.get('federation-view').hidden,false);
- await navigateSidebarTab({id:'projects-tab'});assert.equal(byId.get('project-home').hidden,false);
+ const opened=activeProject;await navigateSidebarTab({id:'projects-tab'});assert.equal(projectView.hidden,false);assert.equal(main,'project-overview-tab');assert.equal(activeProject,opened);assert.equal(selected,'projects-tab');
+ activeProject=null;await navigateSidebarTab({id:'projects-tab'});assert.equal(byId.get('project-home').hidden,false);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 '''
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=20)
@@ -116,6 +140,6 @@ const choose=choice=>handlers.get('click')({target:{closest:()=>({dataset:{leave
         root = Path(__file__).resolve().parents[1]
         result = subprocess.run([sys.executable, str(root / 'tests/ui/workspace_navigation_smoke.py')],
                                 cwd=root, env={**os.environ, 'PYTHONPATH': str(root)},
-                                capture_output=True, text=True, timeout=30)
+                                capture_output=True, text=True, timeout=45)
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-3000:])
         self.assertIn('"ok": true', result.stdout)
