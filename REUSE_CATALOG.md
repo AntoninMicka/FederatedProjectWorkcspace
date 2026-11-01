@@ -929,3 +929,10 @@ ve stávajícím result slotu úlohy. Nevzniká další writer, schema databáze
 plánovací úložiště. Samostatný editor nebo přímý zápis modelu by obcházely
 stávající ochranu změn a native recovery. Rozsah a obnova:
 [úprava vybraného dokumentu](docs/ai-file-edit.md).
+
+Doplnění AI-FILE-EDIT-01: **reuse/adapt** existujícího Ollama NDJSON parseru,
+run journalu, task routeru, streamované HTTP projekce a společného chat progress
+UI. `task_stream` přidává pouze volatile owner-scoped deadline a rozhodnutí
+uživatele; hard limit přeruší původní socket. Nevzniká druhý provider client,
+durable writer, scheduler ani retry mechanismus. Viz
+[časové limity](docs/ai-file-edit.md#průběžný-přenos-a-časové-limity).

@@ -79,3 +79,38 @@ Markdown, zadat změnu přes Ollama, zkontrolovat a případně upravit diff,
 potvrdit uložení a ověřit původní ID, obsah a historii. Ověřit i zahození
 návrhu a odchod s neuloženými změnami. Izolované testy tuto akceptaci ani
 ověření skutečného modelu nenahrazují.
+
+## Průběžný přenos a časové limity
+
+Lokální explicitní úlohy v UI, včetně **Upravit vstup**, používají
+`/v1/tasks/route-stream` a existující Ollama NDJSON parser. JSON obálka návrhu
+se v UI nezobrazuje; průběžně se promítá text pole `content`. Tento text je
+pouze dočasná projekce. Až validní finální providerový rámec a validace
+výsledku úlohy vytvoří návrh pro společný editor.
+
+Čas se měří na backendu monotónně od zahájení dispatch. **Soft limit je
+180 sekund**, automatický **hard limit 360 sekund**. Soft limit nic neruší;
+UI nabídne **Ukončit běh** nebo **Prodloužit na 30 minut**. Výslovné prodloužení
+před hard hranicí nastaví celkový hard limit na **1800 sekund od začátku
+běhu**, nikoli dalších 30 minut. Další prodloužení tuto hranici neposune.
+Ukončení je dostupné i před soft limitem. Backend rozhodnutí přijímá přes
+`/v1/tasks/run-control` pouze pro vlastníka daného projektu a run ID s aktuálním
+oprávněním zapisovat; endpoint má samostatnou HTTP obsluhu vedle generování.
+
+Řídicí stav a heartbeat jsou v paměti aktivního požadavku, nevzniká nová DB
+ani obnovení providerového běhu. Hard limit, ukončení nebo ztráta klienta
+přeruší místní upstream socket. To nedokazuje ukončení vzdáleného výpočtu.
+Po dispatch je neúplný výsledek `unknown`, s diagnostikou důvodu v existujícím
+OllamaRuns journalu; původní run se nesmí znovu odeslat. Pád procesu ztrácí
+jen řízení aktivního spojení; durable `dispatching` zůstane při obnově
+neopakovatelným `unknown`. Částečný dokument ani jeho změna se nevytvoří.
+Po validním finálním rámci deadline končí; následné získávání runtime metrik
+už nemění dokončený výsledek na timeout. Nativní potvrzení diffu a recovery
+zápisu z předchozí sekce zůstávají beze změny.
+
+Regrese `tests.test_task_stream` ověřuje přesné hranice 1×/2×/10×, opakované
+prodloužení, dokončení, ukončení socketu, skutečný upstream bez prvního rámce,
+vlastnictví a role přes HTTPS, obsluhu ukončení vedle obsazené aplikační fronty
+a durable zákaz redispatch. Qt smoke ověřuje ovládání limitu, NDJSON deadline
+události a čitelný průběžný text. Skutečný model a uživatelský profil vyžadují
+samostatnou ruční akceptaci podle streaming checklistu.

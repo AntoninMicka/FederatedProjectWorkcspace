@@ -38,8 +38,8 @@ dokud není ověřený HTTPS pin a síťová hranice.
   odscrollujte nahoru: aplikace vás nesmí vracet dolů. Po ručním návratu
   na konec se automatické sledování musí obnovit.
 - [ ] Přepněte na **Orchestrace** a odešlete další úlohu. Ihned se musí objevit
-  časovaný stav **Ollama zpracovává orchestraci…**. Task router nadále vrátí
-  validovaný výsledek najednou; tento stav proto neoznačuje tokenový stream.
+  časovaný stav a průběžný obsah výsledku. Lokální explicitní úloha používá
+  stream; návrh se přesto zpřístupní k potvrzení až po validním dokončení.
 - [ ] Po dokončení porovnejte průběžný text s uloženou assistant zprávou a
   zkontrolujte ve Spotřebě běhu `stream N částí`, čas první textové části a
   celkový UI čas. Hodnota vyšší než nula potvrzuje textové delta události;
@@ -63,9 +63,12 @@ dokud není ověřený HTTPS pin a síťová hranice.
   provider.
 - [ ] U `private-network` bindingu ověřte správný TLS pin a odmítnutí
   `local-only`. Změna bindingu nebo jeho revize před dispatch se musí odmítnout.
-- [ ] Režim **Orchestrace**, task router a creator/opponent workflow mají nadále
-  používat svůj dosavadní celistvý providerový výsledek. Orchestrace během
-  čekání ukazuje časovaný živý stav, ale není označena jako tokenový stream.
+- [ ] U lokální explicitní úlohy ověřte po 3 minutách nabídku ukončení nebo
+  prodloužení. Bez volby skončí za 6 minut, po prodloužení nejpozději za
+  30 minut od začátku dispatch. Opakování prodloužení neposouvá tuto hranici.
+- [ ] Ukončení přeruší příjem bez vytvoření částečného návrhu a bez nového
+  providerového požadavku. Creator/opponent workflow a starší celistvá API
+  cesta si zachovávají dosavadní chování.
 
 Automatická regrese pokrývá request digest, fragmentované NDJSON čtení, limity,
 neplatný finální rámec, přerušení, restart bez retry, finální durable výsledek a

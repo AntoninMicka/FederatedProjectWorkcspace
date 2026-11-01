@@ -177,9 +177,9 @@ novými identitami. Nedochází ke skrytému přepnutí na externího providera.
 Přímý brainstorming používá bounded NDJSON streaming. Timeout prvního rámce,
 idle timeout nebo ztráta spojení po odeslání jsou rovněž `unknown`; průběžný
 text je jen UI projekce a nevytváří zprávu. Ruční ověření popisuje
-[checklist streamované Ollamy](ollama-streaming-acceptance.md). Orchestrace a
-role workflow zůstávají na celistvé odpovědi a jejich recovery kontrakt se
-nemění.
+[checklist streamované Ollamy](ollama-streaming-acceptance.md). Lokální explicitní úlohy včetně úprav vstupních souborů používají také stream,
+s vlastním celkovým soft/hard limitem popsaným v [úpravách dokumentu](ai-file-edit.md#průběžný-přenos-a-časové-limity).
+Creator/opponent workflow a starší celistvá API cesta se tím nemění.
 
 ## Hranice současné akceptace
 

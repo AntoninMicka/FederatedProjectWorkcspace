@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
+from spikes.task_stream_ui import TASK_STREAM_JS
 from spikes.task_file_edit_ui import FILE_EDIT_HTML, FILE_EDIT_CSS, FILE_EDIT_JS
 from spikes.artifact_history import ArtifactHistory
 from spikes.conflict_resolution import ConflictResolution
@@ -5133,7 +5134,7 @@ function waitForVisiblePaint(){
 }
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
-async function streamRequest(path,request,onDelta,onStatus=()=>{}){
+async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=>{}){
  const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
  if(!response.ok)throw Object.assign(new Error('Streamovaný požadavek byl odmítnut.'),{status:response.status});
@@ -5143,6 +5144,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{}){
    if(!line)continue;const event=JSON.parse(line);
    if(event.type==='delta' && typeof event.delta==='string')onDelta(event.delta);
    else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
+   else if(event.type==='deadline')onDeadline(event);
    else if(event.type==='result')result=event.result;
    else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status});
    else throw new Error('Neplatná událost streamu.');}
@@ -7058,8 +7060,12 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   liveProgress.set(pendingChatRequest?.task_plan?.search_query ?
    'Vyhledávám a model vyhodnocuje výsledky…':'Model přemýšlí…');},250);
  try{
+  taskStreamDraft='';chatStream.textContent='';
   await waitForVisiblePaint();
-  const result=await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
+  const result=adapter==='ollama' ? await streamRequest('/v1/tasks/route-stream',pendingChatRequest,
+   delta=>appendTaskStreamDelta(delta),
+   status=>liveProgress.set(status==='connecting'?'Připojuji se k Ollamě…':'Model zpracovává úlohu…'),
+   deadline=>updateTaskRunDeadline(deadline,pendingChatRequest)) : await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
   replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
   chatOperationStatus.textContent=result.projection.temporary ?
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
@@ -7078,7 +7084,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    (staleSelection?' Zadání zůstalo zachováno; backend a model vyberte znovu.':
    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
  }
- finally{clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
+ finally{clearTaskRunDeadline();chatStream.hidden=true;clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
   finishChatAutoFollow();}
 });
 async function assignActiveThread(){
@@ -7680,7 +7686,7 @@ if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
 HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script src="/app.js"></script>')
 CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
-JS += ADMIN_JS + FILE_EDIT_JS + PAGE_LAYOUT_JS
+JS += ADMIN_JS + FILE_EDIT_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
@@ -7764,7 +7770,7 @@ class DesktopHandler(Handler):
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
-        '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
+        '/v1/tasks/route', '/v1/tasks/route-stream', '/v1/tasks/run-control', '/v1/tasks/list', '/v1/tasks/cancel',
         '/v1/tasks/artifact', '/v1/tasks/presentation/confirm',
         '/v1/tasks/file-edit/preview', '/v1/tasks/file-edit/confirm',
         '/v1/tasks/external/preview',
@@ -8348,6 +8354,12 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_confirm(request))
             if self.path == '/v1/external/cancel' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_cancel(request))
+            if self.path == '/v1/tasks/run-control':
+                from spikes.task_stream import decide
+                return self.reply(200, decide(self.server.chat_service, request))
+            if self.path == '/v1/tasks/route-stream' and isinstance(request, dict):
+                from spikes.task_stream import serve
+                return serve(self, request)
             if self.path == '/v1/tasks/route' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_route(request))
             if (self.path == '/v1/tasks/list' and isinstance(request, dict)

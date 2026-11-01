@@ -271,6 +271,8 @@ class ChatService:
         self.public_source_adapter_factory = public_source_adapter_factory
         self.node_telemetry = NodeTelemetry(self.node_path.parent)
         self.backend_configuration_lock = threading.RLock()
+        self.task_stream_lock = threading.RLock()
+        self.task_stream_controls = {}
         self._request_user_id = ContextVar(
             f'chat-user-{id(self)}', default=None)
         self._request_project_ids = ContextVar(
@@ -1130,7 +1132,7 @@ class ChatService:
                 projection_sha256=projection_sha256))
         return tuple(result)
 
-    def task_route(self, request):
+    def task_route(self, request, *, on_delta=None, on_status=None, control=None):
         required = {'task_id', 'project_id', 'expected_head', 'thread_id', 'message_id',
                     'run_id', 'manifest_id', 'selected_message_ids',
                     'selected_artifact_ids', 'content', 'privacy', 'created_at',
@@ -1257,10 +1259,17 @@ class ChatService:
             handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                      target=binding.target())
             role = ROLES.resolve('task-output', role_revision)
-            adapter.prepare(handoff, binding, role, 'json',
-                            run_selection=run_selection)
-            response = adapter.dispatch(handoff, binding, role, 'json',
-                                        run_selection=run_selection)
+            if control is not None:
+                require(plan.execution == 'local-ollama', 'Streaming task requires Ollama')
+                adapter.prepare(handoff, binding, role, 'json', stream=True, run_selection=run_selection)
+                control.start()
+                response = adapter.dispatch_stream(handoff, binding, on_delta, on_status,
+                    role, 'json', run_selection=run_selection, control=control)
+                control.check()
+                control.close()
+            else:
+                adapter.prepare(handoff, binding, role, 'json', run_selection=run_selection)
+                response = adapter.dispatch(handoff, binding, role, 'json', run_selection=run_selection)
             try:
                 value = json.loads(response['response'])
             except (KeyError, TypeError, ValueError) as exc:

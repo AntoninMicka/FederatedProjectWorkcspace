@@ -562,7 +562,8 @@ class WebHandler(DesktopHandler):
             # inspect that identity's prepared disclosure.
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-        if self.path in {'/v1/chat/send', '/v1/chat/send-stream'}:
+        if self.path in {'/v1/chat/send', '/v1/chat/send-stream',
+                         '/v1/tasks/route-stream', '/v1/tasks/run-control'}:
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
         if self.path in {'/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output'}:

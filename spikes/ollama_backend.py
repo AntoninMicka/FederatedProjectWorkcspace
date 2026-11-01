@@ -638,15 +638,15 @@ class OllamaAdapter:
                               lambda _delta: None, lambda _status: None, run_selection)
 
     def dispatch_stream(self, handoff, binding, on_delta, on_status=None,
-                        role=None, output_format='text', *, run_selection=None):
+                        role=None, output_format='text', *, run_selection=None, control=None):
         require(callable(on_delta), 'Ollama stream delta callback is required')
         require(on_status is None or callable(on_status),
                 'Ollama stream status callback is invalid')
         return self._dispatch(handoff, binding, role, output_format, True, on_delta,
-                              on_status or (lambda _status: None), run_selection)
+                              on_status or (lambda _status: None), run_selection, control)
 
     def _dispatch(self, handoff, binding, role, output_format, stream,
-                  on_delta, on_status, run_selection=None):
+                  on_delta, on_status, run_selection=None, control=None):
         request, digest, legacy_digest, execution = self._request(
             handoff, binding, role, output_format, stream=stream,
             run_selection=run_selection)
@@ -673,10 +673,12 @@ class OllamaAdapter:
             if stream:
                 on_status('connecting')
                 response = self.stream_transport(
-                    binding, request, on_delta, on_status)
+                    binding, request, on_delta, on_status, **({'control': control} if control is not None else {}))
+                if control is not None: control.check()
             else:
                 response = self.transport(binding, request)
             self._validate_response(response, binding)
+            if control is not None: control.complete()
         except OllamaResponseError as exc:
             with self.runs.connect() as db, db:
                 db.execute("UPDATE runs SET state='failed',error=?,error_code=? "
@@ -687,15 +689,15 @@ class OllamaAdapter:
             with self.runs.connect() as db, db:
                 db.execute("UPDATE runs SET state='unknown',error=?,error_code=? "
                            "WHERE run_id=? AND state='dispatching'",
-                           (str(exc), exc.code, handoff.run_id))
-            raise UnknownRun('Ollama dispatch outcome is unknown', code=exc.code) from exc
+                           (str(exc), control.reason if control is not None and control.reason else exc.code, handoff.run_id))
+            raise UnknownRun('Ollama dispatch outcome is unknown', code=control.reason if control is not None and control.reason else exc.code) from exc
         except Exception as exc:
             with self.runs.connect() as db, db:
                 db.execute("UPDATE runs SET state='unknown',error=?,error_code=? "
                            "WHERE run_id=? AND state='dispatching'",
-                           (type(exc).__name__, 'transport-unknown', handoff.run_id))
+                           (type(exc).__name__, control.reason if control is not None and control.reason else 'transport-unknown', handoff.run_id))
             raise UnknownRun('Ollama dispatch outcome is unknown',
-                             code='transport-unknown') from exc
+                             code=control.reason if control is not None and control.reason else 'transport-unknown') from exc
         try:
             runtime_evidence = self.runtime_probe(binding)
             require(isinstance(runtime_evidence, dict)
@@ -734,7 +736,7 @@ class OllamaAdapter:
             timeout=OLLAMA_GENERATE_TIMEOUT, uncertain_after_send=True)
 
     @staticmethod
-    def _http_stream_transport(binding, request, on_delta, on_status):
+    def _http_stream_transport(binding, request, on_delta, on_status, *, control=None):
         parsed = urlsplit(binding.endpoint)
         if binding.boundary == 'same-node':
             connection = http.client.HTTPConnection(
@@ -746,6 +748,10 @@ class OllamaAdapter:
         try:
             try:
                 connection.connect()
+                if control is not None:
+                    control.attach(connection.sock)
+                    control.check()
+                    connection.sock.settimeout(control.soft*10)
             except TimeoutError as exc:
                 raise OllamaResponseError('Ollama connection timed out',
                                           code='connect-timeout') from exc
@@ -785,7 +791,7 @@ class OllamaAdapter:
                                           code=codes.get(response.status, 'http-error'))
             on_status('waiting-first-token')
             if connection.sock is not None:
-                connection.sock.settimeout(OLLAMA_FIRST_TOKEN_TIMEOUT)
+                connection.sock.settimeout(control.soft*10 if control is not None else OLLAMA_FIRST_TOKEN_TIMEOUT)
             chunks = []
             total = events = response_bytes = 0
             thinking_seen = False
@@ -841,7 +847,7 @@ class OllamaAdapter:
                 thinking = frame.get('thinking', '')
                 if thinking:
                     if connection.sock is not None:
-                        connection.sock.settimeout(OLLAMA_IDLE_TIMEOUT)
+                        connection.sock.settimeout(control.soft*10 if control is not None else OLLAMA_IDLE_TIMEOUT)
                     if not chunks and not thinking_seen:
                         on_status('thinking')
                     thinking_seen = True
@@ -850,7 +856,7 @@ class OllamaAdapter:
                 delta = frame['response']
                 if delta:
                     if connection.sock is not None:
-                        connection.sock.settimeout(OLLAMA_IDLE_TIMEOUT)
+                        connection.sock.settimeout(control.soft*10 if control is not None else OLLAMA_IDLE_TIMEOUT)
                     if not chunks:
                         on_status('generating')
                     chunks.append(delta)

@@ -174,6 +174,31 @@ window.layoutTest={done:false};
  await showArtifactOverview();check(!document.querySelector('#artifact-overview-list').children.length&&document.querySelector('#artifact-overview-status').textContent.includes('Projekt se změnil'),'Stale snapshot shown as current list');
  projectRequest=read;await showArtifactOverview();check(document.querySelector('#artifact-overview-list').textContent.includes('Created file')&&!document.querySelector('#artifact-overview-status').textContent,'List did not recover after successful refresh');
 
+
+ const deadlineRequest={project_id:activeProject.id,run_id:'live-run'};
+ let deadlineDecisions=[];
+ projectRequest=async(path,request)=>{
+  if(path==='/v1/tasks/run-control'){
+   deadlineDecisions.push(request);return {soft_seconds:180,elapsed_seconds:181,hard_seconds:1800,extended:true,stopped:request.action==='stop'?'user-stopped':null};
+  }
+  return await read(path,request);
+ };
+ updateTaskRunDeadline({soft_seconds:180,elapsed_seconds:20,hard_seconds:360,extended:false,stopped:null},deadlineRequest);
+ check(document.querySelector('[data-task-run-action=extend]').hidden&&!document.querySelector('[data-task-run-action=stop]').disabled,'Early run has no stop control or allows premature extension');
+ updateTaskRunDeadline({soft_seconds:180,elapsed_seconds:180,hard_seconds:360,extended:false,stopped:null},deadlineRequest);
+ check(!document.querySelector('[data-task-run-action=extend]').hidden&&document.querySelector('#task-run-deadline').textContent.includes('180 s'),'Soft deadline does not offer a bounded decision');
+ document.querySelector('[data-task-run-action=extend]').click();await tick();
+ check(deadlineDecisions[0].run_id==='live-run'&&document.querySelector('[data-task-run-action=extend]').hidden&&document.querySelector('#task-run-deadline').textContent.includes('Prodloužený'),'Extension lost scope or stays repeatable in UI');
+ document.querySelector('[data-task-run-action=stop]').click();await tick();
+ check(deadlineDecisions[1].action==='stop'&&document.querySelector('[data-task-run-action=stop]').disabled,'Stop remains active after acknowledgement');
+ clearTaskRunDeadline();check(!document.querySelector('#task-run-deadline'),'Finished deadline controls remain visible');
+ const originalFetch=window.fetch;let parsedDeadline=null,parsedDelta='';
+ window.fetch=async()=>new Response(JSON.stringify({type:'deadline',soft_seconds:180})+'\n'+JSON.stringify({type:'delta',delta:'part'})+'\n'+JSON.stringify({type:'result',result:{ok:true}})+'\n');
+ const streamed=await streamRequest('/test',{},part=>parsedDelta+=part,()=>{},value=>parsedDeadline=value);
+ check(streamed.ok&&parsedDelta==='part'&&parsedDeadline.soft_seconds===180,'NDJSON parser lost deadline, delta or final result');window.fetch=originalFetch;
+ taskStreamDraft='';appendTaskStreamDelta('{"schema_version":1,"content":"První\\n');
+ appendTaskStreamDelta('druhý řádek"}');check(chatStream.textContent==='První\ndruhý řádek'&&!chatStream.textContent.includes('schema_version'),'Task stream exposes protocol JSON instead of content');chatStream.hidden=true;
+ projectRequest=read;
  const filePlan={schema_version:1,intent:'revise',execution:'local-ollama',output_kind:'file-edit',source_kinds:['artifacts'],target_artifact_id:'doc'};
  const editProjection={task_id:'edit-task',project_id:activeProject.id,thread_id:'edit-thread',created_at:new Date().toISOString(),state:'prepared',privacy:'project',prompt:{content:'Revise selected document',privacy:'project'},task_plan:filePlan,outcome:{kind:'artifact-draft',title:'Shared document',content:'# Proposed\n'}};
  let editPreviews=0,editWrites=0,editRequests=[];
