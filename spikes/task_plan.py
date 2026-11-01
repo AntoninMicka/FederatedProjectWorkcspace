@@ -9,7 +9,7 @@ from spikes.metadata import require, uuid
 
 
 SOURCE_ORDER = ('conversation', 'artifacts', 'public-web')
-OUTPUT_KINDS = frozenset({'conversation', 'document', 'presentation'})
+OUTPUT_KINDS = frozenset({'conversation', 'document', 'presentation', 'file-edit'})
 EXECUTIONS = frozenset({'local-ollama', 'external-openai', 'external-atlascloud'})
 MAX_SEARCH_QUERY_BYTES = 4096
 
@@ -26,11 +26,15 @@ class ExplicitTaskPlan:
     execution: str
     search_query: str | None
     public_source_run_ids: tuple
+    target_artifact_id: str | None = None
 
     @classmethod
     def parse(cls, value):
         fields = {'schema_version', 'source_kinds', 'output_kind', 'execution',
                   'search_query', 'public_source_run_ids'}
+        editing = isinstance(value, dict) and value.get('output_kind') == 'file-edit'
+        if editing:
+            fields.add('target_artifact_id')
         require(isinstance(value, dict) and set(value) == fields
                 and value['schema_version'] == 1,
                 'Unknown or missing explicit task plan field')
@@ -63,8 +67,13 @@ class ExplicitTaskPlan:
         if value['execution'] != 'local-ollama':
             require('artifacts' not in sources,
                     'External task execution cannot include project artifacts')
+        target = value.get('target_artifact_id')
+        if editing:
+            uuid(target)
+            require('artifacts' in sources and value['execution'] == 'local-ollama',
+                    'File editing requires an explicit project input and Ollama execution')
         return cls(tuple(sources), value['output_kind'], value['execution'], query,
-                   tuple(runs))
+                   tuple(runs), target)
 
     @property
     def acquiring_public_web(self):
@@ -72,7 +81,7 @@ class ExplicitTaskPlan:
 
     @property
     def expected_outcome_kind(self):
-        return {'conversation': 'direct-answer', 'document': 'artifact-draft',
+        return {'conversation': 'direct-answer', 'document': 'artifact-draft', 'file-edit': 'artifact-draft',
                 'presentation': 'presentation-draft'}[self.output_kind]
 
     @property
@@ -80,10 +89,13 @@ class ExplicitTaskPlan:
         return 'task-output-' + self.output_kind + '-v1'
 
     def serialize(self):
-        return {'schema_version': 1, 'source_kinds': list(self.source_kinds),
+        result = {'schema_version': 1, 'source_kinds': list(self.source_kinds),
                 'output_kind': self.output_kind, 'execution': self.execution,
                 'search_query': self.search_query,
                 'public_source_run_ids': list(self.public_source_run_ids)}
+        if self.output_kind == 'file-edit':
+            result['target_artifact_id'] = self.target_artifact_id
+        return result
 
     def digest(self):
         return hashlib.sha256(_canonical(self.serialize())).hexdigest()
@@ -93,6 +105,9 @@ class ExplicitTaskPlan:
                 'Task selections must be lists')
         require(('artifacts' in self.source_kinds) == bool(artifact_ids),
                 'Task artifact selection does not match the explicit source plan')
+        if self.output_kind == 'file-edit':
+            require(self.target_artifact_id in artifact_ids,
+                    'File edit target must be explicitly included in the Context Manifest')
         if 'conversation' not in self.source_kinds:
             require(not message_ids,
                     'Task conversation selection does not match the explicit source plan')
@@ -112,10 +127,14 @@ def task_output_instruction(plan):
     if plan.output_kind == 'conversation':
         template = '{"schema_version":1,"kind":"direct-answer","content":"..."}'
         detail = 'Answer the task using only the supplied sources.'
-    elif plan.output_kind == 'document':
+    elif plan.output_kind in {'document', 'file-edit'}:
         template = ('{"schema_version":1,"kind":"artifact-draft",'
                     '"artifact_kind":"document","title":"...","content":"..."}')
         detail = 'Draft one durable text document using only the supplied sources.'
+        if plan.output_kind == 'file-edit':
+            detail = ('Return the complete replacement Markdown content for selected artifact '
+                      + plan.target_artifact_id + '. Preserve its title and unrelated content. '
+                      'This is only a proposal, never authorization to save or modify other files.')
     else:
         template = ('{"schema_version":1,"kind":"presentation-proposal",'
                     '"operation":"create|update","target_artifact_id":null,'

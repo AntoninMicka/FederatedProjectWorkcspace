@@ -227,6 +227,9 @@ class WebHandler(DesktopHandler):
                        if request.get('action') == 'status' else self._can_write(request.get('project_id')))
             if not allowed: return self.send_error(403)
             return super().dispatch(request)
+        if self.path in {'/v1/tasks/file-edit/preview', '/v1/tasks/file-edit/confirm'}:
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
         if self.path.startswith('/v1/roadmap-refinement/'):
             if not isinstance(request, dict):
                 return self.send_error(400)

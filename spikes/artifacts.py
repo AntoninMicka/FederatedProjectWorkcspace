@@ -86,7 +86,7 @@ class Artifacts:
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
 
     def save(self, request, operation_id, *, checkpoint=lambda stage: None,
-             privacy='project', provenance='user'):
+             privacy='project', provenance='user', transformation=None, before_write=lambda: None):
         required = {'project_id', 'artifact_id', 'base_head', 'title', 'body', 'new'}
         require(isinstance(request, dict) and required <= request.keys() <= required | {
                 'metadata', 'filename'},
@@ -120,6 +120,12 @@ class Artifacts:
         ws = self.workspace(request['project_id'])
         author = ProjectCreation(self.node_path).author_id()
         intent = dict(request, author_id=author)
+        if transformation is not None:
+            require(isinstance(transformation, dict) and set(transformation) == {
+                'task_id', 'run_id', 'manifest_id'} and request['new'] is False,
+                'Invalid document transformation provenance')
+            for identifier in transformation.values(): uuid(identifier)
+            intent['transformation'] = dict(transformation)
 
         def prepare(workspace):
             head = workspace.git.head()
@@ -149,6 +155,8 @@ class Artifacts:
                 if sidecar:
                     meta['file'] = request['filename']
             meta.update(patch)
+            if transformation is not None:
+                meta['provenance'] = 'llm-transformed'
             body = request['body'].encode()
             if sidecar:
                 changes = {path: body, sidecar: (json.dumps(meta, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()}
@@ -159,6 +167,16 @@ class Artifacts:
                 if request['body'] == doc['body'] and (sidecar or meta == doc['metadata']):
                     changes[path] = files[old_path]
                 changes[old_path] = None
+            if transformation is not None:
+                from spikes.task_graph import project_task_graph
+                proposed = dict(files)
+                for name, value in changes.items():
+                    if value is None: proposed.pop(name, None)
+                    else: proposed[name] = value
+                plan = project_task_graph(proposed, validate_snapshot(proposed), request['project_id'], head)
+                require(plan['status'] in {'ready', 'missing'},
+                        'Document transformation would leave an invalid roadmap: ' + plan.get('error', ''))
+            before_write()
             return changes, 'Local workspace author', author + '@local.invalid', 'Save Markdown document'
 
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)

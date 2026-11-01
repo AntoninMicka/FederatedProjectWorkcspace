@@ -921,3 +921,11 @@ agent runner ani projektový writer nejsou potřebné. Frontové flags se odvozu
 z existujícího review journalu, nepřidává se druhý completion writer.
 Hardlinky/symlinky míří pouze do exportní cache, nikdy do kanonického Gitu.
 Recovery: [ADR 0062](docs/adr/0062-pinned-queue-handoff.md).
+
+AI-FILE-EDIT-01 **reuse/adaptuje** `ExplicitTaskPlan`, Context Manifest,
+`TaskOutcomes`, sdílený raw editor, `Artifacts.save` a `Workspace.transact`.
+Nový modul váže přesný diff na původní ID/revizi a ukládá schválený požadavek
+ve stávajícím result slotu úlohy. Nevzniká další writer, schema databáze ani
+plánovací úložiště. Samostatný editor nebo přímý zápis modelu by obcházely
+stávající ochranu změn a native recovery. Rozsah a obnova:
+[úprava vybraného dokumentu](docs/ai-file-edit.md).

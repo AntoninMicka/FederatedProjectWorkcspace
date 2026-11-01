@@ -173,6 +173,35 @@ window.layoutTest={done:false};
  const read=projectRequest;workspaceArtifactProjectionHead='unknown';projectRequest=async(path,request)=>path==='/v1/projects/open'?{commit_id:'different-head',artifacts:[]} : await read(path,request);
  await showArtifactOverview();check(!document.querySelector('#artifact-overview-list').children.length&&document.querySelector('#artifact-overview-status').textContent.includes('Projekt se změnil'),'Stale snapshot shown as current list');
  projectRequest=read;await showArtifactOverview();check(document.querySelector('#artifact-overview-list').textContent.includes('Created file')&&!document.querySelector('#artifact-overview-status').textContent,'List did not recover after successful refresh');
+
+ const filePlan={schema_version:1,intent:'revise',execution:'local-ollama',output_kind:'file-edit',source_kinds:['artifacts'],target_artifact_id:'doc'};
+ const editProjection={task_id:'edit-task',project_id:activeProject.id,thread_id:'edit-thread',created_at:new Date().toISOString(),state:'prepared',privacy:'project',prompt:{content:'Revise selected document',privacy:'project'},task_plan:filePlan,outcome:{kind:'artifact-draft',title:'Shared document',content:'# Proposed\n'}};
+ let editPreviews=0,editWrites=0,editRequests=[];
+ projectRequest=async(path,request)=>{
+  if(path==='/v1/tasks/file-edit/preview'){
+   editPreviews++;return {title:'Shared document',document:{id:'doc',title:'Shared document',body,metadata:{file:'content.md'}},body:request.body,diff:'--- original\n+++ proposed\n+'+request.body,pending_confirmation:false,confirmation:{project_id:activeProject.id,task_id:'edit-task',artifact_id:'doc',base_head:activeProject.head,body:request.body,approval_digest:'a'.repeat(64),approved:true}};
+  }
+  if(path==='/v1/tasks/file-edit/confirm'){
+   editRequests.push(structuredClone(request));
+   if(editRequests.length===1){editWrites++;throw Error('Lost reply after commit');}
+   check(JSON.stringify(editRequests[0])===JSON.stringify(request),'Retry changed the approved operation');
+   return {...editProjection,state:'completed',outcome:{kind:'artifact-link',artifact_id:'doc',title:'Shared document',project_commit:'edit-head'}};
+  }
+  return await read(path,request);
+ };
+ await openTaskFileEditEditor(editProjection);
+ check(!artifactEditorView.hidden&&artifactEditorDirty&&artifactEditorForm.elements.title.disabled&&artifactEditorForm.elements.body.value==='# Proposed\n','Proposal bypassed shared editor or lost target');
+ artifactEditorForm.elements.body.value='# Reviewed by user\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));
+ const rejectedSave=saveArtifactEditor(false);await tick();
+ const editDialog=document.querySelector('#task-file-edit-dialog'),approveEdit=document.querySelector('#task-file-edit-approved'),confirmEdit=editDialog.querySelector('[data-file-edit-choice=save]');
+ check(editDialog.open&&confirmEdit.disabled&&document.querySelector('#task-file-edit-diff').textContent.includes('Reviewed by user'),'Exact edited diff is not guarded by confirmation');
+ editDialog.querySelector('[data-file-edit-choice=cancel]').click();check(!await rejectedSave&&editWrites===0&&artifactEditorDirty,'Cancelled diff wrote content or discarded draft');
+ const firstEditSave=saveArtifactEditor(false);await tick();approveEdit.checked=true;approveEdit.dispatchEvent(new Event('change'));confirmEdit.click();
+ check(!await firstEditSave&&editWrites===1&&artifactEditorTaskEdit.confirmation&&artifactEditorForm.elements.body.readOnly,'Unknown save lost its exact retry or left approved body editable');
+ const previewsBeforeRetry=editPreviews;
+ check(await saveArtifactEditor(false)&&editWrites===1&&editRequests.length===2&&editPreviews===previewsBeforeRetry,'Retry generated another preview/write');
+ check(!artifactEditorDirty&&artifactEditorTaskEdit===null&&!artifactEditorForm.elements.title.disabled&&!artifactEditorForm.elements.body.readOnly&&activeProject.head==='edit-head','Saved file edit did not reset shared editor');
+ projectRequest=read;
  const offerPicker=selectedRunOffer;selectedRunOffer=()=>null;showWorkspacePage(settingsView);draft.value='Show chat result';
  promptForm.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();selectedRunOffer=offerPicker;
  check(!projectView.hidden&&!document.querySelector('#chat-panel').hidden&&document.querySelector('#chats-tab').getAttribute('aria-selected')==='true','Submitting from standalone page leaves results hidden');

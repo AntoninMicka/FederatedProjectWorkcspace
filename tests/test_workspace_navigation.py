@@ -93,7 +93,9 @@ const handlers=new Map();
 const editorLeaveDialog={open:false,addEventListener:(type,fn)=>handlers.set(type,fn),removeEventListener:type=>handlers.delete(type),showModal(){this.open=true;},close(){this.open=false;}};
 const document={querySelector:()=>({textContent:''})};
 let editorLeavePending=false;
-let artifactEditorView={hidden:false},artifactEditorDirty=false,artifactEditorAttempt=null,artifactEditorItem={id:'doc'};
+let artifactEditorView={hidden:false},artifactEditorDirty=false,artifactEditorAttempt=null,artifactEditorItem={id:'doc'},artifactEditorTaskEdit=null;
+const artifactEditorForm={elements:Object.fromEntries(['title','filename','description','tags'].map(name=>[name,{disabled:false}]))};
+const artifactRawWidget={readOnly:false,setDisabled(value){this.readOnly=value;}};
 let juliaEditor={hidden:false},juliaEditorDirty=false,juliaEditorAttempt=null,juliaEditorModel={};
 let presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorView={},presentationEditorDeck={},presentationEditorWorkspace={hidden:false},presentationRawPanel={hidden:true};
 let conflicts=false,projectConflictOperation=null;
@@ -108,7 +110,7 @@ async function savePresentationEditor(navigate){assert.equal(navigate,false);wri
 async function saveConflictEditor(navigate){assert.equal(navigate,false);writes++;if(!saveOK)return false;resetProjectConflicts();return true;}
 const choose=choice=>handlers.get('click')({target:{closest:()=>({dataset:{leaveChoice:choice}})}});
 '''
-        for name in ('resolveEditorLeave', 'canLeaveArtifactEditor', 'canLeaveJuliaEditor',
+        for name in ('resetTaskFileEditEditor', 'resolveEditorLeave', 'canLeaveArtifactEditor', 'canLeaveJuliaEditor',
                      'canLeavePresentationEditor', 'canLeaveConflictEditor'):
             script += '\n' + function(name)
         script += r'''
@@ -117,7 +119,7 @@ const choose=choice=>handlers.get('click')({target:{closest:()=>({dataset:{leave
   assert.equal(await guard(),true);assert.equal(editorLeaveDialog.open,false);
  }
  const editors=[
-  [canLeaveArtifactEditor,()=>{artifactEditorView.hidden=false;artifactEditorDirty=true;}],
+  [canLeaveArtifactEditor,()=>{artifactEditorView.hidden=false;artifactEditorDirty=true;artifactEditorTaskEdit={task_id:'proposal'};artifactEditorForm.elements.title.disabled=true;artifactRawWidget.setDisabled(true);}],
   [canLeaveJuliaEditor,()=>{juliaEditor.hidden=false;juliaEditorDirty=true;}],
   [canLeavePresentationEditor,()=>{presentationEditorDirty=true;}],
   [canLeaveConflictEditor,()=>{conflicts=true;}]
@@ -129,7 +131,7 @@ const choose=choice=>handlers.get('click')({target:{closest:()=>({dataset:{leave
   dirty();pending=guard();assert.equal(await guard(),false);let prevented=false;handlers.get('cancel')({preventDefault(){prevented=true;}});assert.equal(await pending,false);assert.equal(prevented,true);
   const count=writes;pending=guard();choose('discard');assert.equal(await pending,true);assert.equal(writes,count);assert.equal(await guard(),true);
  }
- assert.equal(writes,8);
+ assert.equal(writes,8);assert.equal(artifactEditorTaskEdit,null);assert.equal(artifactEditorForm.elements.title.disabled,false);assert.equal(artifactRawWidget.readOnly,false);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 '''
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=20)

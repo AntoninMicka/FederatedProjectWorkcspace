@@ -1160,6 +1160,11 @@ class ChatService:
         workspace = self.projects.workspace(request['project_id'], blocking=False)
         require(workspace.git.head() == request['expected_head'],
                 'Project changed before routed task')
+        edit_target = None
+        if plan.output_kind == 'file-edit':
+            from spikes.task_file_edit import target_document
+            edit_target, _, _ = target_document(self, request['project_id'], plan.target_artifact_id,
+                                                 request['expected_head'])
         root = self._root(); node_id, user_id = self._identity()
         threads, bindings, adapter = self._stores()
         thread = {row['thread_id']: row for row in threads.list(node_id, user_id)}.get(
@@ -1232,6 +1237,9 @@ class ChatService:
                 'Selected task execution binding changed')
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
+        if edit_target is not None:
+            require(PRIVACY_ORDER[edit_target['metadata']['privacy']] >= PRIVACY_ORDER[strongest],
+                    'File edit cannot lower the privacy of its context')
         if plan.acquiring_public_web:
             outcome = AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
                 'purpose': 'Acquire public sources for explicit ' + plan.output_kind + ' output',
@@ -1261,6 +1269,8 @@ class ChatService:
                         else plan.expected_outcome_kind)
             require(isinstance(value, dict) and value.get('kind') == expected,
                     'Model returned a different output kind than the explicit task plan')
+            if edit_target is not None:
+                value = dict(value, title=edit_target['title'])
             if plan.output_kind == 'presentation':
                 require(workspace.git.head() == prepared.manifest['project_commit'],
                         'Project changed while preparing presentation proposal')
@@ -1995,6 +2005,10 @@ class ChatService:
         require(isinstance(request, dict) and set(request) == {'task_id'},
                 'Invalid task cancellation')
         node_id, user_id = self._identity()
+        current = TaskOutcomes(self._root()).get(request['task_id'], node_id, user_id)
+        if current['request'].get('task_plan', {}).get('output_kind') == 'file-edit':
+            from spikes.task_file_edit import cancel
+            return cancel(self, request['task_id'])
         SearchRuns(self._root()).cancel_task(request['task_id'], node_id, user_id)
         row = TaskOutcomes(self._root()).finish(request['task_id'], node_id, user_id,
                                                  'cancelled')
@@ -2007,6 +2021,8 @@ class ChatService:
         for key in required: uuid(request[key])
         node_id, user_id = self._identity(); store = TaskOutcomes(self._root())
         row = store.get(request['task_id'], node_id, user_id)
+        require(row['request'].get('task_plan', {}).get('output_kind') != 'file-edit',
+                'Selected-file edits require their exact preview and confirmation')
         if row['state'] == 'completed':
             require(row['result'].get('kind') == 'artifact-link'
                     and row['result'].get('artifact_id') == request['artifact_id'],
@@ -2026,6 +2042,14 @@ class ChatService:
                   'project_commit': receipt['commit_id']}
         return store.finish(request['task_id'], node_id, user_id, 'completed',
                             result=result)['projection']
+
+    def task_preview_file_edit(self, request):
+        from spikes.task_file_edit import preview
+        return preview(self, request)
+
+    def task_confirm_file_edit(self, request, *, checkpoint=lambda stage: None):
+        from spikes.task_file_edit import confirm
+        return confirm(self, request, checkpoint=checkpoint)
 
     def task_confirm_presentation(self, request, *, checkpoint=lambda stage: None):
         required = {'task_id', 'artifact_id', 'operation_id', 'approval_digest',

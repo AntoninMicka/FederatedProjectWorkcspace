@@ -87,7 +87,10 @@ class TaskOutcomes:
         if row[11] == 'prepared':
             projection.update(temporary=True, outcome=outcome)
             if result is not None:
-                projection['external_preview'] = result
+                if result.get('kind') == 'file-edit-approval':
+                    projection['file_edit_approval'] = result['request']
+                else:
+                    projection['external_preview'] = result
         elif row[11] == 'completed':
             projection.update(temporary=False, outcome=result)
         else:
@@ -123,9 +126,13 @@ class TaskOutcomes:
             rows = db.execute(query + ' ORDER BY created_at,task_id', values).fetchall()
         return [self._projection(row[0], row[1:])['projection'] for row in rows]
 
-    def finish(self, task_id, node_id, user_id, state, *, result=None):
+    def finish(self, task_id, node_id, user_id, state, *, result=None, file_edit_unwritten=False):
         require(state in {'cancelled', 'completed'}, 'Invalid terminal task outcome state')
         current = self.get(task_id, node_id, user_id)
+        file_edit_cancel = (state == 'cancelled' and
+                            current['request'].get('task_plan', {}).get('output_kind') == 'file-edit')
+        if file_edit_cancel and not file_edit_unwritten:
+            require(current['result'] is None, 'File edit was approved; resume the original save before cancelling')
         if current['state'] != 'prepared':
             require(current['state'] == state
                     and current['result'] == result,
@@ -139,9 +146,32 @@ class TaskOutcomes:
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             changed = db.execute('UPDATE outcomes SET state=?,result=? '
-                                 "WHERE task_id=? AND state='prepared'",
-                                 (state, encoded, task_id))
+                                 "WHERE task_id=? AND state='prepared'" +
+                                 (' AND result IS ?' if file_edit_cancel else ''),
+                                 (state, encoded, task_id, None if current['result'] is None else _canonical(current['result']))
+                                 if file_edit_cancel else (state, encoded, task_id))
             require(changed.rowcount == 1, 'Task outcome changed while completing')
+            db.commit()
+        return self.get(task_id, node_id, user_id)
+
+    def bind_file_edit_approval(self, task_id, node_id, user_id, request):
+        current = self.get(task_id, node_id, user_id)
+        require(current['state'] == 'prepared' and current['outcome']['kind'] == 'artifact-draft'
+                and current['request'].get('task_plan', {}).get('output_kind') == 'file-edit'
+                and isinstance(request, dict) and request.get('task_id') == task_id
+                and request.get('approved') is True, 'Invalid file edit approval')
+        approval = {'kind': 'file-edit-approval', 'request': request}
+        if current['result'] is not None:
+            require(current['result'] == approval, 'File edit already has a different approved save')
+            return current
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            changed = db.execute("UPDATE outcomes SET result=? WHERE task_id=? AND state='prepared' AND result IS NULL",
+                                 (_canonical(approval), task_id))
+            if changed.rowcount != 1:
+                row = db.execute('SELECT state,result FROM outcomes WHERE task_id=?', (task_id,)).fetchone()
+                require(row and row[0] == 'prepared' and row[1] == _canonical(approval),
+                        'File edit changed while approving')
             db.commit()
         return self.get(task_id, node_id, user_id)
 

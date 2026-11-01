@@ -611,6 +611,7 @@ class OllamaAdapter:
                 body['format'] = {
                     'task-output-conversation-v1': _DIRECT_ANSWER_FORMAT,
                     'task-output-document-v1': _DOCUMENT_DRAFT_FORMAT,
+                    'task-output-file-edit-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-presentation-v1': _PRESENTATION_PROPOSAL_FORMAT,
                 }[role.revision]
             else:
