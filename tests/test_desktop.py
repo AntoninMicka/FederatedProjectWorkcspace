@@ -807,7 +807,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
         submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]
         self.assertNotIn('selectMainTab', input_handler)
-        self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", submit_handler)
+        self.assertIn("await navigateMainTab(document.querySelector('#chat-tab'))", submit_handler)
+        self.assertIn("selectSidebarTab(document.querySelector('#chats-tab'))", submit_handler)
 
     def test_project_overview_and_prompt_widget_define_central_layout(self):
         overview = HTML.split('<div id="project-overview-panel"', 1)[1].split(

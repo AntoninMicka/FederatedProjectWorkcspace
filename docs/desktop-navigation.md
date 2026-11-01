@@ -34,6 +34,10 @@ posouvá se samostatně a lze jej zavřít pro zvětšení grafu. Na úzkém dis
 jsou graf a detail nad sebou, stále s nezávislým posouváním. Detail nepoužívá
 styly boční navigace a celá stránka roadmapy se neposouvá.
 
+Odeslání promptu otevře hlavní stránku i panel Chaty přes společnou ochranu
+editorů. Průběh a výsledek sledují posouvané tělo stránky chatu. Při ručním
+posunutí ke starším zprávám se automatické sledování pozastaví.
+
 Akce **Zavřít projekt** je v projektovém panelu mezi Importem a Košem.
 Bez otevřeného projektu je vypnutá. Zavření používá stejnou ochranu
 neuložených změn jako ostatní navigace. Výběr jiného projektu dosavadní

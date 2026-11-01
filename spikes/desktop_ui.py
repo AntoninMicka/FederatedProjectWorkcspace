@@ -5057,6 +5057,7 @@ let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevi
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
 function chatScrollOwner(){
+ const pageBody=chatMessages.closest('.workspace-page-body');if(pageBody)return pageBody;
  return getComputedStyle(mainPanelContent).overflowY==='visible' ?
   document.scrollingElement : mainPanelContent;
 }
@@ -5065,7 +5066,7 @@ function chatScrollNearBottom(){const owner=chatScrollOwner();
 function updateChatAutoFollow(){
  if(!chatStream.hidden || !chatStreamStatus.hidden)streamAutoFollow=chatScrollNearBottom();
 }
-mainPanelContent.addEventListener('scroll',updateChatAutoFollow,{passive:true});
+mainPanelContent.addEventListener('scroll',updateChatAutoFollow,{passive:true,capture:true});
 window.addEventListener('scroll',updateChatAutoFollow,{passive:true});
 function keepChatStreamVisible(){
  if(!streamAutoFollow || streamScrollPending)return;streamScrollPending=true;
@@ -6864,7 +6865,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(!threadWritable()){
   chatOperationStatus.textContent='Archivované vlákno nebo vlákno jiného projektu je pouze pro čtení.';return;
  }
- selectMainTab(document.querySelector('#chat-tab'));
+ if(!await navigateMainTab(document.querySelector('#chat-tab')))return;
+ selectSidebarTab(document.querySelector('#chats-tab'));
  const mode=document.querySelector('#chat-mode').value;
  const offer=selectedRunOffer();
  if(!offer){chatOperationStatus.textContent='Vyberte právě jednu čerstvou kombinaci backendu a modelu.';return;}
