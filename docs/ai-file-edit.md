@@ -147,6 +147,24 @@ samostatná; velikost kontextu modelu se touto změnou nezvětšuje.
 
 ## Blokový Markdown Patch Engine
 
+Volba **Vložení pod milník** je omezený kontrakt pro přidání potomků.
+Rodičovský nadpis a jeho metadata se zobrazují pouze ke čtení. Jediná
+povolená operace je jeden `insert_after` za posledními metadaty rodiče,
+před prvním existujícím potomkem. Cíl i akce jsou omezené ve schématu a
+znovu ověřené při sestavení a náhledu návrhu. Pro milník se ukazuje vzor
+dávky s podřízeným úkolem; pro dávku vzor úkolu, vždy s přesným odsazením.
+Krátký doporučený prefix nových ID nekoliduje s definicemi v dokumentu;
+globální unikátnost a vztahy dál ověřuje sémantický validátor celého plánu.
+Existující ID z příkladů se nesmějí použít jako nová definice.
+
+Toto upřesnění řeší běh `18f8fa3f-9efb-48a7-bc1b-3cfda4ff405c`: při
+1234 vstupních tokenech a 152 výstupních tokenech model vložil nový kořenový
+řádek `DEV-02` hned za nadpis milníku, před jeho `type: milestone`.
+Současně už existoval jiný uzel `DEV-02`. Chyba „deklaruje typ vícekrát“
+proto nebyla důvodem tolerovat další deklaraci či přepsat původní uzel.
+Vadný návrh se odmítá; aplikace nepřesměrovává jeho adresu ani neopravuje
+jeho ID potichu. Povolené místo a formát se poskytují před generováním.
+
 Opakované ladění lze provést mimo ostrý projekt přes
 [izolovanou self-ladicí smyčku](markdown-self-tuning.md). Porovnává první
 pokus, modelovou opravu patche a modelový návrh změny instrukcí/parametrů

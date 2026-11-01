@@ -219,12 +219,42 @@ class CompactProposalTests(unittest.TestCase):
                 '- [ ] [M2] Other SIBLING\n  - type: milestone\n')
         ids = [b.id for b in scan(text)][:2]
         scope = context(text, ids, schema=SCHEMA)
-        self.assertEqual(ids, scope['addressable_block_ids'])
+        self.assertEqual([ids[1]], scope['addressable_block_ids'])
         self.assertIn('  - [ ] [B1] Batch\n    - type: batch\n', scope['following_context'])
         rendered = render_prompt(scope)
         self.assertNotIn('SECRET-DESCRIPTION', rendered)
         self.assertNotIn('SIBLING', rendered)
         self.assertEqual('', context('# A\nx\n## B\ny\n', ['b00001'], schema=SCHEMA)['following_context'])
+
+    def test_parent_insertion_is_after_all_metadata_and_rejects_existing_node_ids(self):
+        from spikes.markdown_patch import complete, output_schema_v3
+        text = ('- [ ] [MILESTONE-DEV] Development\n  - type: milestone\n  - Zdroj: retained\n'
+                '  - [ ] [DEV-02] Existing batch\n    - type: batch\n')
+        blocks=scan(text);ids=[blocks[0].id,blocks[1].id]
+        scope=context(text,ids,schema=SCHEMA)
+        anchor=blocks[2].id
+        self.assertEqual([anchor],scope['addressable_block_ids'])
+        self.assertEqual(ids,scope['selected_block_ids'])
+        item=output_schema_v3(scope)['properties']['changes']
+        self.assertEqual(1,item['maxItems'])
+        self.assertEqual(['insert_after'],item['items']['properties']['action']['enum'])
+        def wire(id_,content):return dict(kind=KIND,changes=[dict(block_id=id_,action='insert_after',destination_id=None,content=content)])
+        bad='- [ ] [DEV-02] New task\n  - type: task\n'
+        with self.assertRaisesRegex(ValueError,'metadata rodiče'):complete(wire(ids[0],bad),text,ids)
+        with self.assertRaisesRegex(ValueError,'DEV-02 už v plánu existuje'):complete(wire(anchor,bad),text,ids)
+        new='  - [ ] [NEW-BATCH] New batch\n    - type: batch\n'
+        result=complete(wire(anchor,new),text,ids)
+        expected=text[:blocks[2].end]+new+text[blocks[2].end:]
+        self.assertEqual(expected,apply(text,result,selected_ids=scope['allowed_block_ids']))
+        self.assertNotIn('[DEV-02]',scope['insertion_scope']['template'])
+
+    def test_insertion_does_not_absorb_a_child_with_a_continuation_description(self):
+        text=('- [ ] [MILESTONE-DEV] Development\n  - type: milestone\n'
+              '  - [ ] [DEV-02] Existing batch\n    continuation description\n    - type: batch\n')
+        blocks=scan(text);ids=[blocks[0].id,blocks[1].id]
+        scope=context(text,ids,schema=SCHEMA)
+        self.assertEqual([ids[1]],scope['addressable_block_ids'])
+        self.assertEqual(ids,scope['allowed_block_ids'])
 
     def test_output_schema_has_one_operation_shape_and_heading_only_destinations(self):
         from spikes.markdown_patch import output_schema_v3
@@ -252,6 +282,33 @@ class MarkdownTaskTests(unittest.TestCase):
     create_document = fixtures.FileEditTests.create_document
     generate = fixtures.FileEditTests.generate
     confirmation = fixtures.FileEditTests.confirmation
+
+    def test_insertion_after_parent_metadata_preserves_existing_dev02(self):
+        from spikes.artifacts import Artifacts
+        from spikes.markdown_documents import main_todo_id
+        text = ('<!-- fpw-plan-profile: software-development/v1 -->\n'
+                '- [ ] [MILESTONE-DEV] Development\n  - type: milestone\n  - Zdroj: retained\n'
+                '  - [ ] [DEV-02] Existing batch\n    - type: batch\n')
+        target=main_todo_id(ENTITY)
+        Artifacts(self.node_path).save(dict(project_id=ENTITY,artifact_id=target,new=True,
+            title='Roadmap',body=text,base_head=self.git.head()),str(uuid4()))
+        blocks=scan(text);parent=next(b for b in blocks if '[MILESTONE-DEV]' in text[b.start:b.end])
+        ids=[parent.id,blocks[blocks.index(parent)+1].id]
+        scope=context(text,ids,schema=SCHEMA)
+        service,request,calls=self.generate(target)
+        request['task_plan'].update(edit_format='blocks',edit_block_ids=ids)
+        addition='  - [ ] [NEW-MANUALS] Manuals\n    - type: batch\n    - [ ] [NEW-MANUALS-T1] Add manuals view\n      - type: task\n'
+        def transport(binding,raw):
+            wire=json.loads(raw);calls.append(wire)
+            self.assertEqual([scope['insertion_scope']['anchor_block_id']],wire['format']['properties']['changes']['items']['properties']['block_id']['enum'])
+            return dict(model=binding.model,response=json.dumps(dict(kind=KIND,changes=[dict(
+                block_id=scope['insertion_scope']['anchor_block_id'],action='insert_after',destination_id=None,content=addition)])))
+        service.adapter_factory=lambda runs:OllamaAdapter(runs,transport=transport)
+        head=self.git.head();service.task_route(request)
+        preview=service.task_preview_file_edit(dict(project_id=ENTITY,task_id=request['task_id']))
+        self.assertEqual(text.replace('  - Zdroj: retained\n','  - Zdroj: retained\n'+addition),preview['body'])
+        self.assertEqual(1,preview['body'].count('[DEV-02]'))
+        self.assertEqual(head,self.git.head())
 
     def routed(self, *, invalid=False, selected=True):
         text = '# Root\r\n## Selected\r\nOriginal ž  \r\n## Secret\r\nDO_NOT_SEND\r\n'

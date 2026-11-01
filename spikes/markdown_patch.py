@@ -303,6 +303,48 @@ def _indent(raw):
     return len(raw) - len(raw.lstrip(' \t'))
 
 
+_NODE_LINE = re.compile(r'^([ \t]*)[-+*]\s+\[[ xX]\]\s+\[([^\]\r\n]+)\]\s+(.+?)\s*$')
+
+
+def _node_rows(text, blocks=None):
+    return [m for b in (scan(text) if blocks is None else blocks) if b.kind == 'list-item'
+            and (m := _NODE_LINE.fullmatch(text[b.start:b.end].splitlines()[0]))]
+
+
+def _insertion_scope(text, blocks, selected_ids):
+    """The UI's parent+type pair means insertion of children, not editing the parent."""
+    selected = [b for b in blocks if selected_ids is not None and b.id in selected_ids]
+    if len(selected) != 2:
+        return None
+    parent, type_block = selected
+    match = _NODE_LINE.fullmatch(text[parent.start:parent.end].splitlines()[0])
+    type_match = re.fullmatch(r'([ \t]*)- type: (milestone|batch)\s*', text[type_block.start:type_block.end])
+    if not match or not type_match or parent.end != type_block.start or len(type_match[1]) != len(match[1])+2:
+        return None
+    anchor = type_block
+    for b in blocks:
+        if b.start < type_block.end or b.kind == 'space':
+            continue
+        raw = text[b.start:b.end]
+        if _NODE_LINE.fullmatch(raw.splitlines()[0]) or b.kind != 'list-item' or _indent(raw) <= len(match[1]):
+            break
+        anchor = b
+    existing = {m[2] for m in _node_rows(text, blocks)}
+    prefix = 'NEW-' + hashlib.sha256(text.encode()).hexdigest()[:10].upper()
+    while any(id_ == prefix or id_.startswith(prefix+'-') for id_ in existing):
+        prefix += 'X'
+    child = 'batch' if type_match[2] == 'milestone' else 'task'
+    indent = len(match[1])+2
+    template = (' '*indent + f'- [ ] [{prefix}-{child.upper()}-1] New {child} title\n' +
+                ' '*(indent+2) + f'- type: {child}\n')
+    if child == 'batch':
+        template += (' '*(indent+2) + f'- [ ] [{prefix}-TASK-1] New task title\n' +
+                     ' '*(indent+4) + '- type: task\n')
+    return dict(parent_block_id=parent.id, parent_id=match[2], parent_type=type_match[2],
+                anchor_block_id=anchor.id, child_type=child, child_indent=indent,
+                new_id_prefix=prefix, template=template)
+
+
 def _context_v2(text, selected_ids):
     """Model-facing projection: no per-block hashes and no whitespace-only blocks.
 
@@ -313,6 +355,10 @@ def _context_v2(text, selected_ids):
     base = context(text, selected_ids)
     blocks = scan(text)
     allowed = set(base['allowed_block_ids'])
+    insertion = _insertion_scope(text, blocks, selected_ids)
+    if insertion:
+        allowed.add(insertion['anchor_block_id'])
+        base = context(text, sorted(allowed))
     records = []
     for record in base['blocks']:
         if record['kind'] == 'space':
@@ -320,7 +366,7 @@ def _context_v2(text, selected_ids):
         record = dict(record)
         record.pop('expected_hash')
         records.append(record)
-    addressable = [record['block_id'] for record in records]
+    addressable = [insertion['anchor_block_id']] if insertion else [record['block_id'] for record in records]
     # A milestone insertion scope contains only the milestone line and its type
     # line, so the model cannot see how child nodes are written. Show the
     # structural first lines (checkbox and type metadata) of a few existing
@@ -341,11 +387,11 @@ def _context_v2(text, selected_ids):
             if _STRUCTURE.match(first):
                 following.append(first)
     return dict(schema=SCHEMA, document_hash=base['document_hash'],
-                selected_block_ids=base['selected_block_ids'],
+                selected_block_ids=list(selected_ids) if selected_ids is not None else None,
                 allowed_block_ids=base['allowed_block_ids'], addressable_block_ids=addressable,
                 heading_block_ids=[r['block_id'] for r in records if r['kind'] == 'heading'],
                 newline='\r\n' if '\r\n' in text else '\n',
-                blocks=records, following_context=''.join(following))
+                blocks=records, following_context=''.join(following), insertion_scope=insertion)
 
 
 def render_prompt(scope):
@@ -354,11 +400,21 @@ def render_prompt(scope):
     lines = ['Editable Markdown blocks. Each block starts with a marker line <<block_id kind>>. '
              'Markers are not part of the document and must never be copied into content.', '']
     for record in scope['blocks']:
+        if scope.get('insertion_scope') and record['block_id'] not in scope['addressable_block_ids']:
+            lines += ['Read-only parent metadata (not an edit target):', record['content'].rstrip('\r\n')]
+            continue
         label = record['block_id'] + ' ' + record['kind']
         if record.get('level'):
             label += ' level ' + str(record['level'])
         lines.append('<<' + label + '>>')
         lines.append(record['content'].rstrip('\r\n'))
+    if scope.get('insertion_scope'):
+        item = scope['insertion_scope']
+        lines += ['', f"INSERTION ONLY: use exactly one insert_after on {item['anchor_block_id']}. "
+                  f"The parent is {item['parent_id']} ({item['parent_type']}); new direct children must be {item['child_type']}. "
+                  'Do not repeat parent lines or reuse IDs from existing examples. '
+                  f"Use new IDs beginning with {item['new_id_prefix']}. The following template shows exact indentation; "
+                  'replace titles and add only the requested nodes:', item['template'].rstrip('\r\n')]
     if scope.get('following_context'):
         lines += ['', 'Read-only structure of existing child nodes (format example only; '
                   'it cannot be addressed or changed):', scope['following_context'].rstrip('\r\n')]
@@ -422,8 +478,28 @@ def complete(value, text, selected_ids=None):
         result.append(dict(block_id=op['block_id'], expected_hash=hash_of(op['block_id']), action=action,
                            content=content, destination_id=op['destination_id'] if move else None,
                            destination_hash=hash_of(op['destination_id']) if move else None))
-    return validate_proposal(dict(schema_version=1, kind=KIND, title='Návrh úpravy',
+    proposal = validate_proposal(dict(schema_version=1, kind=KIND, title='Návrh úpravy',
                                   document_hash=digest(text), changes=result))
+    validate_insertion(proposal, text, context(text, selected_ids, schema=SCHEMA))
+    return proposal
+
+
+def validate_insertion(proposal, text, scope):
+    item = scope.get('insertion_scope')
+    if not item:
+        return
+    ops = proposal['changes']
+    require(len(ops)==1 and ops[0]['action']=='insert_after'
+            and ops[0]['block_id']==item['anchor_block_id'],
+            'Vložení potomků musí použít jediný insert_after za všechna metadata rodiče; nadpis rodiče se nemění.')
+    existing = {m[2] for m in _node_rows(text)}
+    added = _node_rows(ops[0]['content'])
+    require(added, 'Vložení úkolů musí obsahovat nové položky plánu.')
+    for node in added:
+        require(node[2] not in existing, f'ID {node[2]} už v plánu existuje. Nová položka musí mít nové ID; existující úkol se nepřepisuje.')
+        existing.add(node[2])
+    require(min(len(m[1]) for m in added)==item['child_indent'],
+            f"Nový potomek musí být odsazen {item['child_indent']} mezerami pod rodičem {item['parent_id']}.")
 
 
 def build(files, entities, project_id, head, target, run_id, selected_ids=None, *, schema=SCHEMA_V1):
@@ -539,13 +615,13 @@ def output_schema_v3(scope):
                    if headings else {'type': 'null'})
     op = dict(type='object', additionalProperties=False,
               properties=dict(block_id={'type': 'string', 'enum': list(ids)},
-                              action={'type': 'string', 'enum': list(ACTIONS)},
+                              action={'type': 'string', 'enum': ['insert_after'] if scope.get('insertion_scope') else list(ACTIONS)},
                               destination_id=destination,
                               content={'type': ['string', 'null']}),
               required=['block_id', 'action', 'destination_id', 'content'])
     return dict(type='object', additionalProperties=False,
                 properties=dict(kind={'type': 'string', 'enum': [KIND]},
-                                changes={'type': 'array', 'minItems': 1, 'maxItems': MAX_OPERATIONS, 'items': op}),
+                                changes={'type': 'array', 'minItems': 1, 'maxItems': 1 if scope.get('insertion_scope') else MAX_OPERATIONS, 'items': op}),
                 required=['kind', 'changes'])
 
 

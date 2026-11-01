@@ -95,6 +95,25 @@ Recovery hranice se nemění: projekce i doplnění odpovědi probíhají v pam�
 
 ## Rozsah, oprávnění a review
 
+Narrow scope tvořený sousedící dvojicí řádku uzlu a jeho `type: milestone`
+nebo `type: batch` reprezentuje UI akci vložení potomků. Model nemůže
+upravovat rodiče: schéma dovolí jediný `insert_after` na poslední metadata
+rodiče. Pokud za typem následují další rodičovská metadata, aplikace do
+projekce zahrne poslední takový blok jako přesný cíl. Původní dvojice
+zůstává v uloženém výběru; payload hash připíná i tento odvozený cíl.
+`complete` i validace uloženého návrhu kontrolují stejný insertion kontrakt.
+Nejde o volné rozšíření modelových oprávnění: rodičovská data zůstávají
+read-only, ostatní akce a více operací se odmítají. První existující
+potomek uzavírá rozsah metadat i v případě pokračujícího popisu na dalším
+řádku. Code fences se nepovažují za definice ID.
+
+Kontext obsahuje přesný vzor odsazení a typů pro novou dávku/úkol a krátký
+nekolidující prefix ID odvozený z původního dokumentu. Převzetí starého ID
+jako nové definice se výslovně odmítne; aplikace ID modelu nepřejmenovává.
+Přijetí dál vyžaduje validaci celého grafu, diff a souhlas. Starší hashed
+kontext v1 se tímto insertion kontraktem nemění. Nový writer ani recovery
+hranice nevznikají.
+
 ExplicitTaskPlan přidává `edit_format:blocks` a volitelné `edit_block_ids`.
 Nadpis zahrne potomky; jiný vybraný blok pouze vlastní text. Bez výběru se
 předá celý dokument jako bloky. UI nabízí kapitolu a u podporované roadmapy

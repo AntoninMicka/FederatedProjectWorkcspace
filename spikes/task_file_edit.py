@@ -57,7 +57,7 @@ def validate_patch_proposal(service, request, outcome):
         from spikes.markdown_patch import apply as apply_markdown, build as markdown_context
         plan = ExplicitTaskPlan.parse(request['task_plan'])
         require(plan.edit_format == 'blocks', 'Markdown patch requires an explicit block plan')
-        from spikes.markdown_patch import SCHEMA_V1, SCHEMAS
+        from spikes.markdown_patch import SCHEMA, SCHEMA_V1, SCHEMAS
         pinned = request.get('file_edit_context')
         schema = pinned.get('schema') if isinstance(pinned, dict) else None
         require(schema in SCHEMAS or pinned is None, 'Unknown pinned Markdown context')
@@ -65,7 +65,13 @@ def validate_patch_proposal(service, request, outcome):
             request['expected_head'], plan.target_artifact_id, request['run_id'], plan.edit_block_ids,
             schema=schema or SCHEMA_V1)
         require(request.get('file_edit_context') == projection['metadata'], 'Markdown scope differs from the pinned context')
-        replacement = body(apply_markdown(doc['body'], outcome, selected_ids=plan.edit_block_ids))
+        effective_ids = plan.edit_block_ids
+        if schema == SCHEMA:
+            from spikes.markdown_patch import validate_insertion
+            scope = json.loads(projection['payload'])
+            validate_insertion(outcome, doc['body'], scope)
+            effective_ids = scope['allowed_block_ids'] if plan.edit_block_ids is not None else None
+        replacement = body(apply_markdown(doc['body'], outcome, selected_ids=effective_ids))
     else:
         replacement = body(apply_patch(doc['body'], outcome['edits']))
     files[doc['path']] = replacement.encode()
