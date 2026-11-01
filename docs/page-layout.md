@@ -9,6 +9,10 @@ SPDX-License-Identifier: MPL-2.0
 webového/desktopového shellu. Adaptuje existující DOM a navigaci; nepřidává
 framework, druhý editor ani nový zápisový endpoint.
 
+Rámec se připojuje pouze k panelům hlavních záložek a samostatným stránkám.
+Nativní `dialog` není stránka: adaptér jej odmítne a zachová jeho formulář,
+výchozí skrytí i otevírání v modálním režimu.
+
 ## Struktura
 
 - Záhlaví obsahuje jeden nadpis a pod ním řádek akcí dané stránky.

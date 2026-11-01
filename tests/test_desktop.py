@@ -905,6 +905,17 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
                                           body=json.dumps(request).encode())
                 head_bytes, body = response.split(b'\r\n\r\n', 1)
                 self.assertIn(b' 200 ', head_bytes); saved = json.loads(body)
+                response = driver.request(server, path='/v1/outputs/definitions', body=json.dumps({
+                    'project_id': project, 'expected_head': saved['commit_id']}).encode())
+                output_head, output_body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b' 200 ', output_head)
+                self.assertEqual(json.loads(output_body), saved)
+                stale_outputs = driver.request(server, path='/v1/outputs/definitions', body=json.dumps({
+                    'project_id': project, 'expected_head': head}).encode())
+                self.assertIn(b' 409 ', stale_outputs.split(b'\r\n\r\n', 1)[0])
+                invalid_outputs = driver.request(server, path='/v1/outputs/definitions', body=json.dumps({
+                    'project_id': project}).encode())
+                self.assertIn(b' 400 ', invalid_outputs.split(b'\r\n\r\n', 1)[0])
                 response = driver.request(server, path='/v1/presentations/use', body=json.dumps({
                     'project_id': project, 'artifact_id': artifact,
                     'expected_head': saved['commit_id']}).encode())

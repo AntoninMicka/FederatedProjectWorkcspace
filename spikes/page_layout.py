@@ -89,7 +89,7 @@ function setPageChatMode(mode){
  if(promptForm.hidden!==hidden)promptForm.hidden=hidden;
 }
 function mountWorkspacePage(root,{title='',heading=null,actions=[],section='projects-tab',kind='page',chat='hidden',close=true,onClose=null,closeLabel='Zavřít'}={}){
- if(!root||workspacePageLayouts.has(root))return;
+ if(!root||root.matches('dialog')||workspacePageLayouts.has(root))return;
  const header=document.createElement('header'),row=document.createElement('div'),body=document.createElement('div');
  header.className='workspace-page-header';row.className='workspace-page-actions';row.setAttribute('aria-label','Akce stránky');body.className='workspace-page-body';
  let titleNode=heading||document.createElement('h1');
@@ -232,7 +232,7 @@ function initializeWorkspacePageLayout(){
 const toolsList=document.createElement('ul');toolsList.id='tools-overview-list';toolsList.className='workspace-file-list';get('#tools-panel').prepend(toolsList);
  const panelSections={'project-overview-panel':'projects-tab','plan-panel':'plan-tab','preview-panel':'artifacts-tab','chat-panel':'chats-tab','tools-panel':'tools-tab','outputs-overview-panel':'presentations-tab','presentation-panel':'presentations-tab'};
  const roots=new Set(['project-overview-panel','plan-panel','chat-panel','tools-panel','outputs-overview-panel']);
- for(const panel of [...get('#main-panel-content').children]){
+ for(const panel of mainTabs.map(tab=>document.getElementById(tab.getAttribute('aria-controls'))).filter(panel=>panel?.parentElement===get('#main-panel-content'))){
   if(workspacePageLayouts.has(panel))continue;
   const tab=mainTabs.find(tab=>tab.getAttribute('aria-controls')===panel.id),heading=panel.querySelector('h1,h2');
   const actions=panel.id==='presentation-panel'?take(panel,['.presentation-editor-head>.form-actions','#presentation-editor-save','#presentation-editor-print','#presentation-editor-use','#presentation-editor-presenter']):panel.id==='project-overview-panel'?take(panel,['#project-overview-edit-todo','#project-conflicts-open']):panel.id==='plan-panel'?take(panel,['#task-queue-publish','#task-queue-refresh','#task-queue-revalidate']):[];

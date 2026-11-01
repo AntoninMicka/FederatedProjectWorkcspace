@@ -3919,9 +3919,9 @@ async function openOutputsOverview(preferred=null){
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;
  selectSidebarTab(document.querySelector('#presentations-tab'));selectMainTab(outputsOverviewTab);outputsOverviewTab.focus();
  if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head){
-  outputsOverviewStatus.textContent='Načítám definice výstupů…';
+  outputsOverviewStatus.textContent='Načítám definice výstupů…';sidebarPresentationStatus.textContent=outputsOverviewStatus.textContent;
   try{presentationEditorView=await projectRequest('/v1/outputs/definitions',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments(null,false);renderOutputsOverview(preferred);}
-  catch(error){outputsOverviewList.replaceChildren();document.querySelector('#outputs-overview-detail').hidden=true;outputsOverviewStatus.textContent=error.message;}
+  catch(error){outputsOverviewList.replaceChildren();document.querySelector('#outputs-overview-detail').hidden=true;outputsOverviewStatus.textContent=error.message;sidebarPresentationStatus.textContent=error.message;}
  }else renderOutputsOverview(preferred);
 }
 function renderSidebarPresentations(){
@@ -7695,6 +7695,7 @@ class DesktopHandler(Handler):
         '/v1/gamepad/status', '/v1/presentation/status',
         '/v1/gamepad/settings', '/v1/user-profile',
         '/v1/presentations/open', '/v1/presentations/save', '/v1/presentations/use',
+        '/v1/outputs/definitions',
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
@@ -8009,12 +8010,12 @@ class DesktopHandler(Handler):
                 return self.send_error(400)
             except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
-        if self.path.startswith('/v1/presentations/') and isinstance(request, dict):
+        if (self.path.startswith('/v1/presentations/') or self.path == '/v1/outputs/definitions') and isinstance(request, dict):
             service = getattr(self.server, 'presentation_documents', None)
             if service is None:
                 return self.reply(503, {'error': 'Editor prezentací je dostupný jen v desktopu.'})
             try:
-                if self.path == '/v1/presentations/open' and request.keys() == {'project_id', 'expected_head'}:
+                if self.path in {'/v1/presentations/open', '/v1/outputs/definitions'} and request.keys() == {'project_id', 'expected_head'}:
                     result = service.open(request['project_id'])
                     if result['commit_id'] != request['expected_head']:
                         return self.reply(409, {'error': 'Projekt se od otevření změnil. Načtěte jej znovu.'})
