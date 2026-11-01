@@ -166,6 +166,8 @@ class RoleRegistry:
 
 
 ROLES = RoleRegistry((
+    RoleDefinition(1, 'task-output', 'task-output-markdown-patch-v3',
+                   'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-markdown-patch-v2',
                    'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-markdown-patch-v1',

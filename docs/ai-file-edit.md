@@ -211,7 +211,16 @@ za cílovou sekci stejné úrovně. Aplikátor kontroluje celý snapshot, každ�
 blok, povolený rozsah, překryvy i nové code fences před vytvořením návrhu.
 Roadmapa navíc prochází existující sémantickou validací celého grafu.
 
-Nové běhy s rolí `task-output-markdown-patch-v2` mají ve schématu výčet
+Nové běhy od revize v3 (`task-output-markdown-patch-v3`, projekce
+`fpw-markdown-block-context-v2`) posílají modelu bloky jako prostý Markdown
+s řádky `<<b00012 kind>>`, bez hashů a bez prázdných bloků. Model vrací jen
+`block_id`, `action`, `destination_id` a `content`; hashe, titul a chybějící
+konce řádků doplní aplikace. Požadavek nastavuje explicitní `num_ctx` a
+`think:false`; příliš velký rozsah se odmítne před odesláním a zaplněný
+kontext podle `prompt_eval_count` po běhu. Podrobnosti a měření viz
+[ADR 0064](adr/0064-markdown-block-patch-engine.md#revize-v3-kompaktní-odpověď-bez-hashů-2026-11-01).
+
+Předchozí běhy s rolí `task-output-markdown-patch-v2` mají ve schématu výčet
 povolených původních ID a přesný hash dokumentu odvozený z Context Manifestu.
 Pro vložení se použije ID existujícího bloku a nový text v `content`;
 model nesmí přidělovat ID novým odstavcům nebo jednotlivým řádkům.

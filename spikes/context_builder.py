@@ -213,7 +213,8 @@ class ContextBuilder:
             uuid(choice.entity_id)
             require(type(choice.required) is bool and choice.entity_id not in seen,
                     'Duplicate or invalid project input')
-            require(choice.block_ids is None or choice.projection == 'fpw-markdown-block-context-v1',
+            require(choice.block_ids is None or choice.projection in {'fpw-markdown-block-context-v1',
+                                                                      'fpw-markdown-block-context-v2'},
                     'Block scope requires a Markdown context projection')
             seen.add(choice.entity_id)
             require(choice.entity_id in authority.readable_entities,
@@ -233,10 +234,12 @@ class ContextBuilder:
                           path=path, privacy=meta['privacy'], size=len(raw), sha256=_digest(raw))
             if choice.projection is not None:
                 from spikes.roadmap_append_context import SCHEMA, build
-                from spikes.markdown_patch import SCHEMA as MARKDOWN_SCHEMA, build as markdown_context
-                require(choice.projection in {SCHEMA, MARKDOWN_SCHEMA}, 'Unknown project context projection')
-                if choice.projection == MARKDOWN_SCHEMA:
-                    projection = markdown_context(files, entities, self.project_id, head, choice.entity_id, run_id, choice.block_ids)
+                from spikes.markdown_patch import SCHEMAS as MARKDOWN_SCHEMAS, build as markdown_context
+                require(choice.projection == SCHEMA or choice.projection in MARKDOWN_SCHEMAS,
+                        'Unknown project context projection')
+                if choice.projection in MARKDOWN_SCHEMAS:
+                    projection = markdown_context(files, entities, self.project_id, head, choice.entity_id, run_id,
+                                                  choice.block_ids, schema=choice.projection)
                 else:
                     require(choice.block_ids is None, 'Block scope requires Markdown projection')
                     projection = build(files, entities, self.project_id, head, choice.entity_id, run_id)
@@ -390,14 +393,14 @@ class ContextBuilder:
                             and _digest(raw) == item['sha256'], 'Project input changed')
                     if item.get('projection') is not None:
                         from spikes.roadmap_append_context import build
-                        from spikes.markdown_patch import SCHEMA as MARKDOWN_SCHEMA, build as markdown_context
+                        from spikes.markdown_patch import SCHEMAS as MARKDOWN_SCHEMAS, build as markdown_context
                         metadata = item['projection']
-                        require(metadata.get('schema') in {MARKDOWN_SCHEMA, 'fpw-roadmap-append-context-v1'},
+                        require(metadata.get('schema') in MARKDOWN_SCHEMAS | {'fpw-roadmap-append-context-v1'},
                                 'Unknown project context projection')
-                        if metadata['schema'] == MARKDOWN_SCHEMA:
+                        if metadata['schema'] in MARKDOWN_SCHEMAS:
                             projection = markdown_context(files, validate_snapshot(files), self.project_id,
                                 manifest['project_commit'], item['input_id'], manifest['run_id'],
-                                metadata.get('selected_block_ids'))
+                                metadata.get('selected_block_ids'), schema=metadata['schema'])
                         else:
                             projection = build(files, validate_snapshot(files), self.project_id,
                                 manifest['project_commit'], item['input_id'], manifest['run_id'])

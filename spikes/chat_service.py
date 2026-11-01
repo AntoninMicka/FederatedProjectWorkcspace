@@ -1214,7 +1214,7 @@ class ChatService:
             user_id=user_id, project_id=request['project_id'],
             expected_head=request['expected_head'])
         from spikes.document_patch import requires_patch, instruction as patch_instruction
-        from spikes.markdown_patch import ROLE as MARKDOWN_ROLE, SCHEMA as MARKDOWN_SCHEMA, build as markdown_context, instruction as markdown_instruction
+        from spikes.markdown_patch import ROLE as MARKDOWN_ROLE, SCHEMA as MARKDOWN_SCHEMA, build as markdown_context, instruction_v3 as markdown_instruction
         block_edit = edit_target is not None and plan.edit_format == 'blocks'
         patch_edit = edit_target is not None and not block_edit and (plan.edit_format == 'patch' or requires_patch(edit_target['body']))
         role_revision = MARKDOWN_ROLE if block_edit else 'task-output-file-edit-patch-v5' if patch_edit else plan.role_revision
@@ -1228,7 +1228,8 @@ class ChatService:
         if block_edit:
             snapshot = workspace.git.snapshot(request['expected_head'])
             block_projection = markdown_context(snapshot, validate_snapshot(snapshot), request['project_id'],
-                request['expected_head'], plan.target_artifact_id, request['run_id'], plan.edit_block_ids)
+                request['expected_head'], plan.target_artifact_id, request['run_id'], plan.edit_block_ids,
+                schema=MARKDOWN_SCHEMA)
             stored_request['file_edit_context'] = block_projection['metadata']
         if append_projection is not None:
             stored_request['file_edit_context'] = append_projection['metadata']
@@ -1299,10 +1300,21 @@ class ChatService:
             if (patch_edit or block_edit) and response.get('done_reason') == 'length':
                 from spikes.document_patch import PatchValidationError
                 raise PatchValidationError('patch-output-limit')
+            if block_edit:
+                from spikes.markdown_patch import MarkdownPatchError, NUM_PREDICT
+                window = json.loads(adapter._request(handoff, binding, role, 'json', stream=control is not None,
+                    run_selection=run_selection)[0])['options']['num_ctx']
+                used = response.get('prompt_eval_count')
+                if type(used) is int and used > window - NUM_PREDICT:
+                    raise MarkdownPatchError(f'Prompt měl {used} tokenů při kontextu {window}; model pravděpodobně '
+                        'neviděl celé zadání. Návrh nebyl použit; vyberte menší rozsah.')
             try:
                 value = json.loads(response['response'])
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValidationError('Model returned invalid explicit task JSON') from exc
+            if block_edit and isinstance(value, dict) and value.get('kind') == 'markdown-patch':
+                from spikes.markdown_patch import complete as complete_markdown
+                value = complete_markdown(value, edit_target['body'], plan.edit_block_ids)
             expected = ('markdown-patch' if block_edit else 'artifact-patch' if patch_edit else 'presentation-proposal' if plan.output_kind == 'presentation'
                         else plan.expected_outcome_kind)
             require(isinstance(value, dict) and value.get('kind') == expected,

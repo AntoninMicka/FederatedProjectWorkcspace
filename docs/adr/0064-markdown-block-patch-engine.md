@@ -56,6 +56,43 @@ se odmítají jako celek. Není fuzzy matching, shell, `git apply`, ruční
 automatická oprava výstupu ani opakování modelu. Limity: tělo 1 MiB,
 8192 bloků, 64 operací a 64 KiB JSON návrhu.
 
+## Revize v3: kompaktní odpověď bez hashů (2026-11-01)
+
+Měření nad roadmapou v repozitáři (148 KiB, 1227 bloků) ukázalo, že JSON
+projekce v1 měla 361 KiB, z toho přes 87 000 znaků SHA-256 hashů, a výstupní
+schéma 111 KiB. Doložený běh se 131074 vstupními tokeny tak pravděpodobně
+narazil na kontext 128k; Ollama delší prompt bez `num_ctx` tiše ořízne.
+Hash bloku je navíc redundantní: aplikátor nejprve ověřuje `document_hash`
+celého snapshotu, takže ID už jednoznačně určuje původní bajty.
+
+Nové běhy proto používají roli `task-output-markdown-patch-v3` a projekci
+`fpw-markdown-block-context-v2`:
+
+- projekce neobsahuje hash bloků ani bloky tvořené jen prázdnými řádky;
+  prompt ji zobrazuje jako prostý Markdown s řádky `<<b00012 kind>>`,
+  nikoli jako escapovaný JSON (cca 1,1× velikosti dokumentu místo 2,4×);
+- model vrací jen `{"kind","changes":[{block_id,action,destination_id,content}]}`;
+  schéma má jeden tvar operace, jeden výčet ID a cílové ID omezené na nadpisy;
+- `complete()` doplní hash dokumentu i bloků z připnutého snapshotu, titul a
+  `null` pole podle akce a výsledek projde nezměněnou validací v1 (`validate_proposal`,
+  `apply`). TaskOutcomes ukládá tento úplný tvar, preview i recovery se nemění;
+- `complete()` doplní chybějící koncový newline ve stylu dokumentu a prázdný
+  řádek mezi vkládaným a sousedním odstavcem, jinak by Markdown text tiše
+  spojil (např. `- [ ] new- [ ] two`). Jiné úpravy obsahu neprovádí;
+- požadavek nastavuje explicitní `num_ctx` (konzervativní odhad 2,5 B/token
+  + výstupní rozpočet, zaokrouhleno na 2048) a `think:false`, aby tokeny
+  přemýšlení nespotřebovaly výstupní rozpočet. Odhad nad 128k se odmítne před
+  dispatch. Pokud `prompt_eval_count` po běhu ukazuje na zaplněný kontext,
+  návrh se odmítne jako pravděpodobně oříznutý, bez dalšího modelového požadavku;
+- u rozsahu „vložení pod milník“ projekce přidá read-only strukturu nejvýše
+  čtyř prvních potomků (řádky s checkboxem a `type:`), aby model viděl formát
+  dávky/úkolu. Popisy úkolů ani obsah mimo vybranou položku se neposílají.
+
+Scanner už nepovažuje položku seznamu následovanou `---` za setext nadpis.
+Projekce v1, role v1/v2 a jejich výstupní schémata zůstávají bajtově stejné
+pro připnuté běhy a uložené návrhy; ověřeno porovnáním s předchozí revizí.
+Recovery hranice se nemění: projekce i doplnění odpovědi probíhají v paměti.
+
 ## Rozsah, oprávnění a review
 
 ExplicitTaskPlan přidává `edit_format:blocks` a volitelné `edit_block_ids`.

@@ -16,6 +16,12 @@ def proposal(text, *ops):
     return dict(schema_version=1, kind=KIND, title='Title', document_hash=digest(text), changes=list(ops))
 
 
+def compact(value):
+    """The v3 model answer: IDs and content only; hashes are filled in by the application."""
+    return dict(kind=value['kind'], changes=[dict(block_id=op['block_id'], action=op['action'],
+        destination_id=op['destination_id'], content=op['content']) for op in value['changes']])
+
+
 def operation(text, content, action='replace', *, match=None, destination=None):
     scope = context(text)
     block = next(b for b in scope['blocks'] if match is None or match(b))
@@ -141,6 +147,103 @@ class MarkdownPatchTests(unittest.TestCase):
             apply(text, value, selected_ids=['b00002'])
 
 
+class CompactProposalTests(unittest.TestCase):
+    """v3: the model sends IDs and Markdown; the application owns hashes and block separation."""
+
+    def test_v2_projection_has_no_hashes_or_whitespace_blocks_and_legacy_v1_is_unchanged(self):
+        from spikes.markdown_patch import SCHEMA_V1, render_prompt
+        text = '# A\n\nPara one.\n\n- [ ] task\n'
+        legacy = context(text)
+        self.assertEqual(SCHEMA_V1, legacy['schema'])
+        self.assertTrue(all('expected_hash' in b for b in legacy['blocks']))
+        scope = context(text, schema=SCHEMA)
+        self.assertEqual(['heading', 'paragraph', 'list-item'], [b['kind'] for b in scope['blocks']])
+        self.assertTrue(all('expected_hash' not in b for b in scope['blocks']))
+        self.assertEqual(legacy['allowed_block_ids'], scope['allowed_block_ids'])
+        rendered = render_prompt(scope)
+        self.assertNotIn('sha256', rendered)
+        self.assertIn('<<b00001 heading level 1>>\n# A\n<<b00003 paragraph>>\nPara one.', rendered)
+
+    def test_projection_is_much_smaller_on_a_large_document(self):
+        text = ''.join(f'## Kapitola {i}\n\nOdstavec {i} s českým textem.\n\n- [ ] úkol {i}\n\n' for i in range(300))
+        old = json.dumps(context(text), ensure_ascii=False)
+        new = json.dumps(context(text, schema=SCHEMA), ensure_ascii=False)
+        self.assertLess(len(new), len(old) * 0.6)
+
+    def test_complete_fills_hashes_and_null_content_for_delete(self):
+        from spikes.markdown_patch import complete
+        text = '# A\n\nOld\n\nGone\n'
+        value = dict(kind=KIND, changes=[
+            dict(block_id='b00003', action='replace', destination_id=None, content='New\n'),
+            dict(block_id='b00005', action='delete', destination_id='b00001', content='')])
+        full = complete(value, text)
+        self.assertEqual(digest(text), full['document_hash'])
+        self.assertEqual(digest('Old\n'), full['changes'][0]['expected_hash'])
+        self.assertEqual((None, None, None), (full['changes'][1]['content'], full['changes'][1]['destination_id'],
+                                              full['changes'][1]['destination_hash']))
+        self.assertEqual('# A\n\nNew\n\n', apply(text, full))
+
+    def test_complete_keeps_invented_id_diagnostic_and_rejects_extra_fields(self):
+        from spikes.markdown_patch import complete
+        text = '# A\nBody\n'
+        value = dict(kind=KIND, changes=[dict(block_id='b99999', action='insert_after', destination_id=None, content='x\n')])
+        with self.assertRaisesRegex(ValueError, 'neexistující blok b99999'):
+            apply(text, complete(value, text))
+        value['changes'][0]['expected_hash'] = digest('')
+        with self.assertRaisesRegex(ValueError, 'Unknown Markdown operation field'):
+            complete(value, text)
+
+    def test_complete_repairs_missing_newlines_and_paragraph_separation(self):
+        from spikes.markdown_patch import complete
+        text = '# A\n\n- [ ] one\n- [ ] two\n\nPara text.\n\n## B\n'
+        def run(block_id, action, content):
+            value = dict(kind=KIND, changes=[dict(block_id=block_id, action=action, destination_id=None, content=content)])
+            return apply(text, complete(value, text))
+        self.assertIn('- [ ] one\n- [ ] new\n- [ ] two\n', run('b00003', 'insert_after', '- [ ] new'))
+        self.assertIn('Para text.\n\nNew para.\n\n## B', run('b00006', 'insert_after', 'New para.\n'))
+        self.assertIn('- [ ] two\n\nAfter list.\n', run('b00004', 'insert_after', 'After list.'))
+        self.assertIn('Before.\n\nPara text.\n', run('b00006', 'insert_before', 'Before.'))
+        self.assertIn('\nChanged.\n\n## B', run('b00006', 'replace', 'Changed.'))
+        crlf = '# A\r\n\r\nBody\r\n'
+        value = dict(kind=KIND, changes=[dict(block_id='b00003', action='replace', destination_id=None, content='New')])
+        self.assertEqual('# A\r\n\r\nNew\r\n', apply(crlf, complete(value, crlf)))
+
+    def test_list_item_followed_by_rule_is_not_a_setext_heading(self):
+        self.assertEqual([], [b for b in scan('- item\n---\n') if b.kind == 'heading'])
+        self.assertEqual(['Title'], [b.title for b in scan('Title\n---\n') if b.kind == 'heading'])
+
+    def test_milestone_scope_shows_child_structure_without_descriptions_or_siblings(self):
+        from spikes.markdown_patch import render_prompt
+        text = ('- [ ] [M1] Milestone\n  - type: milestone\n  - [ ] [B1] Batch\n    - type: batch\n'
+                '    Popis dávky SECRET-DESCRIPTION\n    - [ ] [T1] Task\n      - type: task\n'
+                '- [ ] [M2] Other SIBLING\n  - type: milestone\n')
+        ids = [b.id for b in scan(text)][:2]
+        scope = context(text, ids, schema=SCHEMA)
+        self.assertEqual(ids, scope['addressable_block_ids'])
+        self.assertIn('  - [ ] [B1] Batch\n    - type: batch\n', scope['following_context'])
+        rendered = render_prompt(scope)
+        self.assertNotIn('SECRET-DESCRIPTION', rendered)
+        self.assertNotIn('SIBLING', rendered)
+        self.assertEqual('', context('# A\nx\n## B\ny\n', ['b00001'], schema=SCHEMA)['following_context'])
+
+    def test_output_schema_has_one_operation_shape_and_heading_only_destinations(self):
+        from spikes.markdown_patch import output_schema_v3
+        scope = context('# A\n\nBody\n\n# B\n', schema=SCHEMA)
+        schema = output_schema_v3(scope)
+        item = schema['properties']['changes']['items']
+        self.assertNotIn('anyOf', item)
+        self.assertEqual(['b00001', 'b00003', 'b00005'], item['properties']['block_id']['enum'])
+        self.assertEqual(['b00001', 'b00005'], item['properties']['destination_id']['anyOf'][1]['enum'])
+        self.assertEqual({'kind', 'changes'}, set(schema['properties']))
+
+    def test_context_window_is_explicit_and_bounded(self):
+        from spikes.markdown_patch import context_window, NUM_PREDICT
+        window = context_window('x' * 10000, 'y' * 1000)
+        self.assertEqual(0, window % 2048)
+        self.assertGreaterEqual(window, 11000 * 2 // 5 + NUM_PREDICT)
+        self.assertIsNone(context_window('x' * 400000, ''))
+
+
 class MarkdownTaskTests(unittest.TestCase):
     setUp = fixtures.FileEditTests.setUp
     request = fixtures.FileEditTests.request
@@ -162,7 +265,7 @@ class MarkdownTaskTests(unittest.TestCase):
             op = operation(text, 'Changed ž  \r\n', match=lambda b: b['content'] == 'Original ž  \r\n')
             if invalid:
                 op = operation(text, 'Bad\r\n', match=lambda b: b['content'] == 'DO_NOT_SEND\r\n')
-            return dict(model=binding.model, response=json.dumps(proposal(text, op)))
+            return dict(model=binding.model, response=json.dumps(compact(proposal(text, op))))
         service.adapter_factory = lambda runs: OllamaAdapter(runs, transport=transport)
         return service, request, calls, text
 
@@ -172,11 +275,16 @@ class MarkdownTaskTests(unittest.TestCase):
         self.assertEqual(head, self.git.head())
         self.assertEqual([KIND], calls[0]['format']['properties']['kind']['enum'])
         from spikes.markdown_patch import ROLE
-        self.assertEqual('task-output-markdown-patch-v2', ROLE)
-        scope = context(original, request['task_plan']['edit_block_ids'])
-        for variant in calls[0]['format']['properties']['changes']['items']['anyOf']:
-            self.assertEqual(scope['allowed_block_ids'], variant['properties']['block_id']['enum'])
-        self.assertEqual([digest(original)], calls[0]['format']['properties']['document_hash']['enum'])
+        self.assertEqual('task-output-markdown-patch-v3', ROLE)
+        scope = context(original, request['task_plan']['edit_block_ids'], schema=SCHEMA)
+        item = calls[0]['format']['properties']['changes']['items']
+        self.assertEqual(scope['addressable_block_ids'], item['properties']['block_id']['enum'])
+        self.assertNotIn('document_hash', calls[0]['format']['properties'])
+        self.assertNotIn('expected_hash', item['properties'])
+        self.assertNotIn('sha256:', calls[0]['prompt'])
+        self.assertIn('<<' + scope['addressable_block_ids'][0] + ' heading level 2>>', calls[0]['prompt'])
+        self.assertEqual(False, calls[0]['think'])
+        self.assertGreaterEqual(calls[0]['options']['num_ctx'], 4096 + 512)
         self.assertNotIn('DO_NOT_SEND', calls[0]['prompt'])
         self.assertIn('User edit request', calls[0]['prompt'])
         self.assertEqual(SCHEMA, result['projection']['file_edit_context']['schema'])
@@ -219,7 +327,7 @@ class MarkdownTaskTests(unittest.TestCase):
             calls.append(json.loads(raw))
             op = operation(text, '  - [ ] [BROKEN] Task without type\n', 'insert_after',
                            match=lambda b: 'type: milestone' in b['content'])
-            return dict(model=binding.model, response=json.dumps(proposal(text, op)))
+            return dict(model=binding.model, response=json.dumps(compact(proposal(text, op))))
         service.adapter_factory = lambda runs: OllamaAdapter(runs, transport=transport)
         head = self.git.head()
         with self.assertRaisesRegex(MarkdownPatchError, 'neplatnou roadmapu'):service.task_route(request)
@@ -248,3 +356,23 @@ class MarkdownTaskTests(unittest.TestCase):
         service.task_confirm_file_edit(confirmation)
         self.assertEqual(1, len(calls))
         self.assertEqual('1', self.git.run('rev-list', '--count', head+'..HEAD').stdout.strip())
+
+    def test_oversized_context_is_rejected_before_any_dispatch(self):
+        from unittest import mock
+        service, request, calls, _ = self.routed()
+        with mock.patch('spikes.markdown_patch.MAX_CONTEXT_WINDOW', 2048):
+            with self.assertRaisesRegex(ValueError, 'příliš velký'):service.task_route(request)
+        self.assertEqual([], calls)
+        self.assertEqual([], service.task_outcomes(project_id=ENTITY))
+
+    def test_truncated_prompt_evidence_rejects_the_proposal(self):
+        service, request, calls, text = self.routed()
+        def transport(binding, raw):
+            wire = json.loads(raw);calls.append(wire)
+            op = operation(text, 'Changed\r\n', match=lambda b: b['content'] == 'Original ž  \r\n')
+            return dict(model=binding.model, response=json.dumps(compact(proposal(text, op))),
+                        prompt_eval_count=wire['options']['num_ctx'])
+        service.adapter_factory = lambda runs: OllamaAdapter(runs, transport=transport)
+        with self.assertRaisesRegex(ValueError, 'neviděl celé zadání'):service.task_route(request)
+        self.assertEqual([], service.task_outcomes(project_id=ENTITY))
+        self.assertEqual(1, len(calls))

@@ -557,7 +557,19 @@ class OllamaAdapter:
                 selected_ids = [input_id for input_id, _, _ in decoded if input_id in roles]
                 require(selected_ids == [item['message_id'] for item in conversation],
                         'Task conversation does not match input order')
-            block_task = task['role_revision'] in {'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2'}
+            from spikes.markdown_patch import ROLE as BLOCK_ROLE, ROLES as BLOCK_ROLES, SCHEMA as BLOCK_SCHEMA, render_prompt
+            block_task = task['role_revision'] in BLOCK_ROLES
+            if task['role_revision'] == BLOCK_ROLE:
+                rendered = []
+                for input_id, content, projection in decoded:
+                    try:
+                        scope = json.loads(content)
+                    except ValueError:
+                        scope = None
+                    if isinstance(scope, dict) and scope.get('schema') == BLOCK_SCHEMA:
+                        content, projection = render_prompt(scope), 'Markdown blocks'
+                    rendered.append((input_id, content, projection))
+                decoded = rendered
             patch_task = (task['role_id'] == 'task-output' and
                           task['role_revision'] in {'task-output-file-edit-patch-v3', 'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5'})
             sections = ['Instruction:\n' + task['instruction']]
@@ -578,7 +590,10 @@ class OllamaAdapter:
                 if (patch_task or block_task) and input_id == task['focus_input_id']:
                     label = 'User edit request ID ' + input_id
                 sections.append(label + ':\n' + content)
-            if block_task:
+            if block_task and task['role_revision'] == BLOCK_ROLE:
+                sections.append('Required Markdown result: implement the User edit request using only JSON block operations. '
+                    'Use block IDs from the <<marker>> lines. Do not regenerate unchanged blocks.')
+            elif block_task:
                 sections.append('Required Markdown result: implement the User edit request using only JSON block operations. '
                     'Copy IDs and hashes from the source context. Do not regenerate unchanged document content.')
             elif patch_task:
@@ -645,20 +660,24 @@ class OllamaAdapter:
                                   if role.revision == 'task-router-presentation-v1'
                                   else _TASK_ROUTER_FORMAT)
             elif role is not None and role.role_id == 'task-output':
-                from spikes.markdown_patch import output_schema, SCHEMA as MARKDOWN_SCHEMA
+                from spikes.markdown_patch import (output_schema, output_schema_v3, ROLE as BLOCK_ROLE,
+                                                   SCHEMA as MARKDOWN_SCHEMA, SCHEMA_V1 as MARKDOWN_SCHEMA_V1)
                 markdown_schema = None
-                if role.revision == 'task-output-markdown-patch-v2':
+                if role.revision in {'task-output-markdown-patch-v2', BLOCK_ROLE}:
+                    wanted = MARKDOWN_SCHEMA if role.revision == BLOCK_ROLE else MARKDOWN_SCHEMA_V1
                     scopes = []
                     for part in json.loads(handoff.payload).get('inputs', []):
                         try:
                             value = json.loads(base64.b64decode(part['content_b64'], validate=True))
                         except (KeyError, TypeError, ValueError, UnicodeError):
                             continue
-                        if isinstance(value, dict) and value.get('schema') == MARKDOWN_SCHEMA:
+                        if isinstance(value, dict) and value.get('schema') == wanted:
                             scopes.append(value)
                     require(len(scopes) == 1, 'Markdown output requires exactly one pinned block context')
-                    markdown_schema = output_schema(scopes[0])
+                    markdown_schema = (output_schema_v3(scopes[0]) if role.revision == BLOCK_ROLE
+                                       else output_schema(scopes[0]))
                 body['format'] = {
+                    BLOCK_ROLE: markdown_schema,
                     'task-output-markdown-patch-v2': markdown_schema,
                     'task-output-markdown-patch-v1': output_schema(),
                     'task-output-conversation-v1': _DIRECT_ANSWER_FORMAT,
@@ -673,13 +692,23 @@ class OllamaAdapter:
                 }[role.revision]
             else:
                 body['format'] = 'json'
-        ordered_patch = role is not None and role.revision in {'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5', 'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2'}
+        ordered_patch = role is not None and role.revision in {'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5', 'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2', 'task-output-markdown-patch-v3'}
         if ordered_patch:
             task = json.loads(handoff.payload).get('task', {})
             require(task.get('role_revision') == role.revision and task.get('role_id') == role.role_id,
                     'Patch role differs from the authorized task')
             body['system'] = task['instruction']
             body['options'] = {'num_predict': 4096, 'temperature': 0}
+            if role.revision == 'task-output-markdown-patch-v3':
+                from spikes.markdown_patch import MarkdownPatchError, context_window
+                window = context_window(body['prompt'], body['system'])
+                if window is None:
+                    raise MarkdownPatchError('Vybraný rozsah je pro model příliš velký (odhad přes 128k tokenů). '
+                                             'Vyberte menší kapitolu nebo místo vložení. Nic nebylo odesláno.')
+                # Without num_ctx Ollama silently truncates long prompts to its server default.
+                body['options']['num_ctx'] = window
+                # Thinking tokens would consume the whole 4096-token JSON budget.
+                body['think'] = False
             # JSON-schema property order guides constrained generation. Sorting recursively
             # puts after before before and encourages writing a replacement without an anchor.
             body = {key: body[key] for key in sorted(body)}

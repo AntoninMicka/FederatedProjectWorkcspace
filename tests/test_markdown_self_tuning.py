@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -47,10 +48,13 @@ class SelfTuningTests(unittest.TestCase):
                     self.assertNotIn('four-tasks',wire['prompt']);self.assertNotIn('x=1',wire['prompt'])
                     value=dict(hypothesis='Use narrow insertions',instruction_suffix='Use narrow insertions.',num_predict=2048,temperature=0)
                 else:
-                    prompt=wire['prompt'];marker='Source '
-                    start=prompt.index('{"allowed_block_ids"')
-                    scope=json.JSONDecoder().raw_decode(prompt[start:])[0]
-                    blocks=scope['blocks']
+                    prompt=wire['prompt']
+                    # v3 prompts are plain Markdown with <<id kind>> marker lines, no hashes.
+                    self.assertNotIn('expected_hash',prompt);self.assertNotIn('sha256:',prompt)
+                    self.assertEqual(False,wire['think']);self.assertIn('num_ctx',wire['options'])
+                    blocks=[dict(block_id=m[1],kind=m[2],content=m[3],
+                                 title=m[3].lstrip('#').strip() if m[2]=='heading' else None)
+                            for m in re.finditer(r'^<<(\S+) ([^\s>]+)[^>]*>>\n(.*?)(?=\n<<|\n\nRead-only|\n\n|\Z)',prompt,re.S|re.M)]
                     if 'Previous proposal was rejected.' not in wire['system'] and not options['instruction_suffix'] and 'Do existující dávky' in prompt:
                         value=dict(schema_version=1,kind='direct-answer',content='Wrong kind')
                     else:
@@ -69,9 +73,9 @@ class SelfTuningTests(unittest.TestCase):
                             content='  - [ ] [EVAL-NEW-BATCH] Evaluation batch\n    - type: batch\n'
                             for i,title in enumerate(cases[3]['titles']):
                                 content+=f'    - [ ] [EVAL-NEW-TASK-{i}] {title}\n      - type: task\n'
-                        value=dict(schema_version=1,kind='markdown-patch',title='Proposal',document_hash=scope['document_hash'],
-                            changes=[dict(block_id=block['block_id'],expected_hash=block['expected_hash'],action=action,content=content,
-                                          destination_id=dest['block_id'] if dest else None,destination_hash=dest['expected_hash'] if dest else None)])
+                        value=dict(kind='markdown-patch',
+                            changes=[dict(block_id=block['block_id'],action=action,content=content,
+                                          destination_id=dest['block_id'] if dest else None)])
                 return dict(model=binding.model,response=json.dumps(value),done_reason='stop')
             return ExperimentalAdapter(runs,options,stream_transport=transport)
         return factory

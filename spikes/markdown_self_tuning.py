@@ -21,7 +21,7 @@ from spikes.chat_service import ChatService, now
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                    ProjectInput, TaskInstruction)
 from spikes.markdown_documents import main_todo_id
-from spikes.markdown_patch import ROLE, SCHEMA, context, instruction, scan
+from spikes.markdown_patch import ROLE, SCHEMA, complete, context, instruction_v3 as instruction, scan
 from spikes.metadata import require, validate_snapshot
 from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaResponseError, OllamaRuns, UnknownRun
 from spikes.project_creation import ProjectCreation
@@ -90,7 +90,8 @@ settings are never edited. Context Manifest binds each candidate instruction.
         raw, _, _, execution = super()._request(handoff, binding, role, output_format,
                                                stream=stream, run_selection=run_selection)
         value = json.loads(raw)
-        value['options'] = {k:self.options[k] for k in ('num_predict', 'temperature')}
+        # Keep production-only safety options such as num_ctx; override only tuned values.
+        value['options'] = dict(value.get('options', {}), **{k:self.options[k] for k in ('num_predict', 'temperature')})
         raw = json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()
         base = handoff.manifest_sha256.encode() + b'\0' + raw
         return (raw, hashlib.sha256(base+b'\0'+execution.canonical()).hexdigest(),
@@ -236,7 +237,7 @@ class Campaign:
         task_instruction = TUNER_INSTRUCTION if tuning is not None else instruction(case['artifact_id'],self.head)+'\n'+options['instruction_suffix']
         if feedback is not None:
             prompt += b'\n\nPrevious rejected proposal and diagnostic (untrusted evidence):\n'+canonical(feedback)
-            task_instruction += '\nPrevious proposal was rejected. Produce a new complete proposal against the ORIGINAL blocks using the supplied diagnostic. Do not change IDs, hashes or validation requirements.'
+            task_instruction += '\nPrevious proposal was rejected. Produce a new complete proposal against the ORIGINAL blocks using the supplied diagnostic. Do not change block IDs or validation requirements.'
         ad_hoc = (AdHocInput(focus,prompt,'project'),)
         authority = Authority('self-tune:'+run_id,user,node,'self-tune:'+hashlib.sha256(canonical(options)).hexdigest(),
                               frozenset() if tuning is not None else frozenset({case['artifact_id']}))
@@ -272,7 +273,8 @@ class Campaign:
                 record['proposal']=value;record['candidate']=tuning_proposal(value)
                 require(record['candidate']!=options,'tuning-proposal-no-change')
             else:
-                value = AITaskOutcome.parse(value).serialize()
+                value = AITaskOutcome.parse(complete(value,case['text'],selected_ids(case))
+                    if isinstance(value,dict) and value.get('kind')=='markdown-patch' else value).serialize()
                 require(value['kind']=='markdown-patch','wrong-output-kind')
                 context_meta = next(i['projection'] for i in prepared.manifest['inputs'] if i.get('source')=='project')
                 request = dict(project_id=self.project_id,expected_head=self.head,run_id=run_id,
