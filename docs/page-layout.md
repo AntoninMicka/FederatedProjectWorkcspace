@@ -59,12 +59,16 @@ Stránka deklaruje `data-chat-default` na svém registrovaném kořeni:
 | Hodnota | Chování |
 | --- | --- |
 | `full` | Dosavadní plný formulář zadání, včetně jeho ovládacích prvků. |
-| `hidden` | Chatová část se skryje, rozepsané zadání se zachová. |
-| `compact` | Připravený kontrakt pro následný uživatelský popis. Zatím používá plný formulář a interní příznak `data-compact-pending="true"`. |
+| `hidden` | Formulář se skryje, přepínače zobrazení zůstanou dostupné a rozepsané zadání se zachová. |
+| `compact` | Ovladače zhruba ve dvoutřetinové velikosti leží uvnitř spodního okraje promptu, s popiskem vedle výběru; odesílání je uvnitř vpravo. |
 
 Prohlížeče standardně používají `full`, editory `hidden`. Stránka může
-výchozí hodnotu změnit bez zásahu do doménového backendu. Kompaktní vizuální
-podoba se v této změně nenavrhuje. Existující `data-prompt-default` slouží
+výchozí hodnotu změnit bez zásahu do doménového backendu. Tři přepínače na
+dělicí hraně jsou dostupné ve všech režimech. Ruční volba má přednost před
+výchozími hodnotami stránek až do obnovení aplikace; neukládá se do projektu.
+Přepnutí zachovává původní formulář, jeho ovladače, hodnoty i rozepsaný text.
+Na užších displejích se kompaktní ovladače zalamují uvnitř promptu.
+Existující `data-prompt-default` slouží
 jen jako kompatibilní vstup pro dosavadní záložky; deklarace stránky má přednost.
 
 ## Reuse, persistence a ověření

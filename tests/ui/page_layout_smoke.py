@@ -96,8 +96,23 @@ window.layoutTest={done:false};
  layout.closeButton.click();await tick();check(document.querySelector('#outputs-overview-panel').hidden===false,'Output viewer close did not return to outputs');
  await openPreview('doc');await tick();
  const widget=document.querySelector('#prompt-widget');draft.value='Keep chat draft';
- preview.dataset.chatDefault='hidden';syncPageLayout();check(widget.hidden&&promptForm.hidden,'Hidden chat contract ignored');
- preview.dataset.chatDefault='compact';syncPageLayout();check(widget.dataset.chatMode==='compact'&&widget.dataset.compactPending==='true'&&!promptForm.hidden,'Compact contract not reserved');
+ preview.dataset.chatDefault='hidden';syncPageLayout();check(!widget.hidden&&promptForm.hidden&&visible(document.querySelector('#prompt-display-controls')),'Hidden mode hides display controls');
+ preview.dataset.chatDefault='compact';syncPageLayout();check(widget.dataset.chatMode==='compact'&&!promptForm.hidden,'Compact mode ignored');
+ const surface=document.querySelector('.prompt-surface'),toolbar=document.querySelector('.prompt-toolbar'),submit=document.querySelector('#chat-submit'),modeControl=document.querySelector('[for=chat-mode]');
+ const surfaceBox=surface.getBoundingClientRect(),toolbarBox=toolbar.getBoundingClientRect(),submitBox=submit.getBoundingClientRect();
+ check(surface.contains(draft)&&surface.contains(toolbar)&&surface.contains(submit),'Compact prompt replaced form controls');
+ check(toolbarBox.top>=draft.getBoundingClientRect().bottom-1&&toolbarBox.bottom<=surfaceBox.bottom,'Controls overlap draft text or leave prompt');
+ check(submitBox.right<=surfaceBox.right&&submitBox.bottom<=surfaceBox.bottom&&submitBox.left>=surfaceBox.left,'Send button leaves prompt');
+ check(modeControl.getBoundingClientRect().height<=31&&getComputedStyle(modeControl.querySelector('span')).position==='static','Compact label is not beside combo or control is full size');
+ check(document.documentElement.scrollWidth<=innerWidth,'Compact prompt overflows viewport');
+ const inputs=document.querySelector('#task-inputs');inputs.open=true;await tick();check(visible(inputs.querySelector('.prompt-input-menu')),'Compact mode hides source picker');inputs.open=false;
+ for(const control of toolbar.querySelectorAll('select')){const box=control.getBoundingClientRect();if(box.width)check(box.left>=surfaceBox.left&&box.right<=surfaceBox.right,'Compact combo leaves prompt');}
+ const choices=[...document.querySelectorAll('[data-chat-mode-choice]')],privacy=document.querySelector('#chat-privacy'),privacyBefore=privacy.value;
+ draft.focus();choices.find(button=>button.dataset.chatModeChoice==='hidden').click();check(promptForm.hidden&&visible(choices[0])&&document.activeElement.dataset.chatModeChoice==='hidden','Cannot recover hidden prompt with keyboard');
+ choices.find(button=>button.dataset.chatModeChoice==='compact').click();syncPageLayout();check(widget.dataset.chatMode==='compact','Page default overrode user choice');
+ selectMainTab(document.querySelector('#tools-main-tab'));syncPageLayout();check(widget.dataset.chatMode==='compact','Navigation lost user choice');
+ choices.find(button=>button.dataset.chatModeChoice==='full').click();check(!promptForm.hidden&&choices[0].getAttribute('aria-pressed')==='true'&&privacy.value===privacyBefore&&draft.value==='Keep chat draft','Mode switch lost form state');
+ workspaceChatModeOverride=null;selectMainTab(document.querySelector('#preview-tab'));
  preview.dataset.chatDefault='full';syncPageLayout();check(!widget.hidden&&draft.value==='Keep chat draft','Chat mode switch lost draft');
  check(writes===0,'Read-only operations changed project');check(document.documentElement.scrollWidth<=innerWidth,'Layout overflows viewport');if(innerWidth<=640){check(layout.header.getBoundingClientRect().top>=document.querySelector('#mobile-sidebar-toggle').getBoundingClientRect().bottom,'Mobile navigation overlaps page title');check(document.querySelector('main').getBoundingClientRect().bottom<=innerHeight+1&&widget.getBoundingClientRect().bottom<=innerHeight+1&&getComputedStyle(document.documentElement).overflowY==='hidden','Page frame exceeds viewport');}
 

@@ -44,14 +44,16 @@ function renderTodo(){}function renderProjectOverview(){}function renderProjectH
         script = r'''
 const assert=require('node:assert/strict');
 const WORKSPACE_CHAT_MODES=new Set(['full','compact','hidden']);
-const widget={dataset:{},hidden:false},promptForm={hidden:false,value:'unsent draft'};
+let workspaceChatModeOverride=null;
+const widget={dataset:{},hidden:false,querySelectorAll:()=>[]},promptForm={hidden:false,value:'unsent draft',contains:()=>false};
 const document={querySelector:()=>widget};
 '''+function+r'''
 for(const mode of ['full','hidden','compact','full']){
- setPageChatMode(mode);assert.equal(widget.dataset.chatMode,mode);assert.equal(widget.hidden,mode==='hidden');assert.equal(promptForm.hidden,mode==='hidden');assert.equal(promptForm.value,'unsent draft');
- assert.equal(widget.dataset.compactPending,String(mode==='compact'));
+ setPageChatMode(mode);assert.equal(widget.dataset.chatMode,mode);assert.equal(widget.hidden,false);assert.equal(promptForm.hidden,mode==='hidden');assert.equal(promptForm.value,'unsent draft');
 }
 assert.throws(()=>setPageChatMode('unknown'));assert.equal(widget.dataset.chatMode,'full');
+setPageChatMode('compact',{user:true});setPageChatMode('hidden');assert.equal(widget.dataset.chatMode,'compact');
+setPageChatMode('hidden',{user:true});setPageChatMode('full');assert.equal(promptForm.hidden,true);assert.equal(widget.hidden,false);
 '''
         result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

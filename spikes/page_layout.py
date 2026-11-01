@@ -9,8 +9,33 @@ main{display:flex;flex-direction:column;min-height:0;overflow:hidden}
 main>div{flex:1;min-height:0;height:auto!important}
 main>div.workspace-page{overflow:hidden!important}
 #project-home.workspace-page>.workspace-page-header{display:flex}
-main>#prompt-widget #chat-composer{max-height:48vh}
-main>#prompt-widget{flex:none;max-height:48vh;min-height:0;border:1px solid #dce3e9;border-radius:0 0 14px 14px}
+main>#prompt-widget #chat-composer{max-height:48vh;padding-top:18px}
+main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;border:1px solid #dce3e9;border-radius:0 0 14px 14px}
+#prompt-display-controls{position:absolute;right:16px;top:-15px;display:flex;gap:3px;padding:2px 4px;background:#fafffd;border:1px solid #bfcdc9;border-radius:16px;z-index:30}
+#prompt-display-controls button{min-height:24px;padding:3px 10px;font-size:11px;line-height:18px;border-radius:12px;background:transparent;color:#526675}
+#prompt-display-controls button[aria-pressed=true]{background:#176b60;color:white}
+#prompt-display-controls button:focus-visible{outline:2px solid #176b60;outline-offset:2px}
+#prompt-widget[data-chat-mode=hidden]{min-height:18px}
+.prompt-surface{display:contents}
+#prompt-widget[data-chat-mode=compact] .prompt-surface{display:block;position:relative;border:1px solid #bfcdc9;border-radius:10px;background:white}
+#prompt-widget[data-chat-mode=compact] .prompt-surface:focus-within{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}
+#prompt-widget[data-chat-mode=compact] .prompt-draft-control{border:0;box-shadow:none;background:transparent}
+#prompt-widget[data-chat-mode=compact] #chat-draft{min-height:68px;padding-right:48px}
+#prompt-widget[data-chat-mode=compact] .prompt-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:0;padding:4px 48px 7px 8px}
+#prompt-widget[data-chat-mode=compact] .prompt-control{display:flex;align-items:center;gap:4px;height:29px;border:0;border-radius:5px;background:#f3f7f8;max-width:100%}
+#prompt-widget[data-chat-mode=compact] .prompt-control>span{position:static;padding-left:6px;font-size:8px;white-space:nowrap}
+#prompt-widget[data-chat-mode=compact] .prompt-control>span::after{content:':' }
+#prompt-widget[data-chat-mode=compact] .prompt-control select{height:29px;min-height:0;width:auto;max-width:155px;padding:2px 18px 2px 0;font-size:10px}
+#prompt-widget[data-chat-mode=compact] .prompt-routing-controls,#prompt-widget[data-chat-mode=compact] .prompt-execution-controls{display:contents}
+#prompt-widget[data-chat-mode=compact] .prompt-route-arrow{font-size:12px}
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary{flex-direction:row;align-items:center;gap:4px;min-width:0;height:29px;padding:2px 18px 2px 6px;border:0;background:#f3f7f8}
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary span{font-size:8px}
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary span::after{content:':' }
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary output{font-size:10px}
+#prompt-widget[data-chat-mode=compact] .prompt-input-picker>summary::after{right:5px;bottom:7px}
+#prompt-widget[data-chat-mode=compact] .prompt-input-menu{bottom:35px}
+#prompt-widget[data-chat-mode=compact] #chat-submit{position:absolute;right:8px;bottom:7px;min-height:30px;height:30px;width:30px;font-size:16px}
+@media(max-width:640px){#prompt-display-controls{right:8px}#prompt-widget[data-chat-mode=compact] .prompt-input-menu{bottom:14px}}
 #project-view{gap:0}.project-header{display:none}
 #main-panel-content{padding:0;overflow:hidden}
 #main-panel-content.project-overview-active{overflow:hidden}
@@ -79,13 +104,17 @@ PAGE_LAYOUT_JS = r'''
 const workspacePageLayouts=new Map();
 let workspaceArtifactProjectionHead=null;
 const WORKSPACE_CHAT_MODES=new Set(['full','compact','hidden']);
-function setPageChatMode(mode){
+let workspaceChatModeOverride=null;
+function setPageChatMode(mode,{user=false}={}){
  if(!WORKSPACE_CHAT_MODES.has(mode))throw new Error('Neznámý režim chatové části.');
+ if(user)workspaceChatModeOverride=mode;
+ mode=workspaceChatModeOverride||mode;
  const widget=document.querySelector('#prompt-widget');
  if(widget.dataset.chatMode!==mode)widget.dataset.chatMode=mode;
- // Compact is a declared capability. Its visual design is deliberately deferred.
- if(widget.dataset.compactPending!==String(mode==='compact'))widget.dataset.compactPending=String(mode==='compact');
- const hidden=mode==='hidden';if(widget.hidden!==hidden)widget.hidden=hidden;
+ if(widget.hidden)widget.hidden=false;
+ for(const button of widget.querySelectorAll('[data-chat-mode-choice]'))button.setAttribute('aria-pressed',String(button.dataset.chatModeChoice===mode));
+ const hidden=mode==='hidden';
+ if(hidden&&promptForm.contains(document.activeElement))widget.querySelector('[data-chat-mode-choice=hidden]')?.focus();
  if(promptForm.hidden!==hidden)promptForm.hidden=hidden;
 }
 function mountWorkspacePage(root,{title='',heading=null,actions=[],section='projects-tab',kind='page',chat='hidden',close=true,onClose=null,closeLabel='Zavřít'}={}){
@@ -211,6 +240,10 @@ function initializeWorkspacePageLayout(){
  for(const tab of mainTabs)if(primaryTabs.has(tab.id))tab.hidden=true;
  get('#settings-tabs').hidden=true;
  const prompt=get('#prompt-widget');document.querySelector('main').append(prompt);
+ const displayControls=document.createElement('div');displayControls.id='prompt-display-controls';displayControls.setAttribute('role','group');displayControls.setAttribute('aria-label','Zobrazení promptu');
+ for(const [mode,label] of [['full','Plný'],['compact','Kompaktní'],['hidden','Skrýt']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.chatModeChoice=mode;button.setAttribute('aria-controls','chat-composer');button.addEventListener('click',()=>setPageChatMode(mode,{user:true}));displayControls.append(button);}
+ prompt.prepend(displayControls);
+ const surface=document.createElement('div');surface.className='prompt-surface';promptForm.prepend(surface);surface.append(get('.prompt-draft-control'),get('.prompt-toolbar'));
  const preview=get('#preview-panel');
  const overview=document.createElement('section'),list=document.createElement('ul'),empty=document.createElement('p');const listStatus=document.createElement('p');listStatus.id='artifact-overview-status';listStatus.setAttribute('role','status');overview.id='artifact-overview';list.id='artifact-overview-list';list.className='workspace-file-list';empty.id='artifact-overview-empty';empty.textContent='Projekt zatím nemá žádné podklady.';overview.append(listStatus,list,empty);preview.append(overview);
  const edit=document.createElement('button');edit.id='preview-edit';edit.type='button';edit.textContent='Editovat';edit.hidden=true;
