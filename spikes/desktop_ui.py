@@ -6367,8 +6367,9 @@ function renderChatRunSelectors(){
  const backend=document.querySelector('#chat-run-adapter'),model=document.querySelector('#chat-run-model');
  if(!backend||!model)return;
  const offers=runnableModelOffers(),models=new Map((modelSelectionProjection?.models||[]).map(item=>[item.model_id,item.display_name]));
- let backendOffers=chatRunFilter.model?offers.filter(item=>runOfferModelKey(item)===chatRunFilter.model):offers;
- const backendIds=[...new Set(backendOffers.map(item=>item.adapter_id))].sort((a,b)=>(runBackendNames[a]||a).localeCompare(runBackendNames[b]||b));
+ // Keep backend switching reachable even with another provider's model selected.
+ // The change handler clears only an incompatible model selection.
+ const backendIds=[...new Set(offers.map(item=>item.adapter_id))].sort((a,b)=>(runBackendNames[a]||a).localeCompare(runBackendNames[b]||b));
  if(chatRunFilter.backend&&!backendIds.includes(chatRunFilter.backend))chatRunFilter.backend='';
  backend.replaceChildren(new Option('Vyberte backend',''));
  for(const id of backendIds)backend.append(new Option(runBackendNames[id]||id,id));

@@ -1967,8 +1967,12 @@ with running_api('http', handler=DesktopHandler) as server:
         assert result['backendLabels'] == ['Vyberte backend', 'AtlasCloud', 'Ollama', 'OpenAI'], result
         assert result['modelLabels'] == ['Vyberte model', 'gpt-shared', 'qwen-local'], result
         assert result['rows'] == 2, result
-        assert result['filteredBackends'] == ['Vyberte backend', 'AtlasCloud', 'OpenAI'], result
-        print('model selection: aggregated rows and bidirectional chat filters verified', flush=True)
+        assert result['filteredBackends'] == ['Vyberte backend', 'AtlasCloud', 'Ollama', 'OpenAI'], result
+        assert result['switchedBackend'] == 'ollama', result
+        assert result['clearedModel'] == '', result
+        assert result['ollamaModels'] == ['Vyberte model', 'qwen-local'], result
+        assert result['selectedOffer'] == 'ollama:qwen', result
+        print('model selection: aggregated rows and direct backend switching verified', flush=True)
         app.exit(0)
     def loaded(ok):
         if not ok: return app.exit(3)
@@ -1979,7 +1983,11 @@ const backendLabels=[...backend.options].map(x=>x.textContent);
 const modelLabels=[...model.options].map(x=>x.textContent);
 const rows=document.querySelectorAll('#settings-models-table tbody tr').length;
 model.value='aggregate:openai/gpt-shared';model.dispatchEvent(new Event('change'));
-JSON.stringify({backendLabels,modelLabels,rows,filteredBackends:[...backend.options].map(x=>x.textContent)});""" % payload
+const filteredBackends=[...backend.options].map(x=>x.textContent);
+backend.value='ollama';backend.dispatchEvent(new Event('change'));
+const switchedBackend=backend.value,clearedModel=model.value,ollamaModels=[...model.options].map(x=>x.textContent);
+model.value='aggregate:ollama/qwen-local';model.dispatchEvent(new Event('change'));
+JSON.stringify({backendLabels,modelLabels,rows,filteredBackends,switchedBackend,clearedModel,ollamaModels,selectedOffer:selectedRunOffer()?.offer_id});""" % payload
         page.runJavaScript(javascript, 0, received)
     page.loadFinished.connect(loaded); page.setUrl(QUrl(server.origin + '/'))
     QTimer.singleShot(10000, lambda: app.exit(2)); raise SystemExit(app.exec())
@@ -1988,7 +1996,7 @@ JSON.stringify({backendLabels,modelLabels,rows,filteredBackends:[...backend.opti
                                 cwd=Path(__file__).resolve().parents[1], capture_output=True,
                                 text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('bidirectional chat filters verified', result.stdout)
+        self.assertIn('direct backend switching verified', result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_webengine_audience_renders_approved_slide(self):
