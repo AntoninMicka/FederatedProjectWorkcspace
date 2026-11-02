@@ -357,6 +357,31 @@ def queue_projection(node, project_id, actor_id, view):
     return None
 
 
+def completion_reports(node, project_id, actor_id, *, per_task=5):
+    """Read completion messages per task, newest first; review state stays in the bridge."""
+    from spikes.ide_bridge import IdeBridge
+    service = IdeBridge(node, network=True)
+    if not (service.root/'bridge.sqlite').exists(): return {}
+    with service.database() as db:
+        rows = list(db.execute('SELECT m.record,s.record,r.record FROM messages m JOIN sessions s ON s.id=m.session '
+                               'LEFT JOIN reviews r ON r.session=m.session AND r.id=m.id ORDER BY m.rowid DESC LIMIT 500'))
+    reports = {}
+    for raw_message, raw_record, raw_review in rows:
+        message, record = json.loads(raw_message), json.loads(raw_record)
+        if (record['project_id'] != project_id or message['kind'] not in {'completed', 'progress'}
+                or owner(record, node) != actor_id):
+            continue
+        review = json.loads(raw_review) if raw_review else None
+        entries = reports.setdefault(message['task_id'], [])
+        if len(entries) < per_task:
+            entries.append(dict(message_id=message['message_id'], kind=message['kind'], body=message['body'][:2000],
+                                reported_by=message.get('reported_by'),
+                                outcome=(review.get('outcome') if review and review['state'] == 'completed'
+                                         else 'prepared' if review else None),
+                                note=review['request']['note'][:2000] if review else None))
+    return reports
+
+
 def validate_prepared(service, record, message):
     if not message.get('queue_packet_id'): return
     packet = load(service, record['session_id'], message['queue_packet_id'])

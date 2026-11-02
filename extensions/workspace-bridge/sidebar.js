@@ -125,6 +125,12 @@ function createSidebar(vscode, context, hooks) {
     })().finally(() => {loading = null;});
     return loading;
   }
+  // Same entries as the Messages view, so review state has one source.
+  function completionReports(project,taskId){
+    const entries=new Map((project.panel?.messages||[]).map(entry=>[entry.message.message_id,entry]));
+    for(const entry of project.pending||[])if(!entries.has(entry.message.message_id))entries.set(entry.message.message_id,entry);
+    return [...entries.values()].filter(entry=>entry.message.task_id===taskId&&['completed','progress'].includes(entry.message.kind));
+  }
   function children(kind, item) {
     if (!item) return projects.map(project => row(project, 'project', {view: kind}));
     const project = find(item); if (!project) return [];
@@ -132,7 +138,8 @@ function createSidebar(vscode, context, hooks) {
      if(item.kind==='queueTask'){
       const known=queueBridge.scope(project.queue,item.taskId);
       return [...known.rows.filter(r=>r.depth===1).map(r=>row(project,r.entry?'queueTask':'queueMissing',{entry:r.entry,taskId:r.id,parentRef:item.taskId,repeated:r.repeated})),
-       ...known.problems.filter(p=>!p.startsWith('Chybí odkaz')).map(problem=>row(project,'queueMissing',{taskId:problem,parentRef:item.taskId}))];
+       ...known.problems.filter(p=>!p.startsWith('Chybí odkaz')).map(problem=>row(project,'queueMissing',{taskId:problem,parentRef:item.taskId})),
+       ...completionReports(project,item.taskId).map(entry=>row(project,'message',{entry,parentRef:item.taskId}))];
      }
      return (project.queue?.items||[]).map((entry,index)=>row(project,'queueTask',{entry,taskId:entry.id,index}));
     }
@@ -167,7 +174,7 @@ function createSidebar(vscode, context, hooks) {
       label=(item.index===undefined?'':(item.index+1)+'. ')+item.entry.title;
       description=flags.map(f=>f.label).join(' · ')+(known.problems.length?' · Neúplná hierarchie':'')+(item.repeated?' · Opakovaný odkaz':'');
       icon=item.entry.user_confirmed&&!stale?'pass':known.problems.length?'warning':known.rows.length?'folder':'list-ordered';command='workspaceBridge.showQueueTask';
-      if(!item.repeated&&project.queue?.manifest.hierarchy?.[item.taskId])collapsed=vscode.TreeItemCollapsibleState.Collapsed;
+      if(!item.repeated&&(project.queue?.manifest.hierarchy?.[item.taskId]||completionReports(project,item.taskId).length))collapsed=vscode.TreeItemCollapsibleState.Collapsed;
     } else if(item.kind==='queueMissing'){
       label=item.taskId;description='Chybějící nebo neúplný odkaz';icon='warning';
     } else if (item.kind === 'task') {
@@ -178,7 +185,8 @@ function createSidebar(vscode, context, hooks) {
       label = item.doc.title; description = item.doc.agent_rules ? JSON.stringify(item.doc.scope || {}) : item.doc.available ? 'Připnutý podklad' : 'Nedostupný text'; icon = item.doc.agent_rules ? 'law' : 'file-text'; command = 'workspaceBridge.showDocument';
     } else if (item.kind === 'message') {
       const entry = item.entry, review = entry.review;
-      label = (entry.message.task_id || 'Projekt') + ' · ' + entry.message.body.slice(0,80);
+      const reporter=entry.message.reported_by==='agent'?'Agent · ':entry.message.reported_by==='user'?'Ruční žádost · ':'';
+      label = item.parentRef ? reporter + entry.message.body.slice(0,80) : (entry.message.task_id || 'Projekt') + ' · ' + entry.message.body.slice(0,80);
       description = entry.draft ? 'Návrh · nebyl odeslán' : entry.old_session && !entry.receipt ? 'Stará relace · vyžaduje nové posouzení'
         : review?.state==='completed' ? (review.outcome==='stale'?'Zastaralé · neaplikováno':review.request.decision==='accepted'?'Přijato':'Odmítnuto')
         : review ? 'Review připraveno' : !entry.receipt ? 'Čeká na odeslání' : entry.receipt.status==='stale' ? 'Doručeno ze staré revize' : 'Doručeno · čeká na posouzení';

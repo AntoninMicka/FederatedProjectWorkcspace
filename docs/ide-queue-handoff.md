@@ -89,6 +89,10 @@ Ostatní příznaky mění jen jejich vlastní akce nebo se odvozují, viz
 jeden PR, podúkoly se hlásí jednotlivě a dávka až po přijetí všech. Chybějící nebo
 cyklický odkaz se zobrazí jako problém.
 
+**Zprávy o splnění** se ve frontě pluginu i Workspace zobrazují pod svou položkou,
+včetně původu, stavu posouzení a odpovědi. Je to jen pohled na tytéž zprávy: posuzují
+se dál v Nastavení → IDE → zprávy projektu. Workspace ukazuje pět nejnovějších na úkol.
+
 ## Chyba a obnova
 
 Při unknown/timeoutu nejprve načtěte stav a původní receipts. Stejné UUID se

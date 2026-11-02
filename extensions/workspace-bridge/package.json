@@ -2,7 +2,7 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace",
   "description": "Tasks, messages, documents and agent rules for Federated Workspace",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {

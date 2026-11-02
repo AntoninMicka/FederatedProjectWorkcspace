@@ -86,6 +86,18 @@ class QueuePacketTests(unittest.TestCase):
         self.assertNotEqual(self.head,accepted['result']['commit_id'])
         self.assertTrue(status(self.service,self.record)['items'][0]['user_confirmed'])
 
+    def test_queue_lists_completion_reports_under_their_item(self):
+        packet=self.packet();self.assertEqual([],self.qstatus()['items'][0]['reports'])
+        m=self.message(packet);self.send(m)
+        items=self.qstatus()['items'];report=items[0]['reports'][0]
+        self.assertEqual((m['message_id'],'agent',None,None),(report['message_id'],report['reported_by'],report['outcome'],report['note']))
+        self.assertEqual(m['body'],report['body']);self.assertEqual([],items[1]['reports'])
+        self.review(m,decision='rejected',note='Chybí důkaz.')
+        report=self.qstatus()['items'][0]['reports'][0]
+        self.assertEqual(('rejected','Chybí důkaz.'),(report['outcome'],report['note']))
+        again=self.manual(packet);self.send(again)
+        self.assertEqual(['user','agent'],[r['reported_by'] for r in self.qstatus()['items'][0]['reports']])
+
     def test_manual_request_from_stale_packet_is_refused(self):
         packet=self.packet()
         self.act('set-flag','TASK-03',flag='held',value=True)

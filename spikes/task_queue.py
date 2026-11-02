@@ -169,8 +169,9 @@ class TaskQueue:
         view = self.projects.open(project_id); graph = view['plan']
         require(graph['status'] == 'ready', 'Roadmapa nemá platný graf.')
         require(action == 'status' or not view.get('read_only'), 'Projekt je pouze pro čtení.')
-        from spikes.ide_queue import queue_projection
+        from spikes.ide_queue import completion_reports, queue_projection
         projection = queue_projection(self.node, project_id, actor_id, view)
+        reports = completion_reports(self.node, project_id, actor_id)
         accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)
         with self._lock(project_id, actor_id) as path, workspace.journal.lock(), workspace.journal.connect() as db:
@@ -266,6 +267,7 @@ class TaskQueue:
                                     user_confirmed=i in accepted,
                                     user_requested=bool(projection and any(x['id'] == i and x.get('user_requested') for x in projection['items'])),
                                     held=i in state['held_task_ids'],
+                                    reports=reports.get(i, []),
                                     children=[n['id'] for n in graph['nodes'] if n['parent_id'] == i],
                                     **adjacent_moves(state['task_ids'], position, nodes,
                                                      not stale and not issues and not view.get('read_only')))
