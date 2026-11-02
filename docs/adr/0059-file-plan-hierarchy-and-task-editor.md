@@ -166,9 +166,35 @@ Uložení nese původní HEAD, stabilní ID a digest původního bloku. Pod writ
 lockem znovu sestaví celý kandidátní graf a odmítne neplatné vztahy, změnu ID,
 typu, rodiče, zdroje nebo zásah do jiného uzlu. Změní pouze příslušný úsek
 jednoho souboru; YAML frontmatter, sidecar metadata a ostatní bajty zachová.
-Přidávání uzlů, přesuny a změny hierarchie nadále používají celý editor plánu.
+Přesuny a změny hierarchie nadále používají celý editor plánu.
 Recovery používá stejnou Workspace transakci a stejné operation ID; ztracená
 odpověď nevytváří nový zápis. Čtení nedokončenou operaci samo neobnovuje.
+
+### Vytvoření, závislosti a mazání položky
+
+`NEW-7FFA8A2B6F-TASK-1` doplňuje tři strukturované akce nad stejným writerem.
+Každá nese expected HEAD, mění právě jeden soubor bundle, tvoří právě jeden
+commit a pod writer lockem znovu sestaví celý kandidátní graf. Mimo cílovou
+změnu se nesmí změnit název, stav, popis, checklist, hierarchie, zdroj ani
+`depends_on` jiné položky. Crash boundaries a replay jsou tedy stejné jako výše;
+vygenerované ID se odvozuje z operation ID, takže replay vrací stejnou položku.
+
+- **Vytvoření** vloží odrážku za poslední potomek rodiče, u batch se souborovým
+  odkazem do tohoto souboru. Typ určuje profil, nikoli uživatel. Popis se ukládá
+  jen jako popisné odrážky; text, který by parser četl jako metadata, vztah,
+  podmínku nebo uzel, se odmítne. Dokončený rodič nové potomky nepřijímá.
+- **Závislosti** přepíší jen vlastní řádky `depends_on` a jejich aliasy. Hrana
+  deklarovaná jinou položkou přes `blocks` se tiše neodstraní ani nezduplikuje;
+  odstranění je třeba provést u této položky.
+- **Mazání** odstraní blok včetně fyzicky vnořeného podstromu po náhledu
+  zasažených položek. Odmítne se, pokud na podstromu závisí jiná položka, pokud
+  by graf neprošel (reference z jiného vztahu, `parent_of`, podgrafu, poslední
+  uzel souboru) nebo jde o batch se souborovým odkazem. Text zůstává v Git historii.
+
+Lokální fronta není součástí transakce. UI odmítne smazat položku ve frontě
+aktuálního uživatele; fronta jiného uživatele po změně plánu fail-closed hlásí
+„položka již není v roadmapě“. Znovu použití ručně zadaného ID smazané položky
+se nekontroluje proti historii.
 
 Čtení a sestavení bundle jsou read-only projekce jednoho commitu. Editace
 jednoho souboru používá stávající document Workspace operaci. Pád před jejím

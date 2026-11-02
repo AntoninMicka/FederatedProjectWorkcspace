@@ -978,7 +978,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="plan-status" role="status">Otevřete projekt.</p>
 <div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
 <details id="plan-subgraphs" hidden><summary>Výřezy roadmapy</summary><ul id="sidebar-plan-list" aria-label="Výřezy roadmapy"></ul></details>
-<div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
+<div id="plan-new-root"><button id="plan-add-root" type="button" hidden>Přidat kořenovou položku</button><div id="plan-new-root-form"></div></div><div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
 </div>
 <div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
 <h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
@@ -1343,6 +1343,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .plan-roadmap-canvas{position:relative;min-width:100%;background:#f7fafb}.plan-milestone-lane{position:absolute;left:0;border-radius:11px;background:#edf3f5}.plan-milestone-lane:nth-of-type(even){background:#f1f5f6}.plan-milestone-label{position:sticky;left:0;z-index:4;box-sizing:border-box;width:220px;height:100%;padding:16px 18px;border:0;border-right:1px solid #cfdae0;border-radius:11px 0 0 11px;background:#edf3f5;color:#18384a;text-align:left}.plan-milestone-label strong,.plan-milestone-label span{display:block}.plan-milestone-label span{margin-top:7px;color:#526b79;font-size:12px;line-height:1.35;white-space:pre-line}.plan-milestone-label:hover,.plan-milestone-label:focus-visible{background:#e2eeeb;outline:2px solid #176b60;outline-offset:-2px}.plan-roadmap-edges{position:absolute;inset:0;z-index:1;pointer-events:none}.plan-batch-card{position:absolute;z-index:2;box-sizing:border-box;width:220px;min-height:70px;padding:10px;border:2px solid #557384;border-radius:10px;background:#fff;color:#152b38;text-align:left}.plan-batch-card strong,.plan-batch-card span,.plan-batch-card small{display:block}.plan-batch-card span{margin-top:4px;color:#385160;font-size:12px}.plan-batch-card small{max-height:2.6em;margin-top:5px;overflow:hidden;color:#607987;font-size:11px;line-height:1.25;white-space:pre-line}.plan-batch-card[data-completed="true"]{background:#e2f3eb}.plan-batch-card[data-blocked="true"]{background:#f8dddd}.plan-batch-card[data-ready="true"]{border-color:#176b60;border-style:dashed}.plan-batch-card[data-critical="true"]{border-width:4px}.plan-batch-card:hover,.plan-batch-card:focus-visible{border-color:#0d6b5d;box-shadow:0 3px 6px #17334233;outline:none}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,clamp(230px,calc((100vh - 166px)/2),312px));grid-auto-rows:clamp(230px,calc((100vh - 166px)/2),312px);gap:16px}
+.plan-item-form{display:grid;gap:10px;max-width:640px;margin:10px 0}.plan-item-form label{display:grid;gap:4px}.plan-item-form fieldset{display:grid;gap:6px;min-width:0;margin:0}.plan-item-form input,.plan-item-form textarea,.plan-item-form select{width:100%;box-sizing:border-box}.plan-item-form button{justify-self:start}
 #project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
 button.dashboard-tile,button.project-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 button.dashboard-tile:hover,button.project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
@@ -4388,8 +4389,66 @@ function showTaskPlanDetail(item){
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
  const checklist=(item.checklist||[]).map(value=>(value.checked?'☑ ':'☐ ')+value.text).join('\\n');
  for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',item.checked?'dokončeno':item.blocked?'blokováno':item.ready?'připraveno':'plánováno'],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);
- if(activeProject&&!activeProject.readOnly&&item.source?.artifact_id){const edit=document.createElement('button');edit.type='button';edit.textContent='Upravit tuto položku';edit.addEventListener('click',()=>openPlanItemEditor(item));detail.append(edit);}
+ if(activeProject&&!activeProject.readOnly&&item.source?.artifact_id){const edit=document.createElement('button');edit.type='button';edit.textContent='Upravit tuto položku';edit.addEventListener('click',()=>openPlanItemEditor(item));detail.append(edit);appendPlanItemActions(detail,item);}
  if(item.source?.artifact_id){const open=document.createElement('button');open.type='button';open.textContent='Otevřít zdrojový seznam';open.addEventListener('click',()=>openPreview(item.source.artifact_id));detail.append(open);}
+}
+function planDependencyPicker(selected,excluded){
+ const root=document.createElement('fieldset'),legend=document.createElement('legend'),filter=document.createElement('input'),list=document.createElement('select');
+ legend.textContent='Závisí na';filter.type='search';filter.placeholder='Filtrovat podle ID nebo názvu';filter.setAttribute('aria-label','Filtrovat závislosti');
+ list.multiple=true;list.size=8;list.setAttribute('aria-label','Předpoklady položky');
+ for(const node of taskPlanProjection?.nodes||[]){if(node.id===excluded)continue;const option=document.createElement('option');option.value=node.id;option.textContent=`${node.id} · ${node.title}`;option.selected=selected.includes(node.id);list.append(option);}
+ filter.addEventListener('input',()=>{const text=filter.value.toLowerCase();for(const option of list.options)option.hidden=!option.selected&&!option.textContent.toLowerCase().includes(text);});
+ root.append(legend,filter,list);return{root,values:()=>[...list.options].filter(option=>option.selected).map(option=>option.value)};
+}
+let planChangeAttempt=null;
+async function submitPlanChange(path,item,status,select){
+ const project=activeProject,signature=path+JSON.stringify(item);if(!project||project.readOnly)return false;
+ if(planChangeAttempt?.signature!==signature)planChangeAttempt={signature,operation_id:crypto.randomUUID()};
+ const attempt=planChangeAttempt;status.textContent='Ukládám do plánu…';
+ try{
+  const result=await projectRequest('/v1/artifacts/editor/plan-item/'+path,{operation_id:attempt.operation_id,item},120000);
+  if(planChangeAttempt===attempt)planChangeAttempt=null;project.head=result.commit_id;
+  if(activeProject===project){await openRegisteredProject(result.project_id);if(await openTaskPlan()){const target=taskPlanProjection?.nodes.find(node=>node.id===select(result));if(target)showTaskPlanDetail(target);}}
+  return true;
+ }catch(error){status.textContent=error.message+' Vyplněné údaje zůstávají; po nejasném výsledku zopakování použije stejnou operaci.';return false;}
+}
+function openPlanItemForm(host,parent){
+ host.replaceChildren();const form=document.createElement('form'),status=document.createElement('p');form.className='plan-item-form';status.setAttribute('role','status');
+ const field=(label,element)=>{const wrap=document.createElement('label');wrap.textContent=label+' ';wrap.append(element);form.append(wrap);return element;};
+ const title=field('Název',document.createElement('input')),description=field('Popis',document.createElement('textarea')),identifier=field('Stabilní ID (nepovinné)',document.createElement('input'));
+ title.required=true;title.maxLength=500;identifier.placeholder='např. FEATURE-01';
+ const picker=planDependencyPicker([],null),submit=document.createElement('button');form.append(picker.root);submit.type='submit';submit.textContent=parent?'Přidat podřízenou položku':'Přidat kořenovou položku';form.append(submit,status);
+ form.addEventListener('submit',async event=>{event.preventDefault();if(submit.disabled)return;submit.disabled=true;
+  await submitPlanChange('create',{project_id:activeProject.id,parent_id:parent?.id??null,expected_head:activeProject.head,task_id:identifier.value.trim()||null,title:title.value,description:description.value,depends_on:picker.values()},status,result=>result.task_id);
+  submit.disabled=false;});
+ host.append(form);host.scrollIntoView?.({block:'nearest'});title.focus();
+}
+function openPlanDependenciesForm(host,item){
+ host.replaceChildren();const form=document.createElement('form'),status=document.createElement('p');form.className='plan-item-form';status.setAttribute('role','status');
+ const picker=planDependencyPicker(item.depends_on,item.id),submit=document.createElement('button');submit.type='submit';submit.textContent='Uložit závislosti';form.append(picker.root,submit,status);
+ form.addEventListener('submit',async event=>{event.preventDefault();if(submit.disabled)return;submit.disabled=true;
+  await submitPlanChange('dependencies',{project_id:activeProject.id,task_id:item.id,expected_head:activeProject.head,depends_on:picker.values()},status,result=>result.task_id);
+  submit.disabled=false;});
+ host.append(form);host.scrollIntoView?.({block:'nearest'});
+}
+async function openPlanDeletion(host,item){
+ host.replaceChildren();const status=document.createElement('p');status.setAttribute('role','status');status.textContent='Připravuji náhled smazání…';host.append(status);
+ const project=activeProject;let preview;
+ try{preview=await projectRequest('/v1/artifacts/editor/plan-item/delete/preview',{project_id:project.id,task_id:item.id,expected_head:project.head});}catch(error){status.textContent=error.message;return;}
+ const queued=preview.removed.filter(node=>(taskQueueView?.task_ids||[]).includes(node.id)).map(node=>node.id),blocker=preview.blocker||(queued.length?`Ve frontě úkolů jsou: ${queued.join(', ')}. Nejprve je odeberte z fronty.`:'');
+ const list=document.createElement('ul');for(const node of preview.removed){const row=document.createElement('li');row.textContent=`${node.id} · ${node.title}${node.checked?' (dokončeno)':''}`;list.append(row);}
+ const heading=document.createElement('p');heading.textContent=`Počet mazaných položek: ${preview.removed.length}. Text zůstane v historii projektu.`;
+ const confirm=document.createElement('button');confirm.type='button';confirm.textContent='Potvrdit smazání';confirm.disabled=Boolean(blocker);status.textContent=blocker;
+ confirm.addEventListener('click',async()=>{confirm.disabled=true;const parent=item.parent_id;
+  const done=await submitPlanChange('delete',{project_id:project.id,task_id:item.id,expected_head:preview.expected_head},status,()=>parent);if(!done)confirm.disabled=false;});
+ host.replaceChildren(heading,list,confirm,status);host.scrollIntoView?.({block:'nearest'});
+}
+function appendPlanItemActions(detail,item){
+ const host=document.createElement('div'),action=(label,handler)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.addEventListener('click',handler);detail.append(button);};
+ if(['milestone','batch'].includes(item.type)&&!item.checked)action(item.type==='milestone'?'Přidat dávku':'Přidat úkol',()=>openPlanItemForm(host,item));
+ action('Upravit závislosti',()=>openPlanDependenciesForm(host,item));
+ action('Smazat položku',()=>openPlanDeletion(host,item));
+ detail.append(host);
 }
 function renderProfiledTaskRoadmap(value,mode,graph,status){
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line);
@@ -4434,8 +4493,10 @@ function renderProfiledTaskLevel(value,mode,graph,status,selection){
  for(const task of visibleTasks){const point=positions.get(task.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card plan-task-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.completed=String(task.checked);card.dataset.blocked=String(task.blocked);card.dataset.ready=String(task.ready);card.dataset.critical=String(task.critical);card.setAttribute('aria-label',`${task.id}, ${task.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=task.id;title.textContent=task.title;const done=(task.checklist||[]).filter(item=>item.checked).length,criteria=(task.checklist||[]).length;description.textContent=(task.description||'Bez doplňujícího popisu.')+(criteria?`\nPodmínky: ${done}/${criteria}`:'');card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(task));canvas.append(card);}
  graph.append(canvas);status.textContent=`${visibleTasks.length} úkolů · ${visibleBatches.length} dávek · ${selection.title}`;
 }
+document.querySelector('#plan-add-root').addEventListener('click',()=>{const host=document.querySelector('#plan-new-root-form');if(host.childElementCount)host.replaceChildren();else openPlanItemForm(host,null);});
 function renderTaskPlan(){
  const value=taskPlanProjection,graph=document.querySelector('#plan-graph'),status=document.querySelector('#plan-status');graph.replaceChildren();
+ document.querySelector('#plan-add-root').hidden=!(value?.status==='ready'&&activeProject&&!activeProject.readOnly);document.querySelector('#plan-new-root-form').replaceChildren();
  if(!value){status.textContent='Otevřete projekt.';return;}
  if(value.status!=='ready'){status.textContent=value.status==='missing'?'Projekt zatím nemá hlavní seznam úkolů.':`Plán nelze zobrazit: ${value.error||'neplatný formát'}`;return;}
  const mode=document.querySelector('#plan-state-filter').value,scope=taskPlanSelection?.kind==='subgraph'?new Set(taskPlanSelection.task_ids):null;
@@ -8005,6 +8066,8 @@ class DesktopHandler(Handler):
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/editor/validate-plan',
         '/v1/artifacts/editor/plan-item/open', '/v1/artifacts/editor/plan-item/save',
+        '/v1/artifacts/editor/plan-item/create', '/v1/artifacts/editor/plan-item/dependencies',
+        '/v1/artifacts/editor/plan-item/delete/preview', '/v1/artifacts/editor/plan-item/delete',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
@@ -8881,8 +8944,12 @@ class DesktopHandler(Handler):
                     editor = PlanItems(node, network=getattr(projects, 'network', False))
                     if self.path.endswith('/open') and isinstance(request, dict) and set(request) == {'project_id', 'artifact_id', 'task_id', 'expected_head'}:
                         return self.reply(200, editor.open(**request))
-                    if self.path.endswith('/save') and isinstance(request, dict) and set(request) == {'operation_id', 'item'} and isinstance(request['item'], dict):
-                        return self.reply(200, editor.save(request['item'], request['operation_id']))
+                    if self.path.endswith('/delete/preview') and isinstance(request, dict) and set(request) == {'project_id', 'task_id', 'expected_head'}:
+                        return self.reply(200, editor.delete_preview(**request))
+                    action = {'/save': editor.save, '/create': editor.create, '/dependencies': editor.set_dependencies,
+                              '/delete': editor.delete}.get(self.path.removeprefix('/v1/artifacts/editor/plan-item'))
+                    if action and isinstance(request, dict) and set(request) == {'operation_id', 'item'} and isinstance(request['item'], dict):
+                        return self.reply(200, action(request['item'], request['operation_id']))
                     return self.send_error(400)
                 if (self.path == '/v1/artifacts/editor/open' and isinstance(request, dict)
                         and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
