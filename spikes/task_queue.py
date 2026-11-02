@@ -249,8 +249,10 @@ class TaskQueue:
                 require(identifier in state['task_ids'], 'Položka není ve frontě.')
                 removed = {identifier}
                 while True:
+                    # A completed prerequisite stays satisfied after removal, as in assess().
+                    unmet = {i for i in removed if i in nodes and not nodes[i]['checked']}
                     expanded = removed | {i for i in state['task_ids'] if i in nodes
-                                           and set(nodes[i]['depends_on']) & removed}
+                                           and set(nodes[i]['depends_on']) & unmet}
                     if expanded == removed: break
                     removed = expanded
                 preview = dict(project_id=project_id, owner_id=actor_id, expected_head=head,
