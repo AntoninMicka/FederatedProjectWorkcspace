@@ -2757,6 +2757,7 @@ async function canLeaveWorkspaceEditors(){
 }
 function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
  resetTaskFileEditEditor();
+ for(const name of ['title','filename','description','tags']){const field=artifactEditorForm.elements[name];field.disabled=Boolean(artifactEditorItem?.planItem);const label=field.closest?.('label');if(label)label.hidden=field.disabled;}
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
  document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
@@ -2787,6 +2788,37 @@ async function openArtifactEditor(item,deleteMode=false){
   if(deleteMode)await prepareArtifactDeletion();else{const field=taskPlanEditor.hidden||taskPlanMode==='raw'?artifactEditorForm.elements.body:taskPlanEditor.querySelector('input,textarea,select,button');field?.focus();}
  }catch(error){artifactEditorStatus.textContent=error.message;}
 }
+async function openPlanItemEditor(task){
+ if(!activeProject||activeProject.readOnly||!task.source?.artifact_id||!await canLeaveWorkspaceEditors())return;
+ const project=activeProject,item={id:task.source.artifact_id,kind:'document',planItem:true};artifactEditorItem=item;
+ try{
+  const result=await projectRequest('/v1/artifacts/editor/plan-item/open',{project_id:project.id,artifact_id:item.id,task_id:task.id,expected_head:project.head});
+  if(activeProject!==project||artifactEditorItem!==item)return;
+  item.planItem=result;hideArtifactDeletion();fillArtifactEditor({title:result.title,body:result.body},false,{rawOnly:true});
+  showWorkspacePage(artifactEditorView);
+  document.querySelector('#artifact-editor-heading').textContent=`Upravit položku ${task.id}`;
+  document.querySelector('#artifact-editor-mode').textContent='Pouze vybraná položka plánu';
+  artifactEditorStatus.textContent='Upravujete vlastní text položky; podúkoly a okolní obsah zůstanou zachované. ID a hierarchie se zde nemění.';
+  artifactEditorForm.elements.body.focus();
+ }catch(error){if(artifactEditorItem===item)artifactEditorItem=null;document.querySelector('#plan-status').textContent=error.message;}
+}
+async function savePlanItemEditor(navigate=true){
+ const item=artifactEditorItem,project=activeProject,model=item?.planItem;
+ if(!project||!model||model===true||project.readOnly)return false;
+ const request={project_id:model.project_id,artifact_id:model.artifact_id,task_id:model.task_id,expected_head:model.expected_head,fragment_sha256:model.fragment_sha256,body:artifactEditorForm.elements.body.value};
+ const signature=JSON.stringify(request);
+ if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),item:request};
+ const attempt=artifactEditorAttempt,button=artifactEditorForm.querySelector('button[type="submit"]'),body=artifactEditorForm.elements.body;
+ button.disabled=true;body.readOnly=true;artifactEditorStatus.textContent='Ukládám vybranou položku…';
+ try{
+  const result=await projectRequest('/v1/artifacts/editor/plan-item/save',{operation_id:attempt.operation_id,item:attempt.item},120000);
+  if(activeProject!==project||artifactEditorItem!==item)return false;
+  artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;project.head=result.commit_id;artifactEditorView.hidden=true;
+  if(navigate){await openRegisteredProject(result.project_id);if(await openTaskPlan()){const updated=taskPlanProjection?.nodes.find(n=>n.id===model.task_id);if(updated)showTaskPlanDetail(updated);}}
+  return true;
+ }catch(error){artifactEditorStatus.textContent=error.message+' Rozepsaný text zůstává v editoru; po nejasném výsledku zachovejte stejnou operaci.';return false;}
+ finally{button.disabled=false;body.readOnly=false;}
+}
 async function openNewArtifactEditor({todo=false}={}){
  if(!activeProject||activeProject.readOnly||!await canLeaveWorkspaceEditors())return;
  const id=todo?activeProject.mainTodoId:crypto.randomUUID();
@@ -2804,6 +2836,7 @@ function openMainTodoEditor(){
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
 artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
 async function saveArtifactEditor(navigate=true){
+ if(artifactEditorItem?.planItem)return savePlanItemEditor(navigate);
  if(artifactEditorTaskEdit)return saveTaskFileEditEditor(navigate);
  if(!activeProject||!artifactEditorItem||!artifactEditorForm.reportValidity())return false;const button=artifactEditorForm.querySelector('button[type="submit"]');
  if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return false;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return false;}}}
@@ -4355,6 +4388,7 @@ function showTaskPlanDetail(item){
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
  const checklist=(item.checklist||[]).map(value=>(value.checked?'☑ ':'☐ ')+value.text).join('\\n');
  for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',item.checked?'dokončeno':item.blocked?'blokováno':item.ready?'připraveno':'plánováno'],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);
+ if(activeProject&&!activeProject.readOnly&&item.source?.artifact_id){const edit=document.createElement('button');edit.type='button';edit.textContent='Upravit tuto položku';edit.addEventListener('click',()=>openPlanItemEditor(item));detail.append(edit);}
  if(item.source?.artifact_id){const open=document.createElement('button');open.type='button';open.textContent='Otevřít zdrojový seznam';open.addEventListener('click',()=>openPreview(item.source.artifact_id));detail.append(open);}
 }
 function renderProfiledTaskRoadmap(value,mode,graph,status){
@@ -7970,6 +8004,7 @@ class DesktopHandler(Handler):
         '/v1/projects/conflicts/confirm',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/editor/validate-plan',
+        '/v1/artifacts/editor/plan-item/open', '/v1/artifacts/editor/plan-item/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
@@ -8841,6 +8876,14 @@ class DesktopHandler(Handler):
                 if node is None:
                     return self.send_error(400)
                 actions = ArtifactActions(node, network=getattr(projects, 'network', False))
+                if self.path.startswith('/v1/artifacts/editor/plan-item/'):
+                    from spikes.plan_item_editor import PlanItems
+                    editor = PlanItems(node, network=getattr(projects, 'network', False))
+                    if self.path.endswith('/open') and isinstance(request, dict) and set(request) == {'project_id', 'artifact_id', 'task_id', 'expected_head'}:
+                        return self.reply(200, editor.open(**request))
+                    if self.path.endswith('/save') and isinstance(request, dict) and set(request) == {'operation_id', 'item'} and isinstance(request['item'], dict):
+                        return self.reply(200, editor.save(request['item'], request['operation_id']))
+                    return self.send_error(400)
                 if (self.path == '/v1/artifacts/editor/open' and isinstance(request, dict)
                         and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
                     return self.reply(200, actions.open(**request))
@@ -9010,7 +9053,7 @@ class DesktopHandler(Handler):
                     'Potvrzení prezentace nelze dokončit: návrh, schválení nebo projektová revize '
                     'se změnily. Načtěte aktuální stav; pokud návrh zůstane dostupný, opakování '
                                        'stejného tlačítka zachová identitu operace.'})
-            if self.path == '/v1/artifacts/editor/validate-plan':
+            if self.path == '/v1/artifacts/editor/validate-plan' or self.path.startswith('/v1/artifacts/editor/plan-item/'):
                 return self.reply(422, {'error': str(exc) or 'Plán nelze bezpečně materializovat.'})
             if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/node-telemetry/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):

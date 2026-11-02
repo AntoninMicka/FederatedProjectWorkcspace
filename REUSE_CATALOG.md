@@ -33,6 +33,11 @@ IDE-QUEUE-UX-01-D **adaptuje** stávající připnutý manifest ADR 0062,
 příkaz pro otevření detailu; skripty zůstávají vypnuté. Druhý export dokumentů
 ani další persistentní vrstva se nezavádí.
 
+Plan Editor (`NEW-3FC92B851E-TASK-1`) **adaptuje** společný raw editor,
+dirty guard, validovaný task graph, `ArtifactHistory` a jediný Workspace writer
+podle ADR 0059. Vlastní blok vybrané položky nahrazuje přes přesné textové
+hranice; nematerializuje nový task store ani obecný Markdown rewriter.
+
 M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC.
 
 Shellový launcher adaptuje existující unittest příkaz a `spikes.check_project`; dočasné demo používá `Workspace`/`Git` přímo. Nevytváří další storage implementaci ani aplikační server.

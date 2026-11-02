@@ -5,6 +5,22 @@ SPDX-License-Identifier: MPL-2.0
 
 # Projektový plán a podgrafy
 
+## Úprava jedné položky
+
+V pohledu **Plán** otevřete detail milníku, dávky nebo úkolu a zvolte
+**Upravit tuto položku**. Společný raw editor načte vlastní Markdown blok
+položky s popisem, vztahy a případným checklistem. Podúkoly dávky ani ostatní
+obsah souboru do editoru nevstupují. **Uložit** změní pouze tento blok a vrátí
+vás do plánu; neuložené změny chrání běžný dialog při odchodu z editoru.
+
+Stabilní ID, typ a hierarchie se tímto způsobem nemění. Pro přidání uzlu nebo
+přesun použijte celý zdrojový seznam. Při chybě revize zůstane draft zachovaný;
+po nejasném výsledku lze zopakovat stejné uložení se stejným ID operace.
+Projekt pouze pro čtení tuto akci nenabízí. Recovery a přesné hranice změny
+popisuje [ADR 0059](adr/0059-file-plan-hierarchy-and-task-editor.md#dílčí-úprava-jedné-položky-plan-editor).
+
+## Zápis plánu a vztahů
+
 Hlavní seznam úkolů je autoritou. Každý checkbox začíná stabilním ID:
 
 ```markdown

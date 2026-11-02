@@ -153,6 +153,23 @@ podléhá běžnému expected-HEAD, journal, Git CAS a index recovery kontraktu.
 
 ## Crash boundaries a důsledky
 
+### Dílčí úprava jedné položky (Plan Editor)
+
+`NEW-3FC92B851E-TASK-1` přidává z detailu plánu akci **Upravit tuto položku**.
+Editor načte jen vlastní Markdown blok vybraného stabilního ID, včetně jeho
+metadat, popisu a checklistu; potomky kontejneru a okolní text neposílá do bufferu.
+Stejný postup platí pro definici v odkazovaném souboru bundle. Hranice vycházejí
+z fyzického textu, nikoli z odvozeného čísla řádku po vynechání code fences.
+Neznámé konstrukce bez bezpečné hranice vyžadují použití celého raw dokumentu.
+
+Uložení nese původní HEAD, stabilní ID a digest původního bloku. Pod writer
+lockem znovu sestaví celý kandidátní graf a odmítne neplatné vztahy, změnu ID,
+typu, rodiče, zdroje nebo zásah do jiného uzlu. Změní pouze příslušný úsek
+jednoho souboru; YAML frontmatter, sidecar metadata a ostatní bajty zachová.
+Přidávání uzlů, přesuny a změny hierarchie nadále používají celý editor plánu.
+Recovery používá stejnou Workspace transakci a stejné operation ID; ztracená
+odpověď nevytváří nový zápis. Čtení nedokončenou operaci samo neobnovuje.
+
 Čtení a sestavení bundle jsou read-only projekce jednoho commitu. Editace
 jednoho souboru používá stávající document Workspace operaci. Pád před jejím
 commitem obnoví journal, po commitu lze obnovit index z HEAD. Odkaz a nově
