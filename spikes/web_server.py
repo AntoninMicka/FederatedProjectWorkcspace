@@ -577,12 +577,16 @@ class WebHandler(DesktopHandler):
         if self.path in {'/v1/projects/open', '/v1/artifacts/preview',
                          '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
                          '/v1/projects/conflicts/list', '/v1/projects/conflicts/preview',
-                         '/v1/artifacts/editor/open', '/v1/artifacts/delete/preview'}:
+                         '/v1/artifacts/editor/open', '/v1/artifacts/editor/plan-item/open', '/v1/artifacts/delete/preview'}:
             if not isinstance(request, dict) or not self.server.administration.allowed(self.actor, request.get('project_id')):
                 return self.send_error(403)
         if self.path == '/v1/artifacts/editor/save':
             document = request.get('document') if isinstance(request, dict) else None
             if not isinstance(document, dict) or not self._can_write(document.get('project_id')):
+                return self.send_error(403)
+        if self.path == '/v1/artifacts/editor/plan-item/save':
+            item = request.get('item') if isinstance(request, dict) else None
+            if not isinstance(item, dict) or not self._can_write(item.get('project_id')):
                 return self.send_error(403)
         if self.path == '/v1/projects/conflicts/confirm':
             resolution = request.get('resolution') if isinstance(request, dict) else None

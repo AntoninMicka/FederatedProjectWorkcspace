@@ -899,6 +899,7 @@ class WebTests(unittest.TestCase):
         history_request = {'project_id':project, 'artifact_id':str(uuid4()), 'expected_head':'0'*40}
         self.assertEqual(self.request(path='/v1/artifacts/history/list', body=json.dumps(history_request), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/artifacts/editor/open', body=json.dumps(history_request), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/artifacts/editor/plan-item/open', body=json.dumps(history_request | {'task_id':'TASK-01'}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/outputs/definitions', body=json.dumps({
             'project_id':project, 'expected_head':'0'*40}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
@@ -956,6 +957,8 @@ class WebTests(unittest.TestCase):
             'project_id':project, 'expected_head':'0'*40}), headers=headers)[0], 409)
         self.assertEqual(self.request(path='/v1/artifacts/editor/save', body=json.dumps({
             'operation_id':str(uuid4()), 'document':{'project_id':project}}), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/artifacts/editor/plan-item/save', body=json.dumps({
+            'operation_id':str(uuid4()), 'item':{'project_id':project}}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/artifacts/delete/confirm', body=json.dumps({
             'project_id':project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/media/preview', body=json.dumps({
