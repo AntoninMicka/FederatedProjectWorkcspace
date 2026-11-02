@@ -4270,8 +4270,15 @@ function renderTaskQueue(){
    moves.append(button);
   }
   const hold=document.createElement('button');hold.type='button';hold.textContent=item.held?'Uvolnit':'Pozastavit';hold.title='Pozastavená položka se nepředává agentovi. Příznak nemění roadmapu ani přijetí.';
-  hold.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);hold.addEventListener('click',()=>changeTaskQueue('set-flag',item.id,{flag:'held',value:!item.held}));
+  hold.ariaLabel=`${hold.textContent}: ${item.id}`;
+  hold.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||!taskQueueView.valid;hold.addEventListener('click',()=>changeTaskQueue('set-flag',item.id,{flag:'held',value:!item.held}));
   remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,moves,hold,remove);
+  const audit=(taskQueueView.flag_audit||[]).filter(entry=>entry.task_id===item.id);
+  if(audit.length){
+   const history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Změny příznaku Pozastaveno';history.append(summary);
+   for(const entry of audit){const text=document.createElement('p');text.textContent=`Revize ${entry.revision} · ${entry.actor_id} · ${new Date(entry.at*1000).toLocaleString()} · ${entry.old?'Ano':'Ne'} → ${entry.new?'Ano':'Ne'}`;history.append(text);}
+   row.append(history);
+  }
   if(item.reports?.length){
    const reports=document.createElement('details'),summary=document.createElement('summary');reports.className='task-queue-reports';
    summary.textContent=`Zprávy o splnění (${item.reports.length})`;reports.append(summary);

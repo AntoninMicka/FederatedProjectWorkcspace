@@ -82,6 +82,10 @@ navrhne jej jako splněný; návrh uvidíte před potvrzením.
 
 **Pozastavit** ve frontě Workspace je jediný ručně upravitelný příznak: položka se
 nepředává agentovi, roadmapa ani přijetí se nemění a změna se zapíše do auditu fronty.
+U položky rozbalte **Změny příznaku Pozastaveno**: zobrazí původní a novou
+hodnotu, aktéra, čas a revizi z posledních 20 změn fronty. Úložiště drží nejvýše
+200 změn; tento výpis není úplná projektová historie. Neaktuální nebo neplatnou
+frontu nejprve znovu ověřte, poté lze příznak změnit.
 Ostatní příznaky mění jen jejich vlastní akce nebo se odvozují, viz
 [ADR 0062](adr/0062-pinned-queue-handoff.md#příznaky-ruční-žádost-a-hierarchie-ide-queue-ux-01-2-11-2026).
 
