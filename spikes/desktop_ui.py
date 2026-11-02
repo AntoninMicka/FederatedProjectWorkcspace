@@ -4277,11 +4277,39 @@ function renderTaskQueue(){
    summary.textContent=`Zprávy o splnění (${item.reports.length})`;reports.append(summary);
    const outcomes={accepted:'Přijato',rejected:'Odmítnuto',stale:'Zastaralé, neaplikováno',prepared:'Review připraveno'};
    for(const report of item.reports){const text=document.createElement('p');
-    text.textContent=`${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\n${report.body}${report.note?`\nOdpověď: ${report.note}`:''}`;reports.append(text);}
+    text.textContent=`${report.task_id===item.id?'':report.task_id+' · '}${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\n${report.body}${report.evidence?`\nTesty: ${report.evidence.tests}\nDiff: ${report.evidence.diff}`:''}${report.note?`\nOdpověď: ${report.note}`:''}`;reports.append(text);
+    const decisions=report.outcome==='prepared'?['resume']:report.outcome?[]:['accepted','rejected'];
+    for(const decision of decisions){const button=document.createElement('button');button.type='button';
+     button.textContent=decision==='resume'?'Dokončit připravené review':decision==='rejected'?'Odmítnout':'Přijmout a dokončit úkol';
+     button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||(decision==='accepted'&&report.acceptable!==true);
+     if(decision==='accepted'&&report.acceptable!==true)button.title='Zpráva je ze staré generace fronty nebo má úkol nesplněné předpoklady; nelze ji přijmout.';
+     button.addEventListener('click',()=>reviewQueueReport(report,decision));reports.append(button);}
+   }
    row.append(reports);
   }
   list.append(row);
  }
+}
+// Same review endpoint as the IDE messages page: the server revalidates everything.
+async function reviewQueueReport(report,decision){
+ if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
+ const project=activeProject;let request=report.review_request;
+ if(!request){
+  const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
+  if(!window.confirm(`${decision==='accepted'?'Přijmout a dokončit':'Odmítnout'} ${report.task_id}?\n${report.body}\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
+  request={project_id:project.id,session_id:report.session_id,message_id:report.message_id,decision,note,expected_head:taskQueueView.expected_head,operation_id:crypto.randomUUID()};
+ }
+ taskQueueBusy=true;renderTaskQueue();
+ try{
+  const result=await projectRequest('/v1/ide-bridge/review',request,120000);
+  if(activeProject!==project)return;
+  taskQueueBusy=false;
+  // Reload in place: the user stays on the queue and the plan shows the new state.
+  if(result.result?.commit_id){const view=await projectRequest('/v1/projects/open',{project_id:project.id});
+   if(activeProject!==project)return;project.head=view.commit_id;renderTaskPlanSidebar(view.plan);}
+  else await loadTaskQueue();
+ }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu; připravené review lze bezpečně dokončit.';}}
+ finally{taskQueueBusy=false;renderTaskQueue();}
 }
 async function loadTaskQueue(){
  if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;

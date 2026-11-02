@@ -98,6 +98,60 @@ class QueuePacketTests(unittest.TestCase):
         again=self.manual(packet);self.send(again)
         self.assertEqual(['user','agent'],[r['reported_by'] for r in self.qstatus()['items'][0]['reports']])
 
+    def test_queue_report_acceptability_follows_the_review_rules(self):
+        packet=self.packet();m=self.message(packet);self.send(m)
+        report=self.qstatus()['items'][0]['reports'][0]
+        self.assertTrue(report['acceptable']);self.assertEqual(self.record['session_id'],report['session_id'])
+        self.assertEqual(m['evidence'],report['evidence']);self.assertIsNone(report['review_request'])
+        self.act('set-flag','TASK-03',flag='held',value=True)
+        self.assertFalse(self.qstatus()['items'][0]['reports'][0]['acceptable'],'superseded generation')
+        with self.assertRaises(ValueError):self.review(m)
+        self.act('set-flag','TASK-03',flag='held',value=False)
+
+    def test_accepting_from_queue_completes_only_that_task(self):
+        packet=self.packet();m=self.message(packet);self.send(m)
+        report=self.qstatus()['items'][0]['reports'][0]
+        result=self.review(m,session_id=report['session_id'],message_id=report['message_id'])
+        self.assertEqual('accepted',result['outcome'])
+        items=self.qstatus()['items']
+        self.assertTrue(items[0]['user_confirmed']);self.assertFalse(items[1]['user_confirmed'])
+        self.assertEqual('accepted',items[0]['reports'][0]['outcome']);self.assertFalse(items[0]['reports'][0]['acceptable'])
+
+    def test_batch_row_lists_reports_of_its_linked_tasks(self):
+        packet=self.batch_queue();m=self.message(packet,'BATCH-01-A');self.send(m)
+        report=self.qstatus()['items'][0]['reports'][0]
+        self.assertEqual('BATCH-01-A',report['task_id']);self.assertTrue(report['acceptable'])
+
+    def test_queue_review_button_logic(self):
+        import shutil
+        from spikes.desktop_ui import JS
+        if not shutil.which('node'):self.skipTest('Node required')
+        start=JS.index('async function reviewQueueReport(');end=JS.index('async function loadTaskQueue(){')
+        harness=r"""
+const assert=require('node:assert/strict');
+const crypto={randomUUID:()=>'op'};let confirmed=true,noted='',calls=[],fail=false,loaded=0,plans=0;
+const window={prompt:()=>noted,confirm:()=>confirmed};
+let taskQueueBusy=false,taskQueueView={expected_head:'h1'},taskQueueMessage='';let activeProject={id:'p',head:'h1',readOnly:false};
+const queueIsCurrent=()=>true,renderTaskQueue=()=>{},renderTaskPlanSidebar=()=>{plans++;},loadTaskQueue=async()=>{loaded++;};
+async function projectRequest(path,body){if(path==='/v1/projects/open')return {commit_id:'h2',plan:{}};calls.push(body);if(fail)throw Error('stale');return body.decision==='rejected'?{result:null}:{result:{commit_id:'h2'}};}
+"""
+        checks=r"""
+(async()=>{
+ const report={task_id:'T',body:'b',session_id:'s',message_id:'m',review_request:null};
+ confirmed=false;await reviewQueueReport(report,'accepted');assert.equal(calls.length,0,'cancel sends nothing');
+ noted=null;confirmed=true;await reviewQueueReport(report,'accepted');assert.equal(calls.length,0,'dismissed note sends nothing');
+ noted='ok';await reviewQueueReport(report,'accepted');
+ assert.deepEqual(calls[0],{project_id:'p',session_id:'s',message_id:'m',decision:'accepted',note:'ok',expected_head:'h1',operation_id:'op'});
+ assert.equal(activeProject.head,'h2');assert.equal(plans,1);assert.equal(loaded,0);
+ calls.length=0;await reviewQueueReport(report,'rejected');assert.equal(calls[0].decision,'rejected');assert.equal(plans,1,'rejection keeps the plan');assert.equal(loaded,1);
+ const prepared={...report,review_request:{operation_id:'original'}};calls.length=0;window.prompt=()=>{throw Error('no prompt');};
+ await reviewQueueReport(prepared,'resume');assert.deepEqual(calls[0],{operation_id:'original'});
+ fail=true;await reviewQueueReport(prepared,'resume');assert.equal(taskQueueView,null);assert.match(taskQueueMessage,/stale/);assert.equal(taskQueueBusy,false);
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result=subprocess.run(['node','-e',harness+JS[start:end]+checks],capture_output=True,text=True)
+        self.assertEqual(0,result.returncode,result.stderr)
+
     def test_manual_request_from_stale_packet_is_refused(self):
         packet=self.packet()
         self.act('set-flag','TASK-03',flag='held',value=True)

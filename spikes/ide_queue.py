@@ -374,8 +374,12 @@ def completion_reports(node, project_id, actor_id, *, per_task=5):
         review = json.loads(raw_review) if raw_review else None
         entries = reports.setdefault(message['task_id'], [])
         if len(entries) < per_task:
-            entries.append(dict(message_id=message['message_id'], kind=message['kind'], body=message['body'][:2000],
-                                reported_by=message.get('reported_by'),
+            entries.append(dict(message_id=message['message_id'], task_id=message['task_id'],
+                                session_id=record['session_id'], kind=message['kind'], body=message['body'][:2000],
+                                reported_by=message.get('reported_by'), queue_packet_id=message.get('queue_packet_id'),
+                                evidence=message.get('evidence'), repository_commit=message['repository_commit'],
+                                # A prepared review resumes with its original operation ID.
+                                review_request=review['request'] if review and review['state'] != 'completed' else None,
                                 outcome=(review.get('outcome') if review and review['state'] == 'completed'
                                          else 'prepared' if review else None),
                                 note=review['request']['note'][:2000] if review else None))

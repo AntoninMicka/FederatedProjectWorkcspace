@@ -172,6 +172,20 @@ class TaskQueue:
         from spikes.ide_queue import completion_reports, queue_projection
         projection = queue_projection(self.node, project_id, actor_id, view)
         reports = completion_reports(self.node, project_id, actor_id)
+        eligible = {i['id'] for i in (projection['items'] + projection['linked_items'] if projection else ())
+                    if i['eligible']}
+
+        def item_reports(identifier, nodes, state):
+            ids = [identifier]
+            for current in ids:
+                ids += [n['id'] for n in nodes.values() if n['parent_id'] == current]
+            # Acceptance is revalidated by the review itself; this only drives the button.
+            current = projection and (state['revision'] == projection['manifest']['queue_revision']
+                                      and state['task_ids'] == [t['id'] for t in projection['manifest']['tasks']])
+            return [dict(report, acceptable=bool(current and report['outcome'] is None
+                                                 and report['queue_packet_id'] == projection['packet_id']
+                                                 and report['task_id'] in eligible))
+                    for i in ids for report in reports.get(i, [])]
         accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)
         with self._lock(project_id, actor_id) as path, workspace.journal.lock(), workspace.journal.connect() as db:
@@ -267,7 +281,7 @@ class TaskQueue:
                                     user_confirmed=i in accepted,
                                     user_requested=bool(projection and any(x['id'] == i and x.get('user_requested') for x in projection['items'])),
                                     held=i in state['held_task_ids'],
-                                    reports=reports.get(i, []),
+                                    reports=item_reports(i, nodes, state),
                                     children=[n['id'] for n in graph['nodes'] if n['parent_id'] == i],
                                     **adjacent_moves(state['task_ids'], position, nodes,
                                                      not stale and not issues and not view.get('read_only')))

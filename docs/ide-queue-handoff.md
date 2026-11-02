@@ -90,8 +90,10 @@ jeden PR, podúkoly se hlásí jednotlivě a dávka až po přijetí všech. Chy
 cyklický odkaz se zobrazí jako problém.
 
 **Zprávy o splnění** se ve frontě pluginu i Workspace zobrazují pod svou položkou,
-včetně původu, stavu posouzení a odpovědi. Je to jen pohled na tytéž zprávy: posuzují
-se dál v Nastavení → IDE → zprávy projektu. Workspace ukazuje pět nejnovějších na úkol.
+včetně původu, stavu posouzení a odpovědi. Workspace u nich nabízí **Přijmout a
+dokončit úkol** a **Odmítnout** se stejným review jako Nastavení → IDE → zprávy projektu
+a ukazuje pět nejnovějších na úkol, u dávky i zprávy jejích podúkolů. Plugin zprávy jen
+zobrazuje, přijetí z IDE credentialu ADR 0062 nepovoluje.
 
 ## Chyba a obnova
 
