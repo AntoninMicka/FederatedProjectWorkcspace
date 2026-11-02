@@ -5,12 +5,14 @@ from dataclasses import dataclass
 import hashlib
 import json
 
+from spikes.direct_registry import DIRECT_EXECUTIONS
 from spikes.metadata import require, uuid
 
 
 SOURCE_ORDER = ('conversation', 'artifacts', 'public-web')
 OUTPUT_KINDS = frozenset({'conversation', 'document', 'presentation', 'file-edit'})
-EXECUTIONS = frozenset({'local-ollama', 'external-openai', 'external-atlascloud'})
+EXECUTIONS = frozenset({'local-ollama', 'external-openai', 'external-atlascloud',
+                        *DIRECT_EXECUTIONS})
 MAX_SEARCH_QUERY_BYTES = 4096
 
 
@@ -135,7 +137,8 @@ class ExplicitTaskPlan:
     def validate_execution(self, choice):
         adapter = getattr(choice, 'adapter_id', None)
         expected = {'local-ollama': 'ollama', 'external-openai': 'openai-responses',
-                    'external-atlascloud': 'atlascloud-text'}[self.execution]
+                    'external-atlascloud': 'atlascloud-text',
+                    **DIRECT_EXECUTIONS}[self.execution]
         require(adapter == expected,
                 'Task execution does not match the selected backend')
         return self

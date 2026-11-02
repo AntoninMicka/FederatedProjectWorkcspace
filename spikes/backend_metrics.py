@@ -22,6 +22,10 @@ MAX_REPORT_RESPONSE = 4 * 1024 * 1024
 MAX_PAGES = 100
 
 
+_EXTERNAL_USAGE_ADAPTERS = frozenset({'openai-responses', 'atlascloud-text',
+    'anthropic-messages', 'gemini-generate', 'xai-responses'})
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
 
@@ -53,7 +57,7 @@ def run_usage(adapter_id, binding_id, run_id, response, fetched_at=None):
             value = response.get(source)
             if type(value) is int and value >= 0:
                 metrics.append(_metric(name, value, unit))
-    elif adapter_id in {'openai-responses', 'atlascloud-text'}:
+    elif adapter_id in _EXTERNAL_USAGE_ADAPTERS:
         usage = response.get('usage')
         if isinstance(usage, dict):
             for source, name in (('input_tokens', 'input_tokens'),
@@ -74,7 +78,7 @@ def run_usage(adapter_id, binding_id, run_id, response, fetched_at=None):
 
 def completed_run_usage(run_store, adapter_id, fetched_at=None):
     """Aggregate exact token counts already stored in one provider run journal."""
-    require(adapter_id in {'ollama', 'openai-responses', 'atlascloud-text'},
+    require(adapter_id == 'ollama' or adapter_id in _EXTERNAL_USAGE_ADAPTERS,
             'Unsupported backend usage adapter')
     observed = fetched_at or _now(); timestamp(observed)
     summary = {'schema_version': 1, 'kind': 'usage', 'status': 'available',

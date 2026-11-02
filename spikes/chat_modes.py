@@ -8,10 +8,11 @@ from spikes.metadata import require, uuid
 from spikes.ollama_backend import OllamaBinding
 from spikes.openai_backend import OpenAIBinding
 from spikes.atlascloud_backend import AtlasCloudBinding
+from spikes.direct_registry import DIRECT_BINDINGS
 
 
 MODES = frozenset({'orchestration', 'brainstorming'})
-ADAPTERS = frozenset({'ollama', 'openai-responses', 'atlascloud-text'})
+ADAPTERS = frozenset({'ollama', 'openai-responses', 'atlascloud-text', *DIRECT_BINDINGS})
 
 
 def _model(value):
@@ -80,7 +81,7 @@ class ChatRunChoice:
         return cls(value['mode'], value['adapter'], value['model'], binding_id, revision,
                    selection_revision, offer_id)
 
-    def resolve(self, *, ollama, openai=None, atlascloud=None):
+    def resolve(self, *, ollama, openai=None, atlascloud=None, direct=None):
         """Return an immutable run binding without changing saved configuration."""
         if self.mode == 'orchestration' and self.adapter_id == 'ollama':
             require(isinstance(ollama, OllamaBinding), 'Configured Ollama binding is required')
@@ -93,18 +94,19 @@ class ChatRunChoice:
                         'Selected orchestration binding changed')
             return ollama
         bases = {'ollama': ollama, 'openai-responses': openai,
-                 'atlascloud-text': atlascloud}
+                 'atlascloud-text': atlascloud,
+                 **{adapter: direct for adapter in DIRECT_BINDINGS}}
         expected_types = {'ollama': OllamaBinding, 'openai-responses': OpenAIBinding,
-                          'atlascloud-text': AtlasCloudBinding}
+                          'atlascloud-text': AtlasCloudBinding, **DIRECT_BINDINGS}
         base = bases[self.adapter_id]; expected = expected_types[self.adapter_id]
         require(isinstance(base, expected), 'Selected brainstorm backend is unavailable')
         value = base.serialize()
         value['model'] = self.model
         suffix = hashlib.sha256(self.model.encode('utf-8')).hexdigest()[:16]
         value['revision'] = base.revision + '.run-model-' + suffix
-        if self.adapter_id == 'atlascloud-text':
+        if self.adapter_id == 'atlascloud-text' or self.adapter_id in DIRECT_BINDINGS:
             require(self.offer_id is not None,
-                    'AtlasCloud run requires an exact selected offer')
+                    base.__class__.__name__ + ' run requires an exact selected offer')
             value['offer_id'] = self.offer_id
         return expected.parse(value)
 

@@ -1044,7 +1044,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/atlascloud/configure',binding)", JS)
         self.assertIn("projectRequest('/v1/atlascloud/remove',{confirmed:true})", JS)
         self.assertIn('id="chat-run-adapter"><option value="">Vyberte backend</option>', HTML)
-        self.assertIn("const runBackendNames={'ollama':'Ollama','openai-responses':'OpenAI','atlascloud-text':'AtlasCloud'}", JS)
+        self.assertIn("const runBackendNames={'ollama':'Ollama','openai-responses':'OpenAI','atlascloud-text':'AtlasCloud','anthropic-messages':'Claude','gemini-generate':'Gemini','xai-responses':'Grok'}", JS)
         self.assertIn('function renderChatRunSelectors(){', JS)
         self.assertIn('id="model-catalog-status"', HTML)
         self.assertIn('id="model-catalog-offers"', HTML)
@@ -1538,7 +1538,8 @@ const thread={thread_id:'thread',project_id:'project',status:'active',classifica
 const renderModelSelection=()=>{},renderChatRunSelectors=()=>{},fillBinding=()=>{},fillSearchBinding=()=>{},
  applyOllamaStreamingStatus=()=>{},applyResponseLanguageStatus=()=>{},renderThreadList=()=>{},
  renderTaskPublicSources=()=>{},refreshChatModeControls=()=>{},fillExternalModels=()=>{},fillAtlasCloudOffers=()=>{},
- refreshChatOllamaCatalog=()=>{};
+ refreshChatOllamaCatalog=()=>{},
+ loadDirectProviders=()=>{};
 function renderChat(value){rendered.push(value);}
 async function loadAutonomyQueue(){return true;}
 async function projectRequest(url){
@@ -1587,7 +1588,7 @@ async function projectRequest(url){
         self.assertIn("if(useCurrentFile)artifactIds.push(selectedArtifact)", JS)
         self.assertIn("selected_artifact_ids:uniqueArtifactIds", JS)
         self.assertIn('task_plan:{schema_version:1,source_kinds:sourceKinds', JS)
-        self.assertIn("execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':'external-atlascloud'", JS)
+        self.assertIn("execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':DIRECT_PROVIDERS[adapter]?.execution||'external-atlascloud'", JS)
         self.assertIn('External task execution cannot include project artifacts',
                       Path('spikes/task_plan.py').read_text())
 

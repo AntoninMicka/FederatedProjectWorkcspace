@@ -99,6 +99,11 @@ class BackendCatalogTests(unittest.TestCase):
         self.assertIn('async function refreshChatOllamaCatalog()', JS)
         self.assertNotIn('setInterval(refreshChatOllamaCatalog', JS)
         self.assertIn("refreshChatOllamaCatalog();\n", JS.split('async function loadChat(){', 1)[1])
+        for adapter in ('anthropic-messages', 'gemini-generate', 'xai-responses'):
+            self.assertIn(f'id="{adapter}-backend-form"', HTML)
+            self.assertIn(f'id="settings-{adapter}-status"', HTML)
+            self.assertIn(f'id="{adapter}-run-usage"', HTML)
+        self.assertIn("'/v1/direct/configure'", JS)
         self.assertIn('function renderChatRunSelectors()', JS)
         self.assertIn('function selectedRunOffer()', JS)
         self.assertIn("providers.get('atlascloud-text')", JS)

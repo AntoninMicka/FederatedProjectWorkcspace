@@ -83,6 +83,7 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   document.querySelector('#model-catalog-import').hidden=!admin;
   document.querySelector('#model-catalog-knowledge').readOnly=!admin;
   document.querySelector('#atlascloud-backend-form').hidden=!admin;
+  for(const form of document.querySelectorAll('.direct-backend-form'))form.hidden=!admin;
   document.body.classList.add('authenticated');await loadProjects();if(admin)await loadBackendMetrics();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });
@@ -338,6 +339,7 @@ class WebHandler(DesktopHandler):
         if self.path in {'/v1/chat/configure', '/v1/chat/test', '/v1/chat/availability', '/v1/chat/models',
                          '/v1/search/configure', '/v1/search/test',
                          '/v1/model-catalog/import', '/v1/atlascloud/models',
+                         '/v1/direct/models', '/v1/direct/configure', '/v1/direct/remove',
                          '/v1/atlascloud/configure',
                          '/v1/atlascloud/remove', '/v1/backend-catalog/reset',
                          '/v1/model-selection/preferences'} \
