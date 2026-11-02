@@ -108,7 +108,7 @@
         },
         "workspaceBridge.autoUpdate": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "scope": "application",
           "markdownDescription": "Automaticky instalovat nové verze rozšíření z připojeného důvěryhodného backendu Workspace. Při vypnutí se aktualizace pouze nabídne. Obnovení okna vždy vyžaduje potvrzení."
         }

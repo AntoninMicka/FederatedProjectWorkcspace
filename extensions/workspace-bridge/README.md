@@ -11,9 +11,9 @@ na připojeném backendu Workspace. Novou verzi nabídne tlačítkem
 Po instalaci nabídne **Obnovit okno**. Obnovení lze odložit, běžící verze
 a synchronizace pokračují do obnovení okna.
 
-Volitelné aplikační nastavení **Workspace bridge → Auto Update** dovolí
-instalaci bez potvrzení; výchozí je vypnuté. Obnovení okna se potvrzuje
-vždy. Zdroj spustitelného kódu je připojený důvěryhodný backend Workspace,
+Od verze 0.5.0 se nová verze instaluje bez potvrzení. Aplikační nastavení
+**Workspace bridge → Auto Update** to může vypnout, aktualizace se pak jen
+nabídne. Obnovení okna se potvrzuje vždy. Zdroj spustitelného kódu je připojený důvěryhodný backend Workspace,
 nikoli Marketplace. Balíček neobsahuje párování ani credentials a instaluje
 se do profilu běžícího IDE. SecretStorage, mapování a schránky se zachovají.
 
