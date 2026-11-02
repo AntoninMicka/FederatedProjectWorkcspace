@@ -248,6 +248,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual([], json.loads(data)['task_ids'])
         self.assertEqual(403, queue('add', extra, headers)[0])
         self.assertEqual(403, queue('move', dict(extra, target_index=0), headers)[0])
+        self.assertEqual(403, queue('set-flag', dict(extra, flag='held', value=True), headers)[0])
         state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
             'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {pid: 'editor'}})
         self.assertEqual(200, queue('add', extra, headers)[0])

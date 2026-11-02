@@ -125,10 +125,24 @@ function createSidebar(vscode, context, hooks) {
     })().finally(() => {loading = null;});
     return loading;
   }
+  // Same entries as the Messages view, so review state has one source.
+  function completionReports(project,taskId){
+    const entries=new Map((project.panel?.messages||[]).map(entry=>[entry.message.message_id,entry]));
+    for(const entry of project.pending||[])if(!entries.has(entry.message.message_id))entries.set(entry.message.message_id,entry);
+    return [...entries.values()].filter(entry=>entry.message.task_id===taskId&&['completed','progress'].includes(entry.message.kind));
+  }
   function children(kind, item) {
     if (!item) return projects.map(project => row(project, 'project', {view: kind}));
     const project = find(item); if (!project) return [];
-    if(kind==='queue')return (project.queue?.items||[]).map((entry,index)=>row(project,'queueTask',{entry,taskId:entry.id,index}));
+    if(kind==='queue'){
+     if(item.kind==='queueTask'){
+      const known=queueBridge.scope(project.queue,item.taskId);
+      return [...known.rows.filter(r=>r.depth===1).map(r=>row(project,r.entry?'queueTask':'queueMissing',{entry:r.entry,taskId:r.id,parentRef:item.taskId,repeated:r.repeated})),
+       ...known.problems.filter(p=>!p.startsWith('Chybí odkaz')).map(problem=>row(project,'queueMissing',{taskId:problem,parentRef:item.taskId})),
+       ...completionReports(project,item.taskId).map(entry=>row(project,'message',{entry,parentRef:item.taskId}))];
+     }
+     return (project.queue?.items||[]).map((entry,index)=>row(project,'queueTask',{entry,taskId:entry.id,index}));
+    }
     if (kind === 'tasks') {
       const tasks = project.snapshot.tasks;
       function show(task) {return !openOnly || !task.checked || tasks.some(t => t.parent_id===task.id && show(t));}
@@ -155,7 +169,14 @@ function createSidebar(vscode, context, hooks) {
       if(item.view==='messages'&&project.panel?.history_truncated)description+=' · poslední zprávy';
       icon = project.error || project.state?.stale || project.panel?.stale ? 'warning' : 'project'; collapsed = vscode.TreeItemCollapsibleState.Expanded;
     } else if(item.kind==='queueTask'){
-      label=(item.index+1)+'. '+item.entry.title;description=item.entry.user_confirmed?'Přijato uživatelem':item.entry.agent_confirmed?'Agent hlásí splnění':project.error||project.queue?.blockers.length?'Blokováno':item.entry.eligible?'Zahajitelné':'Navazující · pouze náhled';icon=item.entry.user_confirmed?'pass':'list-ordered';command='workspaceBridge.showQueueTask';
+      const stale=Boolean(project.error||project.state?.stale||project.panel?.stale),blockers=project.queue?.blockers||[];
+      const flags=queueBridge.flags(item.entry,{stale,blockers}),known=queueBridge.scope(project.queue,item.taskId);
+      label=(item.index===undefined?'':(item.index+1)+'. ')+item.entry.title;
+      description=flags.map(f=>f.label).join(' · ')+(known.problems.length?' · Neúplná hierarchie':'')+(item.repeated?' · Opakovaný odkaz':'');
+      icon=item.entry.user_confirmed&&!stale?'pass':known.problems.length?'warning':known.rows.length?'folder':'list-ordered';command='workspaceBridge.showQueueTask';
+      if(!item.repeated&&(project.queue?.manifest.hierarchy?.[item.taskId]||completionReports(project,item.taskId).length))collapsed=vscode.TreeItemCollapsibleState.Collapsed;
+    } else if(item.kind==='queueMissing'){
+      label=item.taskId;description='Chybějící nebo neúplný odkaz';icon='warning';
     } else if (item.kind === 'task') {
       const task = taskOf(item); label = task.title; description = task.id; icon = task.checked ? 'pass' : 'circle-outline';
       if (project.snapshot.tasks.some(t => t.parent_id===task.id)) collapsed = vscode.TreeItemCollapsibleState.Collapsed;
@@ -164,16 +185,20 @@ function createSidebar(vscode, context, hooks) {
       label = item.doc.title; description = item.doc.agent_rules ? JSON.stringify(item.doc.scope || {}) : item.doc.available ? 'Připnutý podklad' : 'Nedostupný text'; icon = item.doc.agent_rules ? 'law' : 'file-text'; command = 'workspaceBridge.showDocument';
     } else if (item.kind === 'message') {
       const entry = item.entry, review = entry.review;
-      label = (entry.message.task_id || 'Projekt') + ' · ' + entry.message.body.slice(0,80);
+      const reporter=entry.message.reported_by==='agent'?'Agent · ':entry.message.reported_by==='user'?'Ruční žádost · ':'';
+      label = item.parentRef ? reporter + entry.message.body.slice(0,80) : (entry.message.task_id || 'Projekt') + ' · ' + entry.message.body.slice(0,80);
       description = entry.draft ? 'Návrh · nebyl odeslán' : entry.old_session && !entry.receipt ? 'Stará relace · vyžaduje nové posouzení'
         : review?.state==='completed' ? (review.outcome==='stale'?'Zastaralé · neaplikováno':review.request.decision==='accepted'?'Přijato':'Odmítnuto')
         : review ? 'Review připraveno' : !entry.receipt ? 'Čeká na odeslání' : entry.receipt.status==='stale' ? 'Doručeno ze staré revize' : 'Doručeno · čeká na posouzení';
       icon = 'mail'; command = 'workspaceBridge.showMessage';
     } else if (item.kind === 'localRule') {label = item.rule.title; description = 'Lokální · '+JSON.stringify(item.rule.scope); icon = 'law'; command = 'workspaceBridge.showLocalRule';}
     else {label = 'INSTRUCTIONS.md'; description = 'Pokyny připojení'; icon = 'law'; command = 'workspaceBridge.showInstructions';}
-    const result = new vscode.TreeItem(label, collapsed); result.id = `${item.projectId}:${item.kind}:${item.taskId || item.doc?.artifact_id || item.rule?.relative || item.entry?.message.message_id || ''}:${item.view || ''}`;
+    const result = new vscode.TreeItem(label, collapsed); result.id = `${item.projectId}:${item.kind}:${item.taskId || item.doc?.artifact_id || item.rule?.relative || item.entry?.message?.message_id || ''}:${item.parentRef || ''}:${item.view || ''}`;
     result.description = description; result.tooltip = label+'\n'+description; result.iconPath = new vscode.ThemeIcon(icon); result.contextValue = item.kind;
-    if(item.kind==='queueTask'&&(!item.entry.eligible||project.error||project.queue?.blockers.length))result.contextValue='queueBlocked';
+    if(item.kind==='queueTask'){
+     const unavailable=project.error||project.state?.stale||project.panel?.stale||project.queue?.blockers.length;
+     result.contextValue=unavailable?'queueBlocked':item.entry.eligible===true?'queueTask':item.entry.startable===true?'queueStartable':'queueBlocked';
+    }
     if (command) result.command = {command, title: label, arguments: [item]};
     return result;
   }
@@ -228,15 +253,42 @@ function createSidebar(vscode, context, hooks) {
   register('allDocuments',async()=>{selected=null;refreshEvents();});
   register('showQueueTask',async item=>{
     const project=find(item);if(!project||!project.queue)return;
-    const task=project.queue.manifest.tasks.find(t=>t.id===item.taskId);if(!task)return;
-    const panel=vscode.window.createWebviewPanel('workspaceQueue',task.id,vscode.ViewColumn.Active,{enableScripts:false});
-    panel.webview.html=detailHTML({...project,state:{stale:false},panel:{stale:false},error:project.error||project.queue.blockers.join('; ')},task).replace('</body>',`<h2>Fronta</h2><pre>${escape(JSON.stringify(item.entry,null,2))}\n${escape(project.queue.blockers.join('; '))}</pre><p>Předpoklady musí přijmout člověk ve Workspace. Agent zapisuje hlášení přes ordinary-file kontrakt balíčku.</p></body>`);context.subscriptions.push(panel);
+    const task=[...project.queue.manifest.tasks,...(project.queue.manifest.linked_tasks||[])].find(t=>t.id===item.taskId);if(!task)return;
+    const currentEntry=[...project.queue.items,...(project.queue.linked_items||[])].find(entry=>entry.id===item.taskId);if(!currentEntry)return;
+    item={...item,entry:currentEntry};
+    const stale=Boolean(project.error||project.state?.stale||project.panel?.stale),known=queueBridge.scope(project.queue,task.id);
+    const flagRows=queueBridge.flags(item.entry,{stale,blockers:project.queue.blockers}).map(f=>'<li>'+escape(f.label)+'</li>').join('');
+    const scopeText=(project.queue.manifest.hierarchy?.[task.id]?'Rozsah: celá feature dávka, jedna větev a jeden PR.':'Rozsah: tento úkol.')+(known.parent?' Nadřazená položka: '+known.parent+'.':'');
+    const entries=new Map([...project.queue.items,...(project.queue.linked_items||[])].map(entry=>[entry.id,entry]));
+    const taskLink=id=>{
+      const entry=entries.get(id);if(!entry)return escape(id)+' · mimo připnutý rozsah';
+      const argument=row(project,'queueTask',{taskId:id});
+      return `<a href="command:workspaceBridge.showQueueTask?${encodeURIComponent(JSON.stringify([argument]))}">${escape(id)}</a>`;
+    };
+    const rows=known.rows.map(r=>'  '.repeat(r.depth-1)+(r.entry?taskLink(r.id):escape(r.id))+(r.repeated?' · opakovaný odkaz':'')+(r.entry?' · '+escape(queueBridge.flags(r.entry,{stale,blockers:project.queue.blockers}).map(f=>f.label).join(' · ')):' · chybějící odkaz')).join('\n');
+    const queueSection=`<h2>Příznaky</h2><ul>${flagRows}</ul><p>${escape(scopeText)}</p>${(item.entry.blocked_by||[]).length?`<p>Důvod blokace: ${escape(item.entry.blocked_by.join('; '))}</p>`:''}${known.problems.length?`<p>Problém hierarchie: ${escape(known.problems.join('; '))}</p>`:''}`;
+    const panel=vscode.window.createWebviewPanel('workspaceQueue',task.id,vscode.ViewColumn.Active,{enableScripts:false,enableCommandUris:['workspaceBridge.showQueueTask']});
+    panel.webview.html=detailHTML({...project,state:{stale:false},panel:{stale:false},error:project.error||project.queue.blockers.join('; ')},task).replace('</body>',()=>`${queueSection}${known.parent?`<p>Zpět na rodiče: ${taskLink(known.parent)}</p>`:''}${rows?`<h2>Podúkoly — odkazy</h2><pre>${rows}</pre>`:''}<h2>Fronta</h2><pre>${escape(project.queue.blockers.join('; '))}</pre><p>Předpoklady musí přijmout člověk ve Workspace. Agent zapisuje hlášení přes ordinary-file kontrakt balíčku.</p></body>`);context.subscriptions.push(panel);
   });
   register('queueHandoff',async item=>{
     const project=find(item);if(!project||project.error)throw Error('Nejdříve obnovte připojení.');
     const result=await queueBridge.handoff(project,item.taskId,hooks.request);
     await vscode.env.clipboard.writeText(`Úkol ${item.taskId}. Context Manifest: ${result.manifest}\nInstrukce agenta: ${result.instructions}\nCompletion inbox: ${result.inbox}\nBalíček: ${result.packet_id}`);
     await vscode.window.showInformationMessage('Připnuté předání fronty zkopírováno; agent musí manifest a instrukce explicitně načíst.');
+  });
+  register('queueConfirm',async item=>{
+    const project=find(item);if(!project||project.error||project.state?.stale||project.panel?.stale)throw Error('Stav není aktuální; nejdříve obnovte připojení.');
+    const taskId=item.taskId,commit=await bridge.git((await bridge.repository(project.repository,project.identity)).root,'rev-parse','HEAD');
+    queueBridge.manualRequest(project.queue,taskId,'-',commit,crypto.randomUUID());
+    const body=await vscode.window.showInputBox({prompt:`Ruční potvrzení splnění ${taskId}: stručně, co je hotovo`,ignoreFocusOut:true});if(!body)return;
+    const message=queueBridge.manualRequest(project.queue,taskId,body,commit,crypto.randomUUID());
+    const notes=message.checklist?` Všech ${message.checklist.length} nesplněných položek checklistu bude navrženo jako splněné.`:'';
+    if(await vscode.window.showWarningMessage(`Požádat o potvrzení splnění ${taskId}?`,{modal:true,detail:`Úkol se tím nedokončí: roadmapu změní až vaše potvrzení ve Workspace, Nastavení → IDE → zprávy projektu.${notes}`},'Odeslat žádost')!=='Odeslat žádost')return;
+    await bridge.atomic(path.join(project.root,'inbox',message.message_id+'.json'),JSON.stringify(message,null,2));
+    await hooks.synchronize();await refresh();
+    const current=find(item),entry=[...(current?.queue?.items||[]),...(current?.queue?.linked_items||[])].find(i=>i.id===taskId);
+    if(current?.error||entry?.user_requested!==true)throw Error('Žádost nebyla potvrzena jako doručená. '+(current?.error||'Zkontrolujte stav fronty a zprávu v inboxu; neodesílejte ji znovu slepě.'));
+    await vscode.window.showInformationMessage(`Žádost o ${taskId} je ve Workspace; potvrďte ji v Nastavení → IDE → zprávy projektu.`);
   });
   register('refreshPanel',async()=>{await hooks.synchronize();await refresh();});
   register('compose',async item => {

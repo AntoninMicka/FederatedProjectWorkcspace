@@ -320,7 +320,8 @@ class IdeBridge:
             for entry in queued:
                 entry['queue_reviewable'] = bool(value and not value['blockers'] and
                     entry['message']['queue_packet_id'] == value['packet_id'] and any(
-                        i['id'] == entry['message']['task_id'] and i['eligible'] for i in value['items']))
+                        i['id'] == entry['message']['task_id'] and i['eligible']
+                        for i in value['items'] + value['linked_items']))
         from spikes.ide_bridge_panel import bounded_history
         return bounded_history(dict(sessions=sessions, current_head=view['commit_id'], pending_operation=pending), sessions=True)
 

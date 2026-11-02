@@ -47,7 +47,7 @@ function createUpdater(vscode, context, request, report) {
         if (manual) vscode.window.showInformationMessage('Workspace je aktuální.');
         return;
       }
-      if (!vscode.workspace.getConfiguration('workspaceBridge').get('autoUpdate', false)) {
+      if (!vscode.workspace.getConfiguration('workspaceBridge').get('autoUpdate', true)) {
         const choice = await vscode.window.showInformationMessage(
           'Je dostupná aktualizace Workspace ' + available.version + '.', 'Aktualizovat');
         if (choice !== 'Aktualizovat') return;

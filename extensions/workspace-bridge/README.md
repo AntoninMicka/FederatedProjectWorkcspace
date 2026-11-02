@@ -11,9 +11,9 @@ na připojeném backendu Workspace. Novou verzi nabídne tlačítkem
 Po instalaci nabídne **Obnovit okno**. Obnovení lze odložit, běžící verze
 a synchronizace pokračují do obnovení okna.
 
-Volitelné aplikační nastavení **Workspace bridge → Auto Update** dovolí
-instalaci bez potvrzení; výchozí je vypnuté. Obnovení okna se potvrzuje
-vždy. Zdroj spustitelného kódu je připojený důvěryhodný backend Workspace,
+Od verze 0.5.0 se nová verze instaluje bez potvrzení. Aplikační nastavení
+**Workspace bridge → Auto Update** to může vypnout, aktualizace se pak jen
+nabídne. Obnovení okna se potvrzuje vždy. Zdroj spustitelného kódu je připojený důvěryhodný backend Workspace,
 nikoli Marketplace. Balíček neobsahuje párování ani credentials a instaluje
 se do profilu běžícího IDE. SecretStorage, mapování a schránky se zachovají.
 
@@ -121,8 +121,10 @@ obnova stejné operace. Výsledek se vrací do panelu IDE po synchronizaci.
 
 Workspace připraví neměnný balíček fronty přes **Předat frontu do IDE**.
 Povolte export podkladů v aktuálním mappingu; následně synchronizujte IDE.
-Pohled **Fronta úkolů** rozlišuje zahajitelné položky, navazující pouze pro
-náhled, agentní hlášení a lidské přijetí. Předání agentovi kopíruje cesty
+Pohled **Fronta úkolů** ukazuje vedle sebe připravenost, agentní hlášení, ruční
+žádost a lidské přijetí a dávku rozbalí na podúkoly. Ikona ✓ odešle ruční žádost
+o potvrzení, kterou uzavřete ve Workspace; úkol sama nedokončí. Podrobně viz
+[předání fronty](../../docs/ide-queue-handoff.md). Předání agentovi kopíruje cesty
 manifestu a AGENT.md. Agent hlásí splnění ordinary-file zprávou; oprávněný
 člověk ji přijímá ve Workspace. Doručení není dokončení.
 

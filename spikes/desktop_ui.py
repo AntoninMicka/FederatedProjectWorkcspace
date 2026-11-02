@@ -1337,7 +1337,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 .settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}
-.task-queue-list{max-height:30vh;overflow-y:auto;overscroll-behavior:contain}.task-queue-list li{display:flex;align-items:center;gap:8px;margin:6px 0}.task-queue-list li button:first-child{text-align:left;overflow-wrap:anywhere}
+.task-queue-list{max-height:30vh;overflow-y:auto;overscroll-behavior:contain}.task-queue-list li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0}.task-queue-reports{flex-basis:100%;margin-left:12px}.task-queue-reports p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}.task-queue-list li button:first-child{text-align:left;overflow-wrap:anywhere}
 .roadmap-card{max-width:none}.roadmap-heading,.roadmap-controls,.roadmap-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.roadmap-heading{justify-content:space-between}.roadmap-heading h2{margin-bottom:4px}.roadmap-heading p{margin-top:0}.roadmap-controls{padding:12px 0}.roadmap-controls label:not(.roadmap-check){display:flex;align-items:center;gap:7px}.roadmap-check{display:flex;align-items:center;gap:7px}.roadmap-legend{margin:10px 0;font-size:12px}.roadmap-legend span{padding:4px 8px;border:2px solid #557384;border-radius:999px;background:#fff}.roadmap-legend .completed{background:#e2f3eb;border-color:#26735e}.roadmap-legend .in-progress{background:#fff2c7;border-color:#9a6900}.roadmap-legend .deferred{background:#eef1f3;border-color:#87939a}.roadmap-legend .critical{border-width:4px}.roadmap-legend .ready{border-color:#176b60;border-style:dashed}.roadmap-graph{min-height:360px;max-height:62vh;overflow:auto;border:1px solid #cbd7de;border-radius:12px;background:#f7fafb;overscroll-behavior:contain}.roadmap-graph svg{display:block;min-width:100%}.roadmap-node{cursor:pointer}.roadmap-node:focus rect,.roadmap-node:hover rect{filter:drop-shadow(0 3px 4px #17334255);stroke:#0d6b5d;stroke-width:4}.roadmap-detail{margin-top:12px;padding:12px 14px;border-left:4px solid #176b60;background:#eff8f5}.roadmap-detail h3{margin:0 0 6px}.roadmap-detail dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;margin:0}.roadmap-detail dt{font-weight:700}.roadmap-detail dd{margin:0;overflow-wrap:anywhere}
 .plan-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px}.plan-layout .roadmap-graph{min-width:0}.plan-layout .roadmap-detail{margin-top:0}.roadmap-detail dd{white-space:pre-line}#sidebar-plan h3{font-size:13px;margin:16px 0 0}#sidebar-plan-list button{width:100%;text-align:left;background:transparent;color:#dce8f1;padding:9px 7px}#sidebar-plan-tree{max-height:55%;overflow:auto}#sidebar-plan-tree,#sidebar-plan-tree ul{list-style:none;padding:0;margin:8px 0}#sidebar-plan-tree ul{margin:2px 0 2px 12px;padding-left:10px;border-left:1px solid #496072}#sidebar-plan-tree button{width:100%;padding:7px 6px;background:transparent;color:#dce8f1;text-align:left;font-size:12px}#sidebar-plan-tree button:hover,#sidebar-plan-tree button[aria-current="true"]{background:#274154}#sidebar-plan-tree button[aria-current="true"]{border-left:3px solid #79c9ac}
 .plan-roadmap-canvas{position:relative;min-width:100%;background:#f7fafb}.plan-milestone-lane{position:absolute;left:0;border-radius:11px;background:#edf3f5}.plan-milestone-lane:nth-of-type(even){background:#f1f5f6}.plan-milestone-label{position:sticky;left:0;z-index:4;box-sizing:border-box;width:220px;height:100%;padding:16px 18px;border:0;border-right:1px solid #cfdae0;border-radius:11px 0 0 11px;background:#edf3f5;color:#18384a;text-align:left}.plan-milestone-label strong,.plan-milestone-label span{display:block}.plan-milestone-label span{margin-top:7px;color:#526b79;font-size:12px;line-height:1.35;white-space:pre-line}.plan-milestone-label:hover,.plan-milestone-label:focus-visible{background:#e2eeeb;outline:2px solid #176b60;outline-offset:-2px}.plan-roadmap-edges{position:absolute;inset:0;z-index:1;pointer-events:none}.plan-batch-card{position:absolute;z-index:2;box-sizing:border-box;width:220px;min-height:70px;padding:10px;border:2px solid #557384;border-radius:10px;background:#fff;color:#152b38;text-align:left}.plan-batch-card strong,.plan-batch-card span,.plan-batch-card small{display:block}.plan-batch-card span{margin-top:4px;color:#385160;font-size:12px}.plan-batch-card small{max-height:2.6em;margin-top:5px;overflow:hidden;color:#607987;font-size:11px;line-height:1.25;white-space:pre-line}.plan-batch-card[data-completed="true"]{background:#e2f3eb}.plan-batch-card[data-blocked="true"]{background:#f8dddd}.plan-batch-card[data-ready="true"]{border-color:#176b60;border-style:dashed}.plan-batch-card[data-critical="true"]{border-width:4px}.plan-batch-card:hover,.plan-batch-card:focus-visible{border-color:#0d6b5d;box-shadow:0 3px 6px #17334233;outline:none}
@@ -4254,7 +4254,7 @@ function renderTaskQueue(){
  status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
  for(const [index,item] of taskQueueView.items.entries()){
   const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button'),moves=document.createElement('span');
-  open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.user_confirmed?' · Přijato uživatelem':item.agent_confirmed?' · Agent hlásí splnění':''}`;
+  open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.held?' · Pozastaveno':''}${item.children?.length?` · Dávka: ${item.children.length} podúkolů`:''}${item.agent_confirmed?' · Agent hlásí splnění':''}${item.user_requested?' · Ruční žádost z IDE':''}${item.user_confirmed?' · Přijato uživatelem':''}`;
   open.addEventListener('click',async()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);});
   moves.className='task-queue-order-controls';
   for(const [direction,offset,symbol,label] of [['up',-1,'↑','Posunout nahoru'],['down',1,'↓','Posunout dolů']]){
@@ -4269,8 +4269,54 @@ function renderTaskQueue(){
    });
    moves.append(button);
   }
-  remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,moves,remove);list.append(row);
+  const hold=document.createElement('button');hold.type='button';hold.textContent=item.held?'Uvolnit':'Pozastavit';hold.title='Pozastavená položka se nepředává agentovi. Příznak nemění roadmapu ani přijetí.';
+  hold.ariaLabel=`${hold.textContent}: ${item.id}`;
+  hold.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||!taskQueueView.valid;hold.addEventListener('click',()=>changeTaskQueue('set-flag',item.id,{flag:'held',value:!item.held}));
+  remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,moves,hold,remove);
+  const audit=(taskQueueView.flag_audit||[]).filter(entry=>entry.task_id===item.id);
+  if(audit.length){
+   const history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Změny příznaku Pozastaveno';history.append(summary);
+   for(const entry of audit){const text=document.createElement('p');text.textContent=`Revize ${entry.revision} · ${entry.actor_id} · ${new Date(entry.at*1000).toLocaleString()} · ${entry.old?'Ano':'Ne'} → ${entry.new?'Ano':'Ne'}`;history.append(text);}
+   row.append(history);
+  }
+  if(item.reports?.length){
+   const reports=document.createElement('details'),summary=document.createElement('summary');reports.className='task-queue-reports';
+   summary.textContent=`Zprávy o splnění (${item.reports.length})`;reports.append(summary);
+   const outcomes={accepted:'Přijato',rejected:'Odmítnuto',stale:'Zastaralé, neaplikováno',prepared:'Review připraveno'};
+   for(const report of item.reports){const text=document.createElement('p');
+    text.textContent=`${report.task_id===item.id?'':report.task_id+' · '}${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\n${report.body}${report.evidence?`\nTesty: ${report.evidence.tests}\nDiff: ${report.evidence.diff}`:''}${report.note?`\nOdpověď: ${report.note}`:''}`;reports.append(text);
+    const decisions=report.outcome==='prepared'?['resume']:report.outcome?[]:['accepted','rejected'];
+    for(const decision of decisions){const button=document.createElement('button');button.type='button';
+     button.textContent=decision==='resume'?'Dokončit připravené review':decision==='rejected'?'Odmítnout':'Přijmout a dokončit úkol';
+     button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||(decision==='accepted'&&report.acceptable!==true);
+     if(decision==='accepted'&&report.acceptable!==true)button.title='Zpráva je ze staré generace fronty nebo má úkol nesplněné předpoklady; nelze ji přijmout.';
+     button.addEventListener('click',()=>reviewQueueReport(report,decision));reports.append(button);}
+   }
+   row.append(reports);
+  }
+  list.append(row);
  }
+}
+// Same review endpoint as the IDE messages page: the server revalidates everything.
+async function reviewQueueReport(report,decision){
+ if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
+ const project=activeProject;let request=report.review_request;
+ if(!request){
+  const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
+  if(!window.confirm(`${decision==='accepted'?'Přijmout a dokončit':'Odmítnout'} ${report.task_id}?\n${report.body}\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
+  request={project_id:project.id,session_id:report.session_id,message_id:report.message_id,decision,note,expected_head:taskQueueView.expected_head,operation_id:crypto.randomUUID()};
+ }
+ taskQueueBusy=true;renderTaskQueue();
+ try{
+  const result=await projectRequest('/v1/ide-bridge/review',request,120000);
+  if(activeProject!==project)return;
+  taskQueueBusy=false;
+  // Reload in place: the user stays on the queue and the plan shows the new state.
+  if(result.result?.commit_id){const view=await projectRequest('/v1/projects/open',{project_id:project.id});
+   if(activeProject!==project)return;project.head=view.commit_id;renderTaskPlanSidebar(view.plan);}
+  else await loadTaskQueue();
+ }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu; připravené review lze bezpečně dokončit.';}}
+ finally{taskQueueBusy=false;renderTaskQueue();}
 }
 async function loadTaskQueue(){
  if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;
@@ -4282,6 +4328,7 @@ async function changeTaskQueue(action,taskId,targetIndex){
  const project=activeProject,view=taskQueueView;taskQueueBusy=true;renderTaskQueue();
  try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
  if(action==='move')request.target_index=targetIndex;
+ if(action==='set-flag')Object.assign(request,targetIndex);
  if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
  const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
@@ -4406,10 +4453,10 @@ async function showIdeBridgeMessages(projectId){
   for(const entry of session.messages){
    const box=document.createElement('article'),message=document.createElement('pre');
    const selections=(entry.message.checklist||[]).map(item=>`${item.checked?'☑':'☐'} ${(entry.task_preview?.checklist||[])[item.index]?.text||`Položka ${item.index+1}`}`).join('\\n');
-   message.textContent=`${entry.message.kind} · ${entry.message.task_id||'Projekt'} · ${entry.receipt.status}\n${entry.message.body}\n${selections}\n${entry.message.queue_packet_id?'Hlášení agenta · balíček '+entry.message.queue_packet_id+' · testy: '+entry.message.evidence.tests+' · diff: '+entry.message.evidence.diff:''}\nZdrojový commit: ${entry.message.repository_commit}`;box.append(message);
+   message.textContent=`${entry.message.kind} · ${entry.message.task_id||'Projekt'} · ${entry.receipt.status}\n${entry.message.body}\n${selections}\n${entry.message.reported_by==='user'?'Ruční žádost uživatele z IDE, bez důkazů agenta · balíček '+entry.message.queue_packet_id:entry.message.queue_packet_id?'Hlášení agenta · balíček '+entry.message.queue_packet_id+' · testy: '+entry.message.evidence.tests+' · diff: '+entry.message.evidence.diff:''}\nZdrojový commit: ${entry.message.repository_commit}`;box.append(message);
    if(entry.review?.state==='completed'){const outcome=document.createElement('p');outcome.textContent=`${entry.review.outcome==='stale'?'Zastaralé – nebylo aplikováno':entry.review.request.decision==='accepted'?'Přijato':'Odmítnuto'}: ${entry.review.request.note}`;box.append(outcome);}
    else for(const decision of entry.review?['resume']:['accepted','rejected']){
-    const button=document.createElement('button');button.type='button';button.textContent=decision==='resume'?'Dokončit připravené review':decision==='accepted'?'Přijmout po posouzení':'Odmítnout';
+    const button=document.createElement('button');button.type='button';button.textContent=decision==='resume'?'Dokončit připravené review':decision==='accepted'?(entry.message.reported_by==='user'?'Potvrdit splnění':'Přijmout po posouzení'):'Odmítnout';
     const changesTask=['completed','progress'].includes(entry.message.kind);
     if(decision==='accepted'&&changesTask&&(session.revoked||(entry.message.queue_packet_id?entry.queue_reviewable!==true:session.commit_id!==result.current_head))){button.disabled=true;button.title='Návrh je ze staré revize nebo odvolané relace; nelze jej aplikovat.';}
     button.addEventListener('click',async()=>{

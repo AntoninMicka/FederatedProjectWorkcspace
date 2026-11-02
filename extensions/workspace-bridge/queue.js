@@ -12,9 +12,63 @@ function validate(value,project){
   ||value.manifest.session_id!==project.session||value.manifest.revision!==project.snapshot.revision
   ||value.manifest.project_head!==project.snapshot.commit_id||value.manifest.repository!==project.identity
   ||!Array.isArray(value.items)||!Array.isArray(value.blockers)||!Array.isArray(value.manifest.documents)
+  ||(value.linked_items!==undefined&&!Array.isArray(value.linked_items))
   ||value.manifest.documents.length>128||value.items.length!==value.manifest.tasks.length)throw Error('Neplatný balíček fronty.');
  for(let i=0;i<value.items.length;i++)if(value.items[i].id!==value.manifest.tasks[i].id||typeof value.items[i].eligible!=='boolean')throw Error('Nesouhlasí položky fronty.');
  return value;
+}
+// Stale data stays visible but is labelled: last known is never shown as confirmed.
+function flags(entry,{stale=false,blockers=[]}={}){
+ const yes=value=>value===true,known=value=>typeof value==='boolean';
+ const suffix=stale?' (poslední známý stav)':'';
+ const list=[];
+ if(stale)list.push({name:'stale',label:'Neaktuální'});
+ if(!known(entry.eligible))list.push({name:'unknown',label:'Stav neznámý'});
+ else if(entry.user_confirmed!==true){
+  if(blockers.length)list.push({name:'blocked',label:'Blokováno balíčkem'});
+  else if(yes(entry.held))list.push({name:'held',label:'Pozastaveno'});
+  else if(yes(entry.eligible))list.push({name:'ready',label:'Zahajitelné'+suffix});
+  else if(yes(entry.startable))list.push({name:'feature',label:'Dávka · '+(entry.open_children||[]).length+' otevřených podúkolů'+suffix});
+  else list.push({name:'waiting',label:'Navazující · pouze náhled'});
+ }
+ if(yes(entry.agent_confirmed))list.push({name:'agent',label:'Agent hlásí splnění'+suffix});
+ if(yes(entry.user_requested))list.push({name:'requested',label:'Ruční žádost čeká na Workspace'+suffix});
+ if(yes(entry.user_confirmed))list.push({name:'accepted',label:(stale?'Naposledy přijato uživatelem':'Přijato uživatelem')});
+ return list;
+}
+// Walk the pinned references; anything unresolved is a problem, never a silent gap.
+function scope(value,taskId){
+ const manifest=value?.manifest,known=new Map([...(value?.items||[]),...(value?.linked_items||[])].map(i=>[i.id,i]));
+ const hierarchy=manifest?.hierarchy||{},problems=[...(value?.hierarchy_problems||[])],rows=[],seen=new Set();
+ (function walk(id,depth,path){
+  for(const child of hierarchy[id]?.children||[]){
+   if(path.includes(child)){problems.push('Cyklus: '+[...path,child].join(' > '));continue;}
+   const repeated=seen.has(child);seen.add(child);
+   if(!known.has(child))problems.push('Chybí odkaz: '+child);
+   rows.push({id:child,depth,repeated,entry:known.get(child)||null});
+   if(!repeated)walk(child,depth+1,[...path,child]);
+  }
+ })(taskId,1,[taskId]);
+ const parent=known.get(taskId)?.parent_id||null;
+ // A queued root may have a parent outside this packet. A linked task must
+ // retain its backlink to a known container in the pinned feature scope.
+ if((manifest?.linked_tasks||[]).some(t=>t.id===taskId)){
+  if(!parent||!known.has(parent))problems.push('Chybí nadřazený odkaz: '+(parent||taskId));
+  else if(!(hierarchy[parent]?.children||[]).includes(taskId))problems.push('Nesouhlasí nadřazený odkaz: '+taskId);
+ }
+ return {rows,problems:[...new Set(problems)],parent};
+}
+// A manual request is a message only; the roadmap changes in Workspace review.
+function manualRequest(value,taskId,body,repositoryCommit,messageId){
+ const entry=[...value.items,...(value.linked_items||[])].find(i=>i.id===taskId);
+ if(!entry||value.blockers.length||entry.eligible!==true)throw Error('Položka je blokovaná, zastaralá nebo má otevřené podúkoly; ruční žádost nelze odeslat.');
+ if(entry.user_requested)throw Error('Ruční žádost už čeká na potvrzení ve Workspace.');
+ const task=[...value.manifest.tasks,...(value.manifest.linked_tasks||[])].find(t=>t.id===taskId);
+ const message={message_id:messageId,task_id:taskId,kind:'completed',body,revision:value.manifest.revision,
+  repository_commit:repositoryCommit,queue_packet_id:value.packet_id,reported_by:'user'};
+ const open=(task.checklist||[]).map((item,index)=>({item,index})).filter(({item})=>!item.checked);
+ if(open.length)message.checklist=open.map(({index})=>({index,checked:true}));
+ return message;
 }
 async function verified(file,sha,cache){
  const real=await fs.realpath(file),stat=await fs.stat(file);
@@ -97,6 +151,7 @@ async function synchronize(project,request){
   await bridge.atomic(path.join(root,'AGENT.md'),'# Předání fronty\n\n'+value.manifest.instructions+'\n\nManifest: manifest.json\nAktuální stav: ../../queue.json (pouze poslední známý stav; před odesláním synchronizujte).\n'
    +'Completion: ../../inbox/<UUID>.json; fields: message_id, task_id, kind="completed", body, revision=manifest.revision, repository_commit=actual HEAD, queue_packet_id, reported_by="agent", evidence={tests,diff}.\n'
    +'Přiložte i přesné checklist změny, pokud úkol má checklist. Zprávu publikujte přes dočasný soubor a rename; stejné UUID nikdy nepoužijte s jinými bajty.\n'
+   +'Dávka v hierarchy je jedna feature větev a jeden PR; manifest.linked_tasks jsou její podúkoly, hlaste je jednotlivě. Dávku lze nahlásit až po přijetí všech podúkolů.\n'
    +'Pravidla z manifestu a místní AGENTS.md načtěte explicitně; rozpory sami nepřekrývejte. Hlášení není lidská akceptace.\n');
   project.queue=current;
  }
@@ -105,9 +160,9 @@ async function synchronize(project,request){
 }
 async function handoff(project,taskId,request){
  const value=await synchronize(project,request);
- if(!value||value.blockers.length||!value.items.find(i=>i.id===taskId)?.eligible)throw Error('Navazující, stale nebo nepřijatá položka je pouze k prohlížení.');
+ if(!value||value.blockers.length||!(([...value.items,...(value.linked_items||[])].find(i=>i.id===taskId)||{}).startable??value.items.find(i=>i.id===taskId)?.eligible))throw Error('Navazující, stale nebo nepřijatá položka je pouze k prohlížení.');
  const root=path.join(project.root,'packets',value.packet_id);
  for(const doc of value.manifest.documents)await verified(path.join(root,'documents',doc.sha256+'.txt'),doc.sha256,path.join(project.root,'queue-cache'));
  return {manifest:path.join(root,'manifest.json'),instructions:path.join(root,'AGENT.md'),inbox:path.join(project.root,'inbox'),packet_id:value.packet_id};
 }
-module.exports={sourceBaseline,stable,validate,verified,blob,link,synchronize,handoff};
+module.exports={sourceBaseline,stable,validate,verified,blob,link,synchronize,handoff,flags,scope,manualRequest};

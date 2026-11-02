@@ -118,6 +118,24 @@ class TaskQueueTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.service.execute(request, self.owner)
         self.assertFalse(list(self.service.root.glob('*.tmp')))
 
+    def test_flag_crash_keeps_value_and_audit_together_and_rejects_replay(self):
+        self.act('add', 'TASK-A'); prior = self.status()
+        request = dict(project_id=self.pid, action='set-flag', task_id='TASK-A',
+                       flag='held', value=True, expected_head=prior['expected_head'], revision=prior['revision'])
+        def stop(stage):
+            if stage == 'queue-before-replace': raise OSError('power failure')
+        with self.assertRaises(OSError): self.service.execute(request, self.owner, checkpoint=stop)
+        self.assertEqual(prior, self.status())
+        def after(stage):
+            if stage == 'queue-after-replace': raise OSError('power failure')
+        with self.assertRaises(QueueOutcomeUnknown): self.service.execute(request, self.owner, checkpoint=after)
+        recovered = self.status()
+        self.assertTrue(recovered['items'][0]['held'])
+        self.assertEqual((False, True, self.owner, recovered['revision']),
+                         tuple(recovered['flag_audit'][-1][k] for k in ('old', 'new', 'actor_id', 'revision')))
+        with self.assertRaises(ValueError): self.service.execute(request, self.owner)
+        self.assertEqual(recovered, self.status())
+
     def test_directory_sync_failure_reports_unknown_and_existing_state_is_readable(self):
         prior = self.status()
         with patch('spikes.task_queue.sync_dir', side_effect=OSError('I/O')):
@@ -292,6 +310,13 @@ async function projectRequest(path,body){calls.push(body);if(reject)throw new Er
 (async()=>{
 response={project_id:'project',expected_head:'head',valid:true,issues:[],revision:1,following:['TASK-B'],task_ids:['TASK-A'],items:[{id:'TASK-A',title:'A'}]};
 await loadTaskQueue();assert(taskPlanMatches({id:'TASK-B'},'following'));assert(!taskPlanMatches({id:'TASK-X'},'following'));
+taskQueueView.flag_audit=[{task_id:'TASK-A',old:false,new:true,actor_id:'reviewer',at:1,revision:1}];
+renderTaskQueue();
+let row=document.querySelector('#task-queue-list').children[0];
+assert.equal(row.children[2].ariaLabel,'Pozastavit: TASK-A');
+assert.match(row.children[4].children[1].textContent,/reviewer.*Ne → Ano/);
+taskQueueView.valid=false;renderTaskQueue();assert(document.querySelector('#task-queue-list').children[0].children[2].disabled);
+taskQueueView.valid=true;
 response={removed_ids:['TASK-A','TASK-B'],preview_sha256:'digest'};
 await changeTaskQueue('remove','TASK-A');assert.equal(calls.filter(c=>c.action==='remove').length,0);
 response={project_id:'project',expected_head:'head',valid:true,issues:[],revision:2,following:[],task_ids:[],items:[]};confirm=true;

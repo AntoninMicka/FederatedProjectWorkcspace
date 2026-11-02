@@ -9,12 +9,17 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import time
 from uuid import uuid4
 
 from spikes.journal import sync_dir
 from spikes.local_api import private_directory
 from spikes.metadata import require, uuid
 from spikes.projects import Projects
+
+
+EDITABLE_FLAGS = frozenset({'held'})
+MAX_FLAG_AUDIT = 200
 
 
 class QueueOutcomeUnknown(OSError):
@@ -101,7 +106,7 @@ class TaskQueue:
     def _read(self, path, project_id, actor_id):
         if not os.path.lexists(path):
             return dict(schema=1, project_id=project_id, owner_id=actor_id, revision=0,
-                        project_head=None, task_ids=[])
+                        project_head=None, task_ids=[], held_task_ids=[], flag_audit=[])
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd, 'rb') as stream:
             info = os.fstat(stream.fileno())
@@ -110,8 +115,11 @@ class TaskQueue:
                     'Unsafe queue file')
             from spikes.metadata import pairs
             data = json.loads(stream.read(1024 * 1024 + 1), object_pairs_hook=pairs)
-        require(isinstance(data, dict) and set(data) == {
-            'schema', 'project_id', 'owner_id', 'revision', 'project_head', 'task_ids'}
+        # Queues written before IDE-QUEUE-UX-01 have no flag fields.
+        require(isinstance(data, dict) and {
+            'schema', 'project_id', 'owner_id', 'revision', 'project_head', 'task_ids'} <= set(data)
+            <= {'schema', 'project_id', 'owner_id', 'revision', 'project_head', 'task_ids',
+                'held_task_ids', 'flag_audit'}
             and data['schema'] == 1 and data['project_id'] == project_id and data['owner_id'] == actor_id,
             'Queue scope differs')
         require(type(data['revision']) is int and data['revision'] >= 0
@@ -119,6 +127,11 @@ class TaskQueue:
                 and all(isinstance(i, str) for i in data['task_ids'])
                 and len(data['task_ids']) == len(set(data['task_ids']))
                 and isinstance(data['project_head'], str), 'Invalid queue')
+        data.setdefault('held_task_ids', []); data.setdefault('flag_audit', [])
+        require(isinstance(data['held_task_ids'], list)
+                and set(map(str, data['held_task_ids'])) <= set(data['task_ids'])
+                and isinstance(data['flag_audit'], list)
+                and len(data['flag_audit']) <= MAX_FLAG_AUDIT, 'Invalid queue flags')
         return data
 
     def _write(self, path, state, checkpoint):
@@ -148,15 +161,31 @@ class TaskQueue:
                   'remove-preview': {'task_id', 'revision', 'expected_head'},
                   'remove': {'task_id', 'revision', 'expected_head', 'preview_sha256'},
                   'revalidate': {'revision', 'expected_head'},
-                  'move': {'task_id', 'target_index', 'revision', 'expected_head'}}
+                  'move': {'task_id', 'target_index', 'revision', 'expected_head'},
+                  'set-flag': {'task_id', 'flag', 'value', 'revision', 'expected_head'}}
         require(isinstance(action, str) and action in fields and set(request) == common | fields[action],
                 'Invalid queue action or fields')
         # Native read enforces registered-project/index/privacy state before opening local queue files.
         view = self.projects.open(project_id); graph = view['plan']
         require(graph['status'] == 'ready', 'Roadmapa nemá platný graf.')
         require(action == 'status' or not view.get('read_only'), 'Projekt je pouze pro čtení.')
-        from spikes.ide_queue import queue_projection
+        from spikes.ide_queue import completion_reports, queue_projection
         projection = queue_projection(self.node, project_id, actor_id, view)
+        reports = completion_reports(self.node, project_id, actor_id)
+        eligible = {i['id'] for i in (projection['items'] + projection['linked_items'] if projection else ())
+                    if i['eligible']}
+
+        def item_reports(identifier, nodes, state):
+            ids = [identifier]
+            for current in ids:
+                ids += [n['id'] for n in nodes.values() if n['parent_id'] == current]
+            # Acceptance is revalidated by the review itself; this only drives the button.
+            current = projection and (state['revision'] == projection['manifest']['queue_revision']
+                                      and state['task_ids'] == [t['id'] for t in projection['manifest']['tasks']])
+            return [dict(report, acceptable=bool(current and report['outcome'] is None
+                                                 and report['queue_packet_id'] == projection['packet_id']
+                                                 and report['task_id'] in eligible))
+                    for i in ids for report in reports.get(i, [])]
         accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)
         with self._lock(project_id, actor_id) as path, workspace.journal.lock(), workspace.journal.connect() as db:
@@ -174,7 +203,7 @@ class TaskQueue:
                 require(type(request['revision']) is int and request['revision'] == state['revision'],
                         'Fronta se změnila; načtěte ji znovu.')
                 require(request['expected_head'] == head, 'Roadmapa se změnila; načtěte ji znovu.')
-                if action in {'add', 'remove-preview', 'remove', 'move'}:
+                if action in {'add', 'remove-preview', 'remove', 'move', 'set-flag'}:
                     require(isinstance(request['task_id'], str), 'Task ID required')
             should_write = action != 'status'
             if action == 'move':
@@ -190,6 +219,24 @@ class TaskQueue:
                 require(not move_issues, '; '.join(move_issues))
                 should_write = reordered != state['task_ids']
                 state['task_ids'] = reordered
+            if action == 'set-flag':
+                # Only a working-queue choice is editable here.  Reports, acceptance and
+                # readiness keep their own lifecycle, so this cannot complete a task.
+                require(not stale, 'Nejprve znovu ověřte frontu vůči roadmapě.')
+                identifier = request['task_id']
+                require(identifier in state['task_ids'], 'Položka není ve frontě.')
+                require(request['flag'] in EDITABLE_FLAGS, 'Tento příznak nelze ručně upravit.')
+                require(type(request['value']) is bool, 'Hodnota příznaku musí být ano, nebo ne.')
+                old = identifier in state['held_task_ids']
+                should_write = old != request['value']
+                if should_write:
+                    state['held_task_ids'] = [i for i in state['task_ids'] if i != identifier
+                                              and i in state['held_task_ids']
+                                              or i == identifier and request['value']]
+                    state['flag_audit'] = (state['flag_audit'] + [dict(
+                        task_id=identifier, flag=request['flag'], old=old, new=request['value'],
+                        actor_id=actor_id, at=int(time.time()), revision=state['revision'] + 1,
+                    )])[-MAX_FLAG_AUDIT:]
             if action == 'add':
                 require(not stale and not issues, 'Nejprve znovu ověřte frontu vůči roadmapě.')
                 identifier = request['task_id']; node = nodes.get(identifier)
@@ -214,6 +261,7 @@ class TaskQueue:
                     return dict(preview, preview_sha256=digest)
                 require(request['preview_sha256'] == digest, 'Dopad odebrání se změnil; načtěte nový náhled.')
                 state['task_ids'] = [i for i in state['task_ids'] if i not in removed]
+                state['held_task_ids'] = [i for i in state['held_task_ids'] if i not in removed]
             if should_write:
                 issues, following = assess(state['task_ids'], graph, accepted)
                 if action != 'remove': require(not issues, '; '.join(issues))
@@ -226,10 +274,15 @@ class TaskQueue:
                 raise ValueError('Roadmapa se změnila; znovu načtěte stav fronty.')
             return dict(project_id=project_id, revision=state['revision'], expected_head=head,
                         stale=stale, valid=not stale and not issues, issues=issues,
-                        task_ids=state['task_ids'], following=following if not stale and not issues else [],
+                        task_ids=state['task_ids'], flag_audit=state['flag_audit'][-20:],
+                        editable_flags=sorted(EDITABLE_FLAGS), following=following if not stale and not issues else [],
                         items=[dict(id=i, title=nodes[i]['title'] if i in nodes else 'Nedostupná položka',
                                     agent_confirmed=bool(projection and any(x['id'] == i and x['agent_confirmed'] for x in projection['items'])),
                                     user_confirmed=i in accepted,
+                                    user_requested=bool(projection and any(x['id'] == i and x.get('user_requested') for x in projection['items'])),
+                                    held=i in state['held_task_ids'],
+                                    reports=item_reports(i, nodes, state),
+                                    children=[n['id'] for n in graph['nodes'] if n['parent_id'] == i],
                                     **adjacent_moves(state['task_ids'], position, nodes,
                                                      not stale and not issues and not view.get('read_only')))
                                for position, i in enumerate(state['task_ids'])])

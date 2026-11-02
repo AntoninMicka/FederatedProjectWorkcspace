@@ -69,6 +69,42 @@ za current a agent musí načíst nové předání. Report čekající na lidsk�
 review obnovu pozastaví, dokud jej člověk nepřijme nebo neodmítne.
 Container s otevřenými potomky nelze dokončit místo nich; zařaďte jeho tasky.
 
+## Příznaky, ruční potvrzení a dávky (rozšíření 0.5.0)
+
+Pohled **Fronta úkolů** ukazuje všechny příznaky vedle sebe: připravenost nebo
+blokaci, hlášení agenta, ruční žádost a přijetí. Při výpadku je označí jako
+neaktuální, poslední známý stav. Detail položky uvádí i důvod blokace.
+
+**Ruční potvrzení** (ikona ✓ u zahajitelné položky) odešle žádost, úkol tím ale
+nedokončí. Otevřete ve Workspace **Nastavení → IDE → zprávy projektu** a použijte
+**Potvrdit splnění**. Žádost nemá důkazy agenta a má-li úkol nesplněný checklist,
+navrhne jej jako splněný; návrh uvidíte před potvrzením.
+
+**Pozastavit** ve frontě Workspace je jediný ručně upravitelný příznak: položka se
+nepředává agentovi, roadmapa ani přijetí se nemění a změna se zapíše do auditu fronty.
+U položky rozbalte **Změny příznaku Pozastaveno**: zobrazí původní a novou
+hodnotu, aktéra, čas a revizi z posledních 20 změn fronty. Úložiště drží nejvýše
+200 změn; tento výpis není úplná projektová historie. Neaktuální nebo neplatnou
+frontu nejprve znovu ověřte, poté lze příznak změnit.
+Ostatní příznaky mění jen jejich vlastní akce nebo se odvozují, viz
+[ADR 0062](adr/0062-pinned-queue-handoff.md#příznaky-ruční-žádost-a-hierarchie-ide-queue-ux-01-2-11-2026).
+
+V detailu dávky použijte **Podúkoly — odkazy** pro otevření konkrétního úkolu;
+z jeho detailu se vrátíte přes **Zpět na rodiče**. Odkazy používají stejné
+stabilní ID a revizi připnutého balíčku, podklady se nekopírují do detailu.
+Chybějící odkaz nebo nesouhlas rodiče a seznamu potomků se zobrazí jako problém.
+Rodič kořenové položky mimo předaný rozsah je označený bez aktivního odkazu.
+
+**Dávka** ve frontě se rozbalí na podúkoly. Předává se jako jedna feature větev a
+jeden PR, podúkoly se hlásí jednotlivě a dávka až po přijetí všech. Chybějící nebo
+cyklický odkaz se zobrazí jako problém.
+
+**Zprávy o splnění** se ve frontě pluginu i Workspace zobrazují pod svou položkou,
+včetně původu, stavu posouzení a odpovědi. Workspace u nich nabízí **Přijmout a
+dokončit úkol** a **Odmítnout** se stejným review jako Nastavení → IDE → zprávy projektu
+a ukazuje pět nejnovějších na úkol, u dávky i zprávy jejích podúkolů. Plugin zprávy jen
+zobrazuje, přijetí z IDE credentialu ADR 0062 nepovoluje.
+
 ## Chyba a obnova
 
 Při unknown/timeoutu nejprve načtěte stav a původní receipts. Stejné UUID se

@@ -355,7 +355,7 @@ async function activate(context) {
     if (!selected) return;
     const kind = await vscode.window.showQuickPick(['completed', 'clarification', 'message'], {placeHolder: 'Typ zprávy'}); if (!kind) return;
     let queue;try{queue=JSON.parse(await bridge.read(path.join(config.root,'queue.json')));}catch(error){if(error.code!=='ENOENT')throw error;}
-    if(kind==='completed'&&queue?.items.some(i=>i.id===selected.label))throw Error('Položka fronty vyžaduje hlášení agenta podle packets/<id>/AGENT.md a lidské přijetí ve Workspace.');
+    if(kind==='completed'&&queue?.items.some(i=>i.id===selected.label))throw Error('Položka fronty vyžaduje hlášení agenta podle packets/<id>/AGENT.md, nebo ruční žádost z pohledu Fronta úkolů; přijímá ji člověk ve Workspace.');
     const body = await vscode.window.showInputBox({prompt: 'Výsledek a důkazy, dotaz nebo zpráva', ignoreFocusOut: true}); if (!body) return;
     if (await vscode.window.showWarningMessage(`${kind} · ${selected.label}\n${body}`, {modal: true}, 'Odeslat') !== 'Odeslat') return;
     const message = {message_id: crypto.randomUUID(), task_id: selected.label, kind, body,
