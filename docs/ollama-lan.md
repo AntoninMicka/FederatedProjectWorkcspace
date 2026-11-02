@@ -153,6 +153,15 @@ projektová data ani Context Manifest a nemění poslední potvrzený binding. T
 **Uložit backend** atomicky publikuje node-local konfiguraci mimo projektový
 Git. Test dostupnosti není souhlas s odesláním konkrétního projektu.
 
+Seznam modelů se načítá sám přes stejné `GET /api/tags`, bez promptu a projektových
+dat: při otevření nastavení, po změně hranice, endpointu, ID cíle nebo pinu a pro
+uložený binding při načtení chatu a návratu do okna (nejvýše jednou za 30 sekund).
+Na pozadí se periodicky nedotazuje. Neuložený koncept nemění nabídku v chatu.
+Snapshot se přepíše jen při změně seznamu, takže vybraný model zůstává platný.
+Když načtení uloženého bindingu selže, výběr v chatu nabídne pouze uložený model
+a označí nabídku za neaktuální. Tento stav drží jen běžící proces; po restartu ho
+znovu určí první další načtení.
+
 Potvrzený `private-network` binding lze použít také v režimu **Orchestrace**.
 Každý nový orchestrační request nese jeho přesné `binding_id` a revizi; backend
 je před sestavením Context Manifestu porovná s aktuální konfigurací. Pokud se
