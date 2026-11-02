@@ -102,3 +102,11 @@ Implementační a provozní evidence je v [návodu](../roadmap-dependencies.md).
 Celoplošný scan ani lidské přijetí nových hran nejsou odvozené od toho, že
 prošly syntetické testy či jedno živé inference. Cílený scan bez chybějících
 citací není sám o sobě důkazem úplnosti celé roadmapy.
+
+## Doplnění 2026-11-01: policy v3
+
+Modelové rozhraní se mění bez změny persistentních kontraktů: zmrazený vstup,
+uložený návrh, validace, review, apply ani recovery hranice se nemění.
+Model vybírá předpoklad jen z výčtu bezcyklových kandidátů ve strukturovaném
+schématu a aplikace doplní focus a schéma návrhu. Podrobnosti a důvody:
+[scan závislostí](../roadmap-dependencies.md#policy-v3-strukturovaná-odpověď-a-explicitní-kontext-2026-11-01).

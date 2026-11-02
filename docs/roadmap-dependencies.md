@@ -156,3 +156,40 @@ závěrečná sada `python3 -m unittest discover -s tests -v`: **1 141 testů OK
 ignorování fenced příkladů, výběr deklarace místo první zmínky, ukončení
 před sousední položkou, odmítnutí nejednoznačné definice, zachování starého
 review a coverage pouze aktuální policy. `git diff --check` prošel.
+
+## Policy v3: strukturovaná odpověď a explicitní kontext (2026-11-01)
+
+Rozbor v2 ukázal příčiny mimo samotnou kvalitu modelu. Prompt nesl celý
+katalog roadmapy jako JSON včetně `depends_on` všech uzlů a končil řádkem
+`Summary:`. Ollama dostala jen `format:"json"` bez schématu a bez `num_ctx`,
+`temperature` i vypnutí thinking. Delší vstup tak mohl být bez varování
+oříznut od začátku, tedy včetně instrukce. Model mohl volně psát libovolná
+ID, existující hrany i hrany vytvářející cyklus. Validátor je správně
+odmítl, ale odmítl tím celou odpověď.
+
+`focused-dependencies-v3` s rolí `extractor-dependencies-v1`:
+
+- zmrazený vstup `fpw-roadmap-dependency-input-v1`, uložený návrh
+  `fpw-roadmap-dependency-proposal-v1`, validace i apply zůstávají beze změny;
+- model dostane prostý text: focus, zvlášť již zaznamenané předpoklady,
+  podklady s čísly řádků a seznam povolených kandidátů (ID — název);
+- kandidáti vynechávají focus, existující předpoklady a uzly, které na focus
+  už tranzitivně závisejí. Duplicitní ani cyklickou hranu tak schéma vůbec
+  nedovolí vybrat;
+- výstupní JSON schéma má výčty pro `prerequisite_id` a `evidence_id`. Pořadí
+  polí je důvod, potom citace, ID a nakonec rozhodnutí;
+- pole se jmenuje `prerequisite_id` a instrukce vysvětluje směr („musí být
+  hotové PŘED focus úkolem“). Schéma, `focus_id` a mapování na `target_id`
+  doplní aplikace;
+- citace lišící se jen mezerami, zalomením nebo Markdown zvýrazněním se
+  převede na přesný jednoznačný úsek zdroje. Vymyšlená citace se dál odmítne;
+- opakovaná stejná hrana v jedné odpovědi se sloučí, ostatní pravidla v1
+  (substance citace, cyklus, rozhodnutí vs. hrany) platí beze změny;
+- požadavek nastavuje `num_ctx`, `temperature:0`, `num_predict:2048`
+  a `think:false`. `done_reason:length` nebo `prompt_eval_count` blízko
+  limitu kontextu označí výsledek jako failed bez automatického opakování.
+
+Nová policy má nové fingerprinty; výsledky v2 včetně pending a unknown
+zůstávají a jejich review i apply fungují jako dřív. Detached a deep-check
+režimy refinementu používají dál `extractor-v1` beze změny. Kvalitu v3 nad
+skutečným modelem je potřeba teprve ověřit na stejném vzorku osmi položek.

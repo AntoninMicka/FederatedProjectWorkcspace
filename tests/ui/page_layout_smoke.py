@@ -173,6 +173,95 @@ window.layoutTest={done:false};
  const read=projectRequest;workspaceArtifactProjectionHead='unknown';projectRequest=async(path,request)=>path==='/v1/projects/open'?{commit_id:'different-head',artifacts:[]} : await read(path,request);
  await showArtifactOverview();check(!document.querySelector('#artifact-overview-list').children.length&&document.querySelector('#artifact-overview-status').textContent.includes('Projekt se změnil'),'Stale snapshot shown as current list');
  projectRequest=read;await showArtifactOverview();check(document.querySelector('#artifact-overview-list').textContent.includes('Created file')&&!document.querySelector('#artifact-overview-status').textContent,'List did not recover after successful refresh');
+
+
+ const deadlineRequest={project_id:activeProject.id,run_id:'live-run'};
+ let deadlineDecisions=[];
+ projectRequest=async(path,request)=>{
+  if(path==='/v1/tasks/run-control'){
+   deadlineDecisions.push(request);return {soft_seconds:180,elapsed_seconds:181,hard_seconds:1800,extended:true,stopped:request.action==='stop'?'user-stopped':null};
+  }
+  return await read(path,request);
+ };
+ updateTaskRunDeadline({soft_seconds:180,elapsed_seconds:20,hard_seconds:360,extended:false,stopped:null},deadlineRequest);
+ check(document.querySelector('[data-task-run-action=extend]').hidden&&!document.querySelector('[data-task-run-action=stop]').disabled,'Early run has no stop control or allows premature extension');
+ updateTaskRunDeadline({soft_seconds:180,elapsed_seconds:180,hard_seconds:360,extended:false,stopped:null},deadlineRequest);
+ check(!document.querySelector('[data-task-run-action=extend]').hidden&&document.querySelector('#task-run-deadline').textContent.includes('180 s'),'Soft deadline does not offer a bounded decision');
+ document.querySelector('[data-task-run-action=extend]').click();await tick();
+ check(deadlineDecisions[0].run_id==='live-run'&&document.querySelector('[data-task-run-action=extend]').hidden&&document.querySelector('#task-run-deadline').textContent.includes('Prodloužený'),'Extension lost scope or stays repeatable in UI');
+ document.querySelector('[data-task-run-action=stop]').click();await tick();
+ check(deadlineDecisions[1].action==='stop'&&document.querySelector('[data-task-run-action=stop]').disabled,'Stop remains active after acknowledgement');
+ clearTaskRunDeadline();check(!document.querySelector('#task-run-deadline'),'Finished deadline controls remain visible');
+ const originalFetch=window.fetch;let parsedDeadline=null,parsedDelta='';
+ window.fetch=async()=>new Response(JSON.stringify({type:'deadline',soft_seconds:180})+'\n'+JSON.stringify({type:'delta',delta:'part'})+'\n'+JSON.stringify({type:'result',result:{ok:true}})+'\n');
+ const streamed=await streamRequest('/test',{},part=>parsedDelta+=part,()=>{},value=>parsedDeadline=value);
+ check(streamed.ok&&parsedDelta==='part'&&parsedDeadline.soft_seconds===180,'NDJSON parser lost deadline, delta or final result');window.fetch=originalFetch;
+ taskStreamDraft='';appendTaskStreamDelta('{"schema_version":1,"content":"První\\n');
+ appendTaskStreamDelta('druhý řádek"}');check(chatStream.textContent==='První\ndruhý řádek'&&!chatStream.textContent.includes('schema_version'),'Task stream exposes protocol JSON instead of content');chatStream.hidden=true;
+ projectRequest=read;
+
+ taskStreamDraft='';appendTaskStreamDelta('{"kind":"artifact-patch","edits":[{"before":"Old","after":"Nov');
+ appendTaskStreamDelta('ý"}]}');check(chatStream.textContent.includes('− Old')&&chatStream.textContent.includes('+ Nový')&&!chatStream.textContent.includes('artifact-patch'),'Patch stream lost readable before/after blocks');chatStream.hidden=true;
+ taskStreamDraft='';appendTaskStreamDelta('{"kind":"markdown-patch","changes":[{"block_id":"b00001","action":"replace","content":"První"},{"block_id":"b00002","action":"replace","content":"Druhý"}]}');
+ check(chatStream.textContent.includes('První')&&chatStream.textContent.includes('Druhý')&&!chatStream.textContent.includes('markdown-patch'),'Block stream hides later operations or exposes JSON');chatStream.hidden=true;
+ const filePlan={schema_version:1,intent:'revise',execution:'local-ollama',output_kind:'file-edit',source_kinds:['artifacts'],target_artifact_id:'doc'};
+ const editProjection={task_id:'edit-task',project_id:activeProject.id,thread_id:'edit-thread',created_at:new Date().toISOString(),state:'prepared',privacy:'project',prompt:{content:'Revise selected document',privacy:'project'},task_plan:filePlan,outcome:{kind:'artifact-draft',title:'Shared document',content:'# Proposed\n'}};
+ let editPreviews=0,editWrites=0,editRequests=[];
+ projectRequest=async(path,request)=>{
+  if(path==='/v1/tasks/file-edit/preview'){
+   editPreviews++;return {title:'Shared document',document:{id:'doc',title:'Shared document',body,metadata:{file:'content.md'}},body:request.body,diff:'--- original\n+++ proposed\n+'+request.body,pending_confirmation:false,confirmation:{project_id:activeProject.id,task_id:'edit-task',artifact_id:'doc',base_head:activeProject.head,body:request.body,approval_digest:'a'.repeat(64),approved:true}};
+  }
+  if(path==='/v1/tasks/file-edit/confirm'){
+   editRequests.push(structuredClone(request));
+   if(editRequests.length===1){editWrites++;throw Error('Lost reply after commit');}
+   check(JSON.stringify(editRequests[0])===JSON.stringify(request),'Retry changed the approved operation');
+   return {...editProjection,state:'completed',outcome:{kind:'artifact-link',artifact_id:'doc',title:'Shared document',project_commit:'edit-head'}};
+  }
+  return await read(path,request);
+ };
+ await openTaskFileEditEditor(editProjection);
+ check(!artifactEditorView.hidden&&artifactEditorDirty&&artifactEditorForm.elements.title.disabled&&artifactEditorForm.elements.body.value==='# Proposed\n','Proposal bypassed shared editor or lost target');
+ artifactEditorForm.elements.body.value='# Reviewed by user\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));
+ const rejectedSave=saveArtifactEditor(false);await tick();
+ const editDialog=document.querySelector('#task-file-edit-dialog'),approveEdit=document.querySelector('#task-file-edit-approved'),confirmEdit=editDialog.querySelector('[data-file-edit-choice=save]');
+ check(editDialog.open&&confirmEdit.disabled&&document.querySelector('#task-file-edit-diff').textContent.includes('Reviewed by user'),'Exact edited diff is not guarded by confirmation');
+ editDialog.querySelector('[data-file-edit-choice=cancel]').click();check(!await rejectedSave&&editWrites===0&&artifactEditorDirty,'Cancelled diff wrote content or discarded draft');
+ const firstEditSave=saveArtifactEditor(false);await tick();approveEdit.checked=true;approveEdit.dispatchEvent(new Event('change'));confirmEdit.click();
+ check(!await firstEditSave&&editWrites===1&&artifactEditorTaskEdit.confirmation&&artifactEditorForm.elements.body.readOnly,'Unknown save lost its exact retry or left approved body editable');
+ const previewsBeforeRetry=editPreviews;
+ check(await saveArtifactEditor(false)&&editWrites===1&&editRequests.length===2&&editPreviews===previewsBeforeRetry,'Retry generated another preview/write');
+ check(!artifactEditorDirty&&artifactEditorTaskEdit===null&&!artifactEditorForm.elements.title.disabled&&!artifactEditorForm.elements.body.readOnly&&activeProject.head==='edit-head','Saved file edit did not reset shared editor');
+
+ projectRequest=async(path,request)=>{
+  if(path==='/v1/tasks/file-edit/preview'){
+   check(!Object.hasOwn(request,'body'),'Patch editor sent patch syntax as document body');
+   return {title:'Shared document',document:{id:'doc',title:'Shared document',body,metadata:{file:'content.md'}},body:'# Patched document\n',diff:'-Old\n+New',pending_confirmation:false,confirmation:{project_id:activeProject.id,task_id:'patch-task',artifact_id:'doc',base_head:activeProject.head,body:'# Patched document\n',approval_digest:'b'.repeat(64),approved:true}};
+  }
+  return await read(path,request);
+ };
+ const patchProjection={...editProjection,task_id:'patch-task',task_plan:{...filePlan,edit_format:'patch'},outcome:{kind:'artifact-patch',title:'Shared document',edits:[{before:'Old',after:'New'}]}};
+ renderTaskOutcome(patchProjection);check(chatMessages.textContent.includes('Návrh změn dokumentu')&&chatMessages.textContent.includes('− Old'),'Patch has no review action or readable changes');
+ const blockProjection={...patchProjection,task_id:'block-task',task_plan:{...filePlan,edit_format:'blocks'},outcome:{kind:'markdown-patch',title:'Shared document',document_hash:'sha256:'+'a'.repeat(64),changes:[{action:'insert_after',block_id:'b00001',content:'Nová položka',destination_id:null}]}};
+ renderTaskOutcome(blockProjection);check(chatMessages.textContent.includes('insert_after b00001')&&chatMessages.textContent.includes('Nová položka'),'Block proposal has no readable operations or shared review action');
+ await openTaskFileEditEditor(patchProjection);check(artifactEditorForm.elements.body.value==='# Patched document\n'&&artifactEditorDirty,'Patch did not open the assembled Markdown in shared editor');
+ const leavePatch=canLeaveArtifactEditor();await tick();document.querySelector('[data-leave-choice=discard]').click();await leavePatch;
+ check(!artifactEditorTaskEdit&&!artifactEditorDirty&&editWrites===1,'Discarded patch wrote content or kept editor binding');
+ projectRequest=read;
+ const scopeArtifacts=currentArtifacts,scopeOutput=document.querySelector('#task-output-kind').value,scopeMode=document.querySelector('#chat-mode').value;
+ currentArtifacts=[{id:'doc',kind:'document',title:'Shared document'}];document.querySelector('#chat-mode').value='orchestration';document.querySelector('#task-output-kind').value='file-edit';document.querySelector('#task-edit-format').value='blocks';
+ projectRequest=async(path,request)=>{check(path==='/v1/artifacts/editor/open'&&request.expected_head===activeProject.head,'Scope uses an unpinned document');return {markdown_outline:[{block_id:'b00003',title:'Selected chapter',level:2}],markdown_scope_error:null};};
+ renderTaskFileEditTargets();document.querySelector('#task-edit-target').value='doc';taskFileEditScopeKey=null;await loadTaskFileEditScope();
+ check(document.querySelector('#task-edit-scope').options.length===2&&!document.querySelector('#task-edit-scope').disabled&&taskFileEditScopeKey===activeProject.id+':'+activeProject.head+':doc','Pinned chapter scope did not load');
+ check(selectedMarkdownEditScope()===null,'Small document cannot use its complete context');
+ taskFileEditScopeKey=null;projectRequest=async()=>({markdown_outline:[{block_id:'b00003',block_ids:['b00003','b00004'],title:'Vložení pod milník',level:1}],markdown_scope_error:null,markdown_requires_scope_choice:true});await loadTaskFileEditScope();
+ let missingScopeRejected=false;try{selectedMarkdownEditScope();}catch(error){missingScopeRejected=error.message.includes('velkého dokumentu');}
+ check(missingScopeRejected&&document.querySelector('#task-edit-scope').value==='__choose_scope__','Large document silently defaults to full context');
+ document.querySelector('#task-edit-scope').value='["b00003","b00004"]';
+ check(JSON.stringify(selectedMarkdownEditScope())==='["b00003","b00004"]','Narrow milestone insertion scope is not preserved');
+ document.querySelector('#task-edit-scope').value='';check(selectedMarkdownEditScope()===null,'Explicit full-document scope is unavailable');
+ taskFileEditScopeKey=null;projectRequest=async()=>{throw Error('Scope unavailable');};await loadTaskFileEditScope();
+ check(taskFileEditScopeKey===null&&document.querySelector('#task-edit-scope').disabled,'Scope failure silently falls back to the whole document');
+ currentArtifacts=scopeArtifacts;document.querySelector('#task-output-kind').value=scopeOutput;document.querySelector('#chat-mode').value=scopeMode;projectRequest=read;renderTaskFileEditTargets();
  const offerPicker=selectedRunOffer;selectedRunOffer=()=>null;showWorkspacePage(settingsView);draft.value='Show chat result';
  promptForm.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();selectedRunOffer=offerPicker;
  check(!projectView.hidden&&!document.querySelector('#chat-panel').hidden&&document.querySelector('#chats-tab').getAttribute('aria-selected')==='true','Submitting from standalone page leaves results hidden');

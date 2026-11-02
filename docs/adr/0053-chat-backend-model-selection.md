@@ -85,8 +85,9 @@ role/akce/výstupního formátu. Server vrátí pouze kompatibilní nabídky:
 1. bez volby backendu řadí modely podle explicitní preference, nikoli podle
    odhadované kvality;
 2. backend-first omezí modely na spustitelné nabídky tohoto bindingu;
-3. canonical-model-first omezí backendy na nabídky explicitně mapované na
-   tento model;
+3. canonical-model-first omezí kompatibilní kombinace na nabídky explicitně
+   mapované na tento model; ostatní dostupné backendy však zůstávají v seznamu
+   dosažitelné pro přepnutí;
 4. po zvolení backendu i modelu musí zbýt právě jedna nabídka. Pokud stejný
    backend nabízí více protokolů nebo modifikátorů, UI vyžádá explicitní
    variantu; první v pořadí se automaticky nevybere.
@@ -98,6 +99,14 @@ jediný desktop/web widget; providerové větve smí být pouze v serverových
 adaptérech a projekci, ne v pravidlech formuláře.
 Projekce voleb se načítá při každém otevření nebo obnovení chatu; návštěva
 Nastavení nesmí být skrytým předpokladem pro zobrazení backendů a modelů.
+
+Upřesnění 1. 11. 2026 podle hlášení uživatele: model jiného poskytovatele
+nesmí skrýt Ollamu ani jiný spustitelný backend. Seznam backendů vždy obsahuje
+všechny nabídky splňující aktuální režim, dostupnost a capabilities. Přepnutí
+na jiný backend vymaže nekompatibilní model; žádný model ani běh se přitom
+automaticky nevybere či nespustí. Ověřeno izolovaným Qt/WebEngine testem
+výběru cizího modelu, přímého přepnutí na Ollamu a následného výběru jejího
+modelu. Katalog, konfigurace providerů a crash boundaries se nemění.
 
 ### Preference
 

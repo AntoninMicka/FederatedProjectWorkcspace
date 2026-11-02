@@ -299,6 +299,43 @@ je `aria-live="off"`; samostatný stručný stav je `aria-live="polite"`, aby
 čtečka neoznamovala každý token. Zavření klienta může přerušit callback, ale
 nemění je na potvrzené zrušení providerového běhu.
 
+### Doplnění 1. 11. 2026 — stream lokálních explicitních úloh
+
+Na výslovný požadavek uživatele se existující Ollama NDJSON transport používá
+rovněž v lokálním task routeru v UI, včetně úprav Markdown vstupu
+AI-FILE-EDIT-01. `stream:true` zůstává součástí request digestu, původní run
+nelze zaměnit za celistvý ani opakovat po přerušení. Delty nejsou publikace;
+TaskOutcomes vznikne až po validním dokončení a kontrole uzavřeného výsledku.
+Creator/opponent a externí backendy tato změna nerozšiřuje.
+
+Backend řídí celkový čas: soft 180 s, výchozí hard 2× soft, výslovné prodloužení
+nejpozději do hard hranice povolí celkem 10× soft od dispatch. Prodloužení není
+posuvný ani opakovaně rostoucí timeout. Uživatelská volba a heartbeat jsou
+volatile, owner/project/run scoped, s aktuální kontrolou oprávnění. Nezavádí
+se další durable autorita. Ukončení nebo hard limit přeruší lokální socket;
+neúplný výsledek po dispatch zůstává `unknown` v OllamaRuns. Přerušení socketu
+není důkaz zrušení vzdáleného výpočtu. Pád procesu zachovává původní recovery
+kontrakt. Po validním finálním rámci se deadline uzavře před měřením runtime
+metrik; žádná dodatečná telemetrie nemůže takto dokončený běh zrušit.
+Podrobnosti a ruční akceptace: [úpravy dokumentu](../ai-file-edit.md).
+
+### Doplnění 1. 11. 2026 — přesný patch vstupního Markdownu
+
+Uživatel požádal o patch místo regenerování celého dokumentu, s povinností pro
+velké soubory. Nová role `task-output-file-edit-patch-v1` vrací pouze uzavřený
+`artifact-patch` s přesnými bloky `before/after`. Cíl a výchozí revizi určuje
+připnutý plán a Context Manifest; model si je nemůže změnit. Od 32 KiB UTF-8
+nebo 500 řádků je patch vynucen před dispatch i při volbě celého těla.
+Nejednoznačné, chybějící a překrývající se kotvy se odmítají; neprovádí se
+fuzzy merge, vykonávání příkazů ani obecná aplikace cest z modelového výstupu.
+
+Sestavení probíhá v paměti proti neměnnému původnímu dokumentu, následované
+validací celého výsledku a graphu. Schválení a zápis zůstávají v existujícím
+sdíleném editoru a Workspace transakci. Trvalý souhlas připíná výsledné tělo,
+nikoli opakovatelný příkaz pro aplikaci patche; crash/retry proto nemění dosavadní
+hranice journalu a indexu. Detaily formátu, limitů a akceptace popisují
+[úpravy dokumentu](../ai-file-edit.md#patch-namísto-celého-dokumentu).
+
 ### Řízené webové hledání přes SearXNG — F-M3-SEARCH-01
 
 Webové hledání je samostatná aplikační capability, nikoli capability LLM

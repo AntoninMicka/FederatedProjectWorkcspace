@@ -188,7 +188,7 @@ class Handler(BaseHTTPRequestHandler):
             lane.release()
 
     def do_POST(self):
-        lane_name = ('availability_lane' if self.path == '/v1/chat/availability'
+        lane_name = ('availability_lane' if self.path in {'/v1/chat/availability', '/v1/tasks/run-control'}
                      else 'telemetry_lane' if self.path == '/v1/node-telemetry/status'
                      else 'review_lane' if self.path in {
                          '/v1/roadmap-refinement/list',

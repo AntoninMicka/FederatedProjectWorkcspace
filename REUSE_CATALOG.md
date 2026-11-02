@@ -921,3 +921,58 @@ agent runner ani projektový writer nejsou potřebné. Frontové flags se odvozu
 z existujícího review journalu, nepřidává se druhý completion writer.
 Hardlinky/symlinky míří pouze do exportní cache, nikdy do kanonického Gitu.
 Recovery: [ADR 0062](docs/adr/0062-pinned-queue-handoff.md).
+
+AI-FILE-EDIT-01 **reuse/adaptuje** `ExplicitTaskPlan`, Context Manifest,
+`TaskOutcomes`, sdílený raw editor, `Artifacts.save` a `Workspace.transact`.
+Nový modul váže přesný diff na původní ID/revizi a ukládá schválený požadavek
+ve stávajícím result slotu úlohy. Nevzniká další writer, schema databáze ani
+plánovací úložiště. Samostatný editor nebo přímý zápis modelu by obcházely
+stávající ochranu změn a native recovery. Rozsah a obnova:
+[úprava vybraného dokumentu](docs/ai-file-edit.md).
+
+Doplnění AI-FILE-EDIT-01: **reuse/adapt** existujícího Ollama NDJSON parseru,
+run journalu, task routeru, streamované HTTP projekce a společného chat progress
+UI. `task_stream` přidává pouze volatile owner-scoped deadline a rozhodnutí
+uživatele; hard limit přeruší původní socket. Nevzniká druhý provider client,
+durable writer, scheduler ani retry mechanismus. Viz
+[časové limity](docs/ai-file-edit.md#průběžný-přenos-a-časové-limity).
+
+AI-FILE-EDIT-01 patch doplnění **reuse/adaptuje** uzavřený AI outcome, role a
+Context Manifest, sdílený editor, task graph validátor, TaskOutcomes a původní
+native writer. Malá pure funkce sestavuje přesné neprotínající se změnové bloky
+proti původnímu tělu; nejde o nový merge algoritmus ani obecný patch executor.
+Fuzzy aplikace, shell/`git apply` nad modelovým vstupem a další závislost byly
+odmítnuty: model nesmí vybírat cesty ani přepisovat nejbližší podobný úsek.
+Schválení nadále váže výsledné tělo, takže recovery nepřidává druhou aplikaci
+patche. [Kontrakt](docs/ai-file-edit.md#patch-namísto-celého-dokumentu).
+
+AI-FILE-EDIT-01 blokové editace **reuse/adaptují** Context Manifest a jeho
+projekce, Ollama Structured Outputs, AITaskOutcome, společný editor/diff,
+TaskOutcomes a native writer s obnovou dle ADR 0003. Nový omezený scanner
+určuje rozsahy nadpisů, odstavců, seznamů a fences bez serializace celého AST.
+Přesun kopíruje původní text. Textové kotvy neposkytují identitu bloků;
+obecný AST serializer, fuzzy aplikace, nový journal a další transakční
+engine byly odmítnuty. Bez nové závislosti či převzetí externího kódu.
+[Rozhodnutí a limity](docs/adr/0064-markdown-block-patch-engine.md).
+
+Revize blokové role v2 **adaptuje** existující Ollama JSON schéma a připnutou
+projekci Context Manifestu pro výčet povolených ID a dokumentového hashe.
+Nepřidává další výběr cíle, journal, provider ani opravování výstupu modelu;
+autorizace a sémantická validace zůstávají v původním aplikátoru. Role v1
+zachovává původní schéma pro dřívější běhy.
+
+Izolované self-ladění **reuse/adaptuje** ProjectCreation/Artifacts pro
+syntetické fixtures, ContextBuilder, OllamaAdapter/OllamaRuns, registrované
+role, RunDeadline a původní validaci bloků i celého grafu. Přenosné části
+dočasných ručních smoke skriptů byly nahrazeny omezenou opakovatelnou kampaní.
+Model navrhuje pouze patch či omezený profil; deterministická kritéria,
+autorizační rozsah, source kód a produkční nastavení nemění. Bez přenosu
+cizího kódu, dalšího providera, writeru či modelového soudce. Reuse katalog
+nepřinesl důvod nahrazovat existující execution/recovery mechanismy.
+[Kontrakt a příkaz](docs/markdown-self-tuning.md).
+
+Oprava velkého finálního Ollama rámce **adaptuje** stávající bounded NDJSON
+reader a normalizaci výsledku. Běžný limit rámce se nemění; výjimka pro
+ověřené finální context tokeny sdílí dosavadní celkový limit přenosu a tokeny
+se nezachovávají. Bez nového transportu, závislosti, opakování modelu nebo
+persistentní vrstvy. [Kontrakt](docs/ai-file-edit.md#velikost-providerových-rámců).

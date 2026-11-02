@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
+from spikes.task_stream_ui import TASK_STREAM_JS
+from spikes.task_file_edit_ui import FILE_EDIT_HTML, FILE_EDIT_CSS, FILE_EDIT_JS
 from spikes.artifact_history import ArtifactHistory
 from spikes.conflict_resolution import ConflictResolution
 from spikes.artifact_actions import ArtifactActions
@@ -1182,7 +1184,10 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 </fieldset></div></details>
 <label class="prompt-control" for="task-action"><span>Akce</span><select id="task-action"><option value="answer">Odpovědět</option><option value="search">Vyhledat na webu</option></select></label>
 <span class="prompt-route-arrow" aria-hidden="true">→</span>
-<label class="prompt-control" for="task-output-kind"><span>Výsledek</span><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option></select></label>
+<label class="prompt-control" for="task-output-kind"><span>Výsledek</span><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option><option value="file-edit">Upravit vstup</option></select></label>
+<label class="prompt-control" id="task-edit-target-control" for="task-edit-target" hidden><span>Soubor</span><select id="task-edit-target"><option value="">Vyberte Markdown dokument</option></select></label>
+<label class="prompt-control" id="task-edit-format-control" for="task-edit-format" hidden title="Od 32 KiB nebo 500 řádků je patch povinný."><span>Úprava</span><select id="task-edit-format"><option value="blocks">Změny bloků</option><option value="patch">Textový patch (starší)</option><option value="full">Celý obsah (jen malé soubory)</option></select></label>
+<label class="prompt-control" id="task-edit-scope-control" for="task-edit-scope" hidden><span>Rozsah</span><select id="task-edit-scope"><option value="">Celý dokument</option></select></label>
 </div>
 <label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
 <label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
@@ -2212,6 +2217,7 @@ function sidebarItemMenu(label,actions,legacyClass=''){
 }
 function renderSidebarArtifacts(items){
  currentArtifacts=items;
+ renderTaskFileEditTargets();
  sidebarArtifacts.replaceChildren();
  sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Zatím tu nejsou žádné podklady.';
  for(const item of items){
@@ -2338,6 +2344,7 @@ function clearProject(){
  ++viewRequest;++chatLoadRevision;++chatSelectionRevision;
  resetProjectConflicts();
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
+ resetTaskFileEditEditor();document.querySelector('#task-edit-target').value='';
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();clearJulia();clearRoadmapReview();
@@ -2633,7 +2640,7 @@ function createRawEditorWidget(root,{textarea,onInput}){
 }
 const artifactEditorForm=document.querySelector('#artifact-editor-form');
 const artifactEditorStatus=document.querySelector('#artifact-editor-status');
-let artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false,artifactDeletePreview=null,artifactDeleteOperation=null;
+let artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false,artifactDeletePreview=null,artifactDeleteOperation=null,artifactEditorTaskEdit=null;
 const artifactRawWidget=createRawEditorWidget(document.querySelector('#artifact-raw-widget'),{textarea:artifactEditorForm.elements.body,onInput:()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactRawWidget.dirty||artifactEditorState()!==artifactEditorBaseline;}});
 const taskPlanEditor=document.querySelector('#task-plan-editor'),taskPlanBlocks=document.querySelector('#task-plan-blocks'),taskPlanStatus=document.querySelector('#task-plan-editor-status'),artifactRawRoot=document.querySelector('#artifact-raw-widget');
 let taskPlanMode='structured';
@@ -2697,7 +2704,7 @@ async function resolveEditorLeave(label,save,discard){
 }
 async function canLeaveArtifactEditor(){
  if(artifactEditorView.hidden||(!artifactEditorDirty&&!artifactEditorAttempt))return true;
- return resolveEditorLeave('Dokument',saveArtifactEditor,()=>{artifactEditorDirty=false;artifactEditorAttempt=null;artifactEditorItem=null;artifactEditorView.hidden=true;});
+ return resolveEditorLeave('Dokument',saveArtifactEditor,()=>{artifactEditorDirty=false;artifactEditorAttempt=null;artifactEditorItem=null;artifactEditorView.hidden=true;resetTaskFileEditEditor();});
 }
 async function canLeaveWorkspaceEditors(){
  if(editorLeavePending)return false;
@@ -2706,14 +2713,15 @@ async function canLeaveWorkspaceEditors(){
  if(allowed){juliaEditor.hidden=true;if(!projectConflicts.hidden)resetProjectConflicts();}
  return allowed;
 }
-function fillArtifactEditor(doc,isNew=false){
+function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
+ resetTaskFileEditEditor();
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
  document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
  artifactEditorBaseline=artifactEditorState();artifactEditorDirty=false;artifactEditorAttempt=null;const properties=artifactEditorForm.querySelector('.workspace-file-properties');if(properties)properties.open=isNew;
- const taskPlan=Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false}).then(()=>configureTaskPlanEditor(taskPlan));
+ const taskPlan=!rawOnly&&Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false}).then(()=>configureTaskPlanEditor(taskPlan));
 }
 async function closeArtifactEditor(){
  const item=artifactEditorItem;
@@ -2754,6 +2762,7 @@ function openMainTodoEditor(){
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
 artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
 async function saveArtifactEditor(navigate=true){
+ if(artifactEditorTaskEdit)return saveTaskFileEditEditor(navigate);
  if(!activeProject||!artifactEditorItem||!artifactEditorForm.reportValidity())return false;const button=artifactEditorForm.querySelector('button[type="submit"]');
  if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return false;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return false;}}}
  if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return false;}const fields=new FormData(artifactEditorForm);
@@ -5127,7 +5136,7 @@ function waitForVisiblePaint(){
 }
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
-async function streamRequest(path,request,onDelta,onStatus=()=>{}){
+async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=>{}){
  const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
  if(!response.ok)throw Object.assign(new Error('Streamovaný požadavek byl odmítnut.'),{status:response.status});
@@ -5137,6 +5146,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{}){
    if(!line)continue;const event=JSON.parse(line);
    if(event.type==='delta' && typeof event.delta==='string')onDelta(event.delta);
    else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
+   else if(event.type==='deadline')onDeadline(event);
    else if(event.type==='result')result=event.result;
    else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status});
    else throw new Error('Neplatná událost streamu.');}
@@ -5433,6 +5443,7 @@ function updatePromptInputSummary(){
  const publicWeb=document.querySelector('#task-source-public')?.checked;
  const artifactIds=new Set(artifacts?[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value):[]);
  if(document.querySelector('#task-source-current-file-input')?.checked&&selectedArtifact)artifactIds.add(selectedArtifact);
+ const editTarget=selectedTaskFileEditTarget();if(editTarget)artifactIds.add(editTarget);
  const artifactCount=artifactIds.size;
  const publicCount=publicWeb?document.querySelectorAll('#task-public-source-list input:checked').length:0;
  const count=searching?1:(conversation?1:0)+artifactCount+publicCount;
@@ -5645,7 +5656,7 @@ function renderSearchAutonomy(container,projection,query,parentSearchId,workflow
 function taskPlanSummary(plan){
  if(!plan)return '';
  const sources={conversation:'konverzace',artifacts:'interní artefakty','public-web':'veřejné zdroje'};
- const outputs={conversation:'konverzace',document:'dokument',presentation:'prezentace'};
+ const outputs={conversation:'konverzace',document:'dokument',presentation:'prezentace','file-edit':'úprava vstupu'};
  const execution={'local-ollama':'lokální Ollama','external-openai':'externí OpenAI','external-atlascloud':'externí AtlasCloud'};
  return `Zdroje: ${plan.source_kinds.map(value=>sources[value] || value).join(', ')} · výstup: ${outputs[plan.output_kind] || plan.output_kind} · provedení: ${execution[plan.execution] || plan.execution}`;
 }
@@ -5763,10 +5774,10 @@ function renderTaskOutcome(projection,showPrompt=true){
   }
   const card=document.createElement('section');card.className='task-outcome'+(projection.temporary?'':' terminal');
   const heading=document.createElement('h3');
-  heading.textContent=outcome.kind==='artifact-draft'?'Návrh artefaktu':
+  heading.textContent=['artifact-patch','markdown-patch'].includes(outcome.kind)?'Návrh změn dokumentu':outcome.kind==='artifact-draft'?'Návrh artefaktu':
    outcome.kind==='presentation-draft'?'Návrh prezentace':
    outcome.kind==='presentation-link'?'Uložená prezentace':
-   outcome.kind==='artifact-link'?'Vytvořený artefakt':
+   outcome.kind==='artifact-link'?(projection.task_plan?.output_kind==='file-edit'?'Upravený dokument':'Vytvořený artefakt'):
    ['web-search','web-search-answer'].includes(outcome.kind)?'Návrh webového hledání':'Externí volání';card.append(heading);
   if(projection.task_plan){const plan=document.createElement('small');plan.textContent=taskPlanSummary(projection.task_plan);card.append(plan);}
   if(outcome.kind==='presentation-draft'){
@@ -5817,10 +5828,17 @@ function renderTaskOutcome(projection,showPrompt=true){
     `${outcome.operation==='create'?'Vytvořeno':'Aktualizováno'} v revizi ${outcome.project_commit.slice(0,12)} · digest ${outcome.deck_sha256.slice(0,12)}`;card.append(detail);
    const actions=document.createElement('div');actions.className='task-actions';
    actions.append(taskButton('Otevřít prezentaci',()=>openPresentationEditor(outcome.artifact_id)));card.append(actions);
-  }else if(outcome.kind==='artifact-draft'){
+  }else if(outcome.kind==='artifact-draft'||outcome.kind==='artifact-patch'||outcome.kind==='markdown-patch'){
    const title=document.createElement('strong');title.textContent=outcome.title;card.append(title);
-   const body=document.createElement('pre');body.textContent=outcome.content;card.append(body);
+   if(projection.file_edit_context?.schema==='fpw-roadmap-append-context-v1'){const scope=document.createElement('p');scope.textContent='Přidání úkolů: model dostal přesné místo vložení a strukturu plánu; historické popisy nebyly odeslány.';card.append(scope);}
+   const body=document.createElement('pre');
+   if(outcome.kind==='markdown-patch')body.textContent=outcome.changes.map(change=>change.action+' '+change.block_id+(change.destination_id?' → '+change.destination_id:'')+'\\n'+(change.content??'')).join('\\n\\n');
+   else if(outcome.kind==='artifact-patch')body.textContent=outcome.edits.map(edit=>'− '+edit.before+'\\n+ '+edit.after).join('\\n\\n');
+   else body.textContent=outcome.content;card.append(body);
    const actions=document.createElement('div');actions.className='task-actions';
+   if(projection.task_plan?.output_kind==='file-edit'){
+    actions.append(taskButton(projection.file_edit_approval?'Dokončit potvrzené uložení':'Zkontrolovat úpravy ve společném editoru',()=>openTaskFileEditEditor(projection)),taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);chatMessages.append(card);return;
+   }
    actions.append(taskButton('Uložit do projektu',async event=>{
     event.currentTarget.disabled=true;chatOperationStatus.textContent='Ukládám potvrzený artefakt…';
     try{const projectId=activeProject.id;await projectRequest('/v1/tasks/artifact',{
@@ -6349,8 +6367,9 @@ function renderChatRunSelectors(){
  const backend=document.querySelector('#chat-run-adapter'),model=document.querySelector('#chat-run-model');
  if(!backend||!model)return;
  const offers=runnableModelOffers(),models=new Map((modelSelectionProjection?.models||[]).map(item=>[item.model_id,item.display_name]));
- let backendOffers=chatRunFilter.model?offers.filter(item=>runOfferModelKey(item)===chatRunFilter.model):offers;
- const backendIds=[...new Set(backendOffers.map(item=>item.adapter_id))].sort((a,b)=>(runBackendNames[a]||a).localeCompare(runBackendNames[b]||b));
+ // Keep backend switching reachable even with another provider's model selected.
+ // The change handler clears only an incompatible model selection.
+ const backendIds=[...new Set(offers.map(item=>item.adapter_id))].sort((a,b)=>(runBackendNames[a]||a).localeCompare(runBackendNames[b]||b));
  if(chatRunFilter.backend&&!backendIds.includes(chatRunFilter.backend))chatRunFilter.backend='';
  backend.replaceChildren(new Option('Vyberte backend',''));
  for(const id of backendIds)backend.append(new Option(runBackendNames[id]||id,id));
@@ -6443,7 +6462,7 @@ function refreshChatModeControls(){
   if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
  }
- updatePromptInputSummary();
+ renderTaskFileEditTargets();updatePromptInputSummary();
 }
 document.querySelector('#chat-run-adapter').addEventListener('change',event=>{
  chatRunFilter.backend=event.currentTarget.value;
@@ -7012,6 +7031,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   const usePublic=searching||document.querySelector('#task-source-public').checked;
   const selectedArtifactIds=[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value);
   const artifactIds=includeSelectedArtifacts ? selectedArtifactIds : [];
+  const editing=document.querySelector('#task-output-kind').value==='file-edit',editTarget=selectedTaskFileEditTarget();
+  if(editing){if(adapter!=='ollama'||!editTarget){chatOperationStatus.textContent='Pro úpravu vstupu vyberte cílový Markdown dokument a Ollama backend.';return;}artifactIds.push(editTarget);}
   if(useCurrentFile)artifactIds.push(selectedArtifact);
   const uniqueArtifactIds=[...new Set(artifactIds)],useArtifacts=uniqueArtifactIds.length>0;
   const publicRunIds=usePublic&&!searching ? [...document.querySelectorAll('#task-public-source-list input:checked')]
@@ -7036,7 +7057,14 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   task_plan:{schema_version:1,source_kinds:sourceKinds,
    output_kind:document.querySelector('#task-output-kind').value,
    execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':'external-atlascloud',
-   search_query:searchQuery,public_source_run_ids:publicRunIds}};}
+   search_query:searchQuery,public_source_run_ids:publicRunIds}};
+  if(editing){pendingChatRequest.task_plan.target_artifact_id=editTarget;pendingChatRequest.task_plan.edit_format=document.querySelector('#task-edit-format').value;
+   if(pendingChatRequest.task_plan.edit_format==='blocks'){
+    try{const scope=selectedMarkdownEditScope();if(scope)pendingChatRequest.task_plan.edit_block_ids=scope;}
+    catch(error){pendingChatRequest=null;chatOperationStatus.textContent=error.message;return;}
+   }
+  }
+ }
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
  const liveProgress=startChatProgress(adapter==='ollama'?
   'Ollama zpracovává explicitní úkol…':'Připravuji explicitní externí náhled…');
@@ -7044,8 +7072,12 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   liveProgress.set(pendingChatRequest?.task_plan?.search_query ?
    'Vyhledávám a model vyhodnocuje výsledky…':'Model přemýšlí…');},250);
  try{
+  taskStreamDraft='';chatStream.textContent='';
   await waitForVisiblePaint();
-  const result=await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
+  const result=adapter==='ollama' ? await streamRequest('/v1/tasks/route-stream',pendingChatRequest,
+   delta=>appendTaskStreamDelta(delta),
+   status=>liveProgress.set(status==='connecting'?'Připojuji se k Ollamě…':'Model zpracovává úlohu…'),
+   deadline=>updateTaskRunDeadline(deadline,pendingChatRequest)) : await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
   replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
   chatOperationStatus.textContent=result.projection.temporary ?
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
@@ -7064,7 +7096,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    (staleSelection?' Zadání zůstalo zachováno; backend a model vyberte znovu.':
    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
  }
- finally{clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
+ finally{clearTaskRunDeadline();chatStream.hidden=true;clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
   finishChatAutoFollow();}
 });
 async function assignActiveThread(){
@@ -7664,8 +7696,9 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
 refreshImageAdapter();
 if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
-CSS += PAGE_LAYOUT_CSS
-JS += ADMIN_JS + PAGE_LAYOUT_JS
+HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script src="/app.js"></script>')
+CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
+JS += ADMIN_JS + FILE_EDIT_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
@@ -7749,8 +7782,9 @@ class DesktopHandler(Handler):
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
-        '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
+        '/v1/tasks/route', '/v1/tasks/route-stream', '/v1/tasks/run-control', '/v1/tasks/list', '/v1/tasks/cancel',
         '/v1/tasks/artifact', '/v1/tasks/presentation/confirm',
+        '/v1/tasks/file-edit/preview', '/v1/tasks/file-edit/confirm',
         '/v1/tasks/external/preview',
         '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
         '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
@@ -8332,6 +8366,12 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_confirm(request))
             if self.path == '/v1/external/cancel' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_cancel(request))
+            if self.path == '/v1/tasks/run-control':
+                from spikes.task_stream import decide
+                return self.reply(200, decide(self.server.chat_service, request))
+            if self.path == '/v1/tasks/route-stream' and isinstance(request, dict):
+                from spikes.task_stream import serve
+                return serve(self, request)
             if self.path == '/v1/tasks/route' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_route(request))
             if (self.path == '/v1/tasks/list' and isinstance(request, dict)
@@ -8342,6 +8382,10 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_cancel(request))
             if self.path == '/v1/tasks/artifact' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_publish_artifact(request))
+            if self.path == '/v1/tasks/file-edit/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_preview_file_edit(request))
+            if self.path == '/v1/tasks/file-edit/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_confirm_file_edit(request))
             if (self.path == '/v1/tasks/presentation/confirm'
                     and isinstance(request, dict)):
                 return self.reply(200,

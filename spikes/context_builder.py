@@ -72,6 +72,8 @@ class Target:
 class ProjectInput:
     entity_id: str
     required: bool = True
+    projection: str | None = None
+    block_ids: tuple | None = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +213,9 @@ class ContextBuilder:
             uuid(choice.entity_id)
             require(type(choice.required) is bool and choice.entity_id not in seen,
                     'Duplicate or invalid project input')
+            require(choice.block_ids is None or choice.projection in {'fpw-markdown-block-context-v1',
+                                                                      'fpw-markdown-block-context-v2'},
+                    'Block scope requires a Markdown context projection')
             seen.add(choice.entity_id)
             require(choice.entity_id in authority.readable_entities,
                     'Input is not authorized for this user')
@@ -224,10 +229,26 @@ class ContextBuilder:
             candidates = sorted(p for p in files if p.startswith(prefix) and not p.endswith('/metadata.json'))
             require(len(candidates) == 1, 'Project input has no unique content')
             path, raw = candidates[0], files[candidates[0]]
-            total += len(raw); require(total <= MAX_CONTEXT, 'Context exceeds 16 MiB')
-            records.append(dict(input_id=choice.entity_id, source='project', required=choice.required,
-                                path=path, privacy=meta['privacy'], size=len(raw), sha256=_digest(raw)))
-            parts.append(dict(input_id=choice.entity_id, content_b64=base64.b64encode(raw).decode()))
+            sent = raw
+            record = dict(input_id=choice.entity_id, source='project', required=choice.required,
+                          path=path, privacy=meta['privacy'], size=len(raw), sha256=_digest(raw))
+            if choice.projection is not None:
+                from spikes.roadmap_append_context import SCHEMA, build
+                from spikes.markdown_patch import SCHEMAS as MARKDOWN_SCHEMAS, build as markdown_context
+                require(choice.projection == SCHEMA or choice.projection in MARKDOWN_SCHEMAS,
+                        'Unknown project context projection')
+                if choice.projection in MARKDOWN_SCHEMAS:
+                    projection = markdown_context(files, entities, self.project_id, head, choice.entity_id, run_id,
+                                                  choice.block_ids, schema=choice.projection)
+                else:
+                    require(choice.block_ids is None, 'Block scope requires Markdown projection')
+                    projection = build(files, entities, self.project_id, head, choice.entity_id, run_id)
+                require(projection is not None, 'Roadmap append projection is unavailable')
+                sent = projection['payload']
+                record['projection'] = projection['metadata']
+            total += len(sent); require(total <= MAX_CONTEXT, 'Context exceeds 16 MiB')
+            records.append(record)
+            parts.append(dict(input_id=choice.entity_id, content_b64=base64.b64encode(sent).decode()))
         for choice in public_source_inputs:
             require(isinstance(choice, PublicSourceInput), 'Invalid public source input')
             uuid(choice.run_id)
@@ -370,6 +391,24 @@ class ContextBuilder:
                     raw = files.get(item['path'])
                     require(raw is not None and len(raw) == item['size']
                             and _digest(raw) == item['sha256'], 'Project input changed')
+                    if item.get('projection') is not None:
+                        from spikes.roadmap_append_context import build
+                        from spikes.markdown_patch import SCHEMAS as MARKDOWN_SCHEMAS, build as markdown_context
+                        metadata = item['projection']
+                        require(metadata.get('schema') in MARKDOWN_SCHEMAS | {'fpw-roadmap-append-context-v1'},
+                                'Unknown project context projection')
+                        if metadata['schema'] in MARKDOWN_SCHEMAS:
+                            projection = markdown_context(files, validate_snapshot(files), self.project_id,
+                                manifest['project_commit'], item['input_id'], manifest['run_id'],
+                                metadata.get('selected_block_ids'), schema=metadata['schema'])
+                        else:
+                            projection = build(files, validate_snapshot(files), self.project_id,
+                                manifest['project_commit'], item['input_id'], manifest['run_id'])
+                        require(projection is not None and projection['metadata'] == item['projection'],
+                                'Project projection changed')
+                        parts = json.loads(prepared.payload)['inputs']
+                        require(next(p['content_b64'] for p in parts if p['input_id'] == item['input_id']) ==
+                                base64.b64encode(projection['payload']).decode(), 'Project projection payload changed')
                 require(item['privacy'] != 'local-only' or target.boundary == 'same-node',
                         'local-only requires same-node execution')
             require(self.workspace.git.head() == manifest['project_commit'],
