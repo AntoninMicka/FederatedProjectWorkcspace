@@ -7,7 +7,7 @@ import unittest
 from uuid import uuid4
 
 from spikes.metadata import ValidationError
-from spikes.plan_item_editor import PlanItems, item_span
+from spikes.plan_item_editor import PlanItems, item_span, subtree_span
 from spikes.projects import Projects
 from tests import test_artifact_actions as artifact_tests
 
@@ -159,12 +159,288 @@ class PlanItemTests(unittest.TestCase):
         self.assertEqual(self.head, Projects(self.node).repository(self.project).head())
 
 
+class PlanStructureTests(unittest.TestCase):
+    def setUp(self):
+        artifact_tests.ArtifactActionTests.setUp(self)
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact,
+            base_head=self.head, title='Roadmapa', body=BODY, new=False), str(uuid4()))['commit_id']
+        self.editor = PlanItems(self.node)
+        self.git = Projects(self.node).repository(self.project)
+        self.path = f'artifacts/{self.artifact}/content.md'
+
+    def create(self, parent='BATCH-01', operation=None, **changes):
+        request = dict(project_id=self.project, parent_id=parent, expected_head=self.head, task_id=None,
+                       title='Nová', description='', depends_on=[]) | changes
+        return self.editor.create(request, operation or str(uuid4()))
+
+    def nodes(self, head):
+        return {n['id']: n for n in self.editor.plan(self.git.snapshot(head), self.project, head)[0]['nodes']}
+
+    def text(self, head):
+        return self.git.snapshot(head)[self.path].decode()
+
+    def rejected(self, call, *args, **kwargs):
+        before = self.git.snapshot(self.head)
+        with self.assertRaises(ValueError):
+            call(*args, **kwargs)
+        self.assertEqual(self.head, self.git.head()); self.assertEqual(before, self.git.snapshot(self.head))
+
+    def test_create_appends_last_child_and_preserves_every_other_byte(self):
+        result = self.create(title='Třetí', description='Řádek jedna\n\n Řádek dva ', depends_on=['TASK-02'], task_id='TASK-03')
+        self.assertEqual('TASK-03', result['task_id'])
+        block = ('    - [ ] [TASK-03] Třetí\n      - type: task\n      - depends_on: TASK-02\n'
+                 '      - Řádek jedna\n      - Řádek dva\n')
+        marker = '      - depends_on: TASK-01\n'
+        self.assertEqual(BODY.replace(marker, marker+block), self.text(result['commit_id']))
+        node = self.nodes(result['commit_id'])['TASK-03']
+        self.assertEqual(('BATCH-01', 'task', ['TASK-02'], 'Řádek jedna\nŘádek dva'),
+                         (node['parent_id'], node['type'], node['depends_on'], node['description']))
+
+    def test_create_uses_profile_type_for_each_level_and_replay_keeps_generated_id(self):
+        operation = str(uuid4()); request = dict(project_id=self.project, parent_id='MILESTONE-01',
+            expected_head=self.head, task_id=None, title='Dávka 2', description='', depends_on=[])
+        batch = self.editor.create(request, operation)
+        self.assertEqual(batch, self.editor.create(request, operation))
+        self.assertEqual('1', self.git.run('rev-list', '--count', self.head+'..'+batch['commit_id']).stdout.strip())
+        nodes = self.nodes(batch['commit_id']); self.assertEqual('batch', nodes[batch['task_id']]['type'])
+        self.head = batch['commit_id']
+        task = self.create(batch['task_id'])
+        self.assertEqual((batch['task_id'], 'task'), (lambda n: (n['parent_id'], n['type']))(self.nodes(task['commit_id'])[task['task_id']]))
+        self.head = task['commit_id']
+        root = self.create(None, title='Milník 2')
+        node = self.nodes(root['commit_id'])[root['task_id']]
+        self.assertEqual((None, 'milestone'), (node['parent_id'], node['type']))
+        self.assertTrue(self.text(root['commit_id']).endswith('# Konec — mimo položky\n'))
+        self.assertLess(self.text(root['commit_id']).index(root['task_id']), self.text(root['commit_id']).index('# Konec'))
+
+    def test_create_rejects_invalid_requests_without_writing(self):
+        for changes in [dict(parent='TASK-01'), dict(parent='UNKNOWN-01'), dict(task_id='TASK-01'), dict(task_id='bad id'),
+                        dict(title=''), dict(title='a\nb'), dict(title='x'*501), dict(title=f'[Soubor](artifacts/{self.artifact}/content.md)'),
+                        dict(depends_on=['UNKNOWN-01']), dict(depends_on=['TASK-01', 'TASK-01']), dict(depends_on='TASK-01'),
+                        dict(description='depends_on: TASK-01'), dict(description='[ ] podmínka'), dict(description='type: batch'),
+                        dict(description='[ ] [TASK-09] Vložený uzel'), dict(expected_head='0'*40)]:
+            with self.subTest(changes=changes):
+                self.rejected(self.create, **changes)
+
+    def test_create_under_completed_parent_is_rejected(self):
+        body = BODY.replace('- [ ] [BATCH-01]', '- [x] [BATCH-01]')
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact, base_head=self.head,
+                                           title='Roadmapa', body=body, new=False), str(uuid4()))['commit_id']
+        self.rejected(self.create)
+
+    def test_create_in_linked_batch_writes_definition_file_and_crlf(self):
+        external = str(uuid4())
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=external, base_head=self.head,
+            title='Definitions', new=True,
+            body='<!-- fpw-plan-document: definitions/v1 -->\r\n- [ ] [TASK-EXT] External\r\n  - type: task'), str(uuid4()))['commit_id']
+        root = ('<!-- fpw-plan-profile: software-development/v1 -->\n- [ ] [MILESTONE-01] Milník\n  - type: milestone\n'
+                f'  - [ ] [BATCH-01] [Dávka](artifacts/{external}/content.md)\n    - type: batch\n')
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact, base_head=self.head,
+                                           title='Roadmapa', new=False, body=root), str(uuid4()))['commit_id']
+        before = self.git.snapshot(self.head)
+        result = self.create(task_id='TASK-NEW')
+        after = self.git.snapshot(result['commit_id']); path = f'artifacts/{external}/content.md'
+        self.assertEqual({path}, {p for p in before if before[p] != after[p]})
+        self.assertEqual(before[path] + b'\r\n- [ ] [TASK-NEW] Nov\xc3\xa1\r\n  - type: task', after[path])
+        self.assertEqual('BATCH-01', self.nodes(result['commit_id'])['TASK-NEW']['parent_id'])
+        self.head = result['commit_id']
+        self.assertIn('samostatný soubor', self.editor.delete_preview(self.project, 'BATCH-01', self.head)['blocker'])
+        self.rejected(self.editor.delete, self.delete_request('BATCH-01'), str(uuid4()))
+
+    def dependencies(self, task, targets):
+        return self.editor.set_dependencies(dict(project_id=self.project, task_id=task, expected_head=self.head, depends_on=targets), str(uuid4()))
+
+    def test_dependencies_are_added_changed_and_removed_in_own_lines_only(self):
+        added = self.dependencies('TASK-01', ['BATCH-01'])
+        self.assertEqual(BODY.replace('[TASK-01] První\n      - type: task\n', '[TASK-01] První\n      - type: task\n      - depends_on: BATCH-01\n'),
+                         self.text(added['commit_id']))
+        self.head = added['commit_id']
+        removed = self.dependencies('TASK-02', [])
+        self.assertEqual(self.text(self.head).replace('      - depends_on: TASK-01\n', ''), self.text(removed['commit_id']))
+        self.assertEqual([], self.nodes(removed['commit_id'])['TASK-02']['depends_on'])
+
+    def test_dependency_aliases_and_multiple_lines_collapse_preserving_other_text(self):
+        body = BODY.replace('      - depends_on: TASK-01\n', '      - závisí na: TASK-01\n      - Text\n      - blocked_by: BATCH-01\n')
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact, base_head=self.head,
+                                           title='Roadmapa', body=body, new=False), str(uuid4()))['commit_id']
+        result = self.dependencies('TASK-02', ['TASK-01', 'MILESTONE-01'])
+        self.assertEqual(BODY.replace('      - depends_on: TASK-01\n', '      - závisí na: TASK-01, MILESTONE-01\n      - Text\n'), self.text(result['commit_id']))
+
+    def test_dependency_errors_do_not_write(self):
+        for task, targets in [('TASK-01', ['TASK-02']), ('TASK-01', ['TASK-01']), ('TASK-01', ['UNKNOWN-01']),
+                              ('TASK-02', ['TASK-01']), ('UNKNOWN-01', []), ('TASK-01', 'TASK-02')]:
+            with self.subTest(task=task, targets=targets):
+                self.rejected(self.dependencies, task, targets)
+
+    def test_dependency_declared_by_other_item_blocks_relation_is_not_silently_dropped(self):
+        body = BODY.replace('      - depends_on: TASK-01\n', '').replace('- [ ] [TASK-01] První\n      - type: task\n', '- [ ] [TASK-01] První\n      - type: task\n      - blocks: TASK-02\n')
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact, base_head=self.head,
+                                           title='Roadmapa', body=body, new=False), str(uuid4()))['commit_id']
+        with self.assertRaisesRegex(ValueError, 'blocks'):
+            self.dependencies('TASK-02', [])
+        result = self.dependencies('TASK-02', ['TASK-01', 'BATCH-01'])
+        self.assertIn('      - depends_on: BATCH-01\n', self.text(result['commit_id']))
+        self.assertNotIn('TASK-01, BATCH-01', self.text(result['commit_id']))
+
+    def delete_request(self, task):
+        return dict(project_id=self.project, task_id=task, expected_head=self.head)
+
+    def test_delete_preview_lists_subtree_and_blocks_dependents_without_writing(self):
+        preview = self.editor.delete_preview(self.project, 'TASK-01', self.head)
+        self.assertEqual((['TASK-01'], ['TASK-02']), ([n['id'] for n in preview['removed']], preview['dependents']))
+        self.assertIn('TASK-02', preview['blocker'])
+        self.rejected(self.editor.delete, self.delete_request('TASK-01'), str(uuid4()))
+        tree = self.editor.delete_preview(self.project, 'MILESTONE-01', self.head)
+        self.assertEqual(['MILESTONE-01', 'BATCH-01', 'TASK-01', 'TASK-02'], [n['id'] for n in tree['removed']])
+        self.assertIn('neobsahuje', tree['blocker'])
+        self.rejected(self.editor.delete, self.delete_request('MILESTONE-01'), str(uuid4()))
+        with self.assertRaises(ValueError): self.editor.delete_preview(self.project, 'UNKNOWN-01', self.head)
+
+    def test_delete_removes_exact_block_or_nested_subtree_and_stays_in_history(self):
+        result = self.editor.delete(self.delete_request('TASK-02'), str(uuid4()))
+        self.assertEqual(BODY.replace('    - [ ] [TASK-02] Druhý\n      - type: task\n      - depends_on: TASK-01\n', ''), self.text(result['commit_id']))
+        self.assertIn(b'TASK-02', self.git.snapshot(self.head)[self.path])
+        self.head = result['commit_id']
+        second = self.create('MILESTONE-01', task_id='BATCH-02', title='Zůstává')
+        self.head = second['commit_id']
+        third = self.editor.delete(self.delete_request('BATCH-01'), str(uuid4()))
+        self.assertEqual({'MILESTONE-01', 'BATCH-02'}, set(self.nodes(third['commit_id'])))
+        text = self.text(third['commit_id'])
+        self.assertIn('Pouze příklad', text); self.assertIn('# Konec', text); self.assertNotIn('neznámý komentář', text)
+
+    def test_delete_blocked_by_declared_blocks_and_subgraph_reference(self):
+        body = BODY.replace('      - depends_on: TASK-01\n', '').replace('- [ ] [TASK-01] První\n      - type: task\n', '- [ ] [TASK-01] První\n      - type: task\n      - blocks: TASK-02\n')
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact, base_head=self.head,
+                                           title='Roadmapa', body=body, new=False), str(uuid4()))['commit_id']
+        self.assertEqual(['TASK-02'], self.editor.delete_preview(self.project, 'TASK-01', self.head)['dependents'])
+        self.head = self.artifacts.save(dict(project_id=self.project, artifact_id=str(uuid4()), base_head=self.head,
+            title='Výřez', body='- [ ] [TASK-02] výběr\n', new=True, metadata=dict(tags=['plan-subgraph'])), str(uuid4()))['commit_id']
+        self.assertIn('TASK-02', self.editor.delete_preview(self.project, 'TASK-02', self.head)['blocker'])
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact, base_head=self.head,
+                                           title='Roadmapa', body=BODY, new=False), str(uuid4()))['commit_id']
+        preview = self.editor.delete_preview(self.project, 'TASK-02', self.head)
+        self.assertEqual([], preview['dependents']); self.assertIn('Výřez', preview['blocker'])
+        self.rejected(self.editor.delete, self.delete_request('TASK-02'), str(uuid4()))
+
+    def test_writer_recovery_replays_every_structural_change_exactly_once(self):
+        calls = {
+            'create': lambda r, o, c: self.editor.create(dict(project_id=self.project, parent_id='BATCH-01', expected_head=self.head,
+                task_id=None, title=r, description='', depends_on=[]), o, checkpoint=c),
+            'dependencies': lambda r, o, c: self.editor.set_dependencies(dict(project_id=self.project, task_id='TASK-01',
+                expected_head=self.head, depends_on=['MILESTONE-01'] if 'MILESTONE-01' not in self.nodes(self.head)['TASK-01']['depends_on'] else []), o, checkpoint=c),
+        }
+        for name, call in calls.items():
+            for stage in ('prepared', 'files-applied', 'ref-updated', 'indexed', 'completed'):
+                operation = str(uuid4()); head = self.head
+                def stop(current):
+                    if current == stage: raise RuntimeError('power loss')
+                with self.subTest(name=name, stage=stage):
+                    wanted = self.nodes(head)['TASK-01']['depends_on']
+                    target = [] if wanted else ['MILESTONE-01']
+                    run = (lambda c: call(stage, operation, c)) if name == 'create' else (lambda c: self.editor.set_dependencies(
+                        dict(project_id=self.project, task_id='TASK-01', expected_head=head, depends_on=target), operation, checkpoint=c))
+                    with self.assertRaises(RuntimeError): run(stop)
+                    result = run(lambda current: None)
+                    self.assertEqual(result, run(lambda current: None))
+                    self.assertEqual('1', self.git.run('rev-list', '--count', head+'..'+result['commit_id']).stdout.strip())
+                    self.head = result['commit_id']
+                    self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+        for stage in ('prepared', 'files-applied', 'ref-updated', 'indexed', 'completed'):
+            created = self.create(title='Ke smazání '+stage, task_id='DROP-'+stage.upper().replace('-', ''))
+            self.head = created['commit_id']; head = self.head; operation = str(uuid4())
+            request = self.delete_request(created['task_id'])
+            def stop(current):
+                if current == stage: raise RuntimeError('power loss')
+            with self.subTest(delete=stage):
+                with self.assertRaises(RuntimeError): self.editor.delete(request, operation, checkpoint=stop)
+                result = self.editor.delete(request, operation)
+                self.assertEqual(result, self.editor.delete(request, operation))
+                self.assertEqual('1', self.git.run('rev-list', '--count', head+'..'+result['commit_id']).stdout.strip())
+                self.assertNotIn(created['task_id'], self.nodes(result['commit_id']))
+                self.head = result['commit_id']
+
+    def test_authenticated_http_routes_and_network_privacy(self):
+        from spikes.desktop_ui import DesktopHandler
+        from spikes.local_api import running_api
+        from tests.test_local_api import LocalAPITests
+        driver = LocalAPITests(); base = '/v1/artifacts/editor/plan-item/'
+        def post(server, path, value):
+            response = driver.request(server, path=base+path, body=json.dumps(value).encode())
+            return response.split(b' ', 2)[1], json.loads(response.split(b'\r\n\r\n', 1)[1])
+        item = dict(project_id=self.project, parent_id='BATCH-01', expected_head=self.head, task_id='TASK-03',
+                    title='HTTP', description='', depends_on=[])
+        with running_api('http', handler=DesktopHandler, projects=Projects(self.node)) as server:
+            status, created = post(server, 'create', dict(operation_id=str(uuid4()), item=item)); self.assertEqual(b'200', status, created)
+            status, error = post(server, 'create', dict(operation_id=str(uuid4()), item=item | {'expected_head': created['commit_id'], 'task_id': 'TASK-01'}))
+            self.assertEqual(b'422', status); self.assertIn('TASK-01', error['error'])
+            status, changed = post(server, 'dependencies', dict(operation_id=str(uuid4()), item=dict(project_id=self.project, task_id='TASK-03', expected_head=created['commit_id'], depends_on=['TASK-02'])))
+            self.assertEqual(b'200', status, changed)
+            request = dict(project_id=self.project, task_id='TASK-03', expected_head=changed['commit_id'])
+            status, preview = post(server, 'delete/preview', request); self.assertEqual(b'200', status, preview)
+            self.assertIsNone(preview['blocker'])
+            driver.rejected(server, path=base+'delete/preview', body=json.dumps(request | {'path': '/etc/passwd'}).encode())
+            driver.rejected(server, path=base+'delete', body=json.dumps(request).encode(), headers={'Authorization': None})
+            status, deleted = post(server, 'delete', dict(operation_id=str(uuid4()), item=request)); self.assertEqual(b'200', status, deleted)
+        self.head = deleted['commit_id']
+        self.head = self.artifacts.save(dict(project_id=self.project, artifact_id=str(uuid4()), base_head=self.head,
+            title='Private', body='Local data', new=True), str(uuid4()), privacy='local-only')['commit_id']
+        network = PlanItems(self.node, network=True)
+        for call, args in [(network.delete_preview, (self.project, 'TASK-02', self.head)),
+                           (network.delete, (self.delete_request('TASK-02'), str(uuid4()))),
+                           (network.set_dependencies, (dict(project_id=self.project, task_id='TASK-02', expected_head=self.head, depends_on=[]), str(uuid4()))),
+                           (network.create, (dict(project_id=self.project, parent_id=None, expected_head=self.head, task_id=None, title='x', description='', depends_on=[]), str(uuid4())))]:
+            with self.assertRaisesRegex(ValueError, 'local-only'): call(*args)
+        self.assertEqual(self.head, self.git.head())
+
+    @unittest.skipUnless(shutil.which('node'), 'Node required for plan controls')
+    def test_plan_controls_keep_operation_on_lost_reply_and_block_queued_deletion(self):
+        from spikes.desktop_ui import JS
+        controls = JS[JS.index('let planChangeAttempt=null;'):JS.index('function openPlanItemForm(')]
+        deletion = JS[JS.index('async function openPlanDeletion('):JS.index('function appendPlanItemActions(')]
+        harness = r'''
+const assert=require('node:assert/strict');
+const node=tag=>({tag,children:[],textContent:'',disabled:false,replaceChildren(...c){this.children=c;},append(...c){this.children.push(...c);},setAttribute(){},addEventListener(n,f){this.on=f;}});
+const document={createElement:node};
+let activeProject={id:'p',head:'h',readOnly:false},taskQueueView={task_ids:[]},taskPlanProjection={nodes:[{id:'BATCH-01',title:'b'}]};
+let failed=true,calls=[],shown=[],count=0;
+const crypto={randomUUID:()=>'op-'+(++count)};
+const preview={expected_head:'h',removed:[{id:'TASK-01',title:'t',checked:true}],blocker:null};
+async function projectRequest(path,request){calls.push({path,request});if(path.endsWith('/preview'))return preview;if(failed)throw Error('unknown');return {project_id:'p',commit_id:'new',task_id:'TASK-01'};}
+async function openRegisteredProject(){}async function openTaskPlan(){return true;}function showTaskPlanDetail(item){shown.push(item.id);}
+'''
+        checks = r'''
+(async()=>{
+const status=node('p'),item={project_id:'p',task_id:'X'};
+assert.equal(await submitPlanChange('create',item,status,r=>r.task_id),false);const first=calls.at(-1).request.operation_id;assert.match(status.textContent,/stejnou operaci/);
+assert.equal(await submitPlanChange('create',item,status,r=>r.task_id),false);assert.equal(calls.at(-1).request.operation_id,first);
+await submitPlanChange('create',{...item,task_id:'Y'},status,r=>r.task_id);const other=calls.at(-1).request.operation_id;assert.notEqual(other,first);
+activeProject.readOnly=true;const before=calls.length;assert.equal(await submitPlanChange('create',item,status,r=>r.task_id),false);assert.equal(calls.length,before);activeProject.readOnly=false;
+failed=false;
+const host=node('div');taskQueueView={task_ids:['TASK-01']};await openPlanDeletion(host,{id:'TASK-01',parent_id:'BATCH-01'});
+let confirm=host.children.find(c=>c.tag==='button');assert.equal(confirm.disabled,true);assert.match(host.children.at(-1).textContent,/fronty/);
+taskQueueView={task_ids:[]};await openPlanDeletion(host,{id:'TASK-01',parent_id:'BATCH-01'});confirm=host.children.find(c=>c.tag==='button');assert.equal(confirm.disabled,false);
+await confirm.on();assert(calls.at(-1).path.endsWith('/plan-item/delete'));assert.deepEqual(shown,['BATCH-01']);assert.equal(activeProject.head,'new');
+preview.blocker='Na položce závisí: Z';await openPlanDeletion(host,{id:'TASK-01',parent_id:null});assert.equal(host.children.find(c=>c.tag==='button').disabled,true);
+})().catch(error=>{console.error(error);process.exit(1);});
+'''
+        result = subprocess.run(['node', '-e', harness+controls+deletion+checks], capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+
+
 class SpanTests(unittest.TestCase):
     def test_fenced_examples_and_child_nodes_do_not_change_physical_offsets(self):
         start, end = item_span(BODY, 'TASK-01')
         self.assertTrue(BODY[start:end].startswith('    - [ ] [TASK-01] První\n'))
         self.assertTrue(BODY[end:].startswith('\n    - [ ] [TASK-02]'))
         with self.assertRaises(ValueError): item_span(BODY, 'UNKNOWN-01')
+
+    def test_subtree_ends_before_lower_indent_and_keeps_fenced_lines_inside(self):
+        start, end = subtree_span(BODY, 'BATCH-01')
+        self.assertTrue(BODY[start:end].startswith('  - [ ] [BATCH-01]'))
+        self.assertTrue(BODY[start:end].endswith('depends_on: TASK-01\n')); self.assertTrue(BODY[end:].startswith('\n# Konec'))
+        body = '- [ ] [A-1] A\n  ```\ntext at root\n  ```\n  - note\n- [ ] [B-1] B\n'
+        self.assertEqual(body.index('- [ ] [B-1]'), subtree_span(body, 'A-1')[1])
+        self.assertEqual(len(body), subtree_span(body, 'B-1')[1])
 
     @unittest.skipUnless(shutil.which('node'), 'Node required for editor controls')
     def test_scoped_editor_preserves_dirty_guard_draft_and_operation_on_lost_reply(self):

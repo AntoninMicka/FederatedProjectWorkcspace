@@ -13,11 +13,28 @@ položky s popisem, vztahy a případným checklistem. Podúkoly dávky ani osta
 obsah souboru do editoru nevstupují. **Uložit** změní pouze tento blok a vrátí
 vás do plánu; neuložené změny chrání běžný dialog při odchodu z editoru.
 
-Stabilní ID, typ a hierarchie se tímto způsobem nemění. Pro přidání uzlu nebo
-přesun použijte celý zdrojový seznam. Při chybě revize zůstane draft zachovaný;
+Stabilní ID, typ a hierarchie se tímto způsobem nemění. Pro přesun použijte
+celý zdrojový seznam. Při chybě revize zůstane draft zachovaný;
 po nejasném výsledku lze zopakovat stejné uložení se stejným ID operace.
 Projekt pouze pro čtení tuto akci nenabízí. Recovery a přesné hranice změny
 popisuje [ADR 0059](adr/0059-file-plan-hierarchy-and-task-editor.md#dílčí-úprava-jedné-položky-plan-editor).
+
+## Nová položka, závislosti a mazání
+
+**Přidat kořenovou položku** nad plánem vytvoří milník. V detailu milníku nebo
+dávky přidáte **Přidat dávku** / **Přidat úkol**: vyplňte název, volitelně popis,
+stabilní ID (jinak se vygeneruje) a závislosti. Položka se zařadí jako poslední
+potomek a typ určí profil plánu.
+
+**Upravit závislosti** v detailu nastaví přesný seznam předpokladů; cyklus nebo
+neznámé ID se neuloží. Závislost zapsanou u jiné položky přes `blocks` je nutné
+odebrat tam.
+
+**Smazat položku** nejprve ukáže celý mazaný podstrom. Smazání se nenabídne,
+pokud na položce závisí jiná položka, je ve vaší frontě úkolů, odkazuje na ni
+výřez nebo jiný vztah, nebo jde o dávku v samostatném souboru. Text zůstává
+v historii projektu. Recovery popisuje
+[ADR 0059](adr/0059-file-plan-hierarchy-and-task-editor.md#vytvoření-závislosti-a-mazání-položky).
 
 ## Zápis plánu a vztahů
 

@@ -38,6 +38,11 @@ dirty guard, validovaný task graph, `ArtifactHistory` a jediný Workspace write
 podle ADR 0059. Vlastní blok vybrané položky nahrazuje přes přesné textové
 hranice; nematerializuje nový task store ani obecný Markdown rewriter.
 
+Pokročilá úprava plánu (`NEW-7FFA8A2B6F-TASK-1`) **rozšiřuje** tentýž `PlanItems`,
+validovaný task graph a Workspace writer o vytvoření, závislosti a mazání. Formát
+`NEW-…` přebírá z `markdown_patch` jen jako konvenci předpony. **Reject:**
+`_insertion_scope` je model-facing LLM rozsah vázaný na dvojici vybraných bloků.
+
 M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC.
 
 Shellový launcher adaptuje existující unittest příkaz a `spikes.check_project`; dočasné demo používá `Workspace`/`Git` přímo. Nevytváří další storage implementaci ani aplikační server.
