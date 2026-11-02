@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MPL-2.0
 
 from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +45,9 @@ EXCLUDED_PATHS = {
 
 EXCLUDED_PREFIXES = (
     Path("docs/legal/licenses"),
+    # Node-local worktrees and experiment evidence are not project sources.
+    # Keep this root-scoped so a similarly named source directory is checked.
+    Path(".worktrees"),
 )
 
 MAX_HEADER_BYTES = 8192
@@ -81,6 +86,22 @@ def files_requiring_spdx():
 
 
 class SPDXTests(unittest.TestCase):
+
+    def test_local_worktree_evidence_is_excluded_but_sources_remain_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            files = [".worktrees/run/report.md", ".worktrees/run/project/source.py",
+                     "source.py", "docs/.worktrees/example.md", ".worktrees-source/example.py"]
+            for relative in files:
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("Missing SPDX metadata\n", encoding="utf-8")
+            with patch.dict(files_requiring_spdx.__globals__, ROOT=root):
+                selected = {str(path.relative_to(root)) for path in files_requiring_spdx()}
+                self.assertEqual({"source.py", "docs/.worktrees/example.md",
+                                  ".worktrees-source/example.py"}, selected)
+                with self.assertRaisesRegex(AssertionError, "source.py: missing SPDX"):
+                    self.test_project_text_files_have_spdx_metadata()
 
     def test_project_text_files_have_spdx_metadata(self):
         missing = []
