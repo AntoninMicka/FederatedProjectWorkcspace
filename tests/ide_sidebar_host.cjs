@@ -122,6 +122,15 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   await commands.get('workspaceBridge.showQueueTask')(queueRoot);
   const queuePanel=panels.at(-1).webview.html;
   for(const text of ['Příznaky','celá feature dávka','Podúkoly','GONE-01','chybějící odkaz'])assert.ok(queuePanel.includes(text),text);
+  assert.deepEqual(panels.at(-1).options.enableCommandUris,['workspaceBridge.showQueueTask']);
+  const follow=async html=>{
+   const match=html.match(/href="command:workspaceBridge.showQueueTask\?([^"]+)"/);assert.ok(match,'navigable pinned reference');
+   const args=JSON.parse(decodeURIComponent(match[1]));assert.equal(args[0].entry,undefined,'resolve flags from current packet');
+   await commands.get('workspaceBridge.showQueueTask')(...args);
+  };
+  await follow(queuePanel);assert.equal(panels.at(-1).title,'TASK-01');
+  assert.match(panels.at(-1).webview.html,/Rozsah: tento úkol/);
+  await follow(panels.at(-1).webview.html);assert.equal(panels.at(-1).title,'BATCH-X');
   await commands.get('workspaceBridge.showQueueTask')(rows[0]);assert.match(panels.at(-1).webview.html,/Nadřazená položka: BATCH-X/);
   errors.length=0;await commands.get('workspaceBridge.queueConfirm')(queueRoot);
   assert.ok(errors.some(e=>/ruční žádost/.test(e)),'batch with open tasks: '+errors);errors.length=0;

@@ -254,13 +254,21 @@ function createSidebar(vscode, context, hooks) {
   register('showQueueTask',async item=>{
     const project=find(item);if(!project||!project.queue)return;
     const task=[...project.queue.manifest.tasks,...(project.queue.manifest.linked_tasks||[])].find(t=>t.id===item.taskId);if(!task)return;
+    const currentEntry=[...project.queue.items,...(project.queue.linked_items||[])].find(entry=>entry.id===item.taskId);if(!currentEntry)return;
+    item={...item,entry:currentEntry};
     const stale=Boolean(project.error||project.state?.stale||project.panel?.stale),known=queueBridge.scope(project.queue,task.id);
     const flagRows=queueBridge.flags(item.entry,{stale,blockers:project.queue.blockers}).map(f=>'<li>'+escape(f.label)+'</li>').join('');
     const scopeText=(project.queue.manifest.hierarchy?.[task.id]?'Rozsah: celá feature dávka, jedna větev a jeden PR.':'Rozsah: tento úkol.')+(known.parent?' Nadřazená položka: '+known.parent+'.':'');
-    const rows=known.rows.map(r=>'  '.repeat(r.depth-1)+r.id+(r.entry?' · '+queueBridge.flags(r.entry,{stale,blockers:project.queue.blockers}).map(f=>f.label).join(' · '):' · chybějící odkaz')).join('\n');
-    const queueSection=`<h2>Příznaky</h2><ul>${flagRows}</ul><p>${escape(scopeText)}</p>${(item.entry.blocked_by||[]).length?`<p>Důvod blokace: ${escape(item.entry.blocked_by.join('; '))}</p>`:''}${known.problems.length?`<p>Problém hierarchie: ${escape(known.problems.join('; '))}</p>`:''}${rows?`<h2>Podúkoly</h2><pre>${escape(rows)}</pre>`:''}`;
-    const panel=vscode.window.createWebviewPanel('workspaceQueue',task.id,vscode.ViewColumn.Active,{enableScripts:false});
-    panel.webview.html=detailHTML({...project,state:{stale:false},panel:{stale:false},error:project.error||project.queue.blockers.join('; ')},task).replace('</body>',()=>`${queueSection}<h2>Fronta</h2><pre>${escape(project.queue.blockers.join('; '))}</pre><p>Předpoklady musí přijmout člověk ve Workspace. Agent zapisuje hlášení přes ordinary-file kontrakt balíčku.</p></body>`);context.subscriptions.push(panel);
+    const entries=new Map([...project.queue.items,...(project.queue.linked_items||[])].map(entry=>[entry.id,entry]));
+    const taskLink=id=>{
+      const entry=entries.get(id);if(!entry)return escape(id)+' · mimo připnutý rozsah';
+      const argument=row(project,'queueTask',{taskId:id});
+      return `<a href="command:workspaceBridge.showQueueTask?${encodeURIComponent(JSON.stringify([argument]))}">${escape(id)}</a>`;
+    };
+    const rows=known.rows.map(r=>'  '.repeat(r.depth-1)+(r.entry?taskLink(r.id):escape(r.id))+(r.repeated?' · opakovaný odkaz':'')+(r.entry?' · '+escape(queueBridge.flags(r.entry,{stale,blockers:project.queue.blockers}).map(f=>f.label).join(' · ')):' · chybějící odkaz')).join('\n');
+    const queueSection=`<h2>Příznaky</h2><ul>${flagRows}</ul><p>${escape(scopeText)}</p>${(item.entry.blocked_by||[]).length?`<p>Důvod blokace: ${escape(item.entry.blocked_by.join('; '))}</p>`:''}${known.problems.length?`<p>Problém hierarchie: ${escape(known.problems.join('; '))}</p>`:''}`;
+    const panel=vscode.window.createWebviewPanel('workspaceQueue',task.id,vscode.ViewColumn.Active,{enableScripts:false,enableCommandUris:['workspaceBridge.showQueueTask']});
+    panel.webview.html=detailHTML({...project,state:{stale:false},panel:{stale:false},error:project.error||project.queue.blockers.join('; ')},task).replace('</body>',()=>`${queueSection}${known.parent?`<p>Zpět na rodiče: ${taskLink(known.parent)}</p>`:''}${rows?`<h2>Podúkoly — odkazy</h2><pre>${rows}</pre>`:''}<h2>Fronta</h2><pre>${escape(project.queue.blockers.join('; '))}</pre><p>Předpoklady musí přijmout člověk ve Workspace. Agent zapisuje hlášení přes ordinary-file kontrakt balíčku.</p></body>`);context.subscriptions.push(panel);
   });
   register('queueHandoff',async item=>{
     const project=find(item);if(!project||project.error)throw Error('Nejdříve obnovte připojení.');

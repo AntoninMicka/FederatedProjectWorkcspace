@@ -267,6 +267,9 @@ let s=q.scope(packet({B:{children:['A','GONE','A']}},[{id:'A',eligible:true,pare
 assert.deepEqual(s.rows.map(r=>[r.id,r.repeated]),[['A',false],['GONE',false],['A',true]]);
 assert.deepEqual(s.problems,['Chybí odkaz: GONE']);
 assert.equal(q.scope(packet({},[{id:'A',parent_id:'B'}]),'A').parent,'B');
+assert.deepEqual(q.scope(packet({},[{id:'A',parent_id:'B'}]),'A').problems,['Nesouhlasí nadřazený odkaz: A']);
+assert.deepEqual(q.scope(packet({},[{id:'A',parent_id:'GONE'}]),'A').problems,['Chybí nadřazený odkaz: GONE']);
+assert.deepEqual(q.scope(packet({B:{children:['A']}},[{id:'A',parent_id:'B'}]),'A').problems,[]);
 s=q.scope(packet({B:{children:['A']},A:{children:['B']}},[{id:'A'}]),'B');assert.ok(s.problems.some(p=>p.startsWith('Cyklus')));
 const value=packet({B:{children:['A']}},[{id:'A',eligible:true}]);
 const m=q.manualRequest(value,'A','done','c'.repeat(40),'id');

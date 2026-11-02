@@ -28,6 +28,11 @@ Nad rámec komponent najdeš evidenci compliance závislostí v [docs/legal/DEPE
 
 Žádná komponenta zatím nemá schválený produkční status reuse. Licence a verze závislostí zaznamenat před zařazením do distribuované aplikace.
 
+IDE-QUEUE-UX-01-D **adaptuje** stávající připnutý manifest ADR 0062,
+`queue.scope` a bezpečný detail sidebaru. Navigace používá pouze povolený
+příkaz pro otevření detailu; skripty zůstávají vypnuté. Druhý export dokumentů
+ani další persistentní vrstva se nezavádí.
+
 M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC.
 
 Shellový launcher adaptuje existující unittest příkaz a `spikes.check_project`; dočasné demo používá `Workspace`/`Git` přímo. Nevytváří další storage implementaci ani aplikační server.

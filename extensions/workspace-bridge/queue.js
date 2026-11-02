@@ -49,7 +49,14 @@ function scope(value,taskId){
    if(!repeated)walk(child,depth+1,[...path,child]);
   }
  })(taskId,1,[taskId]);
- return {rows,problems:[...new Set(problems)],parent:known.get(taskId)?.parent_id||null};
+ const parent=known.get(taskId)?.parent_id||null;
+ // A queued root may have a parent outside this packet. A linked task must
+ // retain its backlink to a known container in the pinned feature scope.
+ if((manifest?.linked_tasks||[]).some(t=>t.id===taskId)){
+  if(!parent||!known.has(parent))problems.push('Chybí nadřazený odkaz: '+(parent||taskId));
+  else if(!(hierarchy[parent]?.children||[]).includes(taskId))problems.push('Nesouhlasí nadřazený odkaz: '+taskId);
+ }
+ return {rows,problems:[...new Set(problems)],parent};
 }
 // A manual request is a message only; the roadmap changes in Workspace review.
 function manualRequest(value,taskId,body,repositoryCommit,messageId){
