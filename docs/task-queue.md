@@ -35,8 +35,9 @@ po odpovědi serveru. Odmítnutý nebo neznámý výsledek vyžaduje obnovu stav
 mutace se automaticky neopakuje a odpověď starého projektu nepřepíše nový.
 
 **Odebrat** nejprve načte aktuální dopad a ukáže seznam všech odebíraných ID.
-Jedno potvrzení odstraní také všechny tranzitivně závislé položky z fronty.
-Nezávislé položky zůstávají. Změna fronty nebo roadmapy mezi náhledem a
+Jedno potvrzení odstraní také tranzitivně závislé položky, kterým by odebráním
+chyběl nesplněný předpoklad. Odebrání dokončené položky závislé položky nemění,
+protože její předpoklad zůstává splněný. Nezávislé položky zůstávají. Změna fronty nebo roadmapy mezi náhledem a
 potvrzením zneplatní náhled.
 
 **Obnovit frontu** pouze načte aktuální stav. Po změně roadmapy znovu otevřete

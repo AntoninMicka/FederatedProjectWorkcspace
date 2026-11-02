@@ -82,6 +82,23 @@ class TaskQueueTests(unittest.TestCase):
         self.act('remove', 'TASK-A', preview_sha256=preview['preview_sha256'])
         self.assertEqual(['TASK-X', 'TASK-READY'], self.status()['task_ids'])
 
+    def test_removing_completed_item_keeps_dependents_and_queue_valid(self):
+        for identifier in ['TASK-A', 'TASK-B', 'TASK-C']: self.act('add', identifier)
+        self.save(BODY.replace('- [ ] [TASK-A]', '- [x] [TASK-A]'))
+        self.assertTrue(self.status()['issues'])
+        preview = self.act('remove-preview', 'TASK-A')
+        self.assertEqual(['TASK-A'], preview['removed_ids'])
+        result = self.act('remove', 'TASK-A', preview_sha256=preview['preview_sha256'])
+        self.assertEqual(['TASK-B', 'TASK-C'], result['task_ids'])
+        self.assertTrue(result['valid'], result['issues'])
+
+    def test_completed_item_stops_cascade_but_unmet_chain_still_cascades(self):
+        for identifier in ['TASK-A', 'TASK-B', 'TASK-C']: self.act('add', identifier)
+        self.save(BODY.replace('- [ ] [TASK-B]', '- [x] [TASK-B]'))
+        # B is completed, so C keeps its prerequisite even though A's removal reaches B.
+        self.assertEqual(['TASK-A', 'TASK-B'], self.act('remove-preview', 'TASK-A')['removed_ids'])
+        self.assertEqual(['TASK-B'], self.act('remove-preview', 'TASK-B')['removed_ids'])
+
     def test_owner_and_project_isolation(self):
         self.act('add', 'TASK-A'); self.assertEqual([], self.status(str(uuid4()))['task_ids'])
         second = ProjectCreation(self.node).create('Second', str(self.root / 'second'), str(uuid4()))['id']
