@@ -152,7 +152,10 @@ class ThreadLifecycle:
                     if isinstance(external.get('run_id'), str): run_ids.add(external['run_id'])
         backend_runs = []
         for filename, adapter in (('ollama-runs.sqlite', 'ollama'),
-                                  ('openai-runs.sqlite', 'openai-responses')):
+                                  ('openai-runs.sqlite', 'openai-responses'),
+                                  ('anthropic-messages-runs.sqlite', 'anthropic-messages'),
+                                  ('gemini-generate-runs.sqlite', 'gemini-generate'),
+                                  ('xai-responses-runs.sqlite', 'xai-responses')):
             for run_id in sorted(run_ids):
                 rows = self._rows(filename, 'SELECT state FROM runs WHERE run_id=?', (run_id,))
                 if rows: backend_runs.append({'run_id': run_id, 'adapter': adapter,

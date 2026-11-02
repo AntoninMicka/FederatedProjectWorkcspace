@@ -22,6 +22,9 @@ from spikes.external_proposal import ExternalCallProposal
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import ContextBuilder
 from spikes.metadata import ValidationError
+from spikes.direct_provider import (DirectAdapter, DirectBindings, DirectCatalog,
+    DirectCredentials)
+from spikes.direct_registry import DIRECT_BINDINGS
 from spikes.ollama_backend import OllamaAdapter, OllamaResponseError, OllamaRuns, UnknownRun
 from spikes.openai_backend import (OpenAIBindings, OpenAICredentials,
                                    OpenAIModelCatalog, OpenAIUnknownRun)
@@ -1819,6 +1822,133 @@ class ChatServiceTests(unittest.TestCase):
             'secret': 'atlas-live-' + 'c' * 24})
         self.assertEqual(configured['binding']['offer_id'], offer['offer_id'])
         self.assertTrue(configured['credential']['available'])
+
+    DIRECT_CASES = {
+        'anthropic-messages': ('claude-test-1', 'Claude',
+            {'data': [{'type': 'model', 'id': 'claude-test-1'}], 'has_more': False,
+             'first_id': 'claude-test-1', 'last_id': 'claude-test-1'},
+            {'id': 'msg_1', 'type': 'message', 'role': 'assistant', 'model': 'claude-test-1',
+             'stop_reason': 'end_turn', 'content': [{'type': 'text', 'text': 'External answer'}],
+             'usage': {'input_tokens': 3, 'output_tokens': 2}}),
+        'gemini-generate': ('gemini-test-1', 'Gemini',
+            {'models': [{'name': 'models/gemini-test-1',
+                         'supportedGenerationMethods': ['generateContent']}]},
+            {'responseId': 'r1', 'modelVersion': 'gemini-test-1', 'candidates': [
+                {'finishReason': 'STOP', 'content': {'role': 'model', 'parts': [
+                    {'text': 'External answer'}]}}],
+             'usageMetadata': {'promptTokenCount': 3, 'candidatesTokenCount': 2,
+                               'totalTokenCount': 5}}),
+        'xai-responses': ('grok-test-1', 'Grok',
+            {'models': [{'id': 'grok-test-1', 'input_modalities': ['text'],
+                         'output_modalities': ['text'], 'aliases': []}]},
+            {'id': 'resp_1', 'status': 'completed', 'model': 'grok-test-1', 'store': False,
+             'output': [{'type': 'message', 'role': 'assistant', 'status': 'completed',
+                         'content': [{'type': 'output_text', 'text': 'External answer'}]}],
+             'usage': {'input_tokens': 3, 'output_tokens': 2, 'total_tokens': 5}}),
+    }
+
+    def configure_direct_provider(self, adapter_id, secret):
+        model, _, page, _ = self.DIRECT_CASES[adapter_id]
+        result = self.service.refresh_direct_models({'adapter_id': adapter_id, 'secret': secret},
+            catalog_factory=lambda root, spec: DirectCatalog(root, spec, lambda *_: page))
+        offer = next(item for item in result['model_catalog']['offers']
+                     if item['provider_model_id'] == model)
+        provider = result['provider']
+        names = sorted(item['name'] for item in offer['capabilities'] if item['supported'])
+        return offer, self.service.configure_direct({'adapter_id': adapter_id, 'secret': secret,
+            'binding': {'schema_version': 1, 'binding_id': str(uuid4()),
+                'revision': adapter_id + '-one', 'adapter': adapter_id,
+                'boundary': 'external-provider', 'endpoint': provider['endpoint'],
+                'model': model, 'target_id': provider['target_id'],
+                'offer_id': offer['offer_id'], 'protocol': offer['protocol'],
+                'knowledge_revision': result['model_catalog']['knowledge_revision'],
+                'capabilities': names, 'max_output_tokens': 4096, 'timeout_seconds': 180}})
+
+    def test_direct_providers_run_through_the_approved_external_path(self):
+        for adapter_id, (model, name, _, answer) in self.DIRECT_CASES.items():
+            with self.subTest(adapter_id=adapter_id):
+                secret = 'direct-secret-' + 'k' * 24; sent = []
+                offer, status = self.configure_direct_provider(adapter_id, secret)
+                self.assertEqual(status['binding']['model'], model)
+                self.assertTrue(status['credential']['available'])
+                self.assertNotIn(secret, json.dumps(status))
+                self.assertIn((adapter_id, offer['offer_id']),
+                    [(item['adapter_id'], item['offer_id'])
+                     for item in self.service.model_selection_status()['offers']
+                     if item['binding_id']])
+                self.assertEqual(next(item for item in
+                    self.service.backend_catalog_status()['backends']
+                    if item['backend_id'] == adapter_id)['configured'], True)
+                def transport(binding, request, used_secret):
+                    sent.append((request, used_secret)); return answer
+                self.service.direct_adapter_factory = (lambda runs, credentials:
+                    DirectAdapter(runs, credentials, transport))
+                request = self.external_request(run_choice={'mode': 'brainstorming',
+                    'adapter': adapter_id, 'model': model})
+                preview = self.service.external_preview(request)
+                self.assertEqual(preview['target']['provider'], name)
+                self.assertEqual(sent, [], 'preview must not send anything')
+                approval = {'approval_id': preview['approval_id'],
+                    'preview_sha256': preview['preview_sha256'], 'approved': True,
+                    'privacy': preview['privacy']}
+                result = self.service.external_confirm(approval)
+                self.assertEqual(result['target']['adapter'], adapter_id)
+                self.assertEqual(result['thread']['messages'][-1]['content'], 'External answer')
+                self.assertEqual(len(sent), 1)
+                self.assertEqual(sent[0][1], secret)
+                self.assertEqual(self.service.external_confirm(approval), result)
+                self.assertEqual(len(sent), 1, 'confirmed run must not be resent')
+                removed = self.service.remove_direct({'adapter_id': adapter_id, 'confirmed': True})
+                self.assertIsNone(removed['binding'])
+                self.assertFalse(any(item['binding_id'] for item in
+                    self.service.model_selection_status()['offers']
+                    if item['adapter_id'] == adapter_id))
+
+    def test_direct_provider_rejects_local_only_and_unknown_offer(self):
+        adapter_id = 'xai-responses'; model = self.DIRECT_CASES[adapter_id][0]
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'k' * 24)
+        request = self.external_request(privacy='local-only', run_choice={
+            'mode': 'brainstorming', 'adapter': adapter_id, 'model': model})
+        with self.assertRaisesRegex(ValueError, 'local-only'):
+            self.service.external_preview(request)
+        with self.assertRaisesRegex(ValueError, 'Unsupported direct provider'):
+            self.service.direct_status({'adapter_id': 'openai-responses'})
+        before = self.service.direct_status({'adapter_id': adapter_id})
+        with self.assertRaisesRegex(ValueError, 'offer is unavailable'):
+            self.service.configure_direct({'adapter_id': adapter_id,
+                'secret': 'direct-secret-' + 'z' * 24, 'binding': dict(
+                    {key: value for key, value in before['binding'].items()
+                     if key not in {'credential_ref', 'credential_revision'}},
+                    offer_id='xai:missing')})
+        after = self.service.direct_status({'adapter_id': adapter_id})
+        self.assertEqual(after['binding'], before['binding'])
+
+    def test_direct_provider_failed_save_removes_only_the_new_secret(self):
+        adapter_id = 'gemini-generate'
+        _, first = self.configure_direct_provider(adapter_id, 'direct-secret-' + 'a' * 24)
+        credentials = DirectCredentials(self.chat_state, DIRECT_BINDINGS[adapter_id].spec)
+        with patch.object(DirectBindings, 'save', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                self.configure_direct_provider(adapter_id, 'direct-secret-' + 'b' * 24)
+        with closing(sqlite3.connect(credentials.path)) as db:
+            rows = db.execute('SELECT reference FROM credentials').fetchall()
+        self.assertEqual(rows, [(first['binding']['credential_ref'],)])
+        self.assertEqual(self.service.direct_status({'adapter_id': adapter_id})['binding'],
+                         first['binding'])
+
+    def test_interrupted_direct_reset_blocks_until_retried(self):
+        adapter_id = 'anthropic-messages'
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'a' * 24)
+        spec = DIRECT_BINDINGS[adapter_id].spec
+        with patch.object(DirectCredentials, 'delete', side_effect=OSError('crash')):
+            with self.assertRaises(OSError):
+                self.service.remove_direct({'adapter_id': adapter_id, 'confirmed': True})
+        with self.assertRaisesRegex(ValueError, 'reset is pending'):
+            self.configure_direct_provider(adapter_id, 'direct-secret-' + 'b' * 24)
+        self.assertIsNone(self.service.remove_direct(
+            {'adapter_id': adapter_id, 'confirmed': True})['binding'])
+        with closing(sqlite3.connect(DirectCredentials(self.chat_state, spec).path)) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM credentials').fetchone(), (0,))
 
     def test_atlascloud_rejects_unreviewed_run_model_and_offer(self):
         service, _ = self.atlascloud_service([])

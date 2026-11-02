@@ -262,6 +262,13 @@ předstírat univerzální OpenAI kompatibilitu; implementuje nový bounded klie
 jen pro explicitně doložený textový protokol. Media, quick-generate,
 automatický fallback a odhad capability z názvu se odmítají jako jiný rozsah.
 
+F-M3-PROVIDERS-02 **reuse** `BackendRuns`, `BackendRegistry`, `RunSelection`,
+provider-neutral katalog a reset journal, **adaptuje** tvar bindingu a catalog flow
+z AtlasCloud do společné vrstvy `direct_provider.py` a **odmítá** provider SDK i
+OpenAI-kompatibilní vrstvy pro Claude a Gemini: SDK ve výchozím stavu opakuje
+požadavky, což je v rozporu s jedním účinkem běhu, a vrstva kompatibility by zakryla
+důvod ukončení. Rozhodnutí: [ADR 0065](docs/adr/0065-direct-text-providers.md).
+
 OPS-NODE-MONITOR-01 **reuse/adaptuje** jediný `OllamaBinding`, přesný
 same-node/private-network Target a TLS pinning, stdlib HTTP transport,
 `OllamaRuns`, node-local stavový adresář a existující panel Zdroje. Živý

@@ -18,7 +18,8 @@ MAX_OFFERS = 10000
 MAX_CATALOG_BYTES = 1024 * 1024
 CAPABILITIES = ('generate-text', 'json-output', 'streaming', 'text-output')
 PROTOCOLS = {'ollama-generate-v1', 'openai-chat-completions-v1',
-             'openai-responses-v1'}
+             'openai-responses-v1', 'anthropic-messages-v1',
+             'gemini-generate-content-v1', 'xai-responses-v1'}
 _ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}')
 
 
@@ -219,7 +220,11 @@ def collect_discovery_pages(first_page, fetch_page, *, max_pages=100):
         cursor = page['next_cursor']
         if cursor is None:
             return items
-        _text(cursor, 'model discovery cursor', identifier=True)
+        # Provider page tokens are opaque (Google's may hold '=' or '+'); they are only
+        # echoed back through a percent-encoded query, so bound them instead of parsing.
+        require(isinstance(cursor, str) and 1 <= len(cursor) <= 4096
+                and cursor.isascii() and cursor.isprintable(),
+                'Invalid model discovery cursor')
         require(cursor not in cursors, 'Repeated model discovery cursor')
         cursors.add(cursor)
         page = fetch_page(cursor)

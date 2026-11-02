@@ -30,6 +30,9 @@ from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     PreparedContext, ProjectInput, PublicSourceInput,
                                     ResponseLanguage, TaskInstruction)
 from spikes.ai_outcome import AITaskOutcome
+from spikes.direct_provider import (DirectAdapter, DirectBindings, DirectCatalog,
+    DirectCredentials, DirectResponseError, DirectRuns, DirectUnknownRun)
+from spikes.direct_registry import DIRECT_BINDINGS
 from spikes.atlascloud_backend import (AtlasCloudAdapter, AtlasCloudBinding,
     AtlasCloudBindings, AtlasCloudCatalog, AtlasCloudCredentials,
     AtlasCloudResponseError, AtlasCloudRuns, AtlasCloudUnknownRun)
@@ -255,10 +258,14 @@ def now():
     return datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
 
 
+EXTERNAL_ADAPTERS = frozenset({'openai-responses', 'atlascloud-text', *DIRECT_BINDINGS})
+
+
 class ChatService:
     def __init__(self, node_path, projects, *, state_dir=None, adapter_factory=None,
                  external_adapter_factory=None, search_adapter_factory=None,
-                 public_source_adapter_factory=None, atlascloud_adapter_factory=None):
+                 public_source_adapter_factory=None, atlascloud_adapter_factory=None,
+                 direct_adapter_factory=None):
         self.node_path = Path(node_path).absolute()
         self.projects = projects
         self.state_dir = (Path(state_dir).absolute() if state_dir else
@@ -267,6 +274,7 @@ class ChatService:
         self.adapter_factory = adapter_factory
         self.external_adapter_factory = external_adapter_factory
         self.atlascloud_adapter_factory = atlascloud_adapter_factory
+        self.direct_adapter_factory = direct_adapter_factory
         self.search_adapter_factory = search_adapter_factory
         self.public_source_adapter_factory = public_source_adapter_factory
         self.node_telemetry = NodeTelemetry(self.node_path.parent)
@@ -476,6 +484,8 @@ class ChatService:
                     completed_run_usage(runs, 'ollama'),
                     completed_run_usage(OpenAIRuns(root), 'openai-responses'),
                     completed_run_usage(AtlasCloudRuns(root), 'atlascloud-text'),
+                    *(completed_run_usage(DirectRuns(root, binding.spec), adapter_id)
+                      for adapter_id, binding in DIRECT_BINDINGS.items()),
                 ]}
         return result
 
@@ -727,6 +737,83 @@ class ChatService:
         self.reset_backend({'backend_id': 'atlascloud-text', 'confirmed': True})
         return self.atlascloud_status()
 
+    def direct_status(self, value):
+        spec = self._direct_type(value).spec; root = self._root()
+        catalog = DirectCatalog(root, spec).load()
+        provider = {'name': spec.name, 'endpoint': spec.endpoint, 'target_id': spec.host,
+                    'protocol': spec.protocol}
+        try:
+            binding = DirectBindings(root, self._direct_type(value)).load()
+        except FileNotFoundError:
+            return {'adapter_id': spec.adapter_id, 'provider': provider, 'binding': None,
+                    'credential': None, 'model_catalog': catalog,
+                    'capabilities': {'streaming': False}}
+        return {'adapter_id': spec.adapter_id, 'provider': provider,
+                'binding': binding.serialize(),
+                'credential': DirectCredentials(root, spec).status(binding.credential_ref),
+                'model_catalog': catalog,
+                'capabilities': {
+                    'streaming': 'streaming' in binding.capability_names,
+                    'json': 'json-output' in binding.capability_names}}
+
+    @staticmethod
+    def _direct_type(value):
+        require(isinstance(value, dict) and value.get('adapter_id') in DIRECT_BINDINGS,
+                'Unsupported direct provider')
+        return DIRECT_BINDINGS[value['adapter_id']]
+
+    def refresh_direct_models(self, value, catalog_factory=DirectCatalog):
+        spec = self._direct_type(value).spec
+        require(set(value) == {'adapter_id', 'secret'},
+                spec.name + ' model refresh requires exactly one credential')
+        self._require_backend_reset_complete(spec.adapter_id)
+        catalog = catalog_factory(self._root(), spec).refresh(value['secret'])
+        return dict(self.direct_status({'adapter_id': spec.adapter_id}),
+                    model_catalog=catalog)
+
+    def configure_direct(self, value):
+        """Publish credential, then binding; see ADR 0065 for the crash boundaries."""
+        binding_type = self._direct_type(value); spec = binding_type.spec
+        require(set(value) == {'adapter_id', 'binding', 'secret'}
+                and isinstance(value['binding'], dict),
+                'Unknown or missing ' + spec.name + ' backend field')
+        fields = {'schema_version', 'binding_id', 'revision', 'adapter', 'boundary',
+                  'endpoint', 'model', 'target_id', 'offer_id', 'protocol',
+                  'knowledge_revision', 'capabilities', 'max_output_tokens',
+                  'timeout_seconds'}
+        require(set(value['binding']) == fields,
+                'Unknown or missing ' + spec.name + ' backend field')
+        with self.backend_configuration_lock:
+            self._require_backend_reset_complete(spec.adapter_id)
+            root = self._root(); candidate = dict(value['binding'])
+            DirectCatalog(root, spec).validate_binding_offer(candidate)
+            credentials = DirectCredentials(root, spec)
+            reference = credentials.new_reference(str(uuid4()))
+            credential = credentials.put(reference, value['secret'])
+            candidate.update(credential_ref=reference,
+                             credential_revision=credential['revision'])
+            try:
+                binding = binding_type.parse(candidate)
+                bindings = DirectBindings(root, binding_type)
+                try:
+                    previous = bindings.load()
+                except FileNotFoundError:
+                    previous = None
+                bindings.save(binding)
+            except Exception:
+                credentials.delete(reference)
+                raise
+            if previous is not None and previous.credential_ref != reference:
+                credentials.delete(previous.credential_ref)
+            return self.direct_status({'adapter_id': spec.adapter_id})
+
+    def remove_direct(self, value):
+        adapter_id = self._direct_type(value).adapter_id
+        require(set(value) == {'adapter_id', 'confirmed'} and value['confirmed'] is True,
+                'Explicit provider removal confirmation is required')
+        self.reset_backend({'backend_id': adapter_id, 'confirmed': True})
+        return self.direct_status({'adapter_id': adapter_id})
+
     def reset_backend(self, value):
         """Disable one chat backend before erasing its credential; recover on retry."""
         require(isinstance(value, dict)
@@ -735,7 +822,8 @@ class ChatService:
                 'Explicit backend reset confirmation is required')
         backend_id = value['backend_id']
         require(backend_id in {'ollama', 'openai-responses', 'atlascloud-text',
-                               'searxng'}, 'Unsupported chat backend reset target')
+                               'searxng', *DIRECT_BINDINGS},
+                'Unsupported chat backend reset target')
         with self.backend_configuration_lock:
             root = self._root(); journal = BackendResetJournal(root, backend_id)
             pending = journal.load()
@@ -747,6 +835,11 @@ class ChatService:
                 elif backend_id == 'atlascloud-text':
                     try: references.append(AtlasCloudBindings(root).load().credential_ref)
                     except FileNotFoundError: pass
+                elif backend_id in DIRECT_BINDINGS:
+                    try:
+                        references.append(DirectBindings(
+                            root, DIRECT_BINDINGS[backend_id]).load().credential_ref)
+                    except FileNotFoundError: pass
                 pending = journal.begin(references)
             paths = {
                 'ollama': (OllamaBindings(root).path,),
@@ -754,11 +847,15 @@ class ChatService:
                                      root / 'openai-image-binding.json'),
                 'atlascloud-text': (AtlasCloudBindings(root).path,),
                 'searxng': (SearXNGBindings(root).path,),
+                **{adapter_id: (DirectBindings(root, binding_type).path,)
+                   for adapter_id, binding_type in DIRECT_BINDINGS.items()},
             }[backend_id]
             for path in paths: durable_unlink(path)
             credentials = (OpenAICredentials(root) if backend_id == 'openai-responses'
                            else AtlasCloudCredentials(root)
-                           if backend_id == 'atlascloud-text' else None)
+                           if backend_id == 'atlascloud-text'
+                           else DirectCredentials(root, DIRECT_BINDINGS[backend_id].spec)
+                           if backend_id in DIRECT_BINDINGS else None)
             if credentials is not None:
                 for reference in pending['credential_refs']:
                     credentials.delete(reference)
@@ -779,6 +876,15 @@ class ChatService:
             adapter = (factory(runs, credentials) if factory else
                        OpenAIAdapter(runs, credentials))
             return binding, OpenAIAdapter, adapter, runs, 'OpenAI'
+        if adapter_id in DIRECT_BINDINGS:
+            binding_type = DIRECT_BINDINGS[adapter_id]; spec = binding_type.spec
+            base = DirectBindings(root, binding_type).load()
+            binding = choice.resolve(ollama=None, direct=base)
+            runs, credentials = DirectRuns(root, spec), DirectCredentials(root, spec)
+            factory = self.direct_adapter_factory
+            adapter = (factory(runs, credentials) if factory else
+                       DirectAdapter(runs, credentials))
+            return binding, DirectAdapter, adapter, runs, spec.name
         require(adapter_id == 'atlascloud-text',
                 'Unsupported external backend adapter')
         base = AtlasCloudBindings(root).load()
@@ -799,6 +905,8 @@ class ChatService:
             ('ollama', lambda: OllamaBindings(root).load()),
             ('openai-responses', lambda: OpenAIBindings(root).load()),
             ('atlascloud-text', lambda: AtlasCloudBindings(root).load()),
+            *((adapter_id, DirectBindings(root, binding_type).load)
+              for adapter_id, binding_type in DIRECT_BINDINGS.items()),
             ('searxng', lambda: SearXNGBindings(root).load()),
         )
         for backend_id, load in loaders:
@@ -808,7 +916,8 @@ class ChatService:
                 continue
             states[backend_id] = {'configured': True, 'availability': 'unknown',
                                   'detail': getattr(binding, 'boundary', None)}
-        for backend_id in ('ollama', 'openai-responses', 'atlascloud-text', 'searxng'):
+        for backend_id in ('ollama', 'openai-responses', 'atlascloud-text', 'searxng',
+                           *DIRECT_BINDINGS):
             if BackendResetJournal(root, backend_id).load() is not None:
                 states[backend_id] = {'configured': False, 'availability': 'unavailable',
                                       'detail': 'reset-pending'}
@@ -846,6 +955,14 @@ class ChatService:
                 item, adapter_id='atlascloud-text',
                 binding_id=atlas_binding.binding_id if bound else None,
                 binding_revision=atlas_binding.revision if bound else None)
+        for adapter_id, binding_type in DIRECT_BINDINGS.items():
+            try: direct_binding = DirectBindings(root, binding_type).load()
+            except FileNotFoundError: direct_binding = None
+            for item in DirectCatalog(root, binding_type.spec).load()['offers']:
+                offers[(adapter_id, item['offer_id'])] = dict(
+                    item, adapter_id=adapter_id,
+                    binding_id=direct_binding.binding_id if direct_binding else None,
+                    binding_revision=direct_binding.revision if direct_binding else None)
         try: ollama = OllamaBindings(root).load()
         except FileNotFoundError: ollama = None
         ollama_catalog = None
@@ -978,6 +1095,9 @@ class ChatService:
             'ollama': lambda: OllamaBindings(self._root()).load().revision,
             'openai-responses': lambda: OpenAIBindings(self._root()).load().revision,
             'atlascloud-text': lambda: AtlasCloudBindings(self._root()).load().revision,
+            **{adapter_id: (lambda binding_type=binding_type: DirectBindings(
+                   self._root(), binding_type).load().revision)
+               for adapter_id, binding_type in DIRECT_BINDINGS.items()},
         }[choice.adapter_id]()
         candidates = [item for item in projection['offers']
                       if item['adapter_id'] == choice.adapter_id
@@ -1233,8 +1353,10 @@ class ChatService:
                             if choice.adapter_id == 'openai-responses' else None)
         atlascloud_binding = (AtlasCloudBindings(root).load()
                               if choice.adapter_id == 'atlascloud-text' else None)
+        direct_binding = (DirectBindings(root, DIRECT_BINDINGS[choice.adapter_id]).load()
+                          if choice.adapter_id in DIRECT_BINDINGS else None)
         binding = choice.resolve(ollama=configured, openai=external_binding,
-                                 atlascloud=atlascloud_binding)
+                                 atlascloud=atlascloud_binding, direct=direct_binding)
         run_selection = self._run_selection(choice, binding, output_format='json',
             runs=adapter.runs, run_id=request['run_id'])
         choice.validate_context(
@@ -1303,7 +1425,9 @@ class ChatService:
                 openai=(OpenAIBindings(root).load()
                 if choice.adapter_id == 'openai-responses' else None),
                 atlascloud=(AtlasCloudBindings(root).load()
-                if choice.adapter_id == 'atlascloud-text' else None)) == binding,
+                if choice.adapter_id == 'atlascloud-text' else None),
+                direct=(DirectBindings(root, DIRECT_BINDINGS[choice.adapter_id]).load()
+                if choice.adapter_id in DIRECT_BINDINGS else None)) == binding,
                 'Selected task execution binding changed')
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
@@ -1316,7 +1440,7 @@ class ChatService:
                 'query': plan.search_query,
                 'message_ids': request['selected_message_ids'] + [request['message_id']],
                 'artifact_ids': request['selected_artifact_ids']})
-        elif choice.adapter_id in {'openai-responses', 'atlascloud-text'}:
+        elif choice.adapter_id in EXTERNAL_ADAPTERS:
             outcome = AITaskOutcome.parse({'schema_version': 1,
                 'kind': 'external-request',
                 'purpose': 'Generate explicit ' + plan.output_kind + ' output',
@@ -2234,7 +2358,7 @@ class ChatService:
             choice = ChatRunChoice.parse(request['run_choice'])
             task_plan = (ExplicitTaskPlan.parse(request['task_plan'])
                          if 'task_plan' in request else None)
-            require(choice.adapter_id in {'openai-responses', 'atlascloud-text'}
+            require(choice.adapter_id in EXTERNAL_ADAPTERS
                     and ((task_plan is None and choice.mode == 'brainstorming')
                          or (task_plan is not None and choice.mode == 'orchestration'
                              and not request['record_chat'])),
@@ -2422,9 +2546,11 @@ class ChatService:
         error_adapter = approval['request'].get('run_choice', {}).get(
             'adapter', 'openai-responses')
         unknown_error = (AtlasCloudUnknownRun if error_adapter == 'atlascloud-text'
+                         else DirectUnknownRun if error_adapter in DIRECT_BINDINGS
                          else OpenAIUnknownRun)
         response_error = (AtlasCloudResponseError
                           if error_adapter == 'atlascloud-text'
+                          else DirectResponseError if error_adapter in DIRECT_BINDINGS
                           else OpenAIResponseError)
         if approval['state'] == 'succeeded':
             return approval['result']

@@ -38,7 +38,10 @@ from spikes.gamepad_settings import GamepadSettings
 from spikes.journal import sync_dir
 
 
-PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
+PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys',
+                               'https://platform.claude.com/settings/keys',
+                               'https://aistudio.google.com/apikey',
+                               'https://console.x.ai/team/default/api-keys'})
 # Qt WebEngine does not deliver plain JS objects as Python dictionaries.
 # Transfer JSON, consuming the sensitive payload only once.
 IDE_BRIDGE_INSTALL_REQUEST_JS = """(function(){
