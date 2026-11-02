@@ -1193,7 +1193,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
 <div class="prompt-execution-controls" aria-label="Cíl běhu">
 <label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="">Vyberte backend</option></select></label>
-<label class="prompt-control" for="chat-run-model"><span>Model</span><select id="chat-run-model"><option value="">Vyberte model</option></select></label>
+<label class="prompt-control" for="chat-run-model"><span>Model</span><select id="chat-run-model"><option value="">Vyberte model</option></select></label><small id="chat-ollama-catalog-status" role="status" aria-live="polite" hidden></small>
 </div>
 <button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)" disabled>↑</button>
 </div>
@@ -4121,7 +4121,7 @@ function renderBackendCatalog(value){
 }
 let modelSelectionProjection=null;
 function renderModelSelection(value){
- modelSelectionProjection=value;renderChatRunSelectors();
+ modelSelectionProjection=value;renderChatRunSelectors();renderChatOllamaCatalogStatus(value);
  const body=document.querySelector('#settings-models-table tbody');body.replaceChildren();
  const names=new Map((value.models||[]).map(item=>[item.model_id,item.display_name]));
  const groups=new Map();
@@ -4150,6 +4150,12 @@ function renderModelSelection(value){
   `${groups.size} agregovaných modelů · ${(value.offers||[]).length} backendových nabídek · ${value.revision}`;
 }
 async function loadBackendCatalog(){try{renderBackendCatalog(await projectRequest('/v1/backend-catalog/status',{}));}catch(error){document.querySelector('#settings-backend-status').textContent=error.message;}}
+function renderChatOllamaCatalogStatus(value){
+ const status=document.querySelector('#chat-ollama-catalog-status'),catalog=value?.ollama_catalog;
+ const reasons={unavailable:'Ollama není dostupná',rejected:'připojení bylo odmítnuto','invalid-response':'Ollama vrátila neplatnou odpověď','rate-limited':'Ollama omezila požadavky'};
+ const stale=!!catalog?.refresh_error;status.hidden=!stale;
+ status.textContent=stale?`Nabídka modelů Ollamy není aktuální (${reasons[catalog.refresh_error]||catalog.refresh_error}); k výběru zůstává uložený model ${catalog.configured_model}.`:'';
+}
 async function loadModelSelection(){try{renderModelSelection(await projectRequest('/v1/model-selection/status',{}));}catch(error){document.querySelector('#settings-models-status').textContent=error.message;}}
 document.querySelector('#settings-model-detail button').addEventListener('click',()=>document.querySelector('#settings-model-detail').close());
 const roadmapSvg='http://www.w3.org/2000/svg';let roadmapProjection=null;
@@ -4448,6 +4454,7 @@ async function openSettings(settingsTabId='settings-backend-tab'){
  }
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
  await loadBackendBinding();
+ if(selected.id==='settings-backend-tab'&&ollamaCatalogCandidateComplete(ollamaDiscoveryCandidate()))refreshOllamaCatalog();
 }
 async function closeSettings(){
  const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;userProfileLoaded=false;
@@ -6560,6 +6567,7 @@ async function loadChat(){
  }else{atlasCloudBinding=null;atlasCloudStreaming=false;fillAtlasCloudOffers(null,null);warnings.push('AtlasCloud stav není dostupný');}
  if(modelSelectionState.status==='rejected')warnings.push('nabídky backendů a modelů nejsou dostupné');
  refreshChatModeControls();
+ refreshChatOllamaCatalog();
  if(selectionRevision!==chatSelectionRevision)return;
  if(tasksState.status==='fulfilled'){
   const tasks=tasksState.value;
@@ -6634,16 +6642,54 @@ document.querySelector('#chat-backend-test').addEventListener('click',async even
  }catch(error){ollamaAvailability={available:false,checked_at:new Date().toISOString()};localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
-document.querySelector('#ollama-load-models').addEventListener('click',async event=>{
- const status=document.querySelector('#ollama-model-catalog-status');event.currentTarget.disabled=true;
+const OLLAMA_CHAT_CATALOG_MIN_INTERVAL=30000;
+let ollamaCatalogRequest=0,ollamaCatalogListKey=null,chatCatalogCheckedAt=0,chatCatalogRefreshing=false;
+function ollamaCatalogKey(binding){return JSON.stringify([binding.boundary,binding.endpoint,binding.target_id,binding.tls_cert_sha256||'']);}
+// Discovery needs only the connection; the model field may still be empty.
+function ollamaDiscoveryCandidate(){const binding=backendCandidate();if(!binding.model)binding.model='catalog-discovery';return binding;}
+function ollamaCatalogCandidateComplete(binding){return !!binding.endpoint&&(binding.boundary==='same-node'||(!!binding.target_id&&!!binding.tls_cert_sha256));}
+async function syncModelSelectionWithCatalog(){
+ try{const value=await projectRequest('/v1/model-selection/status',{});
+  // Re-rendering an unchanged offer list would disturb an open model picker.
+  if(value.revision===modelSelectionProjection?.revision){modelSelectionProjection=value;renderChatOllamaCatalogStatus(value);}
+  else renderModelSelection(value);
+ }catch(error){/* The status element keeps the last confirmed projection. */}
+}
+async function refreshOllamaCatalog(){
+ const status=document.querySelector('#ollama-model-catalog-status'),candidate=ollamaDiscoveryCandidate();
+ const key=ollamaCatalogKey(candidate),request=++ollamaCatalogRequest;
+ // The saved binding itself refreshes the chat offers; an unsaved candidate never does.
+ const saved=chatBinding&&ollamaCatalogKey(chatBinding)===key;
  status.textContent='Načítám modely z přesně zadaného Ollama endpointu…';
- try{const result=await projectRequest('/v1/chat/models',backendCandidate(),15000);
-  fillOllamaModels(result.models);status.textContent=result.models.length?
+ try{const result=await projectRequest('/v1/chat/models',saved?chatBinding:candidate,15000);
+  if(request!==ollamaCatalogRequest)return;
+  fillOllamaModels(result.models);ollamaCatalogListKey=key;status.textContent=result.models.length?
    `Načteno ${result.models.length} modelů. Vyberte některý nebo ponechte ručně zadané ID.`:
    'Ollama nevrátila žádný model; ID modelu zadejte ručně.';}
- catch(error){fillOllamaModels([]);status.textContent=`${error.message} ID modelu můžete zadat ručně.`;}
- finally{event.currentTarget.disabled=false;}
+ catch(error){if(request!==ollamaCatalogRequest)return;
+  if(key===ollamaCatalogListKey)status.textContent=`${error.message} Zobrazený seznam nemusí být aktuální; ID modelu můžete zadat ručně.`;
+  else{fillOllamaModels([]);ollamaCatalogListKey=null;status.textContent=`${error.message} ID modelu můžete zadat ručně.`;}}
+ if(saved)await syncModelSelectionWithCatalog();
+}
+async function refreshChatOllamaCatalog(){
+ if(!chatBinding||chatCatalogRefreshing||Date.now()-chatCatalogCheckedAt<OLLAMA_CHAT_CATALOG_MIN_INTERVAL)return;
+ chatCatalogRefreshing=true;chatCatalogCheckedAt=Date.now();
+ try{
+  try{await projectRequest('/v1/chat/models',chatBinding,15000);}
+  catch(error){/* Reported through the projection below. */}
+  await syncModelSelectionWithCatalog();
+ }finally{chatCatalogRefreshing=false;}
+}
+document.querySelector('#ollama-load-models').addEventListener('click',async event=>{
+ const button=event.currentTarget;button.disabled=true;
+ try{await refreshOllamaCatalog();}finally{button.disabled=false;}
 });
+for(const name of ['boundary','endpoint','target_id','tls_cert_sha256'])chatForm.elements[name].addEventListener('change',()=>{
+ if(ollamaCatalogCandidateComplete(ollamaDiscoveryCandidate())){refreshOllamaCatalog();return;}
+ ollamaCatalogRequest++;fillOllamaModels([]);ollamaCatalogListKey=null;
+ document.querySelector('#ollama-model-catalog-status').textContent='Pro načtení modelů doplňte připojení. Model lze zadat ručně.';
+});
+window.addEventListener('focus',()=>{if(!projectView.hidden)refreshChatOllamaCatalog();});
 ollamaStreamingToggle.addEventListener('change',async event=>{
  const requested=event.currentTarget.checked;event.currentTarget.disabled=true;
  ollamaStreamingState.textContent='Ukládám nastavení streamování…';
@@ -6679,7 +6725,7 @@ chatForm.addEventListener('submit',async event=>{
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;
   try{const catalog=await projectRequest('/v1/chat/models',result.binding,15000);
-   fillOllamaModels(catalog.models);document.querySelector('#ollama-model-catalog-status').textContent=
+   ollamaCatalogListKey=ollamaCatalogKey(result.binding);fillOllamaModels(catalog.models);document.querySelector('#ollama-model-catalog-status').textContent=
     `Uloženo a načteno ${catalog.models.length} modelů pro chat.`;await loadModelSelection();}
   catch(error){document.querySelector('#ollama-model-catalog-status').textContent=
     `Backend je uložen; katalog se nepodařilo načíst. Model lze zadat ručně. ${error.message}`;}}

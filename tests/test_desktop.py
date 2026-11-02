@@ -1475,6 +1475,52 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('++chatLoadRevision', JS)
         self.assertIn('expectedProjectId!==(activeProject?.id || null)', JS)
 
+    def test_ollama_catalog_refresh_flow(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js required')
+        start = JS.index('const OLLAMA_CHAT_CATALOG_MIN_INTERVAL=30000;')
+        end = JS.index("document.querySelector('#ollama-load-models').addEventListener")
+        harness = r"""
+const assert=require('node:assert/strict');
+const status={textContent:''};const document={querySelector:()=>status};
+let chatBinding=null,modelSelectionProjection={revision:'r1'},list=[],rendered=0,catalogRendered=0,calls=[],pending=[];
+let candidate={boundary:'same-node',endpoint:'http://a',target_id:'local-process',model:''};
+const backendCandidate=()=>({...candidate});
+const fillOllamaModels=models=>{list=models;};
+const renderModelSelection=value=>{rendered++;modelSelectionProjection=value;};
+const renderChatOllamaCatalogStatus=()=>{catalogRendered++;};
+let selectionRevision='r1';
+function projectRequest(path,body){
+ if(path==='/v1/model-selection/status')return Promise.resolve({revision:selectionRevision});
+ calls.push(body);return new Promise((resolve,reject)=>pending.push({resolve,reject}));
+}
+"""
+        checks = r"""
+(async()=>{
+ assert.equal(ollamaDiscoveryCandidate().model,'catalog-discovery');
+ assert.equal(ollamaCatalogCandidateComplete({boundary:'private-network',endpoint:'https://x',target_id:'t'}),false);
+ const first=refreshOllamaCatalog();candidate.endpoint='http://b';const second=refreshOllamaCatalog();
+ pending[1].resolve({models:['new']});await second;pending[0].resolve({models:['late']});await first;
+ assert.deepEqual(list,['new']);
+ assert.equal(rendered,0,'an unsaved candidate must not touch the chat offers');
+ pending.length=0;const failed=refreshOllamaCatalog();pending[0].reject(new Error('down'));await failed;
+ assert.deepEqual(list,['new'],'same endpoint keeps the last list');assert.match(status.textContent,/nemusí být aktuální/);
+ candidate.endpoint='http://c';pending.length=0;const other=refreshOllamaCatalog();pending[0].reject(new Error('down'));await other;
+ assert.deepEqual(list,[],'another endpoint must not show foreign models');
+ chatBinding={binding_id:'b',revision:'x',boundary:'same-node',endpoint:'http://c',target_id:'local-process',model:'m'};
+ calls.length=0;pending.length=0;const saved=refreshOllamaCatalog();assert.equal(calls[0],chatBinding);
+ pending[0].resolve({models:['m']});await saved;
+ assert.equal(rendered,0,'unchanged revision must not re-render an open picker');assert.equal(catalogRendered,1);
+ calls.length=0;pending.length=0;const chat=refreshChatOllamaCatalog();await refreshChatOllamaCatalog();
+ assert.equal(calls.length,1,'chat refresh is single-flight');pending[0].reject(new Error('down'));await chat;
+ assert.equal(catalogRendered,2,'a failed refresh still reads the projection');
+ await refreshChatOllamaCatalog();assert.equal(calls.length,1,'chat refresh is rate limited');
+ selectionRevision='r2';await syncModelSelectionWithCatalog();assert.equal(rendered,1);
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        subprocess.run(['node', '-e', harness + JS[start:end] + checks], check=True)
+
     def test_project_chat_restoration_finishes_after_optional_requests(self):
         import shutil
         if not shutil.which('node'):
@@ -1491,7 +1537,8 @@ const document={querySelector:()=>selected},chatStatus={textContent:''},chatOper
 const thread={thread_id:'thread',project_id:'project',status:'active',classification:'brainstorming'};
 const renderModelSelection=()=>{},renderChatRunSelectors=()=>{},fillBinding=()=>{},fillSearchBinding=()=>{},
  applyOllamaStreamingStatus=()=>{},applyResponseLanguageStatus=()=>{},renderThreadList=()=>{},
- renderTaskPublicSources=()=>{},refreshChatModeControls=()=>{},fillExternalModels=()=>{},fillAtlasCloudOffers=()=>{};
+ renderTaskPublicSources=()=>{},refreshChatModeControls=()=>{},fillExternalModels=()=>{},fillAtlasCloudOffers=()=>{},
+ refreshChatOllamaCatalog=()=>{};
 function renderChat(value){rendered.push(value);}
 async function loadAutonomyQueue(){return true;}
 async function projectRequest(url){

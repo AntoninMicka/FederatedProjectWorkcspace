@@ -273,6 +273,9 @@ class ChatService:
         self.backend_configuration_lock = threading.RLock()
         self.task_stream_lock = threading.RLock()
         self.task_stream_controls = {}
+        # Last failed refresh of the active binding.  Advisory runtime state: the
+        # snapshot stays authoritative and a restart re-checks through the next refresh.
+        self._ollama_refresh_failures = {}
         self._request_user_id = ContextVar(
             f'chat-user-{id(self)}', default=None)
         self._request_project_ids = ContextVar(
@@ -379,9 +382,16 @@ class ChatService:
         """Discover a bounded Ollama catalog without changing the active binding."""
         self._require_backend_reset_complete('ollama')
         binding = BACKENDS.parse_binding(value)
-        names = OllamaAdapter.discover_models(binding)
-        require(all(len(name.encode()) <= 256 for name in names),
-                'Ollama model name exceeds catalog limit')
+        root = self._root(); failures = self._ollama_refresh_failures; key = str(root)
+        try:
+            names = OllamaAdapter.discover_models(binding)
+            require(all(len(name.encode()) <= 256 for name in names),
+                    'Ollama model name exceeds catalog limit')
+        except (RuntimeError, ValueError) as exc:
+            if self._active_ollama_binding(root) == binding:
+                failures[key] = (binding.binding_id, binding.revision,
+                                 self._ollama_discovery_error(exc))
+            raise
         observed = now(); capabilities = []
         for name in ('generate-text', 'json-output', 'streaming', 'text-output'):
             capabilities.append({'name': name, 'value': True, 'state': 'reported',
@@ -395,12 +405,34 @@ class ChatService:
             'schema_version': 1, 'provider_id': 'ollama',
             'scope_id': binding.binding_id, 'binding_revision': binding.revision,
             'credential_revision': None, 'fetched_at': observed, 'offers': offers}
-        try: active = OllamaBindings(self._root()).load()
-        except FileNotFoundError: active = None
-        if active == binding:
-            snapshot = ModelDiscoveryStore(
-                self._root(), 'ollama', binding.binding_id).publish(snapshot)
+        if self._active_ollama_binding(root) == binding:
+            store = ModelDiscoveryStore(root, 'ollama', binding.binding_id)
+            try: previous = store.load_raw()
+            except FileNotFoundError: previous = None
+            # Timestamps feed the selection revision, so republishing an unchanged
+            # catalog would invalidate a model the user has already picked.
+            if (previous is not None and previous['binding_revision'] == binding.revision
+                    and sorted(item['provider_model_id'] for item in previous['offers']
+                               if item['availability'] == 'available') == names):
+                snapshot = previous
+            else:
+                snapshot = store.publish(snapshot)
+            failures.pop(key, None)
         return dict(snapshot, freshness='fresh', refresh_error=None, models=names)
+
+    @staticmethod
+    def _active_ollama_binding(root):
+        try: return OllamaBindings(root).load()
+        except FileNotFoundError: return None
+
+    @staticmethod
+    def _ollama_discovery_error(exc):
+        code = getattr(exc, 'code', None)
+        if code in {'tls-failed', 'tls-pin-mismatch', 'redirect-forbidden'}: return 'rejected'
+        if code is None or code.startswith('invalid-') or code in {
+                'response-invalid', 'response-too-large'}:
+            return 'invalid-response'
+        return 'unavailable'
 
     @staticmethod
     def _runtime_assessment(evidence):
@@ -816,12 +848,20 @@ class ChatService:
                 binding_revision=atlas_binding.revision if bound else None)
         try: ollama = OllamaBindings(root).load()
         except FileNotFoundError: ollama = None
+        ollama_catalog = None
         if ollama is not None:
+            failure = self._ollama_refresh_failures.get(str(root))
+            refresh_error = (failure[2] if failure is not None
+                             and failure[:2] == (ollama.binding_id, ollama.revision) else None)
             try:
                 discovered = ModelDiscoveryStore(root, 'ollama', ollama.binding_id).load(
-                    ollama.revision, None)
+                    ollama.revision, None, refresh_error=refresh_error)
             except (FileNotFoundError, ValueError):
                 discovered = None
+            ollama_catalog = {
+                'freshness': 'unknown' if discovered is None else discovered['freshness'],
+                'fetched_at': None if discovered is None else discovered['fetched_at'],
+                'refresh_error': refresh_error, 'configured_model': ollama.model}
             reviewed = {(item['provider_id'], item['provider_model_id'], item['protocol']): item
                         for item in knowledge['offers']}
             if discovered is not None and discovered['freshness'] == 'fresh':
@@ -848,7 +888,7 @@ class ChatService:
                     'adapter_id': 'ollama', 'provider_id': 'ollama',
                     'provider_model_id': ollama.model, 'protocol': 'ollama-generate-v1',
                     'canonical_model_id': None, 'availability': 'available',
-                    'freshness': 'fresh', 'fetched_at': None, 'refresh_error': None,
+                    'freshness': 'fresh', 'fetched_at': None, 'refresh_error': refresh_error,
                     'capabilities': [
                         {'name': name, 'supported': True, 'state': 'reported',
                          'reported': None, 'reviewed': None}
@@ -885,7 +925,8 @@ class ChatService:
         return {'schema_version': 1, 'revision': 'model-selection-' + digest,
                 'knowledge_revision': knowledge['revision'],
                 'models': sorted(models.values(), key=lambda item: item['model_id']),
-                'offers': rows, 'preferences': preferences}
+                'offers': rows, 'preferences': preferences,
+                'ollama_catalog': ollama_catalog}
 
     @staticmethod
     def _with_model_aggregation(offer):

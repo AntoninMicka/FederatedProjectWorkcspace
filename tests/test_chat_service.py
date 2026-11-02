@@ -22,7 +22,7 @@ from spikes.external_proposal import ExternalCallProposal
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import ContextBuilder
 from spikes.metadata import ValidationError
-from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
+from spikes.ollama_backend import OllamaAdapter, OllamaResponseError, OllamaRuns, UnknownRun
 from spikes.openai_backend import (OpenAIBindings, OpenAICredentials,
                                    OpenAIModelCatalog, OpenAIUnknownRun)
 from spikes.storage import Git
@@ -2162,6 +2162,63 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(stored['response_language'], 'cs-CZ')
         self.assertEqual([turn['response_language'] for turn in stored['turns']],
                          ['de-DE', 'sk-SK'])
+
+    def test_unchanged_ollama_refresh_keeps_selection_revision(self):
+        with patch.object(OllamaAdapter, 'discover_models', return_value=['gemma3', 'qwen3']):
+            self.service.refresh_ollama_models(self.binding)
+            before = self.service.model_selection_status()
+            again = self.service.refresh_ollama_models(self.binding)
+        self.assertEqual(again['models'], ['gemma3', 'qwen3'])
+        self.assertEqual(self.service.model_selection_status()['revision'], before['revision'])
+        with patch.object(OllamaAdapter, 'discover_models',
+                          return_value=['gemma3', 'qwen3', 'new:model']):
+            self.service.refresh_ollama_models(self.binding)
+        changed = self.service.model_selection_status()
+        self.assertNotEqual(changed['revision'], before['revision'])
+        self.assertIn('new:model', [item['provider_model_id'] for item in changed['offers']])
+
+    def test_failed_ollama_refresh_never_presents_old_offers_as_current(self):
+        with patch.object(OllamaAdapter, 'discover_models', return_value=['gemma3', 'qwen3']):
+            self.service.refresh_ollama_models(self.binding)
+        snapshot = next(self.chat_state.glob('model-discovery-*.json')).read_bytes()
+        failures = (
+            (OllamaResponseError('down', code='unavailable'), 'unavailable'),
+            (OllamaResponseError('slow', code='response-timeout'), 'unavailable'),
+            (OllamaResponseError('pin', code='tls-pin-mismatch'), 'rejected'),
+            (OllamaResponseError('bad', code='invalid-envelope'), 'invalid-response'))
+        for error, expected in failures:
+            with self.subTest(expected=expected, code=error.code):
+                with patch.object(OllamaAdapter, 'discover_models', side_effect=error):
+                    with self.assertRaises(OllamaResponseError):
+                        self.service.refresh_ollama_models(self.binding)
+                status = self.service.model_selection_status()
+                self.assertEqual(status['ollama_catalog']['freshness'], 'stale')
+                self.assertEqual(status['ollama_catalog']['refresh_error'], expected)
+                offers = [item for item in status['offers'] if item['adapter_id'] == 'ollama']
+                self.assertEqual([item['provider_model_id'] for item in offers], ['gemma3'])
+                self.assertEqual(offers[0]['refresh_error'], expected)
+                self.assertTrue(offers[0]['offer_id'].startswith('ollama-binding:'))
+                self.assertEqual(next(self.chat_state.glob('model-discovery-*.json')).read_bytes(),
+                                 snapshot)
+        with patch.object(OllamaAdapter, 'discover_models', return_value=['gemma3', 'qwen3']):
+            self.service.refresh_ollama_models(self.binding)
+        recovered = self.service.model_selection_status()
+        self.assertEqual(recovered['ollama_catalog']['freshness'], 'fresh')
+        self.assertIsNone(recovered['ollama_catalog']['refresh_error'])
+        self.assertEqual(sorted(item['provider_model_id'] for item in recovered['offers']
+                                if item['adapter_id'] == 'ollama'), ['gemma3', 'qwen3'])
+
+    def test_failed_unsaved_ollama_candidate_does_not_mark_active_catalog_stale(self):
+        with patch.object(OllamaAdapter, 'discover_models', return_value=['gemma3']):
+            self.service.refresh_ollama_models(self.binding)
+        candidate = dict(self.binding, revision='unsaved-candidate')
+        with patch.object(OllamaAdapter, 'discover_models',
+                          side_effect=OllamaResponseError('down', code='unavailable')):
+            with self.assertRaises(OllamaResponseError):
+                self.service.refresh_ollama_models(candidate)
+        catalog = self.service.model_selection_status()['ollama_catalog']
+        self.assertEqual(catalog['freshness'], 'fresh')
+        self.assertIsNone(catalog['refresh_error'])
 
     def test_explicit_modes_bind_thread_and_per_run_local_model(self):
         with patch.object(OllamaAdapter, 'discover_models',
