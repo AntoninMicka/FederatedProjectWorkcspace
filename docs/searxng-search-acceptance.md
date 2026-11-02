@@ -9,6 +9,17 @@ Checklist ověřuje feature `F-M3-SEARCH-01` a její bounded iterativní rozší
 `F-M3-SEARCH-02`. SearXNG a Ollama jsou samostatné
 explicitní bindingy; dostupnost jedné služby nesmí změnit druhou ani privacy.
 
+## Požadavky na instanci
+
+Workspace volá `GET /search?q=…&format=json`. V `settings.yml` instance musí být
+`json` v `search.formats`, jinak SearXNG vrátí 403 a Workspace nahlásí odepření
+přístupu. Limiter SearXNG povoluje ve výchozím stavu jen 4 ne-HTML požadavky za
+hodinu z jedné IP a hodnotí chybějící hlavičky jako bota; Workspace neposílá
+`User-Agent` ani `Accept-Language`. U vlastní instance dostupné jen Workspace
+proto limiter vypněte nebo uvolněte, jinak může vracet 429. Chování se skutečnou
+instancí se zapnutým limiterem není ověřené. Podmínky hledání přímo u providerů
+popisuje [samostatný manuál](web-search-providers.md).
+
 ## Konfigurace
 
 1. Otevřete **Nastavení → AI backend → Řízené webové hledání**.

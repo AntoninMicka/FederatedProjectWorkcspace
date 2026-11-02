@@ -140,7 +140,8 @@ zaškrtnutí potvrzení Workspace provede jeden bounded search, uloží jeho
 provenance a předá přesné výsledky Ollamě v novém Context Manifestu. URL ani
 stránky automaticky neotevírá. `local-only` dotaz je vždy odmítnut a neurčitý
 síťový výsledek se automaticky neopakuje. Praktická akceptace je v
-[checklistu SearXNG hledání](docs/searxng-search-acceptance.md).
+[checklistu SearXNG hledání](docs/searxng-search-acceptance.md). Podmínky hledání
+přímo u providerů LLM shrnuje [samostatný manuál](docs/web-search-providers.md).
 
 U jednotlivého HTTPS výsledku lze zvolit **Načíst stránku**. Workspace nejprve
 zobrazí přesný plán se samostatným `robots.txt` preflightem, cílovým GET,
@@ -322,6 +323,7 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [IP, defensive publication a crowdfunding roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>)
 - [Read-only vizualizace roadmapy](docs/roadmap-visualization.md)
 - [Projektový plán a podgrafy](docs/task-planning.md)
+- [Webové hledání a podmínky providerů](docs/web-search-providers.md)
 - [Patent Risk Register](docs/IP/PATENT_RISK_REGISTER.md)
 - [Defensive Disclosures](docs/IP/DEFENSIVE_DISCLOSURES.md)
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
