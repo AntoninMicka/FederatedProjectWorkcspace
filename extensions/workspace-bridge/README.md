@@ -121,8 +121,10 @@ obnova stejné operace. Výsledek se vrací do panelu IDE po synchronizaci.
 
 Workspace připraví neměnný balíček fronty přes **Předat frontu do IDE**.
 Povolte export podkladů v aktuálním mappingu; následně synchronizujte IDE.
-Pohled **Fronta úkolů** rozlišuje zahajitelné položky, navazující pouze pro
-náhled, agentní hlášení a lidské přijetí. Předání agentovi kopíruje cesty
+Pohled **Fronta úkolů** ukazuje vedle sebe připravenost, agentní hlášení, ruční
+žádost a lidské přijetí a dávku rozbalí na podúkoly. Ikona ✓ odešle ruční žádost
+o potvrzení, kterou uzavřete ve Workspace; úkol sama nedokončí. Podrobně viz
+[předání fronty](../../docs/ide-queue-handoff.md). Předání agentovi kopíruje cesty
 manifestu a AGENT.md. Agent hlásí splnění ordinary-file zprávou; oprávněný
 člověk ji přijímá ve Workspace. Doručení není dokončení.
 

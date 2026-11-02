@@ -2,7 +2,7 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace",
   "description": "Tasks, messages, documents and agent rules for Federated Workspace",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {
@@ -86,6 +86,11 @@
       {
         "command": "workspaceBridge.queueHandoff",
         "title": "Workspace: Předat položku fronty agentovi"
+      },
+      {
+        "command": "workspaceBridge.queueConfirm",
+        "title": "Workspace: Ručně požádat o potvrzení splnění",
+        "icon": "$(check)"
       },
       {
         "command": "workspaceBridge.checkUpdates",
@@ -188,6 +193,11 @@
         },
         {
           "command": "workspaceBridge.queueHandoff",
+          "when": "view == workspaceBridge.queue && viewItem =~ /^queue(Task|Startable)$/",
+          "group": "inline"
+        },
+        {
+          "command": "workspaceBridge.queueConfirm",
           "when": "view == workspaceBridge.queue && viewItem == queueTask",
           "group": "inline"
         }

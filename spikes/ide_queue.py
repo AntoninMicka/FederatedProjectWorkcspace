@@ -75,12 +75,14 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None, automatic
         issues, _ = assess(state['task_ids'], graph, accepted)
         require(not issues, '; '.join(issues))
         catalog = {d['artifact_id']: d for d in descriptors(files, entities, record['snapshot']['tasks'])}
-        source_ids = {nodes[i]['source']['artifact_id'] for i in state['task_ids']}
+        hierarchy, linked_ids, hierarchy_problems = build_hierarchy(state['task_ids'], nodes)
+        scope_ids = list(state['task_ids']) + linked_ids
+        source_ids = {nodes[i]['source']['artifact_id'] for i in scope_ids}
         pending = [(i, 0, None) for i in sorted(source_ids)]
-        for i in state['task_ids']:
+        for i in scope_ids:
             pending += [(m[1], 0, 'artifacts/'+m[1]+'/'+m[2]) for m in REFERENCE.finditer(nodes[i]['description'])]
         pending += [(i, 0, None) for i, d in catalog.items() if d['agent_rules']]
-        visited = set(); documents = []; blockers = []; total = 0
+        visited = set(); documents = []; blockers = list(hierarchy_problems); total = 0
         while pending:
             identifier, depth, target = pending.pop(0)
             if identifier in visited:
@@ -111,8 +113,12 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None, automatic
             'Write one UUID-named agent completion to inbox atomically; include queue_packet_id, reported_by=agent, '
             'evidence.tests and evidence.diff, original revision and actual repository_commit. '
             'Delivery is not acceptance; only human Workspace review completes the roadmap. No automatic retry after unknown outcome.')
-        if accepted.intersection(state['task_ids']):
-            manifest.update(accepted_task_ids=sorted(accepted.intersection(state['task_ids'])), previous_packet_id=previous['packet_id'])
+        if hierarchy:
+            manifest.update(hierarchy=hierarchy, linked_tasks=[nodes[i] for i in linked_ids])
+        if state['held_task_ids']:
+            manifest.update(held_task_ids=state['held_task_ids'])
+        if accepted.intersection(scope_ids):
+            manifest.update(accepted_task_ids=sorted(accepted.intersection(scope_ids)), previous_packet_id=previous['packet_id'])
         require(len(canonical(manifest).encode()) <= 1024*1024, 'Queue manifest exceeds limit')
         packet = dict(packet_id=digest(manifest), manifest=manifest)
         require(git.head() == head, 'Project changed during queue publication')
@@ -132,6 +138,34 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None, automatic
             db.execute('INSERT OR IGNORE INTO queue_packets VALUES (?,?,?)', (packet['packet_id'], record['session_id'], canonical(packet)))
         checkpoint('queue-packet-published')
     return dict(packet_id=packet['packet_id'], blockers=manifest['blockers'], context_status=manifest['context_status'])
+
+
+def build_hierarchy(task_ids, nodes):
+    """Reference the subtree of queued containers; each task definition is pinned once."""
+    children = {}
+    for node in nodes.values():
+        if node['parent_id'] is not None:
+            children.setdefault(node['parent_id'], []).append(node['id'])
+    hierarchy = {}; linked = []; problems = []; queued = set(task_ids)
+
+    def walk(identifier, path):
+        for child in children.get(identifier, ()):
+            if child in path:
+                problems.append('Hierarchy cycle: ' + ' > '.join(path + (child,))); continue
+            if child in hierarchy:
+                continue
+            if child not in queued and child not in linked:
+                linked.append(child)
+            if child in children:
+                hierarchy[child] = dict(type=nodes[child]['type'], children=list(children[child]))
+                walk(child, path + (child,))
+
+    for identifier in task_ids:
+        if identifier in nodes and identifier in children and identifier not in hierarchy:
+            hierarchy[identifier] = dict(type=nodes[identifier]['type'],
+                                         children=list(children[identifier]))
+            walk(identifier, (identifier,))
+    return hierarchy, linked, problems
 
 
 def waiting_review(db, session_id):
@@ -188,7 +222,7 @@ def lineage(service, record, packet, view):
             reviews.append((message, review))
     head = packet['manifest']['project_head']; accepted = set()
     workspace = service.projects.workspace(record['project_id'])
-    for _ in packet['manifest']['tasks']:
+    for _ in packet['manifest']['tasks'] + packet['manifest'].get('linked_tasks', []):
         next_ = [(m, r) for m, r in reviews if r['request']['expected_head'] == head and m['task_id'] not in accepted]
         if not next_: break
         require(len(next_) == 1, 'Ambiguous queue receipt chain')
@@ -218,18 +252,55 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
         if state['revision'] != packet['manifest']['queue_revision'] or state['task_ids'] != [t['id'] for t in packet['manifest']['tasks']]:
             blockers.append('Working queue changed; publish a new packet')
     nodes = {n['id']: n for n in view['plan']['nodes']}
+    reported = {'agent': set(), 'user': set()}
     with service.database() as db:
-        reported = {json.loads(r[0])['task_id'] for r in db.execute('SELECT record FROM messages WHERE session=?', (record['session_id'],))
-                    if json.loads(r[0]).get('queue_packet_id') == packet['packet_id']}
-    items = []
-    for original in packet['manifest']['tasks']:
-        n = nodes.get(original['id']); eligible = bool(not blockers and n and not n['checked']
-            and all(nodes[d]['checked'] for d in n['depends_on'])
-            and all(child['checked'] for child in nodes.values() if child['parent_id'] == n['id']))
-        items.append(dict(id=original['id'], title=original['title'], eligible=eligible,
-                          agent_confirmed=original['id'] in reported, user_confirmed=original['id'] in accepted))
+        for r in db.execute('SELECT record FROM messages WHERE session=?', (record['session_id'],)):
+            message = json.loads(r[0])
+            if message.get('queue_packet_id') == packet['packet_id'] and message.get('reported_by') in reported:
+                reported[message['reported_by']].add(message['task_id'])
+    held = set(packet['manifest'].get('held_task_ids', ()))
+
+    def item(original):
+        identifier = original['id']; n = nodes.get(identifier); blocked_by = []
+        if n is None:
+            blocked_by.append('Položka již není v roadmapě')
+        else:
+            blocked_by += ['Předpoklad: ' + d for d in n['depends_on'] if not nodes[d]['checked']]
+            if identifier in held: blocked_by.append('Pozastaveno uživatelem')
+            if n['checked']: blocked_by.append('Položka je dokončená')
+        open_children = [] if n is None else [c['id'] for c in nodes.values()
+                                               if c['parent_id'] == identifier and not c['checked']]
+        ready = bool(not blockers and not blocked_by)
+        return dict(id=identifier, title=original['title'], type=original.get('type'),
+                    parent_id=original.get('parent_id'),
+                    eligible=ready and not open_children,
+                    # A batch is one feature branch: work starts before its tasks are accepted.
+                    startable=ready and (not open_children or original.get('type') == 'batch'),
+                    blocked_by=blocked_by, open_children=open_children, held=identifier in held,
+                    agent_confirmed=identifier in reported['agent'],
+                    user_requested=identifier in reported['user'],
+                    user_confirmed=identifier in accepted)
+
+    tasks = packet['manifest']['tasks']; linked = packet['manifest'].get('linked_tasks', [])
     return dict(packet_id=packet['packet_id'], manifest=packet['manifest'], current_head=view['commit_id'],
-                current=current, blockers=blockers, items=items)
+                current=current, blockers=blockers, items=[item(t) for t in tasks],
+                linked_items=[item(t) for t in linked],
+                hierarchy_problems=hierarchy_problems(packet['manifest'], nodes))
+
+
+def hierarchy_problems(manifest, nodes):
+    """Report references the pinned packet cannot resolve; a recipient must not guess."""
+    known = {t['id'] for t in manifest['tasks']} | {t['id'] for t in manifest.get('linked_tasks', [])}
+    problems = []
+    for parent, entry in manifest.get('hierarchy', {}).items():
+        for child in entry['children']:
+            if child not in known: problems.append(parent + ': chybí odkaz na ' + child)
+            elif child not in nodes: problems.append(parent + ': ' + child + ' již není v roadmapě')
+    return problems
+
+
+def scoped_item(value, task_id):
+    return next((i for i in value['items'] + value['linked_items'] if i['id'] == task_id), None)
 
 
 def read_document(service, record, packet_id, artifact_id):
@@ -249,16 +320,21 @@ def validate_completion(service, record, message, *, current_head=None):
     packet = load(service, record['session_id'], packet_id) if packet_id else load(service, record['session_id'])
     require(not packet_id or packet is not None, 'Unknown queue packet')
     if not packet: return
-    queued = {n['id'] for n in packet['manifest']['tasks']}
+    queued = {n['id'] for n in packet['manifest']['tasks']} | {n['id'] for n in packet['manifest'].get('linked_tasks', [])}
     if message['task_id'] not in queued and not packet_id: return
     require(packet_id == packet['packet_id'] and message['task_id'] in queued, 'Use the pinned queue completion contract')
-    require(message['kind'] == 'completed' and message.get('reported_by') == 'agent', 'Queue completion requires an agent report')
+    require(message['kind'] == 'completed' and message.get('reported_by') in {'agent', 'user'},
+            'Queue completion requires an agent report or a manual request')
     evidence = message.get('evidence')
-    require(isinstance(evidence, dict) and set(evidence) == {'tests', 'diff'}
-            and all(isinstance(v, str) and 0 < len(v.strip()) <= 4096 for v in evidence.values()), 'Completion evidence required')
+    if message['reported_by'] == 'user':
+        # Only a request: human acceptance stays in Workspace review (ADR 0062).
+        require(evidence is None, 'Manual completion request carries no agent evidence')
+    else:
+        require(isinstance(evidence, dict) and set(evidence) == {'tests', 'diff'}
+                and all(isinstance(v, str) and 0 < len(v.strip()) <= 4096 for v in evidence.values()), 'Completion evidence required')
     value = status(service, record, packet)
     require(current_head is None or value['current_head'] == current_head, 'Review HEAD changed')
-    require(not value['blockers'] and next(i for i in value['items'] if i['id'] == message['task_id'])['eligible'],
+    require(not value['blockers'] and scoped_item(value, message['task_id'])['eligible'],
             'Queue item is blocked, stale or already accepted')
 
 

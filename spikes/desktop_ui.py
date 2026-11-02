@@ -4254,7 +4254,7 @@ function renderTaskQueue(){
  status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
  for(const [index,item] of taskQueueView.items.entries()){
   const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button'),moves=document.createElement('span');
-  open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.user_confirmed?' · Přijato uživatelem':item.agent_confirmed?' · Agent hlásí splnění':''}`;
+  open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.held?' · Pozastaveno':''}${item.children?.length?` · Dávka: ${item.children.length} podúkolů`:''}${item.agent_confirmed?' · Agent hlásí splnění':''}${item.user_requested?' · Ruční žádost z IDE':''}${item.user_confirmed?' · Přijato uživatelem':''}`;
   open.addEventListener('click',async()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);});
   moves.className='task-queue-order-controls';
   for(const [direction,offset,symbol,label] of [['up',-1,'↑','Posunout nahoru'],['down',1,'↓','Posunout dolů']]){
@@ -4269,7 +4269,9 @@ function renderTaskQueue(){
    });
    moves.append(button);
   }
-  remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,moves,remove);list.append(row);
+  const hold=document.createElement('button');hold.type='button';hold.textContent=item.held?'Uvolnit':'Pozastavit';hold.title='Pozastavená položka se nepředává agentovi. Příznak nemění roadmapu ani přijetí.';
+  hold.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);hold.addEventListener('click',()=>changeTaskQueue('set-flag',item.id,{flag:'held',value:!item.held}));
+  remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,moves,hold,remove);list.append(row);
  }
 }
 async function loadTaskQueue(){
@@ -4282,6 +4284,7 @@ async function changeTaskQueue(action,taskId,targetIndex){
  const project=activeProject,view=taskQueueView;taskQueueBusy=true;renderTaskQueue();
  try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
  if(action==='move')request.target_index=targetIndex;
+ if(action==='set-flag')Object.assign(request,targetIndex);
  if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
  const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
@@ -4406,10 +4409,10 @@ async function showIdeBridgeMessages(projectId){
   for(const entry of session.messages){
    const box=document.createElement('article'),message=document.createElement('pre');
    const selections=(entry.message.checklist||[]).map(item=>`${item.checked?'☑':'☐'} ${(entry.task_preview?.checklist||[])[item.index]?.text||`Položka ${item.index+1}`}`).join('\\n');
-   message.textContent=`${entry.message.kind} · ${entry.message.task_id||'Projekt'} · ${entry.receipt.status}\n${entry.message.body}\n${selections}\n${entry.message.queue_packet_id?'Hlášení agenta · balíček '+entry.message.queue_packet_id+' · testy: '+entry.message.evidence.tests+' · diff: '+entry.message.evidence.diff:''}\nZdrojový commit: ${entry.message.repository_commit}`;box.append(message);
+   message.textContent=`${entry.message.kind} · ${entry.message.task_id||'Projekt'} · ${entry.receipt.status}\n${entry.message.body}\n${selections}\n${entry.message.reported_by==='user'?'Ruční žádost uživatele z IDE, bez důkazů agenta · balíček '+entry.message.queue_packet_id:entry.message.queue_packet_id?'Hlášení agenta · balíček '+entry.message.queue_packet_id+' · testy: '+entry.message.evidence.tests+' · diff: '+entry.message.evidence.diff:''}\nZdrojový commit: ${entry.message.repository_commit}`;box.append(message);
    if(entry.review?.state==='completed'){const outcome=document.createElement('p');outcome.textContent=`${entry.review.outcome==='stale'?'Zastaralé – nebylo aplikováno':entry.review.request.decision==='accepted'?'Přijato':'Odmítnuto'}: ${entry.review.request.note}`;box.append(outcome);}
    else for(const decision of entry.review?['resume']:['accepted','rejected']){
-    const button=document.createElement('button');button.type='button';button.textContent=decision==='resume'?'Dokončit připravené review':decision==='accepted'?'Přijmout po posouzení':'Odmítnout';
+    const button=document.createElement('button');button.type='button';button.textContent=decision==='resume'?'Dokončit připravené review':decision==='accepted'?(entry.message.reported_by==='user'?'Potvrdit splnění':'Přijmout po posouzení'):'Odmítnout';
     const changesTask=['completed','progress'].includes(entry.message.kind);
     if(decision==='accepted'&&changesTask&&(session.revoked||(entry.message.queue_packet_id?entry.queue_reviewable!==true:session.commit_id!==result.current_head))){button.disabled=true;button.title='Návrh je ze staré revize nebo odvolané relace; nelze jej aplikovat.';}
     button.addEventListener('click',async()=>{

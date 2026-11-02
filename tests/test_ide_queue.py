@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 import json
 import base64
+from pathlib import Path
+import subprocess
 import unittest
 from uuid import uuid4
 from unittest.mock import patch
@@ -10,7 +12,8 @@ from spikes.artifacts import Artifacts
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.task_queue import TaskQueue
-from spikes.ide_queue import publish, load, status, read_document, digest, refresh
+from spikes.ide_queue import (build_hierarchy, digest, hierarchy_problems, load, publish,
+                              read_document, refresh, status)
 from tests import test_ide_bridge_panel as panel_tests
 
 
@@ -59,6 +62,156 @@ class QueuePacketTests(unittest.TestCase):
         third=self.message(packet,'TASK-03');self.send(third);self.review(third)
         self.assertTrue(all(i['user_confirmed'] for i in status(self.service,self.record)['items']))
         self.assertEqual(old,load(self.service,self.record['session_id']))
+
+    def manual(self,packet,task='TASK-01',**changes):
+        value=self.message(packet,task);value.pop('evidence');value['reported_by']='user'
+        return value|changes
+
+    def test_manual_request_is_distinct_and_never_accepts_by_itself(self):
+        packet=self.packet()
+        with self.assertRaises(ValueError):self.send(self.manual(packet,evidence=dict(tests='x',diff='y')))
+        with self.assertRaises(ValueError):self.send(self.manual(packet,reported_by='robot'))
+        with self.assertRaises(ValueError):self.send(self.manual(packet,'TASK-02'))
+        m=self.manual(packet);self.send(m)
+        item=status(self.service,self.record)['items'][0]
+        self.assertTrue(item['user_requested']);self.assertFalse(item['agent_confirmed']);self.assertFalse(item['user_confirmed'])
+        self.assertEqual(self.head,Projects(self.node).repository(self.project).head())
+        self.assertFalse(self.qstatus()['items'][0]['user_confirmed'])
+        self.assertTrue(self.qstatus()['items'][0]['user_requested'])
+        rejected=self.review(m,decision='rejected',note='Not done.')
+        self.assertEqual('rejected',rejected['outcome'])
+        self.assertEqual(self.head,Projects(self.node).repository(self.project).head())
+        self.assertFalse(status(self.service,self.record)['items'][0]['user_confirmed'])
+        again=self.manual(packet);self.send(again);accepted=self.review(again)
+        self.assertNotEqual(self.head,accepted['result']['commit_id'])
+        self.assertTrue(status(self.service,self.record)['items'][0]['user_confirmed'])
+
+    def test_manual_request_from_stale_packet_is_refused(self):
+        packet=self.packet()
+        self.act('set-flag','TASK-03',flag='held',value=True)
+        with self.assertRaises(ValueError):self.send(self.manual(packet))
+
+    def test_held_flag_is_audited_guarded_and_blocks_only_the_handoff(self):
+        before=self.qstatus()
+        result=self.act('set-flag','TASK-01',flag='held',value=True)
+        self.assertEqual(before['revision']+1,result['revision'])
+        self.assertTrue(result['items'][0]['held']);self.assertEqual(['held'],result['editable_flags'])
+        audit=result['flag_audit'][-1]
+        self.assertEqual(('TASK-01','held',False,True,self.owner,result['revision']),
+            (audit['task_id'],audit['flag'],audit['old'],audit['new'],audit['actor_id'],audit['revision']))
+        self.assertEqual(result['revision'],self.act('set-flag','TASK-01',flag='held',value=True)['revision'],'no-op')
+        for flag in ('user_confirmed','agent_confirmed','eligible','user_requested'):
+            with self.subTest(flag=flag),self.assertRaisesRegex(ValueError,'nelze'):
+                self.act('set-flag','TASK-01',flag=flag,value=True)
+        with self.assertRaises(ValueError):self.act('set-flag','TASK-01',flag='held',value='yes')
+        with self.assertRaises(ValueError):self.act('set-flag','MISSING-01',flag='held',value=True)
+        with self.assertRaisesRegex(ValueError,'změnila'):
+            self.queue.execute(dict(project_id=self.project,action='set-flag',task_id='TASK-01',flag='held',value=False,
+                revision=before['revision'],expected_head=before['expected_head']),self.owner)
+        self.assertEqual(self.head,Projects(self.node).repository(self.project).head())
+        self.request['queue_revision']=self.qstatus()['revision'];packet=self.packet()
+        self.assertEqual(['TASK-01'],packet['manifest']['held_task_ids'])
+        item=status(self.service,self.record)['items'][0]
+        self.assertTrue(item['held']);self.assertFalse(item['eligible']);self.assertFalse(item['startable'])
+        self.assertIn('Pozastaveno uživatelem',item['blocked_by'])
+        with self.assertRaises(ValueError):self.send(self.message(packet))
+        view=self.act('set-flag','TASK-01',flag='held',value=False)
+        self.assertFalse(view['items'][0]['held'])
+        self.assertEqual([False,True],[e['old'] for e in view['flag_audit'][-2:]])
+
+    def test_queue_file_without_flag_fields_still_loads(self):
+        view=self.qstatus();path=next(self.queue.root.glob('*.json'))
+        data=json.loads(path.read_text());data.pop('held_task_ids');data.pop('flag_audit')
+        path.write_text(json.dumps(data));path.chmod(0o600)
+        self.assertEqual(view['task_ids'],self.qstatus()['task_ids'])
+        self.assertTrue(self.act('set-flag','TASK-01',flag='held',value=True)['items'][0]['held'])
+
+    def batch_queue(self):
+        body=('- [ ] [BATCH-01] Feature\n  - type: batch\n'
+              '  - [ ] [BATCH-01-A] First\n  - [ ] [BATCH-01-B] Second\n    - depends_on: BATCH-01-A\n'
+              '- [ ] [TASK-09] Other\n')
+        for task in ['TASK-03','TASK-02','TASK-01']:
+            self.act('remove',task,preview_sha256=self.act('remove-preview',task)['preview_sha256'])
+        self.head=self.save(body)
+        self.record=panel_tests.BridgePanelTests.session(self)
+        self.act('revalidate');self.act('add','BATCH-01')
+        self.request=dict(project_id=self.project,session_id=self.record['session_id'],expected_head=self.head,
+                          queue_revision=self.qstatus()['revision'],repository_commit='a'*40)
+        return self.packet()
+
+    def test_batch_is_one_feature_with_linked_tasks_not_a_flat_list(self):
+        packet=self.batch_queue();manifest=packet['manifest']
+        self.assertEqual(['BATCH-01'],[t['id'] for t in manifest['tasks']])
+        self.assertEqual(['BATCH-01-A','BATCH-01-B'],[t['id'] for t in manifest['linked_tasks']])
+        self.assertEqual(['BATCH-01-A','BATCH-01-B'],manifest['hierarchy']['BATCH-01']['children'])
+        value=status(self.service,self.record);batch=value['items'][0]
+        self.assertTrue(batch['startable']);self.assertFalse(batch['eligible'])
+        self.assertEqual(['BATCH-01-A','BATCH-01-B'],batch['open_children'])
+        linked={i['id']:i for i in value['linked_items']}
+        self.assertEqual('BATCH-01',linked['BATCH-01-A']['parent_id'])
+        self.assertTrue(linked['BATCH-01-A']['eligible']);self.assertFalse(linked['BATCH-01-B']['eligible'])
+        self.assertEqual([],value['hierarchy_problems'])
+        with self.assertRaises(ValueError):self.send(self.message(packet,'BATCH-01'))
+        with self.assertRaises(ValueError):self.send(self.message(packet,'TASK-09'))
+        a=self.message(packet,'BATCH-01-A');self.send(a);self.review(a)
+        value=status(self.service,self.record)
+        self.assertTrue(value['linked_items'][0]['user_confirmed']);self.assertTrue(value['linked_items'][1]['eligible'])
+        b=self.message(packet,'BATCH-01-B');self.send(b);self.review(b)
+        value=status(self.service,self.record);self.assertTrue(value['items'][0]['eligible'])
+        done=self.message(packet,'BATCH-01');self.send(done);self.review(done)
+        self.assertTrue(status(self.service,self.record)['items'][0]['user_confirmed'])
+
+    def test_hierarchy_problems_repeats_and_cycles(self):
+        node=lambda i,p=None:dict(id=i,parent_id=p,type='batch' if p is None else 'task')
+        nodes={i:node(i,p) for i,p in (('B',None),('A','B'),('C','B'))}
+        hierarchy,linked,problems=build_hierarchy(['B','A'],nodes)
+        self.assertEqual(['C'],linked,'a queued child is not linked twice');self.assertEqual([],problems)
+        self.assertEqual(['A','C'],hierarchy['B']['children'])
+        cycle={'X':node('X','Y'),'Y':node('Y','X')}
+        _,_,problems=build_hierarchy(['X'],cycle)
+        self.assertTrue(problems and problems[0].startswith('Hierarchy cycle'))
+        manifest=dict(tasks=[dict(id='B')],linked_tasks=[dict(id='A')],hierarchy=dict(B=dict(children=['A','GONE'])))
+        self.assertEqual(['B: chybí odkaz na GONE'],hierarchy_problems(manifest,{'B':{}, 'A':{}}))
+        self.assertEqual(['B: A již není v roadmapě','B: chybí odkaz na GONE'],hierarchy_problems(manifest,{'B':{}}))
+
+    def test_plain_queue_packet_keeps_its_original_shape(self):
+        manifest=self.packet()['manifest']
+        for key in ('hierarchy','linked_tasks','held_task_ids'):self.assertNotIn(key,manifest)
+
+    def test_plugin_flags_scope_and_manual_request(self):
+        import shutil
+        if not shutil.which('node'):self.skipTest('Node required')
+        script="""
+const assert=require('node:assert/strict'),q=require('./extensions/workspace-bridge/queue.js');
+const names=(e,o)=>q.flags(e,o).map(f=>f.name);
+const base={eligible:true,startable:true,agent_confirmed:false,user_requested:false,user_confirmed:false};
+assert.deepEqual(names(base),['ready']);
+assert.deepEqual(names({...base,agent_confirmed:true,user_requested:true}),['ready','agent','requested']);
+assert.deepEqual(names({...base,user_confirmed:true}),['accepted']);
+assert.deepEqual(names({...base,eligible:false,startable:false}),['waiting']);
+assert.deepEqual(names({...base,held:true,eligible:false}),['held']);
+assert.deepEqual(names({agent_confirmed:true}),['unknown','agent']);
+assert.deepEqual(names(base,{blockers:['x']}),['blocked']);
+const stale=q.flags({...base,user_confirmed:true,agent_confirmed:true},{stale:true}).map(f=>f.label);
+assert.equal(stale[0],'Neaktuální');assert.ok(!stale.includes('Přijato uživatelem'));
+assert.ok(stale.includes('Agent hlásí splnění (poslední známý stav)'));
+assert.deepEqual(names({...base,eligible:false,open_children:['A']}),['feature']);
+const packet=(hierarchy,linked)=>({packet_id:'p',blockers:[],hierarchy_problems:[],items:[{id:'B',eligible:false,startable:true}],linked_items:linked,manifest:{revision:'r',hierarchy,tasks:[{id:'B',checklist:[]}],linked_tasks:linked.map(l=>({id:l.id,checklist:[{checked:true},{checked:false}]}))}});
+let s=q.scope(packet({B:{children:['A','GONE','A']}},[{id:'A',eligible:true,parent_id:'B'}]),'B');
+assert.deepEqual(s.rows.map(r=>[r.id,r.repeated]),[['A',false],['GONE',false],['A',true]]);
+assert.deepEqual(s.problems,['Chybí odkaz: GONE']);
+assert.equal(q.scope(packet({},[{id:'A',parent_id:'B'}]),'A').parent,'B');
+s=q.scope(packet({B:{children:['A']},A:{children:['B']}},[{id:'A'}]),'B');assert.ok(s.problems.some(p=>p.startsWith('Cyklus')));
+const value=packet({B:{children:['A']}},[{id:'A',eligible:true}]);
+const m=q.manualRequest(value,'A','done','c'.repeat(40),'id');
+assert.equal(m.reported_by,'user');assert.equal(m.queue_packet_id,'p');assert.equal(m.evidence,undefined);
+assert.deepEqual(m.checklist,[{index:1,checked:true}]);
+assert.throws(()=>q.manualRequest(value,'B','x','c','id'),/ruční žádost/);
+assert.throws(()=>q.manualRequest({...value,blockers:['stale']},'A','x','c','id'),/ruční žádost/);
+assert.throws(()=>q.manualRequest({...value,linked_items:[{id:'A',eligible:true,user_requested:true}]},'A','x','c','id'),/už čeká/);
+"""
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True,cwd=str(Path(__file__).parent.parent))
+        self.assertEqual(0,result.returncode,result.stderr)
 
     def test_cross_message_identity_and_evidence_are_fail_closed(self):
         p=self.packet();m=self.message(p)

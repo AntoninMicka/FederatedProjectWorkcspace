@@ -159,3 +159,37 @@ opravu `fix/queue-source-head`: IDE zjistí zdrojový HEAD lokálně a při pou�
 ověří návaznost historie. Reuse/adapt: `TaskQueue.assess`, `publish`,
 `snapshot`, existující bridge transakce, atomic-file helper a cache;
 nový scheduler, úložiště ani externí komponenta nejsou potřeba.
+
+## Příznaky, ruční žádost a hierarchie (IDE-QUEUE-UX-01, 2. 11. 2026)
+
+Rozhodnutí o lidském přijetí výše platí beze změny. Uživatel 2. 11. 2026 vybral
+dvoukrokové potvrzení: tlačítko v pluginu vytvoří jen zprávu `reported_by: user`
+a roadmapu mění dál pouze review ve Workspace. `reported_by` zůstává deklarací
+původu, takže proces se stejným OS účtem může žádost napodobit; neuzavře tím úkol.
+
+| Příznak | Zdroj | Změna |
+|---|---|---|
+| `held` (pozastaveno) | pracovní fronta | ručně, s revizí, HEAD a auditem |
+| `agent_confirmed` | hlášení v inboxu | agent přes kontrakt balíčku |
+| `user_requested` | zpráva `reported_by: user` | akce v pluginu |
+| `user_confirmed` | native receipt review | jen reviewer ve Workspace |
+| `eligible`, `startable`, `blocked_by` | plán a balíček | odvozené, needitovatelné |
+
+Ruční změna `held` zapíše původní a novou hodnotu, aktéra a revizi do omezeného
+auditu ve frontě. Zvýšení revize vytvoří novou generaci balíčku obvyklou obnovou,
+takže pozastavení platí až po ní a do té doby je starý balíček `stale`. Pozastavená
+položka není zahajitelná ani přijatelná; stav dokončení příznak nezmění.
+
+Fronta nese dávku jako rodiče: `manifest.hierarchy` drží přímé potomky kontejnerů a
+`manifest.linked_tasks` připnuté definice podúkolů, které jsou v rozsahu reportu,
+ale nejsou položkami fronty. Podklady se procházejí i z nich, soubory se dál jen
+odkazují. Pole vznikají pouze u kontejnerů s potomky, jiné balíčky mají původní
+tvar i ID. Dávka je `startable` před přijetím podúkolů, `eligible` až po něm.
+Ostatní kontejnery se předat nedají. Opakovaný odkaz se zobrazí jednou a označí,
+cyklus je blocker a nerozřešený odkaz příjemce ukáže jako problém.
+
+Crash boundaries: nové persistentní vrstvy nejsou. `held` používá atomický zápis
+fronty a `QueueOutcomeUnknown` podle bodu 5; po ztrátě výsledku se stav načte znovu.
+Ruční žádost používá inbox a UUID deduplikaci podle bodu 3 a review zůstává podle
+bodu 4. Stav `queue.json` je poslední známý; plugin jej při výpadku označí jako
+neaktuální a nenabídne předání ani žádost.

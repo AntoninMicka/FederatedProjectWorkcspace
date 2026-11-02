@@ -93,6 +93,49 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   await commands.get('workspaceBridge.sync')();
   assert.ok(sidebar.children('messages',root).some(row=>row.entry.draft),'draft must survive mapping refresh');
   assert.throws(()=>ui.validateSnapshot({...project.snapshot,tasks:[{...project.snapshot.tasks[0],parent_id:'FOREIGN'}]}),/hierarchie/);
+  // Queue tree and manual request, with a hand-built packet the server does not know.
+  const live=()=>sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
+  const flagsOf={agent_confirmed:false,user_requested:false,user_confirmed:false,held:false,blocked_by:[]};
+  const leaf=(id,extra={})=>({id,title:id+' title',type:'task',parent_id:'BATCH-X',eligible:true,startable:true,open_children:[],...flagsOf,...extra});
+  project=live();
+  project.queue={packet_id:'f'.repeat(64),blockers:[],hierarchy_problems:[],
+   items:[{id:'BATCH-X',title:'Batch',type:'batch',parent_id:null,eligible:false,startable:true,open_children:['TASK-01'],...flagsOf}],
+   linked_items:[leaf('TASK-01',{agent_confirmed:true})],
+   manifest:{revision:project.snapshot.revision,hierarchy:{'BATCH-X':{type:'batch',children:['TASK-01','GONE-01']}},
+    tasks:[{id:'BATCH-X',title:'Batch',description:'',checklist:[],depends_on:[]}],
+    linked_tasks:[{id:'TASK-01',title:'TASK-01 title',description:'',checklist:[],depends_on:[]}]}};
+  const queueRoot=sidebar.children('queue',root)[0],batchItem=sidebar.treeItem(queueRoot);
+  assert.equal(batchItem.contextValue,'queueStartable');assert.equal(batchItem.collapsibleState,1);
+  assert.match(batchItem.description,/Dávka · 1 otevřených/);assert.match(batchItem.description,/Neúplná hierarchie/);
+  const rows=sidebar.children('queue',queueRoot);
+  assert.deepEqual(rows.map(r=>r.kind),['queueTask','queueMissing']);
+  assert.equal(new Set(rows.map(r=>sidebar.treeItem(r).id)).size,2);
+  const childItem=sidebar.treeItem(rows[0]);assert.equal(childItem.contextValue,'queueTask');
+  assert.match(childItem.description,/Zahajitelné · Agent hlásí splnění/);
+  assert.match(sidebar.treeItem(rows[1]).description,/Chybějící/);
+  await commands.get('workspaceBridge.showQueueTask')(queueRoot);
+  const queuePanel=panels.at(-1).webview.html;
+  for(const text of ['Příznaky','celá feature dávka','Podúkoly','GONE-01','chybějící odkaz'])assert.ok(queuePanel.includes(text),text);
+  await commands.get('workspaceBridge.showQueueTask')(rows[0]);assert.match(panels.at(-1).webview.html,/Nadřazená položka: BATCH-X/);
+  errors.length=0;await commands.get('workspaceBridge.queueConfirm')(queueRoot);
+  assert.ok(errors.some(e=>/ruční žádost/.test(e)),'batch with open tasks: '+errors);errors.length=0;
+  const inbox=path.join(project.root,'inbox'),listed=async()=>(await fs.readdir(inbox)).filter(name=>name.endsWith('.json'));
+  const inboxBefore=await listed();
+  const warn=vscode.window.showWarningMessage;vscode.window.showWarningMessage=async()=>undefined;
+  await commands.get('workspaceBridge.queueConfirm')(rows[0]);
+  assert.deepEqual(await listed(),inboxBefore,'cancelled request writes nothing');
+  let informed=0;const info=vscode.window.showInformationMessage;vscode.window.showInformationMessage=async()=>{informed++;};
+  vscode.window.showWarningMessage=async()=>'Odeslat žádost';
+  await commands.get('workspaceBridge.queueConfirm')(rows[0]);
+  assert.ok(errors.some(e=>/nebyla potvrzena/.test(e)),'an undelivered request must not look successful: '+errors);
+  assert.equal(informed,0);
+  const written=(await listed()).filter(name=>!inboxBefore.includes(name));assert.equal(written.length,1);
+  const sent=JSON.parse(await fs.readFile(path.join(inbox,written[0]),'utf8'));
+  assert.equal(sent.reported_by,'user');assert.equal(sent.task_id,'TASK-01');assert.equal(sent.evidence,undefined);
+  await fs.rm(path.join(inbox,written[0]));
+  vscode.window.showWarningMessage=warn;vscode.window.showInformationMessage=info;
+  await commands.get('workspaceBridge.sync')();errors.length=0;
+  project=live();
   await request('/v1/ide-bridge/connection/revoke',{connection_id:fixture.pairing.connection_id},fixture.admin_token);
   await commands.get('workspaceBridge.sync')();
   project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);assert.ok(project.error);
