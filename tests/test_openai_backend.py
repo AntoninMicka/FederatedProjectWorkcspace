@@ -262,6 +262,15 @@ class OpenAIBackendTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'revision differs'):
             adapter.dispatch(self.handoff, self.binding)
 
+    def test_search_call_is_reported_with_annotations_only(self):
+        value = {'id': 'r', 'status': 'completed', 'model': 'm', 'output': [
+            {'type': 'web_search_call', 'status': 'completed'},
+            {'type': 'message', 'content': [{'type': 'output_text', 'text': 'A', 'annotations': [
+                {'type': 'url_citation', 'url': 'https://a.example/', 'title': 'A'}]}]}]}
+        result = OpenAIAdapter._response(value, type('Binding', (), {'model': 'm'}))
+        self.assertEqual({'requests': 1, 'sources': [{'url': 'https://a.example/', 'title': 'A'}]},
+                         result['web_search'])
+
     def test_lost_response_is_unknown_and_never_retried(self):
         calls = []
         def lost(*args):

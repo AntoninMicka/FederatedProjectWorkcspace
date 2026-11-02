@@ -16,7 +16,7 @@ import stat
 
 from spikes.backend_contract import (BackendCapabilities, BackendExecution,
                                      BackendResponseError, BackendUnknown,
-                                     pin_execution, ROLES)
+                                     pin_execution, ROLES, web_sources)
 from spikes.context_builder import DispatchHandoff, Target
 from spikes.metadata import require, uuid
 from spikes.model_catalog import (ModelDiscoveryStore, ModelKnowledgeStore,
@@ -397,7 +397,7 @@ class OpenAIAdapter:
 
     @staticmethod
     def _request(handoff, binding, role=None, output_format='text', stream=False,
-                 run_selection=None):
+                 run_selection=None, *, web_search=False):
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OpenAIBinding),
                 'Authorized handoff and OpenAI binding are required')
         require(handoff.target == binding.target(),
@@ -408,6 +408,9 @@ class OpenAIAdapter:
                     max_output_tokens=binding.max_output_tokens)
         if output_format == 'json':
             body['text'] = {'format': {'type': 'json_object'}}
+        if web_search:
+            require(not stream, 'OpenAI provider web search does not stream here')
+            body['tools'] = [{'type': 'web_search'}]
         request = json.dumps(body, ensure_ascii=False, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = OpenAIAdapter._execution(binding, role, output_format, run_selection)
@@ -418,20 +421,20 @@ class OpenAIAdapter:
         return request, digest, execution
 
     def prepare(self, handoff, binding, role=None, output_format='text', stream=False,
-                run_selection=None):
+                run_selection=None, *, web_search=False):
         _, credential_revision = self.credentials.resolve(binding.credential_ref)
         require(credential_revision == binding.credential_revision,
                 'OpenAI credential revision differs from binding')
         _, digest, execution = self._request(
             handoff, binding, role, output_format, stream=stream,
-            run_selection=run_selection)
+            run_selection=run_selection, web_search=web_search)
         return self.runs.prepare(handoff.run_id, digest, digest, execution,
                                  handoff.manifest_sha256, run_selection)
 
     def dispatch(self, handoff, binding, role=None, output_format='text', *,
-                 run_selection=None):
+                 run_selection=None, web_search=False):
         return self._dispatch(handoff, binding, role, output_format, False, None,
-                              run_selection)
+                              run_selection, web_search)
 
     def dispatch_stream(self, handoff, binding, on_delta, role=None, output_format='text', *,
                         run_selection=None):
@@ -440,10 +443,10 @@ class OpenAIAdapter:
                               run_selection)
 
     def _dispatch(self, handoff, binding, role, output_format, stream, on_delta,
-                  run_selection=None):
+                  run_selection=None, web_search=False):
         request, digest, execution = self._request(
             handoff, binding, role, output_format, stream=stream,
-            run_selection=run_selection)
+            run_selection=run_selection, web_search=web_search)
         row = self.runs.prepare(handoff.run_id, digest, digest, execution,
                                 handoff.manifest_sha256, run_selection)
         if row['state'] == 'succeeded':
@@ -471,6 +474,8 @@ class OpenAIAdapter:
             response = (self.stream_transport(binding, request, secret, on_delta)
                         if stream else self.transport(binding, request, secret))
             normalized = self._response(response, binding)
+            require(web_search or 'web_search' not in normalized,
+                    'OpenAI ran a web search that was not requested')
         except (TimeoutError, OSError, http.client.HTTPException) as exc:
             self._finish(handoff.run_id, 'unknown', None, 'OpenAI response was lost')
             raise OpenAIUnknownRun('OpenAI request outcome is unknown; do not retry automatically') from exc
@@ -503,7 +508,8 @@ class OpenAIAdapter:
         output = value['output']
         require(isinstance(output, list) and bool(output),
                 'OpenAI response has no output items')
-        require(all(isinstance(item, dict) and item.get('type') in {'reasoning', 'message'}
+        require(all(isinstance(item, dict)
+                    and item.get('type') in {'reasoning', 'message', 'web_search_call'}
                     for item in output),
                 'OpenAI response contains an unsupported active output item')
         messages = [item for item in output if item.get('type') == 'message']
@@ -526,6 +532,11 @@ class OpenAIAdapter:
             if set(usage) >= allowed and all(type(usage[key]) is int and usage[key] >= 0
                                              for key in allowed):
                 result['usage'] = {key: usage[key] for key in sorted(allowed)}
+        calls = sum(1 for item in output if item['type'] == 'web_search_call')
+        if calls:
+            result['web_search'] = {'requests': calls, 'sources': web_sources(
+                note for item in content if isinstance(item.get('annotations'), list)
+                for note in item['annotations'])}
         return result
 
     @staticmethod

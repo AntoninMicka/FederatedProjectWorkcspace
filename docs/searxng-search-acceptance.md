@@ -11,7 +11,8 @@ explicitní bindingy; dostupnost jedné služby nesmí změnit druhou ani privac
 
 ## Požadavky na instanci
 
-Workspace volá `GET /search?q=…&format=json`. V `settings.yml` instance musí být
+Workspace volá `GET /search?q=…&format=json` bez parametru jazyka, takže výsledky
+ovlivní výchozí jazyk instance. V `settings.yml` instance musí být
 `json` v `search.formats`, jinak SearXNG vrátí 403 a Workspace nahlásí odepření
 přístupu. Limiter SearXNG povoluje ve výchozím stavu jen 4 ne-HTML požadavky za
 hodinu z jedné IP a hodnotí chybějící hlavičky jako bota; Workspace neposílá

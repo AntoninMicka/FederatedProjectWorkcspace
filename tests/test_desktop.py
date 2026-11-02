@@ -1600,7 +1600,8 @@ async function projectRequest(url){
                         'chat-run-model'):
             self.assertIn('id="' + control + '"', composer)
         self.assertIn('<option value="answer">Odpovědět</option>', composer)
-        self.assertIn('<option value="search">Vyhledat na webu</option>', composer)
+        self.assertIn('<option value="think">Uvažovat s možností dohledání</option>', composer)
+        self.assertIn('<option value="search">Vždy vyhledat na webu</option>', composer)
         self.assertNotIn('Výpočet', composer)
         self.assertNotIn('Julia', composer)
         self.assertIn('aria-label="Zpracovat zadání"', composer)

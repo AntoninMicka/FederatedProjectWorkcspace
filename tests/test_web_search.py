@@ -141,6 +141,32 @@ class WebSearchTests(unittest.TestCase):
                              preview_sha256=second_row['preview_sha256'])
         self.assertEqual(calls, [1])
 
+    def test_unusable_entries_are_skipped_and_query_echo_may_differ(self):
+        good = {'title': 'A', 'url': 'https://a.example/', 'content': None}
+        value = {'query': 'rewritten', 'results': [{'title': 'B', 'url': 'magnet:?xt=1'},
+            {'title': '', 'url': 'https://b.example/'}, {'title': 'C'}, 'bad', good]}
+        result = SearXNGAdapter.validate_response(value, self.binding, ':cs dotaz',
+                                                  '2026-10-12T12:00:00Z')
+        self.assertEqual(':cs dotaz', result['query'])
+        self.assertEqual(['https://a.example/'], [item['url'] for item in result['results']])
+        self.assertEqual('', result['results'][0]['snippet'])
+
+    def test_request_does_not_lock_search_language(self):
+        seen = {}
+        class Response:
+            status = 200
+            def read(self, _): return b'{"results":[]}'
+        class Connection:
+            sock = None
+            def connect(self): pass
+            def request(self, method, path, headers): seen['path'] = path
+            def getresponse(self): return Response()
+            def close(self): pass
+        from unittest.mock import patch
+        with patch('spikes.web_search.http.client.HTTPConnection', return_value=Connection()):
+            SearXNGAdapter._http_transport(self.binding, 'dotaz')
+        self.assertEqual('/search?q=dotaz&format=json', seen['path'])
+
     def test_zero_results_and_probe_use_exact_public_query(self):
         value = {'query': 'SearXNG', 'results': []}
         probe = SearXNGAdapter.probe(self.binding, transport=lambda binding, query: value)
@@ -179,7 +205,7 @@ class WebSearchTests(unittest.TestCase):
                 with self.assertRaisesRegex(SearchResponseError, message):
                     SearXNGAdapter._http_transport(self.binding, 'public query')
                 if connection.response is not None:
-                    self.assertIn('language=cs-CZ', connection.requests[0][0][1])
+                    self.assertNotIn('language=', connection.requests[0][0][1])
 
 
 if __name__ == '__main__':

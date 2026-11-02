@@ -61,6 +61,14 @@ _PRESENTATION_PROPOSAL_FORMAT = _closed_object({
                }, ['slide_id', 'title', 'bullets', 'notes', 'layout'])},
 }, ['schema_version', 'kind', 'operation', 'target_artifact_id', 'title',
     'source_artifact_ids', 'slides'])
+# Ollama structured output: the closed choice is validated again by the task route.
+_ANSWER_OR_SEARCH_FORMAT = {
+    'type': 'object', 'additionalProperties': False,
+    'required': ['schema_version', 'kind'],
+    'properties': {
+        'schema_version': {'type': 'integer', 'enum': [1]},
+        'kind': {'type': 'string', 'enum': ['direct-answer', 'web-search-request']},
+        'content': {'type': 'string'}, 'purpose': {'type': 'string'}, 'query': {'type': 'string'}}}
 _DIRECT_ANSWER_FORMAT = _closed_object({
     'schema_version': {'type': 'integer', 'enum': [1]},
     'kind': {'type': 'string', 'enum': ['direct-answer']},
@@ -709,6 +717,7 @@ class OllamaAdapter:
                     'task-output-markdown-patch-v2': markdown_schema,
                     'task-output-markdown-patch-v1': output_schema(),
                     'task-output-conversation-v1': _DIRECT_ANSWER_FORMAT,
+                    'task-output-conversation-search-v1': _ANSWER_OR_SEARCH_FORMAT,
                     'task-output-document-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-file-edit-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-file-edit-patch-v1': _DOCUMENT_PATCH_FORMAT,

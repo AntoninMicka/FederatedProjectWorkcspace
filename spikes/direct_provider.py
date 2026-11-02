@@ -22,7 +22,7 @@ from typing import Callable
 
 from spikes.backend_contract import (BackendCapabilities, BackendExecution,
                                      BackendResponseError, BackendUnknown,
-                                     pin_execution, ROLES)
+                                     persisted_response, pin_execution, ROLES)
 from spikes.context_builder import DispatchHandoff, Target
 from spikes.metadata import require, uuid
 from spikes.model_catalog import (collect_discovery_pages, ModelDiscoveryStore,
@@ -77,6 +77,8 @@ class ProviderSpec:
     stream_final: Callable
     models_path: Callable
     parse_models: Callable
+    # Adds provider-run search to a request body (ADR 0066); None means not offered.
+    enable_web_search: Callable | None = None
 
     def __post_init__(self):
         require(bool(_ADAPTER_ID.fullmatch(self.adapter_id)), 'Invalid provider adapter ID')
@@ -452,7 +454,7 @@ class DirectAdapter:
 
     @staticmethod
     def _request(handoff, binding, role=None, output_format='text', stream=False,
-                 run_selection=None):
+                 run_selection=None, *, web_search=False):
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, DirectBinding),
                 'Authorized handoff and provider binding are required')
         name = binding.spec.name
@@ -465,6 +467,10 @@ class DirectAdapter:
                 name + ' offer does not support JSON output')
         prompt = OllamaAdapter._prompt(handoff.payload)
         body = binding.spec.build_body(prompt, binding, output_format, stream)
+        if web_search:
+            require(binding.spec.enable_web_search is not None and not stream,
+                    name + ' does not offer provider web search here')
+            binding.spec.enable_web_search(body)
         request = json.dumps(body, ensure_ascii=False, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = DirectAdapter._execution(binding, role, output_format, run_selection)
@@ -475,19 +481,19 @@ class DirectAdapter:
         return request, digest, execution
 
     def prepare(self, handoff, binding, role=None, output_format='text', stream=False,
-                run_selection=None):
+                run_selection=None, *, web_search=False):
         _, revision = self.credentials.resolve(binding.credential_ref)
         require(revision == binding.credential_revision,
                 binding.spec.name + ' credential revision differs from binding')
         _, digest, execution = self._request(handoff, binding, role, output_format, stream,
-                                             run_selection)
+                                             run_selection, web_search=web_search)
         return self.runs.prepare(handoff.run_id, digest, digest, execution,
                                  handoff.manifest_sha256, run_selection)
 
     def dispatch(self, handoff, binding, role=None, output_format='text', *,
-                 run_selection=None):
+                 run_selection=None, web_search=False):
         return self._dispatch(handoff, binding, role, output_format, False, None,
-                              run_selection)
+                              run_selection, web_search)
 
     def dispatch_stream(self, handoff, binding, on_delta, role=None, output_format='text', *,
                         run_selection=None):
@@ -496,10 +502,10 @@ class DirectAdapter:
                               run_selection)
 
     def _dispatch(self, handoff, binding, role, output_format, stream, on_delta,
-                  run_selection=None):
+                  run_selection=None, web_search=False):
         name = binding.spec.name
         request, digest, execution = self._request(handoff, binding, role, output_format,
-                                                   stream, run_selection)
+                                                   stream, run_selection, web_search=web_search)
         row = self.runs.prepare(handoff.run_id, digest, digest, execution,
                                 handoff.manifest_sha256, run_selection)
         if row['state'] == 'succeeded':
@@ -523,6 +529,8 @@ class DirectAdapter:
             value = (self.stream_transport(binding, request, secret, on_delta)
                      if stream else self.transport(binding, request, secret))
             response = binding.spec.parse_response(value, binding)
+            require(web_search or 'web_search' not in response,
+                    name + ' ran a web search that was not requested')
         except (TimeoutError, OSError, http.client.HTTPException) as exc:
             self._finish(handoff.run_id, 'unknown', None, name + ' response was lost', name)
             raise DirectUnknownRun(
@@ -533,7 +541,7 @@ class DirectAdapter:
         except Exception as exc:
             self._finish(handoff.run_id, 'failed', None, str(exc), name)
             raise
-        self._finish(handoff.run_id, 'succeeded', response, None, name)
+        self._finish(handoff.run_id, 'succeeded', persisted_response(response), None, name)
         return response
 
     def _finish(self, run_id, state, response, error, name):

@@ -67,6 +67,19 @@ class ExplicitTaskPlanTests(unittest.TestCase):
             self.plan(source_kinds=['artifacts']).validate_request_selections(
                 artifact_ids=[str(uuid4())], message_ids=[str(uuid4())])
 
+    def test_search_on_demand_is_local_conversation_only_and_keeps_old_digests(self):
+        plain = self.plan(); plan = self.plan(search_on_demand=True)
+        self.assertTrue(plan.search_on_demand); self.assertNotEqual(plain.digest(), plan.digest())
+        self.assertNotIn('search_on_demand', plain.serialize())
+        self.assertEqual('task-output-conversation-search-v1', plan.role_revision)
+        self.assertIn('web-search-request', task_output_instruction(plan))
+        self.assertEqual(plan, ExplicitTaskPlan.parse(plan.serialize()))
+        for changes in (dict(search_on_demand=False), dict(output_kind='document'),
+                        dict(execution='external-openai'),
+                        dict(source_kinds=['conversation', 'public-web'], search_query='q')):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.plan(**{'search_on_demand': True, **changes})
+
 
 if __name__ == '__main__':
     unittest.main()

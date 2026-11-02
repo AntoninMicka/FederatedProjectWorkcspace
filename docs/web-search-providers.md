@@ -5,11 +5,17 @@ SPDX-License-Identifier: MPL-2.0
 
 # Webové hledání a podmínky providerů
 
-Workspace dnes hledá výhradně přes vlastní SearXNG službu: viz
-[akceptace SearXNG](searxng-search-acceptance.md). **Autonomní hledání přímo
-u providera LLM zatím není implementované** a žádný konektor modelu vyhledávací
-nástroj nenabízí. Tento manuál shrnuje, co by jeho zapnutí znamenalo; podklad
-pro `NEW-FA92ACE959-TASK-1`.
+Workspace hledá třemi způsoby:
+
+- **Vždy vyhledat na webu** a **Uvažovat s možností dohledání** (režim Úkol, Ollama)
+  používají vlastní SearXNG službu: viz [akceptace SearXNG](searxng-search-acceptance.md).
+  Při uvažování model sám rozhodne, zda hledání vyžádá; dotaz vidíte a potvrzujete
+  před odesláním.
+- **Model smí hledat na webu** (Volná konverzace, Claude, Grok, OpenAI) nechá hledat
+  přímo providera, bez potvrzení jednotlivých dotazů. Gemini tuto volbu zatím nemá.
+
+Hledání nepřebírá zvolený jazyk odpovědi; ten platí jen pro odpověď LLM. Překlad zdroje
+pomocí LLM zatím není implementovaný. Chování vůči živým API providerů nebylo ověřené.
 
 Údaje jsou ověřené v dokumentaci providerů k 2. 11. 2026. Ceny a podmínky se
 mění, před použitím je ověřte v odkazech níže. Shrnutí není právní rada.
@@ -64,9 +70,9 @@ Podmínky hledání (Grounding with Google Search) jsou pro Workspace nejpřísn
 - Do neplacených služeb podmínky zakazují vkládat citlivé, důvěrné nebo osobní
   údaje, protože data mohou číst lidští kontroloři.
 
-**Dopad na Workspace:** výsledek Gemini s hledáním se nebude ukládat do Gitu ani
-federovat, zůstane jen v RAM. Hledání přes Gemini se nenabídne, pokud nepůjde
-zobrazit návrhy Google Search v požadované podobě.
+**Dopad na Workspace:** až bude hledání přes Gemini dostupné, výsledek zůstane jen
+v RAM a nepůjde do Gitu ani federace. Dnes se nenabízí, protože není ověřené zobrazení
+návrhů Google Search v požadované podobě.
 
 ### Grok (xAI)
 
@@ -104,29 +110,23 @@ zobrazit návrhy Google Search v požadované podobě.
   obsah může model navést k dalšímu dotazu, který vynese data z kontextu.
 - Počet hledání určuje model, cena proto není dopředu známá.
 
-## Požadavky pro zapnutí (`NEW-FA92ACE959-TASK-1`)
+## Co Workspace při hledání u providera dělá
 
-Autonomní hledání má být volba promptu nabízená jen u podporované kombinace
-backend/model. **Při zapnutí se zobrazí upozornění**, jehož návrh zní:
+Po zapnutí volby se zobrazí toto upozornění:
 
-> **Model bude hledat na webu sám.** Dotazy vytvoří model z kontextu tohoto
-> požadavku a odešle je bez vašeho potvrzení přes {provider}. Workspace je uvidí
-> až v odpovědi. Hledání se účtuje zvlášť a řídí se podmínkami providera.
-> Data `local-only` nelze takto použít. [Podmínky providera](web-search-providers.md)
+> Model bude hledat na webu sám. Dotazy vytvoří z kontextu tohoto požadavku
+> a {provider} je odešle bez vašeho potvrzení. Hledání se účtuje zvlášť a řídí
+> se podmínkami providera. Důvěrná a local-only data nelze takto použít.
 
-Zadání uživatele z 2. 11. 2026, zatím neimplementované:
+Je-li nastavená Ollama a SearXNG, nabídne se vedle upozornění přepnutí na ně.
 
-- **Jazyk:** volba jazyka platí jen pro odpověď LLM a hledání ji nepřebírá. Zdroj
-  lze na vyžádání přeložit pomocí LLM do zvoleného jazyka.
-- **Ukládání u Gemini:** výsledky zůstanou jen v RAM, neukládají se a nepoužijí
-  se k dalšímu zpracování v LLM.
-- **Ukládání u Claude:** výsledky zůstanou jen v RAM a po restartu se neobnoví.
-- **Ukládání u ostatních:** jen stručný výtah a nalezené odkazy.
-- **Volba backendu:** Workspace nenápadně vede k Ollamě, ostatní možnosti zůstávají.
-- **`TASK-3`:** model může používat i zpětné volání do Workspace.
+- Odpověď se uloží do chatu s odkazy na citované zdroje.
+- Surové výsledky Claude jsou vidět jen v okně a po obnovení se nezachovají.
+- U Grok a OpenAI se ukládá odpověď modelu jako výtah a odkazy.
+- Běh, který skončí nejistým výsledkem, se automaticky neopakuje. Poplatek už mohl
+  vzniknout.
 
-Návrh řešení, recovery a změnu ADR 0008 popisuje
-[ADR 0066](adr/0066-provider-web-search-and-callback.md).
+Rozhodnutí a recovery popisuje [ADR 0066](adr/0066-provider-web-search-and-callback.md).
 
 ## Zdroje
 

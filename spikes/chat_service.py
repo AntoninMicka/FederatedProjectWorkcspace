@@ -20,6 +20,7 @@ from spikes.chat_threads import ChatThreads
 from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import (BackendResponseError, BackendUnknown,
+                                     EPHEMERAL_SEARCH_KEY,
                                      RunSelection, ROLES)
 from spikes.backend_metrics import OpenAIAccountMetrics, completed_run_usage, run_usage
 from spikes.backend_catalog import (BackendResetJournal, ModelPreferences,
@@ -259,6 +260,19 @@ def now():
 
 
 EXTERNAL_ADAPTERS = frozenset({'openai-responses', 'atlascloud-text', *DIRECT_BINDINGS})
+# ADR 0066. Gemini stays out until its required Search Suggestions can be displayed.
+PROVIDER_WEB_SEARCH_ADAPTERS = frozenset({'anthropic-messages', 'openai-responses', 'xai-responses'})
+PROVIDER_WEB_SEARCH_PRIVACY = frozenset({'public', 'project'})
+
+
+def answer_with_sources(response):
+    """Keep the required citations with the stored answer; raw results are never stored."""
+    sources = (response.get('web_search') or {}).get('sources') or []
+    if not sources:
+        return response['response']
+    rows = ['- [' + re.sub(r'[\[\]\\]', '', item['title']) + '](' + item['url'].replace(')', '%29') + ')'
+            for item in sources]
+    return response['response'] + '\n\nZdroje:\n' + '\n'.join(rows)
 
 
 class ChatService:
@@ -1480,6 +1494,27 @@ class ChatService:
             if block_edit and isinstance(value, dict) and value.get('kind') == 'markdown-patch':
                 from spikes.markdown_patch import complete as complete_markdown
                 value = complete_markdown(value, edit_target['body'], plan.edit_block_ids)
+            if plan.search_on_demand and isinstance(value, dict) \
+                    and value.get('kind') == 'web-search-request':
+                require(set(value) == {'schema_version', 'kind', 'purpose', 'query'}
+                        and value['schema_version'] == 1, 'Invalid web search request from model')
+                require(strongest != 'local-only',
+                        'Model requested web search, but local-only data cannot leave this node')
+                # The existing card shows the exact query; the model's choice sends nothing.
+                outcome = AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
+                    'purpose': value['purpose'], 'query': value['query'],
+                    'message_ids': request['selected_message_ids'] + [request['message_id']],
+                    'artifact_ids': request['selected_artifact_ids']})
+                routed = {'task_id': request['task_id'], 'outcome': outcome.serialize(),
+                    'privacy': strongest, 'project_commit': prepared.manifest['project_commit'],
+                    'run_id': request['run_id'], 'manifest_id': request['manifest_id'],
+                    'model': binding.model, 'boundary': binding.boundary,
+                    'task_plan_sha256': plan.digest(),
+                    'run_selection': run_selection.public_serialize(),
+                    'run_selection_sha256': run_selection.digest()}
+                routed['projection'] = TaskOutcomes(root).prepare(node_id=node_id, user_id=user_id,
+                    request=stored_request, routed=routed)['projection']
+                return routed
             expected = ('markdown-patch' if block_edit else 'artifact-patch' if patch_edit else 'presentation-proposal' if plan.output_kind == 'presentation'
                         else plan.expected_outcome_kind)
             require(isinstance(value, dict) and value.get('kind') == expected,
@@ -2345,7 +2380,7 @@ class ChatService:
                     'message_id', 'run_id', 'manifest_id', 'assistant_message_id',
                     'selected_message_ids', 'content', 'privacy', 'created_at'}
         optional = {'selected_artifact_ids', 'record_chat', 'run_choice', 'stream',
-                    'task_plan', 'response_language'}
+                    'task_plan', 'response_language', 'provider_web_search'}
         require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing external preview field')
         request = dict(request)
@@ -2354,6 +2389,15 @@ class ChatService:
         request.setdefault('stream', False)
         require(type(request['record_chat']) is bool, 'Invalid external chat recording mode')
         require(type(request['stream']) is bool, 'Invalid external streaming mode')
+        if 'provider_web_search' in request:
+            # Absent, not false, when off: earlier approvals keep their exact request.
+            require(request['provider_web_search'] is True and request['record_chat']
+                    and not request['stream'] and 'task_plan' not in request
+                    and isinstance(request.get('run_choice'), dict)
+                    and request['run_choice'].get('adapter') in PROVIDER_WEB_SEARCH_ADAPTERS,
+                    'Provider web search is not available for this request')
+            require(request['privacy'] in PROVIDER_WEB_SEARCH_PRIVACY,
+                    'Provider web search cannot use confidential or local-only data')
         if 'run_choice' in request:
             choice = ChatRunChoice.parse(request['run_choice'])
             task_plan = (ExplicitTaskPlan.parse(request['task_plan'])
@@ -2458,13 +2502,16 @@ class ChatService:
             hashlib.sha256(prepared.manifest_bytes).hexdigest(), binding.target(), prepared.payload)
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
         output_format = 'json' if plan is not None else 'text'
+        search_option = ({'web_search': True} if request.get('provider_web_search') else {})
         provider_request, _, _ = adapter_type._request(
             handoff, binding, role, output_format, stream=request['stream'],
-            run_selection=run_selection)
+            run_selection=run_selection, **search_option)
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
         require(strongest != 'local-only',
                 'local-only data cannot be sent to an external provider')
+        require(not search_option or strongest in PROVIDER_WEB_SEARCH_PRIVACY,
+                'Provider web search cannot use confidential or local-only data')
         binding_bytes = json.dumps(binding.serialize(), sort_keys=True,
                                    separators=(',', ':')).encode()
         binding_sha256 = hashlib.sha256(binding_bytes).hexdigest()
@@ -2482,6 +2529,10 @@ class ChatService:
                 'project_commit': prepared.manifest['project_commit'],
                 'target': {'provider': provider_name, 'endpoint': binding.endpoint,
                            'boundary': binding.boundary, 'model': binding.model},
+                **({'provider_web_search': {'enabled': True, 'warning': (
+                    'Model may search the web by itself. It creates the queries from this '
+                    'context and ' + provider_name + ' sends them without confirmation. '
+                    'Searches are billed separately.')}} if search_option else {}),
                 'privacy': strongest, 'payload_size': len(prepared.payload),
                 'response_language': prepared.manifest['response_language'],
                 'run_selection': run_selection.public_serialize(),
@@ -2590,9 +2641,10 @@ class ChatService:
                                                  target=binding.target())
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
         output_format = 'json' if plan is not None else 'text'
+        search_option = ({'web_search': True} if original.get('provider_web_search') else {})
         current_request, _, _ = adapter_type._request(
             handoff, binding, role, output_format, stream=original['stream'],
-            run_selection=run_selection)
+            run_selection=run_selection, **search_option)
         require(current_request == approval['provider_request'],
                 'Provider request changed after preview')
         if not original['record_chat']:
@@ -2686,15 +2738,15 @@ class ChatService:
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
         try:
             adapter.prepare(handoff, binding, stream=original['stream'],
-                            run_selection=run_selection)
+                            run_selection=run_selection, **search_option)
             response = (adapter.dispatch_stream(handoff, binding,
                                                 on_delta or (lambda _delta: None),
                                                 run_selection=run_selection)
                         if original['stream'] else adapter.dispatch(
-                            handoff, binding, run_selection=run_selection))
+                            handoff, binding, run_selection=run_selection, **search_option))
             completed = threads.complete(turn_id=original['turn_id'], node_id=node_id,
                 user_id=thread_user, run_id=original['run_id'],
-                message_id=original['assistant_message_id'], content=response['response'],
+                message_id=original['assistant_message_id'], content=answer_with_sources(response),
                 privacy=approval['privacy'], created_at=now())
         except BackendUnknown as exc:
             threads.finish(turn_id=original['turn_id'], node_id=node_id,
@@ -2714,6 +2766,9 @@ class ChatService:
                   'usage_report': run_usage(binding.adapter_id, binding.binding_id,
                                             original['run_id'], response)}
         store.finish(original['approval_id'], node_id, user_id, 'succeeded', result=result)
+        # After finish on purpose: this reply is the only copy of the raw results.
+        if EPHEMERAL_SEARCH_KEY in response:
+            result = dict(result, search_results=response[EPHEMERAL_SEARCH_KEY])
         return result
 
     def task_external_preview(self, request):

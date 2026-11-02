@@ -5,7 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0066: Hledání u providera a zpětné volání do Workspace
 
-- Stav: návrh k review, neimplementováno
+- Stav: přijato uživatelem 2. 11. 2026; implementováno pro Claude, Grok, OpenAI
+  a Ollama + SearXNG, nebylo ověřeno proti živým API providerů. Gemini není nabídnuté.
 - Datum: 2026-11-02
 - Dávka: `NEW-FA92ACE959-BATCH-1` (`TASK-1`, `TASK-3`)
 - Mění: [ADR 0008](0008-context-and-publication-contracts.md) v tom, že webové
@@ -86,10 +87,29 @@ nepředá, protože potvrzení dotazu tam není možné.
 | Odpověď přijata, Claude | výsledky RAM, odpověď uložena přes `TaskOutcomes` | pád mezi přijetím a uložením se chová jako `unknown` |
 | Odpověď přijata, Grok, OpenAI | stejné jako Claude, obsah je výtah a odkazy | stejné jako Claude |
 
-Běhový záznam RAM režimu drží stav, digest požadavku, počet hledání a cenu, nikoli
-dotazy ani obsah. Protože Workspace dotazy nezná předem, audit RAM režimu je
-záměrně neúplný. Web server drží RAM výsledek na straně backendu pro daného
-uživatele; odhlášení jej maže.
+Běhový záznam drží stav, digest požadavku, počet hledání a citované odkazy, nikoli
+surové výsledky ani dotazy. Protože Workspace dotazy nezná předem, audit je záměrně
+neúplný. Surové výsledky backend po odpovědi nedrží: existují jen v odpovědi na první
+potvrzení a v paměti okna. Opakované potvrzení, ztracená odpověď, obnovení okna
+i restart je už nevrátí.
+
+## Implementační upřesnění
+
+- Volba je ve **Volné konverzaci** u externího backendu, kde request před odesláním
+  prochází přesným náhledem. Provider search tedy dnes nejde použít v režimu Úkol
+  ani se streamováním. Dotaz odesílá provider, ale spuštění celého běhu uživatel
+  potvrzuje; bez vlastního potvrzení běží jednotlivé dotazy.
+- Podporu určuje adaptér, nikoli model: Claude ji dokumentuje pro všechny modely,
+  u Grok a OpenAI model bez podpory požadavek odmítne a běh skončí chybou.
+- Claude používá základní verzi nástroje bez dynamického filtrování a s `max_uses` 5.
+  Ukončení `pause_turn` se neobnovuje a běh skončí chybou.
+- U Grok a OpenAI je „výtahem“ odpověď modelu; Workspace surové výsledky nepožaduje.
+- `TASK-3` má akci **Uvažovat s možností dohledání** pro Ollamu v režimu Úkol. Model
+  může odpovědět, nebo vyžádat jedno hledání; to pak prochází stávající kartou s
+  náhledem a potvrzením. Má tedy přísnější režim, než výše dovoluje pro `public`
+  a `project`. Nejde o tool calling. Externí backendy tuto akci nemají.
+- Gemini zůstává nenabídnuté, dokud nebude ověřené zobrazení návrhů Google Search.
+  Ukládání jen v RAM je pro něj rozhodnuté, ale neimplementované.
 
 ## Důsledky a otevřené otázky
 

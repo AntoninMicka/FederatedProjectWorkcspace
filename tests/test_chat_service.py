@@ -22,6 +22,7 @@ from spikes.external_proposal import ExternalCallProposal
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import ContextBuilder
 from spikes.metadata import ValidationError
+from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.direct_provider import (DirectAdapter, DirectBindings, DirectCatalog,
     DirectCredentials)
 from spikes.direct_registry import DIRECT_BINDINGS
@@ -421,6 +422,53 @@ class ChatServiceTests(unittest.TestCase):
                       if row['thread_id'] == request['thread_id'])
         self.assertEqual(thread['classification'], 'orchestration')
 
+    def on_demand_route(self, answer, **changes):
+        route = self.route_request(**changes)
+        route['task_plan'] = dict(route['task_plan'], search_on_demand=True)
+        searches = []
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=lambda binding, raw:
+                {'model': binding.model, 'response': json.dumps(answer)}),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda binding, query: searches.append(query) or {'results': []}))
+        service.configure(self.binding)
+        return service, route, searches
+
+    def test_model_choosing_search_only_prepares_the_confirmed_search_card(self):
+        service, route, searches = self.on_demand_route({'schema_version': 1,
+            'kind': 'web-search-request', 'purpose': 'Aktuální fakta', 'query': 'cena mědi'})
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        routed = service.task_route(route)
+        self.assertEqual('web-search', routed['outcome']['kind'])
+        self.assertEqual([route['message_id']], routed['outcome']['message_ids'])
+        self.assertEqual([], searches, 'the model choice must not send anything')
+        preview = service.task_search_preview({'task_id': route['task_id'], 'search_id': str(uuid4()),
+            'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())})
+        self.assertEqual('cena mědi', preview['query'])
+        self.assertEqual(routed['outcome'], service.task_route(route)['outcome'])
+
+    def test_model_may_answer_without_search_and_cannot_add_request_fields(self):
+        service, route, searches = self.on_demand_route({'schema_version': 1,
+            'kind': 'direct-answer', 'content': 'Bez hledání'})
+        routed = service.task_route(route)
+        self.assertEqual('Bez hledání', routed['outcome']['content']); self.assertEqual([], searches)
+        for answer in ({'schema_version': 1, 'kind': 'web-search-request', 'purpose': 'p',
+                        'query': 'q', 'artifact_ids': []},
+                       {'schema_version': 1, 'kind': 'artifact-draft', 'artifact_kind': 'document',
+                        'title': 't', 'content': 'c'}):
+            service, route, _ = self.on_demand_route(answer)
+            with self.subTest(answer=answer), self.assertRaises(ValueError):
+                service.task_route(route)
+
+    def test_model_search_request_is_refused_for_local_only_input(self):
+        service, route, _ = self.on_demand_route({'schema_version': 1,
+            'kind': 'web-search-request', 'purpose': 'p', 'query': 'q'}, privacy='local-only')
+        with self.assertRaisesRegex(ValueError, 'local-only'):
+            service.task_route(route)
+
     def test_web_search_requires_preview_and_reuses_results_after_restart(self):
         route = self.route_request(web_query='current project facts')
         outcome = {'schema_version': 1, 'kind': 'web-search',
@@ -460,7 +508,7 @@ class ChatServiceTests(unittest.TestCase):
         preview = service.task_search_preview(preview_request)
         self.assertEqual(preview['query'], outcome['query'])
         self.assertEqual(preview['privacy'], 'project')
-        self.assertEqual(preview['language'], 'cs-CZ')
+        self.assertEqual(preview['language'], 'instance-default')
         self.assertEqual(search_calls, [])
         confirm = {'task_id': route['task_id'], 'search_id': preview['search_id'],
                    'preview_sha256': preview['preview_sha256'], 'approved': True}
@@ -1903,6 +1951,111 @@ class ChatServiceTests(unittest.TestCase):
                 self.assertFalse(any(item['binding_id'] for item in
                     self.service.model_selection_status()['offers']
                     if item['adapter_id'] == adapter_id))
+
+    CLAUDE_SEARCH_ANSWER = {'id': 'msg-search', 'type': 'message', 'role': 'assistant',
+        'model': 'MODEL', 'stop_reason': 'end_turn',
+        'usage': {'input_tokens': 5, 'output_tokens': 6,
+                  'server_tool_use': {'web_search_requests': 1}},
+        'content': [
+            {'type': 'server_tool_use', 'id': 's1', 'name': 'web_search',
+             'input': {'query': 'RAW-QUERY-MARKER'}},
+            {'type': 'web_search_tool_result', 'tool_use_id': 's1', 'content': [
+                {'type': 'web_search_result', 'url': 'https://raw.example/page',
+                 'title': 'RAW-RESULT-MARKER', 'encrypted_content': 'RAW-ENCRYPTED-MARKER'},
+                {'type': 'web_search_result', 'url': 'javascript:alert(1)', 'title': 'Bad'}]},
+            {'type': 'text', 'text': 'External answer', 'citations': [
+                {'type': 'web_search_result_location', 'url': 'https://cited.example/a)b',
+                 'title': 'Cited [source]', 'cited_text': 'x'}]}]}
+
+    def search_request(self, adapter_id, **changes):
+        model = self.DIRECT_CASES[adapter_id][0]
+        return self.external_request(provider_web_search=True, run_choice={
+            'mode': 'brainstorming', 'adapter': adapter_id, 'model': model}, **changes)
+
+    def stored_bytes(self):
+        return b''.join(path.read_bytes() for path in Path(self.chat_state).rglob('*')
+                        if path.is_file())
+
+    def test_claude_search_keeps_raw_results_out_of_every_store_and_replay(self):
+        adapter_id = 'anthropic-messages'; model = self.DIRECT_CASES[adapter_id][0]; sent = []
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'k' * 24)
+        answer = json.loads(json.dumps(self.CLAUDE_SEARCH_ANSWER).replace('MODEL', model))
+        def transport(binding, request, secret):
+            sent.append(json.loads(request)); return answer
+        self.service.direct_adapter_factory = (lambda runs, credentials:
+            DirectAdapter(runs, credentials, transport))
+        preview = self.service.external_preview(self.search_request(adapter_id))
+        self.assertTrue(preview['provider_web_search']['enabled'])
+        self.assertEqual('web_search_20250305', preview['provider_request']['tools'][0]['type'])
+        self.assertEqual(5, preview['provider_request']['tools'][0]['max_uses'])
+        self.assertEqual([], sent)
+        approval = {'approval_id': preview['approval_id'], 'approved': True,
+                    'preview_sha256': preview['preview_sha256'], 'privacy': preview['privacy']}
+        result = self.service.external_confirm(approval)
+        self.assertEqual(['RAW-QUERY-MARKER'], result['search_results']['queries'])
+        self.assertEqual(['https://raw.example/page'],
+                         [item['url'] for item in result['search_results']['results']])
+        self.assertEqual('External answer\n\nZdroje:\n- [Cited source](https://cited.example/a%29b)',
+                         result['thread']['messages'][-1]['content'])
+        stored = self.stored_bytes()
+        for marker in (b'RAW-QUERY-MARKER', b'RAW-RESULT-MARKER', b'RAW-ENCRYPTED-MARKER',
+                       b'raw.example'):
+            self.assertNotIn(marker, stored)
+        self.assertIn(b'cited.example', stored)
+        replay = self.service.external_confirm(approval)
+        self.assertNotIn('search_results', replay); self.assertEqual(1, len(sent))
+        restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state)
+        self.assertNotIn('search_results', restarted.external_confirm(approval))
+
+    def test_provider_search_rejects_unsupported_requests_without_sending(self):
+        adapter_id = 'anthropic-messages'; model = self.DIRECT_CASES[adapter_id][0]
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'k' * 24)
+        for label, request in (
+                ('confidential', self.search_request(adapter_id, privacy='confidential')),
+                ('local-only', self.search_request(adapter_id, privacy='local-only')),
+                ('streaming', self.search_request(adapter_id, stream=True)),
+                ('false flag', dict(self.search_request(adapter_id), provider_web_search=False))):
+            with self.subTest(label), self.assertRaises(ValueError):
+                self.service.external_preview(request)
+        adapter_id = 'gemini-generate'; model = self.DIRECT_CASES[adapter_id][0]
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'k' * 24)
+        with self.assertRaisesRegex(ValueError, 'not available'):
+            self.service.external_preview(self.search_request(adapter_id))
+
+    def test_unrequested_provider_search_fails_instead_of_passing(self):
+        adapter_id = 'anthropic-messages'; model = self.DIRECT_CASES[adapter_id][0]
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'k' * 24)
+        answer = json.loads(json.dumps(self.CLAUDE_SEARCH_ANSWER).replace('MODEL', model))
+        self.service.direct_adapter_factory = (lambda runs, credentials:
+            DirectAdapter(runs, credentials, lambda *_: answer))
+        preview = self.service.external_preview(self.external_request(run_choice={
+            'mode': 'brainstorming', 'adapter': adapter_id, 'model': model}))
+        with self.assertRaisesRegex(BackendResponseError, 'not requested'):
+            self.service.external_confirm({'approval_id': preview['approval_id'], 'approved': True,
+                'preview_sha256': preview['preview_sha256'], 'privacy': preview['privacy']})
+
+    def test_provider_search_interrupted_after_dispatch_is_unknown_and_not_resent(self):
+        adapter_id = 'xai-responses'; calls = []
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'k' * 24)
+        def lost(*_):
+            calls.append(1); raise TimeoutError('lost')
+        self.service.direct_adapter_factory = (lambda runs, credentials:
+            DirectAdapter(runs, credentials, lost))
+        preview = self.service.external_preview(self.search_request(adapter_id))
+        self.assertEqual([{'type': 'web_search'}], preview['provider_request']['tools'])
+        approval = {'approval_id': preview['approval_id'], 'approved': True,
+                    'preview_sha256': preview['preview_sha256'], 'privacy': preview['privacy']}
+        for _ in range(2):
+            with self.assertRaises(BackendUnknown):
+                self.service.external_confirm(approval)
+        self.assertEqual([1], calls)
+
+    def test_provider_search_adapter_list_matches_the_prompt_control(self):
+        from spikes.chat_service import PROVIDER_WEB_SEARCH_ADAPTERS
+        import re
+        from spikes.desktop_ui import JS
+        shown = re.search(r"PROVIDER_WEB_SEARCH_ADAPTERS=new Set\(\[([^\]]+)\]\)", JS)[1]
+        self.assertEqual(PROVIDER_WEB_SEARCH_ADAPTERS, {item.strip(" '") for item in shown.split(',')})
 
     def test_direct_provider_rejects_local_only_and_unknown_offer(self):
         adapter_id = 'xai-responses'; model = self.DIRECT_CASES[adapter_id][0]

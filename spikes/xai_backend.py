@@ -20,6 +20,7 @@ nothing here has run against the live API.
 """
 import re
 
+from spikes.backend_contract import web_sources
 from spikes.direct_provider import (DirectBinding, DirectResponseError, ProviderSpec,
                                     register_direct)
 from spikes.metadata import require
@@ -65,6 +66,16 @@ def _build_body(prompt, binding, output_format, stream):
     return body
 
 
+def _enable_web_search(body):
+    body['tools'] = [{'type': 'web_search'}]
+
+
+def _server_tool_item(item):
+    # xAI documents server-side tools but not each output item; a client call stays refused.
+    kind = item.get('type')
+    return isinstance(kind, str) and kind.endswith('_call') and kind != 'function_call'
+
+
 def _parse_response(value, binding):
     require(isinstance(value, dict), 'Invalid Grok response')
     require(value.get('status') == 'completed', _not_completed(value))
@@ -76,7 +87,8 @@ def _parse_response(value, binding):
     require(value.get('store', False) is False, 'Grok response was stored at the provider')
     output = value.get('output')
     require(isinstance(output, list) and bool(output)
-            and all(isinstance(item, dict) and item.get('type') in {'reasoning', 'message'}
+            and all(isinstance(item, dict) and (item.get('type') in {'reasoning', 'message'}
+                                                or _server_tool_item(item))
                     for item in output),
             'Grok response contains an unsupported output item')
     messages = [item for item in output if item['type'] == 'message']
@@ -95,6 +107,12 @@ def _parse_response(value, binding):
     if isinstance(usage, dict) and all(type(usage.get(key)) is int and usage[key] >= 0
                                        for key in _USAGE):
         result['usage'] = {key: usage[key] for key in _USAGE}
+    calls = sum(1 for item in output if _server_tool_item(item))
+    if calls:
+        annotated = [note for item in content if isinstance(item.get('annotations'), list)
+                     for note in item['annotations']]
+        cited = value.get('citations') if isinstance(value.get('citations'), list) else []
+        result['web_search'] = {'requests': calls, 'sources': web_sources(annotated + cited)}
     return result
 
 
@@ -166,7 +184,8 @@ SPEC = ProviderSpec(
     auth_headers=_auth_headers, generate_path=_generate_path, build_body=_build_body,
     parse_response=_parse_response, stream_state=_stream_state,
     stream_event=_stream_event, stream_final=_stream_final,
-    models_path=_models_path, parse_models=_parse_models)
+    models_path=_models_path, parse_models=_parse_models,
+    enable_web_search=_enable_web_search)
 
 
 class GrokBinding(DirectBinding):
