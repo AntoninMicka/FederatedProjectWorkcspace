@@ -73,3 +73,25 @@ Automatická regrese: `python3 -m unittest tests.test_workspace_navigation -v`.
 Izolovaný test skutečného Qt/WebEngine shellu lze zapnout pomocí
 `M0_DESKTOP_TEST=1`; transport nahrazuje fixture a neověřuje živý uživatelský
 profil ani backendové transakce.
+
+## Manuály
+
+Ikona knihy **Manuály** v levém panelu otevře strom základních okruhů:
+Začínáme, Plánování a spolupráce, Zdroje a AI, Nástroje a výstupy,
+Správa a nasazení. Okruh rozbalíte kliknutím nebo klávesnicí na jeho název;
+v seznamu vyberete manuál. Vybraný manuál zůstává zvýrazněný.
+
+Obsah se zobrazí na hlavní ploše jako dokument pouze ke čtení, se stejným
+omezeným Markdown vykreslením jako náhled podkladů (nadpisy, seznamy,
+bloky kódu a text). Manuály jsou dokumentace dodaná s aplikací, dostupná
+bez otevřeného projektu i bez externího připojení; neukládají se do projektu.
+Otevření respektuje ochranu rozepsaných editorů. Návrat do záložky zachová
+vybraný manuál i rozbalené okruhy. Na úzké obrazovce výběr manuálu zavře
+navigaci, aby zůstal prostor pro čtení.
+
+Chybějící soubor v instalaci se zobrazí jako nedostupný manuál s výzvou
+k aktualizaci aplikace. Při chybě načtení katalogu záložku otevřete znovu.
+Katalog zahrnuje vybrané uživatelské návody, nikoli úplný archiv ADR a
+akceptačních protokolů. Nový návod se přidává do `spikes/manuals.py`;
+stejný seznam přibalují zdrojový archiv i Debian balík. Čtení nemění
+filesystem projektu, Git, index ani journal; nevzniká nová recovery operace.

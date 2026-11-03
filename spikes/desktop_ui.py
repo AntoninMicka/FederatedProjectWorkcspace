@@ -10,6 +10,7 @@ import subprocess
 from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
+from spikes.manuals import manual_catalog
 from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
 from spikes.task_stream_ui import TASK_STREAM_JS
 from spikes.task_file_edit_ui import FILE_EDIT_HTML, FILE_EDIT_CSS, FILE_EDIT_JS
@@ -250,6 +251,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="artifacts-tab" role="tab" aria-label="Podklady" aria-controls="sidebar-artifacts" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h4M9 12h7M9 16h7"/></svg><span class="sidebar-tab-label" role="tooltip">Podklady</span></button>
 <button id="tools-tab" role="tab" aria-label="Nástroje" aria-controls="sidebar-tools" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a4 4 0 0 0-5 5L3 17l4 4 6-6a4 4 0 0 0 5-5l-3 3-4-4z"/></svg><span class="sidebar-tab-label" role="tooltip">Nástroje</span></button>
 <button id="presentations-tab" role="tab" aria-label="Výstupy" aria-controls="sidebar-presentations" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9h4v10M10 19V4h4v15M16 19v-7h4v7"/></svg><span class="sidebar-tab-label" role="tooltip">Výstupy</span></button>
+<button id="manuals-tab" role="tab" aria-label="Manuály" aria-controls="sidebar-manuals" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5C9 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-2-1-6-1-9 1zM12 5v15"/></svg><span class="sidebar-tab-label" role="tooltip">Manuály</span></button>
 <button id="settings-sidebar-tab" role="tab" aria-label="Nastavení" aria-controls="sidebar-settings" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg><span class="sidebar-tab-label" role="tooltip">Nastavení</span></button>
 <button id="federation-tab" role="tab" aria-label="Federace" aria-controls="sidebar-federation" aria-selected="false" tabindex="-1" hidden><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.7 10.7 6.6-3.4M8.7 13.3l6.6 3.4"/></svg><span class="sidebar-tab-label" role="tooltip">Federace</span></button></div>
 <div id="sidebar-projects" role="tabpanel" aria-labelledby="projects-tab" tabindex="0">
@@ -292,6 +294,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="sidebar-presentations" role="tabpanel" aria-labelledby="presentations-tab" tabindex="0" hidden>
 <h2>Výstupy</h2><h3>Prezentace</h3><p id="sidebar-presentation-status" role="status">Otevřete projekt.</p>
 <ul id="sidebar-presentation-list" aria-label="Prezentace ve výstupech projektu"></ul></div>
+<div id="sidebar-manuals" role="tabpanel" aria-labelledby="manuals-tab" tabindex="0" hidden>
+<h2>Manuály</h2><p id="manuals-status" role="status"></p><div id="manuals-tree" aria-label="Okruhy manuálů"></div></div>
 <div id="sidebar-settings" role="tabpanel" aria-labelledby="settings-sidebar-tab" tabindex="0" hidden>
 <h2>Nastavení</h2><p>Jednotlivá nastavení tohoto uzlu.</p>
 <ul id="sidebar-settings-list" aria-label="Seznam nastavení">
@@ -356,7 +360,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p>Projekt: <code id="project-registration-remove-id"></code></p>
 <div class="form-actions"><button value="cancel" class="secondary-button">Zrušit</button><button id="project-registration-remove-confirm" type="button" class="danger">Odebrat registraci</button></div>
 </form></dialog>
-<main><div id="project-home">
+<main><div id="manuals-view" hidden><h1 id="manual-title">Manuály</h1><p id="manual-source"></p><article id="manual-content" class="manual-document" aria-labelledby="manual-title"><p>V levém panelu vyberte okruh a manuál.</p></article></div><div id="project-home">
 <header><span class="badge">Pracovní prostor</span></header>
 <div class="home-heading"><h1>Přehled</h1></div>
 <p id="project-status" class="visually-hidden" role="status" aria-live="polite">Načítám přehled…</p>
@@ -1571,8 +1575,10 @@ PRESENTER_CSS = '''
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:1100px){.presenter-layout{grid-template-columns:15% 25% minmax(0,1fr)}}
 @media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}.presenter-speaker{min-height:560px}}
+
 '''
 CSS += PRESENTER_CSS
+CSS += '''#manuals-tree summary{cursor:pointer;font-weight:650;padding:10px 4px}#manuals-tree ul{list-style:none;padding-left:12px}#manuals-tree button{width:100%;text-align:left;white-space:normal}#manuals-tree [aria-current="page"]{background:#176b60;color:white}.manual-document{max-width:960px;background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:24px;line-height:1.65;overflow-wrap:anywhere}.manual-document pre{white-space:pre-wrap;background:#f3f6f8;padding:12px;overflow:auto}'''
 JS = SLIDE_JS + '''const button=document.querySelector('#increment');
 button.addEventListener('click',async()=>{
  button.disabled=true;
@@ -2206,6 +2212,7 @@ function showProjectLanding(){
 async function navigateSidebarTab(tab){
  if(!tab||tab.disabled||!await canLeaveWorkspaceEditors())return false;
  const finish=()=>{closeMobileSidebar();closeCompactSidebarMenu();return true;};
+ if(tab.id==='manuals-tab'){selectSidebarTab(tab);showWorkspacePage(document.querySelector('#manuals-view'));await loadManuals();return finish();}
  if(tab.id==='projects-tab'){showProjectLanding();return finish();}
  if(tab.id==='settings-sidebar-tab'){await openSettings();return finish();}
  if(tab.id==='federation-tab'){await openFederationSharing();return finish();}
@@ -2255,6 +2262,39 @@ for(const tab of sidebarTabs){
   if(next===undefined) return;
   event.preventDefault();if(await navigateSidebarTab(visible[next])&&!mobileViewport.matches)visible[next].focus();
  });
+}
+let manualsCatalog=null;
+async function loadManuals(){
+ if(manualsCatalog)return;
+ const status=document.querySelector('#manuals-status');status.textContent='Načítám manuály…';
+ try{
+  const response=await fetch('/manuals.json');if(!response.ok)throw new Error('Manuály se nepodařilo načíst. Zkuste záložku otevřít znovu.');
+  const groups=await response.json();manualsCatalog=groups;
+  const tree=document.querySelector('#manuals-tree');tree.replaceChildren();
+  for(const group of groups){
+   const branch=document.createElement('details'),label=document.createElement('summary'),list=document.createElement('ul');
+   label.textContent=group.title;branch.open=tree.childElementCount===0;branch.append(label,list);
+   for(const manual of group.manuals){
+    const item=document.createElement('li'),button=document.createElement('button');button.type='button';button.className='sidebar-list-main';button.dataset.manualId=manual.id;button.textContent=manual.title;
+    button.addEventListener('click',()=>openManual(manual));item.append(button);list.append(item);
+   }
+   tree.append(branch);
+  }
+  status.textContent='Vyberte manuál. Obsah je pouze ke čtení.';
+ }catch(error){manualsCatalog=null;status.textContent=error.message;}
+}
+async function openManual(manual){
+ if(!await canLeaveWorkspaceEditors())return;
+ selectSidebarTab(document.querySelector('#manuals-tab'));showWorkspacePage(document.querySelector('#manuals-view'));
+ document.querySelector('#manual-title').textContent=manual.title;
+ document.querySelector('#manual-source').textContent='Dokumentace aplikace · pouze ke čtení';
+ const content=document.querySelector('#manual-content');content.replaceChildren();
+ if(manual.text===null)content.textContent='Tento manuál v instalaci chybí. Aktualizujte instalaci aplikace.';
+ else renderMarkdown(manual.text.replace(/<!--[^]*?-->/g,''),content);
+ for(const button of document.querySelectorAll('[data-manual-id]')){
+  if(button.dataset.manualId===manual.id)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');
+ }
+ closeMobileSidebar();closeCompactSidebarMenu();
 }
 let currentArtifacts=[];
 function sidebarItemMenu(label,actions,legacyClass=''){
@@ -8119,7 +8159,8 @@ reportDisplayRatio();addEventListener('resize',reportDisplayRatio);poll();setInt
 PUBLIC_HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Veřejné promítání</title>
 <link rel="stylesheet" href="/presentation-screen.css">
 <main id="screen" class="screen"><p class="neutral">Veřejné okno čeká na schválený slide.</p></main><script src="/presentation-screen.js"></script></html>'''
-ASSETS = {'/presentation-screen.css': ('text/css; charset=utf-8', PUBLIC_CSS),
+ASSETS = {'/manuals.json': ('application/json; charset=utf-8', json.dumps(manual_catalog(), ensure_ascii=False)),
+          '/presentation-screen.css': ('text/css; charset=utf-8', PUBLIC_CSS),
           '/presentation-screen.js': ('text/javascript; charset=utf-8', PUBLIC_JS),
           '/': ('text/html; charset=utf-8', HTML), '/presentation-screen': ('text/html; charset=utf-8', PUBLIC_HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', DESKTOP_BOOTSTRAP + JS)}

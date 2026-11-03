@@ -55,8 +55,9 @@ def build(output, version=None):
             write(f'usr/lib/{NAME}/{name}', (ROOT / name).read_bytes())
         write(f'usr/lib/{NAME}/docs/roadmap-graph.json',
               (ROOT / 'docs/roadmap-graph.json').read_bytes())
-        write(f'usr/lib/{NAME}/docs/julia-runner.md',
-              (ROOT / 'docs/julia-runner.md').read_bytes())
+        from spikes.manuals import manual_paths
+        for name in manual_paths():
+            write(f'usr/lib/{NAME}/{name}', (ROOT / name).read_bytes())
         write(f'usr/share/doc/{NAME}/julia-runner.md',
               (ROOT / 'docs/julia-runner.md').read_bytes())
         write(f'usr/share/doc/{NAME}/VERSION', packaged_version)

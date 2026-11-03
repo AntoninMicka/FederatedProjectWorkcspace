@@ -28,6 +28,9 @@ class PackageTests(unittest.TestCase):
                          'docs/roadmap-graph.json', 'extensions/workspace-bridge/extension.js',
                          'extensions/workspace-bridge/bridge.js', 'docs/ide-file-bridge.md', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md'):
                 self.assertIn(prefix + '/' + name, names)
+            from spikes.manuals import manual_paths
+            for name in manual_paths():
+                self.assertIn(prefix + '/' + name, names)
             self.assertIn(prefix + '/VERSION', names)
             self.assertIn(prefix + '/modules/publication-experiment-registry.module.json', names)
             self.assertIn(prefix + '/modules/publication-experiment-registry.source.json', names)
