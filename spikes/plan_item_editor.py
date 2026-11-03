@@ -138,7 +138,7 @@ def _unchanged_except(before, after, *ignored):
     for identifier, prior in before.items():
         if identifier in ignored or identifier not in after:
             continue
-        fields = ('parent_id', 'type', 'source', 'title', 'checked', 'description', 'checklist', 'depends_on')
+        fields = ('parent_id', 'type', 'source', 'title', 'checked', 'status_mode', 'description', 'checklist', 'depends_on')
         require(all(prior.get(k) == after[identifier].get(k) for k in fields),
                 'Změna zasahuje jinou položku nebo hierarchii.')
 
@@ -208,7 +208,7 @@ class PlanItems:
             for identifier, prior in before.items():
                 fields = ['parent_id', 'type', 'source']
                 if identifier != node['id']:
-                    fields += ['title', 'checked', 'description', 'relations', 'checklist']
+                    fields += ['title', 'checked', 'status_mode', 'description', 'relations', 'checklist']
                 require(all(prior.get(k) == after[identifier].get(k) for k in fields), 'Změna zasahuje jinou položku nebo hierarchii.')
             return {doc['path']: candidate[doc['path']]}, 'Local workspace author', author+'@local.invalid', 'Edit selected plan item'
 

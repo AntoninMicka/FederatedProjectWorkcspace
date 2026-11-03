@@ -115,3 +115,22 @@ specializovaným editorem **Kostky / Raw text**. Kostky mění jen rozpoznané
 committed bundle a expected HEAD. Neplatné nebo duplicitní ID, neznámý cíl,
 profilový či dependency cyklus odmítnou projekci; projekt a raw editor zůstanou
 dostupné.
+
+## Pracovní stavy a SUM
+
+V detailu položky zvolte **Upravit tuto položku** a v editoru použijte
+**Stav položky**. Změna připraví Markdown draft; potvrzuje ji tlačítko
+**Uložit**. Podporované stavy jsou Plánováno, Probíhá, Vyřešeno, Selhalo,
+Dokončeno a Odloženo. Stejné barevné štítky vidíte v plánu a frontě; pole
+**Stav** filtruje graf. Kritická cesta a připravenost jsou oddělené příznaky.
+
+Milníkům a dávkám lze nastavit **SUM — odvodit z položek**. Stav se pak
+počítá ze všech potomků, včetně skrytých filtrem a těch v samostatných
+souborech. Převládá Selhalo; všechny dokončené položky znamenají Dokončeno,
+všechny odložené Odloženo, pouze plánované/odložené Plánováno, pouze
+vyřešené/dokončené Vyřešeno a ostatní směsi Probíhá. Prázdná skupina je
+Plánováno. Přepnutí na ruční stav agregaci vypne.
+
+SUM ani Vyřešeno automaticky nepotvrzují splnění skupiny či přijetí práce
+agenta. Checkbox a lidské review zůstávají samostatné. Přesná pravidla a
+zápis `status:` popisuje [ADR 0067](adr/0067-plan-work-states-and-sum.md).

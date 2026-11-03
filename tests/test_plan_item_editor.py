@@ -97,6 +97,37 @@ class PlanItemTests(unittest.TestCase):
             self.assertEqual(request['body'], self.opened()['body'])
             self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
 
+    def test_status_edits_recompute_sum_and_recover_without_changing_siblings(self):
+        body = BODY.replace('- type: batch', '- type: batch\n    - status: sum')
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact,
+            base_head=self.head, title='Roadmapa', body=body, new=False), str(uuid4()))['commit_id']
+        git = Projects(self.node).repository(self.project)
+        for stage, status in zip(('prepared', 'files-applied', 'ref-updated', 'indexed', 'completed'),
+                                 ('in progress', 'resolved', 'failed', 'deferred', 'planned')):
+            model = self.opened()
+            import re
+            draft = re.sub(r'      - status: [^\n]+\n', '', model['body'])
+            draft = draft.replace('- type: task\n', '- type: task\n      - status: '+status+'\n')
+            request = self.request(model, body=draft)
+            operation = str(uuid4())
+            before = git.snapshot(self.head)
+            def stop(current):
+                if current == stage: raise RuntimeError('power loss')
+            with self.subTest(stage=stage), self.assertRaises(RuntimeError):
+                self.editor.save(request, operation, checkpoint=stop)
+            result = self.editor.save(request, operation)
+            self.assertEqual(result, self.editor.save(request, operation))
+            path = f'artifacts/{self.artifact}/content.md'
+            self.assertEqual(before[path].replace(model['body'].encode(), draft.encode(), 1),
+                             git.snapshot(result['commit_id'])[path])
+            self.head = result['commit_id']
+            plan = self.editor.plan(git.snapshot(self.head), self.project, self.head)[0]
+            nodes = {n['id']: n for n in plan['nodes']}
+            self.assertEqual(status, nodes['TASK-01']['status'])
+            self.assertEqual('failed' if status == 'failed' else 'planned' if status in ('deferred', 'planned')
+                             else 'in progress', nodes['BATCH-01']['status'])
+            self.assertFalse(nodes['BATCH-01']['checked'])
+
     def test_item_in_referenced_definition_document_preserves_main_roadmap(self):
         external = str(uuid4())
         self.head = self.actions.save(dict(project_id=self.project, artifact_id=external,
@@ -451,14 +482,14 @@ class SpanTests(unittest.TestCase):
 const assert=require('node:assert/strict');
 const field=()=>({value:'',disabled:false,readOnly:false,label:{hidden:false},closest(){return this.label;},focus(){}});
 const elements=new Map(),button={disabled:false};
-const document={querySelector(id){if(!elements.has(id))elements.set(id,{textContent:''});return elements.get(id);}};
+const document={querySelector(id){if(!elements.has(id))elements.set(id,{textContent:'',remove(){}});return elements.get(id);}};
 const artifactEditorForm={elements:Object.fromEntries(['body','title','filename','description','tags'].map(n=>[n,field()])),querySelector:()=>button};
 let activeProject={id:'p',head:'h',mainTodoId:'main',readOnly:false},artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false;
 let allow=false,failed=true,calls=[],filled=[],artifactEditorView={hidden:true},taskPlanProjection={nodes:[]};
 const artifactEditorStatus={textContent:''},artifactRawWidget={configure:()=>Promise.resolve()};
 const crypto={randomUUID:()=>String(calls.length)};
 function resetTaskFileEditEditor(){}function artifactEditorState(){return artifactEditorForm.elements.body.value;}function configureTaskPlanEditor(){}
-function hideArtifactDeletion(){}function showWorkspacePage(v){v.hidden=false;}async function canLeaveWorkspaceEditors(){return allow;}
+function configurePlanStatusEditor(){}function hideArtifactDeletion(){}function showWorkspacePage(v){v.hidden=false;}async function canLeaveWorkspaceEditors(){return allow;}
 const model={project_id:'p',artifact_id:'a',task_id:'TASK-01',expected_head:'h',fragment_sha256:'digest',body:'one item',title:'Title'};
 async function projectRequest(path,request){calls.push({path,request});if(path.endsWith('/open'))return model;if(failed)throw Error('unknown');return {project_id:'p',commit_id:'new'};}
 '''

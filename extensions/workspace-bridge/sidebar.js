@@ -178,7 +178,7 @@ function createSidebar(vscode, context, hooks) {
     } else if(item.kind==='queueMissing'){
       label=item.taskId;description='Chybějící nebo neúplný odkaz';icon='warning';
     } else if (item.kind === 'task') {
-      const task = taskOf(item); label = task.title; description = task.id; icon = task.checked ? 'pass' : 'circle-outline';
+      const task = taskOf(item); label = task.title; description = task.id+' · '+({'planned':'Plánováno','in progress':'Probíhá','resolved':'Vyřešeno','failed':'Selhalo','completed':'Dokončeno','deferred':'Odloženo'}[task.status]|| (task.checked?'Dokončeno':'Plánováno'))+(task.status_mode==='sum'?' · SUM':''); icon = task.checked ? 'pass' : 'circle-outline';
       if (project.snapshot.tasks.some(t => t.parent_id===task.id)) collapsed = vscode.TreeItemCollapsibleState.Collapsed;
       command = 'workspaceBridge.showTask';
     } else if (item.kind === 'document') {

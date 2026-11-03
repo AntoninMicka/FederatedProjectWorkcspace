@@ -134,3 +134,10 @@ soubory Workspace. Balíček se kvůli změně plánu tiše nepřepisuje a mappi
 s aktivním packetem se automaticky nepřipíná na jiný commit.
 Podrobný postup, completion schema a recovery: `docs/ide-queue-handoff.md`
 v projektu Workspace; architektonické hranice: ADR 0062.
+
+Od verze 0.5.2 ukazuje strom úkolů a fronta také pracovní stav z plánu
+(Plánováno, Probíhá, Vyřešeno, Selhalo, Dokončeno, Odloženo) a režim SUM.
+Stav se upravuje ve Workspace přes editor položky; synchronizace jej
+přenese do IDE. Zprávy agenta, připravenost a lidské přijetí se zobrazují
+odděleně. Zastaralý balíček ukazuje poslední známý stav, nikoli potvrzení
+aktuálnosti. Po instalaci aktualizace znovu načtěte okno IDE a synchronizujte.

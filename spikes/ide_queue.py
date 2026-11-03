@@ -272,6 +272,8 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
                                                if c['parent_id'] == identifier and not c['checked']]
         ready = bool(not blockers and not blocked_by)
         return dict(id=identifier, title=original['title'], type=original.get('type'),
+                    status=n.get('status') if n else None, status_mode=n.get('status_mode') if n else None,
+                    status_counts=n.get('status_counts', {}) if n else {},
                     parent_id=original.get('parent_id'),
                     eligible=ready and not open_children,
                     # A batch is one feature branch: work starts before its tasks are accepted.

@@ -22,6 +22,8 @@ function flags(entry,{stale=false,blockers=[]}={}){
  const yes=value=>value===true,known=value=>typeof value==='boolean';
  const suffix=stale?' (poslední známý stav)':'';
  const list=[];
+ const labels={'planned':'Plánováno','in progress':'Probíhá','resolved':'Vyřešeno','failed':'Selhalo','completed':'Dokončeno','deferred':'Odloženo'};
+ if(labels[entry.status])list.push({name:'plan-status',label:(entry.status_mode==='sum'?'SUM · ':'')+labels[entry.status]+suffix});
  if(stale)list.push({name:'stale',label:'Neaktuální'});
  if(!known(entry.eligible))list.push({name:'unknown',label:'Stav neznámý'});
  else if(entry.user_confirmed!==true){

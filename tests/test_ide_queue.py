@@ -250,6 +250,8 @@ async function projectRequest(path,body){if(path==='/v1/projects/open')return {c
         script="""
 const assert=require('node:assert/strict'),q=require('./extensions/workspace-bridge/queue.js');
 const names=(e,o)=>q.flags(e,o).map(f=>f.name);
+assert(q.flags({status:'failed',eligible:true}).some(f=>f.label==='Selhalo'));
+assert(q.flags({status:'completed',status_mode:'sum',eligible:true},{stale:true}).some(f=>f.label==='SUM · Dokončeno (poslední známý stav)'));
 const base={eligible:true,startable:true,agent_confirmed:false,user_requested:false,user_confirmed:false};
 assert.deepEqual(names(base),['ready']);
 assert.deepEqual(names({...base,agent_confirmed:true,user_requested:true}),['ready','agent','requested']);

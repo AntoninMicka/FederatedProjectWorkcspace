@@ -8,6 +8,7 @@ import sys
 import unittest
 
 from spikes.desktop_ui import JS
+from spikes.plan_status_ui import PLAN_STATUS_JS
 
 
 class RoadmapHotfixTests(unittest.TestCase):
@@ -25,7 +26,7 @@ class RoadmapHotfixTests(unittest.TestCase):
         script = r'''
 const assert=require('node:assert/strict');
 class Element {
- constructor(tag){this.tag=tag;this.children=[];this.listeners={};this.classList={add(){}};this.textContent='';}
+ constructor(tag){this.tag=tag;this.dataset={};this.children=[];this.listeners={};this.classList={add(){}};this.textContent='';}
  append(...items){this.children.push(...items);}
  replaceChildren(){this.children=[];}
  addEventListener(name,fn){this.listeners[name]=fn;}
@@ -36,7 +37,7 @@ const openPreview=id=>opened.push(id),addConflictLineClasses=()=>{};
 const taskQueueBusy=false,queueIsCurrent=()=>false,taskQueueView=null,activeProject=null;
 const changeTaskQueue=()=>assert.fail('Unloaded queue must not mutate');
 const buttons=el=>[...(el.tag==='button'?[el]:[]),...el.children?.flatMap(buttons)||[]];
-''' + helper + detail + r'''
+''' + PLAN_STATUS_JS + helper + detail + r'''
 const id='12345678-1234-1234-1234-123456789abc';
 const link='[Podklad](artifacts/'+id+'/content.md)';
 showTaskPlanDetail({id:'DEV-02',title:'Task',description:link,depends_on:[],source:{artifact_id:id}});
