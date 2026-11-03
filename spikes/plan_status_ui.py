@@ -15,6 +15,7 @@ function planStatusDraft(body,status){
  const newline=body.includes('\r\n')?'\r\n':'\n',lines=body.split(/\r?\n/);
  // This is only the scoped item fragment: never rewrite child nodes or neighbours.
  const indent=lines[0].match(/^\s*/)[0]+'  ';
+ const sumMarker=/^\s*[-+*]\s+\[[sS][uU][mM]\]/.test(lines[0]);
  let fence=null,found=false;
  for(let index=1;index<lines.length;index++){
   const marker=lines[index].match(/^\s*(`{3,}|~{3,})(.*)$/);
@@ -23,8 +24,8 @@ function planStatusDraft(body,status){
    lines[index]=lines[index].replace(/(:\s*).*$/,(_,prefix)=>prefix+status);found=true;
   }
  }
- if(!found)lines.splice(1,0,indent+'- status: '+status);
- if(status!=='sum')lines[0]=lines[0].replace(/\[([ xX])\]/,status==='completed'?'[x]':'[ ]');
+ if(!found&&!(status==='sum'&&sumMarker))lines.splice(1,0,indent+'- status: '+status);
+ if(status!=='sum')lines[0]=lines[0].replace(/\[(?:[ xX]|[sS][uU][mM])\]/,status==='completed'?'[x]':'[ ]');
  return lines.join(newline);
 }
 function configurePlanStatusEditor(task){

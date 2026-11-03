@@ -50,6 +50,15 @@ class PlanStatusTests(unittest.TestCase):
                     self.assertFalse(nodes[identifier]['checked'])
                 self.assertEqual(2, sum(nodes['BATCH-01']['status_counts'].values()))
 
+    def test_literal_sum_marker_and_conflicting_metadata(self):
+        source = '- [SUM] [MILESTONE-DEV] DEV\n  - type: milestone\n'
+        graph = self.fixture('<!-- fpw-plan-profile: software-development/v1 -->\n'+source)
+        self.assertEqual('ready', graph['status'], graph)
+        self.assertEqual(('sum', 'planned', False),
+                         tuple(graph['nodes'][0][k] for k in ('status_mode', 'status', 'checked')))
+        self.assertEqual('invalid', self.fixture(source+'  - status: failed\n')['status'])
+        self.assertEqual('invalid', self.fixture('- [SUM] [TASK-01] T\n  - type: task\n')['status'])
+
     def test_empty_manual_override_and_legacy_description(self):
         graph = self.graph('')
         self.assertEqual({'planned'}, {n['status'] for n in graph['nodes']})
@@ -108,5 +117,12 @@ assert(planStatusDraft(updated,'completed').startsWith('    - [x]'));
 assert(planStatusDraft(planStatusDraft(updated,'completed'),'resolved').startsWith('    - [ ]'));
 assert.equal(planStatusDraft(updated,'failed').split('status: failed').length,3);
 assert(planStatusDraft(original,'sum').startsWith('    - [ ]'));
+const sum='- [SUM] [MILESTONE-DEV] DEV\n  - type: milestone\n';
+assert.equal(planStatusDraft(sum,'sum'),sum);
+assert(planStatusDraft(sum,'planned').startsWith('- [ ] [MILESTONE-DEV]'));
+assert(planStatusDraft(sum,'completed').startsWith('- [x] [MILESTONE-DEV]'));
 '''
-        subprocess.run(['node', '-e', PLAN_STATUS_JS + code], check=True)
+        from spikes.desktop_ui import JS
+        parser = JS[JS.index('function parseTaskPlanDraft('):JS.index('function replaceTaskPlanLine(')]
+        code += "\nassert(parseTaskPlanDraft('<!-- fpw-plan-profile: software-development/v1 -->\\n'+sum).safe);"
+        subprocess.run(['node', '-e', PLAN_STATUS_JS + parser + code], check=True)

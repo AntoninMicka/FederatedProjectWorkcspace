@@ -24,6 +24,22 @@ Nevzniká další registr ani persistentní vrstva. Povolené hodnoty:
 | `deferred` | Odloženo |
 | `sum` | SUM, odvodit stav ze všech obsažených položek |
 
+Pro skupiny je podporován také přímý zápis značky SUM:
+
+```markdown
+- [SUM] [MILESTONE-DEV] DEV
+  - type: milestone
+```
+
+Značka `[SUM]` je zkratka režimu agregace, nikoli potvrzený checkbox.
+Stejný význam má `[ ]` s metadatem `status: sum`. Volitelná shodná deklarace
+`status: sum` u značky SUM je přípustná; jiný ruční stav je konflikt.
+Úprava názvu nebo ID ve strukturovaném editoru značku zachová. Při změně na
+ruční stav výběrem v editoru se značka nahradí `[ ]` či `[x]` a zapíše se
+příslušné `status`. Při lidském přijetí skupiny se `[SUM]` převede na `[x]`
+a agregaci nadále uchovává `status: sum`. Stejné zkratky používají malé i
+velké písmeno; na task nebo checklist se SUM použít nesmí.
+
 Bez pole `status` zůstává původní význam checkboxu: `[x]` = Dokončeno,
 `[ ]` = Plánováno. Historické popisy `Stav: …` zůstávají obyčejným textem.
 Neznámé a opakované deklarace `status` jsou neplatný plán.

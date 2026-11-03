@@ -59,6 +59,12 @@ def main():
                 "artifactEditorDirty&&artifactEditorForm.elements.body.value.includes('status: in progress')",
                 "taskPlanProjection?.nodes.find(n=>n.id==='BATCH-01')?.status==='in progress'&&artifactEditorView.hidden&&queueIsCurrent()",
                 "taskQueueView?.items.some(i=>i.id==='BATCH-01'&&i.status==='in progress')&&document.querySelector('#task-queue-list .plan-status-badge')?.textContent==='Probíhá'",
+                "document.querySelector('#plan-item-status-control select')?.value==='in progress'&&!artifactEditorView.hidden",
+                "artifactEditorDirty&&artifactEditorForm.elements.body.value.includes('status: sum')",
+                "taskPlanProjection?.nodes.find(n=>n.id==='BATCH-01')?.status_mode==='sum'&&taskPlanProjection.nodes.find(n=>n.id==='BATCH-01')?.status==='planned'&&artifactEditorView.hidden&&queueIsCurrent()",
+                "document.querySelector('#plan-item-status-control select')?.value==='sum'&&!artifactEditorView.hidden&&artifactEditorItem.planItem.task_id==='MILESTONE-01'",
+                "artifactEditorDirty&&artifactEditorForm.elements.body.value.startsWith('- [SUM] [MILESTONE-01]')",
+                "activeProject.head!==window.beforeLiteralHead&&taskPlanProjection?.nodes.find(n=>n.id==='MILESTONE-01')?.status_mode==='sum'&&artifactEditorView.hidden&&queueIsCurrent()",
             ]
             commands = [
                 'openRegisteredProject('+json.dumps(pid)+')',
@@ -67,6 +73,12 @@ def main():
                 "(()=>{const s=document.querySelector('#plan-item-status-control select');s.value='in progress';s.dispatchEvent(new Event('change'));})()",
                 'savePlanItemEditor()',
                 "changeTaskQueue('add','BATCH-01')",
+                "openPlanItemEditor(taskPlanProjection.nodes.find(n=>n.id==='BATCH-01'))",
+                "(()=>{const s=document.querySelector('#plan-item-status-control select');s.value='sum';s.dispatchEvent(new Event('change'));})()",
+                'savePlanItemEditor()',
+                "openPlanItemEditor(taskPlanProjection.nodes.find(n=>n.id==='MILESTONE-01'))",
+                "(()=>{window.beforeLiteralHead=activeProject.head;const b=artifactEditorForm.elements.body;b.value='- [SUM] [MILESTONE-01] Milník\\n  - type: milestone\\n';b.dispatchEvent(new Event('input',{bubbles:true}));})()",
+                'savePlanItemEditor()',
             ]
             def received(value):
                 nonlocal phase

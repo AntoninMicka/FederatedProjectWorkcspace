@@ -11,12 +11,13 @@ from spikes.markdown_documents import document, main_todo_id
 from spikes.metadata import ValidationError, require
 
 SCHEMA = 'fpw-project-task-graph-v3'
+TASK_MARKER = r'(?:[ xX]|[sS][uU][mM])'
 TASK_ID = re.compile(r'[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+')
-TASK = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\]\s+(.+?)\s*$')
+TASK = re.compile(r'^(\s*)[-+*]\s+\[(' + TASK_MARKER + r')\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\]\s+(.+?)\s*$')
 CHECKLIST = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+(.+?)\s*$')
 RELATION = re.compile(r'^(\s*)[-+*]\s+([^:]{1,32}):\s*(.+?)\s*$')
 DESCRIPTION = re.compile(r'^(\s*)[-+*]\s+(.+?)\s*$')
-REFERENCE = re.compile(r'^\s*[-+*]\s+\[[ xX]\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\](?:\s+.*)?$')
+REFERENCE = re.compile(r'^\s*[-+*]\s+\[' + TASK_MARKER + r'\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\](?:\s+.*)?$')
 PROFILE = re.compile(r'^\s*<!--\s*fpw-plan-profile:\s*([^\s]+)\s*-->\s*$')
 PLAN_DOCUMENT = re.compile(r'^\s*<!--\s*fpw-plan-document:\s*definitions/v1\s*-->\s*$')
 DOCUMENT_LINK = re.compile(r'^\[([^\]]+)\]\((artifacts/([0-9a-f-]{36})/[^)]+\.md)\)$')
@@ -78,7 +79,7 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             require(profile is None, 'Plán smí deklarovat profil právě jednou.')
             profile = profile_match.group(1)
             continue
-        checkbox = re.match(r'^\s*[-+*]\s+\[[ xX]\]\s+', line)
+        checkbox = re.match(r'^\s*[-+*]\s+\[' + TASK_MARKER + r'\]\s+', line)
         match = TASK.match(line)
         if checkbox and not match:
             checklist = CHECKLIST.match(line)
@@ -111,7 +112,8 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
                        'indent': indent_value, 'relations': defaultdict(list),
                        'description_lines': [],
                        'checklist': [],
-                       'type': None, 'status_mode': None, 'parent_id': parent_id,
+                       'type': None, 'status_mode': 'sum' if checked.lower() == 'sum' else None,
+                       'status_declared': False, 'sum_marker': checked.lower() == 'sum', 'parent_id': parent_id,
                        'document_link': link.group(2) if link else None,
                        'source': source, 'line': line_number}
             if link:
@@ -130,7 +132,10 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             elif relation.group(2).strip().lower() == 'status':
                 value = relation.group(3).strip().lower()
                 require(value in PLAN_STATUSES | {'sum'}, f'Neznámý stav uzlu: {value}')
-                require(pending['status_mode'] is None, f'Uzel {pending["id"]} deklaruje stav vícekrát.')
+                require(not pending['status_declared'], f'Uzel {pending["id"]} deklaruje stav vícekrát.')
+                require(not pending['sum_marker'] or value == 'sum',
+                        f'Značka [SUM] nesmí mít jiný ruční stav: {pending["id"]}')
+                pending['status_declared'] = True
                 pending['status_mode'] = value
                 continue
             elif relation.group(2).strip().lower() in {'type', 'typ'}:

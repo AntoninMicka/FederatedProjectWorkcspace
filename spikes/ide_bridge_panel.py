@@ -11,7 +11,7 @@ from spikes.metadata import require, safe_path, uuid, validate_snapshot, validat
 from spikes.projects import Projects
 from spikes.markdown_documents import document
 from spikes.roadmap_validation import _actor
-from spikes.task_graph import project_task_graph, TASK, CHECKLIST
+from spikes.task_graph import project_task_graph, parse_main_todo, TASK, CHECKLIST, TASK_MARKER
 from spikes.administration import Administration
 
 MAX_TEXT = 1024 * 1024
@@ -203,8 +203,11 @@ def _changes(files, project_id, head, message):
     candidate = dict(files)
     doc = document(files, entities, task['source']['artifact_id'])
     path = doc['path']; lines = doc['body'].splitlines(keepends=True)
+    from spikes.plan_item_editor import item_span
+    source_start, _ = item_span(doc['body'], task['id'])
+    source_index = len(doc['body'][:source_start].splitlines())
     if message.get('checklist'):
-        start = task['line']; rows = []
+        start = source_index + 1; rows = []
         fence = None
         for i in range(start, len(lines)):
             marker = re.match(r'^\s*(`{3,}|~{3,})(.*)$', lines[i])
@@ -233,10 +236,23 @@ def _changes(files, project_id, head, message):
         task = next(t for t in updated['nodes'] if t['id'] == message['task_id'])
         if message['kind'] == 'completed':
             require(all(item['checked'] for item in task['checklist']), 'Complete or review remaining checklist first')
-        index = task['line'] - 1
-        require(TASK.match(lines[index]).group(3) == task['id'], 'Task source mapping differs')
+        index = source_index
+        match = TASK.match(lines[index])
+        require(match is not None and match.group(3) == task['id'], 'Task source mapping differs')
         checked = message['kind'] == 'completed' or task['checked'] and all(item['checked'] for item in task['checklist'])
-        lines[index] = re.sub(r'^(\s*[-+*]\s+\[)[ xX](\])', lambda m: m[1]+('x' if checked else ' ')+m[2], lines[index], count=1)
+        definition = parse_main_todo(doc['body'])[0][task['id']]
+        if definition['sum_marker'] and not checked:
+            pass  # Progress does not turn a SUM group into a manually planned node.
+        else:
+            original = lines[index]
+            lines[index] = re.sub(r'^(\s*[-+*]\s+\[)' + TASK_MARKER + r'(\])',
+                                  lambda m: m[1]+('x' if checked else ' ')+m[2], original, count=1)
+            if definition['sum_marker'] and not definition['status_declared']:
+                newline = '\r\n' if original.endswith('\r\n') else '\n'
+                terminated = original.endswith(('\r', '\n'))
+                if not terminated: lines[index] += newline
+                indent = re.match(r'^\s*', original)[0]
+                lines.insert(index+1, indent+'  - status: sum'+(newline if terminated else ''))
         candidate[path] = prefix + ''.join(lines).encode()
     validate_transition(files, candidate)
     require(project_task_graph(candidate, validate_snapshot(candidate), project_id, head)['status'] == 'ready',

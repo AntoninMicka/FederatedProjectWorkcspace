@@ -134,3 +134,8 @@ Plánováno. Přepnutí na ruční stav agregaci vypne.
 SUM ani Vyřešeno automaticky nepotvrzují splnění skupiny či přijetí práce
 agenta. Checkbox a lidské review zůstávají samostatné. Přesná pravidla a
 zápis `status:` popisuje [ADR 0067](adr/0067-plan-work-states-and-sum.md).
+
+SUM lze zapsat přímo do značky skupiny, například
+`- [SUM] [MILESTONE-DEV] DEV` s následujícím řádkem `  - type: milestone`.
+Tento zápis zachová agregaci při uložení i úpravě názvu. Pro běžný úkol
+či podmínku checklistu značka SUM povolená není.

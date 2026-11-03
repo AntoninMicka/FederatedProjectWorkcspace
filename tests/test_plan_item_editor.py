@@ -97,6 +97,33 @@ class PlanItemTests(unittest.TestCase):
             self.assertEqual(request['body'], self.opened()['body'])
             self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
 
+    def test_literal_sum_marker_saves_milestone_without_rewriting_other_blocks(self):
+        model = self.opened('MILESTONE-01')
+        draft = model['body'].replace('[ ]', '[SUM]', 1)
+        before = Projects(self.node).repository(self.project).snapshot(self.head)
+        operation = str(uuid4())
+        request = self.request(model, body=draft)
+        result = self.editor.save(request, operation)
+        self.assertEqual(result, self.editor.save(request, operation))
+        after = Projects(self.node).repository(self.project).snapshot(result['commit_id'])
+        path = f'artifacts/{self.artifact}/content.md'
+        self.assertEqual(before[path].replace(model['body'].encode(), draft.encode(), 1), after[path])
+        plan = self.editor.plan(after, self.project, result['commit_id'])[0]
+        node = next(n for n in plan['nodes'] if n['id'] == 'MILESTONE-01')
+        self.assertEqual(('sum', 'planned', False), (node['status_mode'], node['status'], node['checked']))
+
+    def test_literal_sum_marker_acceptance_retains_aggregation_mode(self):
+        from spikes.ide_bridge_panel import _changes
+        body = BODY.replace('[ ]', '[x]').replace('[x] [MILESTONE-01]', '[SUM] [MILESTONE-01]')
+        self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact,
+            base_head=self.head, title='Roadmapa', body=body, new=False), str(uuid4()))['commit_id']
+        git = Projects(self.node).repository(self.project); files = git.snapshot(self.head)
+        changed = _changes(files, self.project, self.head, dict(task_id='MILESTONE-01',
+            kind='completed', queue_packet_id='reviewed-packet'))
+        plan = self.editor.plan(files | changed, self.project, self.head)[0]
+        node = next(n for n in plan['nodes'] if n['id'] == 'MILESTONE-01')
+        self.assertEqual(('sum', 'completed', True), (node['status_mode'], node['status'], node['checked']))
+
     def test_status_edits_recompute_sum_and_recover_without_changing_siblings(self):
         body = BODY.replace('- type: batch', '- type: batch\n    - status: sum')
         self.head = self.actions.save(dict(project_id=self.project, artifact_id=self.artifact,
