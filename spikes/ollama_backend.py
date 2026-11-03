@@ -138,16 +138,25 @@ def _search_evaluation_format(handoff):
         return None
     cited = ({'type': 'string', 'enum': source_ids} if source_ids
              else {'type': 'string', 'maxLength': 0})
-    return _closed_object({
-        'schema_version': {'type': 'integer', 'enum': [1]},
-        'assessment': {'type': 'string', 'enum': ['final', 'intermediate', 'insufficient']},
-        'answer': _TEXT,
-        'rationale': _TEXT,
-        'used_source_ids': {'type': 'array', 'items': cited, 'maxItems': len(source_ids)},
-        'limitations': {'type': 'array', 'maxItems': 8, 'items': _TEXT},
-        'follow_up_queries': {'type': 'array', 'maxItems': 3, 'items': _TEXT},
-    }, ['schema_version', 'assessment', 'answer', 'rationale', 'used_source_ids',
-        'limitations', 'follow_up_queries'])
+    fields = ['schema_version', 'assessment', 'answer', 'rationale', 'used_source_ids',
+              'limitations', 'follow_up_queries']
+
+    def branch(assessments, limitations, follow_up):
+        return _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'assessment': {'type': 'string', 'enum': assessments},
+            'answer': _TEXT,
+            'rationale': _TEXT,
+            'used_source_ids': {'type': 'array', 'items': cited, 'maxItems': len(source_ids)},
+            'limitations': dict({'type': 'array', 'items': _TEXT}, **limitations),
+            'follow_up_queries': dict({'type': 'array', 'items': _TEXT}, **follow_up),
+        }, fields)
+    # A result that is not final must say why, so the user sees the reasons it failed.
+    return {'type': 'object', 'oneOf': [
+        branch(['final'], {'maxItems': 0}, {'maxItems': 0}),
+        branch(['intermediate', 'insufficient'], {'minItems': 1, 'maxItems': 8},
+               {'maxItems': 3}),
+    ]}
 
 
 def normalize_tls_fingerprint(value):

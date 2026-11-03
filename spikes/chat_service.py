@@ -236,6 +236,11 @@ def parse_search_evaluation(raw, source_ids):
                     for item in value['limitations']),
             'Ollama returned invalid search limitations')
     value['limitations'] = [item.strip() for item in value['limitations']]
+    # A failed or partial result must carry its reasons. The schema requires them; if a
+    # model still omits them, its rationale is the only stated reason, which beats
+    # discarding a run that is never retried automatically.
+    if value['assessment'] != 'final' and not value['limitations']:
+        value['limitations'] = [value['rationale']]
     # A result that admits a missing fact is not terminal even when a small
     # local model labels it final. Keep the conservative assessment so the
     # user can refine the search without granting any automatic dispatch.
@@ -370,10 +375,14 @@ def _task_turn_reply(projection):
     if projection['state'] == 'completed' and kind == 'web-search-answer':
         queries = '; '.join(json.dumps(item['query'], ensure_ascii=False)
                             for item in outcome.get('rounds', []) if item.get('query'))
+        reasons = ''
+        if outcome.get('assessment') != 'final' and outcome.get('limitations'):
+            reasons = ('\nThe search did not fully answer the request because: '
+                       + _clipped('; '.join(outcome['limitations']), TASK_HISTORY_ANSWER_CHARS))
         return ('[Web search was run here with these queries: ' + queries + '. The results are '
                 'not part of this context, so do not cite or rely on them; request a new search '
                 'if you need them.]\nAnswer based on them: '
-                + _clipped(outcome['content'], TASK_HISTORY_ANSWER_CHARS))
+                + _clipped(outcome['content'], TASK_HISTORY_ANSWER_CHARS) + reasons)
     if projection['state'] == 'prepared' and kind == 'web-search':
         return ('[A web search was proposed here but has no final result: '
                 + json.dumps(outcome['query'], ensure_ascii=False) + ']')
@@ -1997,7 +2006,11 @@ class ChatService:
             'must directly answer the request, have no limitations and have no follow_up_queries. '
             'limitations and follow_up_queries are arrays; use [] when there are none and never '
             'write an entry saying there are none. '
-            'If a requested fact is still missing, use intermediate or insufficient. Propose at '
+            'If a requested fact is still missing, use intermediate or insufficient. Then '
+            'limitations must list each concrete reason the results do not answer the request, '
+            'for example no results, results about something else, missing fact, conflicting '
+            'or outdated sources, and the answer must say plainly what could not be found and '
+            'why. Propose at '
             'most three bounded public queries; do not '
             'claim they were executed. Write answer, rationale, limitations and follow-up queries '
             'in the language of the user focus request. State uncertainty and do not invent or '
@@ -2046,6 +2059,8 @@ class ChatService:
                     seen.add(source['source_id']); all_sources.append(source)
         result = {'schema_version': 2, 'kind': 'web-search-answer',
                   'content': evaluation['answer'], 'assessment': evaluation['assessment'],
+                  'rationale': evaluation['rationale'],
+                  'limitations': evaluation['limitations'],
                   'assessment_is_model_judgment': True, 'completion_reason': reason,
                   'sources': all_sources, 'rounds': display['rounds'],
                   'budget': display['budget'], 'budget_used': display['budget_used'],

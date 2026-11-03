@@ -5,6 +5,7 @@ from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import sqlite3
 import tempfile
 import unittest
@@ -15,7 +16,7 @@ from spikes.artifacts import Artifacts
 from spikes.atlascloud_backend import AtlasCloudCatalog, AtlasCloudRuns
 from spikes.autonomy_service import AutonomyService
 from spikes.chat_modes import ChatRunChoice
-from spikes.chat_service import ChatService, parse_search_evaluation
+from spikes.chat_service import ChatService, _task_turn_reply, parse_search_evaluation
 from spikes.chat_threads import ChatThreads
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
@@ -26,7 +27,8 @@ from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.direct_provider import (DirectAdapter, DirectBindings, DirectCatalog,
     DirectCredentials)
 from spikes.direct_registry import DIRECT_BINDINGS
-from spikes.ollama_backend import OllamaAdapter, OllamaResponseError, OllamaRuns, UnknownRun
+from spikes.ollama_backend import (OllamaAdapter, OllamaResponseError, OllamaRuns, UnknownRun,
+                                   _search_evaluation_format)
 from spikes.openai_backend import (OpenAIBindings, OpenAICredentials,
                                    OpenAIModelCatalog, OpenAIUnknownRun)
 from spikes.storage import Git
@@ -647,10 +649,10 @@ class ChatServiceTests(unittest.TestCase):
         service.task_search_confirm({'task_id': request['task_id'],
             'search_id': preview['search_id'], 'preview_sha256': preview['preview_sha256'],
             'approved': True})
-        schema = formats[-1]
-        self.assertEqual('array', schema['properties']['limitations']['type'])
-        cited = schema['properties']['used_source_ids']['items']['enum']
-        self.assertEqual(1, len(cited)); self.assertTrue(cited[0].startswith('source-'))
+        for schema in formats[-1]['oneOf']:
+            self.assertEqual('array', schema['properties']['limitations']['type'])
+            cited = schema['properties']['used_source_ids']['items']['enum']
+            self.assertEqual(1, len(cited)); self.assertTrue(cited[0].startswith('source-'))
 
     def test_web_search_requires_preview_and_reuses_results_after_restart(self):
         route = self.route_request(web_query='current project facts')
@@ -1050,7 +1052,8 @@ class ChatServiceTests(unittest.TestCase):
                          first['search_id'])
         self.assertEqual(2, len(ollama_formats))
         for schema in ollama_formats:
-            self.assertIn('assessment', schema['required'])
+            for branch in schema['oneOf']:
+                self.assertIn('assessment', branch['required'])
         self.assertNotEqual(completed['outcome']['rounds'][0]['run_id'],
                             completed['outcome']['rounds'][1]['run_id'])
 
@@ -1070,6 +1073,64 @@ class ChatServiceTests(unittest.TestCase):
             limitations='One model limitation.')), {'source-known'})
         self.assertEqual(normalized['limitations'], ['One model limitation.'])
         self.assertEqual(normalized['assessment'], 'intermediate')
+        unexplained = parse_search_evaluation(json.dumps(dict(base, assessment='insufficient',
+            rationale='The results describe another product.')), {'source-known'})
+        self.assertEqual(unexplained['limitations'], ['The results describe another product.'])
+
+    def test_failed_search_answer_keeps_the_model_reasons(self):
+        request = self.route_request(web_query='q1')
+        prompts = []
+        def ollama_transport(binding, raw):
+            prompts.append(json.loads(raw)['prompt'])
+            response = {'schema_version': 1, 'assessment': 'insufficient',
+                'answer': 'The release date could not be found.',
+                'rationale': 'No result mentions a release.', 'used_source_ids': [],
+                'limitations': ['No results were returned.'], 'follow_up_queries': []}
+            return {'model': binding.model, 'response': json.dumps(response)}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=ollama_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda _binding, query: {'query': query, 'results': []}))
+        service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        service.task_route(request)
+        parent = None
+        for index in range(3):
+            preview_request = {'task_id': request['task_id'], 'search_id': str(uuid4()),
+                'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())}
+            if parent is not None:
+                preview_request.update(parent_search_id=parent, query='q' + str(index + 1))
+            preview = service.task_search_preview(preview_request)
+            projection = service.task_search_confirm({'task_id': request['task_id'],
+                'search_id': preview['search_id'],
+                'preview_sha256': preview['preview_sha256'], 'approved': True})
+            parent = preview['search_id']
+        outcome = projection['outcome']
+        self.assertEqual(outcome['assessment'], 'insufficient')
+        self.assertEqual(outcome['limitations'], ['No results were returned.'])
+        self.assertEqual(outcome['rationale'], 'No result mentions a release.')
+        self.assertIn('must list each concrete reason', prompts[0])
+        reply = _task_turn_reply(projection)
+        self.assertIn('did not fully answer the request because: No results were returned.',
+                      reply)
+
+    def test_search_evaluation_schema_requires_reasons_unless_final(self):
+        payload = json.dumps({'inputs': [{'content_b64': base64.b64encode(json.dumps({
+            'schema': 'fpw-iterative-search-context-v1', 'rounds': [{'search': {
+                'results': [{'source_id': 'source-a'}]}}]}).encode()).decode()}]})
+        schema = _search_evaluation_format(SimpleNamespace(payload=payload))
+        final, partial = schema['oneOf']
+        self.assertEqual(final['properties']['assessment']['enum'], ['final'])
+        self.assertEqual(final['properties']['limitations']['maxItems'], 0)
+        self.assertEqual(partial['properties']['assessment']['enum'],
+                         ['intermediate', 'insufficient'])
+        self.assertEqual(partial['properties']['limitations']['minItems'], 1)
+        self.assertEqual(partial['properties']['used_source_ids']['items']['enum'],
+                         ['source-a'])
 
     def test_iterative_search_stops_at_round_budget(self):
         request = self.route_request(web_query='q1')

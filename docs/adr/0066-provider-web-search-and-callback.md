@@ -126,6 +126,11 @@ i restart je už nevrátí.
   potvrzení providera znovu nevolá.
 - Vyhodnocení výsledků má uzavřené schéma s povolenými ID zdrojů. Instrukce obou režimů
   nesou datum vytvoření požadavku, takže je příprava běhu stabilní.
+- Nefinální vyhodnocení (`intermediate`, `insufficient`) musí podle schématu uvést aspoň
+  jeden důvod v `limitations`; finální žádný. Pokud model důvod přesto vynechá, použije se
+  jeho zdůvodnění, protože běh se automaticky neopakuje. Výsledek ukládá důvody a zdůvodnění
+  a odpověď je zobrazí; důvody vidí i model v historii kol. Chyby bez vyhodnocení modelem
+  (nedostupné SearXNG, neplatný výstup modelu) zůstávají chybou běhu.
 - Kola úkolů nejsou zprávy vlákna, proto se při zdroji **Aktuální konverzace** předává
   nejvýše 6 předchozích kol jako zprávy: zadání a odpověď, zkrácené. Místo výsledků hledání
   je jen dotaz a zástupný text, že výsledky nejsou součástí kontextu. Zrušená a selhaná
