@@ -1004,12 +1004,6 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <span class="chat-progress-spinner" aria-hidden="true"></span><span id="chat-stream-progress-text"></span></div>
 <div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div>
 <button id="search-recovery" class="secondary-button" type="button" hidden>Nastavit SearXNG</button>
-<section id="search-preview" hidden aria-label="Náhled webového hledání">
-<h3>Přesný webový dotaz před odesláním</h3><pre id="search-preview-content"></pre>
-<label class="confirm"><input id="search-confirm-check" type="checkbox"> Potvrzuji odeslání zobrazeného dotazu na uvedený SearXNG endpoint.</label>
-<button id="search-confirm" type="button" disabled>Vyhledat a zpracovat přes Ollamu</button>
-<button id="search-cancel" class="secondary-button" type="button">Zrušit</button>
-</section>
 <section id="public-source-preview" hidden aria-label="Náhled načtení veřejného zdroje">
 <h3>Přesný plán načtení veřejného zdroje</h3><pre id="public-source-preview-content"></pre>
 <label class="confirm"><input id="public-source-confirm-check" type="checkbox"> Potvrzuji oba zobrazené GET účinky, cílovou URL, privacy a limity.</label>
@@ -1260,7 +1254,18 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="external-confirm" type="button" disabled>Odeslat externímu backendu</button>
 <button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
 </section>
-</form></section>
+</form>
+<section id="search-preview" hidden aria-label="Schválení webového hledání">
+<h3>Odeslat tento webový dotaz?</h3>
+<p id="search-preview-query"></p>
+<p id="search-preview-summary"></p>
+<details><summary>Přesný náhled</summary><pre id="search-preview-content"></pre></details>
+<label class="confirm"><input id="search-confirm-check" type="checkbox"> Potvrzuji odeslání zobrazeného dotazu na uvedený SearXNG endpoint.</label>
+<div class="search-preview-actions"><button id="search-confirm" type="button" disabled>Vyhledat a zpracovat přes Ollamu</button>
+<button id="search-cancel" class="secondary-button" type="button">Zrušit</button></div>
+<p id="search-preview-status" role="status" aria-live="polite"></p>
+</section>
+</section>
 </section>
 </div>
 <div id="presenter-view" hidden>
@@ -1445,7 +1450,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .federation-transfer-page,.federation-network-page,.federation-deployment-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label,.federation-deployment-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]),.federation-deployment-page select,.federation-deployment-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre,.federation-deployment-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning,.federation-deployment-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty,#federation-deployment-log:empty{display:none}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:230px}}
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
-.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{flex:0 0 auto}.prompt-routing-controls>.prompt-control{flex:0 0 auto}.search-query-edit{display:block;margin:8px 0;font-size:12px;color:#456276}.search-query-edit textarea{display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:8px;font:inherit;font-size:14px;border:1px solid #bfcdc9;border-radius:8px;resize:vertical}
+#prompt-widget>#search-preview{margin:0;max-height:52vh;overflow:auto;border:0;border-radius:0;padding:14px 20px}#search-preview h3{margin:0 0 8px}#search-preview-query{margin:0 0 6px;padding:10px 12px;font-size:16px;font-weight:600;background:#fff;border:1px solid #d6b36a;border-radius:8px;overflow-wrap:anywhere}#search-preview-summary{margin:0 0 8px;font-size:12px;color:#456276;overflow-wrap:anywhere}#search-preview details{margin-bottom:14px;font-size:12px}#search-preview label.confirm{display:flex;align-items:center;gap:6px;margin:0 0 10px}.search-preview-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}#search-preview-status{margin:8px 0 0;font-size:13px}#search-preview-status:empty{display:none}#prompt-widget.search-approval>#chat-composer{display:none}.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{flex:0 0 auto}.prompt-routing-controls>.prompt-control{flex:0 0 auto}.search-query-edit{display:block;margin:8px 0;font-size:12px;color:#456276}.search-query-edit textarea{display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:8px;font:inherit;font-size:14px;border:1px solid #bfcdc9;border-radius:8px;resize:vertical}
 @media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
 @media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.project-header details{max-width:140px}}
 @media(min-width:641px){
@@ -2397,7 +2402,7 @@ function clearProject(){
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();clearJulia();clearRoadmapReview();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  hideSearchRecovery();
- pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
+ pendingSearchPreview=null;showSearchApproval(false);
  pendingExternalPreview=null;document.querySelector('#external-preview').hidden=true;
  knownThreads=[];pendingThreadDeletion=null;renderThreadList([]);
  document.querySelector('#chat-delete-preview').hidden=true;
@@ -6152,40 +6157,52 @@ async function prepareTaskSearch(projection,query=null,parentSearchId=null){
    await projectRequest('/v1/tasks/search/preview',request);
   pendingSearchPreview={projection,preview};
   document.querySelector('#search-preview-content').textContent=JSON.stringify(preview,null,2);
-  document.querySelector('#search-preview').hidden=false;
+  document.querySelector('#search-preview-query').textContent=preview.query;
+  document.querySelector('#search-preview-summary').textContent=`${preview.binding?.endpoint||''} · soukromí: ${preview.privacy} · kolo ${preview.round_index}`;
   document.querySelector('#search-confirm-check').checked=false;
   document.querySelector('#search-confirm').disabled=true;
-  chatOperationStatus.textContent=preview.state==='unknown'?
-   'Výsledek předchozího hledání není známý; automatické opakování je zakázané.' :
-   'Zkontrolujte přesný dotaz, privacy a endpoint a potom jej potvrďte.';
+  document.querySelector('#search-preview-status').textContent=preview.state==='unknown'?
+   'Výsledek předchozího hledání není známý; automatické opakování je zakázané.' : '';
+  showSearchApproval(true);
   return true;
  }catch(error){chatOperationStatus.textContent=error.message;offerSearchRecovery(error);return false;}
+}
+function showSearchApproval(visible){
+ // The approval takes the whole prompt widget, so nothing else can be sent meanwhile.
+ if(visible&&typeof setPageChatMode==='function'&&window.workspacePageLayoutReady)setPageChatMode('full');
+ // A class, because the page layout restores the form's hidden attribute on its own.
+ document.querySelector('#prompt-widget').classList.toggle('search-approval',visible);
+ document.querySelector('#search-preview').hidden=!visible;
+ if(visible)document.querySelector('#search-confirm-check').focus();
+ else if(activeProject)document.querySelector('#chat-draft').focus();
 }
 document.querySelector('#search-confirm-check').addEventListener('change',event=>{
  document.querySelector('#search-confirm').disabled=!event.currentTarget.checked || !pendingSearchPreview;
 });
 document.querySelector('#search-cancel').addEventListener('click',()=>{
  hideSearchRecovery();
- pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
+ pendingSearchPreview=null;showSearchApproval(false);
  document.querySelector('#search-confirm-check').checked=false;
 });
 document.querySelector('#search-confirm').addEventListener('click',async event=>{
  if(!pendingSearchPreview)return;event.currentTarget.disabled=true;
- chatOperationStatus.textContent='SearXNG hledá a Ollama zpracovává bounded výsledky…';
+ const approvalStatus=document.querySelector('#search-preview-status'),cancel=document.querySelector('#search-cancel');
+ approvalStatus.textContent='SearXNG hledá a Ollama zpracovává výsledky…';cancel.disabled=true;
  const preview=pendingSearchPreview.preview;
  try{const projection=await withChatProgress('Vyhledávám a model vyhodnocuje výsledky…',()=>
    projectRequest('/v1/tasks/search/confirm',{
     task_id:preview.task_id,search_id:preview.search_id,
     preview_sha256:preview.preview_sha256,approved:true},210000));
   replaceTaskProjection(projection);pendingSearchPreview=null;
-  document.querySelector('#search-preview').hidden=true;
+  showSearchApproval(false);
   chatOperationStatus.textContent=projection.temporary ?
    (projection.search_workflow?.next_queries?.length ?
     'Kolo je vyhodnocené. Navržený další dotaz se odešle až po vaší kontrole a potvrzení.' :
     'Kolo není konečné. Napište do pole dole vlastní zpřesnění; před odesláním jej zkontrolujete.') :
    'Řízené hledání a syntéza jsou dokončené.';
- }catch(error){chatOperationStatus.textContent=error.message;
+ }catch(error){approvalStatus.textContent=error.message;
   offerSearchRecovery(error,preview.binding);event.currentTarget.disabled=false;}
+ finally{cancel.disabled=false;}
 });
 async function preparePublicSource(projection,searchId,source){
  const request={task_id:projection.task_id,search_id:searchId,

@@ -536,6 +536,64 @@ class ChatServiceTests(unittest.TestCase):
                 self.assertIn('nesestavil', outcome['purpose'])
                 self.assertEqual([], searches)
 
+    def history_service(self, answers, *, search_results=()):
+        prompts = []; queue = list(answers)
+        def transport(binding, raw):
+            body = json.loads(raw); prompts.append(body['prompt'])
+            return {'model': binding.model, 'response': json.dumps(queue.pop(0))}
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda binding, query: {'results': list(search_results)}))
+        service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        return service, prompts
+
+    def next_turn(self, first, **changes):
+        route = self.route_request(thread_id=first['thread_id'], **changes)
+        route['created_at'] = '2099-01-01T00:00:00.000000Z'
+        return route
+
+    def test_followup_task_sees_earlier_query_and_answer_but_not_the_results(self):
+        search = {'schema_version': 1, 'kind': 'web-search-request', 'purpose': 'p', 'query': 'cena mědi LME'}
+        evaluation = {'schema_version': 1, 'assessment': 'final', 'answer': 'Měď stojí 9 USD.',
+            'rationale': 'r', 'used_source_ids': [], 'limitations': [], 'follow_up_queries': []}
+        answer = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'Navazuji.'}
+        service, prompts = self.history_service([search, evaluation, answer], search_results=[
+            {'title': 'RAW-TITLE', 'url': 'https://example.org/raw', 'content': 'RAW-SNIPPET'}])
+        first = self.route_request(content='Jaká je cena mědi?')
+        first['task_plan'] = dict(first['task_plan'], search_compose=True)
+        service.task_route(first)
+        preview = service.task_search_preview(self.search_ids(first))
+        service.task_search_confirm({'task_id': first['task_id'], 'search_id': preview['search_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True})
+        second = self.next_turn(first, content='A kolik to bylo?')
+        routed = service.task_route(second)
+        self.assertEqual('Navazuji.', routed['outcome']['content'])
+        prompt = prompts[-1]
+        for expected in ('Jaká je cena mědi?', 'cena mědi LME', 'Měď stojí 9 USD.', 'not part of this context'):
+            self.assertIn(expected, prompt)
+        for raw in ('RAW-TITLE', 'RAW-SNIPPET', 'example.org/raw'):
+            self.assertNotIn(raw, prompt)
+        self.assertEqual(routed['outcome'], service.task_route(second)['outcome'])
+
+    def test_unticked_conversation_source_and_cancelled_turns_stay_out_of_context(self):
+        answer = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'x'}
+        service, prompts = self.history_service([answer, answer])
+        first = self.route_request(content='TAJNÁ-PRVNÍ-OTÁZKA')
+        service.task_route(first)
+        second = self.next_turn(first, content='druhá', selected_artifact_ids=[])
+        artifact_id = str(uuid4())
+        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=artifact_id,
+            base_head=self.git.head(), title='A', body='b', new=True), str(uuid4()))
+        second.update(expected_head=self.git.head(), selected_artifact_ids=[artifact_id])
+        second['task_plan'] = dict(second['task_plan'], source_kinds=['artifacts'])
+        service.task_route(second)
+        self.assertNotIn('TAJNÁ-PRVNÍ-OTÁZKA', prompts[-1])
+
     def test_compose_refuses_local_only_before_the_model_runs(self):
         service, route, calls, _ = self.compose_route({'schema_version': 1,
             'kind': 'web-search-request', 'purpose': 'p', 'query': 'q'}, privacy='local-only')
@@ -2270,6 +2328,33 @@ class ChatServiceTests(unittest.TestCase):
         replay = self.service.task_external_confirm(approval)
         self.assertNotIn('search_results', replay)
         self.assertEqual(1, len(sent))
+
+    def test_external_followup_preview_carries_history_but_never_local_only_turns(self):
+        adapter_id = 'anthropic-messages'
+        model = self.DIRECT_CASES[adapter_id][0]
+        answer = {'id': 'm', 'type': 'message', 'role': 'assistant', 'model': model,
+            'stop_reason': 'end_turn', 'usage': {'input_tokens': 1, 'output_tokens': 1},
+            'content': [{'type': 'text', 'text': json.dumps({'schema_version': 1,
+                'kind': 'direct-answer', 'content': 'KLAUDOVA-ODPOVED'})}]}
+        request, _ = self.think_task(adapter_id, answer, direct=False)
+        request['content'] = 'PRVNI-OTAZKA'
+        self.service.task_route(request)
+        self.service.task_external_confirm(self.task_approval(request, self.task_preview(request)))
+        # A local-only turn in the same thread, routed locally.
+        self.service.adapter_factory = lambda runs: OllamaAdapter(runs, transport=lambda binding, raw:
+            {'model': binding.model, 'response': json.dumps({'schema_version': 1,
+             'kind': 'direct-answer', 'content': 'LOKALNI-ODPOVED'})})
+        local = self.route_request(thread_id=request['thread_id'], content='LOKALNI-OTAZKA',
+                                   privacy='local-only')
+        local['created_at'] = '2098-01-01T00:00:00.000000Z'
+        self.service.task_route(local)
+        next_request = dict(request, task_id=str(uuid4()), message_id=str(uuid4()), run_id=str(uuid4()),
+            manifest_id=str(uuid4()), content='NAVAZUJICI', created_at='2099-01-01T00:00:00.000000Z')
+        self.service.task_route(next_request)
+        preview = self.task_preview(next_request)
+        sent = json.dumps(preview['provider_request'], ensure_ascii=False)
+        self.assertIn('PRVNI-OTAZKA', sent); self.assertIn('KLAUDOVA-ODPOVED', sent)
+        self.assertNotIn('LOKALNI', sent)
 
     def test_think_task_direct_option_refuses_confidential_before_anything_leaves(self):
         request, sent = self.think_task('anthropic-messages', {}, direct=True, privacy='confidential')

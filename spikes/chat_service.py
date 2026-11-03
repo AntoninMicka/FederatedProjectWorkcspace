@@ -352,6 +352,72 @@ def _model_json(text):
     return json.loads(match.group(1) if match else text)
 
 
+TASK_HISTORY_TURNS = 6
+TASK_HISTORY_PROMPT_CHARS = 2000
+TASK_HISTORY_ANSWER_CHARS = 4000
+
+
+def _clipped(text, limit):
+    return text if len(text) <= limit else text[:limit] + ' […]'
+
+
+def _task_turn_reply(projection):
+    """Describe an earlier task for the model; search results themselves are never included."""
+    outcome = projection.get('outcome') or {}
+    kind = outcome.get('kind')
+    if projection['state'] == 'completed' and kind == 'direct-answer':
+        return _clipped(outcome['content'], TASK_HISTORY_ANSWER_CHARS)
+    if projection['state'] == 'completed' and kind == 'web-search-answer':
+        queries = '; '.join(json.dumps(item['query'], ensure_ascii=False)
+                            for item in outcome.get('rounds', []) if item.get('query'))
+        return ('[Web search was run here with these queries: ' + queries + '. The results are '
+                'not part of this context, so do not cite or rely on them; request a new search '
+                'if you need them.]\nAnswer based on them: '
+                + _clipped(outcome['content'], TASK_HISTORY_ANSWER_CHARS))
+    if projection['state'] == 'prepared' and kind == 'web-search':
+        return ('[A web search was proposed here but has no final result: '
+                + json.dumps(outcome['query'], ensure_ascii=False) + ']')
+    if projection['state'] == 'completed' and kind:
+        return '[This turn produced a separate ' + kind + ' output, not included here.]'
+    return None
+
+
+def _task_history(tasks, node_id, user_id, request, *, external):
+    """Earlier turns of this task thread as conversation messages, bounded and oldest first.
+
+    Tasks are not chat messages, so without this a follow-up question has no context.
+    """
+    turns = []
+    for projection in tasks.list(node_id, user_id, request['project_id'], request['thread_id']):
+        if projection['task_id'] == request['task_id'] \
+                or projection['created_at'] >= request['created_at'] \
+                or (external and projection['privacy'] == 'local-only'):
+            continue
+        reply = _task_turn_reply(projection)
+        if reply is not None:
+            turns.append((projection, reply))
+    history = []
+    for projection, reply in turns[-TASK_HISTORY_TURNS:]:
+        namespace = UUID(projection['task_id'])
+        history += [{'message_id': str(uuid5(namespace, 'history-prompt')), 'role': 'user',
+                     'content': _clipped(projection['prompt']['content'], TASK_HISTORY_PROMPT_CHARS),
+                     'privacy': projection['privacy']},
+                    {'message_id': str(uuid5(namespace, 'history-reply')), 'role': 'assistant',
+                     'content': reply, 'privacy': projection['privacy']}]
+    return history
+
+
+def _earlier_turns_input(original, row):
+    """Give synthesis the same earlier turns, marked so they are not read as the request."""
+    history = original.get('task_history')
+    if not history:
+        return ()
+    text = 'Earlier conversation, context only:\n' + '\n'.join(
+        item['role'] + ': ' + item['content'] for item in history)
+    return (AdHocInput(str(uuid5(UUID(row['task_id']), 'history-synthesis')), text.encode(),
+                       row['privacy']),)
+
+
 def _search_synthesis_choice(original):
     """Results stay on the local model, whichever backend wrote the query."""
     choice = ChatRunChoice.parse(original.get('run_choice', {
@@ -1445,6 +1511,20 @@ class ChatService:
         choice = ChatRunChoice.parse(request.get('run_choice', {
             'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
         self._require_backend_reset_complete(choice.adapter_id)
+        history = []
+        if 'conversation' in plan.source_kinds and plan.output_kind != 'file-edit':
+            # A repeated route keeps the history it was prepared with.
+            tasks = TaskOutcomes(root)
+            existing = next((item for item in tasks.list(node_id, user_id, request['project_id'],
+                                                         request['thread_id'])
+                             if item['task_id'] == request['task_id']), None)
+            if existing is not None:
+                history = tasks.get(request['task_id'], node_id, user_id)['request'].get(
+                    'task_history', [])
+            else:
+                history = _task_history(tasks, node_id, user_id, request,
+                                        external=choice.adapter_id in EXTERNAL_ADAPTERS)
+        prior = prior + history
         require(choice.mode == 'orchestration',
                 'Explicit task routing requires task mode')
         plan.validate_execution(choice)
@@ -1462,7 +1542,7 @@ class ChatService:
             runs=adapter.runs, run_id=request['run_id'])
         choice.validate_context(
             project_input_ids=tuple(request['selected_artifact_ids']),
-            text_input_ids=tuple(request['selected_message_ids']) + (request['message_id'],))
+            text_input_ids=tuple(item['message_id'] for item in prior) + (request['message_id'],))
         if thread is None and 'run_choice' in request:
             thread = threads.create(thread_id=request['thread_id'], node_id=node_id,
                 user_id=user_id, created_at=request['created_at'], classification=choice.mode,
@@ -1489,6 +1569,8 @@ class ChatService:
             append_projection = append_context(snapshot, validate_snapshot(snapshot), request['project_id'],
                 request['expected_head'], plan.target_artifact_id, request['run_id'])
         stored_request = dict(request)
+        if history:
+            stored_request['task_history'] = history
         if block_edit:
             snapshot = workspace.git.snapshot(request['expected_head'])
             block_projection = markdown_context(snapshot, validate_snapshot(snapshot), request['project_id'],
@@ -1504,7 +1586,7 @@ class ChatService:
                        if patch_edit else task_output_instruction(plan, request['created_at']))
         if append_projection is not None:
             instruction += '\n' + append_instruction()
-        conversation = (ConversationSelection(request['thread_id'], thread['revision'],
+        conversation = (ConversationSelection(request['thread_id'], (thread or {}).get('revision', 0),
             tuple(item['message_id'] for item in prior), tuple(item['role'] for item in prior))
             if prior else None)
         builder = ContextBuilder(workspace, request['project_id'])
@@ -1926,7 +2008,8 @@ class ChatService:
             run_id=round_record['synthesis_run_id'], authority=authority,
             target=binding.target(),
             project_inputs=tuple(ProjectInput(value) for value in outcome['artifact_ids']),
-            ad_hoc_inputs=tuple(AdHocInput(item['message_id'], item['content'].encode(),
+            ad_hoc_inputs=_earlier_turns_input(original, row) +
+                tuple(AdHocInput(item['message_id'], item['content'].encode(),
                 item['privacy']) for item in selected) +
                 (AdHocInput(request['search_id'], search_bytes, row['privacy']),),
             task=TaskInstruction('researcher', 'researcher-v2', instruction))
@@ -2500,7 +2583,7 @@ class ChatService:
                     'message_id', 'run_id', 'manifest_id', 'assistant_message_id',
                     'selected_message_ids', 'content', 'privacy', 'created_at'}
         optional = {'selected_artifact_ids', 'record_chat', 'run_choice', 'stream',
-                    'task_plan', 'response_language', 'provider_web_search'}
+                    'task_plan', 'response_language', 'provider_web_search', 'task_history'}
         require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing external preview field')
         request = dict(request)
@@ -2509,6 +2592,15 @@ class ChatService:
         request.setdefault('stream', False)
         require(type(request['record_chat']) is bool, 'Invalid external chat recording mode')
         require(type(request['stream']) is bool, 'Invalid external streaming mode')
+        if 'task_history' in request:
+            history = request['task_history']
+            require('task_plan' in request and isinstance(history, list) and all(
+                isinstance(item, dict)
+                and set(item) == {'message_id', 'role', 'content', 'privacy'}
+                and item['role'] in {'user', 'assistant'} and isinstance(item['content'], str)
+                and item['privacy'] in PRIVACY_ORDER for item in history),
+                'Invalid task history')
+            for item in history: uuid(item['message_id'])
         if 'provider_web_search' in request:
             # Absent, not false, when off: earlier approvals keep their exact request.
             plan = (ExplicitTaskPlan.parse(request['task_plan'])
@@ -2579,7 +2671,8 @@ class ChatService:
                    if item['message_id'] in request['selected_message_ids']]
         require(ordered == request['selected_message_ids'],
                 'Selected messages must use thread order')
-        selected = [messages[value] for value in request['selected_message_ids']] + [
+        selected = [messages[value] for value in request['selected_message_ids']] + request.get(
+            'task_history', []) + [
             {'message_id': request['message_id'], 'content': request['content'],
              'privacy': request['privacy'], 'role': 'user'}]
         language = ResponseLanguagePolicy(root).resolve(
@@ -2929,6 +3022,8 @@ class ChatService:
             'run_choice': row['request']['run_choice'],
             'response_language': row['request'].get('response_language'),
             'task_plan': row['request']['task_plan'],
+            **({'task_history': row['request']['task_history']}
+               if row['request'].get('task_history') else {}),
             **({'provider_web_search': True} if ExplicitTaskPlan.parse(
                 row['request']['task_plan']).provider_web_search else {})})
         preview['task_id'] = request['task_id']

@@ -126,6 +126,13 @@ i restart je už nevrátí.
   potvrzení providera znovu nevolá.
 - Vyhodnocení výsledků má uzavřené schéma s povolenými ID zdrojů. Instrukce obou režimů
   nesou datum vytvoření požadavku, takže je příprava běhu stabilní.
+- Kola úkolů nejsou zprávy vlákna, proto se při zdroji **Aktuální konverzace** předává
+  nejvýše 6 předchozích kol jako zprávy: zadání a odpověď, zkrácené. Místo výsledků hledání
+  je jen dotaz a zástupný text, že výsledky nejsou součástí kontextu. Zrušená a selhaná
+  kola se nepředávají, `local-only` kola se nepředávají externímu backendu a úprava souboru
+  historii nedostává. Privacy kol zvyšuje privacy běhu. Historie je uložená v záznamu úkolu,
+  takže opakované směrování a pozdější náhled používají tutéž.
+- Schválení hledání dočasně nahrazuje celý widget zadání.
 - Gemini zůstává nenabídnuté, dokud nebude ověřené zobrazení návrhů Google Search.
   Ukládání jen v RAM je pro něj rozhodnuté, ale neimplementované.
 
