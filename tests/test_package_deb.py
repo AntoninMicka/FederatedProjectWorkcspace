@@ -38,6 +38,9 @@ class DebianPackageTests(unittest.TestCase):
             self.assertTrue((tree / f'usr/lib/{NAME}/modules/publication-experiment-registry.source.json').exists())
             self.assertTrue((tree / f'usr/lib/{NAME}/docs/roadmap-graph.json').exists())
             self.assertTrue((tree / f'usr/lib/{NAME}/docs/julia-runner.md').exists())
+            from spikes.manuals import manual_paths
+            for name in manual_paths():
+                self.assertTrue((tree / f'usr/lib/{NAME}' / name).is_file(), name)
             self.assertTrue((tree / f'usr/lib/{NAME}/scripts/julia_runtime_binding.py').exists())
             self.assertTrue((tree / f'usr/lib/{NAME}/BACKLOG.md').exists())
             self.assertFalse((tree / 'home').exists())

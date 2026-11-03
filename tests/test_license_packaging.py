@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 from scripts import package_deb, package_desktop
 from scripts.license_files import LICENSE_FILES, license_files
+from spikes.manuals import manual_paths
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,7 +40,7 @@ def fixture(root):
         'SECURITY.md', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md',
         'REUSE_CATALOG.md', 'CONTRIBUTING.md',
         'Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md',
-    ):
+    ) + manual_paths():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('# Synthetic packaging fixture\n', encoding='utf-8')

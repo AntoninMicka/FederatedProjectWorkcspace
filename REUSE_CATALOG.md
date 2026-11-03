@@ -47,6 +47,14 @@ Hledání na žádost modelu (`NEW-FA92ACE959-TASK-3`) **znovu používá** kart
 budget a recovery řízeného hledání. Hledání u providera (`TASK-1`) rozšiřuje stávající
 náhled a run journal. **Reject:** druhý search journal a backendové úložiště výsledků v RAM.
 
+Manuály (`NEW-DC6B8DEEF2-TASK-1`) **reuse/adaptují** společný sidebar,
+`showWorkspacePage`, ochranu `canLeaveWorkspaceEditors` a bezpečný textový
+`renderMarkdown` v `spikes/desktop_ui.py`. Obsah zůstává v existujících
+`docs/*.md`; explicitní katalog v `spikes/manuals.py` používají i oba balíky.
+Nativní `details/summary` a seznamy poskytují rozbalovací strom okruhů bez
+nové UI knihovny. **Reject:** kopie manuálů v projektových artefaktech a nový
+editor či write endpoint; čtečka nepotřebuje další persistentní vrstvu.
+
 M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC.
 
 Shellový launcher adaptuje existující unittest příkaz a `spikes.check_project`; dočasné demo používá `Workspace`/`Git` přímo. Nevytváří další storage implementaci ani aplikační server.

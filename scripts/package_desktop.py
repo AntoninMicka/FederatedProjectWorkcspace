@@ -44,6 +44,8 @@ def sources(root):
         paths.extend(sorted((root / directory).glob(pattern)))
     paths.extend(sorted((root / 'modules').glob('*.json')))
     paths.extend(root / name for name in ('spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md'))
+    from spikes.manuals import manual_paths
+    paths.extend(root / name for name in manual_paths())
     # Include docs linked by README/ADRs, excluding the private local inventory.
     paths.extend(root / name for name in ('AGENTS.md', 'ARCHITECTURE.md', 'DATA_MODEL.md',
                  'FEDERATION.md', 'SECURITY.md', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md', 'REUSE_CATALOG.md', 'CONTRIBUTING.md'))
