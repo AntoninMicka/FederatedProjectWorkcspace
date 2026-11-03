@@ -61,11 +61,20 @@ _PRESENTATION_PROPOSAL_FORMAT = _closed_object({
                }, ['slide_id', 'title', 'bullets', 'notes', 'layout'])},
 }, ['schema_version', 'kind', 'operation', 'target_artifact_id', 'title',
     'source_artifact_ids', 'slides'])
+# Ollama structured output: the closed choice is validated again by the task route.
 _DIRECT_ANSWER_FORMAT = _closed_object({
     'schema_version': {'type': 'integer', 'enum': [1]},
     'kind': {'type': 'string', 'enum': ['direct-answer']},
     'content': _TEXT,
 }, ['schema_version', 'kind', 'content'])
+_SEARCH_REQUEST_FORMAT = _closed_object({
+    'schema_version': {'type': 'integer', 'enum': [1]},
+    'kind': {'type': 'string', 'enum': ['web-search-request']},
+    'purpose': _TEXT,
+    'query': {'type': 'string', 'minLength': 1, 'maxLength': 400},
+}, ['schema_version', 'kind', 'purpose', 'query'])
+_ANSWER_OR_SEARCH_FORMAT = {'type': 'object',
+                            'oneOf': [_DIRECT_ANSWER_FORMAT, _SEARCH_REQUEST_FORMAT]}
 _DOCUMENT_DRAFT_FORMAT = _closed_object({
     'schema_version': {'type': 'integer', 'enum': [1]},
     'kind': {'type': 'string', 'enum': ['artifact-draft']},
@@ -112,6 +121,42 @@ _TASK_ROUTER_FORMAT = {
             'artifact_ids']),
     ],
 }
+
+
+def _search_evaluation_format(handoff):
+    """Close the search evaluation, so a model can cite only sources it was actually given."""
+    source_ids = None
+    for part in json.loads(handoff.payload).get('inputs', []):
+        try:
+            value = json.loads(base64.b64decode(part['content_b64'], validate=True))
+        except (KeyError, TypeError, ValueError, UnicodeError):
+            continue
+        if isinstance(value, dict) and value.get('schema') == 'fpw-iterative-search-context-v1':
+            source_ids = sorted({source['source_id'] for item in value['rounds']
+                                 for source in item['search']['results']})
+    if source_ids is None:
+        return None
+    cited = ({'type': 'string', 'enum': source_ids} if source_ids
+             else {'type': 'string', 'maxLength': 0})
+    fields = ['schema_version', 'assessment', 'answer', 'rationale', 'used_source_ids',
+              'limitations', 'follow_up_queries']
+
+    def branch(assessments, limitations, follow_up):
+        return _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'assessment': {'type': 'string', 'enum': assessments},
+            'answer': _TEXT,
+            'rationale': _TEXT,
+            'used_source_ids': {'type': 'array', 'items': cited, 'maxItems': len(source_ids)},
+            'limitations': dict({'type': 'array', 'items': _TEXT}, **limitations),
+            'follow_up_queries': dict({'type': 'array', 'items': _TEXT}, **follow_up),
+        }, fields)
+    # A result that is not final must say why, so the user sees the reasons it failed.
+    return {'type': 'object', 'oneOf': [
+        branch(['final'], {'maxItems': 0}, {'maxItems': 0}),
+        branch(['intermediate', 'insufficient'], {'minItems': 1, 'maxItems': 8},
+               {'maxItems': 3}),
+    ]}
 
 
 def normalize_tls_fingerprint(value):
@@ -683,6 +728,9 @@ class OllamaAdapter:
                         scopes.append(value)
                 require(len(scopes) == 1, 'Dependency output requires exactly one pinned focus context')
                 body['format'] = dependency_schema(scopes[0])
+            elif role is not None and role.role_id == 'researcher' \
+                    and (evaluation := _search_evaluation_format(handoff)) is not None:
+                body['format'] = evaluation
             elif role is not None and role.role_id == 'task-router':
                 body['format'] = (_PRESENTATION_PROPOSAL_FORMAT
                                   if role.revision == 'task-router-presentation-v1'
@@ -709,6 +757,8 @@ class OllamaAdapter:
                     'task-output-markdown-patch-v2': markdown_schema,
                     'task-output-markdown-patch-v1': output_schema(),
                     'task-output-conversation-v1': _DIRECT_ANSWER_FORMAT,
+                    'task-output-conversation-search-v1': _ANSWER_OR_SEARCH_FORMAT,
+                    'task-output-search-query-v1': _SEARCH_REQUEST_FORMAT,
                     'task-output-document-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-file-edit-v1': _DOCUMENT_DRAFT_FORMAT,
                     'task-output-file-edit-patch-v1': _DOCUMENT_PATCH_FORMAT,

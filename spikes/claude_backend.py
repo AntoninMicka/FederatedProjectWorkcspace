@@ -16,6 +16,7 @@ The per-model ``structured_outputs`` capability is therefore not sufficient whil
 import re
 from urllib.parse import quote
 
+from spikes.backend_contract import EPHEMERAL_SEARCH_KEY, web_sources
 from spikes.direct_provider import (DirectBinding, DirectResponseError, ProviderSpec,
                                     register_direct)
 
@@ -33,6 +34,9 @@ _STOP_FAILURES = {
         'Claude response stopped at model_context_window_exceeded',
 }
 _THINKING_BLOCKS = {'thinking', 'redacted_thinking'}
+# Basic version: no code execution, which dynamic filtering would add (not ZDR-eligible).
+_WEB_SEARCH_TOOL = {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 5}
+_SEARCH_BLOCKS = {'server_tool_use', 'web_search_tool_result'}
 _CACHE_USAGE = ('cache_creation_input_tokens', 'cache_read_input_tokens')
 _KNOWN_EVENTS = {'message_start', 'content_block_start', 'content_block_delta',
                  'content_block_stop', 'message_delta', 'message_stop'}
@@ -55,6 +59,10 @@ def _build_body(prompt, binding, output_format, stream):
     if stream:
         body['stream'] = True
     return body
+
+
+def _enable_web_search(body):
+    body['tools'] = [dict(_WEB_SEARCH_TOOL)]
 
 
 def _token_count(value):
@@ -98,7 +106,7 @@ def _text(content):
     parts = []
     for block in content:
         kind = block.get('type') if isinstance(block, dict) else None
-        if kind in _THINKING_BLOCKS:
+        if kind in _THINKING_BLOCKS or kind in _SEARCH_BLOCKS:
             continue
         if kind != 'text' or not isinstance(block.get('text'), str):
             raise ValueError('Claude response has an unsupported content block: '
@@ -108,6 +116,25 @@ def _text(content):
     if not text:
         raise ValueError('Claude response has no text')
     return text
+
+
+def _search_report(content, usage):
+    """Citations may be stored with the answer; raw results and queries are in RAM only."""
+    blocks = [block for block in content if isinstance(block, dict)]
+    if not any(block.get('type') in _SEARCH_BLOCKS for block in blocks):
+        return None, None
+    cited = [item for block in blocks if isinstance(block.get('citations'), list)
+             for item in block['citations']]
+    found = [item for block in blocks if block.get('type') == 'web_search_tool_result'
+             and isinstance(block.get('content'), list) for item in block['content']]
+    queries = [block['input']['query'] for block in blocks
+               if block.get('type') == 'server_tool_use' and isinstance(block.get('input'), dict)
+               and isinstance(block['input'].get('query'), str)]
+    server = usage.get('server_tool_use') if isinstance(usage, dict) else None
+    requests = server.get('web_search_requests') if isinstance(server, dict) else None
+    return ({'requests': requests if _token_count(requests) else len(queries),
+             'sources': web_sources(cited)},
+            {'queries': queries, 'results': web_sources(found)})
 
 
 def _parse_response(value, binding):
@@ -124,6 +151,9 @@ def _parse_response(value, binding):
     usage = _usage(value.get('usage'))
     if usage is not None:
         response['usage'] = usage
+    search, ephemeral = _search_report(value['content'], value.get('usage'))
+    if search is not None:
+        response['web_search'] = search; response[EPHEMERAL_SEARCH_KEY] = ephemeral
     return response
 
 
@@ -277,7 +307,8 @@ SPEC = ProviderSpec(
     generate_path=lambda model, stream: '/v1/messages', build_body=_build_body,
     parse_response=_parse_response, stream_state=_stream_state,
     stream_event=_stream_event, stream_final=_stream_final,
-    models_path=_models_path, parse_models=_parse_models)
+    models_path=_models_path, parse_models=_parse_models,
+    enable_web_search=_enable_web_search)
 
 
 class ClaudeBinding(DirectBinding):

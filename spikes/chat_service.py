@@ -20,6 +20,7 @@ from spikes.chat_threads import ChatThreads
 from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import (BackendResponseError, BackendUnknown,
+                                     EPHEMERAL_SEARCH_KEY,
                                      RunSelection, ROLES)
 from spikes.backend_metrics import OpenAIAccountMetrics, completed_run_usage, run_usage
 from spikes.backend_catalog import (BackendResetJournal, ModelPreferences,
@@ -235,6 +236,11 @@ def parse_search_evaluation(raw, source_ids):
                     for item in value['limitations']),
             'Ollama returned invalid search limitations')
     value['limitations'] = [item.strip() for item in value['limitations']]
+    # A failed or partial result must carry its reasons. The schema requires them; if a
+    # model still omits them, its rationale is the only stated reason, which beats
+    # discarding a run that is never retried automatically.
+    if value['assessment'] != 'final' and not value['limitations']:
+        value['limitations'] = [value['rationale']]
     # A result that admits a missing fact is not terminal even when a small
     # local model labels it final. Keep the conservative assessment so the
     # user can refine the search without granting any automatic dispatch.
@@ -259,6 +265,175 @@ def now():
 
 
 EXTERNAL_ADAPTERS = frozenset({'openai-responses', 'atlascloud-text', *DIRECT_BINDINGS})
+# ADR 0066. Gemini stays out until its required Search Suggestions can be displayed.
+PROVIDER_WEB_SEARCH_ADAPTERS = frozenset({'anthropic-messages', 'openai-responses', 'xai-responses'})
+PROVIDER_WEB_SEARCH_PRIVACY = frozenset({'public', 'project'})
+
+
+def answer_with_sources(response):
+    """Keep the required citations with the stored answer; raw results are never stored."""
+    sources = (response.get('web_search') or {}).get('sources') or []
+    if not sources:
+        return response['response']
+    rows = ['- [' + re.sub(r'[\[\]\\]', '', item['title']) + '](' + item['url'].replace(')', '%29') + ')'
+            for item in sources]
+    return response['response'] + '\n\nZdroje:\n' + '\n'.join(rows)
+
+
+SEARCH_QUERY_FALLBACK_PURPOSE = ('Model nesestavil použitelný dotaz. Předvyplněný je text zadání, '
+                                 'před odesláním ho prosím upravte.')
+
+
+def _model_search_outcome(plan, value, content, message_ids, artifact_ids):
+    """Turn a model's search request into the card outcome.
+
+    A composed search was asked for by the person, so an unusable query falls back to the
+    prompt and says so. A search the model chose itself has no such intent to preserve.
+    """
+    try:
+        require(isinstance(value, dict) and value.get('kind') == 'web-search-request'
+                and set(value) == {'schema_version', 'kind', 'purpose', 'query'}
+                and value['schema_version'] == 1
+                and isinstance(value['query'], str), 'Invalid web search request from model')
+        query = ' '.join(value['query'].split())
+        require(len(query.encode('utf-8')) <= MAX_QUERY_BYTES,
+                'Invalid web search request from model')
+        return AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
+            'purpose': value['purpose'], 'query': query,
+            'message_ids': message_ids, 'artifact_ids': artifact_ids})
+    except ValueError:
+        if not plan.search_compose:
+            raise
+    return AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
+        'purpose': SEARCH_QUERY_FALLBACK_PURPOSE, 'query': ' '.join(content.split())[:1000],
+        'message_ids': message_ids, 'artifact_ids': artifact_ids})
+
+
+def _unwrap_search_request(value):
+    """Some local models put the search request inside the answer text; do not show it as one."""
+    if isinstance(value, dict) and value.get('kind') == 'direct-answer' \
+            and isinstance(value.get('content'), str):
+        try:
+            inner = json.loads(value['content'])
+        except ValueError:
+            return value
+        if isinstance(inner, dict) and inner.get('kind') == 'web-search-request':
+            return inner
+    return value
+
+
+def _require_real_answer(value, prompt):
+    """A truncated request or the echoed question must not be shown as the answer."""
+    if isinstance(value, dict) and value.get('kind') == 'direct-answer' \
+            and isinstance(value.get('content'), str):
+        text = value['content'].strip()
+        require(not (text.startswith('{') and '"kind"' in text) and text != '{'
+                and text.casefold() != prompt.strip().casefold(),
+                'Model returned neither an answer nor a usable search request')
+
+
+def _external_output_format(plan, binding):
+    """Direct search answers in text. Search requests stay usable without a JSON mode."""
+    if plan is None or plan.provider_web_search:
+        return 'text'
+    if (plan.search_compose or plan.search_on_demand) \
+            and 'json-output' not in getattr(binding, 'capability_names', {'json-output'}):
+        return 'text'
+    return 'json'
+
+
+def _external_role_revision(plan, binding):
+    """A backend without a JSON mode asks for the same JSON through a text-output role."""
+    if plan is None:
+        return 'external-chat-v1'
+    if _external_output_format(plan, binding) == 'text' and not plan.provider_web_search:
+        return plan.role_revision.replace('-v1', '-text-v1')
+    return plan.role_revision
+
+
+def _model_json(text):
+    """Read JSON from a model without a JSON mode, which often fences it."""
+    match = re.fullmatch(r'\s*```(?:json)?\s*(.*?)\s*```\s*', text, re.DOTALL)
+    return json.loads(match.group(1) if match else text)
+
+
+TASK_HISTORY_TURNS = 6
+TASK_HISTORY_PROMPT_CHARS = 2000
+TASK_HISTORY_ANSWER_CHARS = 4000
+
+
+def _clipped(text, limit):
+    return text if len(text) <= limit else text[:limit] + ' […]'
+
+
+def _task_turn_reply(projection):
+    """Describe an earlier task for the model; search results themselves are never included."""
+    outcome = projection.get('outcome') or {}
+    kind = outcome.get('kind')
+    if projection['state'] == 'completed' and kind == 'direct-answer':
+        return _clipped(outcome['content'], TASK_HISTORY_ANSWER_CHARS)
+    if projection['state'] == 'completed' and kind == 'web-search-answer':
+        queries = '; '.join(json.dumps(item['query'], ensure_ascii=False)
+                            for item in outcome.get('rounds', []) if item.get('query'))
+        reasons = ''
+        if outcome.get('assessment') != 'final' and outcome.get('limitations'):
+            reasons = ('\nThe search did not fully answer the request because: '
+                       + _clipped('; '.join(outcome['limitations']), TASK_HISTORY_ANSWER_CHARS))
+        return ('[Web search was run here with these queries: ' + queries + '. The results are '
+                'not part of this context, so do not cite or rely on them; request a new search '
+                'if you need them.]\nAnswer based on them: '
+                + _clipped(outcome['content'], TASK_HISTORY_ANSWER_CHARS) + reasons)
+    if projection['state'] == 'prepared' and kind == 'web-search':
+        return ('[A web search was proposed here but has no final result: '
+                + json.dumps(outcome['query'], ensure_ascii=False) + ']')
+    if projection['state'] == 'completed' and kind:
+        return '[This turn produced a separate ' + kind + ' output, not included here.]'
+    return None
+
+
+def _task_history(tasks, node_id, user_id, request, *, external):
+    """Earlier turns of this task thread as conversation messages, bounded and oldest first.
+
+    Tasks are not chat messages, so without this a follow-up question has no context.
+    """
+    turns = []
+    for projection in tasks.list(node_id, user_id, request['project_id'], request['thread_id']):
+        if projection['task_id'] == request['task_id'] \
+                or projection['created_at'] >= request['created_at'] \
+                or (external and projection['privacy'] == 'local-only'):
+            continue
+        reply = _task_turn_reply(projection)
+        if reply is not None:
+            turns.append((projection, reply))
+    history = []
+    for projection, reply in turns[-TASK_HISTORY_TURNS:]:
+        namespace = UUID(projection['task_id'])
+        history += [{'message_id': str(uuid5(namespace, 'history-prompt')), 'role': 'user',
+                     'content': _clipped(projection['prompt']['content'], TASK_HISTORY_PROMPT_CHARS),
+                     'privacy': projection['privacy']},
+                    {'message_id': str(uuid5(namespace, 'history-reply')), 'role': 'assistant',
+                     'content': reply, 'privacy': projection['privacy']}]
+    return history
+
+
+def _earlier_turns_input(original, row):
+    """Give synthesis the same earlier turns, marked so they are not read as the request."""
+    history = original.get('task_history')
+    if not history:
+        return ()
+    text = 'Earlier conversation, context only:\n' + '\n'.join(
+        item['role'] + ': ' + item['content'] for item in history)
+    return (AdHocInput(str(uuid5(UUID(row['task_id']), 'history-synthesis')), text.encode(),
+                       row['privacy']),)
+
+
+def _search_synthesis_choice(original):
+    """Results stay on the local model, whichever backend wrote the query."""
+    choice = ChatRunChoice.parse(original.get('run_choice', {
+        'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
+    if choice.adapter_id == 'ollama':
+        return choice
+    return ChatRunChoice.parse({'mode': choice.mode, 'adapter': 'ollama', 'model': None})
 
 
 class ChatService:
@@ -1345,6 +1520,20 @@ class ChatService:
         choice = ChatRunChoice.parse(request.get('run_choice', {
             'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
         self._require_backend_reset_complete(choice.adapter_id)
+        history = []
+        if 'conversation' in plan.source_kinds and plan.output_kind != 'file-edit':
+            # A repeated route keeps the history it was prepared with.
+            tasks = TaskOutcomes(root)
+            existing = next((item for item in tasks.list(node_id, user_id, request['project_id'],
+                                                         request['thread_id'])
+                             if item['task_id'] == request['task_id']), None)
+            if existing is not None:
+                history = tasks.get(request['task_id'], node_id, user_id)['request'].get(
+                    'task_history', [])
+            else:
+                history = _task_history(tasks, node_id, user_id, request,
+                                        external=choice.adapter_id in EXTERNAL_ADAPTERS)
+        prior = prior + history
         require(choice.mode == 'orchestration',
                 'Explicit task routing requires task mode')
         plan.validate_execution(choice)
@@ -1357,11 +1546,12 @@ class ChatService:
                           if choice.adapter_id in DIRECT_BINDINGS else None)
         binding = choice.resolve(ollama=configured, openai=external_binding,
                                  atlascloud=atlascloud_binding, direct=direct_binding)
-        run_selection = self._run_selection(choice, binding, output_format='json',
+        run_selection = self._run_selection(choice, binding,
+            output_format=_external_output_format(plan, binding),
             runs=adapter.runs, run_id=request['run_id'])
         choice.validate_context(
             project_input_ids=tuple(request['selected_artifact_ids']),
-            text_input_ids=tuple(request['selected_message_ids']) + (request['message_id'],))
+            text_input_ids=tuple(item['message_id'] for item in prior) + (request['message_id'],))
         if thread is None and 'run_choice' in request:
             thread = threads.create(thread_id=request['thread_id'], node_id=node_id,
                 user_id=user_id, created_at=request['created_at'], classification=choice.mode,
@@ -1388,6 +1578,8 @@ class ChatService:
             append_projection = append_context(snapshot, validate_snapshot(snapshot), request['project_id'],
                 request['expected_head'], plan.target_artifact_id, request['run_id'])
         stored_request = dict(request)
+        if history:
+            stored_request['task_history'] = history
         if block_edit:
             snapshot = workspace.git.snapshot(request['expected_head'])
             block_projection = markdown_context(snapshot, validate_snapshot(snapshot), request['project_id'],
@@ -1400,10 +1592,10 @@ class ChatService:
             role_revision, frozenset(request['selected_artifact_ids']))
         instruction = (markdown_instruction(plan.target_artifact_id, request['expected_head']) if block_edit
                        else patch_instruction(plan.target_artifact_id, request['expected_head'])
-                       if patch_edit else task_output_instruction(plan))
+                       if patch_edit else task_output_instruction(plan, request['created_at']))
         if append_projection is not None:
             instruction += '\n' + append_instruction()
-        conversation = (ConversationSelection(request['thread_id'], thread['revision'],
+        conversation = (ConversationSelection(request['thread_id'], (thread or {}).get('revision', 0),
             tuple(item['message_id'] for item in prior), tuple(item['role'] for item in prior))
             if prior else None)
         builder = ContextBuilder(workspace, request['project_id'])
@@ -1434,6 +1626,13 @@ class ChatService:
         if edit_target is not None:
             require(PRIVACY_ORDER[edit_target['metadata']['privacy']] >= PRIVACY_ORDER[strongest],
                     'File edit cannot lower the privacy of its context')
+        # Refuse before the model runs: its query could only end in a search this data forbids.
+        require(not plan.search_compose or strongest != 'local-only',
+                'local-only data cannot be sent to web search')
+        require(not plan.provider_web_search
+                or (choice.adapter_id in PROVIDER_WEB_SEARCH_ADAPTERS
+                    and strongest in PROVIDER_WEB_SEARCH_PRIVACY),
+                'Provider web search is not available for this backend or data')
         if plan.acquiring_public_web:
             outcome = AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
                 'purpose': 'Acquire public sources for explicit ' + plan.output_kind + ' output',
@@ -1443,7 +1642,10 @@ class ChatService:
         elif choice.adapter_id in EXTERNAL_ADAPTERS:
             outcome = AITaskOutcome.parse({'schema_version': 1,
                 'kind': 'external-request',
-                'purpose': 'Generate explicit ' + plan.output_kind + ' output',
+                'purpose': ('Sestavit webový dotaz z kontextu' if plan.search_compose
+                            else 'Odpovědět s přímým hledáním u providera' if plan.provider_web_search
+                            else 'Odpovědět, nebo vyžádat webové hledání' if plan.search_on_demand
+                            else 'Generate explicit ' + plan.output_kind + ' output'),
                 'query': request['content'],
                 'message_ids': request['selected_message_ids'] + [request['message_id']],
                 'artifact_ids': []})
@@ -1476,10 +1678,33 @@ class ChatService:
             try:
                 value = json.loads(response['response'])
             except (KeyError, TypeError, ValueError) as exc:
-                raise ValidationError('Model returned invalid explicit task JSON') from exc
+                if not plan.search_compose:
+                    raise ValidationError('Model returned invalid explicit task JSON') from exc
+                value = None
             if block_edit and isinstance(value, dict) and value.get('kind') == 'markdown-patch':
                 from spikes.markdown_patch import complete as complete_markdown
                 value = complete_markdown(value, edit_target['body'], plan.edit_block_ids)
+            if plan.search_on_demand:
+                value = _unwrap_search_request(value)
+                _require_real_answer(value, request['content'])
+            if plan.search_compose or (plan.search_on_demand and isinstance(value, dict)
+                                       and value.get('kind') == 'web-search-request'):
+                require(strongest != 'local-only',
+                        'Model requested web search, but local-only data cannot leave this node')
+                # The existing card shows the exact query; the model's choice sends nothing.
+                outcome = _model_search_outcome(plan, value, request['content'],
+                    request['selected_message_ids'] + [request['message_id']],
+                    request['selected_artifact_ids'])
+                routed = {'task_id': request['task_id'], 'outcome': outcome.serialize(),
+                    'privacy': strongest, 'project_commit': prepared.manifest['project_commit'],
+                    'run_id': request['run_id'], 'manifest_id': request['manifest_id'],
+                    'model': binding.model, 'boundary': binding.boundary,
+                    'task_plan_sha256': plan.digest(),
+                    'run_selection': run_selection.public_serialize(),
+                    'run_selection_sha256': run_selection.digest()}
+                routed['projection'] = TaskOutcomes(root).prepare(node_id=node_id, user_id=user_id,
+                    request=stored_request, routed=routed)['projection']
+                return routed
             expected = ('markdown-patch' if block_edit else 'artifact-patch' if patch_edit else 'presentation-proposal' if plan.output_kind == 'presentation'
                         else plan.expected_outcome_kind)
             require(isinstance(value, dict) and value.get('kind') == expected,
@@ -1583,6 +1808,10 @@ class ChatService:
         _, original, outcome, _ = self._search_task_context(row, node_id, user_id)
         search_runs = SearchRuns(root)
         binding = self._search_binding()
+        # Results are processed locally, so a missing Ollama must stop before the query leaves.
+        require(original.get('run_choice', {}).get('adapter', 'ollama') == 'ollama'
+                or self._stores()[1].load() is not None,
+                'Zpracování výsledků hledání vyžaduje nastavenou Ollamu')
         workflow = (search_runs.workflow(request['task_id'], node_id, user_id)
                     if search_runs.path.exists() else None)
         if workflow is not None and 'parent_search_id' not in request:
@@ -1638,6 +1867,23 @@ class ChatService:
                 'node_id': node_id, 'user_id': user_id,
                 'search_task_id': search_task_id, 'round_index': round_index,
                 'parent_search_id': parent_search_id}
+
+    def task_search_revise_query(self, request):
+        """Store a person's edit of the proposed query before any search round exists."""
+        require(isinstance(request, dict) and set(request) == {'task_id', 'query'},
+                'Invalid search query edit')
+        uuid(request['task_id'])
+        query = request['query']
+        require(isinstance(query, str) and bool(query.strip()) and '\0' not in query
+                and len(query.strip().encode('utf-8')) <= MAX_QUERY_BYTES,
+                'Invalid search query')
+        root = self._root(); node_id, user_id = self._identity()
+        search_runs = SearchRuns(root)
+        require(not search_runs.path.exists()
+                or search_runs.workflow(request['task_id'], node_id, user_id) is None,
+                'Search query cannot change after its preview was prepared')
+        return TaskOutcomes(root).revise_search_query(
+            request['task_id'], node_id, user_id, query.strip())['projection']
 
     def task_search_candidate(self, request):
         """Validate and display an exact search proposal without persisting a run."""
@@ -1733,9 +1979,7 @@ class ChatService:
         self._require_backend_reset_complete('ollama')
         _, ollama_bindings, adapter = self._stores()
         configured = ollama_bindings.load()
-        choice = ChatRunChoice.parse(original.get('run_choice', {
-            'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
-        require(choice.adapter_id == 'ollama', 'Web search synthesis requires Ollama')
+        choice = _search_synthesis_choice(original)
         binding = choice.resolve(ollama=configured)
         workflow = search_runs.workflow(request['task_id'], node_id, user_id)
         rounds_for_model = []
@@ -1760,7 +2004,13 @@ class ChatService:
             'rationale, used_source_ids, limitations, and follow_up_queries. Source IDs must come '
             'from supplied results. final means your model judgment, not guaranteed truth, and '
             'must directly answer the request, have no limitations and have no follow_up_queries. '
-            'If a requested fact is still missing, use intermediate or insufficient. Propose at '
+            'limitations and follow_up_queries are arrays; use [] when there are none and never '
+            'write an entry saying there are none. '
+            'If a requested fact is still missing, use intermediate or insufficient. Then '
+            'limitations must list each concrete reason the results do not answer the request, '
+            'for example no results, results about something else, missing fact, conflicting '
+            'or outdated sources, and the answer must say plainly what could not be found and '
+            'why. Propose at '
             'most three bounded public queries; do not '
             'claim they were executed. Write answer, rationale, limitations and follow-up queries '
             'in the language of the user focus request. State uncertainty and do not invent or '
@@ -1771,7 +2021,8 @@ class ChatService:
             run_id=round_record['synthesis_run_id'], authority=authority,
             target=binding.target(),
             project_inputs=tuple(ProjectInput(value) for value in outcome['artifact_ids']),
-            ad_hoc_inputs=tuple(AdHocInput(item['message_id'], item['content'].encode(),
+            ad_hoc_inputs=_earlier_turns_input(original, row) +
+                tuple(AdHocInput(item['message_id'], item['content'].encode(),
                 item['privacy']) for item in selected) +
                 (AdHocInput(request['search_id'], search_bytes, row['privacy']),),
             task=TaskInstruction('researcher', 'researcher-v2', instruction))
@@ -1808,6 +2059,8 @@ class ChatService:
                     seen.add(source['source_id']); all_sources.append(source)
         result = {'schema_version': 2, 'kind': 'web-search-answer',
                   'content': evaluation['answer'], 'assessment': evaluation['assessment'],
+                  'rationale': evaluation['rationale'],
+                  'limitations': evaluation['limitations'],
                   'assessment_is_model_judgment': True, 'completion_reason': reason,
                   'sources': all_sources, 'rounds': display['rounds'],
                   'budget': display['budget'], 'budget_used': display['budget_used'],
@@ -2345,7 +2598,7 @@ class ChatService:
                     'message_id', 'run_id', 'manifest_id', 'assistant_message_id',
                     'selected_message_ids', 'content', 'privacy', 'created_at'}
         optional = {'selected_artifact_ids', 'record_chat', 'run_choice', 'stream',
-                    'task_plan', 'response_language'}
+                    'task_plan', 'response_language', 'provider_web_search', 'task_history'}
         require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing external preview field')
         request = dict(request)
@@ -2354,6 +2607,26 @@ class ChatService:
         request.setdefault('stream', False)
         require(type(request['record_chat']) is bool, 'Invalid external chat recording mode')
         require(type(request['stream']) is bool, 'Invalid external streaming mode')
+        if 'task_history' in request:
+            history = request['task_history']
+            require('task_plan' in request and isinstance(history, list) and all(
+                isinstance(item, dict)
+                and set(item) == {'message_id', 'role', 'content', 'privacy'}
+                and item['role'] in {'user', 'assistant'} and isinstance(item['content'], str)
+                and item['privacy'] in PRIVACY_ORDER for item in history),
+                'Invalid task history')
+            for item in history: uuid(item['message_id'])
+        if 'provider_web_search' in request:
+            # Absent, not false, when off: earlier approvals keep their exact request.
+            plan = (ExplicitTaskPlan.parse(request['task_plan'])
+                    if 'task_plan' in request else None)
+            require(request['provider_web_search'] is True and not request['stream']
+                    and (request['record_chat'] if plan is None else plan.provider_web_search)
+                    and isinstance(request.get('run_choice'), dict)
+                    and request['run_choice'].get('adapter') in PROVIDER_WEB_SEARCH_ADAPTERS,
+                    'Provider web search is not available for this request')
+            require(request['privacy'] in PROVIDER_WEB_SEARCH_PRIVACY,
+                    'Provider web search cannot use confidential or local-only data')
         if 'run_choice' in request:
             choice = ChatRunChoice.parse(request['run_choice'])
             task_plan = (ExplicitTaskPlan.parse(request['task_plan'])
@@ -2413,7 +2686,8 @@ class ChatService:
                    if item['message_id'] in request['selected_message_ids']]
         require(ordered == request['selected_message_ids'],
                 'Selected messages must use thread order')
-        selected = [messages[value] for value in request['selected_message_ids']] + [
+        selected = [messages[value] for value in request['selected_message_ids']] + request.get(
+            'task_history', []) + [
             {'message_id': request['message_id'], 'content': request['content'],
              'privacy': request['privacy'], 'role': 'user'}]
         language = ResponseLanguagePolicy(root).resolve(
@@ -2426,12 +2700,12 @@ class ChatService:
             self._external_runtime(request)
         plan = (ExplicitTaskPlan.parse(request['task_plan'])
                 if 'task_plan' in request else None)
-        role_revision = plan.role_revision if plan is not None else 'external-chat-v1'
+        role_revision = _external_role_revision(plan, binding)
         run_selection = self._run_selection(
             ChatRunChoice.parse(request.get('run_choice', {
                 'mode': 'brainstorming', 'adapter': 'openai-responses',
                 'model': binding.model})), binding,
-            output_format='json' if plan is not None else 'text')
+            output_format=_external_output_format(plan, binding))
         authority = Authority('external-approval:' + request['approval_id'], user_id, node_id,
                               role_revision, frozenset(request['selected_artifact_ids']))
         inputs = tuple(AdHocInput(item['message_id'], item['content'].encode(), item['privacy'])
@@ -2451,20 +2725,24 @@ class ChatService:
                 tuple(item['role'] for item in (selected[:-1] if plan is not None else selected)))
                 if plan is None or len(selected) > 1 else None),
             task=(TaskInstruction('task-output', role_revision,
-                                  task_output_instruction(plan), request['message_id'])
+                                  task_output_instruction(plan, request['created_at']),
+                                  request['message_id'])
                   if plan is not None else None),
             response_language=ResponseLanguage(language['tag'], language['source']))
         handoff = DispatchHandoff(request['run_id'], request['manifest_id'],
             hashlib.sha256(prepared.manifest_bytes).hexdigest(), binding.target(), prepared.payload)
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
-        output_format = 'json' if plan is not None else 'text'
+        output_format = _external_output_format(plan, binding)
+        search_option = ({'web_search': True} if request.get('provider_web_search') else {})
         provider_request, _, _ = adapter_type._request(
             handoff, binding, role, output_format, stream=request['stream'],
-            run_selection=run_selection)
+            run_selection=run_selection, **search_option)
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
         require(strongest != 'local-only',
                 'local-only data cannot be sent to an external provider')
+        require(not search_option or strongest in PROVIDER_WEB_SEARCH_PRIVACY,
+                'Provider web search cannot use confidential or local-only data')
         binding_bytes = json.dumps(binding.serialize(), sort_keys=True,
                                    separators=(',', ':')).encode()
         binding_sha256 = hashlib.sha256(binding_bytes).hexdigest()
@@ -2482,6 +2760,10 @@ class ChatService:
                 'project_commit': prepared.manifest['project_commit'],
                 'target': {'provider': provider_name, 'endpoint': binding.endpoint,
                            'boundary': binding.boundary, 'model': binding.model},
+                **({'provider_web_search': {'enabled': True, 'warning': (
+                    'Model may search the web by itself. It creates the queries from this '
+                    'context and ' + provider_name + ' sends them without confirmation. '
+                    'Searches are billed separately.')}} if search_option else {}),
                 'privacy': strongest, 'payload_size': len(prepared.payload),
                 'response_language': prepared.manifest['response_language'],
                 'run_selection': run_selection.public_serialize(),
@@ -2570,7 +2852,8 @@ class ChatService:
             ChatRunChoice.parse(original.get('run_choice', {
                 'mode': 'brainstorming', 'adapter': 'openai-responses',
                 'model': binding.model})), binding,
-            output_format='json' if 'task_plan' in original else 'text',
+            output_format=_external_output_format(ExplicitTaskPlan.parse(original['task_plan'])
+                                                  if 'task_plan' in original else None, binding),
             runs=runs, run_id=original['run_id'])
         current_binding_sha256 = hashlib.sha256(json.dumps(binding.serialize(),
             sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -2582,25 +2865,26 @@ class ChatService:
                                    approval['payload'])
         plan = (ExplicitTaskPlan.parse(original['task_plan'])
                 if 'task_plan' in original else None)
-        role_revision = plan.role_revision if plan is not None else 'external-chat-v1'
+        role_revision = _external_role_revision(plan, binding)
         authority = Authority('external-approval:' + original['approval_id'], user_id, node_id,
                               role_revision, frozenset(original['selected_artifact_ids']))
         builder = ContextBuilder(workspace, original['project_id'])
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
-        output_format = 'json' if plan is not None else 'text'
+        output_format = _external_output_format(plan, binding)
+        search_option = ({'web_search': True} if original.get('provider_web_search') else {})
         current_request, _, _ = adapter_type._request(
             handoff, binding, role, output_format, stream=original['stream'],
-            run_selection=run_selection)
+            run_selection=run_selection, **search_option)
         require(current_request == approval['provider_request'],
                 'Provider request changed after preview')
         if not original['record_chat']:
             try:
                 adapter.prepare(handoff, binding, role, output_format,
-                                run_selection=run_selection)
+                                run_selection=run_selection, **search_option)
                 response = adapter.dispatch(handoff, binding, role, output_format,
-                                            run_selection=run_selection)
+                                            run_selection=run_selection, **search_option)
             except BackendUnknown as exc:
                 store.finish(original['approval_id'], node_id, user_id,
                              'unknown', error=str(exc))
@@ -2615,9 +2899,13 @@ class ChatService:
                       'usage_report': run_usage(binding.adapter_id, binding.binding_id,
                                                 original['run_id'], response)}
             if plan is not None:
-                result['response'] = response['response']
+                result['response'] = (answer_with_sources(response) if search_option
+                                      else response['response'])
             store.finish(original['approval_id'], node_id, user_id,
                          'succeeded', result=result)
+            # After finish on purpose: this reply is the only copy of the raw results.
+            if EPHEMERAL_SEARCH_KEY in response:
+                result = dict(result, search_results=response[EPHEMERAL_SEARCH_KEY])
             return result
         threads = ChatThreads(root)
         thread_user = self._storage_user(
@@ -2686,15 +2974,15 @@ class ChatService:
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
         try:
             adapter.prepare(handoff, binding, stream=original['stream'],
-                            run_selection=run_selection)
+                            run_selection=run_selection, **search_option)
             response = (adapter.dispatch_stream(handoff, binding,
                                                 on_delta or (lambda _delta: None),
                                                 run_selection=run_selection)
                         if original['stream'] else adapter.dispatch(
-                            handoff, binding, run_selection=run_selection))
+                            handoff, binding, run_selection=run_selection, **search_option))
             completed = threads.complete(turn_id=original['turn_id'], node_id=node_id,
                 user_id=thread_user, run_id=original['run_id'],
-                message_id=original['assistant_message_id'], content=response['response'],
+                message_id=original['assistant_message_id'], content=answer_with_sources(response),
                 privacy=approval['privacy'], created_at=now())
         except BackendUnknown as exc:
             threads.finish(turn_id=original['turn_id'], node_id=node_id,
@@ -2714,6 +3002,9 @@ class ChatService:
                   'usage_report': run_usage(binding.adapter_id, binding.binding_id,
                                             original['run_id'], response)}
         store.finish(original['approval_id'], node_id, user_id, 'succeeded', result=result)
+        # After finish on purpose: this reply is the only copy of the raw results.
+        if EPHEMERAL_SEARCH_KEY in response:
+            result = dict(result, search_results=response[EPHEMERAL_SEARCH_KEY])
         return result
 
     def task_external_preview(self, request):
@@ -2745,7 +3036,11 @@ class ChatService:
             'created_at': row['created_at'], 'record_chat': False,
             'run_choice': row['request']['run_choice'],
             'response_language': row['request'].get('response_language'),
-            'task_plan': row['request']['task_plan']})
+            'task_plan': row['request']['task_plan'],
+            **({'task_history': row['request']['task_history']}
+               if row['request'].get('task_history') else {}),
+            **({'provider_web_search': True} if ExplicitTaskPlan.parse(
+                row['request']['task_plan']).provider_web_search else {})})
         preview['task_id'] = request['task_id']
         preview['purpose'] = row['outcome']['purpose']
         TaskOutcomes(self._root()).bind_external_preview(
@@ -2784,6 +3079,11 @@ class ChatService:
         plan = ExplicitTaskPlan.parse(row['request']['task_plan'])
         approval = ExternalDispatches(self._root()).get(
             request['approval_id'], node_id, user_id)
+        if (plan.search_compose or plan.search_on_demand) and row['state'] != 'cancelled' \
+                and row['outcome']['kind'] == 'web-search':
+            # The query is already accepted; its later search does not change this replay.
+            require(approval['state'] == 'succeeded', 'Task outcome was prepared differently')
+            return self._task_projection(row['projection'])
         if row['state'] == 'completed':
             require(plan.output_kind == 'conversation'
                     and row['result'].get('kind') == 'direct-answer'
@@ -2808,9 +3108,23 @@ class ChatService:
         result = self.external_confirm({key: request[key] for key in
             ('approval_id', 'preview_sha256', 'approved', 'privacy')})
         try:
-            value = json.loads(result['response'])
+            value = _model_json(result['response'])
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValidationError('External model returned invalid explicit task JSON') from exc
+            if not (plan.search_compose or plan.provider_web_search):
+                raise ValidationError('External model returned invalid explicit task JSON') from exc
+            value = None
+        if plan.provider_web_search:
+            # Plain text by design; the stored answer already carries the citations.
+            value = {'schema_version': 1, 'kind': 'direct-answer', 'content': result['response']}
+        elif plan.search_on_demand:
+            value = _unwrap_search_request(value)
+            _require_real_answer(value, row['request']['content'])
+        if plan.search_compose or (plan.search_on_demand and isinstance(value, dict)
+                                   and value.get('kind') == 'web-search-request'):
+            composed = _model_search_outcome(plan, value, row['request']['content'],
+                row['outcome']['message_ids'], row['outcome']['artifact_ids'])
+            return self._task_projection(store.replace_external_outcome(request['task_id'],
+                node_id, user_id, composed.serialize())['projection'])
         expected = ('presentation-proposal' if plan.output_kind == 'presentation'
                     else plan.expected_outcome_kind)
         require(isinstance(value, dict) and value.get('kind') == expected,
@@ -2831,6 +3145,9 @@ class ChatService:
             projection = store.finish(request['task_id'], node_id, user_id, 'completed',
                 result={'schema_version': 1, 'kind': 'direct-answer',
                         'content': outcome.content})['projection']
+            if 'search_results' in result:
+                return dict(self._task_projection(projection),
+                            search_results=result['search_results'])
         else:
             replaced = store.replace_external_outcome(
                 request['task_id'], node_id, user_id, outcome.serialize())

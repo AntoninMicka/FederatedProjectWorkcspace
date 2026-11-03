@@ -35,6 +35,8 @@ síťový writer by vytvořil nejednoznačnou recovery hranici.
 Registry dostane jedinou verzi akce `search.iterative-query` s účinkem
 `external-request`, oprávněním `external-dispatch`, povolenou privacy
 `public`/`project`/`confidential`, `automatable=true` a `confirmation=none`.
+Automatický režim pro `confidential` později odmítlo
+[ADR 0066](0066-provider-web-search-and-callback.md).
 `local-only` zůstá zakázané. `query.external` se nepoužije: reprezentuje jiný
 OpenAI approval journal a nemá search binding, kolo ani search budget.
 

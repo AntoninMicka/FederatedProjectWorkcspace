@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Small fail-closed contracts shared by LLM backend adapters and services."""
+from urllib.parse import urlsplit
 from dataclasses import dataclass, replace
 import hashlib
 import json
@@ -181,6 +182,16 @@ ROLES = RoleRegistry((
                    'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-conversation-v1',
                    'generate-text', 'json'),
+    RoleDefinition(1, 'task-output', 'task-output-conversation-search-v1',
+                   'generate-text', 'json'),
+    RoleDefinition(1, 'task-output', 'task-output-search-query-v1',
+                   'generate-text', 'json'),
+    RoleDefinition(1, 'task-output', 'task-output-conversation-provider-search-v1',
+                   'generate-text', 'text'),
+    RoleDefinition(1, 'task-output', 'task-output-conversation-search-text-v1',
+                   'generate-text', 'text'),
+    RoleDefinition(1, 'task-output', 'task-output-search-query-text-v1',
+                   'generate-text', 'text'),
     RoleDefinition(1, 'task-output', 'task-output-document-v1',
                    'generate-text', 'json'),
     RoleDefinition(1, 'task-output', 'task-output-file-edit-patch-v5',
@@ -277,3 +288,35 @@ class BackendRegistry:
         require(getattr(binding, 'adapter_id', None) == adapter_id,
                 'Backend parser returned a different adapter')
         return binding
+
+
+MAX_WEB_SOURCES = 50
+MAX_WEB_TITLE = 500
+MAX_WEB_URL = 2048
+EPHEMERAL_SEARCH_KEY = 'ephemeral_search_results'
+
+
+def web_sources(entries):
+    """Bounded, deduplicated links; provider text never becomes a usable non-web URL."""
+    sources, seen = [], set()
+    for entry in entries:
+        if isinstance(entry, str):
+            entry = {'url': entry}
+        url = entry.get('url') if isinstance(entry, dict) else None
+        if not isinstance(url, str) or len(url) > MAX_WEB_URL or url in seen:
+            continue
+        parts = urlsplit(url)
+        if parts.scheme not in {'http', 'https'} or not parts.netloc or parts.username \
+                or any(ord(c) < 33 for c in url):
+            continue
+        title = entry.get('title')
+        title = ' '.join(title.split())[:MAX_WEB_TITLE] if isinstance(title, str) else ''
+        seen.add(url); sources.append({'url': url, 'title': title or url})
+        if len(sources) == MAX_WEB_SOURCES:
+            break
+    return sources
+
+
+def persisted_response(response):
+    """What a run journal may keep: results marked ephemeral stay in this process only."""
+    return {key: value for key, value in response.items() if key != EPHEMERAL_SEARCH_KEY}

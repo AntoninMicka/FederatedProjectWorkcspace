@@ -26,7 +26,8 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_TITLE_BYTES = 1024
 MAX_SNIPPET_BYTES = 8192
 MAX_URL_BYTES = 8192
-DEFAULT_SEARCH_LANGUAGE = 'cs-CZ'
+# The chosen language governs LLM answers only; the instance's own setting governs search.
+DEFAULT_SEARCH_LANGUAGE = 'instance-default'
 MAX_WORKFLOW_ROUNDS = 3
 MAX_WORKFLOW_QUERIES = 3
 MAX_WORKFLOW_RESULTS = 30
@@ -490,21 +491,26 @@ class SearXNGAdapter:
         timestamp(searched_at)
         require(isinstance(value, dict) and isinstance(value.get('results'), list),
                 'Invalid SearXNG response envelope')
-        if 'query' in value:
-            require(value['query'] == query, 'SearXNG response query changed')
+        # SearXNG echoes its parsed query without prefixes such as ":cs", so the echo is
+        # not compared; the stored query is always the one this run sent.
         results, seen = [], set()
         for item in value['results']:
-            require(isinstance(item, dict), 'Invalid SearXNG result')
-            url = cls._result_url(item.get('url'))
+            # Engines are uneven: one unusable entry must not discard the others.
+            try:
+                require(isinstance(item, dict), 'Invalid SearXNG result')
+                url = cls._result_url(item.get('url'))
+                title = _bounded_text(item.get('title'), 'result title', MAX_TITLE_BYTES)
+                snippet = _bounded_text(item.get('content') or '', 'result snippet',
+                                        MAX_SNIPPET_BYTES, allow_empty=True)
+            except ValueError:
+                continue
             if url in seen: continue
             seen.add(url)
-            title = _bounded_text(item.get('title'), 'result title', MAX_TITLE_BYTES)
-            snippet = _bounded_text(item.get('content', ''), 'result snippet',
-                                    MAX_SNIPPET_BYTES, allow_empty=True)
             result = SearXNGResult(title, url, snippet).serialize()
             result['source_id'] = 'source-' + hashlib.sha256(url.encode()).hexdigest()[:32]
             results.append(result)
             if len(results) == binding.result_limit: break
+        require(results or not value['results'], 'SearXNG returned no usable result')
         return {'schema_version': 1, 'query': query, 'searched_at': searched_at,
                 'source': {'adapter': 'searxng', 'binding_id': binding.binding_id,
                            'binding_revision': binding.revision,
@@ -583,10 +589,11 @@ class SearXNGAdapter:
                 if hashlib.sha256(certificate).hexdigest() != binding.tls_cert_sha256:
                     raise SearchResponseError('SearXNG TLS certificate pin mismatch',
                                               code='tls-pin-mismatch')
-            path = '/search?' + urlencode({'q': query, 'format': 'json',
-                                            'language': DEFAULT_SEARCH_LANGUAGE})
+            path = '/search?' + urlencode({'q': query, 'format': 'json'})
             try:
-                connection.request('GET', path, headers={'Accept': 'application/json'})
+                # The SearXNG limiter treats a missing or generic User-Agent as a bot.
+                connection.request('GET', path, headers={'Accept': 'application/json',
+                    'User-Agent': 'FederatedProjectWorkspace/1', 'Accept-Language': '*'})
                 response = connection.getresponse()
             except (TimeoutError, OSError, http.client.HTTPException) as exc:
                 raise _SearchTransportUnknown('SearXNG response was interrupted',

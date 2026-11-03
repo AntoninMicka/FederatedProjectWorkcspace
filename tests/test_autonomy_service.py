@@ -332,6 +332,30 @@ class AutonomyServiceTests(unittest.TestCase):
         self.assertEqual((confirmed['plan_revision'], confirmed['remaining_steps'],
                           len(confirmed['steps'])), (2, 0, 2))
 
+    def test_confidential_search_cannot_enter_automatic_mode_but_stays_manual(self):
+        test = self
+        class ConfidentialChat(ChatStub):
+            def task_search_autonomy_candidate(inner, request):
+                preview = {'schema_version': 2, **request, 'query': request['query'],
+                    'purpose': 'Ověřit', 'privacy': 'confidential', 'round_index': 2,
+                    'parent_search_id': request['parent_search_id'], 'result_limit': 3,
+                    'budget': {'max_rounds': 3, 'max_queries': 3,
+                               'max_results': 30, 'max_seconds': 300},
+                    'language': 'instance-default',
+                    'binding': {'adapter': 'searxng', 'endpoint': 'http://127.0.0.1:8888',
+                                'target_id': 'local-process'},
+                    'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+                return {'request': request, 'preview': dict(preview, preview_sha256=digest(preview),
+                        state='candidate'), 'project_id': test.project_id,
+                        'expected_head': test.git.head()}
+        service = AutonomyService(self.node, Projects(self.node), state_dir=self.state,
+            chat_service=ConfidentialChat(), role_workflow_service=self.roles, countdown_seconds=0)
+        request = {'workflow_id': self.workflow_id, 'task_id': str(uuid4()), 'countdown_seconds': 4,
+                   'parent_search_id': str(uuid4()), 'query': 'dotaz'}
+        with self.assertRaisesRegex(ValueError, 'Confidential'):
+            service.prepare_search(dict(request, mode='automatic'))
+        self.assertEqual('manual', service.prepare_search(dict(request, mode='manual'))['mode'])
+
     def test_search_ui_plan_can_be_edited_and_sent_now_through_exact_queue_step(self):
         task_id, parent_id = str(uuid4()), str(uuid4())
         class SearchChat(ChatStub):

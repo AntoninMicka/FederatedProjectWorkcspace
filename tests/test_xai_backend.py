@@ -132,7 +132,7 @@ class ResponseTests(Base):
                 ('two messages', completed(output=[MESSAGE, MESSAGE])),
                 ('no message', completed(output=[REASONING])),
                 ('empty', completed(output=[])),
-                ('tool item', completed(output=[MESSAGE, {'type': 'web_search_call'}])),
+                ('client tool item', completed(output=[MESSAGE, {'type': 'function_call'}])),
                 ('content', completed(output=[dict(MESSAGE, content=[
                     {'type': 'refusal', 'refusal': 'no'}])])),
                 ('mixed', completed(output=[dict(MESSAGE, content=[
@@ -142,6 +142,16 @@ class ResponseTests(Base):
                 ('not an object', [])):
             with self.subTest(label), self.assertRaises(ValueError):
                 self.parse(value)
+
+    def test_search_calls_report_bounded_sources_and_enable_adds_the_tool(self):
+        text = dict(MESSAGE['content'][0], annotations=[
+            {'type': 'url_citation', 'url': 'https://a.example/', 'title': 'A'},
+            {'type': 'url_citation', 'url': 'file:///etc/passwd', 'title': 'Bad'}])
+        result = self.parse(completed(output=[{'type': 'web_search_call'},
+            dict(MESSAGE, content=[text])], citations=['https://b.example/', 'https://a.example/']))
+        self.assertEqual({'requests': 1, 'sources': [
+            {'url': 'https://a.example/', 'title': 'A'},
+            {'url': 'https://b.example/', 'title': 'https://b.example/'}]}, result['web_search'])
 
     def test_invalid_usage_is_omitted(self):
         for usage in (None, 'x', {'input_tokens': 1}, dict(USAGE, input_tokens=-1),

@@ -67,6 +67,53 @@ class ExplicitTaskPlanTests(unittest.TestCase):
             self.plan(source_kinds=['artifacts']).validate_request_selections(
                 artifact_ids=[str(uuid4())], message_ids=[str(uuid4())])
 
+    def test_compose_plan_lets_any_backend_write_the_query_and_keeps_old_digests(self):
+        plain = self.plan(); plan = self.plan(search_compose=True)
+        self.assertTrue(plan.search_compose); self.assertNotEqual(plain.digest(), plan.digest())
+        self.assertNotIn('search_compose', plain.serialize())
+        self.assertEqual('task-output-search-query-v1', plan.role_revision)
+        self.assertEqual(plan, ExplicitTaskPlan.parse(plan.serialize()))
+        self.assertTrue(self.plan(search_compose=True, execution='external-openai').search_compose)
+        for changes in (dict(search_compose=False), dict(output_kind='document'),
+                        dict(search_on_demand=True),
+                        dict(source_kinds=['conversation', 'public-web'], search_query='q')):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.plan(**{'search_compose': True, **changes})
+
+    def test_direct_provider_search_is_an_opt_in_on_top_of_search_on_demand(self):
+        plan = self.plan(search_on_demand=True, provider_web_search=True, execution='external-openai')
+        self.assertEqual('task-output-conversation-provider-search-v1', plan.role_revision)
+        self.assertEqual(plan, ExplicitTaskPlan.parse(plan.serialize()))
+        self.assertIn('plain text', task_output_instruction(plan))
+        self.assertNotIn('provider_web_search',
+            self.plan(search_on_demand=True, execution='external-openai').serialize())
+        for changes in (dict(search_on_demand=True), dict(execution='external-openai'),
+                        dict(search_on_demand=True, execution='external-openai', provider_web_search=False)):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.plan(**{'provider_web_search': True, **changes})
+
+    def test_search_instructions_carry_date_and_forbid_copying_the_prompt(self):
+        for plan in (self.plan(search_compose=True), self.plan(search_on_demand=True)):
+            text = task_output_instruction(plan, '2026-11-03T10:00:00.000000Z')
+            self.assertIn('Today is 2026-11-03.', text)
+            self.assertIn('not a copy of the user message', text)
+        self.assertIn('Never guess', task_output_instruction(self.plan(search_on_demand=True)))
+        self.assertIn('Do not answer the task', task_output_instruction(self.plan(search_compose=True)))
+        self.assertNotIn('Today is', task_output_instruction(self.plan()))
+
+    def test_search_on_demand_is_conversation_only_and_keeps_old_digests(self):
+        plain = self.plan(); plan = self.plan(search_on_demand=True)
+        self.assertTrue(plan.search_on_demand); self.assertNotEqual(plain.digest(), plan.digest())
+        self.assertNotIn('search_on_demand', plain.serialize())
+        self.assertEqual('task-output-conversation-search-v1', plan.role_revision)
+        self.assertIn('web-search-request', task_output_instruction(plan))
+        self.assertEqual(plan, ExplicitTaskPlan.parse(plan.serialize()))
+        self.assertTrue(self.plan(search_on_demand=True, execution='external-openai').search_on_demand)
+        for changes in (dict(search_on_demand=False), dict(output_kind='document'),
+                        dict(source_kinds=['conversation', 'public-web'], search_query='q')):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.plan(**{'search_on_demand': True, **changes})
+
 
 if __name__ == '__main__':
     unittest.main()
