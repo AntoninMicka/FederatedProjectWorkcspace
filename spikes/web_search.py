@@ -591,7 +591,9 @@ class SearXNGAdapter:
                                               code='tls-pin-mismatch')
             path = '/search?' + urlencode({'q': query, 'format': 'json'})
             try:
-                connection.request('GET', path, headers={'Accept': 'application/json'})
+                # The SearXNG limiter treats a missing or generic User-Agent as a bot.
+                connection.request('GET', path, headers={'Accept': 'application/json',
+                    'User-Agent': 'FederatedProjectWorkspace/1', 'Accept-Language': '*'})
                 response = connection.getresponse()
             except (TimeoutError, OSError, http.client.HTTPException) as exc:
                 raise _SearchTransportUnknown('SearXNG response was interrupted',

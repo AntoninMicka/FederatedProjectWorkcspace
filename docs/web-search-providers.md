@@ -13,10 +13,12 @@ Workspace hledá třemi způsoby:
   použitelný dotaz nevrátí, předvyplní se text zadání a karta na to upozorní. Externí
   backend dotaz sestaví až po náhledu a potvrzení externího odeslání; výsledky vždy
   zpracuje Ollama, bez ní se hledání nespustí.
-- **Uvažovat s možností dohledání** (režim Úkol, jen Ollama) používá stejnou službu
-  a kartu, ale model sám rozhodne, zda hledání vyžádá.
-- **Model smí hledat na webu** (Volná konverzace, Claude, Grok, OpenAI) nechá hledat
-  přímo providera, bez potvrzení jednotlivých dotazů. Gemini tuto volbu zatím nemá.
+- **Uvažovat s možností dohledání** (režim Úkol, všechny backendy) používá výchozí
+  zpětné volání: model sám rozhodne, zda hledání vyžádá, a Workspace je provede přes
+  stejnou službu a kartu. Externí model uvidí vstupy až po náhledu a potvrzení.
+- **Model smí hledat na webu** je doplňková volba, ve výchozím stavu vypnutá (Volná
+  konverzace a akce Uvažovat; Claude, Grok, OpenAI). Hledá přímo provider, bez potvrzení
+  jednotlivých dotazů. Gemini ji zatím nemá.
 
 Hledání nepřebírá zvolený jazyk odpovědi; ten platí jen pro odpověď LLM. Překlad zdroje
 pomocí LLM zatím není implementovaný. Chování vůči živým API providerů nebylo ověřené.

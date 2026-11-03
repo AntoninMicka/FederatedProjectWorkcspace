@@ -469,10 +469,16 @@ class ChatServiceTests(unittest.TestCase):
             'kind': 'direct-answer', 'content': json.dumps(inner)})
         self.assertEqual('web-search', service.task_route(route)['outcome']['kind'])
         self.assertEqual([], searches)
-        for text in ('{"kind": "other"}', 'Běžná odpověď', '[1]'):
+        for text in ('Běžná odpověď', '[1]', '{ množina }'):
             service, route, _ = self.on_demand_route({'schema_version': 1,
                 'kind': 'direct-answer', 'content': text})
             self.assertEqual('direct-answer', service.task_route(route)['outcome']['kind'])
+        echoed = self.route_request()['content']
+        for text in ('{', '{"kind": "other"}', '{"schema_version":1,"kind":"web-search-req', echoed):
+            service, route, _ = self.on_demand_route({'schema_version': 1,
+                'kind': 'direct-answer', 'content': text})
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, 'neither'):
+                service.task_route(route)
 
     def test_model_search_request_is_refused_for_local_only_input(self):
         service, route, _ = self.on_demand_route({'schema_version': 1,
@@ -2203,6 +2209,73 @@ class ChatServiceTests(unittest.TestCase):
         self.assertNotIn('search_results', replay); self.assertEqual(1, len(sent))
         restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state)
         self.assertNotIn('search_results', restarted.external_confirm(approval))
+
+    def think_task(self, adapter_id, answer, *, direct, privacy='project'):
+        model = self.DIRECT_CASES[adapter_id][0]; sent = []
+        self.configure_direct_provider(adapter_id, 'direct-secret-' + 'k' * 24)
+        def transport(binding, request, secret):
+            sent.append(json.loads(request)); return answer
+        self.service.direct_adapter_factory = (lambda runs, credentials:
+            DirectAdapter(runs, credentials, transport))
+        execution = {'anthropic-messages': 'external-claude', 'xai-responses': 'external-grok'}[adapter_id]
+        request = self.route_request(privacy=privacy, run_choice={'mode': 'orchestration',
+            'adapter': adapter_id, 'model': model})
+        request['task_plan'] = dict(request['task_plan'], execution=execution, search_on_demand=True,
+            **({'provider_web_search': True} if direct else {}))
+        return request, sent
+
+    def task_preview(self, request):
+        return self.service.task_external_preview({'task_id': request['task_id'],
+            'approval_id': str(uuid4()), 'turn_id': str(uuid4()), 'run_id': str(uuid4()),
+            'manifest_id': str(uuid4()), 'assistant_message_id': str(uuid4())})
+
+    @staticmethod
+    def task_approval(request, preview):
+        return {'task_id': request['task_id'], 'approval_id': preview['approval_id'], 'approved': True,
+                'preview_sha256': preview['preview_sha256'], 'privacy': preview['privacy']}
+
+    def test_think_task_on_external_backend_defaults_to_callback_without_provider_tools(self):
+        adapter_id = 'anthropic-messages'; model = self.DIRECT_CASES[adapter_id][0]
+        answer = {'id': 'm', 'type': 'message', 'role': 'assistant', 'model': model,
+            'stop_reason': 'end_turn', 'usage': {'input_tokens': 1, 'output_tokens': 1},
+            'content': [{'type': 'text', 'text': '```json\n' + json.dumps({'schema_version': 1,
+                'kind': 'web-search-request', 'purpose': 'p', 'query': 'zpětný dotaz'}) + '\n```'}]}
+        request, sent = self.think_task(adapter_id, answer, direct=False)
+        self.service.task_route(request)
+        preview = self.task_preview(request)
+        self.assertNotIn('tools', preview['provider_request'])
+        self.assertEqual([], sent)
+        approval = self.task_approval(request, preview)
+        projection = self.service.task_external_confirm(approval)
+        self.assertEqual('web-search', projection['outcome']['kind'])
+        self.assertEqual('zpětný dotaz', projection['outcome']['query'])
+        self.assertEqual(projection, self.service.task_external_confirm(approval))
+        self.assertEqual(1, len(sent))
+
+    def test_think_task_direct_option_uses_provider_search_and_keeps_raw_results_in_reply_only(self):
+        adapter_id = 'anthropic-messages'; model = self.DIRECT_CASES[adapter_id][0]
+        answer = json.loads(json.dumps(self.CLAUDE_SEARCH_ANSWER).replace('MODEL', model))
+        request, sent = self.think_task(adapter_id, answer, direct=True)
+        self.service.task_route(request)
+        preview = self.task_preview(request)
+        self.assertEqual('web_search_20250305', preview['provider_request']['tools'][0]['type'])
+        self.assertTrue(preview['provider_web_search']['enabled'])
+        approval = self.task_approval(request, preview)
+        projection = self.service.task_external_confirm(approval)
+        self.assertEqual(['RAW-QUERY-MARKER'], projection['search_results']['queries'])
+        self.assertEqual('External answer\n\nZdroje:\n- [Cited source](https://cited.example/a%29b)',
+                         projection['result']['content'] if 'result' in projection else projection['outcome']['content'])
+        for marker in (b'RAW-QUERY-MARKER', b'RAW-RESULT-MARKER', b'RAW-ENCRYPTED-MARKER'):
+            self.assertNotIn(marker, self.stored_bytes())
+        replay = self.service.task_external_confirm(approval)
+        self.assertNotIn('search_results', replay)
+        self.assertEqual(1, len(sent))
+
+    def test_think_task_direct_option_refuses_confidential_before_anything_leaves(self):
+        request, sent = self.think_task('anthropic-messages', {}, direct=True, privacy='confidential')
+        with self.assertRaisesRegex(ValueError, 'not available'):
+            self.service.task_route(request)
+        self.assertEqual([], sent)
 
     def test_provider_search_rejects_unsupported_requests_without_sending(self):
         adapter_id = 'anthropic-messages'; model = self.DIRECT_CASES[adapter_id][0]

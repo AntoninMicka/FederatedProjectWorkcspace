@@ -429,6 +429,9 @@ class AutonomyService:
         context = self.chat_service.task_search_autonomy_candidate(request)
         preview = dict(context['preview']); preview_sha256 = preview.pop('preview_sha256')
         preview.pop('state', None)
+        # A hostile result could steer the next query into leaking context (ADR 0066).
+        require(value['mode'] != 'automatic' or preview['privacy'] != 'confidential',
+                'Confidential data requires confirming each web search')
         remaining = preview['budget']['max_rounds'] - preview['round_index'] + 1
         plan = {'schema_version': 2, 'workflow_id': value['workflow_id'],
             'project_id': context['project_id'], 'expected_head': context['expected_head'],
@@ -469,6 +472,9 @@ class AutonomyService:
         context = self.chat_service.task_search_autonomy_candidate(request)
         preview = dict(context['preview'])
         preview_sha256 = preview.pop('preview_sha256'); preview.pop('state', None)
+        # A hostile result could steer the next query into leaking context (ADR 0066).
+        require(value['mode'] != 'automatic' or preview['privacy'] != 'confidential',
+                'Confidential data requires confirming each web search')
         require(preview['privacy'] in profile['privacy'],
                 'Research profile does not allow task privacy')
         goal = preview['purpose']

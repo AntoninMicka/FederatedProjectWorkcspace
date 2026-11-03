@@ -5746,6 +5746,8 @@ function renderResearchPreparation(container,projection,query,parentSearchId){
  const modeLabel=document.createElement('label');modeLabel.textContent=' Režim ';
  const mode=document.createElement('select');
  mode.append(new Option('Ruční kontrola','manual'),new Option('Automaticky s odpočtem','automatic'));
+ // Confidential context needs each query confirmed; the backend enforces this too.
+ if(projection.privacy==='confidential'){mode.options[1].disabled=true;mode.options[1].textContent='Automaticky (u důvěrných dat nelze)';}
  modeLabel.append(mode);
  const countdownLabel=document.createElement('label');countdownLabel.textContent=' Odpočet ';
  const countdown=document.createElement('select');
@@ -6651,8 +6653,7 @@ function refreshChatModeControls(){
   model.disabled=false;
   artifactSource.disabled=external;
   if(external){artifactSource.checked=false;for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;}
-  if(action.value!=='think'||publicSource.checked||external)action.value=publicSource.checked?'search':'answer';
-  action.querySelector('option[value="think"]').disabled=external;
+  if(action.value!=='think'||publicSource.checked)action.value=publicSource.checked?'search':'answer';
   const thinking=action.value==='think';
   const searching=action.value==='search';
   refreshCurrentFileSource();
@@ -6674,7 +6675,7 @@ function refreshChatModeControls(){
   if((publicSource.checked||thinking)&&!searchBinding)warnings.push('Pro vyhledávání nejprve nastavte SearXNG.');
   if(external&&!selectedBinding)warnings.push(`Externí úkol vyžaduje nejprve nastavit ${runProviderLabel(adapter.value)} backend.`);
   if(!external&&!chatBinding)warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
-  if(external&&searching)warnings.push(chatBinding?'Dotaz sestaví externí model z vybraných vstupů po vašem potvrzení, výsledky zpracuje Ollama.':'Zpracování výsledků hledání vyžaduje nastavenou Ollamu.');
+  if(external&&(searching||thinking))warnings.push(chatBinding?'Externí model uvidí vybrané vstupy až po vašem potvrzení, výsledky hledání zpracuje Ollama.':'Zpracování výsledků hledání vyžaduje nastavenou Ollamu.');
   target.textContent=warnings.join(' ');target.hidden=!warnings.length;
  }else{
   target.hidden=true;target.textContent='';
@@ -6690,7 +6691,7 @@ const PROVIDER_WEB_SEARCH_ADAPTERS=new Set(['anthropic-messages','openai-respons
 function localSearchAvailable(){return Boolean(searchBinding&&runnableModelOffers().some(item=>item.adapter_id==='ollama'));}
 function refreshProviderWebSearch(){
  const control=document.querySelector('#provider-web-search-control'),check=document.querySelector('#provider-web-search'),notice=document.querySelector('#provider-web-search-notice');
- const adapter=document.querySelector('#chat-run-adapter').value,available=document.querySelector('#chat-mode').value==='brainstorming'&&PROVIDER_WEB_SEARCH_ADAPTERS.has(adapter);
+ const adapter=document.querySelector('#chat-run-adapter').value,chatMode=document.querySelector('#chat-mode').value,available=(chatMode==='brainstorming'||(chatMode==='orchestration'&&document.querySelector('#task-action').value==='think'))&&PROVIDER_WEB_SEARCH_ADAPTERS.has(adapter);
  control.hidden=!available;if(!available)check.checked=false;
  notice.replaceChildren();notice.hidden=!check.checked;if(!check.checked)return;
  const warning=document.createElement('p');warning.textContent=`Model bude hledat na webu sám. Dotazy vytvoří z kontextu tohoto požadavku a ${runProviderLabel(adapter)} je odešle bez vašeho potvrzení. Hledání se účtuje zvlášť a řídí se podmínkami providera. Důvěrná a local-only data nelze takto použít.`;notice.append(warning);
@@ -7246,7 +7247,9 @@ document.querySelector('#external-confirm').addEventListener('click',async event
     const projection=await projectRequest('/v1/tasks/external/confirm',{
      task_id:pendingExternalPreview.taskId,approval_id:preview.approval_id,
      preview_sha256:preview.preview_sha256,approved:true,privacy:preview.privacy},210000);
-    replaceTaskProjection(projection);
+    // Raw provider results stay in the panel, never in the kept task projection.
+    const {search_results:searchResults,...kept}=projection;
+    replaceTaskProjection(kept);renderProviderSearchResults(searchResults,kept.thread_id);
    }else{
     const result=await projectRequest('/v1/external/confirm',
      {approval_id:preview.approval_id,preview_sha256:preview.preview_sha256,
@@ -7424,7 +7427,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':DIRECT_PROVIDERS[adapter]?.execution||'external-atlascloud',
    search_query:null,public_source_run_ids:publicRunIds}};
   if(searching)pendingChatRequest.task_plan.search_compose=true;
-  if(document.querySelector('#task-action').value==='think')pendingChatRequest.task_plan.search_on_demand=true;
+  if(document.querySelector('#task-action').value==='think'){pendingChatRequest.task_plan.search_on_demand=true;
+   if(document.querySelector('#provider-web-search').checked)pendingChatRequest.task_plan.provider_web_search=true;}
   if(editing){pendingChatRequest.task_plan.target_artifact_id=editTarget;pendingChatRequest.task_plan.edit_format=document.querySelector('#task-edit-format').value;
    if(pendingChatRequest.task_plan.edit_format==='blocks'){
     try{const scope=selectedMarkdownEditScope();if(scope)pendingChatRequest.task_plan.edit_block_ids=scope;}

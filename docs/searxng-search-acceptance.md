@@ -15,8 +15,8 @@ Workspace volá `GET /search?q=…&format=json` bez parametru jazyka, takže vý
 ovlivní výchozí jazyk instance. V `settings.yml` instance musí být
 `json` v `search.formats`, jinak SearXNG vrátí 403 a Workspace nahlásí odepření
 přístupu. Limiter SearXNG povoluje ve výchozím stavu jen 4 ne-HTML požadavky za
-hodinu z jedné IP a hodnotí chybějící hlavičky jako bota; Workspace neposílá
-`User-Agent` ani `Accept-Language`. U vlastní instance dostupné jen Workspace
+hodinu z jedné IP a hodnotí chybějící hlavičky jako bota; Workspace proto posílá
+vlastní `User-Agent` a `Accept-Language`, limit tím ale neobejde. U vlastní instance dostupné jen Workspace
 proto limiter vypněte nebo uvolněte, jinak může vracet 429. Chování se skutečnou
 instancí se zapnutým limiterem není ověřené. Podmínky hledání přímo u providerů
 popisuje [samostatný manuál](web-search-providers.md).

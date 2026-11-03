@@ -11,6 +11,8 @@ SPDX-License-Identifier: MPL-2.0
 - Dávka: `NEW-FA92ACE959-BATCH-1` (`TASK-1`, `TASK-3`)
 - Mění: [ADR 0008](0008-context-and-publication-contracts.md) v tom, že webové
   hledání nesmí být modelový tool call
+- Mění: [ADR 0045](0045-governed-automatic-search-dispatch.md) v tom, že `confidential`
+  nesmí běžet v automatickém režimu
 - Podklady: [podmínky providerů](../web-search-providers.md)
 
 ## Kontext
@@ -95,19 +97,24 @@ i restart je už nevrátí.
 
 ## Implementační upřesnění
 
-- Volba je ve **Volné konverzaci** u externího backendu, kde request před odesláním
-  prochází přesným náhledem. Provider search tedy dnes nejde použít v režimu Úkol
-  ani se streamováním. Dotaz odesílá provider, ale spuštění celého běhu uživatel
-  potvrzuje; bez vlastního potvrzení běží jednotlivé dotazy.
+- Přímé hledání je doplňková volba ve **Volné konverzaci** a u akce **Uvažovat**
+  v režimu Úkol, ve výchozím stavu vypnutá. Request vždy prochází přesným náhledem
+  a nejde použít se streamováním. Dotaz odesílá provider, ale spuštění celého běhu
+  uživatel potvrzuje; bez vlastního potvrzení běží jednotlivé dotazy. V Úkolu odpovídá
+  model textem, protože uložená odpověď nese povinné citace.
 - Podporu určuje adaptér, nikoli model: Claude ji dokumentuje pro všechny modely,
   u Grok a OpenAI model bez podpory požadavek odmítne a běh skončí chybou.
 - Claude používá základní verzi nástroje bez dynamického filtrování a s `max_uses` 5.
   Ukončení `pause_turn` se neobnovuje a běh skončí chybou.
 - U Grok a OpenAI je „výtahem“ odpověď modelu; Workspace surové výsledky nepožaduje.
-- `TASK-3` má akci **Uvažovat s možností dohledání** pro Ollamu v režimu Úkol. Model
-  může odpovědět, nebo vyžádat jedno hledání; to pak prochází stávající kartou s
-  náhledem a potvrzením. Má tedy přísnější režim, než výše dovoluje pro `public`
-  a `project`. Nejde o tool calling. Externí backendy tuto akci nemají.
+- `TASK-3` má akci **Uvažovat s možností dohledání** pro všechny backendy v režimu Úkol.
+  Výchozí je zpětné volání: model odpoví, nebo vyžádá jedno hledání, a to prochází
+  stávající kartou. Kolo se spustí ručně; automatický odpočet si u `public` a `project`
+  dat volí uživatel na kartě. Nejde o tool calling, požadavek je JSON v odpovědi. Backend
+  bez JSON režimu (Claude) vrací stejný JSON přes textovou roli a tolerují se ohraničení
+  kódu. Výsledky hledání vždy zpracuje Ollama, nevrací se externímu modelu.
+- Automatický režim hledání se u `confidential` nově odmítne při přípravě plánu i v UI;
+  tím se uzavírá riziko z ADR 0045. Už běžící workflow se tím nemění.
 - **Vždy vyhledat na webu** už neposílá text zadání jako dotaz. Plán nese
   `search_compose` a role `task-output-search-query-v1` vrací jen dotaz; dříve vytvořené
   plány s pevným `search_query` platí dál. Dotaz jde před náhledem upravit, úprava je

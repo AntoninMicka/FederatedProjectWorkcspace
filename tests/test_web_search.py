@@ -159,13 +159,15 @@ class WebSearchTests(unittest.TestCase):
         class Connection:
             sock = None
             def connect(self): pass
-            def request(self, method, path, headers): seen['path'] = path
+            def request(self, method, path, headers): seen['path'] = path; seen['headers'] = headers
             def getresponse(self): return Response()
             def close(self): pass
         from unittest.mock import patch
         with patch('spikes.web_search.http.client.HTTPConnection', return_value=Connection()):
             SearXNGAdapter._http_transport(self.binding, 'dotaz')
         self.assertEqual('/search?q=dotaz&format=json', seen['path'])
+        self.assertEqual('FederatedProjectWorkspace/1', seen['headers']['User-Agent'])
+        self.assertEqual('*', seen['headers']['Accept-Language'])
 
     def test_zero_results_and_probe_use_exact_public_query(self):
         value = {'query': 'SearXNG', 'results': []}
