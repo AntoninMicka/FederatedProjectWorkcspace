@@ -463,11 +463,130 @@ class ChatServiceTests(unittest.TestCase):
             with self.subTest(answer=answer), self.assertRaises(ValueError):
                 service.task_route(route)
 
+    def test_search_request_wrapped_in_answer_text_still_becomes_the_card(self):
+        inner = {'schema_version': 1, 'kind': 'web-search-request', 'purpose': 'p', 'query': 'q'}
+        service, route, searches = self.on_demand_route({'schema_version': 1,
+            'kind': 'direct-answer', 'content': json.dumps(inner)})
+        self.assertEqual('web-search', service.task_route(route)['outcome']['kind'])
+        self.assertEqual([], searches)
+        for text in ('{"kind": "other"}', 'Běžná odpověď', '[1]'):
+            service, route, _ = self.on_demand_route({'schema_version': 1,
+                'kind': 'direct-answer', 'content': text})
+            self.assertEqual('direct-answer', service.task_route(route)['outcome']['kind'])
+
     def test_model_search_request_is_refused_for_local_only_input(self):
         service, route, _ = self.on_demand_route({'schema_version': 1,
             'kind': 'web-search-request', 'purpose': 'p', 'query': 'q'}, privacy='local-only')
         with self.assertRaisesRegex(ValueError, 'local-only'):
             service.task_route(route)
+
+    def compose_route(self, answer, **changes):
+        route = self.route_request(**changes)
+        route['task_plan'] = dict(route['task_plan'], search_compose=True)
+        calls, searches = [], []
+        def transport(binding, raw):
+            calls.append(json.loads(raw))
+            return {'model': binding.model,
+                    'response': answer if isinstance(answer, str) else json.dumps(answer)}
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda binding, query: searches.append(query) or {'results': []}))
+        service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        return service, route, calls, searches
+
+    def search_ids(self, route):
+        return {'task_id': route['task_id'], 'search_id': str(uuid4()),
+                'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())}
+
+    def test_composed_query_comes_from_the_model_and_sends_nothing_before_confirmation(self):
+        service, route, calls, searches = self.compose_route({'schema_version': 1,
+            'kind': 'web-search-request', 'purpose': 'Najít verzi',
+            'query': '  SearXNG   latest\nrelease '}, content='Jaká je nejnovější verze a napiš to tabulkou')
+        routed = service.task_route(route)
+        self.assertEqual('web-search', routed['outcome']['kind'])
+        self.assertEqual('SearXNG latest release', routed['outcome']['query'])
+        self.assertEqual('Najít verzi', routed['outcome']['purpose'])
+        self.assertEqual([], searches)
+        self.assertIn(route['created_at'][:10], calls[0]['prompt'])
+        self.assertEqual(['web-search-request'],
+                         calls[0]['format']['properties']['kind']['enum'])
+        self.assertEqual('SearXNG latest release',
+                         service.task_search_preview(self.search_ids(route))['query'])
+
+    def test_unusable_composed_query_falls_back_to_prompt_and_says_so(self):
+        good = {'schema_version': 1, 'kind': 'web-search-request', 'purpose': 'p', 'query': 'q'}
+        for answer in ('not json', {'schema_version': 1, 'kind': 'direct-answer', 'content': 'x'},
+                       dict(good, query='   '), dict(good, query=1), dict(good, purpose=''),
+                       dict(good, extra=1), dict(good, query='x' * 5000)):
+            service, route, _, searches = self.compose_route(answer, content='Delší  zadání\nuživatele')
+            with self.subTest(answer=answer):
+                outcome = service.task_route(route)['outcome']
+                self.assertEqual('Delší zadání uživatele', outcome['query'])
+                self.assertIn('nesestavil', outcome['purpose'])
+                self.assertEqual([], searches)
+
+    def test_compose_refuses_local_only_before_the_model_runs(self):
+        service, route, calls, _ = self.compose_route({'schema_version': 1,
+            'kind': 'web-search-request', 'purpose': 'p', 'query': 'q'}, privacy='local-only')
+        with self.assertRaisesRegex(ValueError, 'local-only'):
+            service.task_route(route)
+        self.assertEqual([], calls)
+
+    def test_edited_query_survives_restart_is_what_gets_previewed_and_locks_after_preview(self):
+        service, route, _, _ = self.compose_route({'schema_version': 1,
+            'kind': 'web-search-request', 'purpose': 'p', 'query': 'model query'})
+        service.task_route(route)
+        for query in ('', '   ', 'a\0b', 'x' * 5000, 7):
+            with self.subTest(query=query), self.assertRaises(ValueError):
+                service.task_search_revise_query({'task_id': route['task_id'], 'query': query})
+        projection = service.task_search_revise_query({'task_id': route['task_id'],
+                                                       'query': ' upravený dotaz '})
+        self.assertEqual('upravený dotaz', projection['outcome']['query'])
+        restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state)
+        self.assertEqual('upravený dotaz',
+                         restarted.task_search_preview(self.search_ids(route))['query'])
+        with self.assertRaisesRegex(ValueError, 'after its preview'):
+            restarted.task_search_revise_query({'task_id': route['task_id'], 'query': 'pozdě'})
+
+    def test_only_a_pending_search_query_can_be_edited(self):
+        service, route, _, _ = self.compose_route({'schema_version': 1,
+            'kind': 'web-search-request', 'purpose': 'p', 'query': 'q'})
+        service.task_route(route)
+        service.task_cancel({'task_id': route['task_id']})
+        with self.assertRaises(ValueError):
+            service.task_search_revise_query({'task_id': route['task_id'], 'query': 'jiný'})
+
+    def test_search_evaluation_is_constrained_to_the_sources_it_received(self):
+        request = self.route_request(web_query='cena mědi')
+        formats = []
+        def transport(binding, raw):
+            formats.append(json.loads(raw)['format'])
+            return {'model': binding.model, 'response': json.dumps({'schema_version': 1,
+                'assessment': 'insufficient', 'answer': 'a', 'rationale': 'r',
+                'used_source_ids': [], 'limitations': [], 'follow_up_queries': []})}
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs, transport=lambda binding, query:
+                {'results': [{'title': 'T', 'url': 'https://example.org/a', 'content': 'C'}]}))
+        service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        service.task_route(request)
+        preview = service.task_search_preview(self.search_ids(request))
+        service.task_search_confirm({'task_id': request['task_id'],
+            'search_id': preview['search_id'], 'preview_sha256': preview['preview_sha256'],
+            'approved': True})
+        schema = formats[-1]
+        self.assertEqual('array', schema['properties']['limitations']['type'])
+        cited = schema['properties']['used_source_ids']['items']['enum']
+        self.assertEqual(1, len(cited)); self.assertTrue(cited[0].startswith('source-'))
 
     def test_web_search_requires_preview_and_reuses_results_after_restart(self):
         route = self.route_request(web_query='current project facts')
@@ -865,7 +984,9 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(len(completed['outcome']['rounds']), 2)
         self.assertEqual(completed['outcome']['rounds'][1]['parent_search_id'],
                          first['search_id'])
-        self.assertEqual(ollama_formats, ['json', 'json'])
+        self.assertEqual(2, len(ollama_formats))
+        for schema in ollama_formats:
+            self.assertIn('assessment', schema['required'])
         self.assertNotEqual(completed['outcome']['rounds'][0]['run_id'],
                             completed['outcome']['rounds'][1]['run_id'])
 
@@ -1550,6 +1671,82 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(projection['outcome'], document)
         self.assertEqual(service.task_external_confirm(confirm), projection)
         self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+
+    def external_compose(self, answer, *, ollama):
+        request = self.route_request(run_choice={'mode': 'orchestration',
+            'adapter': 'openai-responses', 'model': 'gpt-5.6-luna'})
+        request['task_plan'] = dict(request['task_plan'], search_compose=True)
+        calls, searches, synthesis = [], [], []
+        def transport(binding, raw):
+            synthesis.append(binding.model)
+            return {'model': binding.model, 'response': json.dumps({'schema_version': 1,
+                'assessment': 'insufficient', 'answer': 'Nic', 'rationale': 'r',
+                'used_source_ids': [], 'limitations': ['l'], 'follow_up_queries': []})}
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda binding, query: searches.append(query) or {'results': []}),
+            external_adapter_factory=lambda runs, credentials: FakeExternalAdapter(
+                runs, credentials, calls, answer=answer))
+        if ollama:
+            service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='external-compose', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'd' * 32))
+        self.seed_openai_models(service, 'gpt-5.6-luna')
+        request['run_choice'] = self.pin_run_choice(request['run_choice'])
+        self.assertEqual('external-request', service.task_route(request)['outcome']['kind'])
+        self.assertEqual([], calls, 'context must not leave before the external preview')
+        preview = service.task_external_preview({'task_id': request['task_id'],
+            'approval_id': str(uuid4()), 'turn_id': str(uuid4()), 'run_id': str(uuid4()),
+            'manifest_id': str(uuid4()), 'assistant_message_id': str(uuid4())})
+        confirm = {'task_id': request['task_id'], 'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']}
+        return service, request, confirm, calls, searches, synthesis
+
+    def test_external_model_composes_query_behind_preview_and_ollama_processes_results(self):
+        answer = json.dumps({'schema_version': 1, 'kind': 'web-search-request',
+                             'purpose': 'p', 'query': 'externí dotaz'})
+        service, request, confirm, calls, searches, synthesis = self.external_compose(
+            answer, ollama=True)
+        projection = service.task_external_confirm(confirm)
+        self.assertEqual('web-search', projection['outcome']['kind'])
+        self.assertEqual('externí dotaz', projection['outcome']['query'])
+        self.assertEqual([], searches)
+        self.assertEqual(projection, service.task_external_confirm(confirm),
+                         'a repeated confirmation must not call the provider again')
+        self.assertEqual(['prepare', 'dispatch'], [item[0] for item in calls])
+        preview = service.task_search_preview(self.search_ids(request))
+        service.task_search_confirm({'task_id': request['task_id'],
+            'search_id': preview['search_id'], 'preview_sha256': preview['preview_sha256'],
+            'approved': True})
+        self.assertEqual(['externí dotaz'], searches)
+        self.assertEqual([self.binding['model']], synthesis)
+        self.assertEqual(['prepare', 'dispatch'], [item[0] for item in calls])
+
+    def test_external_compose_without_ollama_stops_before_the_query_leaves(self):
+        answer = json.dumps({'schema_version': 1, 'kind': 'web-search-request',
+                             'purpose': 'p', 'query': 'q'})
+        service, request, confirm, _, searches, _ = self.external_compose(answer, ollama=False)
+        service.task_external_confirm(confirm)
+        # setUp already stored an Ollama binding for this node.
+        with patch.object(type(service._stores()[1]), 'load', return_value=None), \
+                self.assertRaisesRegex(ValueError, 'Ollamu'):
+            service.task_search_preview(self.search_ids(request))
+        self.assertEqual([], searches)
+
+    def test_external_compose_falls_back_on_unusable_answer(self):
+        service, request, confirm, _, _, _ = self.external_compose('neplatné', ollama=True)
+        projection = service.task_external_confirm(confirm)
+        self.assertEqual(request['content'], projection['outcome']['query'])
+        self.assertIn('nesestavil', projection['outcome']['purpose'])
 
     def test_external_task_cancel_recovers_after_approval_was_already_cancelled(self):
         request = self.route_request(run_choice={'mode': 'orchestration',

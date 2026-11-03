@@ -108,6 +108,17 @@ i restart je už nevrátí.
   může odpovědět, nebo vyžádat jedno hledání; to pak prochází stávající kartou s
   náhledem a potvrzením. Má tedy přísnější režim, než výše dovoluje pro `public`
   a `project`. Nejde o tool calling. Externí backendy tuto akci nemají.
+- **Vždy vyhledat na webu** už neposílá text zadání jako dotaz. Plán nese
+  `search_compose` a role `task-output-search-query-v1` vrací jen dotaz; dříve vytvořené
+  plány s pevným `search_query` platí dál. Dotaz jde před náhledem upravit, úprava je
+  jeden atomický zápis do `TaskOutcomes` a po připravení náhledu je zamčená. Nepoužitelná
+  odpověď modelu vede k předvyplnění zadání s upozorněním; selhání spojení zůstává chybou.
+- Externí model smí sestavit dotaz jen přes stávající náhled a potvrzení. Syntéza výsledků
+  běží vždy na Ollamě a její nedostupnost se odmítne před připravením hledání.
+  Pád po odpovědi providera a před zápisem karty řeší žurnál externího běhu: opakované
+  potvrzení providera znovu nevolá.
+- Vyhodnocení výsledků má uzavřené schéma s povolenými ID zdrojů. Instrukce obou režimů
+  nesou datum vytvoření požadavku, takže je příprava běhu stabilní.
 - Gemini zůstává nenabídnuté, dokud nebude ověřené zobrazení návrhů Google Search.
   Ukládání jen v RAM je pro něj rozhodnuté, ale neimplementované.
 

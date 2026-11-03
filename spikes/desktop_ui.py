@@ -1445,6 +1445,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .federation-transfer-page,.federation-network-page,.federation-deployment-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label,.federation-deployment-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]),.federation-deployment-page select,.federation-deployment-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre,.federation-deployment-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning,.federation-deployment-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty,#federation-deployment-log:empty{display:none}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:230px}}
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
+.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{flex:0 0 auto}.prompt-routing-controls>.prompt-control{flex:0 0 auto}.search-query-edit{display:block;margin:8px 0;font-size:12px;color:#456276}.search-query-edit textarea{display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:8px;font:inherit;font-size:14px;border:1px solid #bfcdc9;border-radius:8px;resize:vertical}
 @media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
 @media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.project-header details{max-width:140px}}
 @media(min-width:641px){
@@ -5629,9 +5630,8 @@ function refreshCurrentFileSource(){
  const title=document.querySelector('#task-source-current-file-title');
  if(!label||!input||!title)return;
  const item=currentArtifacts.find(value=>value.id===selectedArtifact);
- const searching=document.querySelector('#task-action')?.value==='search';
  const external=document.querySelector('#chat-run-adapter')?.value==='openai-responses';
- label.hidden=!item||searching;input.disabled=!item||external;
+ label.hidden=!item;input.disabled=!item||external;
  if(!item||external)input.checked=false;
  input.value=item?.id || '';title.textContent=item?`Aktuální soubor: ${item.title}`:'Aktuální soubor';
  updatePromptInputSummary();
@@ -5646,7 +5646,7 @@ function updatePromptInputSummary(){
  const editTarget=selectedTaskFileEditTarget();if(editTarget)artifactIds.add(editTarget);
  const artifactCount=artifactIds.size;
  const publicCount=publicWeb?document.querySelectorAll('#task-public-source-list input:checked').length:0;
- const count=searching?1:(conversation?1:0)+artifactCount+publicCount;
+ const count=searching?Math.max(1,(conversation?1:0)+artifactCount):(conversation?1:0)+artifactCount+publicCount;
  const countOutput=document.querySelector('#task-input-count');
  if(countOutput)countOutput.textContent=String(count);
 }
@@ -6055,11 +6055,12 @@ function renderTaskOutcome(projection,showPrompt=true){
                   taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
   }else if(['web-search','web-search-answer'].includes(outcome.kind)){
    const firstRound=projectionSearchRounds(projection).at(0);
-   const purpose=document.createElement('p');purpose.textContent='Řízené webové hledání';card.append(purpose);
-   const query=document.createElement('pre');query.textContent=firstRound?.query || outcome.query || projection.prompt.content;card.append(query);
+   const purpose=document.createElement('p');purpose.textContent=outcome.purpose&&!outcome.purpose.startsWith('Acquire public sources')?outcome.purpose:'Řízené webové hledání';card.append(purpose);
    const actions=document.createElement('div');actions.className='task-actions';
    const workflow=projection.search_workflow,latest=workflow?.rounds?.at(-1);
    const governed=searchAutonomyWorkflow(projection.task_id);
+   if(outcome.kind==='web-search'&&!workflow&&!governed)renderEditableSearchQuery(card,actions,projection);
+   else{const query=document.createElement('pre');query.textContent=firstRound?.query || outcome.query || projection.prompt.content;card.append(query);}
    if(!governed&&outcome.kind==='web-search'&&(!workflow || !latest?.evaluation)){
     renderResearchPreparation(actions,projection,null,null);
    }else if(!governed&&outcome.kind==='web-search'){
@@ -6125,6 +6126,19 @@ async function prepareTaskExternal(projection){
   document.querySelector('#external-confirm').disabled=true;
   chatOperationStatus.textContent='Externí požadavek je jen náhled. Zkontrolujte jej a potvrďte.';
  }catch(error){chatOperationStatus.textContent=error.message;}
+}
+function renderEditableSearchQuery(card,actions,projection){
+ const label=document.createElement('label');label.className='search-query-edit';label.textContent='Dotaz k odeslání';
+ const input=document.createElement('textarea');input.rows=2;input.maxLength=1000;input.value=projection.outcome.query;label.append(input);
+ const save=taskButton('Uložit úpravu dotazu',async()=>{
+  try{replaceTaskProjection(await projectRequest('/v1/tasks/search/query',{task_id:projection.task_id,query:input.value}));
+   chatOperationStatus.textContent='Dotaz je upravený; zatím nebyl odeslán.';}
+  catch(error){chatOperationStatus.textContent=error.message;}
+ });save.hidden=true;
+ // Preparing a preview with unsaved text would send the old query, so wait for the save.
+ input.addEventListener('input',()=>{const dirty=input.value.trim()!==projection.outcome.query;save.hidden=!dirty;
+  save.disabled=!input.value.trim();const controls=actions.querySelector('fieldset');if(controls)controls.disabled=dirty;});
+ card.append(label,save);
 }
 async function prepareTaskSearch(projection,query=null,parentSearchId=null){
  hideSearchRecovery();
@@ -6643,8 +6657,8 @@ function refreshChatModeControls(){
   const searching=action.value==='search';
   refreshCurrentFileSource();
   currentPromptSource.hidden=!searching;
-  conversationSource.hidden=searching;artifactSourceLabel.hidden=searching;publicSourceLabel.hidden=searching;
-  artifacts.hidden=searching||!artifactSource.checked;publicSources.hidden=true;publicSource.disabled=searching;
+  publicSourceLabel.hidden=searching;
+  artifacts.hidden=!artifactSource.checked;publicSources.hidden=true;publicSource.disabled=searching;
   if(searching){
    if(!output.disabled)output.dataset.beforeSearch=output.value;
    output.value='conversation';output.disabled=true;
@@ -6660,6 +6674,7 @@ function refreshChatModeControls(){
   if((publicSource.checked||thinking)&&!searchBinding)warnings.push('Pro vyhledávání nejprve nastavte SearXNG.');
   if(external&&!selectedBinding)warnings.push(`Externí úkol vyžaduje nejprve nastavit ${runProviderLabel(adapter.value)} backend.`);
   if(!external&&!chatBinding)warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
+  if(external&&searching)warnings.push(chatBinding?'Dotaz sestaví externí model z vybraných vstupů po vašem potvrzení, výsledky zpracuje Ollama.':'Zpracování výsledků hledání vyžaduje nastavenou Ollamu.');
   target.textContent=warnings.join(' ');target.hidden=!warnings.length;
  }else{
   target.hidden=true;target.textContent='';
@@ -6681,7 +6696,7 @@ function refreshProviderWebSearch(){
  const warning=document.createElement('p');warning.textContent=`Model bude hledat na webu sám. Dotazy vytvoří z kontextu tohoto požadavku a ${runProviderLabel(adapter)} je odešle bez vašeho potvrzení. Hledání se účtuje zvlášť a řídí se podmínkami providera. Důvěrná a local-only data nelze takto použít.`;notice.append(warning);
  if(localSearchAvailable()){const local=document.createElement('button');local.type='button';local.className='secondary-button';local.textContent='Hledat raději přes Ollamu a SearXNG';local.addEventListener('click',()=>{check.checked=false;selectLocalSearch();});notice.append(local);}
 }
-function selectLocalSearch(){chatRunFilter.backend='ollama';chatRunFilter.model='';renderChatRunSelectors();refreshChatModeControls();}
+function selectLocalSearch(){if(chatRunFilter.backend!=='ollama'){chatRunFilter.backend='ollama';chatRunFilter.model='';}renderChatRunSelectors();refreshChatModeControls();}
 document.querySelector('#provider-web-search').addEventListener('change',refreshProviderWebSearch);
 let providerSearchThreadId=null;
 function renderProviderSearchResults(value,threadId){
@@ -7375,25 +7390,25 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const threadId=activeTaskThreadId || activeThread?.thread_id || crypto.randomUUID();
  const selectedMessages=activeThread?.thread_id===threadId ? activeThread.messages : [];
   const searching=document.querySelector('#task-action').value==='search';
-  const useConversation=!searching&&document.querySelector('#task-source-conversation').checked;
-  const useCurrentFile=!searching&&document.querySelector('#task-source-current-file-input').checked&&selectedArtifact;
-  const includeSelectedArtifacts=!searching&&document.querySelector('#task-source-artifacts').checked;
-  const usePublic=searching||document.querySelector('#task-source-public').checked;
+  const useConversation=document.querySelector('#task-source-conversation').checked;
+  const useCurrentFile=document.querySelector('#task-source-current-file-input').checked&&selectedArtifact;
+  const includeSelectedArtifacts=document.querySelector('#task-source-artifacts').checked;
+  const usePublic=!searching&&document.querySelector('#task-source-public').checked;
   const selectedArtifactIds=[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value);
   const artifactIds=includeSelectedArtifacts ? selectedArtifactIds : [];
   const editing=document.querySelector('#task-output-kind').value==='file-edit',editTarget=selectedTaskFileEditTarget();
   if(editing){if(adapter!=='ollama'||!editTarget){chatOperationStatus.textContent='Pro úpravu vstupu vyberte cílový Markdown dokument a Ollama backend.';return;}artifactIds.push(editTarget);}
   if(useCurrentFile)artifactIds.push(selectedArtifact);
   const uniqueArtifactIds=[...new Set(artifactIds)],useArtifacts=uniqueArtifactIds.length>0;
-  const publicRunIds=usePublic&&!searching ? [...document.querySelectorAll('#task-public-source-list input:checked')]
+  const publicRunIds=usePublic ? [...document.querySelectorAll('#task-public-source-list input:checked')]
    .map(item=>item.value) : [];
   const sourceKinds=[];if(useConversation)sourceKinds.push('conversation');
   if(useArtifacts)sourceKinds.push('artifacts');if(usePublic)sourceKinds.push('public-web');
+  if(searching&&!sourceKinds.length)sourceKinds.push('conversation');
   if(!sourceKinds.length){chatOperationStatus.textContent='Vyberte alespoň jeden zdroj úkolu.';return;}
   if(includeSelectedArtifacts && !selectedArtifactIds.length){chatOperationStatus.textContent='Vyberte alespoň jeden interní artefakt.';return;}
-  const searchQuery=searching?draft.value.trim():null;
-  if(usePublic && !publicRunIds.length && !searchQuery){
-   chatOperationStatus.textContent='Zadejte zadání pro kontrolované hledání na webu.';return;
+  if(usePublic && !publicRunIds.length){
+   chatOperationStatus.textContent='Vyberte načtený veřejný zdroj, nebo zvolte akci Vždy vyhledat na webu.';return;
   }
   pendingChatRequest={task_id:crypto.randomUUID(),
   project_id:activeProject.id,expected_head:activeProject.head,
@@ -7407,7 +7422,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   task_plan:{schema_version:1,source_kinds:sourceKinds,
    output_kind:document.querySelector('#task-output-kind').value,
    execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':DIRECT_PROVIDERS[adapter]?.execution||'external-atlascloud',
-   search_query:searchQuery,public_source_run_ids:publicRunIds}};
+   search_query:null,public_source_run_ids:publicRunIds}};
+  if(searching)pendingChatRequest.task_plan.search_compose=true;
   if(document.querySelector('#task-action').value==='think')pendingChatRequest.task_plan.search_on_demand=true;
   if(editing){pendingChatRequest.task_plan.target_artifact_id=editTarget;pendingChatRequest.task_plan.edit_format=document.querySelector('#task-edit-format').value;
    if(pendingChatRequest.task_plan.edit_format==='blocks'){
@@ -7420,8 +7436,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const liveProgress=startChatProgress(adapter==='ollama'?
   'Ollama zpracovává explicitní úkol…':'Připravuji explicitní externí náhled…');
  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';
-  liveProgress.set(pendingChatRequest?.task_plan?.search_query ?
-   'Vyhledávám a model vyhodnocuje výsledky…':'Model přemýšlí…');},250);
+  liveProgress.set(pendingChatRequest?.task_plan?.search_compose ?
+   'Model sestavuje webový dotaz…':'Model přemýšlí…');},250);
  try{
   taskStreamDraft='';chatStream.textContent='';
   await waitForVisiblePaint();
@@ -8142,7 +8158,7 @@ class DesktopHandler(Handler):
         '/v1/tasks/file-edit/preview', '/v1/tasks/file-edit/confirm',
         '/v1/tasks/external/preview',
         '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
-        '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
+        '/v1/tasks/search/preview', '/v1/tasks/search/confirm', '/v1/tasks/search/query',
         '/v1/tasks/public-source/preview', '/v1/tasks/public-source/confirm',
         '/v1/tasks/public-source/result',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
@@ -8763,6 +8779,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_external_cancel(request))
             if self.path == '/v1/tasks/search/preview' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_search_preview(request))
+            if self.path == '/v1/tasks/search/query' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_search_revise_query(request))
             if self.path == '/v1/tasks/search/confirm' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_search_confirm(request))
             if self.path == '/v1/tasks/public-source/preview' and isinstance(request, dict):

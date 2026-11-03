@@ -7,10 +7,14 @@ SPDX-License-Identifier: MPL-2.0
 
 Workspace hledá třemi způsoby:
 
-- **Vždy vyhledat na webu** a **Uvažovat s možností dohledání** (režim Úkol, Ollama)
-  používají vlastní SearXNG službu: viz [akceptace SearXNG](searxng-search-acceptance.md).
-  Při uvažování model sám rozhodne, zda hledání vyžádá; dotaz vidíte a potvrzujete
-  před odesláním.
+- **Vždy vyhledat na webu** (režim Úkol) používá vlastní SearXNG službu: viz
+  [akceptace SearXNG](searxng-search-acceptance.md). Dotaz sestaví model z vybraných
+  vstupů; na kartě ho vidíte, můžete upravit a před odesláním potvrzujete. Když model
+  použitelný dotaz nevrátí, předvyplní se text zadání a karta na to upozorní. Externí
+  backend dotaz sestaví až po náhledu a potvrzení externího odeslání; výsledky vždy
+  zpracuje Ollama, bez ní se hledání nespustí.
+- **Uvažovat s možností dohledání** (režim Úkol, jen Ollama) používá stejnou službu
+  a kartu, ale model sám rozhodne, zda hledání vyžádá.
 - **Model smí hledat na webu** (Volná konverzace, Claude, Grok, OpenAI) nechá hledat
   přímo providera, bez potvrzení jednotlivých dotazů. Gemini tuto volbu zatím nemá.
 

@@ -275,6 +275,57 @@ def answer_with_sources(response):
     return response['response'] + '\n\nZdroje:\n' + '\n'.join(rows)
 
 
+SEARCH_QUERY_FALLBACK_PURPOSE = ('Model nesestavil použitelný dotaz. Předvyplněný je text zadání, '
+                                 'před odesláním ho prosím upravte.')
+
+
+def _model_search_outcome(plan, value, content, message_ids, artifact_ids):
+    """Turn a model's search request into the card outcome.
+
+    A composed search was asked for by the person, so an unusable query falls back to the
+    prompt and says so. A search the model chose itself has no such intent to preserve.
+    """
+    try:
+        require(isinstance(value, dict) and value.get('kind') == 'web-search-request'
+                and set(value) == {'schema_version', 'kind', 'purpose', 'query'}
+                and value['schema_version'] == 1
+                and isinstance(value['query'], str), 'Invalid web search request from model')
+        query = ' '.join(value['query'].split())
+        require(len(query.encode('utf-8')) <= MAX_QUERY_BYTES,
+                'Invalid web search request from model')
+        return AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
+            'purpose': value['purpose'], 'query': query,
+            'message_ids': message_ids, 'artifact_ids': artifact_ids})
+    except ValueError:
+        if not plan.search_compose:
+            raise
+    return AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
+        'purpose': SEARCH_QUERY_FALLBACK_PURPOSE, 'query': ' '.join(content.split())[:1000],
+        'message_ids': message_ids, 'artifact_ids': artifact_ids})
+
+
+def _unwrap_search_request(value):
+    """Some local models put the search request inside the answer text; do not show it as one."""
+    if isinstance(value, dict) and value.get('kind') == 'direct-answer' \
+            and isinstance(value.get('content'), str):
+        try:
+            inner = json.loads(value['content'])
+        except ValueError:
+            return value
+        if isinstance(inner, dict) and inner.get('kind') == 'web-search-request':
+            return inner
+    return value
+
+
+def _search_synthesis_choice(original):
+    """Results stay on the local model, whichever backend wrote the query."""
+    choice = ChatRunChoice.parse(original.get('run_choice', {
+        'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
+    if choice.adapter_id == 'ollama':
+        return choice
+    return ChatRunChoice.parse({'mode': choice.mode, 'adapter': 'ollama', 'model': None})
+
+
 class ChatService:
     def __init__(self, node_path, projects, *, state_dir=None, adapter_factory=None,
                  external_adapter_factory=None, search_adapter_factory=None,
@@ -1414,7 +1465,7 @@ class ChatService:
             role_revision, frozenset(request['selected_artifact_ids']))
         instruction = (markdown_instruction(plan.target_artifact_id, request['expected_head']) if block_edit
                        else patch_instruction(plan.target_artifact_id, request['expected_head'])
-                       if patch_edit else task_output_instruction(plan))
+                       if patch_edit else task_output_instruction(plan, request['created_at']))
         if append_projection is not None:
             instruction += '\n' + append_instruction()
         conversation = (ConversationSelection(request['thread_id'], thread['revision'],
@@ -1448,6 +1499,9 @@ class ChatService:
         if edit_target is not None:
             require(PRIVACY_ORDER[edit_target['metadata']['privacy']] >= PRIVACY_ORDER[strongest],
                     'File edit cannot lower the privacy of its context')
+        # Refuse before the model runs: its query could only end in a search this data forbids.
+        require(not plan.search_compose or strongest != 'local-only',
+                'local-only data cannot be sent to web search')
         if plan.acquiring_public_web:
             outcome = AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
                 'purpose': 'Acquire public sources for explicit ' + plan.output_kind + ' output',
@@ -1457,7 +1511,8 @@ class ChatService:
         elif choice.adapter_id in EXTERNAL_ADAPTERS:
             outcome = AITaskOutcome.parse({'schema_version': 1,
                 'kind': 'external-request',
-                'purpose': 'Generate explicit ' + plan.output_kind + ' output',
+                'purpose': ('Sestavit webový dotaz z kontextu' if plan.search_compose
+                            else 'Generate explicit ' + plan.output_kind + ' output'),
                 'query': request['content'],
                 'message_ids': request['selected_message_ids'] + [request['message_id']],
                 'artifact_ids': []})
@@ -1490,21 +1545,22 @@ class ChatService:
             try:
                 value = json.loads(response['response'])
             except (KeyError, TypeError, ValueError) as exc:
-                raise ValidationError('Model returned invalid explicit task JSON') from exc
+                if not plan.search_compose:
+                    raise ValidationError('Model returned invalid explicit task JSON') from exc
+                value = None
             if block_edit and isinstance(value, dict) and value.get('kind') == 'markdown-patch':
                 from spikes.markdown_patch import complete as complete_markdown
                 value = complete_markdown(value, edit_target['body'], plan.edit_block_ids)
-            if plan.search_on_demand and isinstance(value, dict) \
-                    and value.get('kind') == 'web-search-request':
-                require(set(value) == {'schema_version', 'kind', 'purpose', 'query'}
-                        and value['schema_version'] == 1, 'Invalid web search request from model')
+            if plan.search_on_demand:
+                value = _unwrap_search_request(value)
+            if plan.search_compose or (plan.search_on_demand and isinstance(value, dict)
+                                       and value.get('kind') == 'web-search-request'):
                 require(strongest != 'local-only',
                         'Model requested web search, but local-only data cannot leave this node')
                 # The existing card shows the exact query; the model's choice sends nothing.
-                outcome = AITaskOutcome.parse({'schema_version': 1, 'kind': 'web-search',
-                    'purpose': value['purpose'], 'query': value['query'],
-                    'message_ids': request['selected_message_ids'] + [request['message_id']],
-                    'artifact_ids': request['selected_artifact_ids']})
+                outcome = _model_search_outcome(plan, value, request['content'],
+                    request['selected_message_ids'] + [request['message_id']],
+                    request['selected_artifact_ids'])
                 routed = {'task_id': request['task_id'], 'outcome': outcome.serialize(),
                     'privacy': strongest, 'project_commit': prepared.manifest['project_commit'],
                     'run_id': request['run_id'], 'manifest_id': request['manifest_id'],
@@ -1618,6 +1674,10 @@ class ChatService:
         _, original, outcome, _ = self._search_task_context(row, node_id, user_id)
         search_runs = SearchRuns(root)
         binding = self._search_binding()
+        # Results are processed locally, so a missing Ollama must stop before the query leaves.
+        require(original.get('run_choice', {}).get('adapter', 'ollama') == 'ollama'
+                or self._stores()[1].load() is not None,
+                'Zpracování výsledků hledání vyžaduje nastavenou Ollamu')
         workflow = (search_runs.workflow(request['task_id'], node_id, user_id)
                     if search_runs.path.exists() else None)
         if workflow is not None and 'parent_search_id' not in request:
@@ -1673,6 +1733,23 @@ class ChatService:
                 'node_id': node_id, 'user_id': user_id,
                 'search_task_id': search_task_id, 'round_index': round_index,
                 'parent_search_id': parent_search_id}
+
+    def task_search_revise_query(self, request):
+        """Store a person's edit of the proposed query before any search round exists."""
+        require(isinstance(request, dict) and set(request) == {'task_id', 'query'},
+                'Invalid search query edit')
+        uuid(request['task_id'])
+        query = request['query']
+        require(isinstance(query, str) and bool(query.strip()) and '\0' not in query
+                and len(query.strip().encode('utf-8')) <= MAX_QUERY_BYTES,
+                'Invalid search query')
+        root = self._root(); node_id, user_id = self._identity()
+        search_runs = SearchRuns(root)
+        require(not search_runs.path.exists()
+                or search_runs.workflow(request['task_id'], node_id, user_id) is None,
+                'Search query cannot change after its preview was prepared')
+        return TaskOutcomes(root).revise_search_query(
+            request['task_id'], node_id, user_id, query.strip())['projection']
 
     def task_search_candidate(self, request):
         """Validate and display an exact search proposal without persisting a run."""
@@ -1768,9 +1845,7 @@ class ChatService:
         self._require_backend_reset_complete('ollama')
         _, ollama_bindings, adapter = self._stores()
         configured = ollama_bindings.load()
-        choice = ChatRunChoice.parse(original.get('run_choice', {
-            'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
-        require(choice.adapter_id == 'ollama', 'Web search synthesis requires Ollama')
+        choice = _search_synthesis_choice(original)
         binding = choice.resolve(ollama=configured)
         workflow = search_runs.workflow(request['task_id'], node_id, user_id)
         rounds_for_model = []
@@ -1795,6 +1870,8 @@ class ChatService:
             'rationale, used_source_ids, limitations, and follow_up_queries. Source IDs must come '
             'from supplied results. final means your model judgment, not guaranteed truth, and '
             'must directly answer the request, have no limitations and have no follow_up_queries. '
+            'limitations and follow_up_queries are arrays; use [] when there are none and never '
+            'write an entry saying there are none. '
             'If a requested fact is still missing, use intermediate or insufficient. Propose at '
             'most three bounded public queries; do not '
             'claim they were executed. Write answer, rationale, limitations and follow-up queries '
@@ -2495,7 +2572,8 @@ class ChatService:
                 tuple(item['role'] for item in (selected[:-1] if plan is not None else selected)))
                 if plan is None or len(selected) > 1 else None),
             task=(TaskInstruction('task-output', role_revision,
-                                  task_output_instruction(plan), request['message_id'])
+                                  task_output_instruction(plan, request['created_at']),
+                                  request['message_id'])
                   if plan is not None else None),
             response_language=ResponseLanguage(language['tag'], language['source']))
         handoff = DispatchHandoff(request['run_id'], request['manifest_id'],
@@ -2839,6 +2917,11 @@ class ChatService:
         plan = ExplicitTaskPlan.parse(row['request']['task_plan'])
         approval = ExternalDispatches(self._root()).get(
             request['approval_id'], node_id, user_id)
+        if plan.search_compose and row['state'] != 'cancelled' \
+                and row['outcome']['kind'] == 'web-search':
+            # The query is already accepted; its later search does not change this replay.
+            require(approval['state'] == 'succeeded', 'Task outcome was prepared differently')
+            return self._task_projection(row['projection'])
         if row['state'] == 'completed':
             require(plan.output_kind == 'conversation'
                     and row['result'].get('kind') == 'direct-answer'
@@ -2865,7 +2948,14 @@ class ChatService:
         try:
             value = json.loads(result['response'])
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValidationError('External model returned invalid explicit task JSON') from exc
+            if not plan.search_compose:
+                raise ValidationError('External model returned invalid explicit task JSON') from exc
+            value = None
+        if plan.search_compose:
+            composed = _model_search_outcome(plan, value, row['request']['content'],
+                row['outcome']['message_ids'], row['outcome']['artifact_ids'])
+            return self._task_projection(store.replace_external_outcome(request['task_id'],
+                node_id, user_id, composed.serialize())['projection'])
         expected = ('presentation-proposal' if plan.output_kind == 'presentation'
                     else plan.expected_outcome_kind)
         require(isinstance(value, dict) and value.get('kind') == expected,

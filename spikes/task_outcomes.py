@@ -200,13 +200,28 @@ class TaskOutcomes:
             db.commit()
         return self.get(task_id, node_id, user_id)
 
+    def revise_search_query(self, task_id, node_id, user_id, query):
+        """Atomically store the query a person edited on a pending search card."""
+        current = self.get(task_id, node_id, user_id)
+        require(current['state'] == 'prepared' and current['outcome']['kind'] == 'web-search',
+                'Task outcome is not a pending web search')
+        encoded = _canonical(AITaskOutcome.parse(
+            dict(current['outcome'], query=query)).serialize())
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            changed = db.execute('UPDATE outcomes SET outcome=? '
+                                 "WHERE task_id=? AND state='prepared'", (encoded, task_id))
+            require(changed.rowcount == 1, 'Task outcome changed while editing the search query')
+            db.commit()
+        return self.get(task_id, node_id, user_id)
+
     def replace_external_outcome(self, task_id, node_id, user_id, outcome):
         """Atomically replace a confirmed external-request preview with its draft."""
         current = self.get(task_id, node_id, user_id)
         parsed = AITaskOutcome.parse(outcome).serialize()
         require(current['state'] == 'prepared'
                 and current['outcome']['kind'] == 'external-request'
-                and parsed['kind'] in {'artifact-draft', 'presentation-draft'},
+                and parsed['kind'] in {'artifact-draft', 'presentation-draft', 'web-search'},
                 'Invalid confirmed external task output')
         encoded = _canonical(parsed)
         with self.connect() as db:
