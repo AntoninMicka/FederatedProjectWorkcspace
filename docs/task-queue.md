@@ -10,13 +10,14 @@ roadmapě. Rozsah první dávky nezahrnuje transport do IDE ani spouštění age
 ## Ovládání
 
 V roadmapě použijte existující filtr **Připravené**: nedokončené položky bez
-závislostí nebo se všemi závislostmi dokončenými. Vyberte položku a v detailu
+závislostí nebo s předpoklady ve stavu Vyřešeno/Dokončeno, přičemž nejvýše
+jeden předpoklad může být Probíhá. Vyberte položku a v detailu
 stiskněte **Přidat do fronty**. Fronta neobsahuje duplikáty ani dokončené položky.
 
 Filtr **Navazující** ukazuje nedokončené položky, které ještě mají nesplněné
 závislosti, ale všechny tyto přímé předpoklady už jsou ve frontě. Úkol bez
 nesplněných závislostí patří mezi Připravené. Přidává se na konec; předpoklady
-proto vždy předcházejí závislým položkám. Pořadí lze upravit tlačítky
+které stále blokují zahájení, proto předcházejí závislým položkám. Pořadí lze upravit tlačítky
 **Posunout nahoru / Posunout dolů** na stránce Fronta úloh. Filtr respektuje
 vybranou úroveň roadmapy jako ostatní pohledy; dávky vidíte na úrovni milníků,
 jejich tasky po otevření dávky.
@@ -173,3 +174,8 @@ Od rozšíření 0.4.0 navazuje [předání fronty a potvrzování](ide-queue-ha
 Agentní a uživatelské flags se obnovují z bridge/native receipts; roadmapa
 zůstává autoritou dokončení. Vlastní přijaté výsledky balíčku mají explicitně
 ověřenou návaznost, jiné změny HEAD nadále vyžadují revalidaci/nové předání.
+
+Zahajitelnost neznamená možnost potvrdit dokončení: ta vyžaduje potvrzené
+splnění všech předpokladů. Stejné pravidlo zahájení používá graf plánu,
+fronta, přesuny/odebrání referencí i přijetí zprávy Probíhá z IDE. Podrobnosti
+uvádí [ADR 0067](adr/0067-plan-work-states-and-sum.md#zahajitelnost-závislých-úkolů).

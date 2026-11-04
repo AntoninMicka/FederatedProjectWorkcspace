@@ -11,7 +11,7 @@ from spikes.metadata import require, safe_path, uuid, validate_snapshot, validat
 from spikes.projects import Projects
 from spikes.markdown_documents import document
 from spikes.roadmap_validation import _actor
-from spikes.task_graph import project_task_graph, TASK, CHECKLIST
+from spikes.task_graph import project_task_graph, parse_main_todo, TASK, CHECKLIST, TASK_MARKER, dependency_start_blockers
 from spikes.administration import Administration
 
 MAX_TEXT = 1024 * 1024
@@ -62,7 +62,7 @@ def validate_checklist(message, tasks):
                 and type(item['checked']) is bool and item['index'] not in seen,
                 'Unknown or duplicate checklist item')
         seen.add(item['index'])
-    require(message['kind'] != 'progress' or bool(values), 'Progress needs checklist selections')
+    require(message['kind'] != 'progress' or task is not None, 'Progress requires a task')
 
 
 def authorize(service, record):
@@ -195,16 +195,29 @@ def _changes(files, project_id, head, message):
     task = next((t for t in graph['nodes'] if t['id'] == message['task_id']), None)
     require(task is not None, 'Review task disappeared')
     require(task['type'] in {None, 'task'} or message.get('queue_packet_id') and task['type'] in {'batch', 'milestone'}, 'Only leaf tasks or reviewed queue containers can change completion')
+    nodes = {n['id']: n for n in graph['nodes']}
+    if message['kind'] == 'progress':
+        require(not dependency_start_blockers(task['depends_on'], nodes),
+                'Zahájení vyžaduje vyřešené závislosti a nejvýše jednu probíhající.')
+    if message['kind'] == 'completed':
+        require(all(nodes[d]['checked'] for d in task['depends_on']),
+                'Dokončení vyžaduje potvrzené dokončení všech závislostí.')
     if message['kind'] == 'completed' and message.get('queue_packet_id'):
         nodes = {n['id']: n for n in graph['nodes']}
         require(not task['checked'] and all(nodes[d]['checked'] for d in task['depends_on'])
                 and all(n['checked'] for n in graph['nodes'] if n['parent_id'] == task['id']), 'Task has unfinished prerequisites or children')
+    if message['kind'] == 'progress' and not message.get('checklist'):
+        require(not task['checked'], 'Dokončenou položku nelze označit jako Probíhá.')
+        require(task.get('status_mode') != 'sum', 'Skupina SUM přebírá stav podúkolů; odešlete Probíhá u konkrétního podúkolu.')
     validate_checklist(message, graph['nodes'])
     candidate = dict(files)
     doc = document(files, entities, task['source']['artifact_id'])
     path = doc['path']; lines = doc['body'].splitlines(keepends=True)
+    from spikes.plan_item_editor import item_span
+    source_start, _ = item_span(doc['body'], task['id'])
+    source_index = len(doc['body'][:source_start].splitlines())
     if message.get('checklist'):
-        start = task['line']; rows = []
+        start = source_index + 1; rows = []
         fence = None
         for i in range(start, len(lines)):
             marker = re.match(r'^\s*(`{3,}|~{3,})(.*)$', lines[i])
@@ -233,15 +246,100 @@ def _changes(files, project_id, head, message):
         task = next(t for t in updated['nodes'] if t['id'] == message['task_id'])
         if message['kind'] == 'completed':
             require(all(item['checked'] for item in task['checklist']), 'Complete or review remaining checklist first')
-        index = task['line'] - 1
-        require(TASK.match(lines[index]).group(3) == task['id'], 'Task source mapping differs')
+        index = source_index
+        match = TASK.match(lines[index])
+        require(match is not None and match.group(3) == task['id'], 'Task source mapping differs')
         checked = message['kind'] == 'completed' or task['checked'] and all(item['checked'] for item in task['checklist'])
-        lines[index] = re.sub(r'^(\s*[-+*]\s+\[)[ xX](\])', lambda m: m[1]+('x' if checked else ' ')+m[2], lines[index], count=1)
+        definition = parse_main_todo(doc['body'])[0][task['id']]
+        if definition['sum_marker'] and not checked:
+            pass  # Progress does not turn a SUM group into a manually planned node.
+        else:
+            original = lines[index]
+            lines[index] = re.sub(r'^(\s*[-+*]\s+\[)' + TASK_MARKER + r'(\])',
+                                  lambda m: m[1]+('x' if checked else ' ')+m[2], original, count=1)
+            if definition['sum_marker'] and not definition['status_declared']:
+                newline = '\r\n' if original.endswith('\r\n') else '\n'
+                terminated = original.endswith(('\r', '\n'))
+                if not terminated: lines[index] += newline
+                indent = re.match(r'^\s*', original)[0]
+                lines.insert(index+1, indent+'  - status: sum'+(newline if terminated else ''))
         candidate[path] = prefix + ''.join(lines).encode()
+    if message['kind'] == 'progress' and task.get('status_mode') != 'sum':
+        # Reuse the exact scoped block; no additional persistent status store.
+        from spikes.plan_item_editor import item_span, _fence_after
+        from spikes.task_graph import RELATION
+        body = ''.join(lines)
+        start, end = item_span(body, task['id'])
+        block = body[start:end].splitlines(keepends=True)
+        newline = '\r\n' if block[0].endswith('\r\n') else '\n'
+        fence, found = None, False
+        for index in range(1, len(block)):
+            visible = fence is None
+            fence = _fence_after(block[index], fence)
+            relation = RELATION.match(block[index].rstrip('\r\n')) if visible and fence is None else None
+            if relation and relation[2].strip().lower() == 'status':
+                ending = newline if block[index].endswith(('\n', '\r')) else ''
+                block[index] = relation[1]+'- status: in progress'+ending
+                found = True
+        if not found:
+            terminated = block[0].endswith(('\n', '\r'))
+            if not terminated: block[0] += newline
+            indent = re.match(r'^\s*', block[0])[0]
+            block.insert(1, indent+'  - status: in progress'+(newline if terminated else ''))
+        candidate[path] = prefix + (body[:start]+''.join(block)+body[end:]).encode()
     validate_transition(files, candidate)
     require(project_task_graph(candidate, validate_snapshot(candidate), project_id, head)['status'] == 'ready',
             'Review produces invalid task graph')
     return {path: raw for path, raw in candidate.items() if raw != files.get(path)}
+
+
+AUTO_START_NOTE = 'Automaticky přijaté zahájení (ADR 0067).'
+
+
+def automatic_start(message):
+    """A plain start report needs no human decision; checklist changes still do."""
+    return message['kind'] == 'progress' and not message.get('checklist')
+
+
+def auto_start(service, record, message, *, checkpoint=lambda stage: None):
+    """Accept a start report through the normal review intent and native journal.
+
+    The operation ID is derived from the message, so a retry after a lost reply
+    or an idle poll resumes the same intent instead of creating another commit.
+    Returns the completed intent, or None when the report must wait for a human.
+    """
+    from uuid import NAMESPACE_URL, uuid5
+    from spikes.workspace import PendingOperation
+    operation = str(uuid5(NAMESPACE_URL, f'fpw-auto-start:{record["session_id"]}:{message["message_id"]}'))
+    with service.database() as db:
+        prior = db.execute('SELECT record FROM reviews WHERE session=? AND id=?',
+                           (record['session_id'], message['message_id'])).fetchone()
+    if prior:
+        intent = json.loads(prior['record'])
+        if intent['state'] == 'completed' or intent['request']['operation_id'] != operation:
+            return intent if intent['request']['operation_id'] == operation else None
+        request = intent['request']
+    else:
+        request = dict(project_id=record['project_id'], session_id=record['session_id'],
+                       message_id=message['message_id'], decision='accepted', note=AUTO_START_NOTE,
+                       expected_head=service.projects.repository(record['project_id']).head(), operation_id=operation)
+    try:
+        return review(service, service.connection_actor(record), request, checkpoint=checkpoint)
+    except (ValueError, PendingOperation):
+        # Blocked, stale or temporarily locked: the receipt stays durable and
+        # a prepared intent is resumed later; nothing is reported as accepted.
+        return None
+
+
+def resume_auto_starts(service, record):
+    """Finish automatic start intents interrupted after preparation."""
+    with service.database() as db:
+        rows = db.execute('SELECT m.record AS message, r.record AS review FROM messages m JOIN reviews r '
+                          'ON r.session=m.session AND r.id=m.id WHERE m.session=?', (record['session_id'],)).fetchall()
+    for row in rows:
+        message, intent = json.loads(row['message']), json.loads(row['review'])
+        if automatic_start(message) and intent['state'] != 'completed' and intent['request']['note'] == AUTO_START_NOTE:
+            auto_start(service, record, message)
 
 
 def review(service, actor, request, *, checkpoint=lambda stage: None):

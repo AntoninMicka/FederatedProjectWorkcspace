@@ -46,6 +46,78 @@ class QueuePacketTests(unittest.TestCase):
             decision='accepted',note='Human accepted evidence.',expected_head=Projects(self.node).repository(self.project).head(),operation_id=str(uuid4()))
         return self.service.review(None,request|changes)
 
+    def test_start_gate_allows_resolved_and_one_running_but_never_completion(self):
+        for first, second, allowed in [('resolved', 'resolved', True),
+                                       ('resolved', 'in progress', True),
+                                       ('in progress', 'in progress', False),
+                                       ('resolved', 'planned', False),
+                                       ('failed', 'resolved', False)]:
+            with self.subTest(first=first, second=second):
+                self.body = (f'- [ ] [TASK-01] A\n  - status: {first}\n'
+                             f'- [ ] [TASK-02] B\n  - status: {second}\n'
+                             '- [ ] [TASK-03] C\n  - depends_on: TASK-01, TASK-02\n')
+                self.head = Projects(self.node).repository(self.project).head()
+                self.head = self.save(self.body)
+                self.record = panel_tests.BridgePanelTests.session(self)
+                self.act('revalidate')
+                self.request.update(session_id=self.record['session_id'], expected_head=self.head,
+                                    queue_revision=self.qstatus()['revision'])
+                packet = self.packet()
+                item = status(self.service, self.record)['items'][2]
+                self.assertEqual(allowed, item['startable'])
+                self.assertFalse(item['eligible'])
+                message = self.message(packet, 'TASK-03') | {'kind': 'progress'}
+                message.pop('evidence')
+                if allowed:
+                    self.assertEqual('automatic-start', self.send(message)['receipts'][0]['acceptance'])
+                    self.assertEqual('in progress', status(self.service, self.record)['items'][2]['status'])
+                else:
+                    with self.assertRaises(ValueError): self.send(message)
+                with self.assertRaises(ValueError): self.send(self.message(packet, 'TASK-03'))
+
+    def test_progress_then_completion_uses_same_packet_without_false_acceptance(self):
+        packet = self.packet()
+        progress = self.message(packet) | dict(kind='progress', body='Work started')
+        progress.pop('evidence')
+        with self.assertRaises(ValueError): self.send(progress | {'queue_packet_id': '0'*64})
+        self.send(progress)  # accepted automatically, no human review
+        first = status(self.service, self.record)['items'][0]
+        self.assertFalse(first['agent_confirmed'])
+        self.assertFalse(first['user_confirmed'])
+        value = status(self.service, self.record)
+        self.assertTrue(value['current'])
+        self.assertEqual('in progress', value['items'][0]['status'])
+        self.assertFalse(value['items'][0]['user_confirmed'])
+        self.assertFalse(value['items'][1]['eligible'])
+        self.assertTrue(self.qstatus()['valid'])
+        self.assertFalse(self.qstatus()['items'][0]['agent_confirmed'])
+        completed = self.message(packet)
+        self.send(completed); self.review(completed)
+        value = status(self.service, self.record)
+        self.assertTrue(value['current'])
+        self.assertTrue(value['items'][0]['user_confirmed'])
+        self.assertTrue(value['items'][1]['eligible'])
+
+    def test_manual_user_start_is_accepted_automatically_without_completion_request(self):
+        packet = self.packet()
+        # Same shape as the extension's queue.manualStart.
+        start = dict(message_id=str(uuid4()), task_id='TASK-01', kind='progress', body='Zahájeno ručně z IDE.',
+                     revision=self.record['snapshot']['revision'], repository_commit='b'*40,
+                     queue_packet_id=packet['packet_id'], reported_by='user')
+        with self.assertRaises(ValueError): self.send(start | dict(message_id=str(uuid4()), evidence=dict(tests='x', diff='y')))
+        with self.assertRaises(ValueError): self.send(start | dict(message_id=str(uuid4()), task_id='TASK-02', body='Blocked start'))
+        receipt = self.send(start)['receipts'][0]
+        self.assertEqual(('received', 'automatic-start'), (receipt['status'], receipt['acceptance']))
+        self.assertNotEqual(self.head, Projects(self.node).repository(self.project).head())
+        with self.assertRaisesRegex(ValueError, 'another decision'): self.review(start)
+        item = status(self.service, self.record)['items'][0]
+        self.assertEqual('in progress', item['status'])
+        self.assertFalse(item['user_requested']); self.assertFalse(item['user_confirmed']); self.assertTrue(item['eligible'])
+        request = start | dict(message_id=str(uuid4()), kind='completed', body='Hotovo', checklist=None)
+        request.pop('checklist')
+        self.send(request)
+        self.assertTrue(status(self.service, self.record)['items'][0]['user_requested'])
+
     def test_chain_agent_then_human_then_following_and_receipt_flags(self):
         packet=self.packet(); self.assertEqual(packet,self.packet()); old=packet.copy()
         self.assertEqual([True,False,False],[i['eligible'] for i in status(self.service,self.record)['items']])
@@ -250,8 +322,11 @@ async function projectRequest(path,body){if(path==='/v1/projects/open')return {c
         script="""
 const assert=require('node:assert/strict'),q=require('./extensions/workspace-bridge/queue.js');
 const names=(e,o)=>q.flags(e,o).map(f=>f.name);
+assert(q.flags({status:'failed',eligible:true}).some(f=>f.label==='Selhalo'));
+assert(q.flags({status:'completed',status_mode:'sum',eligible:true},{stale:true}).some(f=>f.label==='SUM · Dokončeno (poslední známý stav)'));
 const base={eligible:true,startable:true,agent_confirmed:false,user_requested:false,user_confirmed:false};
 assert.deepEqual(names(base),['ready']);
+assert(q.flags({...base,eligible:false,open_children:[]}).some(f=>f.name==='ready'&&f.label.includes('dokončení čeká')));
 assert.deepEqual(names({...base,agent_confirmed:true,user_requested:true}),['ready','agent','requested']);
 assert.deepEqual(names({...base,user_confirmed:true}),['accepted']);
 assert.deepEqual(names({...base,eligible:false,startable:false}),['waiting']);
@@ -278,6 +353,18 @@ assert.deepEqual(m.checklist,[{index:1,checked:true}]);
 assert.throws(()=>q.manualRequest(value,'B','x','c','id'),/ruční žádost/);
 assert.throws(()=>q.manualRequest({...value,blockers:['stale']},'A','x','c','id'),/ruční žádost/);
 assert.throws(()=>q.manualRequest({...value,linked_items:[{id:'A',eligible:true,user_requested:true}]},'A','x','c','id'),/už čeká/);
+const startValue=packet({B:{children:['A']}},[{id:'A',eligible:true,startable:true,status:'planned'}]);
+const st=q.manualStart(startValue,'A','start','c'.repeat(40),'id');
+assert.deepEqual(st,{message_id:'id',task_id:'A',kind:'progress',body:'start',revision:'r',repository_commit:'c'.repeat(40),queue_packet_id:'p',reported_by:'user'});
+assert.ok(q.startable(startValue,'A'));assert.ok(q.startable(startValue,'B'),'batch starts before its tasks are accepted');
+const withA=extra=>({...startValue,linked_items:[{id:'A',startable:true,...extra}]});
+assert.throws(()=>q.manualStart(withA({status_mode:'sum'}),'A','x','c','id'),/SUM/);
+assert.throws(()=>q.manualStart(withA({status:'in progress'}),'A','x','c','id'),/Probíhá/);
+assert.throws(()=>q.manualStart(withA({startable:false}),'A','x','c','id'),/zahájení nelze/);
+assert.throws(()=>q.manualStart(withA({user_confirmed:true}),'A','x','c','id'),/zahájení nelze/);
+assert.throws(()=>q.manualStart({...startValue,blockers:['stale']},'A','x','c','id'),/zahájení nelze/);
+assert.throws(()=>q.manualStart(startValue,'GONE','x','c','id'),/zahájení nelze/);
+assert.ok(!q.startable(null,'A'));
 """
         result=subprocess.run(['node','-e',script],capture_output=True,text=True,cwd=str(Path(__file__).parent.parent))
         self.assertEqual(0,result.returncode,result.stderr)

@@ -55,6 +55,32 @@ class TaskQueueTests(unittest.TestCase):
         if task is not None: request['task_id'] = task
         return self.service.execute(dict(request, **extra), self.owner)
 
+    def test_queue_projects_sum_state_without_implicitly_accepting_group(self):
+        self.head = self.save('- [ ] [GROUP-01] Group\n  - type: batch\n  - status: sum\n'
+                              '  - [ ] [TASK-A] A\n    - type: task\n    - status: resolved\n')
+        view = self.act('add', 'GROUP-01')
+        item = view['items'][0]
+        self.assertEqual(('resolved', 'sum', {'resolved': 1}),
+                         (item['status'], item['status_mode'], item['status_counts']))
+        self.assertFalse(item['user_confirmed'])
+        self.assertFalse(item['agent_confirmed'])
+        self.assertEqual(self.head, Projects(self.node).repository(self.pid).head())
+
+    def test_ready_dependent_can_be_queued_without_resolved_or_running_prerequisites(self):
+        self.head = self.save('- [ ] [TASK-A] A\n  - status: resolved\n'
+                              '- [ ] [TASK-X] X\n  - status: in progress\n'
+                              '- [ ] [TASK-B] B\n  - depends_on: TASK-A, TASK-X\n')
+        view = self.act('add', 'TASK-B')
+        self.assertTrue(view['valid'])
+        self.assertEqual(['TASK-B'], view['task_ids'])
+        self.assertFalse(view['items'][0]['user_confirmed'])
+        self.act('add', 'TASK-A')
+        preview = self.act('remove-preview', 'TASK-A')
+        self.assertEqual(['TASK-A'], preview['removed_ids'])
+        after = self.act('remove', 'TASK-A', preview_sha256=preview['preview_sha256'])
+        self.assertEqual(['TASK-B'], after['task_ids'])
+        self.assertTrue(after['valid'])
+
     def test_chain_following_excludes_partial_dependencies_and_does_not_mutate_plan(self):
         self.assertEqual([], self.status()['following'])
         self.act('add', 'TASK-A'); self.assertEqual(['TASK-B'], self.status()['following'])
@@ -310,12 +336,13 @@ class QueueBrowserLogicTests(unittest.TestCase):
         import shutil
         import subprocess
         from spikes.desktop_ui import JS
+        from spikes.plan_status_ui import PLAN_STATUS_JS
         if not shutil.which('node'): self.skipTest('Node required for shared browser logic')
         source = JS[JS.index('let taskPlanProjection=null,taskPlanSelection=null;'):JS.index('function showTaskPlanDetail(item)')]
         prelude = '''
 const assert=require('assert');
 const elements=new Map();
-function element(){return {children:[],disabled:false,textContent:'',replaceChildren(){this.children=[];},append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
+function element(){return {children:[],dataset:{},disabled:false,textContent:'',replaceChildren(){this.children=[];},append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
 const document={querySelector(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},createElement:element};
 let activeProject={id:'project',head:'head',readOnly:false};
 let calls=[],response=null,reject=false,confirm=false;
@@ -330,9 +357,9 @@ await loadTaskQueue();assert(taskPlanMatches({id:'TASK-B'},'following'));assert(
 taskQueueView.flag_audit=[{task_id:'TASK-A',old:false,new:true,actor_id:'reviewer',at:1,revision:1}];
 renderTaskQueue();
 let row=document.querySelector('#task-queue-list').children[0];
-assert.equal(row.children[2].ariaLabel,'Pozastavit: TASK-A');
-assert.match(row.children[4].children[1].textContent,/reviewer.*Ne → Ano/);
-taskQueueView.valid=false;renderTaskQueue();assert(document.querySelector('#task-queue-list').children[0].children[2].disabled);
+assert.equal(row.children[3].ariaLabel,'Pozastavit: TASK-A');
+assert.match(row.children[5].children[1].textContent,/reviewer.*Ne → Ano/);
+taskQueueView.valid=false;renderTaskQueue();assert(document.querySelector('#task-queue-list').children[0].children[3].disabled);
 taskQueueView.valid=true;
 response={removed_ids:['TASK-A','TASK-B'],preview_sha256:'digest'};
 await changeTaskQueue('remove','TASK-A');assert.equal(calls.filter(c=>c.action==='remove').length,0);
@@ -349,5 +376,5 @@ const moving=changeTaskQueue('move','TASK-A',0);await Promise.resolve();assert.e
 activeProject={id:'other-project',head:'other-head'};taskQueueView=null;release(response);await moving;assert.equal(taskQueueView,null);
 })().catch(e=>{console.error(e);process.exit(1);});
 '''
-        result = subprocess.run(['node', '-e', prelude+source+checks], capture_output=True, text=True, timeout=20)
+        result = subprocess.run(['node', '-e', prelude+PLAN_STATUS_JS+source+checks], capture_output=True, text=True, timeout=20)
         self.assertEqual(0, result.returncode, result.stderr)

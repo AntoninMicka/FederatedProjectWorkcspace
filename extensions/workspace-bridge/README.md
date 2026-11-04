@@ -134,3 +134,34 @@ soubory Workspace. Balíček se kvůli změně plánu tiše nepřepisuje a mappi
 s aktivním packetem se automaticky nepřipíná na jiný commit.
 Podrobný postup, completion schema a recovery: `docs/ide-queue-handoff.md`
 v projektu Workspace; architektonické hranice: ADR 0062.
+
+Od verze 0.5.2 ukazuje strom úkolů a fronta také pracovní stav z plánu
+(Plánováno, Probíhá, Vyřešeno, Selhalo, Dokončeno, Odloženo) a režim SUM.
+Stav se upravuje ve Workspace přes editor položky; synchronizace jej
+přenese do IDE. Zprávy agenta, připravenost a lidské přijetí se zobrazují
+odděleně. Zastaralý balíček ukazuje poslední známý stav, nikoli potvrzení
+aktuálnosti. Po instalaci aktualizace znovu načtěte okno IDE a synchronizujte.
+
+Ve verzi 0.5.3 je ve zprávách dostupná volba **Probíhá**, také bez checklistu.
+Po přijetí ve Workspace synchronizace zobrazí pracovní stav v detailu,
+stromu i frontě. Hlášení zahájení neznačí splnění. U SUM skupin hlaste práci
+na podúkolu. Dokončení a důkazy se nadále posílají samostatně.
+
+Od verze 0.5.4 se u závislých úkolů rozlišuje zahájení a dokončení. Zahájit
+lze po Vyřešeno/Dokončeno všech předpokladů s nejvýše jedním Probíhá.
+Dvě probíhající nebo libovolná nevyřešená závislost start blokují. Dokončení
+stále čeká na potvrzené splnění všech závislostí.
+
+Ve verzi 0.5.5 má pohled **Fronta úkolů** vedle ✓ také ikonu ▶ **Ručně
+navrhnout zahájení (Probíhá)**. Je dostupná jen u aktuální, nezablokované,
+zahajitelné položky, která ještě neprobíhá a není skupinou SUM. Odešle
+`kind: progress` s `reported_by: user` a připnutým balíčkem, bez checklistu
+a důkazů. Úspěch se hlásí jen při doručeném receiptu `received`, jinak
+zpráva zůstává v inboxu ke kontrole.
+
+Od verze 0.5.6 Workspace zahájení (Probíhá bez checklistu) přijímá
+automaticky, bez potvrzení uživatelem. Platí to pro ▶ ve frontě, volbu
+Probíhá ve zprávách i pro hlášení agenta. Pokud zahájení nejde přijmout,
+třeba kvůli mezitím změněným závislostem, IDE to ohlásí a zpráva čeká
+na posouzení ve Workspace. Dokončení, částečný checklist a dotazy dál
+potvrzuje člověk.

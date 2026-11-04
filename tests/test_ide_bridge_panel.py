@@ -138,6 +138,79 @@ class BridgePanelTests(unittest.TestCase):
         self.assertEqual(Projects(self.node).open(self.project)['commit_id'], self.head)
         self.assertEqual(panel(self.service, self.record)['messages'][0]['review'], outcome)
 
+    def commits(self):
+        return Projects(self.node).repository(self.project).run('rev-list', '--count', self.head+'..HEAD').stdout.strip()
+
+    def test_progress_without_checklist_is_accepted_automatically_and_idempotently(self):
+        from spikes.ide_bridge_panel import AUTO_START_NOTE
+        record = self.session(); message = self.message(self.created) | dict(kind='progress')
+        request = dict(session_id=record['session_id'], messages=[message])
+        first = self.service.exchange(record, request)
+        self.assertEqual('automatic-start', first['receipts'][0]['acceptance'])
+        task = next(n for n in Projects(self.node).open(self.project)['plan']['nodes'] if n['id']=='TASK-01')
+        self.assertEqual('in progress', task['status']); self.assertFalse(task['checked'])
+        self.assertEqual('1', self.commits())
+        review = panel(self.service, record)['messages'][0]['review']
+        self.assertEqual(('completed', 'accepted', AUTO_START_NOTE), (review['state'], review['outcome'], review['request']['note']))
+        self.assertEqual(first['receipts'], IdeBridge(self.node).exchange(record, request)['receipts'])
+        self.assertEqual('1', self.commits())
+        with self.assertRaisesRegex(ValueError, 'another decision'):
+            self.service.review(None, self.review(message))
+
+    def test_automatic_start_recovers_from_every_crash_boundary(self):
+        from unittest import mock
+        import spikes.ide_bridge_panel as module
+        original, first = module.review, True
+        for stage in ['intent-prepared', 'prepared', 'commit-created', 'ref-updated', 'committed', 'indexed',
+                      'before-outcome', 'outcome-published']:
+            for resume in ['retry', 'poll']:
+                with self.subTest(stage=stage, resume=resume):
+                    if not first:  # restore Plánováno from the previous subtest
+                        self.head = Projects(self.node).repository(self.project).head(); self.head = self.save(self.body)
+                    first = False
+                    record = self.session(); message = self.message(self.created) | dict(kind='progress')
+                    request = dict(session_id=record['session_id'], messages=[message])
+                    def crash(*args, **kwargs):
+                        def checkpoint(name):
+                            if name == stage: raise RuntimeError('crash at '+name)
+                        return original(*args, **kwargs | {'checkpoint': checkpoint})
+                    with mock.patch.object(module, 'review', crash), self.assertRaisesRegex(RuntimeError, 'crash'):
+                        self.service.exchange(record, request)
+                    restarted = IdeBridge(self.node)
+                    restarted.exchange(record, request if resume == 'retry' else dict(session_id=record['session_id'], messages=[]))
+                    view = Projects(self.node).open(self.project)
+                    task = next(n for n in view['plan']['nodes'] if n['id']=='TASK-01')
+                    self.assertEqual('in progress', task['status'])
+                    self.assertEqual('1', self.commits())
+                    with restarted.database() as db:
+                        intent = json.loads(db.execute('SELECT record FROM reviews WHERE session=? AND id=?',
+                                                       (record['session_id'], message['message_id'])).fetchone()[0])
+                    self.assertEqual(('completed', 'accepted'), (intent['state'], intent['outcome']))
+
+    def test_blocked_nonqueue_start_waits_for_human_review(self):
+        self.body = ('- [ ] [TASK-A] A\n  - status: in progress\n'
+                     '- [ ] [TASK-B] B\n  - status: in progress\n'
+                     '- [ ] [TASK-01] T\n  - depends_on: TASK-A, TASK-B\n')
+        self.head = self.save(self.body)
+        message = self.send(kind='progress')
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+        self.assertIsNone(panel(self.service, self.record)['messages'][0]['review'])
+        with self.assertRaisesRegex(ValueError, 'nejvýše jednu'):
+            self.service.review(None, self.review(message))
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+
+    def test_progress_recomputes_sum_parents_without_replacing_sum(self):
+        self.body = ('<!-- fpw-plan-profile: software-development/v1 -->\n'
+            '- [SUM] [MILESTONE-01] M\n  - type: milestone\n'
+            '  - [SUM] [BATCH-01] B\n    - type: batch\n'
+            '    - [ ] [TASK-01] T\n      - type: task\n')
+        self.head = self.save(self.body)
+        self.send(kind='progress')
+        nodes = Projects(self.node).open(self.project)['plan']['nodes']
+        self.assertEqual({'in progress'}, {n['status'] for n in nodes})
+        self.assertTrue(all(not n['checked'] for n in nodes))
+        self.assertEqual(2, sum(n['status_mode']=='sum' for n in nodes))
+
     def test_review_task_completion_replays_without_second_commit(self):
         message = self.send(); request = self.review(message)
         first = self.service.review(None, request)

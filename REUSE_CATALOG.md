@@ -47,6 +47,25 @@ Hledání na žádost modelu (`NEW-FA92ACE959-TASK-3`) **znovu používá** kart
 budget a recovery řízeného hledání. Hledání u providera (`TASK-1`) rozšiřuje stávající
 náhled a run journal. **Reject:** druhý search journal a backendové úložiště výsledků v RAM.
 
+Hlášení Probíhá z IDE **adaptuje** existující zprávu `progress`, review,
+`PlanItems.item_span` a nativní journal. Stejný transport nově podporuje
+zahájení bez checklistu; řada receipts rozlišuje průběh a dokončení.
+**Reject:** zápis do autoritativního plánu přímo z rozšíření a vydávání
+hlášení zahájení za potvrzené dokončení. Detail IDE používá stejnou projekci
+pracovního stavu jako strom a fronta.
+
+Zahajitelnost závislých úkolů **adaptuje** stejný graf, `assess`, přesuny a
+náhled odebrání referencí i `progress` review. Čistý sdílený výpočet odděluje
+zahájení od potvrzení dokončení. **Reject:** vlastní pravidla jen v IDE,
+automatické zaškrtávání vyřešených předpokladů a druhé úložiště stavů.
+
+Stavy plánu a SUM (`NEW-B7B56C4A0B-TASK-1`) **adaptují** `task_graph.py`,
+scoped `PlanItems.save`, sdílený desktop/web shell a projekce obou front.
+`plan_status_ui.py` používá stávající editor a draft, bez dalšího write
+endpointu. **Reject:** druhý registr stavů, implicitní akceptace od agenta
+nebo přepis checkboxů při read-only agregaci. Recovery zůstává v existující
+Workspace transakci; pravidla zachycuje ADR 0067.
+
 Manuály (`NEW-DC6B8DEEF2-TASK-1`) **reuse/adaptují** společný sidebar,
 `showWorkspacePage`, ochranu `canLeaveWorkspaceEditors` a bezpečný textový
 `renderMarkdown` v `spikes/desktop_ui.py`. Obsah zůstává v existujících

@@ -11,12 +11,13 @@ from spikes.markdown_documents import document, main_todo_id
 from spikes.metadata import ValidationError, require
 
 SCHEMA = 'fpw-project-task-graph-v3'
+TASK_MARKER = r'(?:[ xX]|[sS][uU][mM])'
 TASK_ID = re.compile(r'[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+')
-TASK = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\]\s+(.+?)\s*$')
+TASK = re.compile(r'^(\s*)[-+*]\s+\[(' + TASK_MARKER + r')\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\]\s+(.+?)\s*$')
 CHECKLIST = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+(.+?)\s*$')
 RELATION = re.compile(r'^(\s*)[-+*]\s+([^:]{1,32}):\s*(.+?)\s*$')
 DESCRIPTION = re.compile(r'^(\s*)[-+*]\s+(.+?)\s*$')
-REFERENCE = re.compile(r'^\s*[-+*]\s+\[[ xX]\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\](?:\s+.*)?$')
+REFERENCE = re.compile(r'^\s*[-+*]\s+\[' + TASK_MARKER + r'\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\](?:\s+.*)?$')
 PROFILE = re.compile(r'^\s*<!--\s*fpw-plan-profile:\s*([^\s]+)\s*-->\s*$')
 PLAN_DOCUMENT = re.compile(r'^\s*<!--\s*fpw-plan-document:\s*definitions/v1\s*-->\s*$')
 DOCUMENT_LINK = re.compile(r'^\[([^\]]+)\]\((artifacts/([0-9a-f-]{36})/[^)]+\.md)\)$')
@@ -28,10 +29,14 @@ ALIASES = {
     'relates_to': 'relates_to', 'souvisí s': 'relates_to',
     'parent_of': 'parent_of', 'rodič': 'parent_of',
 }
+STATUS_SVG_CSS = '.planned{fill:#fff}.in-progress{fill:#fff2c7}.resolved{fill:#e7effb}.failed{fill:#f8dddd}.completed{fill:#e2f3eb}.deferred{fill:#eef1f3}'
 MAX_TASKS, MAX_RELATIONS, MAX_SUBGRAPHS = 1000, 4000, 100
 MAX_CHECKLIST_PER_TASK, MAX_CHECKLIST_TOTAL = 100, 4000
 MAX_DESCRIPTION_BYTES = 8192
 SOFTWARE_PROFILE = 'software-development/v1'
+PLAN_STATUSES = frozenset({'planned', 'in progress', 'resolved', 'failed', 'completed', 'deferred'})
+STATUS_LABELS = {'planned': 'Plánováno', 'in progress': 'Probíhá', 'resolved': 'Vyřešeno',
+                 'failed': 'Selhalo', 'completed': 'Dokončeno', 'deferred': 'Odloženo'}
 CHILD_TYPES = {'milestone': {'batch'}, 'batch': {'task'}, 'task': set()}
 
 
@@ -74,7 +79,7 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             require(profile is None, 'Plán smí deklarovat profil právě jednou.')
             profile = profile_match.group(1)
             continue
-        checkbox = re.match(r'^\s*[-+*]\s+\[[ xX]\]\s+', line)
+        checkbox = re.match(r'^\s*[-+*]\s+\[' + TASK_MARKER + r'\]\s+', line)
         match = TASK.match(line)
         if checkbox and not match:
             checklist = CHECKLIST.match(line)
@@ -107,7 +112,8 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
                        'indent': indent_value, 'relations': defaultdict(list),
                        'description_lines': [],
                        'checklist': [],
-                       'type': None, 'parent_id': parent_id,
+                       'type': None, 'status_mode': 'sum' if checked.lower() == 'sum' else None,
+                       'status_declared': False, 'sum_marker': checked.lower() == 'sum', 'parent_id': parent_id,
                        'document_link': link.group(2) if link else None,
                        'source': source, 'line': line_number}
             if link:
@@ -122,6 +128,15 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
                 values = _targets(relation.group(3)); relation_count += len(values)
                 require(relation_count <= MAX_RELATIONS, 'TODO přesahuje limit 4000 vztahů.')
                 pending['relations'][key].extend(values)
+                continue
+            elif relation.group(2).strip().lower() == 'status':
+                value = relation.group(3).strip().lower()
+                require(value in PLAN_STATUSES | {'sum'}, f'Neznámý stav uzlu: {value}')
+                require(not pending['status_declared'], f'Uzel {pending["id"]} deklaruje stav vícekrát.')
+                require(not pending['sum_marker'] or value == 'sum',
+                        f'Značka [SUM] nesmí mít jiný ruční stav: {pending["id"]}')
+                pending['status_declared'] = True
+                pending['status_mode'] = value
                 continue
             elif relation.group(2).strip().lower() in {'type', 'typ'}:
                 value = relation.group(3).strip().lower()
@@ -280,6 +295,57 @@ def _subgraphs(files, entities, canonical):
     return result
 
 
+def dependency_start_blockers(dependencies, nodes):
+    """Start after resolved work, allowing at most one concurrently running prerequisite."""
+    active, blocked = [], []
+    for identifier in dependencies:
+        node = nodes[identifier]
+        status = node.get('status') or ('completed' if node.get('checked') else 'planned')
+        if status == 'in progress': active.append(identifier)
+        elif status not in {'resolved', 'completed'}: blocked.append(identifier)
+    if len(active) > 1: blocked.extend(active)
+    return sorted(blocked)
+
+
+def task_statuses(tasks):
+    """Pure projection; SUM never changes authoritative checkboxes or review receipts."""
+    children = defaultdict(list)
+    for task in tasks.values():
+        children[task['parent_id']].append(task['id'])
+    result = {}
+    remaining = {identifier: len(children[identifier]) for identifier in tasks}
+    ready = [identifier for identifier in tasks if not remaining[identifier]]
+    for identifier in ready:
+        task = tasks[identifier]
+        mode = task['status_mode']
+        counts = defaultdict(int)
+        if mode == 'sum':
+            require(task['type'] in {'milestone', 'batch'} or
+                    (task['type'] is None and bool(children[identifier])),
+                    f'SUM lze použít pouze pro skupinu: {identifier}')
+            for child in children[identifier]:
+                counts[result[child]['status']] += 1
+            states = set(counts)
+            if not states: status = 'planned'
+            elif states == {'completed'}: status = 'completed'
+            elif 'failed' in states: status = 'failed'
+            elif states == {'deferred'}: status = 'deferred'
+            elif states <= {'planned', 'deferred'}: status = 'planned'
+            elif states <= {'resolved', 'completed'}: status = 'resolved'
+            else: status = 'in progress'
+        else:
+            require(mode != 'completed' or task['checked'],
+                    f'Dokončený stav vyžaduje potvrzený checkbox: {identifier}')
+            status = 'completed' if task['checked'] else mode or 'planned'
+        result[identifier] = dict(status=status, status_mode=mode, status_counts=dict(counts))
+        parent = task['parent_id']
+        if parent in remaining:
+            remaining[parent] -= 1
+            if not remaining[parent]: ready.append(parent)
+    require(len(result) == len(tasks), 'Hierarchie stavů obsahuje cyklus.')
+    return result
+
+
 def project_task_graph(files, entities, project_id, commit_id):
     todo_id = main_todo_id(project_id)
     if todo_id not in entities:
@@ -289,12 +355,13 @@ def project_task_graph(files, entities, project_id, commit_id):
         tasks, profile = _profiled_tasks(files, entities, project_id)
         order, dependencies, derived, depths, critical = _topology(tasks)
         subgraphs = _subgraphs(files, entities, tasks)
+        statuses = task_statuses(tasks)
         nodes = []
         for task_id in order:
             task = tasks[task_id]; parents = sorted(dependencies[task_id])
             relations = {key: sorted(values) for key, values in derived[task_id].items()
                          if key != 'depends_on' and values}
-            nodes.append({'id': task_id, 'title': task['title'],
+            nodes.append({'id': task_id, 'title': task['title'], **statuses[task_id],
                           'description': '\n'.join(task['description_lines']),
                           'checklist': task['checklist'],
                           'checked': task['checked'],
@@ -304,8 +371,10 @@ def project_task_graph(files, entities, project_id, commit_id):
                           'hierarchy_depth': _hierarchy_depth(tasks, task_id),
                           'source': task['source'], 'line': task['line'],
                           'critical': task_id in critical,
-                          'ready': not task['checked'] and all(tasks[parent]['checked'] for parent in parents),
-                          'blocked': not task['checked'] and any(not tasks[parent]['checked'] for parent in parents)})
+                          'completion_ready': all(tasks[parent]['checked'] for parent in parents),
+                          'start_blockers': dependency_start_blockers(parents, statuses),
+                          'ready': not task['checked'] and not dependency_start_blockers(parents, statuses),
+                          'blocked': not task['checked'] and bool(dependency_start_blockers(parents, statuses))})
         if profile:
             for node in nodes:
                 node['depth'] = node['hierarchy_depth']
@@ -342,7 +411,7 @@ def task_graph_svg(value, selected=None):
     width = 280 + max((item['depth'] for item in nodes), default=0) * 260
     height = 90 + max(slots.values(), default=1) * 78
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">',
-             '<style>text{font-family:system-ui}.e{stroke:#91a5b1;fill:none}.n{fill:#fff;stroke:#557384;stroke-width:2}.r{stroke:#176b60;stroke-dasharray:6 3}.b{fill:#f8dddd}.c{stroke-width:4}</style>']
+             '<style>text{font-family:system-ui}.e{stroke:#91a5b1;fill:none}.n{fill:#fff;stroke:#557384;stroke-width:2}.r{stroke:#176b60;stroke-dasharray:6 3}.b{fill:#f8dddd}.c{stroke-width:4}' + STATUS_SVG_CSS + '</style>']
     for item in nodes:
         x2, y2 = positions[item['id']]
         parent = item.get('parent_id')
@@ -353,7 +422,7 @@ def task_graph_svg(value, selected=None):
             if parent in positions:
                 x1, y1 = positions[parent]; parts.append(f'<path class="e" d="M{x1+220} {y1+25} C{x1+240} {y1+25} {x2-20} {y2+25} {x2} {y2+25}"/>')
     for item in nodes:
-        x, y = positions[item['id']]; classes = ['n']
+        x, y = positions[item['id']]; classes = ['n', item.get('status', 'planned').replace(' ', '-')]
         if item['ready']: classes.append('r')
         if item['blocked']: classes.append('b')
         if item['critical']: classes.append('c')
@@ -368,7 +437,7 @@ def _profiled_task_graph_svg(value):
     milestones = sorted((item for item in value['nodes'] if item['type'] == 'milestone'),
                         key=lambda item: ((item['source'] or {}).get('path', ''), item['line']))
     batches = [item for item in value['nodes'] if item['type'] == 'batch']
-    label_width, column_width, card_width, card_height = 220, 270, 220, 96
+    label_width, column_width, card_width, card_height = 220, 270, 220, 124
     positions, lanes = {}, []
     top, max_depth = 10, 0
     for milestone in milestones:
@@ -382,7 +451,7 @@ def _profiled_task_graph_svg(value):
         lanes.append((milestone, top, height)); top += height + 10
     width, height = label_width + 68 + (max_depth + 1) * column_width, max(top, 140)
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">',
-             '<style>text{font-family:system-ui}.lane{fill:#edf3f5}.label{font-weight:700;fill:#18384a}.description{font-size:11px;fill:#526b79}.edge{stroke:#91a5b1;stroke-width:2;fill:none}.card{fill:#fff;stroke:#557384;stroke-width:2}.ready{stroke:#176b60;stroke-dasharray:6 3}.blocked{fill:#f8dddd}.done{fill:#e2f3eb}.critical{stroke-width:4}</style>']
+             '<style>text{font-family:system-ui}.lane{fill:#edf3f5}.label{font-weight:700;fill:#18384a}.description{font-size:11px;fill:#526b79}.edge{stroke:#91a5b1;stroke-width:2;fill:none}.card{fill:#fff;stroke:#557384;stroke-width:2}.ready{stroke:#176b60;stroke-dasharray:6 3}.blocked{fill:#f8dddd}.done{fill:#e2f3eb}.critical{stroke-width:4}' + STATUS_SVG_CSS + '</style>']
     for milestone, lane_top, lane_height in lanes:
         full_description = milestone['description'].replace('\n', ' ') or 'Bez doplňujícího popisu.'
         parts.append(f'<g><title>{escape(milestone["title"])} — {escape(full_description)}</title><rect class="lane" x="10" y="{lane_top}" width="{width-20}" height="{lane_height}" rx="11"/>')
@@ -400,7 +469,7 @@ def _profiled_task_graph_svg(value):
     for batch in batches:
         if batch['id'] not in positions:
             continue
-        x, y = positions[batch['id']]; classes = ['card']
+        x, y = positions[batch['id']]; classes = ['card', batch.get('status', 'planned').replace(' ', '-')]
         if batch['checked']: classes.append('done')
         if batch['ready']: classes.append('ready')
         if batch['blocked']: classes.append('blocked')
@@ -409,6 +478,8 @@ def _profiled_task_graph_svg(value):
         parts.extend([f'<g><title>{escape(batch["title"])} — {escape(description)}</title><rect class="{" ".join(classes)}" x="{x}" y="{y}" width="{card_width}" height="{card_height}" rx="9"/>',
                       f'<text x="{x+10}" y="{y+22}" font-weight="700">{escape(batch["id"])}</text>',
                       f'<text x="{x+10}" y="{y+43}" font-size="11">{escape(batch["title"][:31])}</text>',
-                      f'<text class="description" x="{x+10}" y="{y+64}">{escape(description[:31])}</text></g>'])
+                      f'<text class="description" x="{x+10}" y="{y+64}">{escape(description[:31])}</text>',
+                      f'<rect class="{batch.get("status", "planned").replace(" ", "-")}" x="{x+10}" y="{y+82}" width="150" height="24" rx="12" stroke="#557384"/>',
+                      f'<text x="{x+18}" y="{y+98}" font-size="11">{"SUM · " if batch.get("status_mode") == "sum" else ""}{STATUS_LABELS.get(batch.get("status"), "Plánováno")}</text></g>' ])
     parts.append(f'<metadata>{SCHEMA} {escape(value["revision"])}</metadata></svg>')
     return ''.join(parts)

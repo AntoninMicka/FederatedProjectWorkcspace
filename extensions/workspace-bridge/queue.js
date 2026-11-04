@@ -22,13 +22,15 @@ function flags(entry,{stale=false,blockers=[]}={}){
  const yes=value=>value===true,known=value=>typeof value==='boolean';
  const suffix=stale?' (poslední známý stav)':'';
  const list=[];
+ const labels={'planned':'Plánováno','in progress':'Probíhá','resolved':'Vyřešeno','failed':'Selhalo','completed':'Dokončeno','deferred':'Odloženo'};
+ if(labels[entry.status])list.push({name:'plan-status',label:(entry.status_mode==='sum'?'SUM · ':'')+labels[entry.status]+suffix});
  if(stale)list.push({name:'stale',label:'Neaktuální'});
  if(!known(entry.eligible))list.push({name:'unknown',label:'Stav neznámý'});
  else if(entry.user_confirmed!==true){
   if(blockers.length)list.push({name:'blocked',label:'Blokováno balíčkem'});
   else if(yes(entry.held))list.push({name:'held',label:'Pozastaveno'});
   else if(yes(entry.eligible))list.push({name:'ready',label:'Zahajitelné'+suffix});
-  else if(yes(entry.startable))list.push({name:'feature',label:'Dávka · '+(entry.open_children||[]).length+' otevřených podúkolů'+suffix});
+  else if(yes(entry.startable))list.push((entry.open_children||[]).length?{name:'feature',label:'Dávka · '+entry.open_children.length+' otevřených podúkolů'+suffix}:{name:'ready',label:'Zahajitelné · dokončení čeká na potvrzení závislostí'+suffix});
   else list.push({name:'waiting',label:'Navazující · pouze náhled'});
  }
  if(yes(entry.agent_confirmed))list.push({name:'agent',label:'Agent hlásí splnění'+suffix});
@@ -69,6 +71,20 @@ function manualRequest(value,taskId,body,repositoryCommit,messageId){
  const open=(task.checklist||[]).map((item,index)=>({item,index})).filter(({item})=>!item.checked);
  if(open.length)message.checklist=open.map(({index})=>({index,checked:true}));
  return message;
+}
+// A manual start is accepted automatically by Workspace; this only builds the report.
+function startable(value,taskId){
+ const entry=[...(value?.items||[]),...(value?.linked_items||[])].find(i=>i.id===taskId);
+ return Boolean(entry&&!value.blockers.length&&entry.startable===true&&entry.user_confirmed!==true
+  &&entry.status!=='in progress'&&entry.status_mode!=='sum');
+}
+function manualStart(value,taskId,body,repositoryCommit,messageId){
+ const entry=[...value.items,...(value.linked_items||[])].find(i=>i.id===taskId);
+ if(entry?.status_mode==='sum')throw Error('Skupina SUM přebírá stav podúkolů; zahajte konkrétní podúkol.');
+ if(entry?.status==='in progress')throw Error('Položka už je ve Workspace vedená jako Probíhá.');
+ if(!startable(value,taskId))throw Error('Položka je blokovaná, zastaralá nebo přijatá; zahájení nelze odeslat.');
+ return {message_id:messageId,task_id:taskId,kind:'progress',body,revision:value.manifest.revision,
+  repository_commit:repositoryCommit,queue_packet_id:value.packet_id,reported_by:'user'};
 }
 async function verified(file,sha,cache){
  const real=await fs.realpath(file),stat=await fs.stat(file);
@@ -149,6 +165,7 @@ async function synchronize(project,request){
   if(!current||current.packet_id!==value.packet_id||current.blockers.length)throw Error('Balíček se během exportu změnil.');
   await bridge.atomic(path.join(root,'manifest.json'),stable(value.manifest));
   await bridge.atomic(path.join(root,'AGENT.md'),'# Předání fronty\n\n'+value.manifest.instructions+'\n\nManifest: manifest.json\nAktuální stav: ../../queue.json (pouze poslední známý stav; před odesláním synchronizujte).\n'
+   +'Probíhá: ../../inbox/<UUID>.json se stejnými identifikátory, kind="progress", reported_by="agent"; checklist a evidence nejsou pro zahájení povinné. Workspace zahájení bez checklistu přijme automaticky (Probíhá); ověřte receipts a stav. U SUM skupiny zahajte konkrétní podúkol.\n'
    +'Completion: ../../inbox/<UUID>.json; fields: message_id, task_id, kind="completed", body, revision=manifest.revision, repository_commit=actual HEAD, queue_packet_id, reported_by="agent", evidence={tests,diff}.\n'
    +'Přiložte i přesné checklist změny, pokud úkol má checklist. Zprávu publikujte přes dočasný soubor a rename; stejné UUID nikdy nepoužijte s jinými bajty.\n'
    +'Dávka v hierarchy je jedna feature větev a jeden PR; manifest.linked_tasks jsou její podúkoly, hlaste je jednotlivě. Dávku lze nahlásit až po přijetí všech podúkolů.\n'
@@ -165,4 +182,4 @@ async function handoff(project,taskId,request){
  for(const doc of value.manifest.documents)await verified(path.join(root,'documents',doc.sha256+'.txt'),doc.sha256,path.join(project.root,'queue-cache'));
  return {manifest:path.join(root,'manifest.json'),instructions:path.join(root,'AGENT.md'),inbox:path.join(project.root,'inbox'),packet_id:value.packet_id};
 }
-module.exports={sourceBaseline,stable,validate,verified,blob,link,synchronize,handoff,flags,scope,manualRequest};
+module.exports={sourceBaseline,stable,validate,verified,blob,link,synchronize,handoff,flags,scope,manualRequest,manualStart,startable};

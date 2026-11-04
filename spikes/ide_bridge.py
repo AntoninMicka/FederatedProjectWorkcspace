@@ -209,6 +209,10 @@ class IdeBridge:
         require(isinstance(messages, list) and len(messages) <= 20, 'Too many messages')
         from spikes.ide_bridge_panel import authorize
         authorize(self, record)
+        # An interrupted automatic start holds the project journal; finish it
+        # first, otherwise opening the project reports the pending operation.
+        from spikes.ide_bridge_panel import resume_auto_starts
+        resume_auto_starts(self, record)
         # Revalidate privacy/current HEAD even for credential-only polls and retries.
         view = self.projects.open(record['project_id'])
         require(not record.get('connection_id') or not view['read_only'], 'Project is read-only')
@@ -230,7 +234,11 @@ class IdeBridge:
             if prior:
                 require(prior['digest'] == hashlib.sha256(canonical(message).encode()).hexdigest(),
                         'Message ID reused with different content')
-                receipts.append(json.loads(prior['receipt']))
+                receipt = json.loads(prior['receipt'])
+                if receipt.get('acceptance') == 'automatic-start':
+                    from spikes.ide_bridge_panel import auto_start
+                    auto_start(self, record, json.loads(canonical(message)))
+                receipts.append(receipt)
                 continue
             require((message['task_id'] is None and message['kind'] == 'message')
                     or isinstance(message['task_id'], str) and message['task_id'] in {
@@ -243,12 +251,15 @@ class IdeBridge:
             from spikes.ide_queue import validate_completion
             with self.database() as db:
                 existing = db.execute('SELECT digest FROM messages WHERE session=? AND id=?', (record['session_id'], message['message_id'])).fetchone()
-            if not existing and (message['kind'] == 'completed' or any(k in message for k in ('queue_packet_id', 'reported_by', 'evidence'))):
+            if not existing and (message['kind'] in {'completed', 'progress'} or any(k in message for k in ('queue_packet_id', 'reported_by', 'evidence'))):
                 validate_completion(self, record, message)
             digest = hashlib.sha256(canonical(message).encode()).hexdigest()
-            receipt = dict(message_id=message['message_id'], status='received' if message.get('queue_packet_id') else 'stale' if stale else 'received',
+            from spikes.ide_bridge_panel import automatic_start
+            delivered = 'received' if message.get('queue_packet_id') else 'stale' if stale else 'received'
+            # Policy, not outcome: the review record says whether the start was applied.
+            receipt = dict(message_id=message['message_id'], status=delivered,
                            project_id=record['project_id'], revision=message['revision'],
-                           acceptance='pending-human-review')
+                           acceptance='automatic-start' if delivered == 'received' and automatic_start(message) else 'pending-human-review')
             with self.database() as db:
                 # Writer lock coordinates revoke and receipt publication.
                 db.execute('BEGIN IMMEDIATE')
@@ -267,6 +278,9 @@ class IdeBridge:
                                (record['session_id'], message['message_id'], digest,
                                 canonical(message), canonical(receipt)))
             receipts.append(receipt)
+            if receipt['acceptance'] == 'automatic-start':
+                from spikes.ide_bridge_panel import auto_start
+                auto_start(self, record, json.loads(canonical(message)))
         from spikes.ide_queue import load, refresh
         queue_refresh_error = None
         if not messages:

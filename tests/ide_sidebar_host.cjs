@@ -37,7 +37,7 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   assert.equal(project.panel.export_documents,false);
   const catalog=await bridge.connectionRequest(fixture.pairing,{action:'status'}),mapping=catalog.mappings.find(m=>m.project_id===fixture.project_id);
   const grant=await request('/v1/ide-bridge/connection/map',{connection_id:fixture.pairing.connection_id,project_id:fixture.project_id,
-   enabled:true,expected_head:fixture.head,expected_mapping:mapping.session_id,repository:mapping.repository,
+   enabled:true,expected_head:project.snapshot.commit_id,expected_mapping:mapping.session_id,repository:mapping.repository,
    editor_workspace:mapping.editor_workspace,instructions:mapping.instructions,export_documents:true},fixture.admin_token);
   assert.equal(grant.status,200,JSON.stringify(grant.value));
   await commands.get('workspaceBridge.sync')();project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
@@ -69,20 +69,34 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   const agentBytes=await fs.readFile(path.join(fixture.repository,'AGENTS.md'),'utf8');assert.equal(agentBytes,'Local agent instructions.\n');
   await assert.rejects(ui.localFile(project,'../escape'),/cesta/);
   await assert.rejects(ui.localFile(project,'linked.txt'),/symlink/);
+  kind='progress';await commands.get('workspaceBridge.compose')(task);
+  project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
+  const starting=sidebar.children('messages',root).find(r=>r.entry.message.kind==='progress').entry;
+  // Start is accepted by Workspace itself; a human decision is neither needed nor possible.
+  assert.equal(starting.review?.state,'completed');assert.equal(starting.review.outcome,'accepted');
+  const started=await request('/v1/ide-bridge/review',{project_id:fixture.project_id,session_id:starting.session_id,
+   message_id:starting.message.message_id,decision:'accepted',note:'Start reviewed.',expected_head:project.snapshot.commit_id,operation_id:crypto.randomUUID()},fixture.admin_token);
+  assert.notEqual(started.status,200,JSON.stringify(started.value));
+  await commands.get('workspaceBridge.sync')();
+  project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
+  assert.equal(project.snapshot.tasks.find(t=>t.id==='TASK-01').status,'in progress');
+  assert.match(sidebar.treeItem(task).description,/Probíhá/);
+  await commands.get('workspaceBridge.showTask')(task);assert.match(panels.at(-1).webview.html,/Probíhá/);
+  kind='completed';
   await commands.get('workspaceBridge.compose')(task);
   project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
-  let messages=sidebar.children('messages',root);assert.equal(messages.length,1);
+  let messages=sidebar.children('messages',root);assert.equal(messages.length,2);
   assert.match(sidebar.treeItem(messages[0]).description,/čeká na posouzení/);
-  const proposal=messages[0].entry;
+  const proposal=messages.find(r=>r.entry.message.kind==='completed').entry;
   const forbidden=await request('/v1/ide-bridge/review',{},fixture.pairing.token);assert.notEqual(forbidden.status,200);
   const review=await request('/v1/ide-bridge/review',{project_id:fixture.project_id,session_id:proposal.session_id,
-   message_id:proposal.message.message_id,decision:'accepted',note:'Reviewed by user.',expected_head:fixture.head,operation_id:crypto.randomUUID()},fixture.admin_token);
+   message_id:proposal.message.message_id,decision:'accepted',note:'Reviewed by user.',expected_head:project.snapshot.commit_id,operation_id:crypto.randomUUID()},fixture.admin_token);
   assert.equal(review.status,200,JSON.stringify(review.value));assert.equal(review.value.state,'completed');
   await commands.get('workspaceBridge.sync')();
   project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
   assert.notEqual(project.session,proposal.session_id);
   assert.equal(project.snapshot.tasks.find(t=>t.id==='TASK-01').checked,true);
-  messages=sidebar.children('messages',root);assert.equal(messages.length,1);assert.equal(sidebar.treeItem(messages[0]).description,'Přijato');
+  messages=sidebar.children('messages',root);assert.equal(messages.length,2);assert.equal(sidebar.treeItem(messages.find(r=>r.entry.message.kind==='completed')).description,'Přijato');
   kind='message';await commands.get('workspaceBridge.compose')(root);
   messages=sidebar.children('messages',root);assert.ok(messages.some(row=>row.entry.message.task_id===null));
   assert.equal(sidebar.children('messages',{kind:'project',projectId:fixture.other_project}).length,0);
@@ -104,13 +118,14 @@ const ui=require('../extensions/workspace-bridge/sidebar');
    manifest:{revision:project.snapshot.revision,hierarchy:{'BATCH-X':{type:'batch',children:['TASK-01','GONE-01']}},
     tasks:[{id:'BATCH-X',title:'Batch',description:'',checklist:[],depends_on:[]}],
     linked_tasks:[{id:'TASK-01',title:'TASK-01 title',description:'',checklist:[],depends_on:[]}]}};
+  const handBuilt=structuredClone(project.queue);
   const queueRoot=sidebar.children('queue',root)[0],batchItem=sidebar.treeItem(queueRoot);
-  assert.equal(batchItem.contextValue,'queueStartable');assert.equal(batchItem.collapsibleState,1);
+  assert.equal(batchItem.contextValue,'queueStartable.start');assert.equal(batchItem.collapsibleState,1);
   assert.match(batchItem.description,/Dávka · 1 otevřených/);assert.match(batchItem.description,/Neúplná hierarchie/);
   const rows=sidebar.children('queue',queueRoot);
   assert.deepEqual(rows.map(r=>r.kind),['queueTask','queueMissing']);
   assert.equal(new Set(rows.map(r=>sidebar.treeItem(r).id)).size,2);
-  const childItem=sidebar.treeItem(rows[0]);assert.equal(childItem.contextValue,'queueTask');
+  const childItem=sidebar.treeItem(rows[0]);assert.equal(childItem.contextValue,'queueTask.start');
   assert.match(childItem.description,/Zahajitelné · Agent hlásí splnění/);
   assert.match(sidebar.treeItem(rows[1]).description,/Chybějící/);
   const reportRows=sidebar.children('queue',rows[0]).filter(r=>r.kind==='message');
@@ -148,6 +163,26 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   const sent=JSON.parse(await fs.readFile(path.join(inbox,written[0]),'utf8'));
   assert.equal(sent.reported_by,'user');assert.equal(sent.task_id,'TASK-01');assert.equal(sent.evidence,undefined);
   await fs.rm(path.join(inbox,written[0]));
+  // Manual start: progress proposal only, never shown as delivered without a receipt.
+  await commands.get('workspaceBridge.sync')();live().queue=structuredClone(handBuilt);errors.length=0;informed=0;
+  vscode.window.showWarningMessage=async()=>undefined;
+  await commands.get('workspaceBridge.queueStart')(rows[0]);
+  assert.deepEqual(await listed(),inboxBefore,'cancelled start writes nothing');
+  vscode.window.showWarningMessage=async()=>'Zahájit';errors.length=0;
+  await commands.get('workspaceBridge.queueStart')(rows[0]);
+  assert.ok(errors.some(e=>/nebylo potvrzeno/.test(e)),'an undelivered start must not look successful: '+errors);
+  assert.equal(informed,0);
+  const startedFiles=(await listed()).filter(name=>!inboxBefore.includes(name));assert.equal(startedFiles.length,1);
+  const startMessage=JSON.parse(await fs.readFile(path.join(inbox,startedFiles[0]),'utf8'));
+  assert.equal(startMessage.kind,'progress');assert.equal(startMessage.reported_by,'user');assert.equal(startMessage.task_id,'TASK-01');
+  assert.equal(startMessage.queue_packet_id,'f'.repeat(64));assert.equal(startMessage.checklist,undefined);assert.equal(startMessage.evidence,undefined);
+  await fs.rm(path.join(inbox,startedFiles[0]));
+  await commands.get('workspaceBridge.sync')();const sumProject=live();sumProject.queue=structuredClone(handBuilt);
+  assert.equal(sidebar.treeItem(rows[0]).contextValue,'queueTask.start');sumProject.queue.linked_items[0]={...sumProject.queue.linked_items[0],status_mode:'sum'};
+  assert.equal(sidebar.treeItem(rows[0]).contextValue,'queueTask','SUM group offers no manual start');
+  sumProject.queue.linked_items[0]={...sumProject.queue.linked_items[0],status_mode:null,status:'in progress'};
+  assert.equal(sidebar.treeItem(rows[0]).contextValue,'queueTask','running item offers no second start');
+  errors.length=0;await commands.get('workspaceBridge.queueStart')(rows[0]);assert.ok(errors.some(e=>/Probíhá/.test(e)),errors.join());
   vscode.window.showWarningMessage=warn;vscode.window.showInformationMessage=info;
   await commands.get('workspaceBridge.sync')();errors.length=0;
   project=live();
