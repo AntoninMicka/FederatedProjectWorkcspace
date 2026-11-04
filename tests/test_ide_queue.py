@@ -46,6 +46,35 @@ class QueuePacketTests(unittest.TestCase):
             decision='accepted',note='Human accepted evidence.',expected_head=Projects(self.node).repository(self.project).head(),operation_id=str(uuid4()))
         return self.service.review(None,request|changes)
 
+    def test_start_gate_allows_resolved_and_one_running_but_never_completion(self):
+        for first, second, allowed in [('resolved', 'resolved', True),
+                                       ('resolved', 'in progress', True),
+                                       ('in progress', 'in progress', False),
+                                       ('resolved', 'planned', False),
+                                       ('failed', 'resolved', False)]:
+            with self.subTest(first=first, second=second):
+                self.body = (f'- [ ] [TASK-01] A\n  - status: {first}\n'
+                             f'- [ ] [TASK-02] B\n  - status: {second}\n'
+                             '- [ ] [TASK-03] C\n  - depends_on: TASK-01, TASK-02\n')
+                self.head = Projects(self.node).repository(self.project).head()
+                self.head = self.save(self.body)
+                self.record = panel_tests.BridgePanelTests.session(self)
+                self.act('revalidate')
+                self.request.update(session_id=self.record['session_id'], expected_head=self.head,
+                                    queue_revision=self.qstatus()['revision'])
+                packet = self.packet()
+                item = status(self.service, self.record)['items'][2]
+                self.assertEqual(allowed, item['startable'])
+                self.assertFalse(item['eligible'])
+                message = self.message(packet, 'TASK-03') | {'kind': 'progress'}
+                message.pop('evidence')
+                if allowed:
+                    self.send(message); self.review(message)
+                    self.assertEqual('in progress', status(self.service, self.record)['items'][2]['status'])
+                else:
+                    with self.assertRaises(ValueError): self.send(message)
+                with self.assertRaises(ValueError): self.send(self.message(packet, 'TASK-03'))
+
     def test_progress_then_completion_uses_same_packet_without_false_acceptance(self):
         packet = self.packet()
         progress = self.message(packet) | dict(kind='progress', body='Work started')
@@ -278,6 +307,7 @@ assert(q.flags({status:'failed',eligible:true}).some(f=>f.label==='Selhalo'));
 assert(q.flags({status:'completed',status_mode:'sum',eligible:true},{stale:true}).some(f=>f.label==='SUM · Dokončeno (poslední známý stav)'));
 const base={eligible:true,startable:true,agent_confirmed:false,user_requested:false,user_confirmed:false};
 assert.deepEqual(names(base),['ready']);
+assert(q.flags({...base,eligible:false,open_children:[]}).some(f=>f.name==='ready'&&f.label.includes('dokončení čeká')));
 assert.deepEqual(names({...base,agent_confirmed:true,user_requested:true}),['ready','agent','requested']);
 assert.deepEqual(names({...base,user_confirmed:true}),['accepted']);
 assert.deepEqual(names({...base,eligible:false,startable:false}),['waiting']);

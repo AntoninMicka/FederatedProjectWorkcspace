@@ -295,6 +295,18 @@ def _subgraphs(files, entities, canonical):
     return result
 
 
+def dependency_start_blockers(dependencies, nodes):
+    """Start after resolved work, allowing at most one concurrently running prerequisite."""
+    active, blocked = [], []
+    for identifier in dependencies:
+        node = nodes[identifier]
+        status = node.get('status') or ('completed' if node.get('checked') else 'planned')
+        if status == 'in progress': active.append(identifier)
+        elif status not in {'resolved', 'completed'}: blocked.append(identifier)
+    if len(active) > 1: blocked.extend(active)
+    return sorted(blocked)
+
+
 def task_statuses(tasks):
     """Pure projection; SUM never changes authoritative checkboxes or review receipts."""
     children = defaultdict(list)
@@ -359,8 +371,10 @@ def project_task_graph(files, entities, project_id, commit_id):
                           'hierarchy_depth': _hierarchy_depth(tasks, task_id),
                           'source': task['source'], 'line': task['line'],
                           'critical': task_id in critical,
-                          'ready': not task['checked'] and all(tasks[parent]['checked'] for parent in parents),
-                          'blocked': not task['checked'] and any(not tasks[parent]['checked'] for parent in parents)})
+                          'completion_ready': all(tasks[parent]['checked'] for parent in parents),
+                          'start_blockers': dependency_start_blockers(parents, statuses),
+                          'ready': not task['checked'] and not dependency_start_blockers(parents, statuses),
+                          'blocked': not task['checked'] and bool(dependency_start_blockers(parents, statuses))})
         if profile:
             for node in nodes:
                 node['depth'] = node['hierarchy_depth']

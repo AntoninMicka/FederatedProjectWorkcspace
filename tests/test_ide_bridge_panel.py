@@ -153,6 +153,16 @@ class BridgePanelTests(unittest.TestCase):
         self.assertEqual('1', Projects(self.node).repository(self.project).run(
             'rev-list', '--count', self.head+'..HEAD').stdout.strip())
 
+    def test_nonqueue_progress_rechecks_dependency_start_policy(self):
+        self.body = ('- [ ] [TASK-A] A\n  - status: in progress\n'
+                     '- [ ] [TASK-B] B\n  - status: in progress\n'
+                     '- [ ] [TASK-01] T\n  - depends_on: TASK-A, TASK-B\n')
+        self.head = self.save(self.body)
+        message = self.send(kind='progress')
+        with self.assertRaisesRegex(ValueError, 'nejvýše jednu'):
+            self.service.review(None, self.review(message))
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+
     def test_progress_recomputes_sum_parents_without_replacing_sum(self):
         self.body = ('<!-- fpw-plan-profile: software-development/v1 -->\n'
             '- [SUM] [MILESTONE-01] M\n  - type: milestone\n'

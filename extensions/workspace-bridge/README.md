@@ -146,3 +146,8 @@ Ve verzi 0.5.3 je ve zprávách dostupná volba **Probíhá**, také bez checkli
 Po přijetí ve Workspace synchronizace zobrazí pracovní stav v detailu,
 stromu i frontě. Hlášení zahájení neznačí splnění. U SUM skupin hlaste práci
 na podúkolu. Dokončení a důkazy se nadále posílají samostatně.
+
+Od verze 0.5.4 se u závislých úkolů rozlišuje zahájení a dokončení. Zahájit
+lze po Vyřešeno/Dokončeno všech předpokladů s nejvýše jedním Probíhá.
+Dvě probíhající nebo libovolná nevyřešená závislost start blokují. Dokončení
+stále čeká na potvrzené splnění všech závislostí.

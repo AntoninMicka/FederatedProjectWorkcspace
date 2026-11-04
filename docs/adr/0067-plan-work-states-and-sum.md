@@ -114,3 +114,26 @@ receipts zahrnuje přijaté progress i completion commity, ale mezi potvrzené
 úkoly počítá pouze completion. Více přijatých zpráv stejného tasku proto
 nesmí způsobit falešné dokončení ani blokovat jeho pozdější completion.
 Crash boundaries zůstávají stejné jako u existujícího review.
+
+## Zahajitelnost závislých úkolů
+
+Zahájit lze nedokončenou položku, jestliže všechny její přímé závislosti
+mají pracovní stav Vyřešeno nebo Dokončeno a nejvýše jedna může mít stav
+Probíhá. Bez závislostí je podmínka splněná. Dvě probíhající závislosti nebo
+kterákoli Plánováno, Odloženo, Selhalo či neznámý stav zahájení blokují.
+Používá se úplná projektová projekce včetně SUM, nikoli pouze viditelná fronta.
+
+Jde o zahájení, nikoli potvrzení dokončení. Pole `ready`/`blocked` grafu a
+`startable` IDE fronty vyjadřují tuto politiku. `completion_ready` grafu
+vyjadřuje potvrzené checkboxy všech přímých závislostí. `eligible` fronty
+pro dokončení navíc vyžaduje nedokončený, nepřidržený cíl a pro skupinu také
+potvrzení všech jejích dětí. Přijetí `progress` podmínku opět ověří
+nad aktuálním commitem, také mimo připnutou frontu. Příznak Pozastaveno,
+neaktuálnost, read-only a ostatní oprávnění zůstávají samostatnými blokacemi.
+
+Vyřešený předpoklad ani jediný probíhající předpoklad proto nemusí být
+přítomen před položkou ve frontě. Přesuny a náhled odebrání používají stejnou
+podmínku jako validace fronty. Ostatní dosud nevyřešené předpoklady lze
+nadále plánovat dříve ve frontě jako Navazující; to neumožňuje okamžité zahájení.
+Nevzniká nový writer ani crash boundary; stav je read-only výpočet a změny
+fronty používají stávající revizi, náhled a atomický zápis.

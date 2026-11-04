@@ -189,6 +189,7 @@ a zahajitelné zadání. Změnu opět provádí lidské review ve Workspace.
 
 Přijatý progress posune ověřenou řadu projektových commitů, ale nepřidá task
 do `accepted_task_ids`, nenastaví `agent_confirmed`/`user_requested` jako
-hlášení dokončení ani `user_confirmed` a neodemkne jeho závislé položky.
+hlášení dokončení ani `user_confirmed`. Zahájení jeho závislých položek se řídí stavovou
+politikou z ADR 0067; potvrzení jejich dokončení dál čeká na všechny závislosti.
 Pozdější dokončení stejného tasku ve stejném připnutém balíčku zůstává platné.
 U skupiny SUM se ohlašuje práce na podúkolu a skupina se přepočítá.

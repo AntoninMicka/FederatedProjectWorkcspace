@@ -11,7 +11,7 @@ from spikes.metadata import require, safe_path, uuid, validate_snapshot, validat
 from spikes.projects import Projects
 from spikes.markdown_documents import document
 from spikes.roadmap_validation import _actor
-from spikes.task_graph import project_task_graph, parse_main_todo, TASK, CHECKLIST, TASK_MARKER
+from spikes.task_graph import project_task_graph, parse_main_todo, TASK, CHECKLIST, TASK_MARKER, dependency_start_blockers
 from spikes.administration import Administration
 
 MAX_TEXT = 1024 * 1024
@@ -195,6 +195,13 @@ def _changes(files, project_id, head, message):
     task = next((t for t in graph['nodes'] if t['id'] == message['task_id']), None)
     require(task is not None, 'Review task disappeared')
     require(task['type'] in {None, 'task'} or message.get('queue_packet_id') and task['type'] in {'batch', 'milestone'}, 'Only leaf tasks or reviewed queue containers can change completion')
+    nodes = {n['id']: n for n in graph['nodes']}
+    if message['kind'] == 'progress':
+        require(not dependency_start_blockers(task['depends_on'], nodes),
+                'Zahájení vyžaduje vyřešené závislosti a nejvýše jednu probíhající.')
+    if message['kind'] == 'completed':
+        require(all(nodes[d]['checked'] for d in task['depends_on']),
+                'Dokončení vyžaduje potvrzené dokončení všech závislostí.')
     if message['kind'] == 'completed' and message.get('queue_packet_id'):
         nodes = {n['id']: n for n in graph['nodes']}
         require(not task['checked'] and all(nodes[d]['checked'] for d in task['depends_on'])

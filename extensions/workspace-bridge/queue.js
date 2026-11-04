@@ -30,7 +30,7 @@ function flags(entry,{stale=false,blockers=[]}={}){
   if(blockers.length)list.push({name:'blocked',label:'Blokováno balíčkem'});
   else if(yes(entry.held))list.push({name:'held',label:'Pozastaveno'});
   else if(yes(entry.eligible))list.push({name:'ready',label:'Zahajitelné'+suffix});
-  else if(yes(entry.startable))list.push({name:'feature',label:'Dávka · '+(entry.open_children||[]).length+' otevřených podúkolů'+suffix});
+  else if(yes(entry.startable))list.push((entry.open_children||[]).length?{name:'feature',label:'Dávka · '+entry.open_children.length+' otevřených podúkolů'+suffix}:{name:'ready',label:'Zahajitelné · dokončení čeká na potvrzení závislostí'+suffix});
   else list.push({name:'waiting',label:'Navazující · pouze náhled'});
  }
  if(yes(entry.agent_confirmed))list.push({name:'agent',label:'Agent hlásí splnění'+suffix});

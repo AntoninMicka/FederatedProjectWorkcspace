@@ -11,6 +11,7 @@ from spikes.ide_bridge import canonical
 from spikes.ide_bridge_panel import authorize, live, content, descriptors, reviewer
 from spikes.metadata import require, validate_snapshot
 from spikes.project_creation import ProjectCreation
+from spikes.task_graph import dependency_start_blockers
 from spikes.task_queue import TaskQueue, assess
 
 MAX_DOCUMENTS = 128
@@ -267,7 +268,7 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
         if n is None:
             blocked_by.append('Položka již není v roadmapě')
         else:
-            blocked_by += ['Předpoklad: ' + d for d in n['depends_on'] if not nodes[d]['checked']]
+            blocked_by += ['Předpoklad pro zahájení: ' + d for d in dependency_start_blockers(n['depends_on'], nodes)]
             if identifier in held: blocked_by.append('Pozastaveno uživatelem')
             if n['checked']: blocked_by.append('Položka je dokončená')
         open_children = [] if n is None else [c['id'] for c in nodes.values()
@@ -277,10 +278,10 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
                     status=n.get('status') if n else None, status_mode=n.get('status_mode') if n else None,
                     status_counts=n.get('status_counts', {}) if n else {},
                     parent_id=original.get('parent_id'),
-                    eligible=ready and not open_children,
+                    eligible=ready and not open_children and all(nodes[d]['checked'] for d in n['depends_on']),
                     # A batch is one feature branch: work starts before its tasks are accepted.
                     startable=ready and (not open_children or original.get('type') == 'batch'),
-                    blocked_by=blocked_by, open_children=open_children, held=identifier in held,
+                    blocked_by=blocked_by, completion_blocked_by=[] if n is None else [d for d in n['depends_on'] if not nodes[d]['checked']], open_children=open_children, held=identifier in held,
                     agent_confirmed=identifier in reported['agent'],
                     user_requested=identifier in reported['user'],
                     user_confirmed=identifier in accepted)

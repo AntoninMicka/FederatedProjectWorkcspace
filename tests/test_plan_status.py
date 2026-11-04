@@ -59,6 +59,20 @@ class PlanStatusTests(unittest.TestCase):
         self.assertEqual('invalid', self.fixture(source+'  - status: failed\n')['status'])
         self.assertEqual('invalid', self.fixture('- [SUM] [TASK-01] T\n  - type: task\n')['status'])
 
+    def test_start_gate_requires_resolved_work_and_at_most_one_running_dependency(self):
+        from spikes.task_graph import dependency_start_blockers
+        cases = [
+            ([], True), (['resolved'], True), (['completed'], True),
+            (['in progress'], True), (['resolved', 'completed', 'in progress'], True),
+            (['in progress', 'in progress'], False), (['planned', 'resolved'], False),
+            (['failed', 'completed'], False), (['deferred', 'in progress'], False),
+            (['unknown'], False),
+        ]
+        for states, expected in cases:
+            with self.subTest(states=states):
+                nodes = {f'TASK-{i}': {'status': status} for i, status in enumerate(states)}
+                self.assertEqual(expected, not dependency_start_blockers(list(nodes), nodes))
+
     def test_empty_manual_override_and_legacy_description(self):
         graph = self.graph('')
         self.assertEqual({'planned'}, {n['status'] for n in graph['nodes']})
@@ -75,7 +89,7 @@ class PlanStatusTests(unittest.TestCase):
                 graph = self.graph(self.child('A', 'planned').replace('status: planned', 'status: '+text))
                 self.assertEqual('invalid', graph['status'])
 
-    def test_linked_children_participate_in_sum_and_resolved_does_not_unlock_dependencies(self):
+    def test_linked_children_participate_in_sum_and_resolved_allows_start_only(self):
         external = str(uuid4())
         graph = self.fixture('''<!-- fpw-plan-profile: software-development/v1 -->
 - [ ] [MILESTONE-01] M
@@ -95,7 +109,9 @@ class PlanStatusTests(unittest.TestCase):
         self.assertEqual('ready', graph['status'], graph)
         nodes = {n['id']: n for n in graph['nodes']}
         self.assertEqual('in progress', nodes['BATCH-01']['status'])
-        self.assertTrue(nodes['TASK-B']['blocked'])
+        self.assertFalse(nodes['TASK-B']['blocked'])
+        self.assertTrue(nodes['TASK-B']['ready'])
+        self.assertFalse(nodes['TASK-B']['completion_ready'])
         self.assertIn('SUM', graph['svg'])
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires Qt/WebEngine')

@@ -66,6 +66,21 @@ class TaskQueueTests(unittest.TestCase):
         self.assertFalse(item['agent_confirmed'])
         self.assertEqual(self.head, Projects(self.node).repository(self.pid).head())
 
+    def test_ready_dependent_can_be_queued_without_resolved_or_running_prerequisites(self):
+        self.head = self.save('- [ ] [TASK-A] A\n  - status: resolved\n'
+                              '- [ ] [TASK-X] X\n  - status: in progress\n'
+                              '- [ ] [TASK-B] B\n  - depends_on: TASK-A, TASK-X\n')
+        view = self.act('add', 'TASK-B')
+        self.assertTrue(view['valid'])
+        self.assertEqual(['TASK-B'], view['task_ids'])
+        self.assertFalse(view['items'][0]['user_confirmed'])
+        self.act('add', 'TASK-A')
+        preview = self.act('remove-preview', 'TASK-A')
+        self.assertEqual(['TASK-A'], preview['removed_ids'])
+        after = self.act('remove', 'TASK-A', preview_sha256=preview['preview_sha256'])
+        self.assertEqual(['TASK-B'], after['task_ids'])
+        self.assertTrue(after['valid'])
+
     def test_chain_following_excludes_partial_dependencies_and_does_not_mutate_plan(self):
         self.assertEqual([], self.status()['following'])
         self.act('add', 'TASK-A'); self.assertEqual(['TASK-B'], self.status()['following'])

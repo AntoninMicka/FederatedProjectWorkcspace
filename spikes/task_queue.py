@@ -12,6 +12,7 @@ import subprocess
 import time
 from uuid import uuid4
 
+from spikes.task_graph import dependency_start_blockers
 from spikes.journal import sync_dir
 from spikes.local_api import private_directory
 from spikes.metadata import require, uuid
@@ -40,13 +41,13 @@ def assess(task_ids, graph, accepted=()):
         elif node['checked'] and identifier not in accepted:
             issues.append(identifier + ': položka je dokončená')
         else:
-            missing = [d for d in node['depends_on'] if not nodes[d]['checked'] and d not in seen]
+            missing = [d for d in dependency_start_blockers(node['depends_on'], nodes) if d not in seen]
             if missing:
                 issues.append(identifier + ': nesplněný předpoklad chybí před položkou: ' + ', '.join(missing))
         seen.add(identifier)
     following = [n['id'] for n in graph['nodes'] if not n['checked'] and n['id'] not in seen
-                 and any(not nodes[d]['checked'] for d in n['depends_on'])
-                 and all(nodes[d]['checked'] or d in seen for d in n['depends_on'])]
+                 and bool(dependency_start_blockers(n['depends_on'], nodes))
+                 and all(d in seen for d in dependency_start_blockers(n['depends_on'], nodes))]
     return issues, following
 
 
@@ -62,7 +63,7 @@ def adjacent_moves(task_ids, position, nodes, enabled):
             reason = 'Položka je na začátku fronty.' if offset < 0 else 'Položka je na konci fronty.'
         else:
             before, after = (task_ids[target], task_ids[position]) if offset < 0 else (task_ids[position], task_ids[target])
-            if not nodes[before]['checked'] and before in nodes[after]['depends_on']:
+            if before in dependency_start_blockers(nodes[after]['depends_on'], nodes):
                 reason = f'{after} závisí na {before}; předpoklad musí zůstat před položkou.'
         result['can_move_' + direction] = not reason
         result['move_' + direction + '_reason'] = reason
@@ -251,10 +252,9 @@ class TaskQueue:
                 require(identifier in state['task_ids'], 'Položka není ve frontě.')
                 removed = {identifier}
                 while True:
-                    # A completed prerequisite stays satisfied after removal, as in assess().
-                    unmet = {i for i in removed if i in nodes and not nodes[i]['checked']}
+                    # Only prerequisites that still block starting require a retained queue reference.
                     expanded = removed | {i for i in state['task_ids'] if i in nodes
-                                           and set(nodes[i]['depends_on']) & unmet}
+                                           and set(dependency_start_blockers(nodes[i]['depends_on'], nodes)) & removed}
                     if expanded == removed: break
                     removed = expanded
                 preview = dict(project_id=project_id, owner_id=actor_id, expected_head=head,
