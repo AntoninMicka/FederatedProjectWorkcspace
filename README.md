@@ -18,6 +18,9 @@ Ruční tasky, zdroje/události/story a neměnné Markdown reporty lze ukládat
 lokálním [reporting CLI a izolovanou ukázkou](docs/manual-reporting.md).
 Tento řez nepřidává scheduler ani grafické formuláře reportingu.
 
+[Source Collector](docs/source-collector.md) přidává potvrzený sběr veřejného
+UTF-8 textu podle připnuté policy a samostatný atomický import raw/Source.
+
 ## Desktop
 
 ```sh

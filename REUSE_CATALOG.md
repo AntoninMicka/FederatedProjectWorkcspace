@@ -1038,3 +1038,12 @@ druhá DB, provider ani frontend nejsou potřeba. Soukromá inventura nepřinesl
 důvod nahrazovat místní engine; externí kód se nepřenášel. Ruční jednofázový
 intent používá původní Workspace journal, nikoli scheduled ReportRun.
 Recovery: [ADR 0068](docs/adr/0068-manual-reporting-transactions.md).
+
+MON-02 **reuse/adaptuje** PublicSourceBinding/Request/Runs a StaticHTMLAdapter,
+bounded textovou projekci, místní autora, reportingové schéma/PinnedRef a
+Workspace.transact s původním writerem, journalem, Git CAS a indexem. Úzký
+textový adaptér zpřísňuje robots/MIME/storage pravidla; přidává se připnutá
+collector policy a origin backoff ve stejném fetch journalu. Druhý fetch engine,
+projektový writer, parser, browser, SDK či LLM by hranice duplikovaly. Soukromá
+inventura nepřinesla důvod nahrazovat místní komponenty a kód se nepřenášel.
+Rozhodnutí/recovery: [ADR 0069](docs/adr/0069-reporting-source-collector.md).
