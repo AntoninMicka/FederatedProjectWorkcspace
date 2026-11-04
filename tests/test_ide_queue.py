@@ -69,7 +69,7 @@ class QueuePacketTests(unittest.TestCase):
                 message = self.message(packet, 'TASK-03') | {'kind': 'progress'}
                 message.pop('evidence')
                 if allowed:
-                    self.send(message); self.review(message)
+                    self.assertEqual('automatic-start', self.send(message)['receipts'][0]['acceptance'])
                     self.assertEqual('in progress', status(self.service, self.record)['items'][2]['status'])
                 else:
                     with self.assertRaises(ValueError): self.send(message)
@@ -80,11 +80,10 @@ class QueuePacketTests(unittest.TestCase):
         progress = self.message(packet) | dict(kind='progress', body='Work started')
         progress.pop('evidence')
         with self.assertRaises(ValueError): self.send(progress | {'queue_packet_id': '0'*64})
-        self.send(progress)
+        self.send(progress)  # accepted automatically, no human review
         first = status(self.service, self.record)['items'][0]
         self.assertFalse(first['agent_confirmed'])
         self.assertFalse(first['user_confirmed'])
-        self.review(progress)
         value = status(self.service, self.record)
         self.assertTrue(value['current'])
         self.assertEqual('in progress', value['items'][0]['status'])
@@ -99,7 +98,7 @@ class QueuePacketTests(unittest.TestCase):
         self.assertTrue(value['items'][0]['user_confirmed'])
         self.assertTrue(value['items'][1]['eligible'])
 
-    def test_manual_user_start_is_accepted_without_completion_request(self):
+    def test_manual_user_start_is_accepted_automatically_without_completion_request(self):
         packet = self.packet()
         # Same shape as the extension's queue.manualStart.
         start = dict(message_id=str(uuid4()), task_id='TASK-01', kind='progress', body='Zahájeno ručně z IDE.',
@@ -107,11 +106,10 @@ class QueuePacketTests(unittest.TestCase):
                      queue_packet_id=packet['packet_id'], reported_by='user')
         with self.assertRaises(ValueError): self.send(start | dict(message_id=str(uuid4()), evidence=dict(tests='x', diff='y')))
         with self.assertRaises(ValueError): self.send(start | dict(message_id=str(uuid4()), task_id='TASK-02', body='Blocked start'))
-        self.assertEqual('received', self.send(start)['receipts'][0]['status'])
-        self.assertEqual(self.head, Projects(self.node).repository(self.project).head())
-        item = status(self.service, self.record)['items'][0]
-        self.assertFalse(item['user_requested']); self.assertFalse(item['user_confirmed'])
-        self.review(start)
+        receipt = self.send(start)['receipts'][0]
+        self.assertEqual(('received', 'automatic-start'), (receipt['status'], receipt['acceptance']))
+        self.assertNotEqual(self.head, Projects(self.node).repository(self.project).head())
+        with self.assertRaisesRegex(ValueError, 'another decision'): self.review(start)
         item = status(self.service, self.record)['items'][0]
         self.assertEqual('in progress', item['status'])
         self.assertFalse(item['user_requested']); self.assertFalse(item['user_confirmed']); self.assertTrue(item['eligible'])

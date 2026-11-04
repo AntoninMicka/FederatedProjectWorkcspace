@@ -72,10 +72,11 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   kind='progress';await commands.get('workspaceBridge.compose')(task);
   project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
   const starting=sidebar.children('messages',root).find(r=>r.entry.message.kind==='progress').entry;
-  assert.equal(project.snapshot.tasks.find(t=>t.id==='TASK-01').checked,false);
+  // Start is accepted by Workspace itself; a human decision is neither needed nor possible.
+  assert.equal(starting.review?.state,'completed');assert.equal(starting.review.outcome,'accepted');
   const started=await request('/v1/ide-bridge/review',{project_id:fixture.project_id,session_id:starting.session_id,
    message_id:starting.message.message_id,decision:'accepted',note:'Start reviewed.',expected_head:project.snapshot.commit_id,operation_id:crypto.randomUUID()},fixture.admin_token);
-  assert.equal(started.status,200,JSON.stringify(started.value));
+  assert.notEqual(started.status,200,JSON.stringify(started.value));
   await commands.get('workspaceBridge.sync')();
   project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
   assert.equal(project.snapshot.tasks.find(t=>t.id==='TASK-01').status,'in progress');
@@ -167,7 +168,7 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   vscode.window.showWarningMessage=async()=>undefined;
   await commands.get('workspaceBridge.queueStart')(rows[0]);
   assert.deepEqual(await listed(),inboxBefore,'cancelled start writes nothing');
-  vscode.window.showWarningMessage=async()=>'Odeslat zahájení';errors.length=0;
+  vscode.window.showWarningMessage=async()=>'Zahájit';errors.length=0;
   await commands.get('workspaceBridge.queueStart')(rows[0]);
   assert.ok(errors.some(e=>/nebylo potvrzeno/.test(e)),'an undelivered start must not look successful: '+errors);
   assert.equal(informed,0);

@@ -293,6 +293,55 @@ def _changes(files, project_id, head, message):
     return {path: raw for path, raw in candidate.items() if raw != files.get(path)}
 
 
+AUTO_START_NOTE = 'Automaticky přijaté zahájení (ADR 0067).'
+
+
+def automatic_start(message):
+    """A plain start report needs no human decision; checklist changes still do."""
+    return message['kind'] == 'progress' and not message.get('checklist')
+
+
+def auto_start(service, record, message, *, checkpoint=lambda stage: None):
+    """Accept a start report through the normal review intent and native journal.
+
+    The operation ID is derived from the message, so a retry after a lost reply
+    or an idle poll resumes the same intent instead of creating another commit.
+    Returns the completed intent, or None when the report must wait for a human.
+    """
+    from uuid import NAMESPACE_URL, uuid5
+    from spikes.workspace import PendingOperation
+    operation = str(uuid5(NAMESPACE_URL, f'fpw-auto-start:{record["session_id"]}:{message["message_id"]}'))
+    with service.database() as db:
+        prior = db.execute('SELECT record FROM reviews WHERE session=? AND id=?',
+                           (record['session_id'], message['message_id'])).fetchone()
+    if prior:
+        intent = json.loads(prior['record'])
+        if intent['state'] == 'completed' or intent['request']['operation_id'] != operation:
+            return intent if intent['request']['operation_id'] == operation else None
+        request = intent['request']
+    else:
+        request = dict(project_id=record['project_id'], session_id=record['session_id'],
+                       message_id=message['message_id'], decision='accepted', note=AUTO_START_NOTE,
+                       expected_head=service.projects.repository(record['project_id']).head(), operation_id=operation)
+    try:
+        return review(service, service.connection_actor(record), request, checkpoint=checkpoint)
+    except (ValueError, PendingOperation):
+        # Blocked, stale or temporarily locked: the receipt stays durable and
+        # a prepared intent is resumed later; nothing is reported as accepted.
+        return None
+
+
+def resume_auto_starts(service, record):
+    """Finish automatic start intents interrupted after preparation."""
+    with service.database() as db:
+        rows = db.execute('SELECT m.record AS message, r.record AS review FROM messages m JOIN reviews r '
+                          'ON r.session=m.session AND r.id=m.id WHERE m.session=?', (record['session_id'],)).fetchall()
+    for row in rows:
+        message, intent = json.loads(row['message']), json.loads(row['review'])
+        if automatic_start(message) and intent['state'] != 'completed' and intent['request']['note'] == AUTO_START_NOTE:
+            auto_start(service, record, message)
+
+
 def review(service, actor, request, *, checkpoint=lambda stage: None):
     from spikes.ide_bridge import canonical, MAX_MESSAGE
     require(isinstance(request, dict) and set(request) == {'project_id', 'session_id',

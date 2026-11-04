@@ -299,15 +299,18 @@ function createSidebar(vscode, context, hooks) {
     const project=find(item);if(!project||project.error||project.state?.stale||project.panel?.stale)throw Error('Stav není aktuální; nejdříve obnovte připojení.');
     const taskId=item.taskId,commit=await bridge.git((await bridge.repository(project.repository,project.identity)).root,'rev-parse','HEAD');
     queueBridge.manualStart(project.queue,taskId,'-',commit,crypto.randomUUID());
-    const body=await vscode.window.showInputBox({prompt:`Ruční zahájení ${taskId}: kdo a na čem začíná pracovat`,value:'Zahájeno ručně z IDE.',ignoreFocusOut:true});if(!body)return;
+    const body=await vscode.window.showInputBox({prompt:`Zahájení ${taskId}: kdo a na čem začíná pracovat`,value:'Zahájeno ručně z IDE.',ignoreFocusOut:true});if(!body)return;
     if(Buffer.byteLength(body)>16384)throw Error('Zpráva přesahuje 16 KiB.');
     const message=queueBridge.manualStart(project.queue,taskId,body,commit,crypto.randomUUID());
-    if(await vscode.window.showWarningMessage(`Navrhnout zahájení ${taskId}?`,{modal:true,detail:'Stav Probíhá nastaví až přijetí ve Workspace, Nastavení → IDE → zprávy projektu. Checklist se nemění.'},'Odeslat zahájení')!=='Odeslat zahájení')return;
+    if(await vscode.window.showWarningMessage(`Zahájit ${taskId}?`,{modal:true,detail:'Workspace zahájení přijme automaticky a nastaví stav Probíhá. Checklist ani dokončení se nemění.'},'Zahájit')!=='Zahájit')return;
     await bridge.atomic(path.join(project.root,'inbox',message.message_id+'.json'),JSON.stringify(message,null,2));
     await hooks.synchronize();await refresh();
     let receipt;try{receipt=JSON.parse(await bridge.read(path.join(project.root,'receipts',message.message_id+'.json')));}catch(error){if(error.code!=='ENOENT')throw error;}
     if(receipt?.status!=='received')throw Error('Zahájení nebylo potvrzeno jako doručené'+(receipt?.status==='stale'?' (zastaralá revize).':'.')+' Zkontrolujte zprávu v inboxu; neodesílejte ji znovu slepě.');
-    await vscode.window.showInformationMessage(`Zahájení ${taskId} je ve Workspace; přijměte jej v Nastavení → IDE → zprávy projektu.`);
+    const review=(find(item)?.panel?.messages||[]).find(entry=>entry.message.message_id===message.message_id)?.review;
+    if(review?.state!=='completed'||review.outcome!=='accepted')
+      throw Error(`Zahájení ${taskId} bylo doručeno, ale Workspace jej automaticky nepřijal (např. změněný stav nebo závislosti); čeká na posouzení v Nastavení → IDE → zprávy projektu.`);
+    await vscode.window.showInformationMessage(`Zahájení ${taskId} přijato; stav je Probíhá.`);
   });
   register('refreshPanel',async()=>{await hooks.synchronize();await refresh();});
   register('compose',async item => {

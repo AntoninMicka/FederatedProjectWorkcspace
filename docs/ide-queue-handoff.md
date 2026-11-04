@@ -185,7 +185,10 @@ Vedle `kind: completed` lze odeslat `kind: progress` jako návrh stavu
 Probíhá. Používá stejné identity, revizi, přesný balíček a repository HEAD;
 `reported_by` rozlišuje `agent` a `user`. Pro samotné zahájení není povinný
 checklist ani completion evidence. Povoleno je pouze aktuální, nezablokované
-a zahajitelné zadání. Změnu opět provádí lidské review ve Workspace.
+a zahajitelné zadání. Zahájení bez checklistu Workspace od rozšíření 0.5.6
+přijímá automaticky
+([ADR 0067](adr/0067-plan-work-states-and-sum.md#automatické-přijetí-zahájení-4-11-2026));
+změny checklistu a dokončení dál provádí lidské review.
 
 Přijatý progress posune ověřenou řadu projektových commitů, ale nepřidá task
 do `accepted_task_ids`, nenastaví `agent_confirmed`/`user_requested` jako
@@ -195,8 +198,8 @@ Pozdější dokončení stejného tasku ve stejném připnutém balíčku zůst�
 U skupiny SUM se ohlašuje práce na podúkolu a skupina se přepočítá.
 
 Rozšíření 0.5.5 nabízí ve frontě ruční akci ▶ vedle ručního potvrzení ✓.
-Akce odešle uvedený `progress` s `reported_by: user`; Workspace jej jen
-přijme nebo odmítne stávajícím review. Pohled akci skryje u blokované,
+Akce odešle uvedený `progress` s `reported_by: user`. Od 0.5.6 jej
+Workspace přijme automaticky a IDE hlásí úspěch až po přijatém review. Pohled akci skryje u blokované,
 neaktuální, přijaté, již probíhající položky a u skupiny SUM; serverová
 validace zahajitelnosti při doručení i přijetí zůstává rozhodující.
 Nedoručený receipt se nehlásí jako úspěch a zprávu nelze slepě opakovat.

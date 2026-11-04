@@ -156,5 +156,12 @@ Ve verzi 0.5.5 má pohled **Fronta úkolů** vedle ✓ také ikonu ▶ **Ručně
 navrhnout zahájení (Probíhá)**. Je dostupná jen u aktuální, nezablokované,
 zahajitelné položky, která ještě neprobíhá a není skupinou SUM. Odešle
 `kind: progress` s `reported_by: user` a připnutým balíčkem, bez checklistu
-a důkazů. Stav Probíhá nastaví až přijetí ve Workspace; úspěch se hlásí jen
-při doručeném receiptu `received`, jinak zpráva zůstává v inboxu ke kontrole.
+a důkazů. Úspěch se hlásí jen při doručeném receiptu `received`, jinak
+zpráva zůstává v inboxu ke kontrole.
+
+Od verze 0.5.6 Workspace zahájení (Probíhá bez checklistu) přijímá
+automaticky, bez potvrzení uživatelem. Platí to pro ▶ ve frontě, volbu
+Probíhá ve zprávách i pro hlášení agenta. Pokud zahájení nejde přijmout,
+třeba kvůli mezitím změněným závislostem, IDE to ohlásí a zpráva čeká
+na posouzení ve Workspace. Dokončení, částečný checklist a dotazy dál
+potvrzuje člověk.

@@ -72,7 +72,7 @@ function manualRequest(value,taskId,body,repositoryCommit,messageId){
  if(open.length)message.checklist=open.map(({index})=>({index,checked:true}));
  return message;
 }
-// A manual start is a progress proposal only; Workspace review sets the status.
+// A manual start is accepted automatically by Workspace; this only builds the report.
 function startable(value,taskId){
  const entry=[...(value?.items||[]),...(value?.linked_items||[])].find(i=>i.id===taskId);
  return Boolean(entry&&!value.blockers.length&&entry.startable===true&&entry.user_confirmed!==true
@@ -165,7 +165,7 @@ async function synchronize(project,request){
   if(!current||current.packet_id!==value.packet_id||current.blockers.length)throw Error('Balíček se během exportu změnil.');
   await bridge.atomic(path.join(root,'manifest.json'),stable(value.manifest));
   await bridge.atomic(path.join(root,'AGENT.md'),'# Předání fronty\n\n'+value.manifest.instructions+'\n\nManifest: manifest.json\nAktuální stav: ../../queue.json (pouze poslední známý stav; před odesláním synchronizujte).\n'
-   +'Probíhá: ../../inbox/<UUID>.json se stejnými identifikátory, kind="progress", reported_by="agent"; checklist a evidence nejsou pro zahájení povinné. Stav změní až přijetí ve Workspace. U SUM skupiny zahajte konkrétní podúkol.\n'
+   +'Probíhá: ../../inbox/<UUID>.json se stejnými identifikátory, kind="progress", reported_by="agent"; checklist a evidence nejsou pro zahájení povinné. Workspace zahájení bez checklistu přijme automaticky (Probíhá); ověřte receipts a stav. U SUM skupiny zahajte konkrétní podúkol.\n'
    +'Completion: ../../inbox/<UUID>.json; fields: message_id, task_id, kind="completed", body, revision=manifest.revision, repository_commit=actual HEAD, queue_packet_id, reported_by="agent", evidence={tests,diff}.\n'
    +'Přiložte i přesné checklist změny, pokud úkol má checklist. Zprávu publikujte přes dočasný soubor a rename; stejné UUID nikdy nepoužijte s jinými bajty.\n'
    +'Dávka v hierarchy je jedna feature větev a jeden PR; manifest.linked_tasks jsou její podúkoly, hlaste je jednotlivě. Dávku lze nahlásit až po přijetí všech podúkolů.\n'

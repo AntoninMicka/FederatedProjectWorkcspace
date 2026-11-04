@@ -106,7 +106,8 @@ ve frontě. Izolovaný smoke nenahrazuje ruční akceptaci běžného profilu.
 Zpráva `kind: progress` může navrhovat pouze zahájení bez checklistu.
 Přijetí používá stávající review/journal a vloží či upraví pouze vlastní
 `status: in progress`. Případné explicitní změny checklistu zůstávají
-samostatným obsahem stejné zprávy. Doručení samo projekt nemění. SUM režim
+samostatným obsahem stejné zprávy. Zahájení bez checklistu přijímá
+Workspace automaticky (viz níže); ostatní doručení projekt nemění. SUM režim
 skupiny se tím nenahrazuje; zahájení se hlásí u konkrétního podúkolu.
 
 Fronta ověřuje zahajitelnost i přesnou připnutou revizi. Její řada nativních
@@ -119,6 +120,47 @@ Ruční zahájení z fronty IDE (rozšíření 0.5.5) je stejná zpráva s
 `reported_by: user`. Nepřidává writer, schéma ani crash boundary: zápis
 do inboxu je atomický soubor bridge, doručení idempotentní receipt podle
 UUID a změnu plánu provádí jen přijetí ve Workspace.
+
+## Automatické přijetí zahájení (4. 11. 2026)
+
+Na výslovný pokyn uživatele Workspace přijímá zahájení bez lidského
+potvrzení. Pro hlášení zahájení tím mění dosavadní pravidlo z ADR 0062,
+podle kterého změnu plánu provádí jen lidské review. Automaticky se přijímá
+`kind: progress` bez checklistu, pokud je doručení aktuální (`received`).
+Platí to pro agenta i uživatele, ve frontě i mimo ni. Receipt nese
+`acceptance: automatic-start`. Jde o označení pravidla, ne výsledku;
+výsledek dokládá záznam review. Dokončení, změny checklistu, dotazy
+a zprávy dál vyžadují člověka.
+
+Přijetí volá stejnou funkci review jako člověk. Používá oprávnění vlastníka
+připojení a validace jsou stejné: zahajitelnost, SUM, nedokončený úkol,
+přesná revize i HEAD. Volá se z `exchange` hned po trvalém uložení zprávy.
+`operation_id` je UUIDv5 ze session a message ID, takže všechny pokusy
+navazují na jediný záměr a jediný nativní commit. Ruční review stejné zprávy
+pak skončí chybou `another decision`.
+
+Hranice pádu a obnova:
+
+1. Pád po uložení zprávy, ale před vznikem záměru: IDE nedostalo odpověď
+   a pošle stejné UUID znovu. Větev `prior` pokus zopakuje.
+2. Pád po vzniku záměru (`intent-prepared`), ale před nativní operací:
+   další `exchange` dané session, včetně idle pollu, nejdřív dokončí
+   rozpracované automatické záměry. Pokud se mezitím změnil HEAD, záměr
+   skončí jako `stale` bez účinku.
+3. Pád během nativní operace (`prepared` až `indexed`): projekt drží
+   nedokončenou operaci, takže otevření projektu by selhalo. Proto se
+   obnova spouští před otevřením projektu. Transakce se stejným
+   `operation_id` dokončí právě jeden commit.
+4. Pád po commitu, ale před zveřejněním výsledku (`before-outcome`), nebo
+   po něm: obnova jen dopíše výsledek, druhý commit nevznikne.
+
+Validační chyba (blokované zahájení nebo zastaralý snapshot) a dočasné
+`PendingOperation` nezpůsobí chybu doručení. Zpráva zůstane doručená
+a čeká na lidské review jako dosud. Bez nového doručení stejné zprávy se
+nezaložený záměr znovu nezkouší, takže zahájení nemůže později proběhnout
+samovolně. Obnova při pollu pokrývá jen aktuální session. Rozpracovaný
+záměr staré session může dokončit vlastník připojení nebo administrátor
+přes stávající pokračování review.
 
 ## Zahajitelnost závislých úkolů
 
