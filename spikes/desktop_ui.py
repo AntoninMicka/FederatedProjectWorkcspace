@@ -4372,10 +4372,10 @@ function renderTaskQueue(){
    summary.textContent=`Zprávy o splnění (${item.reports.length})`;reports.append(summary);
    const outcomes={accepted:'Přijato',rejected:'Odmítnuto',stale:'Zastaralé, neaplikováno',prepared:'Review připraveno'};
    for(const report of item.reports){const text=document.createElement('p');
-    text.textContent=`${report.task_id===item.id?'':report.task_id+' · '}${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\n${report.body}${report.evidence?`\nTesty: ${report.evidence.tests}\nDiff: ${report.evidence.diff}`:''}${report.note?`\nOdpověď: ${report.note}`:''}`;reports.append(text);
+    text.textContent=`${report.task_id===item.id?'':report.task_id+' · '}${report.kind==='progress'?'Probíhá · ':''}${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\n${report.body}${report.evidence?`\nTesty: ${report.evidence.tests}\nDiff: ${report.evidence.diff}`:''}${report.note?`\nOdpověď: ${report.note}`:''}`;reports.append(text);
     const decisions=report.outcome==='prepared'?['resume']:report.outcome?[]:['accepted','rejected'];
     for(const decision of decisions){const button=document.createElement('button');button.type='button';
-     button.textContent=decision==='resume'?'Dokončit připravené review':decision==='rejected'?'Odmítnout':'Přijmout a dokončit úkol';
+     button.textContent=decision==='resume'?'Dokončit připravené review':decision==='rejected'?'Odmítnout':report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit úkol';
      button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||(decision==='accepted'&&report.acceptable!==true);
      if(decision==='accepted'&&report.acceptable!==true)button.title='Zpráva je ze staré generace fronty nebo má úkol nesplněné předpoklady; nelze ji přijmout.';
      button.addEventListener('click',()=>reviewQueueReport(report,decision));reports.append(button);}
@@ -4391,7 +4391,7 @@ async function reviewQueueReport(report,decision){
  const project=activeProject;let request=report.review_request;
  if(!request){
   const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
-  if(!window.confirm(`${decision==='accepted'?'Přijmout a dokončit':'Odmítnout'} ${report.task_id}?\n${report.body}\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
+  if(!window.confirm(`${decision==='accepted'?(report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit'):'Odmítnout'} ${report.task_id}?\n${report.body}\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
   request={project_id:project.id,session_id:report.session_id,message_id:report.message_id,decision,note,expected_head:taskQueueView.expected_head,operation_id:crypto.randomUUID()};
  }
  taskQueueBusy=true;renderTaskQueue();

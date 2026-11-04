@@ -138,6 +138,34 @@ class BridgePanelTests(unittest.TestCase):
         self.assertEqual(Projects(self.node).open(self.project)['commit_id'], self.head)
         self.assertEqual(panel(self.service, self.record)['messages'][0]['review'], outcome)
 
+    def test_progress_without_checklist_is_reviewed_and_sets_work_state(self):
+        message = self.send(kind='progress')
+        self.assertEqual(self.head, Projects(self.node).open(self.project)['commit_id'])
+        request = self.review(message)
+        with self.assertRaisesRegex(RuntimeError, 'lost reply'):
+            self.service.review(None, request, checkpoint=lambda stage:
+                (_ for _ in ()).throw(RuntimeError('lost reply')) if stage == 'before-outcome' else None)
+        result = self.service.review(None, request)
+        self.assertEqual(result, self.service.review(None, request))
+        task = next(n for n in Projects(self.node).open(self.project)['plan']['nodes'] if n['id']=='TASK-01')
+        self.assertEqual('in progress', task['status'])
+        self.assertFalse(task['checked'])
+        self.assertEqual('1', Projects(self.node).repository(self.project).run(
+            'rev-list', '--count', self.head+'..HEAD').stdout.strip())
+
+    def test_progress_recomputes_sum_parents_without_replacing_sum(self):
+        self.body = ('<!-- fpw-plan-profile: software-development/v1 -->\n'
+            '- [SUM] [MILESTONE-01] M\n  - type: milestone\n'
+            '  - [SUM] [BATCH-01] B\n    - type: batch\n'
+            '    - [ ] [TASK-01] T\n      - type: task\n')
+        self.head = self.save(self.body)
+        message = self.send(kind='progress')
+        self.service.review(None, self.review(message))
+        nodes = Projects(self.node).open(self.project)['plan']['nodes']
+        self.assertEqual({'in progress'}, {n['status'] for n in nodes})
+        self.assertTrue(all(not n['checked'] for n in nodes))
+        self.assertEqual(2, sum(n['status_mode']=='sum' for n in nodes))
+
     def test_review_task_completion_replays_without_second_commit(self):
         message = self.send(); request = self.review(message)
         first = self.service.review(None, request)

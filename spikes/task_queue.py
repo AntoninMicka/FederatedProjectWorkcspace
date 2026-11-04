@@ -175,6 +175,8 @@ class TaskQueue:
         eligible = {i['id'] for i in (projection['items'] + projection['linked_items'] if projection else ())
                     if i['eligible']}
 
+        startable = {i['id'] for i in (projection['items'] + projection['linked_items'] if projection else ()) if i.get('startable')}
+
         def item_reports(identifier, nodes, state):
             ids = [identifier]
             for current in ids:
@@ -184,7 +186,7 @@ class TaskQueue:
                                       and state['task_ids'] == [t['id'] for t in projection['manifest']['tasks']])
             return [dict(report, acceptable=bool(current and report['outcome'] is None
                                                  and report['queue_packet_id'] == projection['packet_id']
-                                                 and report['task_id'] in eligible))
+                                                 and report['task_id'] in (startable if report['kind'] == 'progress' else eligible)))
                     for i in ids for report in reports.get(i, [])]
         accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)

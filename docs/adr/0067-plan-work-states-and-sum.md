@@ -100,3 +100,17 @@ skupinu, ruční override, rekurzi a souborové definice. Scoped zápis ověřuj
 nezměněné okolní bajty a replay po přerušení na všech pěti hranicích.
 Qt smoke čte SUM, vybere jiný stav, uloží přes skutečné API a ověří stav
 ve frontě. Izolovaný smoke nenahrazuje ruční akceptaci běžného profilu.
+
+## Probíhá přes IDE bridge
+
+Zpráva `kind: progress` může navrhovat pouze zahájení bez checklistu.
+Přijetí používá stávající review/journal a vloží či upraví pouze vlastní
+`status: in progress`. Případné explicitní změny checklistu zůstávají
+samostatným obsahem stejné zprávy. Doručení samo projekt nemění. SUM režim
+skupiny se tím nenahrazuje; zahájení se hlásí u konkrétního podúkolu.
+
+Fronta ověřuje zahajitelnost i přesnou připnutou revizi. Její řada nativních
+receipts zahrnuje přijaté progress i completion commity, ale mezi potvrzené
+úkoly počítá pouze completion. Více přijatých zpráv stejného tasku proto
+nesmí způsobit falešné dokončení ani blokovat jeho pozdější completion.
+Crash boundaries zůstávají stejné jako u existujícího review.

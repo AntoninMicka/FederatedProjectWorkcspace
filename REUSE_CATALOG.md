@@ -47,6 +47,13 @@ Hledání na žádost modelu (`NEW-FA92ACE959-TASK-3`) **znovu používá** kart
 budget a recovery řízeného hledání. Hledání u providera (`TASK-1`) rozšiřuje stávající
 náhled a run journal. **Reject:** druhý search journal a backendové úložiště výsledků v RAM.
 
+Hlášení Probíhá z IDE **adaptuje** existující zprávu `progress`, review,
+`PlanItems.item_span` a nativní journal. Stejný transport nově podporuje
+zahájení bez checklistu; řada receipts rozlišuje průběh a dokončení.
+**Reject:** zápis do autoritativního plánu přímo z rozšíření a vydávání
+hlášení zahájení za potvrzené dokončení. Detail IDE používá stejnou projekci
+pracovního stavu jako strom a fronta.
+
 Stavy plánu a SUM (`NEW-B7B56C4A0B-TASK-1`) **adaptují** `task_graph.py`,
 scoped `PlanItems.save`, sdílený desktop/web shell a projekce obou front.
 `plan_status_ui.py` používá stávající editor a draft, bez dalšího write

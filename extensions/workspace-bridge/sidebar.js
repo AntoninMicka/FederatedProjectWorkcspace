@@ -9,7 +9,10 @@ const queueBridge = require('./queue');
 const hash = data => crypto.createHash('sha256').update(data).digest('hex');
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const idPattern = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/;
-const kinds={message:'Zpráva',clarification:'Dotaz',progress:'Částečné splnění',completed:'Návrh dokončení'};
+const kinds={message:'Zpráva',clarification:'Dotaz',progress:'Probíhá',completed:'Návrh dokončení'};
+
+const statusLabels={'planned':'Plánováno','in progress':'Probíhá','resolved':'Vyřešeno','failed':'Selhalo','completed':'Dokončeno','deferred':'Odloženo'};
+const statusLabel=task=>(task.status_mode==='sum'?'SUM · ':'')+(statusLabels[task.status]||(Object.hasOwn(task,'status')?'Stav neznámý':task.checked?'Dokončeno':'Plánováno'));
 
 function validateSnapshot(snapshot) {
   if (!snapshot || typeof snapshot.project_id !== 'string' || typeof snapshot.revision !== 'string'
@@ -40,7 +43,7 @@ function detailHTML(project, task) {
 body{font-family:var(--vscode-font-family);color:var(--vscode-editor-foreground);padding:20px;max-width:900px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit}small{opacity:.8}.warning{color:var(--vscode-editorWarning-foreground)}</style></head><body>
 <p class="warning">${escape(project.error || (project.state?.stale || project.panel?.stale ? 'Zastaralý export; obnovte synchronizaci.' : 'Stav úkolu mění až posouzení ve Workspace.'))}</p>
 <small>${escape(project.snapshot.project_title)} · ${escape(task.id)}</small><h1>${escape(task.title)}</h1>
-<p>${task.checked ? '✓ Dokončeno' : '○ Otevřeno'} · ${escape(task.type || 'úkol')}</p><pre>${escape(task.description)}</pre>
+<p>${escape(statusLabel(task))} · ${escape(task.type || 'úkol')}</p><pre>${escape(task.description)}</pre>
 <h2>Podmínky splnění</h2><ul>${task.checklist.map(item => `<li>${item.checked?'☑':'☐'} ${escape(item.text)}</li>`).join('')}</ul>
 <p>Závisí na: ${escape((task.depends_on || []).join(', ') || 'bez závislostí')}</p>
 <small>Projektový commit: ${escape(project.snapshot.commit_id)}<br>Revize exportu: ${escape(project.snapshot.revision)}</small></body></html>`;
@@ -178,7 +181,7 @@ function createSidebar(vscode, context, hooks) {
     } else if(item.kind==='queueMissing'){
       label=item.taskId;description='Chybějící nebo neúplný odkaz';icon='warning';
     } else if (item.kind === 'task') {
-      const task = taskOf(item); label = task.title; description = task.id+' · '+({'planned':'Plánováno','in progress':'Probíhá','resolved':'Vyřešeno','failed':'Selhalo','completed':'Dokončeno','deferred':'Odloženo'}[task.status]|| (task.checked?'Dokončeno':'Plánováno'))+(task.status_mode==='sum'?' · SUM':''); icon = task.checked ? 'pass' : 'circle-outline';
+      const task = taskOf(item); label = task.title; description = task.id+' · '+statusLabel(task); icon = task.checked ? 'pass' : 'circle-outline';
       if (project.snapshot.tasks.some(t => t.parent_id===task.id)) collapsed = vscode.TreeItemCollapsibleState.Collapsed;
       command = 'workspaceBridge.showTask';
     } else if (item.kind === 'document') {
@@ -268,7 +271,7 @@ function createSidebar(vscode, context, hooks) {
     const rows=known.rows.map(r=>'  '.repeat(r.depth-1)+(r.entry?taskLink(r.id):escape(r.id))+(r.repeated?' · opakovaný odkaz':'')+(r.entry?' · '+escape(queueBridge.flags(r.entry,{stale,blockers:project.queue.blockers}).map(f=>f.label).join(' · ')):' · chybějící odkaz')).join('\n');
     const queueSection=`<h2>Příznaky</h2><ul>${flagRows}</ul><p>${escape(scopeText)}</p>${(item.entry.blocked_by||[]).length?`<p>Důvod blokace: ${escape(item.entry.blocked_by.join('; '))}</p>`:''}${known.problems.length?`<p>Problém hierarchie: ${escape(known.problems.join('; '))}</p>`:''}`;
     const panel=vscode.window.createWebviewPanel('workspaceQueue',task.id,vscode.ViewColumn.Active,{enableScripts:false,enableCommandUris:['workspaceBridge.showQueueTask']});
-    panel.webview.html=detailHTML({...project,state:{stale:false},panel:{stale:false},error:project.error||project.queue.blockers.join('; ')},task).replace('</body>',()=>`${queueSection}${known.parent?`<p>Zpět na rodiče: ${taskLink(known.parent)}</p>`:''}${rows?`<h2>Podúkoly — odkazy</h2><pre>${rows}</pre>`:''}<h2>Fronta</h2><pre>${escape(project.queue.blockers.join('; '))}</pre><p>Předpoklady musí přijmout člověk ve Workspace. Agent zapisuje hlášení přes ordinary-file kontrakt balíčku.</p></body>`);context.subscriptions.push(panel);
+    panel.webview.html=detailHTML({...project,state:{stale:false},panel:{stale:false},error:project.error||project.queue.blockers.join('; ')},{...task,status:currentEntry.status,status_mode:currentEntry.status_mode}).replace('</body>',()=>`${queueSection}${known.parent?`<p>Zpět na rodiče: ${taskLink(known.parent)}</p>`:''}${rows?`<h2>Podúkoly — odkazy</h2><pre>${rows}</pre>`:''}<h2>Fronta</h2><pre>${escape(project.queue.blockers.join('; '))}</pre><p>Předpoklady musí přijmout člověk ve Workspace. Agent zapisuje hlášení přes ordinary-file kontrakt balíčku.</p></body>`);context.subscriptions.push(panel);
   });
   register('queueHandoff',async item=>{
     const project=find(item);if(!project||project.error)throw Error('Nejdříve obnovte připojení.');
@@ -294,22 +297,25 @@ function createSidebar(vscode, context, hooks) {
   register('compose',async item => {
     item=await selectedItem(item,false);if(!item)return;const project=find(item);assertCurrent(project);
     const task=taskOf(item);
-    const options=!task?['message']:project.queue?.items.some(i=>i.id===task.id)?['message','clarification']:task.type&&task.type!=='task'?['message','clarification']:['message','clarification','progress','completed'];
-    const choiceKind=await vscode.window.showQuickPick(options.map(kind=>({label:kinds[kind],kind})),{placeHolder:'Typ zprávy'});
+    const queued=task&&[...(project.queue?.items||[]),...(project.queue?.linked_items||[])].find(i=>i.id===task.id);
+    const options=!task?['message']:['message','clarification',...(!task.checked&&task.status_mode!=='sum'&&(!task.type||task.type==='task'||queued)?['progress']:[]),...(!queued&&(!task.type||task.type==='task')?['completed']:[])];
+    const choices=options.map(kind=>({label:kinds[kind],kind}));
+    if(task?.checklist.length&&!queued)choices.push({label:'Částečné splnění checklistu',kind:'progress',checklist:true});
+    const choiceKind=await vscode.window.showQuickPick(choices,{placeHolder:'Typ zprávy'});
     const kind=choiceKind?.kind;if(!kind)return;
     let checklist;
-    if(['completed','progress'].includes(kind)&&task.checklist.length){
+    if((kind==='completed'||choiceKind.checklist)&&task.checklist.length){
       const choice=await vscode.window.showQuickPick(task.checklist.map((entry,index)=>({label:entry.text,picked:kind==='completed'||entry.checked,index})),{canPickMany:true,placeHolder:'Navrhované splněné podmínky (ostatní budou nesplněné)'});
       if(!choice)return; const chosen=new Set(choice.map(entry=>entry.index));checklist=task.checklist.map((_entry,index)=>({index,checked:chosen.has(index)}));
       if(kind==='completed'&&chosen.size!==task.checklist.length)throw Error('Pro část checklistu zvolte Částečné splnění.');
     }
-    if(kind==='progress'&&!checklist?.length)throw Error('Úkol nemá checklist pro částečné splnění.');
     const body=await vscode.window.showInputBox({prompt:'Zpráva a skutečné důkazy k posouzení',ignoreFocusOut:true});if(!body)return;
     if(Buffer.byteLength(body)>16384)throw Error('Zpráva přesahuje 16 KiB.');
     if(await vscode.window.showWarningMessage(`${kinds[kind]} · ${task?.id||'Projekt'}\n${body}`,{modal:true},'Odeslat')!=='Odeslat')return;
     await bridge.repository(project.repository,project.identity);
     const message={message_id:crypto.randomUUID(),task_id:task?.id||null,kind,body,revision:project.snapshot.revision,
-      repository_commit:await bridge.git(project.repository,'rev-parse','HEAD'),...(checklist?{checklist}:{})};
+      repository_commit:await bridge.git(project.repository,'rev-parse','HEAD'),...(checklist?{checklist}:{}),
+      ...(queued&&kind==='progress'?{queue_packet_id:project.queue.packet_id,reported_by:'user'}:{})};
     const draft=path.join(project.root,'drafts',message.message_id+'.json');
     await bridge.atomic(draft,JSON.stringify(message,null,2));
     try {

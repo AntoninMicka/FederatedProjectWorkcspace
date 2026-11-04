@@ -243,7 +243,7 @@ class IdeBridge:
             from spikes.ide_queue import validate_completion
             with self.database() as db:
                 existing = db.execute('SELECT digest FROM messages WHERE session=? AND id=?', (record['session_id'], message['message_id'])).fetchone()
-            if not existing and (message['kind'] == 'completed' or any(k in message for k in ('queue_packet_id', 'reported_by', 'evidence'))):
+            if not existing and (message['kind'] in {'completed', 'progress'} or any(k in message for k in ('queue_packet_id', 'reported_by', 'evidence'))):
                 validate_completion(self, record, message)
             digest = hashlib.sha256(canonical(message).encode()).hexdigest()
             receipt = dict(message_id=message['message_id'], status='received' if message.get('queue_packet_id') else 'stale' if stale else 'received',

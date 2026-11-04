@@ -141,3 +141,8 @@ Stav se upravuje ve Workspace přes editor položky; synchronizace jej
 přenese do IDE. Zprávy agenta, připravenost a lidské přijetí se zobrazují
 odděleně. Zastaralý balíček ukazuje poslední známý stav, nikoli potvrzení
 aktuálnosti. Po instalaci aktualizace znovu načtěte okno IDE a synchronizujte.
+
+Ve verzi 0.5.3 je ve zprávách dostupná volba **Probíhá**, také bez checklistu.
+Po přijetí ve Workspace synchronizace zobrazí pracovní stav v detailu,
+stromu i frontě. Hlášení zahájení neznačí splnění. U SUM skupin hlaste práci
+na podúkolu. Dokončení a důkazy se nadále posílají samostatně.

@@ -37,7 +37,7 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   assert.equal(project.panel.export_documents,false);
   const catalog=await bridge.connectionRequest(fixture.pairing,{action:'status'}),mapping=catalog.mappings.find(m=>m.project_id===fixture.project_id);
   const grant=await request('/v1/ide-bridge/connection/map',{connection_id:fixture.pairing.connection_id,project_id:fixture.project_id,
-   enabled:true,expected_head:fixture.head,expected_mapping:mapping.session_id,repository:mapping.repository,
+   enabled:true,expected_head:project.snapshot.commit_id,expected_mapping:mapping.session_id,repository:mapping.repository,
    editor_workspace:mapping.editor_workspace,instructions:mapping.instructions,export_documents:true},fixture.admin_token);
   assert.equal(grant.status,200,JSON.stringify(grant.value));
   await commands.get('workspaceBridge.sync')();project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
@@ -69,20 +69,33 @@ const ui=require('../extensions/workspace-bridge/sidebar');
   const agentBytes=await fs.readFile(path.join(fixture.repository,'AGENTS.md'),'utf8');assert.equal(agentBytes,'Local agent instructions.\n');
   await assert.rejects(ui.localFile(project,'../escape'),/cesta/);
   await assert.rejects(ui.localFile(project,'linked.txt'),/symlink/);
+  kind='progress';await commands.get('workspaceBridge.compose')(task);
+  project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
+  const starting=sidebar.children('messages',root).find(r=>r.entry.message.kind==='progress').entry;
+  assert.equal(project.snapshot.tasks.find(t=>t.id==='TASK-01').checked,false);
+  const started=await request('/v1/ide-bridge/review',{project_id:fixture.project_id,session_id:starting.session_id,
+   message_id:starting.message.message_id,decision:'accepted',note:'Start reviewed.',expected_head:project.snapshot.commit_id,operation_id:crypto.randomUUID()},fixture.admin_token);
+  assert.equal(started.status,200,JSON.stringify(started.value));
+  await commands.get('workspaceBridge.sync')();
+  project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
+  assert.equal(project.snapshot.tasks.find(t=>t.id==='TASK-01').status,'in progress');
+  assert.match(sidebar.treeItem(task).description,/Probíhá/);
+  await commands.get('workspaceBridge.showTask')(task);assert.match(panels.at(-1).webview.html,/Probíhá/);
+  kind='completed';
   await commands.get('workspaceBridge.compose')(task);
   project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
-  let messages=sidebar.children('messages',root);assert.equal(messages.length,1);
+  let messages=sidebar.children('messages',root);assert.equal(messages.length,2);
   assert.match(sidebar.treeItem(messages[0]).description,/čeká na posouzení/);
-  const proposal=messages[0].entry;
+  const proposal=messages.find(r=>r.entry.message.kind==='completed').entry;
   const forbidden=await request('/v1/ide-bridge/review',{},fixture.pairing.token);assert.notEqual(forbidden.status,200);
   const review=await request('/v1/ide-bridge/review',{project_id:fixture.project_id,session_id:proposal.session_id,
-   message_id:proposal.message.message_id,decision:'accepted',note:'Reviewed by user.',expected_head:fixture.head,operation_id:crypto.randomUUID()},fixture.admin_token);
+   message_id:proposal.message.message_id,decision:'accepted',note:'Reviewed by user.',expected_head:project.snapshot.commit_id,operation_id:crypto.randomUUID()},fixture.admin_token);
   assert.equal(review.status,200,JSON.stringify(review.value));assert.equal(review.value.state,'completed');
   await commands.get('workspaceBridge.sync')();
   project=sidebar.projects().find(p=>p.snapshot.project_id===fixture.project_id);
   assert.notEqual(project.session,proposal.session_id);
   assert.equal(project.snapshot.tasks.find(t=>t.id==='TASK-01').checked,true);
-  messages=sidebar.children('messages',root);assert.equal(messages.length,1);assert.equal(sidebar.treeItem(messages[0]).description,'Přijato');
+  messages=sidebar.children('messages',root);assert.equal(messages.length,2);assert.equal(sidebar.treeItem(messages.find(r=>r.entry.message.kind==='completed')).description,'Přijato');
   kind='message';await commands.get('workspaceBridge.compose')(root);
   messages=sidebar.children('messages',root);assert.ok(messages.some(row=>row.entry.message.task_id===null));
   assert.equal(sidebar.children('messages',{kind:'project',projectId:fixture.other_project}).length,0);

@@ -46,6 +46,30 @@ class QueuePacketTests(unittest.TestCase):
             decision='accepted',note='Human accepted evidence.',expected_head=Projects(self.node).repository(self.project).head(),operation_id=str(uuid4()))
         return self.service.review(None,request|changes)
 
+    def test_progress_then_completion_uses_same_packet_without_false_acceptance(self):
+        packet = self.packet()
+        progress = self.message(packet) | dict(kind='progress', body='Work started')
+        progress.pop('evidence')
+        with self.assertRaises(ValueError): self.send(progress | {'queue_packet_id': '0'*64})
+        self.send(progress)
+        first = status(self.service, self.record)['items'][0]
+        self.assertFalse(first['agent_confirmed'])
+        self.assertFalse(first['user_confirmed'])
+        self.review(progress)
+        value = status(self.service, self.record)
+        self.assertTrue(value['current'])
+        self.assertEqual('in progress', value['items'][0]['status'])
+        self.assertFalse(value['items'][0]['user_confirmed'])
+        self.assertFalse(value['items'][1]['eligible'])
+        self.assertTrue(self.qstatus()['valid'])
+        self.assertFalse(self.qstatus()['items'][0]['agent_confirmed'])
+        completed = self.message(packet)
+        self.send(completed); self.review(completed)
+        value = status(self.service, self.record)
+        self.assertTrue(value['current'])
+        self.assertTrue(value['items'][0]['user_confirmed'])
+        self.assertTrue(value['items'][1]['eligible'])
+
     def test_chain_agent_then_human_then_following_and_receipt_flags(self):
         packet=self.packet(); self.assertEqual(packet,self.packet()); old=packet.copy()
         self.assertEqual([True,False,False],[i['eligible'] for i in status(self.service,self.record)['items']])

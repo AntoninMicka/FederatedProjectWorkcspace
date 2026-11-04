@@ -112,6 +112,7 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None, automatic
             'Do not silently resolve rule conflicts. Only eligible tasks may be reported complete. '
             'Write one UUID-named agent completion to inbox atomically; include queue_packet_id, reported_by=agent, '
             'evidence.tests and evidence.diff, original revision and actual repository_commit. '
+            'For a start report send kind=progress with the same packet_id as queue_packet_id, reported_by=agent, original revision and actual repository_commit; completion evidence is optional for progress. '
             'Delivery is not acceptance; only human Workspace review completes the roadmap. No automatic retry after unknown outcome.')
         if hierarchy:
             manifest.update(hierarchy=hierarchy, linked_tasks=[nodes[i] for i in linked_ids])
@@ -222,7 +223,7 @@ def lineage(service, record, packet, view):
             reviews.append((message, review))
     head = packet['manifest']['project_head']; accepted = set()
     workspace = service.projects.workspace(record['project_id'])
-    for _ in packet['manifest']['tasks'] + packet['manifest'].get('linked_tasks', []):
+    for _ in reviews:
         next_ = [(m, r) for m, r in reviews if r['request']['expected_head'] == head and m['task_id'] not in accepted]
         if not next_: break
         require(len(next_) == 1, 'Ambiguous queue receipt chain')
@@ -230,7 +231,8 @@ def lineage(service, record, packet, view):
         receipt = workspace.receipt(review['request']['operation_id'])
         require(receipt and receipt['commit_id'] == result.get('commit_id'), 'Native queue receipt is unavailable')
         require(workspace.git.run('rev-parse', result['commit_id']+'^').stdout.strip() == head, 'Queue commit lineage differs')
-        accepted.add(message['task_id']); head = result['commit_id']
+        if message['kind'] == 'completed': accepted.add(message['task_id'])
+        head = result['commit_id']
     return head == view['commit_id'], accepted
 
 
@@ -256,7 +258,7 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
     with service.database() as db:
         for r in db.execute('SELECT record FROM messages WHERE session=?', (record['session_id'],)):
             message = json.loads(r[0])
-            if message.get('queue_packet_id') == packet['packet_id'] and message.get('reported_by') in reported:
+            if message['kind'] == 'completed' and message.get('queue_packet_id') == packet['packet_id'] and message.get('reported_by') in reported:
                 reported[message['reported_by']].add(message['task_id'])
     held = set(packet['manifest'].get('held_task_ids', ()))
 
@@ -325,18 +327,18 @@ def validate_completion(service, record, message, *, current_head=None):
     queued = {n['id'] for n in packet['manifest']['tasks']} | {n['id'] for n in packet['manifest'].get('linked_tasks', [])}
     if message['task_id'] not in queued and not packet_id: return
     require(packet_id == packet['packet_id'] and message['task_id'] in queued, 'Use the pinned queue completion contract')
-    require(message['kind'] == 'completed' and message.get('reported_by') in {'agent', 'user'},
+    require(message['kind'] in {'completed', 'progress'} and message.get('reported_by') in {'agent', 'user'},
             'Queue completion requires an agent report or a manual request')
     evidence = message.get('evidence')
     if message['reported_by'] == 'user':
         # Only a request: human acceptance stays in Workspace review (ADR 0062).
         require(evidence is None, 'Manual completion request carries no agent evidence')
-    else:
+    elif message['kind'] == 'completed' or evidence is not None:
         require(isinstance(evidence, dict) and set(evidence) == {'tests', 'diff'}
                 and all(isinstance(v, str) and 0 < len(v.strip()) <= 4096 for v in evidence.values()), 'Completion evidence required')
     value = status(service, record, packet)
     require(current_head is None or value['current_head'] == current_head, 'Review HEAD changed')
-    require(not value['blockers'] and scoped_item(value, message['task_id'])['eligible'],
+    require(not value['blockers'] and scoped_item(value, message['task_id'])['startable' if message['kind'] == 'progress' else 'eligible'],
             'Queue item is blocked, stale or already accepted')
 
 

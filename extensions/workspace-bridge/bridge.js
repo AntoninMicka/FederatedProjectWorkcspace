@@ -184,7 +184,7 @@ async function sync(root, pairing, repoRoot, ca, transport = request) {
     '# Instrukce\n\n' + result.instructions + '\n\nTODO je export připnuté revize. Neupravujte jej jako autoritativní plán.\n'
     + 'Zprávy zapisujte do inbox/<message_id>.json přes dočasný soubor a přejmenování.\n'
     + 'Doručení a lidská akceptace jsou oddělené. Přijetí ověřte v receipts/.\n'
-    + 'Povolené kind: completed, clarification, message. task_id vyberte ze snapshot.json.\n'
+    + 'Povolené kind: progress (Probíhá), completed, clarification, message. task_id vyberte ze snapshot.json.\n'
     + 'message_id je nové UUID; revision je snapshot.revision; repository_commit je skutečný Git HEAD.\n'
     + 'Přihlašovací údaje do schránky nepatří.\n'
     + 'Fronta: queue.json a neměnné packets/<id>/manifest.json s AGENT.md. Navazující položky jsou pouze k prohlížení; postup určuje lidské přijetí ve Workspace.\n'

@@ -62,7 +62,7 @@ def validate_checklist(message, tasks):
                 and type(item['checked']) is bool and item['index'] not in seen,
                 'Unknown or duplicate checklist item')
         seen.add(item['index'])
-    require(message['kind'] != 'progress' or bool(values), 'Progress needs checklist selections')
+    require(message['kind'] != 'progress' or task is not None, 'Progress requires a task')
 
 
 def authorize(service, record):
@@ -199,6 +199,9 @@ def _changes(files, project_id, head, message):
         nodes = {n['id']: n for n in graph['nodes']}
         require(not task['checked'] and all(nodes[d]['checked'] for d in task['depends_on'])
                 and all(n['checked'] for n in graph['nodes'] if n['parent_id'] == task['id']), 'Task has unfinished prerequisites or children')
+    if message['kind'] == 'progress' and not message.get('checklist'):
+        require(not task['checked'], 'Dokončenou položku nelze označit jako Probíhá.')
+        require(task.get('status_mode') != 'sum', 'Skupina SUM přebírá stav podúkolů; odešlete Probíhá u konkrétního podúkolu.')
     validate_checklist(message, graph['nodes'])
     candidate = dict(files)
     doc = document(files, entities, task['source']['artifact_id'])
@@ -254,6 +257,29 @@ def _changes(files, project_id, head, message):
                 indent = re.match(r'^\s*', original)[0]
                 lines.insert(index+1, indent+'  - status: sum'+(newline if terminated else ''))
         candidate[path] = prefix + ''.join(lines).encode()
+    if message['kind'] == 'progress' and task.get('status_mode') != 'sum':
+        # Reuse the exact scoped block; no additional persistent status store.
+        from spikes.plan_item_editor import item_span, _fence_after
+        from spikes.task_graph import RELATION
+        body = ''.join(lines)
+        start, end = item_span(body, task['id'])
+        block = body[start:end].splitlines(keepends=True)
+        newline = '\r\n' if block[0].endswith('\r\n') else '\n'
+        fence, found = None, False
+        for index in range(1, len(block)):
+            visible = fence is None
+            fence = _fence_after(block[index], fence)
+            relation = RELATION.match(block[index].rstrip('\r\n')) if visible and fence is None else None
+            if relation and relation[2].strip().lower() == 'status':
+                ending = newline if block[index].endswith(('\n', '\r')) else ''
+                block[index] = relation[1]+'- status: in progress'+ending
+                found = True
+        if not found:
+            terminated = block[0].endswith(('\n', '\r'))
+            if not terminated: block[0] += newline
+            indent = re.match(r'^\s*', block[0])[0]
+            block.insert(1, indent+'  - status: in progress'+(newline if terminated else ''))
+        candidate[path] = prefix + (body[:start]+''.join(block)+body[end:]).encode()
     validate_transition(files, candidate)
     require(project_task_graph(candidate, validate_snapshot(candidate), project_id, head)['status'] == 'ready',
             'Review produces invalid task graph')

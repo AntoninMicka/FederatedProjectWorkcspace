@@ -134,3 +134,20 @@ Okno uživatele ani jeho běžný backend nebyly restartovány. Pro ruční
 akceptaci je třeba restartovat backend, obnovit okno IDE a projít úkol →
 podklad/pravidla → zpráva → review → výsledek. Akceptace ani zdrojový
 commit/push/PR/merge nebyly provedeny automaticky.
+
+## Ohlášení stavu Probíhá z Code/VSCodium
+
+Od rozšíření 0.5.3 vyberte úkol, použijte **Odeslat zprávu** a zvolte
+**Probíhá**. Checklist není povinný. Samostatná volba **Částečné splnění
+checklistu** zachovává možnost navrhnout změny podmínek. Doručení zprávy
+čeká na review; po přijetí ve Workspace se zapíše `status: in progress`,
+aktualizuje fronta a přepočtou skupiny SUM. Synchronizace IDE ukáže pracovní
+stav také v detailu úkolu, nikoli jen v jeho řádku ve stromu.
+
+Zahájení neznamená potvrzené dokončení. U SUM skupiny ohlašujte zahájení
+konkrétního podúkolu; odvozený režim skupiny se zachová. Pro položky připnuté
+fronty zpráva obsahuje také její přesné `queue_packet_id` a původce
+`reported_by`. Agent může stejné hlášení odeslat běžným souborem inboxu podle
+instrukcí balíčku. Na rozdíl od dokončení nejsou pro zahájení povinné důkazy
+`evidence.tests/diff`. Ztracená odpověď se řeší stejným UUID, nikoli novou
+zprávou. Po instalaci aktualizace znovu načtěte okno IDE a synchronizujte.
