@@ -14,6 +14,10 @@ izolaci, CLI a explicitní publikaci popisuje
 [návod k Julia runneru](docs/julia-runner.md). Runtime se neinstaluje
 automaticky ani nepřibaluje do `.deb`.
 
+Ruční tasky, zdroje/události/story a neměnné Markdown reporty lze ukládat
+lokálním [reporting CLI a izolovanou ukázkou](docs/manual-reporting.md).
+Tento řez nepřidává scheduler ani grafické formuláře reportingu.
+
 ## Desktop
 
 ```sh
