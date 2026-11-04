@@ -408,6 +408,8 @@ def validate_snapshot(files):
     for meta in entities.values():
         for relation in meta.get('relations', []):
             require(relation['target_id'] in entities, 'Dangling relation')
+    from spikes.reporting_schema import records
+    records(files, entities)
     return entities
 
 
@@ -415,6 +417,8 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
     """Enforce invariants that require comparing two valid project snapshots."""
     base = validate_snapshot(base_files)
     candidate = validate_snapshot(candidate_files)
+    from spikes.reporting_schema import immutable_transition
+    immutable_transition(base_files, candidate_files, base, candidate)
     privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
     immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file',
                  'generation', 'computation')

@@ -1029,3 +1029,12 @@ reader a normalizaci výsledku. Běžný limit rámce se nemění; výjimka pro
 ověřené finální context tokeny sdílí dosavadní celkový limit přenosu a tokeny
 se nezachovávají. Bez nového transportu, závislosti, opakování modelu nebo
 persistentní vrstvy. [Kontrakt](docs/ai-file-edit.md#velikost-providerových-rámců).
+
+MON-01 **reuse/adaptuje** Artifacts.workspace, registraci a local_author,
+Workspace.transact, writer lock, journal, Git CAS/receipts a původní Index.
+Metadata validátory zahrnují uzavřené reportingové revize a jejich neměnnost;
+čistý doménový validátor ověřuje reference před stejným writerem. Nový writer,
+druhá DB, provider ani frontend nejsou potřeba. Soukromá inventura nepřinesla
+důvod nahrazovat místní engine; externí kód se nepřenášel. Ruční jednofázový
+intent používá původní Workspace journal, nikoli scheduled ReportRun.
+Recovery: [ADR 0068](docs/adr/0068-manual-reporting-transactions.md).

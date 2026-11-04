@@ -136,8 +136,10 @@ class Workspace:
                 candidate_files.pop(path, None)
             else:
                 candidate_files[path] = data
-        validate_transition(base_files, candidate_files,
-                            allow_privacy_relaxation=allow_privacy_relaxation)
+        entities = validate_transition(base_files, candidate_files,
+                                       allow_privacy_relaxation=allow_privacy_relaxation)
+        from spikes.reporting_schema import validate_git
+        validate_git(self.git, candidate_files, entities, base_files)
         paths = self.journal._prepare(db, changes)
         # A merge that explicitly keeps the complete first-parent tree is still
         # meaningful: its additional parent records the reconciled history.
@@ -294,8 +296,10 @@ class Workspace:
             tree = self.git.run('write-tree', env_extra=env).stdout.strip()
         base_files = self.git.snapshot(record['base_head'])
         candidate_files = self.git.snapshot(tree)
-        validate_transition(base_files, candidate_files,
-                            allow_privacy_relaxation=record.get('allow_privacy_relaxation', False))
+        entities = validate_transition(base_files, candidate_files,
+                                       allow_privacy_relaxation=record.get('allow_privacy_relaxation', False))
+        from spikes.reporting_schema import validate_git
+        validate_git(self.git, candidate_files, entities, base_files)
         identity = {'GIT_AUTHOR_NAME': record['author_name'], 'GIT_AUTHOR_EMAIL': record['author_email'],
                     'GIT_COMMITTER_NAME': record['author_name'], 'GIT_COMMITTER_EMAIL': record['author_email']}
         parents = []

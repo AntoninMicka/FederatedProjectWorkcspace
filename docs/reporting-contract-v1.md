@@ -7,8 +7,11 @@ SPDX-License-Identifier: MPL-2.0
 
 Stav: **navržený normativní kontrakt k review, designed**. Autorita zadání,
 reuse a recovery jsou v [ADR 0063](adr/0063-reporting-contract-and-boundaries.md).
-Existující aplikace tyto doménové struktury zatím nevaliduje ani nevydává.
-Následující „musí“ jsou požadavky na navazující implementaci, nikoli její popis.
+Kontrakt vymezuje celý cílový reportingový tok; samotný text není důkazem
+jeho implementace. Lokální ruční řez MON-01 nyní popisuje
+[návod k reportingu](manual-reporting.md), včetně skutečné validace a hranic.
+Následující „musí“ zůstávají normativními požadavky; scheduler, collector,
+vícefázový ReportRun a externí doručení se tímto neprohlašují za hotové.
 
 ## 1. Verze, identity a společné typy
 
