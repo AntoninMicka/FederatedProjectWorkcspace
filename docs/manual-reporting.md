@@ -18,6 +18,9 @@ Policy dokumenty jsou připnuté podklady lidského rozhodnutí, nikoli spustite
 pravidla. CLI neotevírá síťové zdroje ani nespouští jejich obsah. Cross-project
 reference odmítá, dokud nebude připojen autorizovaný handoff XREF-01.
 
+Navazující [MON-02 Source Collector](source-collector.md) přidává samostatný
+potvrzený fetch a import, aniž by měnil tento ruční writer či vytvářel Event.
+
 ## Izolovaná spustitelná ukázka
 
 Z kořene zdrojového repozitáře:
