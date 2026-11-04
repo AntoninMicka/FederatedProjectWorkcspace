@@ -115,6 +115,11 @@ receipts zahrnuje přijaté progress i completion commity, ale mezi potvrzené
 nesmí způsobit falešné dokončení ani blokovat jeho pozdější completion.
 Crash boundaries zůstávají stejné jako u existujícího review.
 
+Ruční zahájení z fronty IDE (rozšíření 0.5.5) je stejná zpráva s
+`reported_by: user`. Nepřidává writer, schéma ani crash boundary: zápis
+do inboxu je atomický soubor bridge, doručení idempotentní receipt podle
+UUID a změnu plánu provádí jen přijetí ve Workspace.
+
 ## Zahajitelnost závislých úkolů
 
 Zahájit lze nedokončenou položku, jestliže všechny její přímé závislosti

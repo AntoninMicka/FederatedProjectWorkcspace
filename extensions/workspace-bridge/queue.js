@@ -72,6 +72,20 @@ function manualRequest(value,taskId,body,repositoryCommit,messageId){
  if(open.length)message.checklist=open.map(({index})=>({index,checked:true}));
  return message;
 }
+// A manual start is a progress proposal only; Workspace review sets the status.
+function startable(value,taskId){
+ const entry=[...(value?.items||[]),...(value?.linked_items||[])].find(i=>i.id===taskId);
+ return Boolean(entry&&!value.blockers.length&&entry.startable===true&&entry.user_confirmed!==true
+  &&entry.status!=='in progress'&&entry.status_mode!=='sum');
+}
+function manualStart(value,taskId,body,repositoryCommit,messageId){
+ const entry=[...value.items,...(value.linked_items||[])].find(i=>i.id===taskId);
+ if(entry?.status_mode==='sum')throw Error('Skupina SUM přebírá stav podúkolů; zahajte konkrétní podúkol.');
+ if(entry?.status==='in progress')throw Error('Položka už je ve Workspace vedená jako Probíhá.');
+ if(!startable(value,taskId))throw Error('Položka je blokovaná, zastaralá nebo přijatá; zahájení nelze odeslat.');
+ return {message_id:messageId,task_id:taskId,kind:'progress',body,revision:value.manifest.revision,
+  repository_commit:repositoryCommit,queue_packet_id:value.packet_id,reported_by:'user'};
+}
 async function verified(file,sha,cache){
  const real=await fs.realpath(file),stat=await fs.stat(file);
  if(!stat.isFile()||(stat.mode&0o222)||stat.size>1024*1024||(process.getuid&&stat.uid!==process.getuid()))throw Error('Neplatný blob fronty.');
@@ -168,4 +182,4 @@ async function handoff(project,taskId,request){
  for(const doc of value.manifest.documents)await verified(path.join(root,'documents',doc.sha256+'.txt'),doc.sha256,path.join(project.root,'queue-cache'));
  return {manifest:path.join(root,'manifest.json'),instructions:path.join(root,'AGENT.md'),inbox:path.join(project.root,'inbox'),packet_id:value.packet_id};
 }
-module.exports={sourceBaseline,stable,validate,verified,blob,link,synchronize,handoff,flags,scope,manualRequest};
+module.exports={sourceBaseline,stable,validate,verified,blob,link,synchronize,handoff,flags,scope,manualRequest,manualStart,startable};

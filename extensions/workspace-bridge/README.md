@@ -151,3 +151,10 @@ Od verze 0.5.4 se u závislých úkolů rozlišuje zahájení a dokončení. Zah
 lze po Vyřešeno/Dokončeno všech předpokladů s nejvýše jedním Probíhá.
 Dvě probíhající nebo libovolná nevyřešená závislost start blokují. Dokončení
 stále čeká na potvrzené splnění všech závislostí.
+
+Ve verzi 0.5.5 má pohled **Fronta úkolů** vedle ✓ také ikonu ▶ **Ručně
+navrhnout zahájení (Probíhá)**. Je dostupná jen u aktuální, nezablokované,
+zahajitelné položky, která ještě neprobíhá a není skupinou SUM. Odešle
+`kind: progress` s `reported_by: user` a připnutým balíčkem, bez checklistu
+a důkazů. Stav Probíhá nastaví až přijetí ve Workspace; úspěch se hlásí jen
+při doručeném receiptu `received`, jinak zpráva zůstává v inboxu ke kontrole.

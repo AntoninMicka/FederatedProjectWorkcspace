@@ -201,6 +201,8 @@ function createSidebar(vscode, context, hooks) {
     if(item.kind==='queueTask'){
      const unavailable=project.error||project.state?.stale||project.panel?.stale||project.queue?.blockers.length;
      result.contextValue=unavailable?'queueBlocked':item.entry.eligible===true?'queueTask':item.entry.startable===true?'queueStartable':'queueBlocked';
+     // Suffix only gates the start action; the packet stays the authority on submit.
+     if(!unavailable&&queueBridge.startable(project.queue,item.taskId))result.contextValue+='.start';
     }
     if (command) result.command = {command, title: label, arguments: [item]};
     return result;
@@ -292,6 +294,20 @@ function createSidebar(vscode, context, hooks) {
     const current=find(item),entry=[...(current?.queue?.items||[]),...(current?.queue?.linked_items||[])].find(i=>i.id===taskId);
     if(current?.error||entry?.user_requested!==true)throw Error('Žádost nebyla potvrzena jako doručená. '+(current?.error||'Zkontrolujte stav fronty a zprávu v inboxu; neodesílejte ji znovu slepě.'));
     await vscode.window.showInformationMessage(`Žádost o ${taskId} je ve Workspace; potvrďte ji v Nastavení → IDE → zprávy projektu.`);
+  });
+  register('queueStart',async item=>{
+    const project=find(item);if(!project||project.error||project.state?.stale||project.panel?.stale)throw Error('Stav není aktuální; nejdříve obnovte připojení.');
+    const taskId=item.taskId,commit=await bridge.git((await bridge.repository(project.repository,project.identity)).root,'rev-parse','HEAD');
+    queueBridge.manualStart(project.queue,taskId,'-',commit,crypto.randomUUID());
+    const body=await vscode.window.showInputBox({prompt:`Ruční zahájení ${taskId}: kdo a na čem začíná pracovat`,value:'Zahájeno ručně z IDE.',ignoreFocusOut:true});if(!body)return;
+    if(Buffer.byteLength(body)>16384)throw Error('Zpráva přesahuje 16 KiB.');
+    const message=queueBridge.manualStart(project.queue,taskId,body,commit,crypto.randomUUID());
+    if(await vscode.window.showWarningMessage(`Navrhnout zahájení ${taskId}?`,{modal:true,detail:'Stav Probíhá nastaví až přijetí ve Workspace, Nastavení → IDE → zprávy projektu. Checklist se nemění.'},'Odeslat zahájení')!=='Odeslat zahájení')return;
+    await bridge.atomic(path.join(project.root,'inbox',message.message_id+'.json'),JSON.stringify(message,null,2));
+    await hooks.synchronize();await refresh();
+    let receipt;try{receipt=JSON.parse(await bridge.read(path.join(project.root,'receipts',message.message_id+'.json')));}catch(error){if(error.code!=='ENOENT')throw error;}
+    if(receipt?.status!=='received')throw Error('Zahájení nebylo potvrzeno jako doručené'+(receipt?.status==='stale'?' (zastaralá revize).':'.')+' Zkontrolujte zprávu v inboxu; neodesílejte ji znovu slepě.');
+    await vscode.window.showInformationMessage(`Zahájení ${taskId} je ve Workspace; přijměte jej v Nastavení → IDE → zprávy projektu.`);
   });
   register('refreshPanel',async()=>{await hooks.synchronize();await refresh();});
   register('compose',async item => {

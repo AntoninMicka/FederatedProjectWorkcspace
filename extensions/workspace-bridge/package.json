@@ -2,7 +2,7 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace",
   "description": "Tasks, messages, documents and agent rules for Federated Workspace",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {
@@ -91,6 +91,11 @@
         "command": "workspaceBridge.queueConfirm",
         "title": "Workspace: Ručně požádat o potvrzení splnění",
         "icon": "$(check)"
+      },
+      {
+        "command": "workspaceBridge.queueStart",
+        "title": "Workspace: Ručně navrhnout zahájení (Probíhá)",
+        "icon": "$(play)"
       },
       {
         "command": "workspaceBridge.checkUpdates",
@@ -193,13 +198,18 @@
         },
         {
           "command": "workspaceBridge.queueHandoff",
-          "when": "view == workspaceBridge.queue && viewItem =~ /^queue(Task|Startable)$/",
-          "group": "inline"
+          "when": "view == workspaceBridge.queue && viewItem =~ /^queue(Task|Startable)(\\.start)?$/",
+          "group": "inline@1"
         },
         {
           "command": "workspaceBridge.queueConfirm",
-          "when": "view == workspaceBridge.queue && viewItem == queueTask",
-          "group": "inline"
+          "when": "view == workspaceBridge.queue && viewItem =~ /^queueTask(\\.start)?$/",
+          "group": "inline@3"
+        },
+        {
+          "command": "workspaceBridge.queueStart",
+          "when": "view == workspaceBridge.queue && viewItem =~ /\\.start$/",
+          "group": "inline@2"
         }
       ]
     }

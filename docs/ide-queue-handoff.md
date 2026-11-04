@@ -193,3 +193,10 @@ hlášení dokončení ani `user_confirmed`. Zahájení jeho závislých polože
 politikou z ADR 0067; potvrzení jejich dokončení dál čeká na všechny závislosti.
 Pozdější dokončení stejného tasku ve stejném připnutém balíčku zůstává platné.
 U skupiny SUM se ohlašuje práce na podúkolu a skupina se přepočítá.
+
+Rozšíření 0.5.5 nabízí ve frontě ruční akci ▶ vedle ručního potvrzení ✓.
+Akce odešle uvedený `progress` s `reported_by: user`; Workspace jej jen
+přijme nebo odmítne stávajícím review. Pohled akci skryje u blokované,
+neaktuální, přijaté, již probíhající položky a u skupiny SUM; serverová
+validace zahajitelnosti při doručení i přijetí zůstává rozhodující.
+Nedoručený receipt se nehlásí jako úspěch a zprávu nelze slepě opakovat.
