@@ -1065,3 +1065,13 @@ kontextu. Druhý writer, run DB, provider SDK, implicitní fallback a automatick
 modelový soudce byly odmítnuty jako duplicita nebo překročení scope.
 Veřejná i dostupná soukromá inventura nepřinesly potřebu přenosu externího
 kódu. Hranice/recovery: [ADR 0071](docs/adr/0071-reporting-proposals-and-review.md).
+
+MON-04 **reuse/adaptuje** Reporting/Workspace.transact a jeho společný
+candidate builder, sémantický validátor, writer/journal/receipts,
+Period schéma a SourceCollector.resolve. Node-local autorita běhů adaptuje
+SQLite/permissions vzory RoleWorkflows/PublicSourceRuns a Journal.sync_dir;
+AutonomyService má odlišné doménové klíče a není náhradou periodové rezervace.
+Nová run DB je požadovaná autorita podle ADR 0063, nikoli projektový index nebo
+druhý writer. Další provider, knihovna scheduleru, implicitní retry/approval a
+přenos externího kódu nejsou potřeba. Veřejná i dostupná soukromá inventura
+byly zkontrolovány. Recovery: [ADR 0072](docs/adr/0072-reporting-scheduler-and-run-recovery.md).

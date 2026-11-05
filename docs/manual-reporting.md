@@ -139,3 +139,7 @@ Volitelné modelové návrhy pro Event, EvidenceAssessment a Story používají
 samostatný tok [MON-03 — reportingové návrhy](reporting-proposals.md).
 Generování nezapisuje projekt a přijetí vyžaduje přesné lidské potvrzení;
 původní ruční CLI zůstává dostupné bez LLM.
+
+Kalendářní rezervace a obnova běhů používají samostatný
+[MON-04 scheduler](reporting-scheduler.md), který vydává přes tentýž writer
+a zachovává explicitní lidské schválení kandidáta.
