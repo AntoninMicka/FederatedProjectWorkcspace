@@ -1047,3 +1047,12 @@ collector policy a origin backoff ve stejném fetch journalu. Druhý fetch engin
 projektový writer, parser, browser, SDK či LLM by hranice duplikovaly. Soukromá
 inventura nepřinesla důvod nahrazovat místní komponenty a kód se nepřenášel.
 Rozhodnutí/recovery: [ADR 0069](docs/adr/0069-reporting-source-collector.md).
+
+XREF-01 **reuse/adaptuje** Artifacts/Projects a registraci projektů,
+Administration, ContextBuilder/ChatService, inertní artifact_preview,
+metadata/index a Workspace.transact s původním journalem, Git CAS a receipts.
+Nové jsou uzavřený referenční formát a soukromá obnovitelná per-user cache;
+druhý writer, autoritativní DB ani kopie cizích bajtů v indexu nejsou potřeba.
+Veřejná i soukromá inventura nepřinesly důvod nahrazovat existující komponenty;
+externí kód se nepřenášel. Rozhodnutí/recovery:
+[ADR 0070](docs/adr/0070-local-artifact-references.md).

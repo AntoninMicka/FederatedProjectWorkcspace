@@ -410,6 +410,8 @@ def validate_snapshot(files):
             require(relation['target_id'] in entities, 'Dangling relation')
     from spikes.reporting_schema import records
     records(files, entities)
+    from spikes.reference_schema import references
+    references(files, entities)
     return entities
 
 
@@ -419,6 +421,8 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
     candidate = validate_snapshot(candidate_files)
     from spikes.reporting_schema import immutable_transition
     immutable_transition(base_files, candidate_files, base, candidate)
+    from spikes.reference_schema import transition
+    transition(base_files, candidate_files, base, candidate)
     privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
     immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file',
                  'generation', 'computation')

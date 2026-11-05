@@ -169,8 +169,9 @@ class DispatchHandoff:
 
 
 class ContextBuilder:
-    def __init__(self, workspace, project_id):
+    def __init__(self, workspace, project_id, *, references=None):
         self.workspace = workspace
+        self.references = references
         uuid(project_id)
         self.project_id = project_id
 
@@ -207,6 +208,8 @@ class ContextBuilder:
         committed_project(self.workspace.git, head, self.project_id)
         files = self.workspace.git.snapshot(head)
         entities = validate_snapshot(files)
+        from spikes.reference_schema import references as reference_records
+        reference_inputs = reference_records(files, entities)
         records, parts, omissions, seen, total = [], [], [], set(), 0
         for choice in project_inputs:
             require(isinstance(choice, ProjectInput), 'Invalid project input')
@@ -232,6 +235,16 @@ class ContextBuilder:
             sent = raw
             record = dict(input_id=choice.entity_id, source='project', required=choice.required,
                           path=path, privacy=meta['privacy'], size=len(raw), sha256=_digest(raw))
+            if choice.entity_id in reference_inputs:
+                require(choice.projection is None, 'Reference projections require an explicit local fork')
+                require(self.references is not None and self.references.user_id == authority.user_id,
+                        'Reference resolver with the current actor is required')
+                resolved = self.references.resolve_input(self.project_id, choice.entity_id, files, entities,
+                                                         boundary=target.boundary)
+                sent = resolved['raw']
+                record.update(source='cross-project-reference', privacy=resolved['privacy'],
+                              size=len(sent), sha256=_digest(sent), reference=resolved['proof'],
+                              descriptor_sha256=_digest(raw), read_only=True, untrusted=True)
             if choice.projection is not None:
                 from spikes.roadmap_append_context import SCHEMA, build
                 from spikes.markdown_patch import SCHEMAS as MARKDOWN_SCHEMAS, build as markdown_context
@@ -383,8 +396,22 @@ class ContextBuilder:
                     target_id=target.target_id, model=target.model),
                     'Backend target changed after context preparation')
             files = self.workspace.git.snapshot(manifest['project_commit'])
-            validate_snapshot(files)
+            entities = validate_snapshot(files)
             for item in manifest['inputs']:
+                if item['source'] == 'cross-project-reference':
+                    require(item['input_id'] in authority.readable_entities,
+                            'Input authorization was revoked')
+                    require(self.references is not None and self.references.user_id == authority.user_id,
+                            'Reference resolver with the current actor is required')
+                    resolved = self.references.resolve_input(self.project_id, item['input_id'], files, entities,
+                                                             boundary=target.boundary)
+                    require(resolved['proof'] == item['reference'] and resolved['privacy'] == item['privacy']
+                            and len(resolved['raw']) == item['size'] and _digest(resolved['raw']) == item['sha256']
+                            and _digest(files[item['path']]) == item['descriptor_sha256'],
+                            'Reference access, privacy or source changed after preparation')
+                    parts = json.loads(prepared.payload)['inputs']
+                    require(next(p['content_b64'] for p in parts if p['input_id'] == item['input_id']) ==
+                            base64.b64encode(resolved['raw']).decode(), 'Reference payload changed')
                 if item['source'] == 'project':
                     require(item['input_id'] in authority.readable_entities,
                             'Input authorization was revoked')

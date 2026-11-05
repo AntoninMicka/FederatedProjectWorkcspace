@@ -21,6 +21,10 @@ Tento řez nepřidává scheduler ani grafické formuláře reportingu.
 [Source Collector](docs/source-collector.md) přidává potvrzený sběr veřejného
 UTF-8 textu podle připnuté policy a samostatný atomický import raw/Source.
 
+[Meziprojektové reference](docs/cross-project-references.md) nabízejí lokální
+CLI pro připnuté čtení, explicitní aktualizaci a fork, autorizovaný Context
+Manifest a izolovanou ukázku se dvěma projekty.
+
 ## Desktop
 
 ```sh
