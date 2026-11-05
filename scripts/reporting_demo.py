@@ -12,7 +12,7 @@ from spikes.reporting import Reporting, operation_uuid
 from spikes.reporting_schema import DIMENSIONS, encoded
 
 
-def demo(destination):
+def demo(destination, *, llm_assistance=False):
     destination = Path(destination).absolute()
     # Never open or overwrite an existing node/project as a side effect of a demo.
     destination.mkdir(mode=0o700, parents=False, exist_ok=False)
@@ -49,7 +49,8 @@ def demo(destination):
         source_policy=policy, selection_policy=policy, scale_ref=scale, retention_policy=policy,
         calendar=dict(timezone='Europe/Prague', calendar_revision='manual-v1', periods=['custom']),
         outputs=dict(formats=['markdown'], language='cs', required_sections=['# Přehled', '## Omezení']),
-        execution=dict(llm='disabled', context_policy=policy, publication_policy=policy)))
+        execution=dict(llm='optional' if llm_assistance else 'disabled',
+                       context_policy=policy, publication_policy=policy)))
     unknown = dict(precision='unknown', start=None, end=None, basis=[])
     sources = []
     for title, role in [('Syntetický primární zdroj', 'primary'), ('Syntetický odporující zdroj', 'secondary')]:

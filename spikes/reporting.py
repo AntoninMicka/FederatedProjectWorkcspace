@@ -18,7 +18,7 @@ from spikes.configuration import committed_project
 from spikes.metadata import parse_json, require, uuid, validate_snapshot
 from spikes.project_creation import ProjectCreation
 from spikes.storage import StaleIndex
-from spikes.reporting_schema import (SCHEMA, TYPES, digest, encoded, fields, hex_id,
+from spikes.reporting_schema import (SCHEMA, TYPES, PRIVACY, digest, encoded, fields, hex_id,
                                      records, ref, references, validate_record, validate_git, canonical_events)
 
 
@@ -77,7 +77,8 @@ class Reporting:
                 raise StaleIndex('Project changed while pinning reporting content')
             return result
 
-    def apply(self, request, operation_id, *, confirm=False, checkpoint=lambda stage: None):
+    def apply(self, request, operation_id, *, confirm=False, checkpoint=lambda stage: None,
+              _assistance=None):
         """Store new revisions; request and approval are frozen by transact's digest.
 
         IDs for the revision and Markdown sibling derive from operation_id, so
@@ -94,6 +95,10 @@ class Reporting:
         ws = self.artifacts.workspace(request['project_id'])
         author = ProjectCreation(self.node_path).author_id()
         intent = dict(request, action='manual-reporting-v1', author_id=author, confirmed=confirm)
+        assistance = deepcopy(_assistance)
+        if assistance is not None:
+            require(confirm, 'Explicit confirmation is required for assisted reporting')
+            intent['assistance'] = assistance
 
         def prepare(workspace):
             head = workspace.git.head()
@@ -104,6 +109,16 @@ class Reporting:
             existing = records(files, entities)
             now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             changes = {}
+            if assistance is not None:
+                # Application-owned audit, never a model-selected path. Exact
+                # context projection and instruction survive loss of the backend journal;
+                # raw provider responses remain outside the project Git.
+                audit_id = operation_uuid(operation_id, 'assistance')
+                changes[f'artifacts/{audit_id}/assistance.json'] = encoded(assistance['audit'])
+                changes[f'artifacts/{audit_id}/metadata.json'] = encoded(dict(
+                    schema_version=1, id=audit_id, title='Reporting — assisted proposal audit',
+                    kind='snapshot', created_at=now, author_id=author, privacy=assistance['privacy'],
+                    provenance='snapshot', file='assistance.json'))
             for index, spec in enumerate(request['records']):
                 require(isinstance(spec, dict) and spec.keys() in (
                     {'type', 'entity_id', 'previous', 'privacy', 'value'},
@@ -169,6 +184,15 @@ class Reporting:
                 # pinned dependency in provenance, never an application-made guess.
                 record['provenance']['inputs'] = list({encoded(r): r for r in references(value)
                                                        if 'commit_id' in r}.values())
+                if assistance is not None:
+                    require(spec['type'] in {'Event', 'Story', 'EvidenceAssessment'},
+                            'Assistance cannot change definitions or publish reports')
+                    require(PRIVACY[spec['privacy']] >= PRIVACY[assistance['context_privacy']],
+                            'Assisted reporting privacy would be relaxed')
+                    record['provenance'] = dict(method='derived',
+                        inputs=list({encoded(r): r for r in
+                            record['provenance']['inputs'] + assistance['inputs']}.values()),
+                        run_refs=[assistance['run_ref']])
                 validate_record(record)
                 if spec['type'] == 'Story':
                     canonical_events(record)
@@ -177,7 +201,8 @@ class Reporting:
                 changes[f'artifacts/{id_}/metadata.json'] = encoded(dict(
                     schema_version=1, id=id_, title=value.get('title', spec['type']),
                     kind='snapshot' if spec['type'] == 'ReportSnapshot' else 'document', created_at=now,
-                    author_id=author, privacy=spec['privacy'], provenance='user', file='record.json', tags=[SCHEMA]))
+                    author_id=author, privacy=spec['privacy'],
+                    provenance='llm-transformed' if assistance else 'user', file='record.json', tags=[SCHEMA]))
             return changes, 'Local workspace author', author + '@local.invalid', 'Record manual reporting revisions'
 
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)

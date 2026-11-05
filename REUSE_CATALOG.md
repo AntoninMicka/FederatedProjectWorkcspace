@@ -1056,3 +1056,12 @@ druhý writer, autoritativní DB ani kopie cizích bajtů v indexu nejsou potře
 Veřejná i soukromá inventura nepřinesly důvod nahrazovat existující komponenty;
 externí kód se nepřenášel. Rozhodnutí/recovery:
 [ADR 0070](docs/adr/0070-local-artifact-references.md).
+
+MON-03 **reuse/adaptuje** ContextBuilder, Authority/Target, registry rolí,
+backendové prepare/dispatch/BackendRuns, reportingová schémata a původní
+Reporting/Workspace.transact s writer lockem, journalem, Git CAS a receipts.
+Nový je uzavřený návrh a explicitní lidské review s auditovanou projekcí
+kontextu. Druhý writer, run DB, provider SDK, implicitní fallback a automatický
+modelový soudce byly odmítnuty jako duplicita nebo překročení scope.
+Veřejná i dostupná soukromá inventura nepřinesly potřebu přenosu externího
+kódu. Hranice/recovery: [ADR 0071](docs/adr/0071-reporting-proposals-and-review.md).

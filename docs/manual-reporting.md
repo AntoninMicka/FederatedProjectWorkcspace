@@ -134,3 +134,8 @@ export `e2999add43d03394690c774f4b337a96f0dbf0181c2484ce0415ca934791e79c`,
 packet `5d00588b495d8630e724561d091a86b9c259cbcbad030bd54778fb4ab5859cea`;
 při načtení current=true, stale=false. Zdrojový základ `82cb613`.
 Tento návod nepřepisuje plán ani neeviduje lidskou akceptaci MON-01.
+
+Volitelné modelové návrhy pro Event, EvidenceAssessment a Story používají
+samostatný tok [MON-03 — reportingové návrhy](reporting-proposals.md).
+Generování nezapisuje projekt a přijetí vyžaduje přesné lidské potvrzení;
+původní ruční CLI zůstává dostupné bez LLM.
