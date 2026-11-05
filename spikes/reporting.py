@@ -78,7 +78,7 @@ class Reporting:
             return result
 
     def apply(self, request, operation_id, *, confirm=False, checkpoint=lambda stage: None,
-              _assistance=None):
+              _assistance=None, _validate_only=False):
         """Store new revisions; request and approval are frozen by transact's digest.
 
         IDs for the revision and Markdown sibling derive from operation_id, so
@@ -205,7 +205,23 @@ class Reporting:
                     provenance='llm-transformed' if assistance else 'user', file='record.json', tags=[SCHEMA]))
             return changes, 'Local workspace author', author + '@local.invalid', 'Record manual reporting revisions'
 
+        if _validate_only:
+            # Reuse the exact candidate builder and semantic gate, without
+            # creating a journal intent or certifying a durable human approval.
+            ws.recover()
+            with ws.journal.lock(), ws.journal.connect() as db:
+                ws._read_locked(db, expected_head=request['base_head'])
+                changes, _, _, _ = prepare(ws)
+                base = ws.git.snapshot(request['base_head'])
+                candidate = dict(base, **changes)
+                entities = validate_snapshot(candidate)
+                validate_git(ws.git, candidate, entities, base)
+            return dict(request_sha256=digest(encoded(request)))
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
+
+    def validate(self, request, operation_id):
+        """Read-only validation of a candidate; not a persisted human review."""
+        return self.apply(request, operation_id, confirm=True, _validate_only=True)
 
 
 def main():
