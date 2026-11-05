@@ -1232,7 +1232,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('QDialog', Path('spikes/desktop_transfer.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_network.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_deployment.py').read_text())
-        self.assertIn('<h2>Výstupy</h2><h3>Prezentace</h3>', HTML)
+        self.assertIn('<h2>Výstupy</h2><h3>Zprávy</h3>', HTML)
+        self.assertIn('id="sidebar-report-list"', HTML)
+        self.assertIn('<h3>Prezentace</h3>', HTML)
         self.assertIn('#sidebar-settings-list{flex:1}', CSS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', HTML)
         sidebar_chats = HTML.split('id="sidebar-chats"', 1)[1].split('</div></div>', 1)[0]

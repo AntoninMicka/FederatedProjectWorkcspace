@@ -97,6 +97,8 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         return super().shutdown()
 
     def server_close(self):
+        monitoring=getattr(self,'monitoring',None)
+        monitoring_clean=monitoring.close() if monitoring else True
         deadline = time.monotonic() + self.shutdown_timeout
         with self._worker_condition:
             self._admission_open = False
@@ -105,7 +107,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 timeout=self.shutdown_timeout)
             active = tuple(self._active_requests)
         probe_clean = self.backend_availability.close(deadline - time.monotonic())
-        self.shutdown_clean = clean and probe_clean
+        self.shutdown_clean = clean and probe_clean and monitoring_clean
         if not clean:
             for request in active:
                 try:
@@ -247,6 +249,8 @@ class Handler(BaseHTTPRequestHandler):
 
 class UnixAPI(UnixStreamServer):
     def server_close(self):
+        monitoring=getattr(self,'monitoring',None)
+        if monitoring is not None:monitoring.close()
         sampler = getattr(self, 'backend_availability', None)
         if sampler is not None:
             sampler.close(SHUTDOWN_GRACE_SECONDS)

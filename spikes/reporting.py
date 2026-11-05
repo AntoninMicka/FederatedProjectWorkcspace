@@ -78,7 +78,7 @@ class Reporting:
             return result
 
     def apply(self, request, operation_id, *, confirm=False, checkpoint=lambda stage: None,
-              _assistance=None, _validate_only=False):
+              _assistance=None, _validate_only=False, _generation=None):
         """Store new revisions; request and approval are frozen by transact's digest.
 
         IDs for the revision and Markdown sibling derive from operation_id, so
@@ -95,6 +95,8 @@ class Reporting:
         ws = self.artifacts.workspace(request['project_id'])
         author = ProjectCreation(self.node_path).author_id()
         intent = dict(request, action='manual-reporting-v1', author_id=author, confirmed=confirm)
+        if _generation is not None:
+            intent['generation']=deepcopy(_generation)
         assistance = deepcopy(_assistance)
         if assistance is not None:
             require(confirm, 'Explicit confirmation is required for assisted reporting')
@@ -166,10 +168,13 @@ class Reporting:
                     path = f'artifacts/{md_id}/report.md'
                     require(value.get('markdown') is None, 'Application supplies Markdown reference')
                     value['markdown'] = dict(artifact_id=md_id, path=path, sha256=digest(markdown), at='same-commit')
-                    require(value['generation']['mode'] == 'manual' and
-                            value['generation']['context_manifest_ref'] is None,
-                            'Manual CLI cannot certify assisted provenance')
-                    value['generation']['run_id'] = operation_id
+                    if _generation is None:
+                        require(value['generation']['mode'] == 'manual' and value['generation']['context_manifest_ref'] is None,
+                                'Manual CLI cannot certify assisted provenance')
+                        value['generation']['run_id'] = operation_id
+                    else:
+                        require(value['generation']==_generation and _generation['mode']=='assisted' and
+                                _generation['result_sha256']==digest(markdown), 'Assisted generation proof differs')
                     value['generation']['result_sha256'] = digest(markdown)
                     changes[path] = markdown
                     changes[f'artifacts/{md_id}/metadata.json'] = encoded(dict(
@@ -219,9 +224,9 @@ class Reporting:
             return dict(request_sha256=digest(encoded(request)))
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
 
-    def validate(self, request, operation_id):
+    def validate(self, request, operation_id, *, _generation=None):
         """Read-only validation of a candidate; not a persisted human review."""
-        return self.apply(request, operation_id, confirm=True, _validate_only=True)
+        return self.apply(request, operation_id, confirm=True, _validate_only=True,_generation=_generation)
 
 
 def main():

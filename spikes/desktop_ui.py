@@ -10,6 +10,7 @@ import subprocess
 from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
+from spikes.monitoring_ui import HTML as MONITORING_HTML, CSS as MONITORING_CSS, JS as MONITORING_JS
 from spikes.plan_status_ui import PLAN_STATUS_JS, PLAN_STATUS_CSS
 from spikes.manuals import manual_catalog
 from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
@@ -2435,6 +2436,7 @@ function syncSidebarProjectAvailability(){
  if(!available && projectSidebarTabs.includes(sidebarTabs.find(tab=>tab.getAttribute('aria-selected')==='true')?.id))selectSidebarTab(document.querySelector('#projects-tab'));
 }
 function clearProject(){
+ if(typeof clearMonitoring==='function')clearMonitoring();
  ++viewRequest;++chatLoadRevision;++chatSelectionRevision;
  resetProjectConflicts();
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
@@ -2801,6 +2803,7 @@ async function canLeaveArtifactEditor(){
  return resolveEditorLeave('Dokument',saveArtifactEditor,()=>{artifactEditorDirty=false;artifactEditorAttempt=null;artifactEditorItem=null;artifactEditorView.hidden=true;resetTaskFileEditEditor();});
 }
 async function canLeaveWorkspaceEditors(){
+ if(typeof canLeaveMonitoring==='function'&&!await canLeaveMonitoring())return false;
  if(editorLeavePending)return false;
  if(!presenterView.hidden&&!await closePresenter())return false;
  const allowed=await canLeaveArtifactEditor()&&await canLeaveJuliaEditor()&&await canLeavePresentationEditor()&&await canLeaveConflictEditor();
@@ -3048,6 +3051,7 @@ async function openRegisteredProject(projectId){
   sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   syncSidebarProjectAvailability();
   loadProjectConflictSummary();
+  if(typeof loadMonitoring==='function')await loadMonitoring();
   await loadJuliaWorkspace();
   await loadRoadmapReview();
   await loadChat();
@@ -4103,6 +4107,7 @@ async function openPresentationEditor(preferred=null){
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;selectSidebarTab(document.querySelector('#presentations-tab'));
  selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!await canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
  if(presentationEditorDeck)document.querySelector('#presentation-deck-title').focus();
+ if(typeof renderPresentationReportLink==='function')renderPresentationReportLink();
 }
 async function createPresentationDocument(confirmDiscard=true){
  if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
@@ -8145,6 +8150,12 @@ if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
 HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script src="/app.js"></script>')
 CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
+HTML = HTML.replace('<ul id="sidebar-tool-list"', '<h3>Sledování</h3><button id="sidebar-monitoring-new" type="button" disabled>Nové sledování</button><ul id="sidebar-monitoring-list"></ul><h3>Modely a výpočty</h3><ul id="sidebar-tool-list"',1)
+HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><h3>Zprávy</h3><ul id="sidebar-report-list"></ul><h3>Prezentace</h3>',1)
+HTML = HTML.replace('<button id="presentation-tab"', '<button id="monitoring-tab" role="tab" aria-controls="monitoring-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Sledování a zprávy</button><button id="presentation-tab"',1)
+HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id="outputs-overview-panel"',1)
+CSS += MONITORING_CSS
+JS = MONITORING_JS + JS
 JS += ADMIN_JS + FILE_EDIT_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
@@ -8176,7 +8187,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8360,6 +8371,36 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
+        if self.path.startswith('/v1/monitoring/'):
+            service=getattr(self.server,'monitoring',None)
+            if service is None:return self.reply(503,{'error':'Služba sledování není dostupná.'})
+            try:
+                if not isinstance(request,dict) or 'project_id' not in request:return self.send_error(400)
+                action=self.path.rsplit('/',1)[-1];pid=request['project_id']
+                service._data(pid,network=getattr(self.server.projects,'network',False))
+                if action=='view' and set(request)=={'project_id'}:
+                    result=service.view(pid,network=getattr(self.server.projects,'network',False))
+                    result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    return self.reply(200,result)
+                service._writable(pid)
+                if action=='save' and set(request)=={'project_id','operation_id','base_head','watch','new'}:
+                    result=service.save({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
+                elif action=='run' and set(request)=={'project_id','watch_id','kind'}:
+                    result=service.run_now(pid,request['watch_id'],request['kind'])
+                elif action=='publish' and set(request)=={'project_id','run_id','approval_digest','confirm'}:
+                    result=service.publish(pid,request['run_id'],request['approval_digest'],request['confirm'])
+                elif action=='correct' and set(request)=={'project_id','run_id'}:
+                    result=service.correct(pid,request['run_id'])
+                elif action=='presentation' and set(request)=={'project_id','run_id'}:
+                    result=service.presentation(pid,request['run_id'])
+                elif action in {'retry','cancel'} and set(request)=={'project_id','run_id','confirm'}:
+                    job=service.scheduler.get(request['run_id'])
+                    if job['project_id']!=pid:return self.send_error(403)
+                    result=service.retry(pid,request['run_id'],request['confirm']) if action=='retry' else service.scheduler.cancel(request['run_id'],confirm=request['confirm'])
+                else:return self.send_error(400)
+                return self.reply(200,result)
+            except (ValueError,KeyError,OSError,sqlite3.Error,subprocess.SubprocessError,PendingOperation,BackendUnknown,BackendResponseError) as exc:
+                return self.reply(422,{'error':str(exc)})
         if self.path.startswith('/v1/ide-bridge/'):
             return self.dispatch_ide_bridge(request)
         if self.path == '/v1/counter':

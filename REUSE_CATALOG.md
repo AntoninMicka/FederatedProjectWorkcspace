@@ -1075,3 +1075,13 @@ Nová run DB je požadovaná autorita podle ADR 0063, nikoli projektový index n
 druhý writer. Další provider, knihovna scheduleru, implicitní retry/approval a
 přenos externího kódu nejsou potřeba. Veřejná i dostupná soukromá inventura
 byly zkontrolovány. Recovery: [ADR 0072](docs/adr/0072-reporting-scheduler-and-run-recovery.md).
+
+MON-05 **reuse/adaptuje** ReportingScheduler včetně run/lease/candidate recovery,
+SourceCollector, ContextBuilder/OllamaAdapter a BackendRuns, Reporting a
+Workspace.transact s původními receipts. UI rozšiřuje sdílený desktop/web a
+Administration RBAC; prezentace jsou existující PresentationDocuments. Nová
+je deklarace sledování, privátní souhlas s jejím hashem a periodově odlišná
+syntéza. Druhý writer, paralelní journal běhů, provider SDK a automatické
+schvalování byly odmítnuty. Veřejná i dostupná soukromá inventura neposkytly
+důvod kopírovat externí komponenty. Hranice/recovery:
+[ADR 0073](docs/adr/0073-monitoring-ui-and-period-synthesis.md).

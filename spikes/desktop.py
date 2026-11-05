@@ -346,6 +346,9 @@ def main():
             server.presentation_sessions.recover()
         except Exception as exc:
             QMessageBox.warning(None, 'Obnova záznamu prezentace nebyla dokončena', str(exc))
+        from spikes.monitoring import Monitoring
+        server.monitoring=Monitoring(Path(node_path),server.projects)
+        server.monitoring.start()
         server.chat_service = ChatService(node_path, server.projects)
         server.media_service = MediaService(node_path, server.projects,
             state_dir=server.chat_service.state_dir)

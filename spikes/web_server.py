@@ -584,6 +584,11 @@ class WebHandler(DesktopHandler):
             document = request.get('document') if isinstance(request, dict) else None
             if not isinstance(document, dict) or not self._can_write(document.get('project_id')):
                 return self.send_error(403)
+        if self.path.startswith('/v1/monitoring/'):
+            if not isinstance(request,dict) or not self.server.administration.allowed(self.actor,request.get('project_id')):
+                return self.send_error(403)
+            if self.path!='/v1/monitoring/view' and (not self.server.administration.is_admin(self.actor) or not self._can_write(request.get('project_id'))):
+                return self.send_error(403)
         if self.path in {'/v1/artifacts/editor/plan-item/save', '/v1/artifacts/editor/plan-item/create',
                          '/v1/artifacts/editor/plan-item/dependencies', '/v1/artifacts/editor/plan-item/delete'}:
             item = request.get('item') if isinstance(request, dict) else None
@@ -721,6 +726,9 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
         node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
     server.google_drive_import = GoogleDriveImport(node)
     server.administration = Administration(node)
+    from spikes.monitoring import Monitoring
+    server.monitoring=Monitoring(Path(node),server.projects)
+    server.monitoring.start()
     return server
 
 
