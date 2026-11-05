@@ -110,7 +110,7 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             link = DOCUMENT_LINK.fullmatch(title)
             pending = {'id': task_id, 'title': title, 'checked': checked.lower() == 'x',
                        'indent': indent_value, 'relations': defaultdict(list),
-                       'description_lines': [],
+                       'description_lines': [], 'description_markdown_lines': [],
                        'checklist': [],
                        'type': None, 'status_mode': 'sum' if checked.lower() == 'sum' else None,
                        'status_declared': False, 'sum_marker': checked.lower() == 'sum', 'parent_id': parent_id,
@@ -150,6 +150,8 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             text = description.group(2).strip()
             require(text and '\0' not in text, 'Popis uzlu nesmí být prázdný.')
             pending['description_lines'].append(text)
+            relative_indent = max(0, len(description.group(1).expandtabs(4)) - pending['indent'] - 2)
+            pending['description_markdown_lines'].append(' ' * relative_indent + '- ' + text)
             require(len('\n'.join(pending['description_lines']).encode('utf-8'))
                     <= MAX_DESCRIPTION_BYTES,
                     f'Popis uzlu {pending["id"]} přesahuje limit 8 KiB.')
@@ -346,6 +348,48 @@ def task_statuses(tasks):
     return result
 
 
+def task_outline(body, *, source=None):
+    """Display-only physical blocks; duplicate IDs never collapse or authorize nodes."""
+    rows, ancestors, current, fence = [], [], None, None
+    for number, line in enumerate(body.splitlines(), 1):
+        marker = re.match(r'^\s*(`{3,}|~{3,})(.*)$', line)
+        if marker:
+            token, tail = marker.groups()
+            if fence is None: fence = (token[0], len(token))
+            elif token[0] == fence[0] and len(token) >= fence[1] and not tail.strip(): fence = None
+            continue
+        if fence is not None: continue
+        match = TASK.match(line)
+        if match:
+            if len(rows) >= MAX_TASKS: return rows, True
+            indent = len(match[1].expandtabs(4))
+            while ancestors and ancestors[-1]['indent'] >= indent: ancestors.pop()
+            parent_type = (ancestors[-1]['type'] or ancestors[-1].get('inferred_type')) if ancestors else None
+            inferred = {'milestone': 'batch', 'batch': 'task'}.get(parent_type)
+            current = dict(key=str(number), id=match[3], title=match[4][:500], line=number,
+                           type=None, inferred_type=inferred, parent_key=ancestors[-1]['key'] if ancestors else None,
+                           depth=len(ancestors), indent=indent, source=source,
+                           description_markdown='', truncated=False)
+            rows.append(current); ancestors.append(current)
+            continue
+        description = DESCRIPTION.match(line)
+        if not current or not description: continue
+        indent = len(description[1].expandtabs(4))
+        if indent <= current['indent']: continue
+        relation = RELATION.match(line)
+        key = relation[2].strip().lower() if relation else None
+        if key in {'type', 'typ'}:
+            current['type'] = relation[3].strip()
+            continue
+        if key == 'status' or key in ALIASES: continue
+        text = ' ' * max(0, indent-current['indent']-2) + '- ' + description[2]
+        joined = (current['description_markdown']+'\n'+text).lstrip('\n')
+        if len(joined.encode()) <= MAX_DESCRIPTION_BYTES and not current['truncated']:
+            current['description_markdown'] = joined
+        else: current['truncated'] = True
+    return rows, False
+
+
 def project_task_graph(files, entities, project_id, commit_id):
     todo_id = main_todo_id(project_id)
     if todo_id not in entities:
@@ -363,6 +407,7 @@ def project_task_graph(files, entities, project_id, commit_id):
                          if key != 'depends_on' and values}
             nodes.append({'id': task_id, 'title': task['title'], **statuses[task_id],
                           'description': '\n'.join(task['description_lines']),
+                          'description_markdown': '\n'.join(task['description_markdown_lines']),
                           'checklist': task['checklist'],
                           'checked': task['checked'],
                           'depends_on': parents, 'relations': relations, 'depth': depths[task_id],
@@ -387,7 +432,12 @@ def project_task_graph(files, entities, project_id, commit_id):
         value['svg'] = task_graph_svg(value)
         return value
     except (ValidationError, UnicodeError, ValueError) as exc:
-        return {'schema': SCHEMA, 'status': 'invalid', 'revision': commit_id, 'error': str(exc),
+        try:
+            doc, source = _document_source(files, entities, todo_id)
+            outline, truncated = task_outline(doc['body'], source=source)
+        except (ValidationError, UnicodeError, ValueError, KeyError):
+            outline, truncated = [], False
+        return {'outline': outline, 'outline_truncated': truncated, 'schema': SCHEMA, 'status': 'invalid', 'revision': commit_id, 'error': str(exc),
                 'nodes': [], 'critical_path': [], 'ready': [], 'blocked': [], 'subgraphs': []}
 
 

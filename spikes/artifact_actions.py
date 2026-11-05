@@ -20,10 +20,19 @@ class ArtifactActions:
         self.artifacts = Artifacts(node_path)
         self.projects = Projects(node_path, network=network)
 
-    def open(self, project_id, artifact_id, expected_head):
+    def open(self, project_id, artifact_id, expected_head, *, include_working_draft=False):
+        require(type(include_working_draft) is bool, 'Invalid working draft flag')
         result = self.history.compare(project_id, artifact_id, expected_head,
                                       expected_head, expected_head)
         require(result['after'] is not None, 'Document is unavailable')
+        from spikes.markdown_documents import main_todo_id
+        if include_working_draft and not self.projects.network and artifact_id==main_todo_id(project_id):
+            from spikes.plan_draft import read_plan_draft
+            ws=self.projects.workspace(project_id)
+            with ws.journal.lock():draft=read_plan_draft(ws,project_id,expected_head)
+            if draft:
+                files=ws.git.snapshot(expected_head);files[draft[0]['source']['path']]=draft[1]
+                result['after']=dict(document(files,validate_snapshot(ws.git.snapshot(expected_head)),artifact_id),working_draft=True)
         from spikes.markdown_patch import scan
         from spikes.document_patch import requires_patch
         try:

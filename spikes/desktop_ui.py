@@ -2623,7 +2623,7 @@ document.querySelector('#google-drive-select').addEventListener('click',async ev
  try{const result=await projectRequest('/v1/google-drive/authorize',{project_id:activeProject.id,
    expected_head:activeProject.head,privacy:document.querySelector('#google-drive-privacy').value});
   googleDriveSelection=result.selection_id;
-  if(document.body.dataset.runtime==='desktop'){
+  if(document.body?.dataset?.runtime==='desktop'){
    googleDriveStatus.textContent='Google se otevírá v systémovém prohlížeči. Přihlaste se, vyberte položky a vraťte se sem.';
    location.assign(result.authorization_url);
   }else{
@@ -2741,33 +2741,48 @@ const artifactRawWidget=createRawEditorWidget(document.querySelector('#artifact-
 const taskPlanEditor=document.querySelector('#task-plan-editor'),taskPlanBlocks=document.querySelector('#task-plan-blocks'),taskPlanStatus=document.querySelector('#task-plan-editor-status'),artifactRawRoot=document.querySelector('#artifact-raw-widget');
 let taskPlanMode='structured';
 function parseTaskPlanDraft(body){
- const lines=body.split('\\n'),tasks=[],ancestors=[];let fence=null,pending=null,profile=false,external=false;
+ const lines=body.split('\\n'),tasks=[],ancestors=[];let fence=null,pending=null,profile=false,external=false,structuralError=null;
+ const invalid=error=>({safe:false,error,tasks,lines});
  for(let index=0;index<lines.length;index++){
   const line=lines[index],marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
   if(marker){if(!fence)fence=[marker[1][0],marker[1].length];else if(marker[1][0]===fence[0]&&marker[1].length>=fence[1]&&!marker[2].trim())fence=null;continue;}if(fence)continue;
   if(/^\\s*<!--\\s*fpw-plan-profile:\\s*software-development\\/v1\\s*-->\\s*$/.test(line)){profile=true;continue;}
   if(/^\\s*<!--\\s*fpw-plan-document:\\s*definitions\\/v1\\s*-->\\s*$/.test(line)){external=true;continue;}
   const checkbox=line.match(/^(\\s*[-+*]\\s+\\[)([ xX]|[sS][uU][mM])(\\]\\s+\\[)([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)(\\]\\s+)(.*?)(\\r?)$/);
-  if(/^\\s*[-+*]\\s+\\[(?:[ xX]|[sS][uU][mM])\\]\\s+/.test(line)&&!checkbox){const checklist=line.match(/^(\\s*[-+*]\\s+\\[)([ xX])(\\]\\s+)(.*?)(\\r?)$/),indent=checklist?checklist[1].match(/^\\s*/)[0].replace(/\\t/g,'    ').length:-1;if(!checklist||!pending||indent<=pending.indent||pending.type!=='task')return {safe:false,error:`Řádek ${index+1} nemá stabilní ID ani platnou task podmínku.`};if(!checklist[4].trim()||checklist[4].trim().length>500||pending.checklist.length>=100)return {safe:false,error:`Task ${pending.parts[4]} má neplatný checklist.`};pending.checklist.push({checked:checklist[2].toLowerCase()==='x',text:checklist[4].trim()});continue;}
-  if(checkbox){const indent=checkbox[1].match(/^\\s*/)[0].replace(/\\t/g,'    ').length;while(ancestors.length&&ancestors.at(-1).indent>=indent)ancestors.pop();pending={line:index,parts:checkbox,indent,depth:ancestors.length,parentId:ancestors.at(-1)?.id||null,type:null,typeLine:null,relations:[],descriptions:[],checklist:[]};tasks.push(pending);ancestors.push({indent,id:checkbox[4]});continue;}
+  if(/^\\s*[-+*]\\s+\\[(?:[ xX]|[sS][uU][mM])\\]\\s+/.test(line)&&!checkbox){const checklist=line.match(/^(\\s*[-+*]\\s+\\[)([ xX])(\\]\\s+)(.*?)(\\r?)$/),indent=checklist?checklist[1].match(/^\\s*/)[0].replace(/\\t/g,'    ').length:-1;if(!checklist||!pending||indent<=pending.indent||pending.type!=='task'){structuralError=structuralError||`Řádek ${index+1} nemá stabilní ID ani platnou task podmínku.`;continue;}if(!checklist[4].trim()||checklist[4].trim().length>500||pending.checklist.length>=100){structuralError=structuralError||`Task ${pending.parts[4]} má neplatný checklist.`;continue;}pending.checklist.push({checked:checklist[2].toLowerCase()==='x',text:checklist[4].trim()});continue;}
+  if(checkbox){const indent=checkbox[1].match(/^\\s*/)[0].replace(/\\t/g,'    ').length;while(ancestors.length&&ancestors.at(-1).indent>=indent)ancestors.pop();pending={line:index,parts:checkbox,indent,depth:ancestors.length,parentId:ancestors.at(-1)?.id||null,type:null,typeLine:null,relations:[],descriptions:[],descriptionMarkdown:[],checklist:[]};tasks.push(pending);ancestors.push({indent,id:checkbox[4]});continue;}
   const metadata=line.match(/^(\\s*[-+*]\\s+)([^:]{1,32}):(.*?)(\\r?)$/);
-  if(metadata&&pending&&metadata[1].replace(/\\t/g,'    ').length>pending.indent){const key=metadata[2].trim().toLowerCase(),value=metadata[3].trim();if(key==='type'||key==='typ'){if(!['milestone','batch','task'].includes(value)||pending.type)return {safe:false,error:`Uzel ${pending.parts[4]} nemá jednoznačný type.`};pending.type=value;pending.typeLine={line:index,parts:metadata};continue;}else if(['depends_on','blocks','duplicates','supersedes','relates_to','parent_of','závisí na','blokuje','duplikuje','nahrazuje','souvisí s'].includes(key)){pending.relations.push(`${metadata[2].trim()}: ${value}`);continue;}}
+  if(metadata&&pending&&metadata[1].replace(/\\t/g,'    ').length>pending.indent){const key=metadata[2].trim().toLowerCase(),value=metadata[3].trim();if(key==='type'||key==='typ'){if(!['milestone','batch','task'].includes(value)||pending.type){structuralError=structuralError||`Uzel ${pending.parts[4]} nemá jednoznačný type.`;continue;}pending.type=value;pending.typeLine={line:index,parts:metadata};continue;}else if(['depends_on','blocks','duplicates','supersedes','relates_to','parent_of','závisí na','blokuje','duplikuje','nahrazuje','souvisí s'].includes(key)){pending.relations.push(`${metadata[2].trim()}: ${value}`);continue;}}
   const description=line.match(/^(\\s*[-+*]\\s+)(.+?)(\\r?)$/);
-  if(description&&pending&&description[1].replace(/\\t/g,'    ').length>pending.indent)pending.descriptions.push(description[2].trim());
+  if(description&&pending&&description[1].replace(/\\t/g,'    ').length>pending.indent){pending.descriptions.push(description[2].trim());const indent=line.match(/^[ \\t]*/)[0].replace(/\\t/g,'    ').length;pending.descriptionMarkdown.push(' '.repeat(Math.max(0,indent-pending.indent-2))+'- '+description[2].trim());}
  }
- if(!profile&&!external)return {safe:false,error:'Dokument nemá podporovanou profilovou značku.'};
- if(!tasks.length)return {safe:false,error:'Dokument neobsahuje žádný strukturovaný uzel.'};
- if(tasks.some(item=>!item.type))return {safe:false,error:'Každý uzel musí mít právě jeden rozpoznaný type.'};
- if(tasks.some(item=>item.checklist.some(value=>value.text.includes('\\0')))||tasks.reduce((count,item)=>count+item.checklist.length,0)>4000)return {safe:false,error:'Dokument obsahuje neplatný nebo příliš velký checklist.'};
- if(new Set(tasks.map(item=>item.parts[4])).size!==tasks.length)return {safe:false,error:'Dokument obsahuje duplicitní stabilní ID.'};
+ if(structuralError)return invalid(structuralError);
+ if(!profile&&!external)return invalid('Dokument nemá podporovanou profilovou značku.');
+ if(!tasks.length)return invalid('Dokument neobsahuje žádný strukturovaný uzel.');
+ if(tasks.some(item=>!item.type))return invalid('Každý uzel musí mít právě jeden rozpoznaný type.');
+ if(tasks.some(item=>item.checklist.some(value=>value.text.includes('\\0')))||tasks.reduce((count,item)=>count+item.checklist.length,0)>4000)return invalid('Dokument obsahuje neplatný nebo příliš velký checklist.');
+ if(new Set(tasks.map(item=>item.parts[4])).size!==tasks.length)return invalid('Dokument obsahuje duplicitní stabilní ID.');
  const byId=new Map(tasks.map(item=>[item.parts[4],item]));
- for(const task of tasks){const parent=task.parentId?byId.get(task.parentId):null,linked=task.parts[6].startsWith('[')&&task.parts[6].includes('](artifacts/')&&task.parts[6].endsWith('.md)');if(profile&&!parent&&task.type!=='milestone')return {safe:false,error:`Kořen ${task.parts[4]} musí být milestone.`};if(external&&(!(!parent&&task.type==='task')))return {safe:false,error:'Externí soubor smí obsahovat pouze kořenové task uzly.'};if(parent&&!({milestone:'batch',batch:'task'}[parent.type]===task.type))return {safe:false,error:`Hierarchie ${parent.type} → ${task.type} není povolená.`};if(linked&&task.type!=='batch')return {safe:false,error:'Odkaz na soubor může nést pouze batch.'};if(linked&&tasks.some(item=>item.parentId===task.parts[4]))return {safe:false,error:`Batch ${task.parts[4]} kombinuje odkaz a inline potomky.`};}
+ for(const task of tasks){const parent=task.parentId?byId.get(task.parentId):null,linked=task.parts[6].startsWith('[')&&task.parts[6].includes('](artifacts/')&&task.parts[6].endsWith('.md)');if(profile&&!parent&&task.type!=='milestone')return invalid(`Kořen ${task.parts[4]} musí být milestone.`);if(external&&(!(!parent&&task.type==='task')))return invalid('Externí soubor smí obsahovat pouze kořenové task uzly.');if(parent&&!({milestone:'batch',batch:'task'}[parent.type]===task.type))return invalid(`Hierarchie ${parent.type} → ${task.type} není povolená.`);if(linked&&task.type!=='batch')return invalid('Odkaz na soubor může nést pouze batch.');if(linked&&tasks.some(item=>item.parentId===task.parts[4]))return invalid(`Batch ${task.parts[4]} kombinuje odkaz a inline potomky.`);}
  return {safe:true,tasks,lines,profile,external};
 }
 function replaceTaskPlanLine(index,value){const lines=artifactEditorForm.elements.body.value.split('\\n');lines[index]=value;artifactEditorForm.elements.body.value=lines.join('\\n');artifactEditorForm.elements.body.dispatchEvent(new Event('input',{bubbles:true}));renderTaskPlanEditor();}
+function renderPlanOutline(rows,target,{compact=false}={}){
+ const containers=new Map();
+ for(const row of rows||[]){const item=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div'),children=document.createElement(compact?'ul':'div');item.className='plan-outline-item';item.dataset.planOutline=row.key;item.dataset.readOnly='true';summary.textContent=row.id+' · '+row.title+' · '+(row.type||(row.inferred_type?row.inferred_type+' (typ neuveden)':'typ neuveden'))+' · řádek '+row.line;
+  if(!compact){renderMarkdown(row.description_markdown||'',body,null,true);if(row.truncated){const note=document.createElement('p');note.textContent='Popis je v náhledu zkrácený; úplný text je ve zdroji.';body.append(note);}}
+  children.className='plan-outline-children';children.style.marginLeft='1rem';item.append(summary,body,children);const host=compact?document.createElement('li'):item;if(compact){host.setAttribute('role','treeitem');children.setAttribute('role','group');host.append(item);}(containers.get(row.parent_key)||target).append(host);containers.set(row.key,children);
+ }
+}
+function renderDraftPlanOutline(parsed,target){
+ const stack=[],rows=[];
+ for(const task of parsed.tasks||[]){while(stack.length&&stack.at(-1).indent>=task.indent)stack.pop();const row={key:String(task.line+1),id:task.parts[4],title:task.parts[6],type:task.type,inferred_type:({milestone:'batch',batch:'task'}[stack.at(-1)?.type||stack.at(-1)?.inferred_type]||null),line:task.line+1,parent_key:stack.at(-1)?.key||null,indent:task.indent,description_markdown:(task.descriptionMarkdown||[]).join('\\n')};rows.push(row);stack.push(row);}
+ renderPlanOutline(rows,target);
+}
 function renderTaskPlanEditor(){
  if(taskPlanEditor.hidden)return;const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value),position=document.querySelector('#task-plan-insert-position'),priorPosition=position.value;taskPlanBlocks.replaceChildren();position.replaceChildren(new Option('Na konec souboru','end'));document.querySelector('#task-plan-mode-structured').setAttribute('aria-selected',String(taskPlanMode==='structured'));document.querySelector('#task-plan-mode-raw').setAttribute('aria-selected',String(taskPlanMode==='raw'));artifactRawRoot.hidden=taskPlanMode==='structured';taskPlanBlocks.hidden=taskPlanMode!=='structured';document.querySelector('#task-plan-insert').hidden=taskPlanMode!=='structured';
- if(!parsed.safe){taskPlanStatus.textContent=`Strukturovaný režim je pouze pro čtení: ${parsed.error} Použijte raw text.`;document.querySelector('#task-plan-insert').hidden=true;return;}
+ if(artifactEditorItem?.workingDraft){parsed.safe=false;parsed.error='Náhled rozpracovaného souboru z disku.';}
+ if(!parsed.safe){taskPlanStatus.textContent=`Strukturovaný režim je pouze pro čtení: ${parsed.error} Použijte raw text.`;document.querySelector('#task-plan-insert').hidden=true;renderDraftPlanOutline(parsed,taskPlanBlocks);return;}
  for(const task of parsed.tasks)position.append(new Option(`Před ${task.parts[4]} · ${task.parts[6]}`,task.parts[4]));if([...position.options].some(option=>option.value===priorPosition))position.value=priorPosition;
  taskPlanStatus.textContent=`${parsed.tasks.length} uzlů · změny polí přepisují jen rozpoznané řádky; ostatní text zůstává beze změny.`;
  for(const task of parsed.tasks){const card=document.createElement('section');card.className='task-plan-block';card.dataset.depth=String(Math.min(task.depth,3));const state=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=task.parts[2].toLowerCase()==='x';check.disabled=task.parts[2].toLowerCase()==='sum';state.append(check,document.createTextNode(check.disabled?' SUM · odvozený stav':' Hotovo'));const typeLabel=document.createElement('label'),type=document.createElement('select');for(const value of ['milestone','batch','task'])type.append(new Option(value,value));type.value=task.type;typeLabel.append('Typ',type);const idLabel=document.createElement('label'),id=document.createElement('input');id.value=task.parts[4];id.pattern='[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+';idLabel.append('ID',id);const titleLabel=document.createElement('label'),title=document.createElement('input');title.value=task.parts[6];title.maxLength=500;titleLabel.append('Název nebo odkaz',title);const details=document.createElement('small');details.textContent=`rodič: ${task.parentId||'kořen'}${task.descriptions.length?' · '+task.descriptions.join(' '):''}${task.checklist.length?' · podmínky: '+task.checklist.map(item=>(item.checked?'☑ ':'☐ ')+item.text).join(' · '):''}${task.relations.length?' · '+task.relations.join(' · '):''}`;
@@ -2812,14 +2827,15 @@ async function canLeaveWorkspaceEditors(){
 }
 function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
  resetTaskFileEditEditor();document.querySelector('#plan-item-status-control')?.remove();
- for(const name of ['title','filename','description','tags']){const field=artifactEditorForm.elements[name];field.disabled=Boolean(artifactEditorItem?.planItem);const label=field.closest?.('label');if(label)label.hidden=field.disabled;}
+ for(const name of ['title','filename','description','tags']){const field=artifactEditorForm.elements[name];field.disabled=Boolean(artifactEditorItem?.planItem||doc.working_draft);const label=field.closest?.('label');if(label)label.hidden=field.disabled;}
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
  document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
  artifactEditorBaseline=artifactEditorState();artifactEditorDirty=false;artifactEditorAttempt=null;const properties=artifactEditorForm.querySelector('.workspace-file-properties');if(properties)properties.open=isNew;
- const taskPlan=!rawOnly&&Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false}).then(()=>configureTaskPlanEditor(taskPlan));
+ if(artifactEditorItem)artifactEditorItem.workingDraft=Boolean(doc.working_draft);artifactEditorForm.querySelector('button[type="submit"]').disabled=Boolean(doc.working_draft);
+ const taskPlan=!rawOnly&&Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:Boolean(doc.working_draft)}).then(()=>configureTaskPlanEditor(taskPlan));
 }
 async function closeArtifactEditor(){
  const item=artifactEditorItem;
@@ -2836,10 +2852,10 @@ async function openArtifactEditor(item,deleteMode=false){
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
  selectSidebarTab(document.querySelector('#artifacts-tab'));
  artifactEditorStatus.textContent='Načítám uložený dokument…';
- try{const result=await projectRequest('/v1/artifacts/editor/open',{project_id:project.id,artifact_id:item.id,expected_head:project.head});
+ try{const result=await projectRequest('/v1/artifacts/editor/open',{project_id:project.id,artifact_id:item.id,expected_head:project.head,include_working_draft:item.id===project.mainTodoId});
   if(activeProject!==project||artifactEditorItem!==item)return;
   fillArtifactEditor(result.document);
-  artifactEditorStatus.textContent='Uložená verze je připravena k úpravě.';
+  artifactEditorStatus.textContent=result.document.working_draft?'Náhled právě upravovaného souboru z disku. Pokračujte v jeho úpravě ve svém textovém editoru; tento náhled soubor neukládá.':'Uložená verze je připravena k úpravě.';
   if(deleteMode)await prepareArtifactDeletion();else{const field=taskPlanEditor.hidden||taskPlanMode==='raw'?artifactEditorForm.elements.body:taskPlanEditor.querySelector('input,textarea,select,button');field?.focus();}
  }catch(error){artifactEditorStatus.textContent=error.message;}
 }
@@ -2894,6 +2910,7 @@ function openMainTodoEditor(){
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
 artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
 async function saveArtifactEditor(navigate=true){
+ if(artifactEditorItem?.workingDraft){artifactEditorStatus.textContent='Toto je náhled souboru právě upravovaného na disku; náhled nic neukládá.';return false;}
  if(artifactEditorItem?.planItem)return savePlanItemEditor(navigate);
  if(artifactEditorTaskEdit)return saveTaskFileEditEditor(navigate);
  if(!activeProject||!artifactEditorItem||!artifactEditorForm.reportValidity())return false;const button=artifactEditorForm.querySelector('button[type="submit"]');
@@ -3044,7 +3061,7 @@ async function openRegisteredProject(projectId){
   if(request!==viewRequest)return;
   rememberRecentProject(projectId);
   activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id,readOnly:Boolean(result.read_only),replication:result.replication||null};
-  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);renderTaskPlanSidebar(result.plan);renderSidebarArtifacts(result.artifacts);
+  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);renderTaskPlanSidebar(result.plan_draft||result.plan);if(result.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=result.plan_draft_error;renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-description').textContent=result.description;
   document.querySelector('#project-commit').textContent=result.commit_id;
@@ -4167,7 +4184,7 @@ function fillApplicationAccess(result){
  applicationAccessStatus.textContent=`Aktuální režim: ${applicationAccessLabels[settings.mode]}.`;
 }
 async function loadApplicationAccess(){
- if(document.body.dataset.runtime==='desktop'){
+ if(document.body?.dataset?.runtime==='desktop'){
   fillApplicationAccess({runtime:'desktop',settings:{mode:'localhost',allowed:[]}});
   for(const control of applicationAccessForm.elements)control.disabled=true;
   document.querySelector('#application-access-runtime').textContent='Desktopová aplikace nepovoluje vzdálený přístup; tato volba je pouze informativní.';return;
@@ -4178,7 +4195,7 @@ async function loadApplicationAccess(){
 }
 applicationAccessForm.elements.mode.addEventListener('change',invalidateApplicationAccess);
 applicationAccessForm.elements.allowed.addEventListener('input',invalidateApplicationAccess);
-applicationAccessForm.addEventListener('submit',async event=>{event.preventDefault();if(document.body.dataset.runtime==='desktop')return;
+applicationAccessForm.addEventListener('submit',async event=>{event.preventDefault();if(document.body?.dataset?.runtime==='desktop')return;
  const settings={mode:applicationAccessForm.elements.mode.value,allowed:applicationAccessForm.elements.allowed.value.split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)};
  applicationAccessStatus.textContent='Kontroluji přesný rozsah…';
  try{const result=await projectRequest('/v1/application-access',{action:'preview',settings});applicationAccessPlan=result.plan;
@@ -4406,7 +4423,7 @@ async function reviewQueueReport(report,decision){
   taskQueueBusy=false;
   // Reload in place: the user stays on the queue and the plan shows the new state.
   if(result.result?.commit_id){const view=await projectRequest('/v1/projects/open',{project_id:project.id});
-   if(activeProject!==project)return;project.head=view.commit_id;renderTaskPlanSidebar(view.plan);}
+   if(activeProject!==project)return;project.head=view.commit_id;renderTaskPlanSidebar(view.plan_draft||view.plan);}
   else await loadTaskQueue();
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu; připravené review lze bezpečně dokončit.';}}
  finally{taskQueueBusy=false;renderTaskQueue();}
@@ -4440,6 +4457,19 @@ document.querySelector('#task-queue-publish').addEventListener('click',async()=>
 document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
 document.querySelector('#task-queue-revalidate').addEventListener('click',()=>changeTaskQueue('revalidate'));
 
+function renderPlanDescription(target,item){
+ if(item.description_markdown)renderMarkdown(item.description_markdown,target,null,true);
+ else appendProjectArtifactLinks(target,item.description||'bez popisu');
+}
+function appendPlanChildren(target,item){
+ const children=(taskPlanProjection?.nodes||[]).filter(node=>node.parent_id===item.id);
+ if(!children.length)return;
+ const section=document.createElement('section');section.className='plan-detail-children';
+ const heading=document.createElement('h4');heading.textContent=item.type==='milestone'?'Dávky':'Podúkoly';
+ const list=document.createElement('ul');
+ for(const child of children){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planChild=child.id;button.textContent=child.id+' · '+child.title;button.addEventListener('click',()=>showTaskPlanDetail(child));row.append(button,planStatusBadge(child));list.append(row);}
+ section.append(heading,list);target.append(section);
+}
 function showTaskPlanDetail(item){
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
  const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;document.querySelector('#plan-graph').focus();});detail.append(close);
@@ -4447,7 +4477,7 @@ function showTaskPlanDetail(item){
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title,planStatusBadge(item));
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
  const checklist=(item.checklist||[]).map(value=>(value.checked?'☑ ':'☐ ')+value.text).join('\\n');
- for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',(item.status_mode==='sum'?'SUM · ':'')+planStatusLabels[planStatus(item)]],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);
+ for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',(item.status_mode==='sum'?'SUM · ':'')+planStatusLabels[planStatus(item)]],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;if(name==='Popis')renderPlanDescription(description,item);else appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);appendPlanChildren(detail,item);
  if(activeProject&&!activeProject.readOnly&&item.source?.artifact_id){const edit=document.createElement('button');edit.type='button';edit.textContent='Upravit tuto položku';edit.addEventListener('click',()=>openPlanItemEditor(item));detail.append(edit);appendPlanItemActions(detail,item);}
  if(item.source?.artifact_id){const open=document.createElement('button');open.type='button';open.textContent='Otevřít zdrojový seznam';open.addEventListener('click',()=>openPreview(item.source.artifact_id));detail.append(open);}
 }
@@ -4557,7 +4587,7 @@ function renderTaskPlan(){
  const value=taskPlanProjection,graph=document.querySelector('#plan-graph'),status=document.querySelector('#plan-status');graph.replaceChildren();
  document.querySelector('#plan-add-root').hidden=!(value?.status==='ready'&&activeProject&&!activeProject.readOnly);document.querySelector('#plan-new-root-form').replaceChildren();
  if(!value){status.textContent='Otevřete projekt.';return;}
- if(value.status!=='ready'){status.textContent=value.status==='missing'?'Projekt zatím nemá hlavní seznam úkolů.':`Plán nelze zobrazit: ${value.error||'neplatný formát'}`;return;}
+ if(value.status!=='ready'){status.textContent=value.status==='missing'?'Projekt zatím nemá hlavní seznam úkolů.':value.status==='draft'?`Rozpracovaný soubor z disku · zatím není uložený v plánu.${value.error?' '+value.error:''}`:`Plán není validní: ${value.error||'neplatný formát'}. Zobrazená struktura je pouze pro čtení.`;renderPlanOutline(value.outline,graph);return;}
  const mode=document.querySelector('#plan-state-filter').value,scope=taskPlanSelection?.kind==='subgraph'?new Set(taskPlanSelection.task_ids):null;
  if(value.profile==='software-development/v1'&&!taskPlanSelection){renderProfiledTaskRoadmap(value,mode,graph,status);return;}
  if(value.profile==='software-development/v1'&&['milestone','batch'].includes(taskPlanSelection?.kind)){renderProfiledTaskLevel(value,mode,graph,status,taskPlanSelection);return;}
@@ -4570,13 +4600,13 @@ function renderTaskPlan(){
  graph.append(svg);status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
 }
 function updateTaskPlanTreeSelection(queueOpen=false){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(!queueOpen&&(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/')));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(!queueOpen&&taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
-async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
+async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');renderTaskPlanSidebar(view.plan_draft||view.plan);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
 async function openTaskQueue(){if(!activeProject||!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));selectMainTab(document.querySelector('#task-queue-tab'));closeMobileSidebar();closeCompactSidebarMenu();await loadTaskQueue();}
 document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
 function renderTaskPlanSidebar(value){
  taskQueueView=null;loadTaskQueue();
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
- if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
+ if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.'+(value.error?' '+value.error:''):value?.status==='draft'?'Rozpracovaný soubor z disku · pouze náhled.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;renderPlanOutline(value?.outline,hierarchy,{compact:true});updateTaskPlanTreeSelection();renderTaskPlan();return;}
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
  status.textContent=value.profile==='software-development/v1'?`${milestones.length} milníků · ${batches.length} dávek · ${value.nodes.filter(item=>item.type==='task').length} úkolů`:`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
  for(const milestone of milestones){const row=document.createElement('li'),button=document.createElement('button'),children=document.createElement('ul');row.setAttribute('role','treeitem');row.setAttribute('aria-expanded','true');button.type='button';button.dataset.planSelection=milestone.id;button.textContent=`${milestone.id} · ${milestone.title}`;button.addEventListener('click',()=>openTaskPlan({kind:'milestone',id:milestone.id,title:milestone.title}));children.setAttribute('role','group');for(const batch of batches.filter(item=>item.parent_id===milestone.id)){const child=document.createElement('li'),batchButton=document.createElement('button');child.setAttribute('role','treeitem');batchButton.type='button';batchButton.dataset.planSelection=batch.id;batchButton.textContent=`${batch.id} · ${batch.title}`;batchButton.addEventListener('click',()=>openTaskPlan({kind:'batch',id:batch.id,parent_id:milestone.id,title:batch.title}));batchButton.append(planStatusBadge(batch));child.append(batchButton);children.append(child);}button.append(planStatusBadge(milestone));row.append(button,children);hierarchy.append(row);}
@@ -4854,24 +4884,33 @@ function appendProjectArtifactLinks(target,text){
   const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=match[1];button.title='Otevřít projektový podklad';button.addEventListener('click',()=>openPreview(match[3]));target.append(button);offset=match.index+match[0].length;
  }target.append(document.createTextNode(text.slice(offset)));
 }
-function renderMarkdown(text,target=previewContent,lineClasses=null){
+function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
- let fence=null,code=null,list=null,lineIndex=0;
+ let fence=null,code=null,lists=[],lineIndex=0;
  for(const line of text.split('\\n')){
   const marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
   if(marker && (!fence || (marker[1][0]===fence[0] && marker[1].length>=fence.length && !marker[2].trim()))){
-   list=null;
+   lists=[];
    if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');addConflictLineClasses(code,lineClasses,lineIndex);target.append(code);}
    lineIndex++;
    continue;
   }
   if(fence){code.textContent+=line+'\\n';addConflictLineClasses(code,lineClasses,lineIndex);lineIndex++;continue;}
   const heading=line.match(/^(#{1,6})\\s+(.*)$/);
-  const bullet=line.match(/^\\s*[-*+]\\s+(.*)$/);
-  if(bullet){if(!list){list=document.createElement('ul');target.append(list);}
-   const item=document.createElement('li');if(target===previewContent)appendProjectArtifactLinks(item,bullet[1]);else item.textContent=bullet[1];addConflictLineClasses(item,lineClasses,lineIndex);list.append(item);lineIndex++;continue;}
-  list=null;const element=document.createElement(heading?'h'+heading[1].length:'p');
-  if(target===previewContent)appendProjectArtifactLinks(element,heading?heading[2]:line);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
+  const bullet=line.match(/^([ \\t]*)[-*+]\\s+(.*)$/);
+  if(bullet){
+   const indent=[...bullet[1]].reduce((column,char)=>column+(char==='\\t'?4-column%4:1),0);
+   while(lists.length&&lists.at(-1).indent>indent)lists.pop();
+   if(!lists.length||lists.at(-1).indent<indent){
+    const list=document.createElement('ul');(lists.at(-1)?.item||target).append(list);lists.push({indent,list,item:null});
+   }
+   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2]);else item.textContent=bullet[2];
+   addConflictLineClasses(item,lineClasses,lineIndex);lists.at(-1).list.append(item);lists.at(-1).item=item;lineIndex++;continue;
+  }
+  // A blank line separates list paragraphs, not the batch from its children.
+  if(!line.trim()){lineIndex++;continue;}
+  lists=[];const element=document.createElement(heading?'h'+heading[1].length:'p');
+  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
  }
 }
 const projectConflicts=document.querySelector('#project-conflicts');
@@ -5038,6 +5077,7 @@ async function openPreview(id,page=1){
  try{
   const result=await projectRequest('/v1/artifacts/preview',{
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
+  if(id===project.mainTodoId&&document.body?.dataset?.runtime==='desktop'){const view=await projectRequest('/v1/projects/open',{project_id:project.id});if(view.commit_id!==project.head)throw Error('Projekt se změnil; otevřete jej znovu.');if(view.plan_draft_error)throw Error(view.plan_draft_error);if(view.plan_draft){result.format='markdown';result.text=view.plan_draft.text;result.page=1;result.pages=1;result.message='Rozpracovaný soubor z disku · není uložený v plánu · pouze náhled.';}}
   if(request!==previewRequest || activeProject!==project)return;
   selectedPreviewMetadata={...result.metadata,id};document.querySelector('#preview-title').textContent=result.metadata.title;document.querySelector('#preview-panel').dataset.fileFormat=result.format;
   const metadata=document.querySelector('#preview-metadata');
@@ -5148,7 +5188,7 @@ const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
 const settingsSearchStatus=document.querySelector('#settings-search-status');
 const settingsGoogleDriveStatus=document.querySelector('#settings-google-drive-status');
-const googleDriveDesktop=document.body.dataset.runtime==='desktop';
+const googleDriveDesktop=document.body?.dataset?.runtime==='desktop';
 document.querySelector('#google-drive-client-guide').textContent=googleDriveDesktop ?
  'V Google Cloud zapněte Google Drive API a vytvořte OAuth klienta typu Desktop app. Nepoužívejte klienta typu Web application.' :
  'V Google Cloud zapněte Google Drive API a vytvořte OAuth klienta typu Web application.';
@@ -9122,7 +9162,7 @@ class DesktopHandler(Handler):
                         return self.reply(200, action(request['item'], request['operation_id']))
                     return self.send_error(400)
                 if (self.path == '/v1/artifacts/editor/open' and isinstance(request, dict)
-                        and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
+                        and set(request) in ({'project_id', 'artifact_id', 'expected_head'}, {'project_id', 'artifact_id', 'expected_head', 'include_working_draft'})):
                     return self.reply(200, actions.open(**request))
                 if (self.path == '/v1/artifacts/editor/validate-plan' and isinstance(request, dict)
                         and set(request) == {'project_id', 'artifact_id', 'expected_head', 'body'}):

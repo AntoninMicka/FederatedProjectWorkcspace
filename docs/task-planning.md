@@ -139,3 +139,53 @@ SUM lze zapsat přímo do značky skupiny, například
 `- [SUM] [MILESTONE-DEV] DEV` s následujícím řádkem `  - type: milestone`.
 Tento zápis zachová agregaci při uložení i úpravě názvu. Pro běžný úkol
 či podmínku checklistu značka SUM povolená není.
+
+## Vnořené odrážky v náhledu zdrojového seznamu
+
+Markdown náhled zachovává odsazení odrážek: popis dávky, vnořené části
+popisu a podřízené úkoly zůstávají ve svých seznamech. Prázdný řádek před
+podúkolem nezruší jeho vizuální vazbu na dávku. Návrat k menšímu odsazení
+uzavře příslušnou úroveň, například při začátku další dávky.
+
+Náhled nepřepisuje zdrojový dokument ani identifikátory úkolů. Validace
+plánovacího grafu zůstává samostatná; struktura vnořeného seznamu nenahrazuje
+kontrolu stabilních ID, vztahů a typů uzlů.
+
+Detail položky v Plánu používá samostatnou Markdown projekci popisu, která
+zachovává odrážky a jejich odsazení. Textová projekce zůstává dostupná pro
+stručné karty a kompatibilní klienty. Podúkoly dávky se zobrazují zvlášť jako
+odkazy do jejich detailů; netvoří součást popisu rodiče.
+
+Chyba validity (například duplicitní ID či chybějící typ) nesmí odstranit
+rozpoznané hranice položek. Plán, sidebar i strukturovaný editor v takovém
+případě zobrazují pouze čitelnou strukturu fyzických bloků. Odsazení určuje
+vnoření, číslo řádku rozlišuje i stejné ID. Tato projekce není plánovací graf:
+nelze z ní potvrzovat úkoly, exportovat platný graf ani spouštět práci.
+Typ odvozený pro náhled je výslovně označen jako nedeklarovaný. Oprava údajů
+probíhá v raw textu a při uložení znovu podléhá původní úplné validaci.
+
+## Ručně rozepsaný soubor roadmapy
+
+Při ruční úpravě hlavního souboru plánu na lokálním desktopu není nutné
+commitovat každou rozepsanou část jen pro její zobrazení. Znovuotevření Plánu
+načte současný pracovní soubor a označí jej jako rozpracovaný náhled. Uvidíte
+již napsané popisy i samostatné bloky úkolů, i když další část nemá doplněné
+typ nebo jiné povinné údaje. Úplná validace se tím nevypíná.
+
+Hlavička položky ve tvaru checkboxu se stabilním ID otevírá nový blok.
+Odsazení určuje jeho rodiče; milník i dávka mohou mít vlastní popis a současně
+podřízené položky. Začátkem podúkolu končí vlastní popis rodiče. Náhled nikdy
+neslučuje dva bloky jen kvůli stejnému ID.
+
+Rozpracovaný obsah se čte také v lokálním náhledu zdrojového dokumentu a při
+výslovném otevření jeho náhledu v editoru. Při další změně na disku znovu
+otevřete Plán. Náhled nic nezapisuje, nepotvrzuje ani nepředává do fronty;
+uložený plán a jeho revize zůstávají oddělené. Editor rozpracovaného souboru
+je pouze pro čtení, aby nepřepsal právě prováděnou externí úpravu. Pokračovat
+lze ve vlastním textovém editoru.
+
+Původní API připnutých náhledů nadále vrací bajty z požadovaného commitu.
+Pracovní soubor se neposkytuje síťovým klientům a nevstupuje do kontextových
+manifestů, synchronizace ani autoritativního indexu. Chybějící, měnící se,
+nečitelný nebo nepřípustný soubor vyvolá explicitní zprávu, nikoli tichou
+záměnu za údajně aktuální uloženou verzi.

@@ -66,6 +66,14 @@ endpointu. **Reject:** druhý registr stavů, implicitní akceptace od agenta
 nebo přepis checkboxů při read-only agregaci. Recovery zůstává v existující
 Workspace transakci; pravidla zachycuje ADR 0067.
 
+Oprava vnořeného náhledu roadmapy **adaptuje** existující textový
+`renderMarkdown` ve sdíleném desktop/web UI. Zásobník odsazení zachovává
+rodiče odrážek i přes prázdné řádky; odkazy, diff zvýraznění a inertní text
+používají původní cesty. **Reject:** další Markdown knihovna, nový renderer
+nebo změna plánovacích dat. Parser grafu navíc poskytuje původní odsazení
+popisu jako read-only Markdown projekci; detail znovu používá tentýž renderer
+a existující uzly grafu pro navigaci na podúkoly.
+
 Manuály (`NEW-DC6B8DEEF2-TASK-1`) **reuse/adaptují** společný sidebar,
 `showWorkspacePage`, ochranu `canLeaveWorkspaceEditors` a bezpečný textový
 `renderMarkdown` v `spikes/desktop_ui.py`. Obsah zůstává v existujících
@@ -1085,3 +1093,18 @@ syntéza. Druhý writer, paralelní journal běhů, provider SDK a automatické
 schvalování byly odmítnuty. Veřejná i dostupná soukromá inventura neposkytly
 důvod kopírovat externí komponenty. Hranice/recovery:
 [ADR 0073](docs/adr/0073-monitoring-ui-and-period-synthesis.md).
+
+Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
+Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
+zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný
+graf nadále vrací `status=invalid`, prázdné execution uzly a zakázané fronty.
+**Reject:** automatické přejmenování ID, domýšlení autoritativního typu,
+druhý plánovací registr nebo obejití validace při zápisu.
+
+Lokální náhled ručně rozepsané roadmapy **adaptuje** Projects/ArtifactActions,
+validovanou cestu hlavního dokumentu, snapshoty, limity Markdown dokumentů
+a existující read-only outline. Nový je ohraničený čtecí adaptér pracovní
+kopie s otevřením přes directory FD bez symlinků a kontrolou změny souboru.
+**Reject:** automatický import/commit, nový writer, index neověřených bajtů,
+implicitní změna API připnutého náhledu nebo přenos pracovní kopie po síti.
+Žádná další persistentní vrstva ani nové crash/recovery účinky nevznikají.

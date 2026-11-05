@@ -133,6 +133,14 @@ class Projects:
         workspace = self.workspace(project_id, blocking=not self.network,
                                    deadline=time.monotonic() + 30 if self.network else None)
         result = workspace.read_project(project_id, network=self.network)
+        if not self.network:
+            from spikes.plan_draft import read_plan_draft
+            try:
+                with workspace.journal.lock():
+                    draft=read_plan_draft(workspace,project_id,result['commit_id'])
+                if draft:result['plan_draft']=draft[0]
+            except (OSError,ValueError) as exc:
+                result['plan_draft_error']='Náhled rozpracovaného plánu není dostupný: '+str(exc)
         result['replication'] = self.replication(project_id)
         result['read_only'] = bool(result['replication']
                                    and result['replication']['role'] == 'read-only-replica')
