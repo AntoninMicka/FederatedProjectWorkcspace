@@ -199,7 +199,7 @@ class TaskGraphTests(unittest.TestCase):
     def test_shared_ui_places_plan_after_tasks_and_uses_safe_svg_dom(self):
         self.assertLess(HTML.index('id="todo-tab"'), HTML.index('id="plan-tab"'))
         self.assertLess(HTML.index('id="plan-tab"'), HTML.index('id="artifacts-tab"'))
-        for marker in ('Hlavní graf /', 'sidebar-plan-tree', 'Fronta úloh', 'Výřezy roadmapy', 'renderTaskPlanSidebar(result.plan_draft||result.plan)',
+        for marker in ('Hlavní graf /', 'sidebar-plan-tree', 'Fronta úloh', 'Výřezy roadmapy', 'renderTaskPlanSidebar(result.plan)',
                        "roadmapElement('svg'", 'textContent=item.title',
                        'renderProfiledTaskRoadmap', 'plan-milestone-label',
                        'renderProfiledTaskLevel', 'plan-task-card', 'Podmínky splnění',

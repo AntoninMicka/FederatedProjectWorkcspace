@@ -190,11 +190,11 @@ manifestů, synchronizace ani autoritativního indexu. Chybějící, měnící s
 nečitelný nebo nepřípustný soubor vyvolá explicitní zprávu, nikoli tichou
 záměnu za údajně aktuální uloženou verzi.
 
-Pokud existuje rozpracovaná kopie, nad Plánem jsou přepínače **Uložený graf**
-a **Rozepsaný soubor**. První vrací graf poslední uložené platné revize,
-druhý náhled právě přepisovaného souboru. Volba zůstává zachovaná při dalším
-otevření Plánu v témže projektu. Přepnutí nic neukládá ani nemaže; pokud
-uložená revize nemá platný graf, odpovídající tlačítko je zakázané s důvodem.
+Pohled **Plán** zobrazuje uložený graf. Kliknutí na kartu dávky otevře pouze
+detail s úpravou závislostí; dvojklik nepřepíná graf; výběr milníku či dávky je dostupný také v levém stromu.
+Detail dávky nabízí před popisem tlačítko **Zobrazit úkoly** s počtem přímých
+podúkolů. Detail milníku obdobně nabízí **Zobrazit dávky**. Dlouhý popis
+nezakrývá vstup do podrobnějšího grafu. Náhled textu plánu je v editoru.
 
 ## Režimy editoru a pracovní plocha
 
@@ -202,7 +202,7 @@ Editor hlavního plánu nabízí v záhlaví **Kostky**, **Raw text** a **Náhle
 Náhled vykresluje aktuální obsah textového pole, včetně dosud neuložených
 změn. Přepnutí nic neukládá a zachovává rozepsaný obsah i výběr v raw textu.
 Pohled Plán při otevření projektu standardně zobrazuje uložený graf;
-rozpracovaný soubor lze prohlížet v editoru nebo zvolit jeho samostatný náhled.
+rozpracovaný soubor lze prohlížet v editoru.
 
 Obsah editoru využívá zbývající výšku a celou dostupnou šířku stránky.
 Posouvá se text nebo náhled, nikoli záhlaví s akcemi. Pomocné vzory,

@@ -1114,3 +1114,10 @@ PAGE_LAYOUT_CSS, původní raw widget a inertní `renderMarkdown`. Režimy
 zachovávají jediný textový buffer; nápověda i vzory zůstávají v původním
 widgetu, pouze v rozbalovacích nástrojích. **Reject:** další editor, kopie
 draftu, nový parser nebo zapisovací endpoint kvůli přepnutí režimu.
+
+Navigace tlačítkem v detailu dávky na její úkoly **reuse/adaptuje** `openTaskPlan`,
+`renderProfiledTaskLevel` a existující rodičovské vazby ověřeného grafu.
+Karta otevírá pouze detail včetně úpravy závislostí; dvojklik graf nepřepíná.
+Detail milníku/dávky nabízí stejný vstup před dlouhým popisem. **Reject:**
+nový parser, duplikovaný graf či přepis uživatelova zadání kvůli navigaci.
+Změna pouze zobrazuje data; nepřidává zápisy ani recovery hranice.
