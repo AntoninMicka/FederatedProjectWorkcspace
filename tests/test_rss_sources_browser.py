@@ -44,7 +44,7 @@ try:
    7:'navigateSidebarTab(document.querySelector("#projects-tab"))'}
   checks={
    0:'typeof loadSources==="function"&&typeof navigateSidebarTab==="function"',
-   1:'!document.querySelector("#sources-view").hidden&&sourcesView?.channels.length===2&&!activeProject',
+   1:'!document.querySelector("#sources-view").hidden&&sourcesView?.channels.length===2&&!activeProject&&document.querySelector("#sources-connector-list").textContent.includes("Nedostupné")&&document.querySelector("#sources-connector-list").textContent.includes("Nepřipojeno")',
    2:'!sourcesBusy&&sourcesFeed.querySelectorAll("article").length===2',
    3:'sourcesChannel==="one"&&sourcesFeed.querySelectorAll("article").length===1&&sourcesFeed.textContent.includes("<img src=x")&&!sourcesFeed.querySelector("img")',
    4:'sourcesChannel==="two"&&document.activeElement.id==="source-channel-two"&&sourcesFeed.querySelectorAll("article").length===1',

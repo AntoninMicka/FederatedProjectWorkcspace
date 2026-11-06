@@ -149,7 +149,7 @@ def observe(feed, observed_at, previous=None):
                 record['aliases'].append(key)
             aliases[key] = index
         if state != 'unchanged':
-            record['revisions'].append(dict(observed_at=observed_at, entry=entry))
+            record['revisions'].append(dict(observed_at=observed_at, entry=entry, raw_sha256=feed['raw_sha256']))
         counts[state] += 1
     result = dict(schema=SCHEMA, url=feed['url'], title=feed['title'], observed_at=observed_at,
                   raw_sha256=feed['raw_sha256'], counts=counts, records=records,

@@ -56,9 +56,11 @@ class RSSSourcesHTTPTests(unittest.TestCase):
         code, raw, _ = self.call('view', {})
         self.assertEqual(code, 200, raw)
         self.assertEqual(len(json.loads(raw)['channels']), 2)
+        self.assertTrue(any(c['availability']['state']=='unavailable' for c in json.loads(raw)['connectors']))
         code, raw, _ = self.call('refresh', {'channel_id': 'all'})
         self.assertEqual(code, 200, raw)
         self.assertEqual(len(json.loads(raw)['entries']), 2)
+        self.assertEqual(len(json.loads(raw)['items']),2)
         # Bootstrap the fixture node identity for its administration registry.
         code, raw, _ = self.f.create_project('RBAC fixture')
         self.assertEqual(code, 200, raw)

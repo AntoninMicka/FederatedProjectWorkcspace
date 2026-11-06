@@ -1134,6 +1134,16 @@ byly **reject**. Veřejná i dostupná soukromá inventura byly zkontrolovány;
 externí kód se nepřenášel. Recovery a hranice:
 [ADR 0074](docs/adr/0074-independent-monitoring-definitions.md).
 
+MON-08-02 **reuse/adaptuje** RSS parser/transport a cache, bounded
+`project_document`, tvar SearXNGResult a Projects/Reporting/PinnedRef s
+`SourceCollector.resolve`. Nový je společný descriptor/read/normalize
+kontrakt, inertní SourceItem/SourceBatch a přehled dostupnosti ve Zdroje.
+Jiný writer, crawler, scheduler, fetch journal, credential store a provider
+SDK byly **reject**. Veřejná i dostupná soukromá inventura byly zkontrolovány;
+externí kód se nepřenášel. Žádný provider nebyl připojený jen na základě
+přijetí konfiguračních metadat. Scope/recovery:
+[ADR 0075](docs/adr/0075-source-connector-contract.md).
+
 Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
 Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
 zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný

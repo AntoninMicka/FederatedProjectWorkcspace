@@ -3,6 +3,11 @@
 
 # Přímý RSS/Atom pilot
 
+Navazující [kontrakt zdrojových konektorů](source-connectors.md) sjednocuje
+položky readeru s dalšími typy zdrojů. V API sekce Zdroje je dostupný jako
+`items`; původní `entries` zůstává kompatibilní UI projekcí. Nové revize
+RSS pozorování uchovávají také hash původního feedu u konkrétní revize.
+
 Uživatelem zvolený první kanál je
 [ČT24 — Výběr redakce](https://ct24.ceskatelevize.cz/rss/tema/vyber-redakce-84313).
 Skript `scripts.rss_pilot` ověřuje přímý odběr a porovnání položek. Jde

@@ -7,6 +7,7 @@ HTML = '''<div id="sources-view" hidden>
 <div id="sources-channel-tabs" role="tablist" aria-label="Kanály zdrojů"></div>
 <p id="sources-status" role="status" aria-live="polite">Kanály zatím nebyly načteny.</p>
 <div id="sources-feed" role="tabpanel" aria-label="Články z vybraných kanálů" tabindex="0"></div>
+<details id="sources-connectors"><summary>Typy zdrojů a dostupnost</summary><ul id="sources-connector-list"></ul></details>
 </div>'''
 CSS = '''
 #sources-view{max-width:1100px;margin:0 auto;padding:clamp(12px,3vw,32px);width:100%;box-sizing:border-box;overflow:auto}
@@ -26,6 +27,9 @@ const sourcesTabs=document.getElementById('sources-channel-tabs'),sourcesFeed=do
 const sourcesStatus=document.getElementById('sources-status'),sourcesRefresh=document.getElementById('sources-refresh');
 function renderSources(){
  if(!sourcesView)return;
+ const catalog=document.getElementById('sources-connector-list');catalog.replaceChildren();
+ const availability={ready:'Dostupné',unavailable:'Nedostupné','not-configured':'Nepřipojeno'};
+ for(const connector of sourcesView.connectors||[]){const li=document.createElement('li');li.textContent=connector.name+' — '+(availability[connector.availability.state]||'Neznámý stav')+'. '+connector.availability.reason;catalog.append(li);}
  const tabs=[{id:'all',name:'Všechny'},...sourcesView.channels];sourcesTabs.replaceChildren();
  for(const channel of tabs){
   const b=document.createElement('button');b.type='button';b.setAttribute('role','tab');b.id='source-channel-'+channel.id;
@@ -37,7 +41,7 @@ function renderSources(){
  const channels=sourcesView.channels.filter(c=>sourcesChannel==='all'||c.id===sourcesChannel);
  sourcesStatus.textContent=entries.length+' článků\n'+channels.map(c=>{
   const checked=c.checked_at?new Date(c.checked_at).toLocaleString('cs-CZ'):'dosud nenačteno';
-  if(c.error)return c.name+': '+(c.state==='unknown'?'Neznámý výsledek':'Chyba načítání')+' — '+c.error+'. Poslední úspěšné načtení: '+checked+'.';
+  if(c.error)return c.name+': '+(c.state==='unavailable'?'Nedostupné':c.state==='unknown'?'Neznámý výsledek':'Chyba načítání')+' — '+c.error+'. Poslední úspěšné načtení: '+checked+'.';
   return c.name+': '+(c.state==='loading'?'Načítá se…':checked);
  }).join('\n');
  if(!entries.length){const p=document.createElement('p');p.textContent=channels.some(c=>c.state==='unloaded')?'Pro načtení článků použijte tlačítko Načíst kanály.':'Žádné načtené články.';sourcesFeed.append(p);}
