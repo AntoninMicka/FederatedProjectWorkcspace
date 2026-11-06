@@ -132,12 +132,39 @@ class TaskQueueTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.service.execute(dict(project_id=second, action='status'), self.owner)
         self.assertEqual(['TASK-A'], self.status()['task_ids'])
 
-    def test_changed_head_requires_explicit_revalidation(self):
+    def test_add_checks_current_request_head_and_revision_without_global_revalidation(self):
         self.act('add', 'TASK-A'); old = self.status(); self.save(BODY + '\nA description.\n')
         self.assertTrue(self.status()['stale']); self.assertFalse(self.status()['valid'])
-        with self.assertRaises(ValueError): self.act('add', 'TASK-X')
-        with self.assertRaises(ValueError): self.act('revalidate', view=old)
-        self.assertTrue(self.act('revalidate')['valid']); self.act('add', 'TASK-X')
+        with self.assertRaises(ValueError): self.act('add', 'TASK-X', view=old)
+        view = self.act('add', 'TASK-X')
+        self.assertEqual(['TASK-A', 'TASK-X'], view['task_ids'])
+        self.assertTrue(view['valid'])
+        with self.assertRaises(ValueError): self.act('add', 'TASK-READY', view=old)
+
+    def test_unrelated_missing_dependency_does_not_block_add_and_issues_remain(self):
+        self.act('add', 'TASK-A'); self.act('add', 'TASK-B')
+        self.save(BODY.replace('  - depends_on: TASK-A', '  - depends_on: TASK-A, TASK-X'))
+        before = self.status(); self.assertFalse(before['valid'])
+        # A dependent new item still needs all of its own blockers queued.
+        with self.assertRaises(ValueError): self.act('add', 'TASK-D')
+        self.assertEqual(before, self.status())
+        # C follows B; this remains eligible even though B itself has a missing prerequisite.
+        self.assertIn('TASK-C', before['following'])
+        view = self.act('add', 'TASK-C')
+        self.assertEqual(['TASK-A', 'TASK-B', 'TASK-C'], view['task_ids'])
+        self.assertFalse(view['valid']); self.assertEqual(before['issues'], view['issues'])
+        view = self.act('add', 'TASK-READY')
+        self.assertEqual(['TASK-A', 'TASK-B', 'TASK-C', 'TASK-READY'], view['task_ids'])
+        self.assertFalse(view['valid']); self.assertEqual(before['issues'], view['issues'])
+        self.assertEqual(before['expected_head'], Projects(self.node).repository(self.pid).head())
+
+    def test_completed_existing_entry_does_not_block_ready_add(self):
+        self.act('add', 'TASK-A')
+        self.save(BODY.replace('- [ ] [TASK-A]', '- [x] [TASK-A]'))
+        before=self.status();self.assertFalse(before['valid'])
+        result=self.act('add', 'TASK-X')
+        self.assertEqual(['TASK-A','TASK-X'], result['task_ids'])
+        self.assertEqual(before['issues'], result['issues']);self.assertFalse(result['valid'])
 
     def test_new_dependency_invalidates_existing_order_and_remove_recovers(self):
         self.act('add', 'TASK-A'); self.act('add', 'TASK-B')

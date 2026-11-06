@@ -194,6 +194,7 @@ class TaskGraphTests(unittest.TestCase):
         value = self.fixture('```\n- [ ] Bez ID\n```\n- [ ] [TASK-01] <script>&\n')
         first = task_graph_svg(value); second = task_graph_svg(value)
         self.assertEqual(first, second)
+        self.assertIn('.n.b{fill:#ede0fa}', first)
         self.assertIn('&lt;script&gt;&amp;', first); self.assertNotIn('<script>', first)
 
     def test_shared_ui_places_plan_after_tasks_and_uses_safe_svg_dom(self):

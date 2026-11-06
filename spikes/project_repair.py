@@ -240,6 +240,8 @@ class ProjectDiagnostics:
                     record = json.loads(raw)
                     if not isinstance(record, dict) or record.get('operation_id') != active_id:
                         raise ValueError('active record')
+                    if record.get('kind') == 'staged-artifact-commit':
+                        recovery_conflict = False  # Working edits are deliberately outside this commit.
                     if record.get('kind') == 'external-replication':
                         add('journal-external-replication', 'journal',
                             'Projekt čeká na dokončení externí replikace; '

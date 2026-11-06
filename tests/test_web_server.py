@@ -1466,7 +1466,7 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
         self.assertEqual([], opened['artifacts'])
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
-    def test_real_browser_renders_and_filters_roadmap_graph(self):
+    def test_real_browser_settings_omit_alternative_roadmap(self):
         import sys
         code = r"""
 import json, os, sys
@@ -1485,12 +1485,8 @@ def result(value):
  if phase==0:
   phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
  elif phase==1:
-  phase=2;run("document.querySelector('[data-settings-tab=\"settings-roadmap-tab\"]').click();")
- elif phase==2:
-  phase=3;run("document.querySelector('.roadmap-node').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));")
- elif phase==3:
-  phase=4;run("const c=document.querySelector('#roadmap-ready-filter');c.checked=true;c.dispatchEvent(new Event('change',{bubbles:true}));")
- elif phase==4: finish('roadmap smoke: graph, keyboard detail and ready filter OK',0)
+  phase=2;run("openSettings();")
+ elif phase==2: finish('roadmap smoke: alternative settings view removed',0)
 def poll():
  global ticks
  ticks+=1
@@ -1498,9 +1494,7 @@ def poll():
  checks={
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')?'ready':'waiting'",
- 2:"(()=>{if(document.querySelector('#settings-view').hidden)return'waiting';const n=document.querySelectorAll('.roadmap-node').length;if(n<40)return document.querySelector('#roadmap-status').textContent.includes('revize')?'FAIL: too few nodes '+n:'waiting';if(document.querySelector('#roadmap-export').disabled)return'FAIL: export disabled';return'ready'})()",
- 3:"document.querySelector('#roadmap-detail').textContent.includes('Zdroj')?'ready':'waiting'",
- 4:"(()=>{const n=document.querySelectorAll('.roadmap-node').length;return n>0&&n<=25?'ready':'FAIL: ready filter count '+n})()"}
+ 2:"!document.querySelector('#settings-view').hidden&&!document.querySelector('#settings-roadmap-tab')&&!document.querySelector('#settings-roadmap-panel')?'ready':'waiting'"}
  view.page().runJavaScript(checks[phase],result)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100)
 view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
@@ -1510,7 +1504,7 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
             WORKSPACE_SMOKE_URL='https://'+self.authority+'/'),
             capture_output=True, text=True, timeout=45)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('roadmap smoke: graph, keyboard detail and ready filter OK', result.stdout)
+        self.assertIn('roadmap smoke: alternative settings view removed', result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_browser_opens_project_plan_and_subgraph(self):

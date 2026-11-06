@@ -111,6 +111,8 @@ SHEETS = [
     sheet("image", "Generování obrázku", ("#image-panel",), scale=.7),
     sheet("julia", "Výpočty — editor Julia modelu", ("#julia-editor",),
           ("julia-editor",), scale=.55),
+    sheet("monitoring", "Nástroje — sledování a periodické zprávy", ("#monitoring-panel",),
+          ("monitoring-form",), scale=.5),
     sheet("presentation", "Editor prezentace", ("#presentation-panel",), scale=.48, notes=False),
     sheet("presentation-pdf", "Export prezentace do PDF", ("#presentation-print-dialog",), scale=.82),
     sheet("metadata", "Návrh popisu a štítků", ("#metadata-panel",), scale=.72),

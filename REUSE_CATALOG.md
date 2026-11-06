@@ -1083,3 +1083,79 @@ Nová run DB je požadovaná autorita podle ADR 0063, nikoli projektový index n
 druhý writer. Další provider, knihovna scheduleru, implicitní retry/approval a
 přenos externího kódu nejsou potřeba. Veřejná i dostupná soukromá inventura
 byly zkontrolovány. Recovery: [ADR 0072](docs/adr/0072-reporting-scheduler-and-run-recovery.md).
+
+MON-05 **reuse/adaptuje** ReportingScheduler včetně run/lease/candidate recovery,
+SourceCollector, ContextBuilder/OllamaAdapter a BackendRuns, Reporting a
+Workspace.transact s původními receipts. UI rozšiřuje sdílený desktop/web a
+Administration RBAC; prezentace jsou existující PresentationDocuments. Nová
+je deklarace sledování, privátní souhlas s jejím hashem a periodově odlišná
+syntéza. Druhý writer, paralelní journal běhů, provider SDK a automatické
+schvalování byly odmítnuty. Veřejná i dostupná soukromá inventura neposkytly
+důvod kopírovat externí komponenty. Hranice/recovery:
+[ADR 0073](docs/adr/0073-monitoring-ui-and-period-synthesis.md).
+
+Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
+Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
+zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný
+graf nadále vrací `status=invalid`, prázdné execution uzly a zakázané fronty.
+**Reject:** automatické přejmenování ID, domýšlení autoritativního typu,
+druhý plánovací registr nebo obejití validace při zápisu.
+
+Lokální náhled ručně rozepsané roadmapy **adaptuje** Projects/ArtifactActions,
+validovanou cestu hlavního dokumentu, snapshoty, limity Markdown dokumentů
+a existující read-only outline. Nový je ohraničený čtecí adaptér pracovní
+kopie s otevřením přes directory FD bez symlinků a kontrolou změny souboru.
+**Reject:** automatický import/commit, nový writer, index neověřených bajtů,
+implicitní změna API připnutého náhledu nebo přenos pracovní kopie po síti.
+Žádná další persistentní vrstva ani nové crash/recovery účinky nevznikají.
+
+Náhled a rozložení editoru plánu **adaptují** sdílené `mountWorkspacePage`,
+PAGE_LAYOUT_CSS, původní raw widget a inertní `renderMarkdown`. Režimy
+zachovávají jediný textový buffer; nápověda i vzory zůstávají v původním
+widgetu, pouze v rozbalovacích nástrojích. **Reject:** další editor, kopie
+draftu, nový parser nebo zapisovací endpoint kvůli přepnutí režimu.
+
+Navigace tlačítkem v detailu dávky na její úkoly **reuse/adaptuje** `openTaskPlan`,
+`renderProfiledTaskLevel` a existující rodičovské vazby ověřeného grafu.
+Karta otevírá pouze detail včetně úpravy závislostí; dvojklik graf nepřepíná.
+Detail milníku/dávky nabízí stejný vstup před dlouhým popisem. **Reject:**
+nový parser, duplikovaný graf či přepis uživatelova zadání kvůli navigaci.
+Změna pouze zobrazuje data; nepřidává zápisy ani recovery hranice.
+
+Návrat z editoru a rodičovská navigace **reuse/adaptují** `openTaskPlan`,
+`openPlanItemEditor`, existující raw editor a `parent_id` validovaného grafu.
+Pozice pohledu je pouze dočasný projektově vázaný UI stav; zápisy nadále
+obsluhuje původní transakce. Počítadlo N/M a stručný přehled podúkolů používají stejné uzly,
+`checked`, `appendPlanChildren`, detail položky a efektivní `planStatus`
+jako velké karty. N/M se počítá nad všemi přímými podúkoly, bez filtru;
+nepoužívá rozpracovaný ani pouze vyřešený stav jako potvrzené splnění. Panel Úkoly znovu používá
+`openMainTodoPreview`. **Reject:** druhý plán, přepis uložených stavů kvůli
+barevnosti, nový writer či persistentní ukládání scroll pozic. Nové crash
+boundaries ani recovery zápisů nevznikají.
+
+Indikace hlavní roadmapy **reuse/adaptují** `blocked`, `critical` a `ready`
+z existujícího projektového grafu; nepřepočítávají stav nezávisle podle
+nastavení roadmapy. Stejné symboly s popisky platí pro milníky, dávky i úkoly.
+Zoom používá jednu škálu celého vykresleného grafu a původní posuvníky;
+vrací se jako součást existujícího UI snapshotu editoru. **Reject:** nový
+plánovací algoritmus, změny uložených stavů nebo druhý exportní formát.
+Jde pouze o UI stav bez nových persistentních zápisů a recovery hranic.
+
+Vzhled indikací **reuse/adaptuje** původní silný/přerušovaný rámeček
+alternativní roadmapy. Blokování používá samostatnou fialovou výplň
+v UI i existujícím SVG exportu, bez změny stavu či výpočtu závislostí.
+Odstraněna je duplicitní obrazovka Nastavení a její klientský loader;
+doménové API a historická data zůstávají zachované. **Reject:** druhý
+plán, nové stavové pole nebo mazání historických plánovacích podkladů.
+
+Důvody zákazu přidání do fronty **reuse/adaptují** současný výsledek
+`TaskQueue.status` (`stale`, `valid`, `issues`, `following`) a připravenost
+uzlu z validovaného grafu. Obnovení fronty současně aktualizuje tlačítko
+v otevřeném detailu. **Reject:** obcházení vlastních předpokladů položky, automatické mazání
+fronty nebo další perzistentní stav. Chybová odpověď zůstává viditelná.
+
+Přidání do neplatné pracovní fronty **adaptuje** původní `assess`, kontrolu
+HEAD/revize, zámek a atomický writer `TaskQueue._write`. Ověřuje vlastní
+předpoklady přidávaného uzlu; existující chyby zůstanou v `issues` a dál
+blokují publikaci balíčku. Nezavádí jiný writer ani automatickou akceptaci.
+Crash boundaries se nemění; upřesnění viz ADR 0062.

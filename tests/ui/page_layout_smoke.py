@@ -17,7 +17,9 @@ view.resize(int(os.environ.get('WORKSPACE_LAYOUT_WIDTH','1440')), 980)
 test = r'''
 window.layoutTest={done:false};
 (async()=>{
- const check=(value,message)=>{if(!value)throw Error(message);};
+ // This layout-only smoke has no real working files; Git actions have their own HTTP integration tests.
+loadArtifactGitState=async()=>null;
+const check=(value,message)=>{if(!value)throw Error(message);};
  const tick=()=>new Promise(resolve=>setTimeout(resolve,30));
  const visible=node=>node&&!node.hidden&&node.getBoundingClientRect().height>0;
  for(const dialog of document.querySelectorAll('dialog')){
@@ -66,7 +68,7 @@ window.layoutTest={done:false};
  check(!document.querySelector('#sidebar-plan').textContent.includes('Podgrafy')&&document.querySelector('#plan-subgraphs').hidden,'Obsolete sidebar subgraphs remain');
  document.querySelector('#task-queue-list li button').click();await tick();check(!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-detail').textContent.includes('Queued task'),'Queue item did not open roadmap detail');
  const planPanel=document.querySelector('#plan-panel'),planLayout=workspacePageLayouts.get(planPanel),graph=document.querySelector('#plan-graph'),detail=document.querySelector('#plan-detail');
- check(planLayout.header.contains(document.querySelector('#plan-state-filter'))&&planLayout.header.contains(document.querySelector('#plan-export'))&&planLayout.header.contains(document.querySelector('#plan-status')),'Plan controls waste content space');
+ check(planLayout.header.contains(document.querySelector('#plan-status-filter'))&&planLayout.header.contains(document.querySelector('#plan-export'))&&planLayout.header.contains(document.querySelector('#plan-status')),'Plan controls waste content space');
  taskPlanProjection={...plan,profile:'software-development/v1',nodes:[{id:'M',title:'Milestone',type:'milestone',depends_on:[]},...Array.from({length:120},(_,index)=>({id:'B-'+index,title:'Batch '+index,type:'batch',parent_id:'M',dependency_depth:index%8,checked:false,ready:true,depends_on:[]}))]};renderTaskPlan();
  showTaskPlanDetail({...queueNode,description:'Long selected item description.\n'.repeat(250)});await tick();
  const headerTop=planLayout.header.getBoundingClientRect().top;

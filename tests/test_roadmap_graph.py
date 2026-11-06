@@ -97,9 +97,9 @@ class RoadmapGraphTests(unittest.TestCase):
         self.assertGreaterEqual(len(value['nodes']), 40)
         self.assertIn('DEV-ROADMAP-GRAPH-01', {item['id'] for item in value['nodes']})
         self.assertIn('/v1/roadmap/graph', DesktopHandler.post_paths)
-        self.assertIn('id="settings-roadmap-tab"', HTML)
-        self.assertIn("projectRequest('/v1/roadmap/graph',{format:'json'})", JS)
-        self.assertNotIn('innerHTML', JS[JS.index('function renderRoadmap()'):JS.index('function selectSettingsTab(')])
+        self.assertNotIn('id="settings-roadmap-tab"', HTML)
+        self.assertNotIn("projectRequest('/v1/roadmap/graph',{format:'json'})", JS)
+        self.assertNotIn('innerHTML', JS[JS.index('function renderProfiledTaskRoadmap('):JS.index('async function openTaskPlan(')])
 
 
 if __name__ == '__main__':

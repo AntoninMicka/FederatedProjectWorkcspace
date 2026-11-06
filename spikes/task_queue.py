@@ -241,7 +241,8 @@ class TaskQueue:
                         actor_id=actor_id, at=int(time.time()), revision=state['revision'] + 1,
                     )])[-MAX_FLAG_AUDIT:]
             if action == 'add':
-                require(not stale and not issues, 'Nejprve znovu ověřte frontu vůči roadmapě.')
+                # Current request HEAD/revision and this node's prerequisites guard addition.
+                # Existing queue issues remain visible; they do not reject an independent item.
                 identifier = request['task_id']; node = nodes.get(identifier)
                 require(node is not None and not node['checked'] and identifier not in state['task_ids'],
                         'Položka není dostupná, je dokončená nebo je již ve frontě.')
@@ -268,7 +269,7 @@ class TaskQueue:
                 state['held_task_ids'] = [i for i in state['held_task_ids'] if i not in removed]
             if should_write:
                 issues, following = assess(state['task_ids'], graph, accepted)
-                if action != 'remove': require(not issues, '; '.join(issues))
+                if action not in {'remove', 'add'}: require(not issues, '; '.join(issues))
                 state.update(revision=state['revision'] + 1, project_head=head)
                 require(workspace.git.head() == head, 'Roadmapa se změnila před zápisem.')
                 self._write(path, state, checkpoint); stale = False
@@ -279,7 +280,7 @@ class TaskQueue:
             return dict(project_id=project_id, revision=state['revision'], expected_head=head,
                         stale=stale, valid=not stale and not issues, issues=issues,
                         task_ids=state['task_ids'], flag_audit=state['flag_audit'][-20:],
-                        editable_flags=sorted(EDITABLE_FLAGS), following=following if not stale and not issues else [],
+                        editable_flags=sorted(EDITABLE_FLAGS), following=following,
                         items=[dict(id=i, status=nodes[i].get('status', 'planned') if i in nodes else None,
                                     status_mode=nodes[i].get('status_mode') if i in nodes else None,
                                     status_counts=nodes[i].get('status_counts', {}) if i in nodes else {},

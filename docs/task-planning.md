@@ -155,3 +155,124 @@ Detail položky v Plánu používá samostatnou Markdown projekci popisu, která
 zachovává odrážky a jejich odsazení. Textová projekce zůstává dostupná pro
 stručné karty a kompatibilní klienty. Podúkoly dávky se zobrazují zvlášť jako
 odkazy do jejich detailů; netvoří součást popisu rodiče.
+
+Chyba validity (například duplicitní ID či chybějící typ) nesmí odstranit
+rozpoznané hranice položek. Plán, sidebar i strukturovaný editor v takovém
+případě zobrazují pouze čitelnou strukturu fyzických bloků. Odsazení určuje
+vnoření, číslo řádku rozlišuje i stejné ID. Tato projekce není plánovací graf:
+nelze z ní potvrzovat úkoly, exportovat platný graf ani spouštět práci.
+Typ odvozený pro náhled je výslovně označen jako nedeklarovaný. Oprava údajů
+probíhá v raw textu a při uložení znovu podléhá původní úplné validaci.
+
+## Ručně rozepsaný soubor roadmapy
+
+Při ruční úpravě hlavního souboru plánu na lokálním desktopu není nutné
+commitovat každou rozepsanou část jen pro její zobrazení. Znovuotevření Plánu
+zpřístupní současný pracovní soubor jako volitelný rozpracovaný náhled. V něm uvidíte
+již napsané popisy i samostatné bloky úkolů, i když další část nemá doplněné
+typ nebo jiné povinné údaje. Úplná validace se tím nevypíná.
+
+Hlavička položky ve tvaru checkboxu se stabilním ID otevírá nový blok.
+Odsazení určuje jeho rodiče; milník i dávka mohou mít vlastní popis a současně
+podřízené položky. Začátkem podúkolu končí vlastní popis rodiče. Náhled nikdy
+neslučuje dva bloky jen kvůli stejnému ID.
+
+Rozpracovaný obsah se čte také v lokálním náhledu zdrojového dokumentu a při
+výslovném otevření jeho náhledu v editoru. Při další změně na disku znovu
+otevřete Plán. Náhled nic nezapisuje, nepotvrzuje ani nepředává do fronty;
+uložený plán a jeho revize zůstávají oddělené. Editor rozpracovaného souboru
+je pouze pro čtení, aby nepřepsal právě prováděnou externí úpravu. Pokračovat
+lze ve vlastním textovém editoru.
+
+Původní API připnutých náhledů nadále vrací bajty z požadovaného commitu.
+Pracovní soubor se neposkytuje síťovým klientům a nevstupuje do kontextových
+manifestů, synchronizace ani autoritativního indexu. Chybějící, měnící se,
+nečitelný nebo nepřípustný soubor vyvolá explicitní zprávu, nikoli tichou
+záměnu za údajně aktuální uloženou verzi.
+
+Pohled **Plán** zobrazuje uložený graf. Kliknutí na kartu dávky otevře pouze
+detail s úpravou závislostí; dvojklik nepřepíná graf; výběr milníku či dávky je dostupný také v levém stromu.
+Detail dávky nabízí před popisem tlačítko **Zobrazit úkoly** s počtem přímých
+podúkolů. Detail milníku obdobně nabízí **Zobrazit dávky**. Dlouhý popis
+nezakrývá vstup do podrobnějšího grafu. Náhled textu plánu je v editoru.
+
+## Režimy editoru a pracovní plocha
+
+Editor hlavního plánu nabízí v záhlaví **Kostky**, **Raw text** a **Náhled**.
+Náhled vykresluje aktuální obsah textového pole, včetně dosud neuložených
+změn. Přepnutí nic neukládá a zachovává rozepsaný obsah i výběr v raw textu.
+Pohled Plán při otevření projektu standardně zobrazuje uložený graf;
+rozpracovaný soubor lze prohlížet v editoru.
+
+Obsah editoru využívá zbývající výšku a celou dostupnou šířku stránky.
+Posouvá se text nebo náhled, nikoli záhlaví s akcemi. Pomocné vzory,
+ověření a kontextová nápověda jsou v rozbalovací části **Nástroje a nápověda**.
+Vlastnosti dokumentu zůstávají samostatně rozbalovací; pro náhled externě
+rozepsaného souboru a editor jedné položky se prázdné vlastnosti nezobrazují.
+Toto rozložení používá společnou hlavičku a tělo stránky jako ostatní editory.
+
+## Návrat do plánu a hierarchie pohledů
+
+Editor otevřený z plánu uchovává výběr milníku/dávky, filtr, otevřený detail
+položky i vodorovnou a svislou pozici grafu a detailu. Zavření bez změn
+nebo úspěšné uložení vrací tento pohled; po uložení se detail načte z nové
+revize. Neúspěšné uložení ponechá text v editoru. Návrat se váže na konkrétní
+projekt, nepřenáší se mezi projekty ani po restartu aplikace.
+
+Graf nabízí **O úroveň výš**, detail úkolu obdobně odkaz na dávku a detail
+dávky na milník. Nad milníkem je hlavní roadmapa. Karta vždy otevírá pouze
+detail; vstup do podrobnějšího grafu zůstává samostatnou akcí.
+
+V hlavní roadmapě má dávka v pravém dolním rohu tlačítko **N/M**:
+N je počet potvrzených splněných přímých podúkolů, M počet všech přímých
+podúkolů. Počty nezávisí na filtru; stav „Vyřešeno“ se za splnění nepovažuje.
+I prázdná dávka má ukazatel **0/0**. Kliknutí otevře stručný přehled podúkolů
+s názvem, stavem a krátkým popisem. Z něj lze otevřít celý detail úkolu nebo
+dávky. Přehled nemění výběr grafu; návrat do plánu zachovává i tento režim.
+Pod dávkami nejsou trvale rozbalené malé karty. Kliknutí na zbytek karty
+stále otevírá detail dávky. Velké karty mají větší plochu a ohraničené texty; celý název a stav jsou dostupné v tooltipu a přístupném popisku.
+Jediná výplň celé buňky vyjadřuje efektivní stav, včetně odvozeného SUM.
+Připravenost a kritická cesta jsou doplňkové indikace rámečku podle legendy.
+Výběr stavu a připravenosti používá jeden filtr. Pravidla dokončení a odvození
+stavů v uloženém plánu se tím nemění.
+
+Panel **Úkoly** otevírá náhled hlavního seznamu úkolů. Přehled projektu
+zůstává pod položkou **Projekty**.
+
+### Indikace a přiblížení hlavní roadmapy
+
+Buňky hlavní roadmapy i podrobnějšího grafu používají původní vizuální
+indikace: **silnější rámeček** označuje kritickou cestu a **zelený přerušovaný
+rámeček** souběžnou připravenost. Oba se mohou kombinovat. **Blokování má
+světle fialovou výplň**, odlišnou od červeného stavu Selhalo; tooltip a
+přístupný popisek nadále uvádějí efektivní stav i indikace. Stejná fialová
+platí pro export SVG. Legenda ukazuje skutečný vzhled indikací, nikoli
+samostatné symboly. Význam počítadla N/M se nemění. Připravenost používá
+stejný výpočet závislostí jako filtr Připravené.
+
+Alternativní roadmapa byla odstraněna z nabídky a panelů Nastavení; plán
+projektu je dostupný v hlavním pohledu **Plán**. Doménové API původního
+grafu zůstává kvůli kompatibilitě, rozhraní Nastavení jej již nenačítá.
+
+Tlačítka **− / procenta / +** mění velikost grafu po 10 procentních bodech
+v rozsahu 50–200 %. Kliknutí na procenta vrací 100 %. Změna přiblížení
+zachovává střed viditelné části v mezích posuvníků. Škáluje současně karty,
+indikace, počítadla i spojnice. Detail zůstává v původní velikosti. Přiblížení
+se zachovává mezi úrovněmi a při návratu z editoru v téže relaci aplikace;
+nejde o změnu uloženého plánu ani exportovaného SVG.
+
+### Proč nelze položku přidat do fronty
+
+Detail položky zobrazuje přímo u tlačítka **Přidat do fronty** důvod zákazu:
+nenačtený aktuální stav fronty, vlastní chybějící předpoklady, již přidanou
+položku nebo projekt pouze pro čtení. Důvod i tlačítko se obnoví při načtení
+a změně fronty bez nutnosti znovu otevřít detail. Chyba obnovení se zachová
+jako vysvětlení; nepovažuje se za prázdnou platnou frontu.
+
+Chyba jiné položky ve frontě neblokuje přidání připraveného úkolu. Totéž
+platí pro navazující úkol, jehož vlastní nesplněné předpoklady jsou již před
+ním ve frontě. Přidání ověřuje aktuální HEAD projektu a revizi fronty;
+po změně roadmapy je nutné načíst aktuální stav, není však nutné nejprve
+opravit celou existující frontu. Zápis zachová ostatní položky a jejich
+chyby. Fronta zůstává `valid=false`, dokud není její obsah platný; neplatnou
+frontu nelze předat do IDE. Přidání žádnou položku nepřijímá ani nedokončuje.

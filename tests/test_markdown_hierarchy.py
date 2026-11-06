@@ -8,7 +8,7 @@ import subprocess
 import sys
 import unittest
 from spikes.desktop_ui import JS
-from spikes.task_graph import parse_main_todo
+from spikes.task_graph import parse_main_todo, task_outline
 from tests import test_task_graph as graph_fixtures
 
 ROADMAP='''<!-- fpw-plan-profile: software-development/v1 -->
@@ -56,6 +56,44 @@ class MarkdownHierarchyTests(unittest.TestCase):
         self.assertNotIn('Datový model',nodes['MON-08']['description_markdown'])
         self.assertIn('- Rozsah:\n  - Každé sledování má:\n    - stabilní identitu;',nodes['MON-08-01']['description_markdown'])
         self.assertEqual(nodes['MON-08-01']['parent_id'],'MON-08')
+
+    def test_invalid_graph_retains_every_physical_task_boundary_without_authority(self):
+        body=ROADMAP.replace('[MON-08-02]','[MON-08-01]')
+        graph=graph_fixtures.TaskGraphTests().fixture(body)
+        self.assertEqual(graph['status'],'invalid');self.assertEqual(graph['nodes'],[])
+        self.assertEqual(graph['ready'],[]);self.assertEqual(graph['blocked'],[])
+        rows=graph['outline'];self.assertEqual(len(rows),5)
+        batch=next(r for r in rows if r['id']=='MON-08')
+        tasks=[r for r in rows if r['id']=='MON-08-01']
+        self.assertEqual(len(tasks),2);self.assertNotEqual(tasks[0]['key'],tasks[1]['key'])
+        self.assertTrue(all(r['parent_key']==batch['key'] for r in tasks))
+        self.assertNotIn('Datový model',batch['description_markdown'])
+        self.assertIn('Rozsah:',tasks[0]['description_markdown'])
+        self.assertIn('RSS/Atom',tasks[1]['description_markdown'])
+
+    def test_outline_preserves_missing_type_and_ignores_fenced_task_examples(self):
+        body=ROADMAP.replace('      - type: task','      - poznámka: neuvedený typ')
+        graph=graph_fixtures.TaskGraphTests().fixture(body)
+        self.assertEqual(graph['status'],'invalid')
+        rows=graph['outline'];tasks=[r for r in rows if r['id'].startswith('MON-08-')]
+        self.assertEqual(len(tasks),2)
+        self.assertTrue(all(r['type'] is None and r['inferred_type']=='task' for r in tasks))
+        rows,truncated=task_outline(ROADMAP+'\n```md\n- [ ] [FAKE-01] Example\n```\n')
+        self.assertEqual(len(rows),5);self.assertFalse(truncated)
+        self.assertEqual(rows[0]['line'],2)
+
+    def test_draft_boundary_reader_retains_nodes_when_ids_are_invalid(self):
+        source=JS[JS.index('function parseTaskPlanDraft('):JS.index('function replaceTaskPlanLine(')]
+        body=ROADMAP.replace('[MON-08-02]','[MON-08-01]')
+        result=subprocess.run(['node','-e',source+'\nconsole.log(JSON.stringify(parseTaskPlanDraft('+json.dumps(body)+')));'],text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        parsed=json.loads(result.stdout);self.assertFalse(parsed['safe']);self.assertEqual(len(parsed['tasks']),5)
+        batch=next(t for t in parsed['tasks'] if t['parts'][4]=='MON-08')
+        self.assertFalse(any('Datový model' in line for line in batch['descriptions']))
+        malformed=ROADMAP.replace('      - type: task','      - type: invalid',1)
+        result=subprocess.run(['node','-e',source+'\nconsole.log(JSON.stringify(parseTaskPlanDraft('+json.dumps(malformed)+')));'],text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        parsed=json.loads(result.stdout);self.assertFalse(parsed['safe']);self.assertEqual(len(parsed['tasks']),5)
 
     def test_renderer_preserves_ownership_blank_lines_dedent_safety_and_diff_lines(self):
         source=JS[JS.index('function addConflictLineClasses('):JS.index('const projectConflicts=')]
@@ -112,7 +150,9 @@ with running_api('http',handler=DesktopHandler) as server:
  profile=QWebEngineProfile(app);page=QWebEnginePage(profile,app)
  bootstrap=QWebEngineScript();bootstrap.setInjectionPoint(QWebEngineScript.DocumentCreation);bootstrap.setWorldId(QWebEngineScript.MainWorld);bootstrap.setSourceCode('window.workspaceAutoStart=false;');page.scripts().insert(bootstrap)
  plan=TaskGraphTests().fixture(ROADMAP)
- command="""(()=>{if(typeof renderMarkdown!=='function')return 'waiting';const target=document.querySelector('#preview-content');target.replaceChildren();renderMarkdown(SOURCE,target);const items=[...target.querySelectorAll('li')],own=n=>[...n.childNodes].filter(c=>c.nodeName!=='UL').map(c=>c.textContent).join(''),find=t=>items.find(n=>own(n).includes(t)),children=n=>[...n.querySelector(':scope > ul').children];const batch=find('[MON-08]'),task=find('[MON-08-01]');if(!(children(batch).includes(task)&&children(task).includes(find('Rozsah:'))&&!children(batch).includes(find('[MON-09]'))))return 'preview failed';taskPlanProjection=PLAN;showTaskPlanDetail(taskPlanProjection.nodes.find(n=>n.id==='MON-08'));const detail=document.querySelector('#plan-detail'),description=[...detail.querySelectorAll('dt')].find(e=>e.textContent==='Popis').nextElementSibling;if(!description.querySelector('ul li ul li'))return 'description flattened';const link=detail.querySelector('[data-plan-child=MON-08-01]');if(!link||detail.querySelector('[data-plan-child=MON-09]'))return 'children mixed';link.click();if(!detail.querySelector('h3').textContent.includes('MON-08-01'))return 'child navigation failed';const scope=[...detail.querySelectorAll('dt')].find(e=>e.textContent==='Popis').nextElementSibling;if(!scope.querySelector('ul li ul li ul li'))return 'scope flattened';renderTaskPlanSidebar({status:'invalid',error:'Duplicitní ID úkolu: MON-08-01',nodes:[],subgraphs:[]});return document.querySelector('#sidebar-plan-status').textContent.includes('MON-08-01')?'ok':'hidden validation error';})()""".replace('SOURCE',json.dumps(ROADMAP)).replace('PLAN',json.dumps(plan))
+ broken=ROADMAP.replace('[MON-08-02]','[MON-08-01]')
+ invalid=TaskGraphTests().fixture(broken)
+ command="""(()=>{if(typeof renderMarkdown!=='function')return 'waiting';const target=document.querySelector('#preview-content');target.replaceChildren();renderMarkdown(SOURCE,target);const items=[...target.querySelectorAll('li')],own=n=>[...n.childNodes].filter(c=>c.nodeName!=='UL').map(c=>c.textContent).join(''),find=t=>items.find(n=>own(n).includes(t)),children=n=>[...n.querySelector(':scope > ul').children];const batch=find('[MON-08]'),task=find('[MON-08-01]');if(!(children(batch).includes(task)&&children(task).includes(find('Rozsah:'))&&!children(batch).includes(find('[MON-09]'))))return 'preview failed';taskPlanProjection=PLAN;showTaskPlanDetail(taskPlanProjection.nodes.find(n=>n.id==='MON-08'));const detail=document.querySelector('#plan-detail');const drill=detail.querySelector('[data-plan-open-children=MON-08]');if(!drill||drill.textContent!=='Zobrazit úkoly (2)'||!(drill.compareDocumentPosition(detail.querySelector('dl'))&Node.DOCUMENT_POSITION_FOLLOWING))return 'child graph navigation missing';const realOpen=openTaskPlan;let selected=null;openTaskPlan=selection=>{selected=selection;taskPlanSelection=selection;renderTaskPlan();};drill.click();if(selected?.id!=='MON-08'||document.querySelectorAll('#plan-graph .plan-task-card').length!==2)return 'detail child graph missing';taskPlanSelection=null;renderTaskPlan();const batchCard=[...document.querySelectorAll('#plan-graph .plan-batch-card')].find(card=>card.querySelector('strong')?.textContent==='MON-08');if(!batchCard)return 'batch card missing';selected=null;batchCard.click();if(selected!==null||!detail.querySelector('h3').textContent.includes('MON-08')||!document.querySelector('#plan-graph .plan-batch-card'))return 'single click must retain graph and open detail';batchCard.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));if(selected!==null||!detail.querySelector('h3').textContent.includes('MON-08')||document.querySelector('#plan-graph .plan-task-card'))return 'card must only open detail';openTaskPlan=realOpen;const description=[...detail.querySelectorAll('dt')].find(e=>e.textContent==='Popis').nextElementSibling;if(!description.querySelector('ul li ul li'))return 'description flattened';const link=detail.querySelector('[data-plan-child=MON-08-01]');if(!link||detail.querySelector('[data-plan-child=MON-09]'))return 'children mixed';link.click();if(!detail.querySelector('h3').textContent.includes('MON-08-01'))return 'child navigation failed';const scope=[...detail.querySelectorAll('dt')].find(e=>e.textContent==='Popis').nextElementSibling;if(!scope.querySelector('ul li ul li ul li'))return 'scope flattened';renderTaskPlanSidebar(INVALID);if(document.querySelector('#plan-graph [data-plan-outline]')||document.querySelector('#sidebar-plan-hierarchy [data-plan-outline]'))return 'outline escaped editor';if(document.querySelector('#plan-graph button')||!document.querySelector('#plan-export').disabled)return 'invalid graph became actionable';taskPlanEditor.hidden=false;artifactEditorForm.elements.body.value=BROKEN;renderTaskPlanEditor();if(document.querySelectorAll('#task-plan-blocks [data-plan-outline]').length!==5)return 'draft lost boundaries';return document.querySelector('#sidebar-plan-status').textContent.includes('MON-08-01')?'ok':'hidden validation error';})()""".replace('SOURCE',json.dumps(ROADMAP)).replace('PLAN',json.dumps(plan)).replace('INVALID',json.dumps(invalid)).replace('BROKEN',json.dumps(broken))
  def received(value):
   if value=='waiting':return
   print('nested roadmap browser',value,flush=True);app.exit(0 if value=='ok' else 2)

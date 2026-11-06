@@ -199,6 +199,7 @@ class QueuePacketTests(unittest.TestCase):
         from spikes.desktop_ui import JS
         if not shutil.which('node'):self.skipTest('Node required')
         start=JS.index('async function reviewQueueReport(');end=JS.index('async function loadTaskQueue(){')
+        install=JS[JS.index('function installTaskPlanViews('):JS.index('function renderTaskPlanSidebar(')]
         harness=r"""
 const assert=require('node:assert/strict');
 const crypto={randomUUID:()=>'op'};let confirmed=true,noted='',calls=[],fail=false,loaded=0,plans=0;
@@ -221,7 +222,7 @@ async function projectRequest(path,body){if(path==='/v1/projects/open')return {c
  fail=true;await reviewQueueReport(prepared,'resume');assert.equal(taskQueueView,null);assert.match(taskQueueMessage,/stale/);assert.equal(taskQueueBusy,false);
 })().catch(error=>{console.error(error);process.exit(1);});
 """
-        result=subprocess.run(['node','-e',harness+JS[start:end]+checks],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',harness+install+JS[start:end]+checks],capture_output=True,text=True)
         self.assertEqual(0,result.returncode,result.stderr)
 
     def test_manual_request_from_stale_packet_is_refused(self):

@@ -85,7 +85,7 @@ class ReportingScheduler:
             if not tables:
                 require(self._creating, 'Reporting run journal has no schema; reconciliation required')
                 db.execute('CREATE TABLE schema_info(version INTEGER NOT NULL,node_id TEXT NOT NULL,owner_id TEXT NOT NULL)')
-                db.execute('INSERT INTO schema_info VALUES(1,?,?)',self.owner)
+                db.execute('INSERT INTO schema_info VALUES(2,?,?)',self.owner)
                 db.execute('''CREATE TABLE runs(run_id TEXT PRIMARY KEY, reservation TEXT UNIQUE NOT NULL,
                     request_digest TEXT NOT NULL, document BLOB NOT NULL, candidate BLOB,
                     task_entity TEXT NOT NULL, delivery_required INTEGER NOT NULL,
@@ -93,9 +93,13 @@ class ReportingScheduler:
                 db.execute('''CREATE TABLE cutoffs(project_id TEXT NOT NULL, task_entity TEXT NOT NULL,
                     kind TEXT NOT NULL, cutoff TEXT, snapshot BLOB NOT NULL,
                     PRIMARY KEY(project_id,task_entity,kind))''')
+                db.execute('CREATE TABLE watch_grants(project_id TEXT NOT NULL,watch_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(project_id,watch_id))')
             else:
-                require(tables == {'schema_info', 'runs', 'cutoffs'} and
-                        db.execute('SELECT version,node_id,owner_id FROM schema_info').fetchall() == [(1,*self.owner)],
+                version=db.execute('SELECT version,node_id,owner_id FROM schema_info').fetchall() if 'schema_info' in tables else []
+                if tables=={'schema_info','runs','cutoffs'} and version==[(1,*self.owner)]:
+                    db.execute('CREATE TABLE watch_grants(project_id TEXT NOT NULL,watch_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(project_id,watch_id))')
+                    db.execute('UPDATE schema_info SET version=2');tables.add('watch_grants');version=[(2,*self.owner)]
+                require(tables == {'schema_info', 'runs', 'cutoffs','watch_grants'} and version == [(2,*self.owner)],
                         'Unknown reporting run journal schema or owner')
                 require([r[1] for r in db.execute('PRAGMA table_info(runs)')] ==
                         ['run_id','reservation','request_digest','document','candidate','task_entity',
@@ -121,7 +125,7 @@ class ReportingScheduler:
     @staticmethod
     def _row(db, run_id):
         uuid(run_id)
-        row = db.execute('SELECT document,candidate,task_entity,delivery_required,lease_owner,lease_token,lease_until '
+        row = db.execute('SELECT document,candidate,task_entity,delivery_required,lease_owner,lease_token,lease_until,reservation '
                          'FROM runs WHERE run_id=?', (run_id,)).fetchone()
         require(row is not None, 'Unknown reporting run')
         return json.loads(row[0]), row
@@ -133,6 +137,20 @@ class ReportingScheduler:
     def get(self, run_id):
         with self.db() as db:
             return self._row(db, run_id)[0]
+
+    def is_correction(self,run_id):
+        with self.db() as db:
+            return self._row(db,run_id)[1][7].startswith('correction:')
+
+    def grant_watch(self,project_id,watch_id,sha):
+        uuid(project_id);uuid(watch_id);hex_id(sha)
+        with self.db() as db:
+            db.execute('INSERT OR REPLACE INTO watch_grants VALUES(?,?,?)',(project_id,watch_id,sha))
+
+    def watch_granted(self,project_id,watch_id,sha):
+        with self.db() as db:
+            row=db.execute('SELECT digest FROM watch_grants WHERE project_id=? AND watch_id=?',(project_id,watch_id)).fetchone()
+            return row is not None and row[0]==sha
 
     def preview(self, run_id):
         """Recover the exact review surface after an application restart."""
@@ -206,10 +224,13 @@ class ReportingScheduler:
         return digest(encoded([request['project_id'], task['entity_id'], task['revision_id'], request['period'],
                                [request['rules_ref']['artifact_id'], request['rules_ref']['sha256']]]))
 
-    def enqueue(self, request, run_id, *, checkpoint=lambda stage: None):
+    def enqueue(self, request, run_id, *, checkpoint=lambda stage: None, correction=False):
         request = deepcopy(request); uuid(run_id)
         # Validate even a replay: current access/revocation is never inferred from a run UUID.
         task = self._context(request); sha = digest(encoded(request)); key = self.reservation(request, task)
+        if correction:
+            require(request['baseline_snapshot'] is not None, 'Correction requires an issued predecessor')
+            key = 'correction:' + digest(encoded([key, request['baseline_snapshot']['artifact_id']]))
         with self.db() as db:
             old = db.execute('SELECT run_id,request_digest,document FROM runs WHERE run_id=? OR reservation=?',
                              (run_id,key)).fetchone()
@@ -327,7 +348,7 @@ class ReportingScheduler:
             run['state']='failed';run['last_error']='human-confirmed-no-effect';self._save(db,run)
         return run
 
-    def stage(self, run_id, token, request, *, checkpoint=lambda stage: None):
+    def stage(self, run_id, token, request, *, checkpoint=lambda stage: None, _generation=None):
         request=deepcopy(request);fields(request,'project_id base_head records')
         require(isinstance(request['records'],list) and len(request['records'])==1, 'Expected one report publication')
         spec=request['records'][0];fields(spec,'type entity_id previous privacy value markdown')
@@ -340,8 +361,11 @@ class ReportingScheduler:
             for k in ('task_ref','rules_ref','period','input_head','knowledge_cutoff','baseline_snapshot'):
                 require(v[k]==run[k], 'Candidate differs from immutable run: '+k)
             self._current(run,row[3])
-            require(v['corrects'] is None and v['generation']['mode']=='manual', 'Use explicit manual correction/assisted workflow')
-            self.reporting.validate(request,run_id)
+            require(v['corrects']==(run['baseline_snapshot'] if row[7].startswith('correction:') else None),
+                    'Candidate correction differs from reserved predecessor')
+            require(v['generation']['mode']=='manual' or (_generation is not None and v['generation']==_generation),
+                    'Assisted report requires an application-verified generation proof')
+            self.reporting.validate(request,run_id,_generation=_generation)
             run['candidate']=dict(manifest_sha256=digest(encoded(v)),markdown_sha256=digest(spec['markdown'].encode()),
                                   cache_ref='sqlite:'+run_id)
             run['state']='review'
@@ -381,7 +405,9 @@ class ReportingScheduler:
         if ws.receipt(run_id) is None:
             self._current(run,delivery)
         # Existing writer's request digest and receipt bridge this crash boundary.
-        receipt=self.reporting.apply(request,run_id,confirm=True,checkpoint=checkpoint)
+        generation=request['records'][0]['value']['generation']
+        receipt=self.reporting.apply(request,run_id,confirm=True,checkpoint=checkpoint,
+                                     _generation=generation if generation['mode']=='assisted' else None)
         checkpoint('workspace-receipt')
         pin=self.reporting.pin(run['project_id'],operation_uuid(run_id,'record:0'),receipt['commit_id'])
         with self.db() as db:

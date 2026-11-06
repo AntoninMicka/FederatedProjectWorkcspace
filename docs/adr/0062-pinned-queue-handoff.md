@@ -195,6 +195,24 @@ Ruční žádost používá inbox a UUID deduplikaci podle bodu 3 a review zůst
 bodu 4. Stav `queue.json` je poslední známý; plugin jej při výpadku označí jako
 neaktuální a nenabídne předání ani žádost.
 
+## Přidávání při chybách jiných položek (6. 11. 2026)
+
+Uživatel upřesnil, že neplatné závislosti existující položky nesmějí blokovat
+přidání jiného připraveného úkolu. Pracovní fronta smí během sestavování
+obsahovat chyby; teprve neměnný balíček pro IDE vyžaduje její úplnou validaci.
+Přidání ověřuje vlastní dostupnost, nehotovost, neduplicitu a předpoklady
+nového uzlu nad aktuálním grafem. Předpoklad může být dokončený/vyřešený
+nebo již zařazený před novým uzlem podle existujícího startovacího pravidla.
+Žádost musí obsahovat aktuální projektový HEAD a revizi fronty; stará žádost
+se odmítne. Starší připnutí obsahu fronty samo o sobě přidání neblokuje, pokud
+žádost vznikla z aktuálního statusu. Výsledek uchová veškeré existující chyby
+a skutečnou hodnotu `valid`; publikační `assess` zůstává povinný.
+
+Persistence se nemění: jeden zámek, dočasný JSON, fsync, atomické replace
+a fsync adresáře. Před replace zůstává původní fronta, po replace je výsledek
+při ztrátě odpovědi `QueueOutcomeUnknown`; před dalším zápisem se načte stav.
+Nezapisuje se plán ani přijetí úkolů. Stávající testy obou hranic writeru
+platí i pro toto uvolnění vstupní podmínky.
 ## Obnova IDE bez závislosti na historii programu (6. 11. 2026)
 
 Na výslovný požadavek uživatele není zdrojový commit ani jeho ancestry
