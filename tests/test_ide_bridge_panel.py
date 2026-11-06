@@ -3,6 +3,7 @@
 import base64
 import json
 import unittest
+from unittest.mock import patch
 import subprocess
 import shutil
 from uuid import uuid4
@@ -17,6 +18,19 @@ from spikes.desktop_ui import DesktopHandler
 
 
 class BridgePanelTests(unittest.TestCase):
+    def test_targeted_document_read_rejects_deleted_artifact_without_full_project_reload(self):
+        artifact_id=str(uuid4())
+        self.head=Artifacts(self.node).save(dict(project_id=self.project,artifact_id=artifact_id,
+            base_head=self.head,title='Exported document',body='Pinned text',new=True),str(uuid4()))['commit_id']
+        self.session()
+        with patch.object(Projects,'open',side_effect=AssertionError('full project reload')):
+            result=read_document(self.service,self.record,artifact_id)
+        self.assertEqual(base64.b64decode(result['content_base64']).decode(),'Pinned text')
+        git=Projects(self.node).repository(self.project)
+        git.run('rm','-r','artifacts/'+artifact_id);git.commit('Delete exported document')
+        with self.assertRaisesRegex(ValueError,'no longer available'):
+            read_document(self.service,self.record,artifact_id)
+
     save = bridge_tests.IdeBridgeTests.save
     create = bridge_tests.IdeBridgeTests.create
     message = bridge_tests.IdeBridgeTests.message

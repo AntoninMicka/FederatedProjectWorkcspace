@@ -235,3 +235,33 @@ Crash boundaries zůstávají podle tohoto ADR a ADR 0060: změna neprovádí z�
 do projektového Gitu, indexu ani journalu. Lokální STATUS je obnovitelná
 projekce; po pádu jej další poll přepíše. Neprovádí se slepý replay neznámých
 mutací, automatické review, změna credentials ani spuštění desktopu.
+
+## Obnova fronty bez opakovaného otevření projektu (6. 11. 2026)
+
+Na požadavek uživatele se výběr fronty při každém čtení posoudí proti aktuálnímu
+validovanému grafu. Samotná změna HEAD již nevyžaduje lidskou revalidaci, pokud
+stabilní ID, předpoklady a pořadí zůstávají platné. Stavový dotaz frontu ani
+roadmapu nepřepisuje; `expected_head` odpovídá čtenému commitu. Zápis stále
+porovnává tento HEAD a revizi fronty. Chybějící, dokončené nebo nevhodně
+uspořádané položky zůstávají konkrétními chybami. Tlačítko „Znovu ověřit“
+se z běžného toku odstraňuje; starší API akce zůstává kompatibilní.
+
+`Projects.plan_view` adaptuje existující `Workspace.read_project(plan_only=True)`:
+stejný writer lock, pending-operation guard, validace registrovaného projektu,
+privacy, snapshotu, indexu a závěrečná kontrola HEAD; vynechá historii, katalog
+artefaktů, souhrn TODO a čtení lokálního draftu. Používá jej fronta a bridge.
+Nevzniká cache, druhý index ani writer. Cílený UI požadavek s `scope: plan`
+používá stejnou čtecí autorizaci jako původní projektový endpoint.
+
+Otevření fronty sloučí souběžné dotazy a nekreslí skrytý graf. Pouze při změně
+HEAD stáhne plánovou část, zkontroluje její shodu s frontou a obnoví sidebar
+bez dalšího načtení fronty. Cizí, opožděné a mezitím změněné odpovědi nezveřejní.
+Review obnoví plánovou část místo úplného projektu.
+
+Ruční předání používá existující bound mapping s již povoleným exportem;
+starší plánový HEAD jej nevyřazuje. Publikace adaptuje stávající atomickou
+obnovu snapshotu a packetu (`publish(automatic=True)`). Owner, připojení,
+exportní oprávnění, HEAD, revize fronty a pending human review se ověřují dál.
+Nemění se cílový repozitář ani oprávnění a nic se automaticky nepřijímá.
+Crash boundaries zůstávají podle tohoto ADR: snapshot a packet se zveřejní
+jednou bridge transakcí; neznámé projektové operace se slepě neopakují.

@@ -4,7 +4,7 @@
 
 ## Aktualizace od verze 0.4.1
 
-Rozšíření při spuštění a poté nejvýše jednou za hodinu kontroluje verzi
+Rozšíření při spuštění a od 0.5.8 poté každou minutu kontroluje verzi
 na připojeném backendu Workspace. Novou verzi nabídne tlačítkem
 **Aktualizovat**; bez kliknutí ji neinstaluje. Ruční kontrolu spustí
 **Workspace: Zkontrolovat aktualizace rozšíření**, nezávisle na Auto Sync.

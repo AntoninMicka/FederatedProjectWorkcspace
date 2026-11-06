@@ -17,7 +17,7 @@ from unittest.mock import patch
 import zipfile
 
 from spikes.artifacts import Artifacts, main_todo_id
-from spikes.ide_bridge import IdeBridge, endpoint, desktop_bridge
+from spikes.ide_bridge import IdeBridge, MAX_SNAPSHOT_BYTES, canonical, endpoint, desktop_bridge
 from spikes.local_api import running_api
 from spikes.desktop_ui import DesktopHandler
 from spikes.metadata import ValidationError
@@ -46,6 +46,50 @@ class IdeBridgeTests(unittest.TestCase):
         return self.service.create(dict(project_id=self.project, expected_head=self.head,
             repository=str(self.root / 'project'), instructions='Use focused tests.', **extra),
             None, 'http://127.0.0.1:9999')
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required for extension transport tests')
+    def test_large_snapshot_round_trips_http_and_disk_without_repair(self):
+        description = 'Žluťoučký plán: ' + 'x' * 2000
+        self.head = self.save(''.join(f'- [ ] [TASK-{i:03}] Item {i}\n  - {description}\n'
+                                      for i in range(150)))
+        snapshot = self.service.snapshot(self.project, self.head)
+        self.assertGreater(len(canonical(snapshot).encode()), 1024 * 1024)
+        self.assertLessEqual(len(json.dumps(snapshot).encode()), MAX_SNAPSHOT_BYTES)
+        program = """
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const bridge=require('./extensions/workspace-bridge/bridge');
+const input=JSON.parse(fs.readFileSync(0,'utf8'));
+(async()=>{
+ for(let poll=0;poll<2;poll++){
+  const result=await bridge.sync(input.mailbox,input.pairing,input.repo);
+  const disk=JSON.parse(await bridge.read(input.mailbox+'/snapshot.json'));
+  assert.deepEqual(disk,input.snapshot);
+  assert.deepEqual(result.snapshot,disk);
+  assert.equal(result.stale,false);
+  assert.equal(await bridge.read(input.mailbox+'/TODO.md'),disk.todo);
+ }
+ console.log('large snapshot: HTTP, disk reader and repeat synchronization OK');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        with running_api('http', handler=DesktopHandler, projects=Projects(self.node)) as server:
+            created = self.service.create(dict(project_id=self.project, expected_head=self.head,
+                repository=str(self.root/'project'), instructions='Large plan'), None, server.origin)
+            result = subprocess.run(['node', '-e', program], input=json.dumps(dict(
+                mailbox=str(self.root/'mailbox'), pairing=created['pairing'],
+                repo=str(self.root/'project'), snapshot=snapshot)),
+                cwd=Path(__file__).resolve().parents[1], text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.service.projects.repository(self.project).head(), self.head)
+
+    def test_snapshot_budget_accounts_for_wire_escaping_without_mutation(self):
+        self.head = self.save(''.join(f'- [ ] [TASK-{i:03}] Item {i}\n  - '+ 'ž' * 1800 + '\n'
+                                      for i in range(80)))
+        before = self.service.projects.repository(self.project).run('status', '--porcelain').stdout
+        with self.assertRaisesRegex(ValidationError, '2 MiB wire budget'):
+            self.service.snapshot(self.project, self.head)
+        repository = self.service.projects.repository(self.project)
+        self.assertEqual(repository.head(), self.head)
+        self.assertEqual(repository.run('status', '--porcelain').stdout, before)
 
     def message(self, result):
         return dict(message_id=str(uuid4()), task_id='TASK-01', kind='completed', body='Verified tests.',
@@ -258,7 +302,7 @@ class IdeBridgeTests(unittest.TestCase):
             self.service.managed_connection(stranger, other['connection_id'])
         self.assertEqual([], self.service.connections_status(stranger)['connections'])
         view = self.service.projects.open(self.project)
-        with patch.object(self.service.projects, 'open', return_value=dict(view, read_only=True)):
+        with patch.object(self.service.projects, 'plan_view', return_value=dict(view, read_only=True)):
             with self.assertRaisesRegex(ValidationError, 'read-only'):
                 self.service.configure_mapping(None, self.mapping(other))
 

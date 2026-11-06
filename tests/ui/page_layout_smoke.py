@@ -80,7 +80,7 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  check(graph.getBoundingClientRect().height>=document.querySelector('.plan-layout').clientHeight-1,'Closing detail does not return space to graph');
  taskPlanProjection=plan;renderTaskPlan();
  await openTaskQueue();queueLayout.closeButton.click();await tick();check(!document.querySelector('#plan-panel').hidden,'Queue close did not return to roadmap');
- activeProject.readOnly=true;await openTaskQueue();check(document.querySelector('#task-queue-publish').disabled&&document.querySelector('#task-queue-revalidate').disabled&&document.querySelector('#task-queue-list li button:last-child').disabled,'Read-only queue exposes write actions');activeProject.readOnly=false;
+ activeProject.readOnly=true;await openTaskQueue();check(document.querySelector('#task-queue-publish').disabled&&document.querySelector('#task-queue-list li button:last-child').disabled,'Read-only queue exposes write actions');activeProject.readOnly=false;
  queueItems=[{id:'TASK-1',title:'Queued task'},{id:'TASK-FREE',title:'Independent task'}];await openTaskQueue();
  const queueList=document.querySelector('#task-queue-list'),moveDown=queueList.querySelector('.task-queue-move-down');
  check(queueList.querySelector('.task-queue-move-up').disabled&&!moveDown.disabled&&moveDown.getAttribute('aria-label').includes('TASK-1'),'Move controls lack limits or accessible labels');

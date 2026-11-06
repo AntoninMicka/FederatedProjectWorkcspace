@@ -16,7 +16,10 @@ async function activate(context) {
   const output = vscode.window.createOutputChannel('Workspace bridge');
   context.subscriptions.push(output);
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
-  status.text = 'Workspace: odpojeno'; status.command = 'workspaceBridge.configure'; status.show();
+  status.text = 'Workspace: odpojeno';
+  status.command = context.globalState.get('connection') || context.globalState.get('session')
+    ? 'workspaceBridge.sync' : 'workspaceBridge.connect';
+  status.show();
   context.subscriptions.push(status);
   const privateRoot = path.join(context.globalStorageUri.fsPath, 'bridge-private');
   const mailbox = session => path.join(privateRoot, 'sessions', session);
@@ -105,6 +108,7 @@ async function activate(context) {
   async function synchronize(quiet = false) {
     if (busy || !vscode.workspace.isTrusted || !(context.globalState.get('connection') || context.globalState.get('session'))) return;
     busy = true;
+    status.command = 'workspaceBridge.sync';
     try {
       const config = await configuration();
       let summary, warning = false;
@@ -387,6 +391,7 @@ async function activate(context) {
       await context.globalState.update(type, undefined);
     }
     status.text = 'Workspace: odpojeno';
+    status.command = 'workspaceBridge.connect';
     sidebar.clear?.();
     vscode.window.showInformationMessage('Lokální synchronizace zastavena. Přístup odvolejte také ve Workspace. Soubory zůstaly zachovány.');
   });

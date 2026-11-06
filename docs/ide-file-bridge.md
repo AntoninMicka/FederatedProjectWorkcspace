@@ -78,8 +78,8 @@ omezuje balíček na 2 MiB, ověřuje SHA-256 a shodu metadat mezi kontrolou
 a stažením. Dočasný adresář je privátní, soubor má 0600 a po skončení
 instalačního příkazu se odstraní. Při změně verze během stahování se
 instalace odmítne. Souběžné kontroly jednoho hostu se sloučí; automatické
-pokusy včetně odmítnuté nabídky a chyb mají hodinový odstup. Ruční kontrola
-odstup obchází. Zastaralý backend chybu zapíše do výstupu, sync pokračuje.
+pokusy mají od verze 0.5.8 minutový odstup; po chybě další tick pokus zopakuje.
+Ruční kontrola odstup obchází. Zastaralý backend chybu zapíše do výstupu, sync pokračuje.
 
 Crash boundaries: před předáním ověřeného VSIX installeru se instalace
 nemění; chyba stahování či checksumu ponechá starou verzi. Při pádu procesu
@@ -241,3 +241,18 @@ bez výzvy k opakovanému nastavení projektů. Vypnutý desktop nelze opravit
 synchronizací: po jeho spuštění se použije stávající podepsaná discovery.
 Rozšíření samo desktop nespouští. Instalaci nové verze a reload IDE nadále
 potvrzuje uživatel. Kontrakt a recovery: [ADR 0062](adr/0062-pinned-queue-handoff.md#obnova-ide-bez-závislosti-na-historii-programu-6-11-2026).
+
+## Chyba `Bridge export exceeds 1 MiB` (oprava 0.5.8)
+
+Jde o velikost snapshotu plánu, nikoli neplatné propojení. Opravený backend
+povoluje do 2 MiB v HTTP podobě a rozšíření 0.5.8 zapisuje kompaktní JSON,
+aby šel export celý znovu načíst. Data plánu se nezkracují. Aktualizujte backend
+a rozšíření, obnovte okno IDE a použijte dosavadní spojení; nové párování není
+potřeba. Nadále platí horní limity pro bezpečný přenos a načtení souborů.
+Podrobnosti: [rozpočet exportu](adr/0060-local-file-ide-bridge.md#rozpočet-exportu-většího-plánu-6-11-2026).
+
+Od 0.5.8 se kontrola verze i po běžné úspěšné kontrole provádí po minutě,
+nikoli až za hodinu. Chyba transportu či installeru dovolí další pokus při
+následujícím ticku. Nastavení automatické instalace i potvrzení reloadu se
+zachovávají. Obnova transportu neopravuje sama kód již běžícího starého backendu;
+opravený backend musí být aktivovaný běžným nasazením.

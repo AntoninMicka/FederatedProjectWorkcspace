@@ -36,6 +36,55 @@ class QueuePacketTests(unittest.TestCase):
         return self.queue.execute(request|extra,self.owner)
     def packet(self):
         result=publish(self.service,None,self.request);return load(self.service,self.record['session_id'],result['packet_id'])
+    def http_publish(self, request):
+        import urllib.request, urllib.error
+        from spikes.local_api import running_api
+        from spikes.desktop_ui import DesktopHandler
+        with running_api('http',handler=DesktopHandler,projects=Projects(self.node)) as server:
+            call=urllib.request.Request(server.origin+'/v1/ide-queue/publish',
+                data=json.dumps(request).encode(),headers={
+                    'Authorization':'Bearer '+server.token,'Content-Type':'application/json'})
+            try:
+                with urllib.request.urlopen(call,timeout=20) as response:
+                    return response.status,json.load(response)
+            except urllib.error.HTTPError as error:
+                with error:
+                    return error.code,json.load(error)
+
+    def test_plan_scope_http_avoids_full_open_and_omits_history_and_artifact_catalog(self):
+        import urllib.request
+        from spikes.local_api import running_api
+        from spikes.desktop_ui import DesktopHandler
+        with running_api('http',handler=DesktopHandler,projects=Projects(self.node)) as server:
+            call=urllib.request.Request(server.origin+'/v1/projects/open',
+                data=json.dumps(dict(project_id=self.project,scope='plan')).encode(),headers={
+                    'Authorization':'Bearer '+server.token,'Content-Type':'application/json'})
+            with patch.object(Projects,'open',side_effect=AssertionError('full project reload')):
+                with urllib.request.urlopen(call,timeout=20) as response:
+                    result=json.load(response)
+        self.assertEqual(result['commit_id'],self.head)
+        self.assertEqual(result['plan']['status'],'ready')
+        self.assertNotIn('history',result);self.assertNotIn('artifacts',result)
+
+    def test_http_publish_refreshes_existing_bound_mapping_without_reconfiguration(self):
+        self.head=self.save(self.body+'- [ ] [TASK-04] New unrelated task\n')
+        request=self.request|dict(expected_head=self.head,queue_revision=self.qstatus()['revision'])
+        code,result=self.http_publish(request)
+        self.assertEqual(code,200,result)
+        packet=load(self.service,self.record['session_id'],result['packet_id'])
+        self.assertEqual(packet['manifest']['project_head'],self.head)
+        self.assertEqual(packet['manifest']['session_id'],self.record['session_id'])
+        self.assertEqual(Projects(self.node).repository(self.project).head(),self.head)
+
+    def test_http_publish_never_refreshes_over_pending_human_review(self):
+        packet=self.packet();self.send(self.message(packet))
+        self.head=self.save(self.body+'- [ ] [TASK-04] New unrelated task\n')
+        request=self.request|dict(expected_head=self.head,queue_revision=self.qstatus()['revision'])
+        code,result=self.http_publish(request)
+        self.assertEqual(code,422,result)
+        self.assertIn('human review',result['error'])
+        self.assertEqual(load(self.service,self.record['session_id'])['packet_id'],packet['packet_id'])
+        self.assertEqual(Projects(self.node).repository(self.project).head(),self.head)
     def message(self,packet,task='TASK-01'):
         return dict(message_id=str(uuid4()),task_id=task,kind='completed',body='Implemented and inspected.',
             revision=self.record['snapshot']['revision'],repository_commit='b'*40,queue_packet_id=packet['packet_id'],

@@ -76,7 +76,7 @@ def authorize(service, record):
             require(row and not row['revoked'], 'Workspace connection revoked')
 def live(service, record):
     authorize(service, record)
-    view = service.projects.open(record['project_id'])
+    view = service.projects.plan_view(record['project_id'])
     require(not view['read_only'], 'Project is read-only')
     return view
 
@@ -177,7 +177,10 @@ def read_document(service, record, artifact_id):
     require(record.get('export_documents'), 'Document export is not enabled for this mapping')
     files, entities, current = pinned(service, record)
     require(artifact_id in entities, 'Document belongs to another project or revision')
-    require(artifact_id in {item['id'] for item in current['artifacts']}, 'Document no longer available in current project')
+    git = service.projects.repository(record['project_id'])
+    present = git.run('ls-tree', '-r', '--name-only', current['commit_id'], '--',
+                      'artifacts/' + artifact_id + '/').stdout.strip()
+    require(bool(present), 'Document no longer available in current project')
     item = next((row for row in descriptors(files, {artifact_id: entities[artifact_id]},
                                            record['snapshot']['tasks']) if row['available']), None)
     require(item is not None, 'Document is not available for text export')

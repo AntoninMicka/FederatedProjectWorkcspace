@@ -167,7 +167,7 @@ class TaskQueue:
         require(isinstance(action, str) and action in fields and set(request) == common | fields[action],
                 'Invalid queue action or fields')
         # Native read enforces registered-project/index/privacy state before opening local queue files.
-        view = self.projects.open(project_id); graph = view['plan']
+        view = self.projects.plan_view(project_id); graph = view['plan']
         require(graph['status'] == 'ready', 'Roadmapa nemá platný graf.')
         require(action == 'status' or not view.get('read_only'), 'Projekt je pouze pro čtení.')
         from spikes.ide_queue import completion_reports, queue_projection
@@ -199,7 +199,9 @@ class TaskQueue:
             state = self._read(path, project_id, actor_id)
             issues, following = assess(state['task_ids'], graph, accepted)
             nodes = {n['id']: n for n in graph['nodes']}
-            stale = state['project_head'] not in (None, head)
+            # A selection is validated against the live graph on every read.
+            # A different project HEAD alone does not require human revalidation.
+            stale = state['project_head'] not in (None, head) and bool(issues)
             if projection and state['revision'] == projection['manifest']['queue_revision'] and state['task_ids'] == [t['id'] for t in projection['manifest']['tasks']]:
                 stale = False
             if action != 'status':

@@ -159,13 +159,22 @@ class ProjectTests(unittest.TestCase):
                      author_name='Test', author_email='test@example.invalid', message='Pending', checkpoint=crash)
         before = self.gits[0].head()
         with self.assertRaises(PendingOperation): self.projects.open(ENTITY)
+        with self.assertRaises(PendingOperation): self.projects.plan_view(ENTITY)
         self.assertEqual(self.gits[0].head(), before)
         ws.recover()
         with closing(sqlite3.connect(self.state() / 'index.sqlite')) as db, db:
             db.execute("UPDATE entities SET title='Forged'")
         with self.assertRaises(ValidationError): self.projects.open(ENTITY)
+        with self.assertRaises(ValidationError): self.projects.plan_view(ENTITY)
         (self.state() / 'index.sqlite').unlink()
         self.assertEqual(self.projects.open(ENTITY)['artifacts'][0]['title'], 'Pending')
+
+    def test_plan_view_preserves_network_privacy_boundary(self):
+        meta=metadata();meta['privacy']='local-only'
+        path=self.gits[0].root/'artifacts'/ENTITY/'note.md'
+        path.write_bytes(markdown(meta));self.gits[0].commit('Local-only source')
+        with self.assertRaises(ValidationError):
+            Projects(self.node_path,network=True).plan_view(ENTITY)
 
     def test_interrupted_initialization_and_rebuild_can_be_retried(self):
         with patch('spikes.workspace.Index', side_effect=RuntimeError('before index initialization')):
