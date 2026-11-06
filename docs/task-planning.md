@@ -168,7 +168,7 @@ probíhá v raw textu a při uložení znovu podléhá původní úplné validac
 
 Při ruční úpravě hlavního souboru plánu na lokálním desktopu není nutné
 commitovat každou rozepsanou část jen pro její zobrazení. Znovuotevření Plánu
-načte současný pracovní soubor a označí jej jako rozpracovaný náhled. Uvidíte
+zpřístupní současný pracovní soubor jako volitelný rozpracovaný náhled. V něm uvidíte
 již napsané popisy i samostatné bloky úkolů, i když další část nemá doplněné
 typ nebo jiné povinné údaje. Úplná validace se tím nevypíná.
 
@@ -189,3 +189,24 @@ Pracovní soubor se neposkytuje síťovým klientům a nevstupuje do kontextový
 manifestů, synchronizace ani autoritativního indexu. Chybějící, měnící se,
 nečitelný nebo nepřípustný soubor vyvolá explicitní zprávu, nikoli tichou
 záměnu za údajně aktuální uloženou verzi.
+
+Pokud existuje rozpracovaná kopie, nad Plánem jsou přepínače **Uložený graf**
+a **Rozepsaný soubor**. První vrací graf poslední uložené platné revize,
+druhý náhled právě přepisovaného souboru. Volba zůstává zachovaná při dalším
+otevření Plánu v témže projektu. Přepnutí nic neukládá ani nemaže; pokud
+uložená revize nemá platný graf, odpovídající tlačítko je zakázané s důvodem.
+
+## Režimy editoru a pracovní plocha
+
+Editor hlavního plánu nabízí v záhlaví **Kostky**, **Raw text** a **Náhled**.
+Náhled vykresluje aktuální obsah textového pole, včetně dosud neuložených
+změn. Přepnutí nic neukládá a zachovává rozepsaný obsah i výběr v raw textu.
+Pohled Plán při otevření projektu standardně zobrazuje uložený graf;
+rozpracovaný soubor lze prohlížet v editoru nebo zvolit jeho samostatný náhled.
+
+Obsah editoru využívá zbývající výšku a celou dostupnou šířku stránky.
+Posouvá se text nebo náhled, nikoli záhlaví s akcemi. Pomocné vzory,
+ověření a kontextová nápověda jsou v rozbalovací části **Nástroje a nápověda**.
+Vlastnosti dokumentu zůstávají samostatně rozbalovací; pro náhled externě
+rozepsaného souboru a editor jedné položky se prázdné vlastnosti nezobrazují.
+Toto rozložení používá společnou hlavičku a tělo stránky jako ostatní editory.

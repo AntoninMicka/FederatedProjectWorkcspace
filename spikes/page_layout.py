@@ -67,6 +67,34 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #artifact-editor-view[hidden]{display:none}
 #artifact-editor-form{flex:1;min-height:0;max-width:none;border:1px solid #dce3e9}
 #artifact-editor-form .raw-editor-widget{width:100%;max-width:none}
+#artifact-editor-form>.workspace-page-body{display:flex;flex-direction:column;overflow:hidden;padding:12px 16px;gap:8px}
+#artifact-editor-form .workspace-page-status{flex:none;margin:0;padding:2px 0;font-size:12px}
+#artifact-editor-form .workspace-file-properties{flex:none;max-height:35%;overflow:auto;margin:0;padding:6px 10px}
+#artifact-editor-form #artifact-raw-widget{flex:1;min-height:0;margin:0;padding:0;border:0;background:transparent}
+#artifact-editor-form .raw-editor-layout{display:flex;align-items:stretch;height:100%;min-height:0;width:100%}
+#artifact-editor-form .raw-editor-main{display:flex;flex-direction:column;flex:1;min-height:0;gap:6px}
+#artifact-editor-form .raw-editor-main>label{display:flex;flex-direction:column;flex:1;min-height:0;margin:0;gap:0;font-size:0}
+#artifact-editor-form textarea[name=body]{font-size:14px;flex:1;min-height:0;height:100%;resize:none;overflow:auto;margin:0}
+#artifact-editor-form .raw-editor-status{flex:none;min-height:0;margin:0}
+#artifact-git-dialog{width:min(900px,95vw);max-height:90vh;overflow:auto;border:1px solid #b9c9c4;border-radius:12px;padding:20px}#artifact-git-diff{max-height:50vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f7f8;padding:12px}.artifact-git-actions{display:inline-flex;gap:8px}
+#artifact-editor-form .raw-editor-status:empty,#artifact-editor-form>.workspace-page-body>.form-actions:empty{display:none}
+.workspace-page-actions .task-plan-mode button[aria-selected=false]{background:#edf2f5;color:#234650}
+.artifact-editor-tools{flex:none;max-height:40%;overflow:auto;border:1px solid #dce3e9;border-radius:7px;padding:5px 9px}
+.artifact-editor-tools>summary{font-size:12px;font-weight:600;cursor:pointer}
+.artifact-editor-tools-content{display:grid;grid-template-columns:minmax(0,2fr) minmax(200px,1fr);gap:12px;padding-top:8px}
+#artifact-editor-form .artifact-editor-tools .raw-editor-toolbar{align-content:start}
+#artifact-editor-form .artifact-editor-tools .raw-editor-toolbar label{min-width:min(210px,100%)}
+#artifact-editor-form #task-plan-editor{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;gap:8px;margin:0;padding:0;border:0;background:transparent}
+#artifact-editor-form #task-plan-editor[data-mode=raw]{display:none}
+#artifact-editor-form #task-plan-editor-status{flex:none;margin:0;padding:2px 0;font-size:12px}
+#artifact-editor-form #task-plan-editor-status:empty{display:none}
+#artifact-editor-form #task-plan-blocks,#artifact-editor-form #task-plan-preview{flex:1;min-height:0;overflow:auto;padding:8px;border:1px solid #dce3e9;border-radius:8px;overscroll-behavior:contain}
+#artifact-editor-form #task-plan-blocks{align-content:start}
+#artifact-editor-form #task-plan-preview{overflow-wrap:anywhere}
+#artifact-editor-form #task-plan-preview>ul{padding-left:22px}
+#artifact-editor-form #task-plan-preview li{margin:4px 0}
+@media(max-width:700px){.artifact-editor-tools-content{grid-template-columns:minmax(0,1fr)}#artifact-editor-form>.workspace-page-body{padding:8px}#artifact-editor-form textarea[name=body]{font-size:16px}}
+
 #tools-panel:has(#julia-editor:not([hidden]))>.workspace-page-body,#tools-panel:has(#julia-model-detail:not([hidden]))>.workspace-page-body{display:flex;flex-direction:column;padding:0;overflow:hidden}
 #tools-panel:has(#julia-editor:not([hidden]))>.workspace-page-body>:not(#julia-editor):not(dialog),#tools-panel:has(#julia-model-detail:not([hidden]))>.workspace-page-body>:not(#julia-model-detail):not(dialog){display:none}
 #julia-editor.workspace-page,#julia-model-detail.workspace-page,#project-conflicts.workspace-page{height:100%;min-height:0;flex:1}
@@ -225,6 +253,7 @@ function syncPageLayout(){
  let root=[...document.querySelectorAll('main>div')].find(item=>!item.hidden);
  if(root===projectView){root=mainTabs.map(tab=>document.getElementById(tab.getAttribute('aria-controls'))).find(item=>!item.hidden);if(root?.id==='project-overview-panel'&&!projectConflicts.hidden)root=projectConflicts;if(root?.id==='tools-panel'){if(!juliaEditor.hidden)root=juliaEditor;else if(!juliaModelDetail.hidden)root=juliaModelDetail;}}
  else if(root===artifactEditorView)root=artifactEditorForm;
+ if(typeof syncArtifactGitButtons==='function')syncArtifactGitButtons();
  const modeSwitch=document.querySelector('.task-plan-mode');if(modeSwitch&&modeSwitch.hidden!==taskPlanEditor.hidden)modeSwitch.hidden=taskPlanEditor.hidden;
  const layout=workspacePageLayouts.get(root);
  document.querySelector('#open-task-queue').setAttribute('aria-current',String(root?.id==='task-queue-panel'));
@@ -287,12 +316,15 @@ function initializeWorkspacePageLayout(){
  const edit=document.createElement('button');edit.id='preview-edit';edit.type='button';edit.textContent='Editovat';edit.hidden=true;
  const create=document.createElement('button'),importButton=document.createElement('button');
  for(const [button,label,run] of [[create,'Nový dokument',()=>openNewArtifactEditor()],[importButton,'Importovat',openSourceImport]]){button.type='button';button.dataset.artifactOverviewAction='';button.textContent=label;button.addEventListener('click',run);}
- const previewLayout=mountWorkspacePage(preview,{onClose:()=>navigateSidebarTab(sidebarTabs.find(tab=>tab.getAttribute('aria-selected')==='true')||get('#artifacts-tab')),title:'Podklady',heading:get('#preview-title'),section:'artifacts-tab',kind:'viewer',chat:'full',actions:[edit,create,importButton,get('#text-preview-controls'),get('#pdf-controls')]});
+ const previewLayout=mountWorkspacePage(preview,{onClose:()=>navigateSidebarTab(sidebarTabs.find(tab=>tab.getAttribute('aria-selected')==='true')||get('#artifacts-tab')),title:'Podklady',heading:get('#preview-title'),section:'artifacts-tab',kind:'viewer',chat:'full',actions:[edit,artifactGitButtons('preview'),create,importButton,get('#text-preview-controls'),get('#pdf-controls')]});
  const artifactSave=artifactEditorForm.querySelector('button[type="submit"]');
- mountWorkspacePage(artifactEditorForm,{title:'Dokument',heading:get('#artifact-editor-heading'),section:'artifacts-tab',kind:'editor',close:false,actions:[artifactSave,get('#artifact-editor-close'),get('.task-plan-mode')]});
+ mountWorkspacePage(artifactEditorForm,{title:'Dokument',heading:get('#artifact-editor-heading'),section:'artifacts-tab',kind:'editor',close:false,actions:[artifactSave,get('#artifact-editor-close'),get('.task-plan-mode'),artifactGitButtons('editor')]});
  const properties=document.createElement('details'),propertiesTitle=document.createElement('summary');properties.className='workspace-file-properties';propertiesTitle.textContent='Vlastnosti dokumentu';properties.append(propertiesTitle);
  for(const name of ['title','filename','description','tags'])properties.append(artifactEditorForm.elements[name].closest('label'));
  workspacePageLayouts.get(artifactEditorForm).body.prepend(properties);
+ const editorTools=document.createElement('details'),editorToolsTitle=document.createElement('summary'),editorToolsBody=document.createElement('div');editorTools.id='artifact-editor-tools';editorTools.className='artifact-editor-tools';editorToolsTitle.textContent='Nástroje a nápověda';editorToolsBody.className='artifact-editor-tools-content';editorTools.append(editorToolsTitle,editorToolsBody);
+ editorToolsBody.append(get('#artifact-raw-widget .raw-editor-toolbar'),get('#artifact-raw-widget [data-raw-help]'));get('#artifact-raw-widget .raw-editor-main').prepend(editorTools);
+
  const artifactHeading=get('#artifact-editor-heading');artifactEditorForm.addEventListener('input',()=>{artifactHeading.textContent=artifactEditorForm.elements.title.value||'Nový dokument';});
  const juliaSave=juliaEditor.querySelector('button[type="submit"]');
  mountWorkspacePage(juliaEditor,{title:'Julia model',heading:juliaEditor.querySelector('h3'),section:'tools-tab',kind:'editor',close:false,actions:[juliaSave,get('#julia-editor-close')]});

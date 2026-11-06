@@ -17,7 +17,9 @@ view.resize(int(os.environ.get('WORKSPACE_LAYOUT_WIDTH','1440')), 980)
 test = r'''
 window.layoutTest={done:false};
 (async()=>{
- const check=(value,message)=>{if(!value)throw Error(message);};
+ // This layout-only smoke has no real working files; Git actions have their own HTTP integration tests.
+loadArtifactGitState=async()=>null;
+const check=(value,message)=>{if(!value)throw Error(message);};
  const tick=()=>new Promise(resolve=>setTimeout(resolve,30));
  const visible=node=>node&&!node.hidden&&node.getBoundingClientRect().height>0;
  for(const dialog of document.querySelectorAll('dialog')){

@@ -9,7 +9,7 @@ import re
 import tempfile
 import uuid
 
-from spikes.configuration import committed_project
+from spikes.configuration import committed_project, parse_project
 from spikes.markdown_documents import main_todo_id, main_todo_view
 from spikes.task_graph import project_task_graph
 from spikes.journal import Journal, RecoveryConflict, snapshot
@@ -74,7 +74,7 @@ class Workspace:
             return self._apply_locked(db, changes, author_name, author_email, message, checkpoint)
 
     def transact(self, operation_id, request, prepare, *, expected_head=None,
-                 allow_privacy_relaxation=False, additional_parents=(),
+                 allow_privacy_relaxation=False, additional_parents=(), adopt_staged=False,
                  checkpoint=lambda stage: None):
         """Bind a native request to one durable operation, including lost-response retries.
 
@@ -91,6 +91,8 @@ class Workspace:
             require(isinstance(parent, str)
                     and re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', parent),
                     'Expected full additional parent commit ID')
+        require(type(adopt_staged) is bool, 'Invalid staged adoption mode')
+        if adopt_staged:request=dict(request, workspace_mode='adopt-staged-v1')
         digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         with self.journal.lock(), self.journal.connect() as db:
             self._writable()
@@ -105,11 +107,11 @@ class Workspace:
             return self._apply_locked(db, changes, name, email, message, checkpoint,
                                       operation_id=operation_id, request_digest=digest, expected_head=expected_head,
                                       allow_privacy_relaxation=allow_privacy_relaxation,
-                                      additional_parents=additional_parents)
+                                      additional_parents=additional_parents, adopt_staged=adopt_staged)
 
     def _apply_locked(self, db, changes, author_name, author_email, message, checkpoint,
                       *, operation_id=None, request_digest=None, expected_head=None,
-                      allow_privacy_relaxation=False, additional_parents=()):
+                      allow_privacy_relaxation=False, additional_parents=(), adopt_staged=False):
         for value in (author_name, author_email):
             require(isinstance(value, str) and value.strip() == value and bool(value)
                     and not any(c in value for c in '\n\r\0<>'), 'Explicit Git identity required')
@@ -123,10 +125,19 @@ class Workspace:
         for parent in additional_parents:
             resolved = self.git.run('rev-parse', '--verify', parent + '^{commit}').stdout.strip()
             require(resolved == parent and parent != base, 'Invalid additional parent')
-        require(not self.git.run('status', '--porcelain', '--untracked-files=all').stdout,
-                'Clean worktree and staging index required')
-        require(snapshot(self.git.root) == self.git.snapshot(base),
-                'Working projection differs from HEAD (including ignored files)')
+        index_tree = None
+        if adopt_staged:
+            require(len(changes)==1 and not additional_parents,'A file commit adopts exactly one staged file')
+            index_tree=self.git.run('write-tree').stdout.strip()
+            for path,data in changes.items():
+                self.journal.target(path)
+                require(path.startswith('artifacts/') and isinstance(data,bytes),'Expected tracked artifact bytes')
+                require(self.git.run('show',':'+path,binary=True).stdout==data,'Staged file changed; review again')
+        else:
+            require(not self.git.run('status', '--porcelain', '--untracked-files=all').stdout,
+                    'Clean worktree and staging index required')
+            require(snapshot(self.git.root) == self.git.snapshot(base),
+                    'Working projection differs from HEAD (including ignored files)')
         base_files = self.git.snapshot(base)
         candidate_files = dict(base_files)
         for path, data in changes.items():
@@ -140,7 +151,16 @@ class Workspace:
                                        allow_privacy_relaxation=allow_privacy_relaxation)
         from spikes.reporting_schema import validate_git
         validate_git(self.git, candidate_files, entities, base_files)
-        paths = self.journal._prepare(db, changes)
+        if adopt_staged:
+            pid=parse_project(self.git.run('show',base+':project.json',binary=True).stdout)['id']
+            plan=project_task_graph(candidate_files,entities,pid,base)
+            require(plan['status'] in {'ready','missing'},plan.get('error','Invalid project plan'))
+        if adopt_staged:
+            paths=[]
+            for path,data in changes.items():
+                require(path in base_files and base_files[path]!=data,'Selected file has no staged changes')
+                db.execute('INSERT INTO pending VALUES(?,?,?)',(path,base_files[path],data));paths.append(path)
+        else:paths = self.journal._prepare(db, changes)
         # A merge that explicitly keeps the complete first-parent tree is still
         # meaningful: its additional parent records the reconciled history.
         require(bool(paths) or additional_parents, 'Operation has no changes')
@@ -149,11 +169,56 @@ class Workspace:
                       message=message, state='prepared', commit_id=None, request_digest=request_digest,
                       allow_privacy_relaxation=allow_privacy_relaxation,
                       additional_parents=list(additional_parents))
+        if adopt_staged:record.update(kind='staged-artifact-commit',index_tree=index_tree,file_modes={path:self.git.run('ls-tree',index_tree,'--',path).stdout.split()[0] for path in paths})
         db.execute('INSERT INTO operations(id, record) VALUES (?, ?)',
                    (record['operation_id'], json.dumps(record)))
         db.commit()
         checkpoint('prepared')
         return self._recover(db, record, checkpoint)
+
+    def stage_artifact(self, operation_id, request, prepare, *, checkpoint=lambda stage: None):
+        """Freeze one file in the real Git index, using the shared operation journal."""
+        from spikes.metadata import uuid as validate_uuid
+        validate_uuid(operation_id)
+        digest=hashlib.sha256(json.dumps(request,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+        with self.journal.lock(),self.journal.connect() as db:
+            self._writable()
+            row=db.execute('SELECT record,done FROM operations WHERE id=?',(operation_id,)).fetchone()
+            if row:
+                record=json.loads(row[0]);require(record.get('request_digest')==digest,'Operation ID belongs to a different request')
+                return record if row[1] else self._recover_stage(db,record,checkpoint)
+            if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():raise PendingOperation('Recover pending operation first')
+            path,raw=prepare(self);self.journal.target(path)
+            branch=self._branch();head=self.git.head();before=self.git.run('write-tree').stdout.strip()
+            mode=self.git.run('ls-tree',head,'--',path).stdout.split()[0]
+            require(mode in {'100644','100755'},'Expected tracked regular file')
+            oid=self.git.run('hash-object','-w','--stdin',input=raw,binary=True).stdout.decode().strip()
+            with tempfile.TemporaryDirectory(dir=self.journal.state) as temporary:
+                env={'GIT_INDEX_FILE':str(Path(temporary)/'index')}
+                self.git.run('read-tree',before,env_extra=env)
+                self.git.run('update-index','--add','--cacheinfo',mode,oid,path,env_extra=env)
+                after=self.git.run('write-tree',env_extra=env).stdout.strip()
+            record=dict(kind='artifact-stage',operation_id=operation_id,request_digest=digest,base_head=head,
+                        branch=branch,paths=[path],blob_oid=oid,file_mode=mode,before_index=before,after_index=after,
+                        state='stage-prepared',commit_id=None)
+            db.execute('INSERT INTO operations(id,record) VALUES(?,?)',(operation_id,json.dumps(record)));db.commit()
+            checkpoint('stage-prepared')
+            return self._recover_stage(db,record,checkpoint)
+
+    def _recover_stage(self,db,record,checkpoint):
+        self._writable()
+        require(self._branch()==record['branch'] and self.git.head()==record['base_head'],'Stage base changed; operation retained')
+        current=self.git.run('write-tree').stdout.strip()
+        require(current in {record['before_index'],record['after_index']},'Foreign staging changes; operation retained')
+        if current!=record['after_index']:
+            self.git.run('update-index','--add','--cacheinfo',record['file_mode'],record['blob_oid'],record['paths'][0])
+        checkpoint('stage-indexed')
+        require(self._branch()==record['branch'] and self.git.head()==record['base_head'] and
+                self.git.run('write-tree').stdout.strip()==record['after_index'],'Stage outcome changed; operation retained')
+        record['commit_id']=record['base_head']
+        self._save(db,record,'stage-applied');db.execute('UPDATE operations SET done=1 WHERE id=?',(record['operation_id'],));db.commit()
+        checkpoint('stage-completed')
+        return record
 
     def recover(self, checkpoint=lambda stage: None):
         with self.journal.lock(), self.journal.connect() as db:
@@ -269,6 +334,10 @@ class Workspace:
         for parent in record.get('additional_parents', []):
             resolved = self.git.run('rev-parse', '--verify', parent + '^{commit}').stdout.strip()
             require(resolved == parent, 'Additional parent is unavailable')
+        if record.get('kind')=='staged-artifact-commit':
+            if self.git.run('write-tree').stdout.strip()!=record['index_tree']:
+                raise RecoveryConflict('Git staging changed; operation retained')
+            return head
         trees = {self.git.run('rev-parse', f"{record['base_head']}^{{tree}}").stdout.strip()}
         if record['commit_id']:
             trees.add(self.git.run('rev-parse', f"{record['commit_id']}^{{tree}}").stdout.strip())
@@ -292,7 +361,7 @@ class Workspace:
                     self.git.run('update-index', '--force-remove', '--', path, env_extra=env)
                 else:
                     oid = self.git.run('hash-object', '-w', '--stdin', input=data, binary=True).stdout.decode().strip()
-                    self.git.run('update-index', '--add', '--cacheinfo', '100644', oid, path, env_extra=env)
+                    self.git.run('update-index', '--add', '--cacheinfo', record.get('file_modes',{}).get(path,'100644'), oid, path, env_extra=env)
             tree = self.git.run('write-tree', env_extra=env).stdout.strip()
         base_files = self.git.snapshot(record['base_head'])
         candidate_files = self.git.snapshot(tree)
@@ -300,6 +369,10 @@ class Workspace:
                                        allow_privacy_relaxation=record.get('allow_privacy_relaxation', False))
         from spikes.reporting_schema import validate_git
         validate_git(self.git, candidate_files, entities, base_files)
+        if record.get('kind')=='staged-artifact-commit':
+            pid=parse_project(self.git.run('show',record['base_head']+':project.json',binary=True).stdout)['id']
+            plan=project_task_graph(candidate_files,entities,pid,record['base_head'])
+            require(plan['status'] in {'ready','missing'},plan.get('error','Invalid project plan'))
         identity = {'GIT_AUTHOR_NAME': record['author_name'], 'GIT_AUTHOR_EMAIL': record['author_email'],
                     'GIT_COMMITTER_NAME': record['author_name'], 'GIT_COMMITTER_EMAIL': record['author_email']}
         parents = []
@@ -314,16 +387,19 @@ class Workspace:
         checkpoint('commit-ready')
 
     def _recover(self, db, record, checkpoint):
+        if record.get('kind')=='artifact-stage':return self._recover_stage(db,record,checkpoint)
+        adopting=record.get('kind')=='staged-artifact-commit'
+        if adopting:self._writable()
         self._check(record)
         if record['commit_id'] is None:
-            self.journal._recover(db, checkpoint, clear=False)
+            if not adopting:self.journal._recover(db, checkpoint, clear=False)
             self._save(db, record, 'files-applied')
             checkpoint('files-applied')
             self._check(record)
             self._candidate(db, record, checkpoint)
         # Once a candidate exists, never roll back a subsequent edit to its payload.
-        current = snapshot(self.git.root)
-        if current != self.git.snapshot(record['commit_id']):
+        current = snapshot(self.git.root) if not adopting else None
+        if not adopting and current != self.git.snapshot(record['commit_id']):
             raise RecoveryConflict('Working projection differs from candidate; operation retained')
         head = self._check(record)
         if head == record['base_head']:
@@ -333,7 +409,7 @@ class Workspace:
         self._save(db, record, 'committed')
         checkpoint('committed')
         self._check(record)
-        self.git.run('read-tree', record['commit_id'])
+        if not adopting:self.git.run('read-tree', record['commit_id'])
         checkpoint('git-indexed')
         indexed = self.index.rebuild(self.git, checkpoint=checkpoint)
         require(indexed == record['commit_id'], 'HEAD changed during index rebuild')

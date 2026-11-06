@@ -1108,3 +1108,9 @@ kopie s otevřením přes directory FD bez symlinků a kontrolou změny souboru.
 **Reject:** automatický import/commit, nový writer, index neověřených bajtů,
 implicitní změna API připnutého náhledu nebo přenos pracovní kopie po síti.
 Žádná další persistentní vrstva ani nové crash/recovery účinky nevznikají.
+
+Náhled a rozložení editoru plánu **adaptují** sdílené `mountWorkspacePage`,
+PAGE_LAYOUT_CSS, původní raw widget a inertní `renderMarkdown`. Režimy
+zachovávají jediný textový buffer; nápověda i vzory zůstávají v původním
+widgetu, pouze v rozbalovacích nástrojích. **Reject:** další editor, kopie
+draftu, nový parser nebo zapisovací endpoint kvůli přepnutí režimu.

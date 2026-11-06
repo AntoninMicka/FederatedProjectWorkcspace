@@ -39,6 +39,7 @@ from spikes.google_drive_import import GoogleDriveImport, DriveAccessError, GOOG
 from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+from spikes.journal import RecoveryConflict
 from spikes.web_search import SearchResponseError, SearchUnknown
 from spikes.web_administration import (ADMIN_HTML, ADMIN_SHARING_HTML,
                                        ADMIN_CSS, ADMIN_JS)
@@ -888,6 +889,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <details><summary>Rozdíl uložených souborů</summary><pre id="history-diff"></pre></details>
 <details><summary>Záznam uložení</summary><pre id="history-info"></pre></details>
 </section></div>
+<dialog id="artifact-git-dialog" aria-labelledby="artifact-git-title"><h2 id="artifact-git-title">Commit vybraného souboru</h2><p id="artifact-git-summary"></p><pre id="artifact-git-diff"></pre><label>Zpráva commitu <textarea id="artifact-git-message" rows="2" maxlength="1000"></textarea></label><p id="artifact-git-feedback" role="status"></p><div class="form-actions"><button id="artifact-git-confirm" type="button">Commit</button><button id="artifact-git-close" type="button">Zavřít</button></div></dialog>
 <div id="artifact-editor-view" hidden>
 <header><span class="badge">Dokument</span><span id="artifact-editor-mode">Uložený Markdown</span></header>
 <div class="page-heading"><div class="eyebrow" id="artifact-editor-eyebrow">UPRAVIT DOKUMENT</div><h1 id="artifact-editor-heading">Dokument</h1></div>
@@ -896,15 +898,15 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
 <section id="task-plan-editor" class="task-plan-editor" hidden aria-label="Strukturovaný editor plánu">
-<div class="task-plan-mode" role="tablist" aria-label="Režim editoru plánu"><button id="task-plan-mode-structured" type="button" role="tab" aria-selected="true">Kostky</button><button id="task-plan-mode-raw" type="button" role="tab" aria-selected="false">Raw text</button></div>
+<div class="task-plan-mode" role="tablist" aria-label="Režim editoru plánu"><button id="task-plan-mode-structured" type="button" role="tab" aria-selected="true">Kostky</button><button id="task-plan-mode-raw" type="button" role="tab" aria-selected="false">Raw text</button><button id="task-plan-mode-preview" type="button" role="tab" aria-selected="false" aria-controls="task-plan-preview">Náhled</button></div>
 <p id="task-plan-editor-status" role="status" aria-live="polite"></p>
 <div id="task-plan-insert" class="task-plan-insert" aria-label="Vložit vzor"><label>Místo vložení <select id="task-plan-insert-position"><option value="end">Na konec souboru</option></select></label><button type="button" data-task-pattern="task-plan.milestone">Přidat milník</button><button type="button" data-task-pattern="task-plan.batch-inline">Přidat batch s úkoly</button><button type="button" data-task-pattern="task-plan.batch-file">Přidat batch se souborem</button><button type="button" data-task-pattern="task-plan.task">Přidat task</button><button type="button" data-task-pattern="task-plan.dependency">Přidat závislost</button></div>
-<div id="task-plan-blocks" class="task-plan-blocks"></div></section>
+<div id="task-plan-blocks" class="task-plan-blocks"></div><div id="task-plan-preview" class="task-plan-preview" role="region" aria-label="Náhled obsahu souboru" tabindex="0" hidden></div></section>
 <section id="artifact-raw-widget" class="raw-editor-widget" aria-label="Raw editor dokumentu">
 <div class="raw-editor-layout"><div class="raw-editor-main">
 <div class="raw-editor-toolbar"><label>Vzor <select data-raw-pattern aria-label="Vzor dokumentu"></select></label><label>Místo vložení <select data-raw-insertion-position><option value="cursor">Na pozici kurzoru / výběru</option><option value="end">Na konec textu</option></select></label>
 <button data-raw-insert type="button">Vložit vzor</button><button data-raw-validate class="secondary-button" type="button">Ověřit obsah</button></div>
-<label>Obsah <textarea data-raw-content name="body" rows="18" maxlength="1048576" required spellcheck="true"></textarea></label>
+<label>Obsah <textarea aria-label="Obsah souboru" data-raw-content name="body" rows="18" maxlength="1048576" required spellcheck="true"></textarea></label>
 <p data-raw-status class="raw-editor-status" role="status" aria-live="polite"></p></div>
 <aside class="raw-editor-help-panel" data-raw-help aria-live="polite"><h3 data-raw-help-title>Nápověda k souboru</h3><p data-raw-help-body></p><div class="raw-editor-help-example"><h4>Příklad použití</h4><p data-raw-help-example></p></div></aside></div></section>
 <div class="form-actions"><button type="submit">Uložit</button><button id="artifact-editor-close" class="secondary-button" type="button">Zavřít editor</button></div>
@@ -2780,7 +2782,12 @@ function renderDraftPlanOutline(parsed,target){
  renderPlanOutline(rows,target);
 }
 function renderTaskPlanEditor(){
- if(taskPlanEditor.hidden)return;const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value),position=document.querySelector('#task-plan-insert-position'),priorPosition=position.value;taskPlanBlocks.replaceChildren();position.replaceChildren(new Option('Na konec souboru','end'));document.querySelector('#task-plan-mode-structured').setAttribute('aria-selected',String(taskPlanMode==='structured'));document.querySelector('#task-plan-mode-raw').setAttribute('aria-selected',String(taskPlanMode==='raw'));artifactRawRoot.hidden=taskPlanMode==='structured';taskPlanBlocks.hidden=taskPlanMode!=='structured';document.querySelector('#task-plan-insert').hidden=taskPlanMode!=='structured';
+ if(taskPlanEditor.hidden)return;const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value),position=document.querySelector('#task-plan-insert-position'),priorPosition=position.value,preview=document.querySelector('#task-plan-preview');taskPlanBlocks.replaceChildren();preview.replaceChildren();position.replaceChildren(new Option('Na konec souboru','end'));
+ taskPlanEditor.dataset.mode=taskPlanMode;
+ for(const mode of ['structured','raw','preview'])document.querySelector('#task-plan-mode-'+mode).setAttribute('aria-selected',String(taskPlanMode===mode));
+ artifactRawRoot.hidden=taskPlanMode!=='raw';taskPlanBlocks.hidden=taskPlanMode!=='structured';preview.hidden=taskPlanMode!=='preview';document.querySelector('#task-plan-insert').hidden=taskPlanMode!=='structured';
+ if(taskPlanMode==='preview'){renderMarkdown(artifactEditorForm.elements.body.value,preview);taskPlanStatus.textContent='Náhled aktuálního textu souboru · přepnutí režimu nic neukládá.';return;}
+ if(taskPlanMode==='raw'){taskPlanStatus.textContent='';return;}
  if(artifactEditorItem?.workingDraft){parsed.safe=false;parsed.error='Náhled rozpracovaného souboru z disku.';}
  if(!parsed.safe){taskPlanStatus.textContent=`Strukturovaný režim je pouze pro čtení: ${parsed.error} Použijte raw text.`;document.querySelector('#task-plan-insert').hidden=true;renderDraftPlanOutline(parsed,taskPlanBlocks);return;}
  for(const task of parsed.tasks)position.append(new Option(`Před ${task.parts[4]} · ${task.parts[6]}`,task.parts[4]));if([...position.options].some(option=>option.value===priorPosition))position.value=priorPosition;
@@ -2788,11 +2795,12 @@ function renderTaskPlanEditor(){
  for(const task of parsed.tasks){const card=document.createElement('section');card.className='task-plan-block';card.dataset.depth=String(Math.min(task.depth,3));const state=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=task.parts[2].toLowerCase()==='x';check.disabled=task.parts[2].toLowerCase()==='sum';state.append(check,document.createTextNode(check.disabled?' SUM · odvozený stav':' Hotovo'));const typeLabel=document.createElement('label'),type=document.createElement('select');for(const value of ['milestone','batch','task'])type.append(new Option(value,value));type.value=task.type;typeLabel.append('Typ',type);const idLabel=document.createElement('label'),id=document.createElement('input');id.value=task.parts[4];id.pattern='[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+';idLabel.append('ID',id);const titleLabel=document.createElement('label'),title=document.createElement('input');title.value=task.parts[6];title.maxLength=500;titleLabel.append('Název nebo odkaz',title);const details=document.createElement('small');details.textContent=`rodič: ${task.parentId||'kořen'}${task.descriptions.length?' · '+task.descriptions.join(' '):''}${task.checklist.length?' · podmínky: '+task.checklist.map(item=>(item.checked?'☑ ':'☐ ')+item.text).join(' · '):''}${task.relations.length?' · '+task.relations.join(' · '):''}`;
   const update=()=>{if(!id.checkValidity()||!title.value.trim()){taskPlanStatus.textContent='ID a název musí zůstat platné.';return;}replaceTaskPlanLine(task.line,task.parts[1]+(task.parts[2].toLowerCase()==='sum'?task.parts[2]:check.checked?'x':' ')+task.parts[3]+id.value.trim()+task.parts[5]+title.value.trim()+task.parts[7]);};check.addEventListener('change',update);id.addEventListener('change',update);title.addEventListener('change',update);type.addEventListener('change',()=>replaceTaskPlanLine(task.typeLine.line,task.typeLine.parts[1]+task.typeLine.parts[2]+': '+type.value+task.typeLine.parts[4]));card.append(state,typeLabel,idLabel,titleLabel,details);taskPlanBlocks.append(card);}
 }
-function configureTaskPlanEditor(enabled){taskPlanEditor.hidden=!enabled;artifactRawRoot.hidden=enabled&&taskPlanMode==='structured';if(enabled)renderTaskPlanEditor();else artifactRawRoot.hidden=false;}
+function configureTaskPlanEditor(enabled){taskPlanEditor.hidden=!enabled;artifactRawRoot.hidden=enabled&&taskPlanMode!=='raw';if(enabled)renderTaskPlanEditor();else artifactRawRoot.hidden=false;}
 document.querySelector('#task-plan-mode-structured').addEventListener('click',()=>{taskPlanMode='structured';renderTaskPlanEditor();});
 document.querySelector('#task-plan-mode-raw').addEventListener('click',()=>{taskPlanMode='raw';renderTaskPlanEditor();});
+document.querySelector('#task-plan-mode-preview').addEventListener('click',()=>{taskPlanMode='preview';renderTaskPlanEditor();});
 for(const button of document.querySelectorAll('[data-task-pattern]'))button.addEventListener('click',()=>{const textarea=artifactEditorForm.elements.body,parsed=parseTaskPlanDraft(textarea.value),target=document.querySelector('#task-plan-insert-position').value,task=parsed.safe?parsed.tasks.find(item=>item.parts[4]===target):null,offset=task?parsed.lines.slice(0,task.line).join('\\n').length+(task.line?1:0):textarea.value.length;document.querySelector('#artifact-raw-widget [data-raw-insertion-position]').value='cursor';textarea.setSelectionRange(offset,offset);if(artifactRawWidget.insert(button.dataset.taskPattern))renderTaskPlanEditor();});
-artifactEditorForm.elements.body.addEventListener('input',()=>{if(!taskPlanEditor.hidden&&taskPlanMode==='structured')renderTaskPlanEditor();});
+artifactEditorForm.elements.body.addEventListener('input',()=>{if(!taskPlanEditor.hidden&&taskPlanMode!=='raw')renderTaskPlanEditor();});
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
 function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
 const editorLeaveDialog=document.querySelector('#editor-leave-dialog');
@@ -2833,7 +2841,7 @@ function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
  document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
- artifactEditorBaseline=artifactEditorState();artifactEditorDirty=false;artifactEditorAttempt=null;const properties=artifactEditorForm.querySelector('.workspace-file-properties');if(properties)properties.open=isNew;
+ artifactEditorBaseline=artifactEditorState();artifactEditorDirty=false;artifactEditorAttempt=null;const properties=artifactEditorForm.querySelector('.workspace-file-properties');if(properties){properties.open=isNew;properties.hidden=Boolean(doc.working_draft||artifactEditorItem?.planItem);}
  if(artifactEditorItem)artifactEditorItem.workingDraft=Boolean(doc.working_draft);artifactEditorForm.querySelector('button[type="submit"]').disabled=Boolean(doc.working_draft);
  const taskPlan=!rawOnly&&Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:Boolean(doc.working_draft)}).then(()=>configureTaskPlanEditor(taskPlan));
 }
@@ -3061,7 +3069,7 @@ async function openRegisteredProject(projectId){
   if(request!==viewRequest)return;
   rememberRecentProject(projectId);
   activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id,readOnly:Boolean(result.read_only),replication:result.replication||null};
-  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);renderTaskPlanSidebar(result.plan_draft||result.plan);if(result.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=result.plan_draft_error;renderSidebarArtifacts(result.artifacts);
+  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);installTaskPlanViews(result);if(result.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=result.plan_draft_error;renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-description').textContent=result.description;
   document.querySelector('#project-commit').textContent=result.commit_id;
@@ -4423,7 +4431,7 @@ async function reviewQueueReport(report,decision){
   taskQueueBusy=false;
   // Reload in place: the user stays on the queue and the plan shows the new state.
   if(result.result?.commit_id){const view=await projectRequest('/v1/projects/open',{project_id:project.id});
-   if(activeProject!==project)return;project.head=view.commit_id;renderTaskPlanSidebar(view.plan_draft||view.plan);}
+   if(activeProject!==project)return;project.head=view.commit_id;installTaskPlanViews(view);}
   else await loadTaskQueue();
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu; připravené review lze bezpečně dokončit.';}}
  finally{taskQueueBusy=false;renderTaskQueue();}
@@ -4587,7 +4595,7 @@ function renderTaskPlan(){
  const value=taskPlanProjection,graph=document.querySelector('#plan-graph'),status=document.querySelector('#plan-status');graph.replaceChildren();
  document.querySelector('#plan-add-root').hidden=!(value?.status==='ready'&&activeProject&&!activeProject.readOnly);document.querySelector('#plan-new-root-form').replaceChildren();
  if(!value){status.textContent='Otevřete projekt.';return;}
- if(value.status!=='ready'){status.textContent=value.status==='missing'?'Projekt zatím nemá hlavní seznam úkolů.':value.status==='draft'?`Rozpracovaný soubor z disku · zatím není uložený v plánu.${value.error?' '+value.error:''}`:`Plán není validní: ${value.error||'neplatný formát'}. Zobrazená struktura je pouze pro čtení.`;renderPlanOutline(value.outline,graph);return;}
+ if(value.status!=='ready'){status.textContent=value.status==='missing'?'Projekt zatím nemá hlavní seznam úkolů.':value.status==='draft'?`Rozpracovaný soubor z disku · zatím není uložený v plánu.${value.error?' '+value.error:''}`:`Plán není validní: ${value.error||'neplatný formát'}. Zobrazená struktura je pouze pro čtení.`;return;}
  const mode=document.querySelector('#plan-state-filter').value,scope=taskPlanSelection?.kind==='subgraph'?new Set(taskPlanSelection.task_ids):null;
  if(value.profile==='software-development/v1'&&!taskPlanSelection){renderProfiledTaskRoadmap(value,mode,graph,status);return;}
  if(value.profile==='software-development/v1'&&['milestone','batch'].includes(taskPlanSelection?.kind)){renderProfiledTaskLevel(value,mode,graph,status,taskPlanSelection);return;}
@@ -4600,13 +4608,14 @@ function renderTaskPlan(){
  graph.append(svg);status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
 }
 function updateTaskPlanTreeSelection(queueOpen=false){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(!queueOpen&&(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/')));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(!queueOpen&&taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
-async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');renderTaskPlanSidebar(view.plan_draft||view.plan);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
+async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');installTaskPlanViews(view);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
 async function openTaskQueue(){if(!activeProject||!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));selectMainTab(document.querySelector('#task-queue-tab'));closeMobileSidebar();closeCompactSidebarMenu();await loadTaskQueue();}
 document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
+function installTaskPlanViews(result){renderTaskPlanSidebar(result.plan);}
 function renderTaskPlanSidebar(value){
  taskQueueView=null;loadTaskQueue();
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
- if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.'+(value.error?' '+value.error:''):value?.status==='draft'?'Rozpracovaný soubor z disku · pouze náhled.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;renderPlanOutline(value?.outline,hierarchy,{compact:true});updateTaskPlanTreeSelection();renderTaskPlan();return;}
+ if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.'+(value.error?' '+value.error:''):value?.status==='draft'?'Rozpracovaný soubor z disku · pouze náhled.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
  status.textContent=value.profile==='software-development/v1'?`${milestones.length} milníků · ${batches.length} dávek · ${value.nodes.filter(item=>item.type==='task').length} úkolů`:`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
  for(const milestone of milestones){const row=document.createElement('li'),button=document.createElement('button'),children=document.createElement('ul');row.setAttribute('role','treeitem');row.setAttribute('aria-expanded','true');button.type='button';button.dataset.planSelection=milestone.id;button.textContent=`${milestone.id} · ${milestone.title}`;button.addEventListener('click',()=>openTaskPlan({kind:'milestone',id:milestone.id,title:milestone.title}));children.setAttribute('role','group');for(const batch of batches.filter(item=>item.parent_id===milestone.id)){const child=document.createElement('li'),batchButton=document.createElement('button');child.setAttribute('role','treeitem');batchButton.type='button';batchButton.dataset.planSelection=batch.id;batchButton.textContent=`${batch.id} · ${batch.title}`;batchButton.addEventListener('click',()=>openTaskPlan({kind:'batch',id:batch.id,parent_id:milestone.id,title:batch.title}));batchButton.append(planStatusBadge(batch));child.append(batchButton);children.append(child);}button.append(planStatusBadge(milestone));row.append(button,children);hierarchy.append(row);}
@@ -4876,6 +4885,57 @@ function clearPreview(){
  document.querySelector('#text-preview-controls').hidden=true;
  previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
+let artifactGitState=null,artifactGitGeneration=0,artifactGitCommitReview=null,artifactGitCommitAttempt=null;
+const artifactGitStageAttempts=new Map();
+function artifactGitButtons(prefix){
+ const root=document.createElement('span');root.className='artifact-git-actions';
+ for(const [action,label] of [['stage','Stage'],['commit','Commit']]){const button=document.createElement('button');button.type='button';button.id=prefix+'-git-'+action;button.textContent=label;button.dataset.artifactGitAction=action;button.disabled=true;button.addEventListener('click',()=>action==='stage'?stagePreviewedArtifact():previewArtifactCommit());root.append(button);}
+ return root;
+}
+function syncArtifactGitButtons(){
+ for(const button of document.querySelectorAll('[data-artifact-git-action]')){
+  const editor=button.id.startsWith('editor-'),state=artifactGitState;
+  const hidden=document.body.dataset.runtime!=='desktop'||!activeProject||activeProject.readOnly||!state||state.project_id!==activeProject.id||(editor?(artifactEditorItem?.id!==state.artifact_id||taskPlanEditor.hidden||taskPlanMode!=='preview'):selectedArtifact!==state.artifact_id);
+  if(button.parentElement.hidden!==hidden)button.parentElement.hidden=hidden;
+  button.disabled=!state||(editor&&artifactEditorDirty)||(button.dataset.artifactGitAction==='stage'?!state.can_stage:!state.can_commit);
+  button.title=editor&&artifactEditorDirty?'Nejprve uložte změny textu do souboru.':button.dataset.artifactGitAction==='stage'?'Zachytit přesnou verzi tohoto souboru do Git stage.':'Commitnout pouze staged verzi tohoto souboru.';
+ }
+}
+async function loadArtifactGitState(project,id,page=1){
+ const generation=++artifactGitGeneration;artifactGitState=null;syncArtifactGitButtons();
+ if(document.body.dataset.runtime!=='desktop'||project.readOnly)return null;
+ try{const state=await projectRequest('/v1/artifacts/git/status',{project_id:project.id,artifact_id:id,base_head:project.head,page});if(generation!==artifactGitGeneration||activeProject!==project)return null;artifactGitState=state;syncArtifactGitButtons();return state;}
+ catch(error){if(generation===artifactGitGeneration&&activeProject===project)previewStatus.textContent=error.message;throw error;}
+}
+function artifactGitFeedback(text){if(!artifactEditorView.hidden)artifactEditorStatus.textContent=text;else previewStatus.textContent=text;}
+async function stagePreviewedArtifact(){
+ const state=artifactGitState,project=activeProject;if(!state||!project)return;
+ const request={project_id:state.project_id,artifact_id:state.artifact_id,base_head:state.base_head,working_sha256:state.working_sha256},signature=JSON.stringify(request);
+ let attempt=artifactGitStageAttempts.get(signature);if(!attempt){attempt={request,operation_id:crypto.randomUUID()};artifactGitStageAttempts.set(signature,attempt);}
+ try{await projectRequest('/v1/artifacts/git/stage',attempt,120000);artifactGitStageAttempts.delete(signature);if(activeProject===project&&artifactGitState?.artifact_id===state.artifact_id){artifactGitState={...state,can_stage:false,can_commit:state.working_sha256!==state.head_sha256,staged_sha256:state.working_sha256};syncArtifactGitButtons();artifactGitFeedback('Stage: zachycena přesná verze vybraného souboru.');}}
+ catch(error){if(error.outcome==='not-started')artifactGitStageAttempts.delete(signature);artifactGitFeedback(error.message+(error.outcome==='not-started'?' Obnovte náhled před novým Stage.':' Původní operace zůstává zachovaná pro dohledání výsledku.'));}
+}
+async function previewArtifactCommit(){
+ const state=artifactGitState;if(!state||!activeProject)return;
+ try{
+  if(!artifactGitCommitAttempt){artifactGitCommitReview=await projectRequest('/v1/artifacts/git/preview',{project_id:state.project_id,artifact_id:state.artifact_id,base_head:state.base_head});document.querySelector('#artifact-git-message').value='Update '+(state.title||state.path);document.querySelector('#artifact-git-message').disabled=false;}
+  const review=artifactGitCommitAttempt||artifactGitCommitReview,preview=review.preview;
+  document.querySelector('#artifact-git-summary').textContent=preview.path+' · commit obsahuje pouze tento soubor · '+preview.staged_sha256+(preview.diff_truncated?' · diff je zkrácený':'');
+  document.querySelector('#artifact-git-diff').textContent=preview.diff;document.querySelector('#artifact-git-feedback').textContent='Zkontrolujte staged verzi a zprávu commitu. Novější úpravy na disku zůstanou zachované.';
+  document.querySelector('#artifact-git-confirm').disabled=false;document.querySelector('#artifact-git-dialog').showModal();
+ }catch(error){artifactGitFeedback(error.message);}
+}
+async function commitPreviewedArtifact(){
+ if(!artifactGitCommitReview&&!artifactGitCommitAttempt)return;
+ const feedback=document.querySelector('#artifact-git-feedback'),button=document.querySelector('#artifact-git-confirm'),message=document.querySelector('#artifact-git-message');
+ if(!artifactGitCommitAttempt){if(!message.value.trim()){feedback.textContent='Vyplňte zprávu commitu.';return;}artifactGitCommitAttempt={...artifactGitCommitReview,message:message.value,operation_id:crypto.randomUUID(),confirm:true};}
+ button.disabled=true;message.disabled=true;
+ try{const attempt=artifactGitCommitAttempt,receipt=await projectRequest('/v1/artifacts/git/commit',attempt,120000);artifactGitCommitAttempt=null;artifactGitCommitReview=null;document.querySelector('#artifact-git-dialog').close();if(activeProject?.id===attempt.preview.project_id){activeProject.head=receipt.commit_id;await openRegisteredProject(attempt.preview.project_id);await openPreview(attempt.preview.artifact_id);}}
+ catch(error){if(error.outcome==='not-started'){artifactGitCommitAttempt=null;artifactGitCommitReview=null;message.disabled=false;feedback.textContent=error.message+' Zavřete dialog a znovu otevřete Commit pro aktuální diff.';button.disabled=true;}else{feedback.textContent=error.message+' Při dalším potvrzení se dohledá stejná operace.';button.disabled=false;}}
+}
+document.querySelector('#artifact-git-confirm').addEventListener('click',commitPreviewedArtifact);
+document.querySelector('#artifact-git-close').addEventListener('click',()=>document.querySelector('#artifact-git-dialog').close());
+artifactEditorForm.addEventListener('input',syncArtifactGitButtons);
 function addConflictLineClasses(element,lineClasses,index){for(const name of lineClasses?.get(index)||[])element.classList.add(name);}
 function appendProjectArtifactLinks(target,text){
  const links=/\\[([^\\]\\n]+)\\]\\((artifacts\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\/[^\\s()?#]+)\\)/g;
@@ -5077,7 +5137,7 @@ async function openPreview(id,page=1){
  try{
   const result=await projectRequest('/v1/artifacts/preview',{
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
-  if(id===project.mainTodoId&&document.body?.dataset?.runtime==='desktop'){const view=await projectRequest('/v1/projects/open',{project_id:project.id});if(view.commit_id!==project.head)throw Error('Projekt se změnil; otevřete jej znovu.');if(view.plan_draft_error)throw Error(view.plan_draft_error);if(view.plan_draft){result.format='markdown';result.text=view.plan_draft.text;result.page=1;result.pages=1;result.message='Rozpracovaný soubor z disku · není uložený v plánu · pouze náhled.';}}
+  const gitState=await loadArtifactGitState(project,id,page);if(gitState?.working_preview)Object.assign(result,gitState.working_preview);if(gitState?.notice)result.message=(result.message||'')+' '+gitState.notice;if(gitState?.can_commit&&gitState.working_after_stage)result.message=(result.message||'')+' Stage obsahuje jinou verzi než soubor na disku; Commit použije staged verzi.';
   if(request!==previewRequest || activeProject!==project)return;
   selectedPreviewMetadata={...result.metadata,id};document.querySelector('#preview-title').textContent=result.metadata.title;document.querySelector('#preview-panel').dataset.fileFormat=result.format;
   const metadata=document.querySelector('#preview-metadata');
@@ -8227,7 +8287,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8411,6 +8471,33 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
+        if self.path.startswith('/v1/artifacts/git/'):
+            if not isinstance(request,dict):return self.send_error(400)
+            if getattr(self.server.projects,'network',False):return self.send_error(403)
+            try:
+                from spikes.artifact_git import ArtifactGit
+                service=ArtifactGit(self.server.projects.node_path)
+                action=self.path.rsplit('/',1)[-1]
+                if action=='status' and set(request)=={'project_id','artifact_id','base_head','page'}:
+                    result=service.status(request['project_id'],request['artifact_id'],request['base_head'],page=request['page'])
+                elif action=='stage' and set(request)=={'request','operation_id'}:
+                    result=service.stage(request['request'],request['operation_id'])
+                elif action=='preview' and set(request)=={'project_id','artifact_id','base_head'}:
+                    result=service.preview(request['project_id'],request['artifact_id'],request['base_head'])
+                elif action=='commit' and set(request)=={'preview','approval_digest','message','operation_id','confirm'}:
+                    result=service.commit(request['preview'],request['approval_digest'],request['message'],request['operation_id'],confirm=request['confirm'])
+                else:return self.send_error(400)
+                return self.reply(200,result)
+            except (ValueError,TypeError,KeyError,OSError,sqlite3.Error,subprocess.SubprocessError,PendingOperation,RecoveryConflict) as exc:
+                outcome='unknown'
+                try:
+                    if action in {'stage','commit'}:
+                        pid=request['request']['project_id'] if action=='stage' else request['preview']['project_id']
+                        workspace=service.workspace(pid)
+                        with workspace.journal.lock(),workspace.journal.connect() as db:
+                            if db.execute('SELECT 1 FROM operations WHERE id=?',(request['operation_id'],)).fetchone() is None:outcome='not-started'
+                except (ValueError,TypeError,KeyError,OSError,sqlite3.Error):pass
+                return self.reply(422,{'error':str(exc),'outcome':outcome})
         if self.path.startswith('/v1/monitoring/'):
             service=getattr(self.server,'monitoring',None)
             if service is None:return self.reply(503,{'error':'Služba sledování není dostupná.'})
