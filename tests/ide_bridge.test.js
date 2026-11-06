@@ -38,6 +38,24 @@ test('HTTP retries only pre-dispatch busy responses and bounds persistent overlo
     assert.equal(calls, 1);
   }
 });
+test('rejected requests expose a bounded reason and redact credentials without retrying writes', async t => {
+  const http=require('node:http');let calls=0;
+  const pairing={schema_version:2,connection_id:crypto.randomUUID(),name:'IDE',token:'a'.repeat(43),
+    endpoint:'',expires_at:Math.floor(Date.now()/1000)+1000};
+  const server=http.createServer((req,res)=>{
+    req.resume();calls++;res.statusCode=422;
+    res.end(JSON.stringify({error:'Bridge export exceeds 1 MiB\n'+pairing.token+' '+ 'x'.repeat(1000)}));
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  pairing.endpoint=`http://127.0.0.1:${server.address().port}`;
+  await assert.rejects(bridge.connectionRequest(pairing,{action:'exchange'}),error=>{
+    assert.equal(error.status,422);assert.match(error.message,/Bridge export exceeds 1 MiB/);
+    assert(!error.message.includes(pairing.token));assert(!error.message.includes('\n'));
+    assert(error.message.length<600);return true;
+  });
+  assert.equal(calls,1);
+});
 
 async function fixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'ide-bridge-'));
@@ -101,7 +119,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
   const projects = [first, second].map((f, index) => ({project_id: f.pairing.project_id,
     title: 'Project ' + index, expected_head: 'b'.repeat(40)}));
   let mappings = [], folderPick = 0, selection = 'both';
-  const synchronizations = [], notices = [];
+  const synchronizations = [], notices = [], statusItems = [];
   let syncMode = 'ok', failSidebar = false, missingInbox = false;
   let loseMapResponse = false, loseBindResponse = false, mapCalls = 0, failStore = '';
   const originalRequest = bridge.connectionRequest, originalSync = bridge.sync;
@@ -140,7 +158,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     workspace: {isTrusted: true, workspaceFolders: [first, second].map((f, index) => ({name: 'Local '+index, uri: {fsPath: f.repo}})),
       getConfiguration: () => ({get: () => false})},
     window: {createOutputChannel: () => ({appendLine(){},dispose(){}}),
-      createStatusBarItem: () => ({show(){},dispose(){}}),
+      createStatusBarItem: () => {const item={show(){},dispose(){}};statusItems.push(item);return item;},
       showInformationMessage: async message => { notices.push({kind: 'info', message}); },
       showErrorMessage: message => {throw new Error(message);},
       showWarningMessage: async (message, options) => { if (!options?.modal) notices.push({kind: 'warning', message}); return 'Přiřadit'; },
@@ -178,6 +196,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
   state.set('connection',pairing.connection_id);
   secrets.set('connection:'+pairing.connection_id,JSON.stringify({pairing,mappings:{}}));
   await extension.activate(context());
+  assert.equal(statusItems.at(-1).command,'workspaceBridge.sync','restored connection must not open settings');
   await commands.get('workspaceBridge.configure')();
   const stored = JSON.parse(secrets.get('connection:'+pairing.connection_id));
   assert.equal(Object.keys(stored.mappings).length,2);
@@ -193,6 +212,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     assert.equal(notices.length, 1);
     assert.equal(notices[0].kind, 'warning');
     assert.match(notices[0].message, pattern);
+    assert.equal(statusItems.at(-1).command,'workspaceBridge.sync','failed sync must not redirect to configuration');
   }
   syncMode = 'review'; notices.length = 0;
   await commands.get('workspaceBridge.sync')();

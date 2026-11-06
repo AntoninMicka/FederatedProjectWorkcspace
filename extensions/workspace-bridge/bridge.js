@@ -135,7 +135,17 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
           return;
         }
         if (busy) throw new Error('Workspace je zaneprázdněný. Synchronizaci zkuste znovu za chvíli (503).');
-        if (response.statusCode !== 200) throw new Error(`Workspace odmítl synchronizaci (${response.statusCode}).`);
+        if (response.statusCode !== 200) {
+          let reason='';
+          try {
+            const value=JSON.parse(text);
+            if(typeof value.error==='string')reason=value.error.split(pairing.token).join('[credential]')
+              .replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,500);
+          } catch (_) { /* Non-JSON error responses retain the HTTP status. */ }
+          const error=new Error(`Workspace odmítl synchronizaci (${response.statusCode})${reason?': '+reason:'.'}`);
+          error.status=response.statusCode;
+          throw error;
+        }
         resolve(JSON.parse(text));
       } catch (error) { reject(error); }});
     });
