@@ -1125,8 +1125,18 @@ Změna pouze zobrazuje data; nepřidává zápisy ani recovery hranice.
 Návrat z editoru a rodičovská navigace **reuse/adaptují** `openTaskPlan`,
 `openPlanItemEditor`, existující raw editor a `parent_id` validovaného grafu.
 Pozice pohledu je pouze dočasný projektově vázaný UI stav; zápisy nadále
-obsluhuje původní transakce. Miniatury úkolů používají stejné uzly, detail
-položky a efektivní `planStatus` jako velké karty. Panel Úkoly znovu používá
+obsluhuje původní transakce. Počítadlo N/M a stručný přehled podúkolů používají stejné uzly,
+`checked`, `appendPlanChildren`, detail položky a efektivní `planStatus`
+jako velké karty. N/M se počítá nad všemi přímými podúkoly, bez filtru;
+nepoužívá rozpracovaný ani pouze vyřešený stav jako potvrzené splnění. Panel Úkoly znovu používá
 `openMainTodoPreview`. **Reject:** druhý plán, přepis uložených stavů kvůli
 barevnosti, nový writer či persistentní ukládání scroll pozic. Nové crash
 boundaries ani recovery zápisů nevznikají.
+
+Indikace hlavní roadmapy **reuse/adaptují** `blocked`, `critical` a `ready`
+z existujícího projektového grafu; nepřepočítávají stav nezávisle podle
+nastavení roadmapy. Stejné symboly s popisky platí pro milníky, dávky i úkoly.
+Zoom používá jednu škálu celého vykresleného grafu a původní posuvníky;
+vrací se jako součást existujícího UI snapshotu editoru. **Reject:** nový
+plánovací algoritmus, změny uložených stavů nebo druhý exportní formát.
+Jde pouze o UI stav bez nových persistentních zápisů a recovery hranic.

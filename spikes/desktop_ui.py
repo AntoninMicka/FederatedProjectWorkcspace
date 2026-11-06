@@ -984,9 +984,9 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="plan-panel" role="tabpanel" aria-labelledby="plan-main-tab" hidden>
 <div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Roadmapa projektu</h1></div>
 <p id="plan-status" role="status">Otevřete projekt.</p>
-<div class="roadmap-controls"><button id="plan-up" type="button" hidden>O úroveň výš</button><label>Stav <select id="plan-status-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="resolved">Vyřešeno</option><option value="failed">Selhalo</option><option value="completed">Dokončeno</option><option value="deferred">Odloženo</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
+<div class="roadmap-controls"><button id="plan-up" type="button" hidden>O úroveň výš</button><label>Stav <select id="plan-status-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="resolved">Vyřešeno</option><option value="failed">Selhalo</option><option value="completed">Dokončeno</option><option value="deferred">Odloženo</option></select></label><button id="plan-zoom-out" type="button" aria-label="Oddálit roadmapu">−</button><button id="plan-zoom-reset" type="button" aria-label="Vrátit velikost roadmapy na 100 %">100 %</button><button id="plan-zoom-in" type="button" aria-label="Přiblížit roadmapu">+</button><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
 <details id="plan-subgraphs" hidden><summary>Výřezy roadmapy</summary><ul id="sidebar-plan-list" aria-label="Výřezy roadmapy"></ul></details>
-<div id="plan-new-root"><button id="plan-add-root" type="button" hidden>Přidat kořenovou položku</button><div id="plan-new-root-form"></div></div><div class="plan-status-legend" aria-label="Legenda stavů"><span class="plan-status-badge" data-status="completed">Dokončeno</span><span class="plan-status-badge" data-status="in progress">Probíhá</span><span class="plan-status-badge" data-status="planned">Plánováno</span><span class="plan-status-badge" data-status="resolved">Vyřešeno</span><span class="plan-status-badge" data-status="failed">Selhalo</span><span class="plan-status-badge" data-status="deferred">Odloženo</span></div><div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
+<div id="plan-new-root"><button id="plan-add-root" type="button" hidden>Přidat kořenovou položku</button><div id="plan-new-root-form"></div></div><div class="plan-status-legend" aria-label="Legenda stavů"><span class="plan-status-badge" data-status="completed">Dokončeno</span><span class="plan-status-badge" data-status="in progress">Probíhá</span><span class="plan-status-badge" data-status="planned">Plánováno</span><span class="plan-status-badge" data-status="resolved">Vyřešeno</span><span class="plan-status-badge" data-status="failed">Selhalo</span><span class="plan-status-badge" data-status="deferred">Odloženo</span></div><div class="plan-indicator-legend" aria-label="Legenda indikací"><span>! Blokováno</span><span>◆ Kritická cesta</span><span>⇉ Souběžně připraveno</span></div><div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
 </div>
 <div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
 <h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
@@ -2846,17 +2846,18 @@ function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
  if(artifactEditorItem)artifactEditorItem.workingDraft=Boolean(doc.working_draft);artifactEditorForm.querySelector('button[type="submit"]').disabled=Boolean(doc.working_draft);
  const taskPlan=!rawOnly&&Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:Boolean(doc.working_draft)}).then(()=>configureTaskPlanEditor(taskPlan));
 }
-let planEditorReturn=null,planDetailId=null;
+let planEditorReturn=null,planDetailId=null,planDetailMode='item';
 function capturePlanPosition(){
  if(!activeProject||document.querySelector('#plan-panel').hidden||projectView.hidden)return null;
  const scrolls=['#plan-graph','#plan-detail','#plan-panel .workspace-page-body','#sidebar-plan'];
- return {project_id:activeProject.id,selection:taskPlanSelection?structuredClone(taskPlanSelection):null,detail:document.querySelector('#plan-detail').hidden?null:planDetailId,filter:document.querySelector('#plan-status-filter').value,scrolls:scrolls.map(selector=>{const el=document.querySelector(selector);return {selector,top:el?.scrollTop||0,left:el?.scrollLeft||0};})};
+ return {project_id:activeProject.id,selection:taskPlanSelection?structuredClone(taskPlanSelection):null,detail:document.querySelector('#plan-detail').hidden?null:planDetailId,detailMode:planDetailMode,zoom:planZoom,filter:document.querySelector('#plan-status-filter').value,scrolls:scrolls.map(selector=>{const el=document.querySelector(selector);return {selector,top:el?.scrollTop||0,left:el?.scrollLeft||0};})};
 }
 async function restorePlanPosition(position){
  if(!position||activeProject?.id!==position.project_id)return false;
+ planZoom=position.zoom??1;
  document.querySelector('#plan-status-filter').value=position.filter;
  if(!await openTaskPlan(position.selection))return false;
- const detail=taskPlanProjection?.nodes.find(node=>node.id===position.detail);if(detail)showTaskPlanDetail(detail);
+ const detail=taskPlanProjection?.nodes.find(node=>node.id===position.detail);if(detail){if(position.detailMode==='children')showPlanChildrenSummary(detail);else showTaskPlanDetail(detail);}
  const restore=()=>{for(const row of position.scrolls){const el=document.querySelector(row.selector);if(el){el.scrollTop=row.top;el.scrollLeft=row.left;}}};restore();requestAnimationFrame(restore);return true;
 }
 function planParentSelection(item){const parent=taskPlanProjection?.nodes.find(node=>node.id===item?.parent_id);return parent?{kind:parent.type,id:parent.id,parent_id:parent.parent_id,title:parent.title}:null;}
@@ -4488,17 +4489,26 @@ function renderPlanDescription(target,item){
  if(item.description_markdown)renderMarkdown(item.description_markdown,target,null,true);
  else appendProjectArtifactLinks(target,item.description||'bez popisu');
 }
-function appendPlanChildren(target,item){
+function appendPlanChildren(target,item,{brief=false}={}){
  const children=(taskPlanProjection?.nodes||[]).filter(node=>node.parent_id===item.id);
  if(!children.length)return;
  const section=document.createElement('section');section.className='plan-detail-children';
  const heading=document.createElement('h4');heading.textContent=item.type==='milestone'?'Dávky':'Podúkoly';
  const list=document.createElement('ul');
- for(const child of children){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planChild=child.id;button.textContent=child.id+' · '+child.title;button.addEventListener('click',()=>showTaskPlanDetail(child));row.append(button,planStatusBadge(child));list.append(row);}
+ for(const child of children){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planChild=child.id;button.textContent=child.id+' · '+child.title;button.addEventListener('click',()=>showTaskPlanDetail(child));row.append(button,planStatusBadge(child));if(brief){const description=document.createElement('p');description.className='plan-child-summary';description.textContent=(child.description||'Bez doplňujícího popisu.').slice(0,160);row.append(description);}list.append(row);}
  section.append(heading,list);target.append(section);
 }
+function showPlanChildrenSummary(batch){
+ planDetailId=batch.id;planDetailMode='children';
+ const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
+ const close=document.createElement('button');close.type='button';close.textContent='Zavřít přehled';close.addEventListener('click',()=>{detail.hidden=true;planDetailId=null;document.querySelector('#plan-graph').focus();});
+ const heading=document.createElement('h3');heading.textContent=batch.id+' · '+batch.title;
+ const full=document.createElement('button');full.type='button';full.textContent='Detail dávky';full.addEventListener('click',()=>showTaskPlanDetail(batch));
+ detail.append(close,heading,full);appendPlanChildren(detail,batch,{brief:true});
+ if(!taskPlanProjection.nodes.some(node=>node.parent_id===batch.id)){const empty=document.createElement('p');empty.textContent='Dávka zatím nemá podúkoly.';detail.append(empty);}
+}
 function showTaskPlanDetail(item){
- planDetailId=item.id;
+ planDetailId=item.id;planDetailMode='item';
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
  const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;planDetailId=null;document.querySelector('#plan-graph').focus();});detail.append(close);
  if(!item.checked){const add=document.createElement('button');add.type='button';add.textContent='Přidat do fronty';add.disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView.valid||Boolean(activeProject?.readOnly)||taskQueueView.task_ids.includes(item.id)||!(item.ready||taskQueueView.following.includes(item.id));add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add);}
@@ -4569,10 +4579,28 @@ function appendPlanItemActions(detail,item){
  action('Smazat položku',()=>openPlanDeletion(host,item));
  detail.append(host);
 }
-function stylePlanCell(cell,item){cell.dataset.status=planStatus(item);cell.style.backgroundColor=planStatusColors[planStatus(item)]||'#fff';cell.title=item.id+' · '+item.title+' · '+(planStatusLabels[planStatus(item)]||'Stav neznámý');cell.setAttribute('aria-label',cell.title);}
-function appendPlanMiniTasks(canvas,batch,point,mode,cardWidth,cardHeight){
- const tasks=taskPlanProjection.nodes.filter(node=>node.type==='task'&&node.parent_id===batch.id&&taskPlanMatches(node,mode));
- tasks.forEach((task,index)=>{const cell=document.createElement('button');cell.type='button';cell.className='plan-mini-task';cell.dataset.planTask=task.id;cell.textContent=task.title;cell.style.left=(point.x+(index%3)*(cardWidth/3))+'px';cell.style.top=(point.y+cardHeight+8+Math.floor(index/3)*48)+'px';cell.style.width=(cardWidth/3-4)+'px';stylePlanCell(cell,task);cell.addEventListener('click',()=>showTaskPlanDetail(task));canvas.append(cell);});
+let planZoom=1;
+function applyPlanZoom(){
+ const graph=document.querySelector('#plan-graph');for(const child of graph.children)child.style.zoom=String(planZoom);
+ document.querySelector('#plan-zoom-reset').textContent=Math.round(planZoom*100)+' %';document.querySelector('#plan-zoom-out').disabled=planZoom<=.5;document.querySelector('#plan-zoom-in').disabled=planZoom>=2;
+}
+function changePlanZoom(value){
+ const graph=document.querySelector('#plan-graph'),prior=planZoom;planZoom=Math.max(.5,Math.min(2,Math.round(value*100)/100));applyPlanZoom();
+ graph.scrollLeft=(graph.scrollLeft+graph.clientWidth/2)*planZoom/prior-graph.clientWidth/2;graph.scrollTop=(graph.scrollTop+graph.clientHeight/2)*planZoom/prior-graph.clientHeight/2;
+}
+function stylePlanCell(cell,item){
+ cell.dataset.status=planStatus(item);cell.style.backgroundColor=planStatusColors[planStatus(item)]||'#fff';
+ const flags=document.createElement('span');flags.className='plan-cell-flags';const labels=[];
+ for(const [active,symbol,label] of [[item.blocked,'!','Blokováno'],[item.critical,'◆','Kritická cesta'],[item.ready,'⇉','Souběžně připraveno']]){if(!active)continue;const flag=document.createElement('span');flag.textContent=symbol;flag.title=label;flag.setAttribute('aria-label',label);flags.append(flag);labels.push(label);}
+ cell.title=[item.id+' · '+item.title,planStatusLabels[planStatus(item)]||'Stav neznámý',...labels].join(' · ');cell.setAttribute('aria-label',cell.title);if(labels.length)cell.append(flags);
+}
+
+function appendPlanBatchProgress(canvas,card,batch,point,cardWidth,cardHeight){
+ const children=taskPlanProjection.nodes.filter(node=>node.type==='task'&&node.parent_id===batch.id),done=children.filter(node=>node.checked).length;
+ const group=document.createElement('div');group.className='plan-batch-group';group.style.left=point.x+'px';group.style.top=point.y+'px';group.style.width=cardWidth+'px';group.style.height=cardHeight+'px';
+ card.style.left='0px';card.style.top='0px';
+ const counter=document.createElement('button');counter.type='button';counter.className='plan-batch-progress';counter.dataset.planProgress=batch.id;counter.textContent=done+'/'+children.length;counter.setAttribute('aria-label',batch.id+': '+done+' z '+children.length+' splněných podúkolů. Zobrazit stručný přehled.');counter.title='Splněné podúkoly / všechny podúkoly';counter.addEventListener('click',()=>showPlanChildrenSummary(batch));
+ group.append(card,counter);canvas.append(group);
 }
 function renderProfiledTaskRoadmap(value,mode,graph,status){
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line);
@@ -4581,9 +4609,9 @@ function renderProfiledTaskRoadmap(value,mode,graph,status){
  if(!visibleMilestones.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné dávky.';graph.append(empty);status.textContent='0 dávek';return;}
  const visible=new Set(batches.map(item=>item.id)),labelWidth=220,columnWidth=310,cardWidth=270,cardHeight=164,laneGap=10,lanePadding=18;
  const positions=new Map(),lanes=[];let top=10,maxDepth=0;
- for(const milestone of visibleMilestones){const laneBatches=batches.filter(item=>item.parent_id===milestone.id),slots=new Map();const miniHeight=Math.max(0,...laneBatches.map(batch=>Math.ceil(value.nodes.filter(node=>node.type==='task'&&node.parent_id===batch.id&&taskPlanMatches(node,mode)).length/3)*48));let maxSlot=0;
-  for(const batch of laneBatches){const depth=batch.dependency_depth||0,slot=slots.get(depth)||0;slots.set(depth,slot+1);maxSlot=Math.max(maxSlot,slot);maxDepth=Math.max(maxDepth,depth);positions.set(batch.id,{x:labelWidth+28+depth*columnWidth,y:top+lanePadding+slot*(cardHeight+miniHeight+24)});}
-  const height=laneBatches.length?lanePadding*2+(maxSlot+1)*(cardHeight+miniHeight+14)+maxSlot*10:96;lanes.push({milestone,top,height});top+=height+laneGap;
+ for(const milestone of visibleMilestones){const laneBatches=batches.filter(item=>item.parent_id===milestone.id),slots=new Map();let maxSlot=0;
+  for(const batch of laneBatches){const depth=batch.dependency_depth||0,slot=slots.get(depth)||0;slots.set(depth,slot+1);maxSlot=Math.max(maxSlot,slot);maxDepth=Math.max(maxDepth,depth);positions.set(batch.id,{x:labelWidth+28+depth*columnWidth,y:top+lanePadding+slot*(cardHeight+14)});}
+  const height=laneBatches.length?lanePadding*2+(maxSlot+1)*cardHeight+maxSlot*14:96;lanes.push({milestone,top,height});top+=height+laneGap;
  }
  const width=Math.max(graph.clientWidth||0,labelWidth+68+(maxDepth+1)*columnWidth),height=top;
  const canvas=document.createElement('div');canvas.className='plan-roadmap-canvas';canvas.style.width=`${width}px`;canvas.style.height=`${height}px`;
@@ -4591,8 +4619,8 @@ function renderProfiledTaskRoadmap(value,mode,graph,status){
  const svg=roadmapElement('svg',{class:'plan-roadmap-edges',viewBox:`0 0 ${width} ${height}`,width,height,'aria-hidden':'true'});
  for(const batch of batches){const target=positions.get(batch.id);if(!target)continue;for(const parent of batch.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);if(!source)continue;svg.append(roadmapElement('path',{d:`M ${source.x+cardWidth} ${source.y+cardHeight/2} C ${source.x+cardWidth+28} ${source.y+cardHeight/2}, ${target.x-28} ${target.y+cardHeight/2}, ${target.x} ${target.y+cardHeight/2}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
  canvas.append(svg);
- for(const batch of batches){const point=positions.get(batch.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.status=planStatus(batch);card.dataset.completed=String(batch.checked);card.dataset.blocked=String(batch.blocked);card.dataset.ready=String(batch.ready);card.dataset.critical=String(batch.critical);card.setAttribute('aria-label',`${batch.id}, ${batch.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=batch.id;title.textContent=batch.title;description.textContent=batch.description||'Bez doplňujícího popisu.';stylePlanCell(card,batch);card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(batch));canvas.append(card);appendPlanMiniTasks(canvas,batch,point,mode,cardWidth,cardHeight);}
- graph.append(canvas);status.textContent=`${batches.length}/${value.nodes.filter(item=>item.type==='batch').length} dávek · ${visibleMilestones.length} milníků · ${value.ready.filter(id=>visible.has(id)).length} připravených · hlavní roadmapa`;
+ for(const batch of batches){const point=positions.get(batch.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.status=planStatus(batch);card.dataset.completed=String(batch.checked);card.dataset.blocked=String(batch.blocked);card.dataset.ready=String(batch.ready);card.dataset.critical=String(batch.critical);card.setAttribute('aria-label',`${batch.id}, ${batch.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=batch.id;title.textContent=batch.title;description.textContent=batch.description||'Bez doplňujícího popisu.';stylePlanCell(card,batch);card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(batch));appendPlanBatchProgress(canvas,card,batch,point,cardWidth,cardHeight);}
+ graph.append(canvas);applyPlanZoom();status.textContent=`${batches.length}/${value.nodes.filter(item=>item.type==='batch').length} dávek · ${visibleMilestones.length} milníků · ${value.ready.filter(id=>visible.has(id)).length} připravených · hlavní roadmapa`;
 }
 function renderProfiledTaskLevel(value,mode,graph,status,selection){
  const selectedBatches=value.nodes.filter(item=>item.type==='batch'&&(selection.kind==='milestone'?item.parent_id===selection.id:item.id===selection.id));
@@ -4615,7 +4643,7 @@ function renderProfiledTaskLevel(value,mode,graph,status,selection){
  for(const task of visibleTasks){const target=positions.get(task.id);if(!target)continue;for(const parent of task.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);if(!source)continue;svg.append(roadmapElement('path',{d:`M ${source.x+cardWidth} ${source.y+cardHeight/2} C ${source.x+cardWidth+28} ${source.y+cardHeight/2}, ${target.x-28} ${target.y+cardHeight/2}, ${target.x} ${target.y+cardHeight/2}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
  canvas.append(svg);
  for(const task of visibleTasks){const point=positions.get(task.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card plan-task-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.status=planStatus(task);card.dataset.completed=String(task.checked);card.dataset.blocked=String(task.blocked);card.dataset.ready=String(task.ready);card.dataset.critical=String(task.critical);card.setAttribute('aria-label',`${task.id}, ${task.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=task.id;title.textContent=task.title;const done=(task.checklist||[]).filter(item=>item.checked).length,criteria=(task.checklist||[]).length;description.textContent=(task.description||'Bez doplňujícího popisu.')+(criteria?`\nPodmínky: ${done}/${criteria}`:'');stylePlanCell(card,task);card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(task));canvas.append(card);}
- graph.append(canvas);status.textContent=`${visibleTasks.length} úkolů · ${visibleBatches.length} dávek · ${selection.title}`;
+ graph.append(canvas);applyPlanZoom();status.textContent=`${visibleTasks.length} úkolů · ${visibleBatches.length} dávek · ${selection.title}`;
 }
 document.querySelector('#plan-add-root').addEventListener('click',()=>{const host=document.querySelector('#plan-new-root-form');if(host.childElementCount)host.replaceChildren();else openPlanItemForm(host,null);});
 function renderTaskPlan(){
@@ -4633,7 +4661,7 @@ function renderTaskPlan(){
  const width=280+Math.max(...nodes.map(item=>item.depth))*260,height=90+Math.max(...slots.values())*78,svg=roadmapElement('svg',{viewBox:`0 0 ${width} ${height}`,width,height,role:'img','aria-label':'Plán projektových úkolů'});
  for(const item of nodes){const target=positions.get(item.id);for(const parent of item.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);svg.append(roadmapElement('path',{d:`M ${source.x+220} ${source.y+26} C ${source.x+242} ${source.y+26}, ${target.x-22} ${target.y+26}, ${target.x} ${target.y+26}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
  for(const item of nodes){const point=positions.get(item.id),group=roadmapElement('g',{class:'roadmap-node',tabindex:0,role:'button','aria-label':`${item.id}, ${item.title}`});group.append(roadmapElement('rect',{x:point.x,y:point.y,width:220,height:54,rx:8,fill:planStatusColors[planStatus(item)]||'#fff',stroke:item.ready?'#176b60':'#557384','stroke-width':item.critical?4:2,'stroke-dasharray':item.ready?'6 3':''}));const id=roadmapElement('text',{x:point.x+9,y:point.y+21,fill:'#152b38','font-size':12,'font-weight':700});id.textContent=item.id;const title=roadmapElement('text',{x:point.x+9,y:point.y+41,fill:'#4e6674','font-size':11});title.textContent=item.title.length>32?item.title.slice(0,31)+'…':item.title;group.append(id,title);const select=()=>showTaskPlanDetail(item);group.addEventListener('click',select);group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});svg.append(group);}
- graph.append(svg);status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
+ graph.append(svg);applyPlanZoom();status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
 }
 function updateTaskPlanTreeSelection(queueOpen=false){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(!queueOpen&&(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/')));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(!queueOpen&&taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
 async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');installTaskPlanViews(view);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
@@ -4651,6 +4679,9 @@ function renderTaskPlanSidebar(value){
 }
 document.querySelector('#open-main-plan').addEventListener('click',()=>openTaskPlan());
 
+document.querySelector('#plan-zoom-out').addEventListener('click',()=>changePlanZoom(planZoom-.1));
+document.querySelector('#plan-zoom-in').addEventListener('click',()=>changePlanZoom(planZoom+.1));
+document.querySelector('#plan-zoom-reset').addEventListener('click',()=>changePlanZoom(1));
 document.querySelector('#plan-status-filter').addEventListener('change',renderTaskPlan);
 
 document.querySelector('#plan-export').addEventListener('click',()=>{if(taskPlanProjection?.status!=='ready')return;const blob=new Blob([taskPlanProjection.svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`plan-${taskPlanProjection.revision.slice(0,12)}.svg`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);});

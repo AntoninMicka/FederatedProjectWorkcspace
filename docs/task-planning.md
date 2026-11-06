@@ -223,9 +223,14 @@ Graf nabízí **O úroveň výš**, detail úkolu obdobně odkaz na dávku a det
 dávky na milník. Nad milníkem je hlavní roadmapa. Karta vždy otevírá pouze
 detail; vstup do podrobnějšího grafu zůstává samostatnou akcí.
 
-V hlavní roadmapě jsou pod dávkou malé karty jejích úkolů s názvem.
-Kliknutí otevře detail úkolu. Velké karty mají větší plochu a ohraničené
-texty; celý název a stav jsou dostupné v tooltipu a přístupném popisku.
+V hlavní roadmapě má dávka v pravém dolním rohu tlačítko **N/M**:
+N je počet potvrzených splněných přímých podúkolů, M počet všech přímých
+podúkolů. Počty nezávisí na filtru; stav „Vyřešeno“ se za splnění nepovažuje.
+I prázdná dávka má ukazatel **0/0**. Kliknutí otevře stručný přehled podúkolů
+s názvem, stavem a krátkým popisem. Z něj lze otevřít celý detail úkolu nebo
+dávky. Přehled nemění výběr grafu; návrat do plánu zachovává i tento režim.
+Pod dávkami nejsou trvale rozbalené malé karty. Kliknutí na zbytek karty
+stále otevírá detail dávky. Velké karty mají větší plochu a ohraničené texty; celý název a stav jsou dostupné v tooltipu a přístupném popisku.
 Jediná výplň celé buňky vyjadřuje efektivní stav, včetně odvozeného SUM.
 Připravenost ani kritická cesta nepřidávají další konkurenční barvu či rámeček.
 Výběr stavu a připravenosti používá jeden filtr. Pravidla dokončení a odvození
@@ -233,3 +238,19 @@ stavů v uloženém plánu se tím nemění.
 
 Panel **Úkoly** otevírá náhled hlavního seznamu úkolů. Přehled projektu
 zůstává pod položkou **Projekty**.
+
+### Indikace a přiblížení hlavní roadmapy
+
+Buňky hlavní roadmapy i podrobnějšího grafu zobrazují podle existujících
+vazeb **! Blokováno**, **◆ Kritická cesta** a **⇉ Souběžně připraveno**.
+Legenda vysvětluje symboly; tooltip a přístupný popisek obsahují jejich
+celé názvy. Indikace doplňují efektivní stav položky, nemění jeho výplň ani
+význam počítadla N/M. Připravenost používá stejný výpočet závislostí jako
+filtr Připravené; neurčuje dostupnost konkrétního výpočetního uzlu.
+
+Tlačítka **− / procenta / +** mění velikost grafu po 10 procentních bodech
+v rozsahu 50–200 %. Kliknutí na procenta vrací 100 %. Změna přiblížení
+zachovává střed viditelné části v mezích posuvníků. Škáluje současně karty,
+indikace, počítadla i spojnice. Detail zůstává v původní velikosti. Přiblížení
+se zachovává mezi úrovněmi a při návratu z editoru v téže relaci aplikace;
+nejde o změnu uloženého plánu ani exportovaného SVG.

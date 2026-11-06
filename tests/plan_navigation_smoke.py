@@ -18,8 +18,10 @@ fixture = PlanDraftTests(); fixture.setUp()
 body = '<!-- fpw-plan-profile: software-development/v1 -->\n- [ ] [MILESTONE-01] Milník\n  - type: milestone\n'
 for batch in range(1, 5):
     body += f'  - [ ] [BATCH-{batch:02}] Dávka dlouhého názvu '+('popis ' * 20)+'\n    - type: batch\n'
+    if batch==2:body+='    - depends_on: BATCH-01\n'
     for task in range(1, 13):
         body += f'    - [ ] [TASK-{batch:02}-{task:02}] Úkol '+('dlouhý název ' * 10)+'\n      - type: task\n      - Popis úkolu.\n'
+body += '  - [ ] [BATCH-05] Prázdná dávka\n    - type: batch\n'
 Artifacts(fixture.node).save(dict(project_id=fixture.pid, artifact_id=fixture.aid,
     base_head=fixture.git.head(), title='Roadmapa', body=body, new=False), str(uuid4()))
 try:
@@ -40,11 +42,12 @@ try:
  const task=()=>taskPlanProjection.nodes.find(node=>node.id==='TASK-01-01');
  showTaskPlanDetail(task());await tick();
  const graph=document.querySelector('#plan-graph');graph.scrollTop=240;graph.scrollLeft=80;
+ changePlanZoom(.9);graph.scrollTop=240;
  const before=capturePlanPosition();check(before.scrolls[0].top===240,'fixture must scroll');
  await openPlanItemEditor(task());check(!artifactEditorView.hidden,'editor not open');
  await closeArtifactEditor();await tick();
  check(taskPlanSelection?.id==='BATCH-01'&&!document.querySelector('#plan-panel').hidden,'close lost selected graph');
- check(graph.scrollTop===before.scrolls[0].top&&graph.scrollLeft===before.scrolls[0].left,'close lost scroll');
+ check(planZoom===.9&&graph.scrollTop===before.scrolls[0].top&&graph.scrollLeft===before.scrolls[0].left,'close lost scroll');
  check(document.querySelector('#plan-detail h3').textContent.includes('TASK-01-01'),'close lost detail');
  await openPlanItemEditor(task());
  artifactEditorForm.elements.body.value=artifactEditorForm.elements.body.value.replace('Popis úkolu.','Upravený popis úkolu.');
@@ -59,10 +62,42 @@ try:
  check(taskPlanSelection?.id==='MILESTONE-01','batch to milestone');
  document.querySelector('#plan-up').click();await new Promise(resolve=>setTimeout(resolve,250));
  check(taskPlanSelection===null&&document.querySelector('#plan-up').hidden,'milestone to root');
- check(document.querySelectorAll('.plan-mini-task').length===48,'overview missing child level');
- const mini=document.querySelector('.plan-mini-task');mini.click();
- check(document.querySelector('#plan-detail h3').textContent.includes('TASK-01-01'),'mini task detail');
- check(taskPlanSelection===null,'mini click must not replace graph');
+ check(!document.querySelector('.plan-mini-task'),'expanded tasks must not remain under cards');
+ const counter=document.querySelector('[data-plan-progress="BATCH-01"]');
+ check(counter?.textContent==='0/12','wrong completion counter');
+ const card=counter.parentElement.querySelector('.plan-batch-card'),rect=card.getBoundingClientRect(),badge=counter.getBoundingClientRect();
+ check(badge.left>=rect.left&&badge.right<=rect.right&&badge.top>=rect.top&&badge.bottom<=rect.bottom,'counter outside batch cell');
+ counter.click();check(document.querySelectorAll('#plan-detail [data-plan-child]').length===12,'summary lost tasks');
+ check(document.querySelectorAll('#plan-detail .plan-child-summary').length===12,'brief task descriptions missing');
+ check(!document.querySelector('#plan-detail dl'),'counter opened full batch detail');
+ check(taskPlanSelection===null,'counter must not replace graph');
+ const summaryPosition=capturePlanPosition();await restorePlanPosition(summaryPosition);
+ check(document.querySelectorAll('#plan-detail .plan-child-summary').length===12,'summary return lost mode');
+ document.querySelector('#plan-detail [data-plan-child="TASK-01-01"]').click();
+ check(document.querySelector('#plan-detail h3').textContent.includes('TASK-01-01'),'summary task detail');
+ const batchCard=document.querySelector('[data-plan-progress="BATCH-01"]').parentElement.querySelector('.plan-batch-card');batchCard.click();
+ check(document.querySelector('#plan-detail dl'),'batch card must retain full detail');
+ const empty=document.querySelector('[data-plan-progress="BATCH-05"]');check(empty?.textContent==='0/0','empty batch counter');empty.click();
+ check(document.querySelector('#plan-detail').textContent.includes('Dávka zatím nemá podúkoly.')&&!document.querySelector('#plan-detail [data-plan-child]'),'empty batch summary');
+ // Counts use accepted completion, not filter or resolved work state.
+ const children=taskPlanProjection.nodes.filter(node=>node.parent_id==='BATCH-01');
+ children[0].checked=true;children[0].status='completed';children[1].status='resolved';
+ renderTaskPlan();check(document.querySelector('[data-plan-progress="BATCH-01"]').textContent==='1/12','resolved must not count as accepted completion');
+ document.querySelector('#plan-status-filter').value='ready';renderTaskPlan();
+ const filteredCounter=document.querySelector('[data-plan-progress="BATCH-01"]');
+ check(filteredCounter?.textContent==='1/12','filter changed total');filteredCounter.click();
+ check(document.querySelectorAll('#plan-detail [data-plan-child]').length===12,'filter hid summary children');
+ document.querySelector('#plan-status-filter').value='';renderTaskPlan();
+ check(document.querySelector('.plan-cell-flags [aria-label="Blokováno"]'),'blocked indication missing');
+ check(document.querySelector('.plan-cell-flags [aria-label="Kritická cesta"]'),'critical indication missing');
+ check(document.querySelector('.plan-cell-flags [aria-label="Souběžně připraveno"]'),'ready indication missing');
+ document.querySelector('#plan-zoom-reset').click();const baseWidth=document.querySelector('.plan-batch-card').getBoundingClientRect().width;
+ document.querySelector('#plan-zoom-out').click();check(planZoom===.9&&document.querySelector('#plan-zoom-reset').textContent==='90 %','zoom out control');
+ check(Math.abs(document.querySelector('.plan-batch-card').getBoundingClientRect().width-baseWidth*.9)<1,'zoom did not scale cards');
+ for(let i=0;i<20;i++)document.querySelector('#plan-zoom-out').click();check(planZoom===.5&&document.querySelector('#plan-zoom-out').disabled,'zoom minimum');
+ for(let i=0;i<30;i++)document.querySelector('#plan-zoom-in').click();check(planZoom===2&&document.querySelector('#plan-zoom-in').disabled,'zoom maximum');
+ const zoomPosition=capturePlanPosition();changePlanZoom(1);await restorePlanPosition(zoomPosition);check(planZoom===2,'return lost zoom');
+ document.querySelector('#plan-zoom-reset').click();check(planZoom===1,'reset zoom');
  for(const card of document.querySelectorAll('.plan-batch-card')){
   check(!card.querySelector('.plan-status-badge'),'duplicate card status');
   check(getComputedStyle(card).overflow==='hidden','unbounded card');
