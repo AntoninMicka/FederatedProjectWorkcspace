@@ -1105,6 +1105,16 @@ schvalování byly odmítnuty. Veřejná i dostupná soukromá inventura neposky
 důvod kopírovat externí komponenty. Hranice/recovery:
 [ADR 0073](docs/adr/0073-monitoring-ui-and-period-synthesis.md).
 
+Izolovaný přímý RSS/Atom pilot **reuse/adaptuje** PublicSourceBinding,
+StaticHTMLAdapter transport (veřejné DNS/IP, TLS, timeout a byte limit),
+robots kontrolu a TextAdapter dekódování úplného gzip streamu. Nový úzký
+parser používá stdlib ElementTree a vrací pouze JSON pozorování s historií
+oprav; druhý projektový writer, scheduler, DB a externí reader SDK byly pro
+tento experiment **reject** jako nepotřebné. Veřejná i dostupná soukromá
+inventura byly zkontrolovány; externí kód se nepřenášel. Nejde o dokončený
+konektor nebo integraci do monitoringu. Scope a recovery:
+[RSS pilot](docs/rss-pilot.md).
+
 Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
 Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
 zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný
