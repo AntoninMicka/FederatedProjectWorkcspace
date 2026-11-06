@@ -227,3 +227,17 @@ Bridge nespouští Codex ani jiného agenta a nepřidává MCP/FUSE/virtuální 
 Skutečný izolovaný smoke: `python3 -m scripts.ide_bridge_smoke --editor codium`.
 Výsledky drží TODO, po uzavření WORK_LOG. Recovery a autoritu vymezuje
 [ADR 0060](adr/0060-local-file-ide-bridge.md).
+
+## Obnova od verze 0.5.7
+
+Synchronizace a předání již nevyžadují návaznost historie zdrojového programu
+na dřívější commit. Přepnutí větve, squash/rebase a staré lokální baseline
+nevyžadují nové párování. Identita repozitáře se kontroluje dál; commit
+výsledku zůstává údajem o původu. Revize dat Workspace a oprávnění se nemění.
+
+Čekání na review je označené jako čekání na posouzení ve Workspace.
+Dočasné chyby panelu nezastaví další autosync a stale zadání se znovu obnovuje
+bez výzvy k opakovanému nastavení projektů. Vypnutý desktop nelze opravit
+synchronizací: po jeho spuštění se použije stávající podepsaná discovery.
+Rozšíření samo desktop nespouští. Instalaci nové verze a reload IDE nadále
+potvrzuje uživatel. Kontrakt a recovery: [ADR 0062](adr/0062-pinned-queue-handoff.md#obnova-ide-bez-závislosti-na-historii-programu-6-11-2026).
