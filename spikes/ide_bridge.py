@@ -25,6 +25,8 @@ from spikes.metadata import require, uuid
 from spikes.projects import Projects
 
 MAX_MESSAGE = 16384
+# Match the IDE file reader's budget and leave room in its 4 MiB HTTP response.
+MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
 EXTENSION = Path(__file__).resolve().parent.parent / 'extensions' / 'workspace-bridge'
 
 
@@ -129,7 +131,7 @@ class IdeBridge:
 
     def snapshot(self, project_id, expected_head, *, writable=False):
         uuid(project_id)
-        view = self.projects.open(project_id)
+        view = self.projects.plan_view(project_id)
         require(not writable or not view['read_only'], 'Project is read-only')
         require(view['commit_id'] == expected_head, 'Project changed; reopen project')
         require(view['plan']['status'] == 'ready', 'TODO requires stable task IDs and a valid plan')
@@ -147,7 +149,10 @@ class IdeBridge:
         result = dict(project_id=project_id, project_title=view['title'], commit_id=expected_head,
                     revision=plan['revision'], tasks=plan['nodes'], todo='\n'.join(lines) + '\n',
                     source_todo=opened['document']['body'])
-        require(len(canonical(result).encode()) <= 1024 * 1024, 'Bridge export exceeds 1 MiB')
+        # Handler.reply escapes non-ASCII text. Budget the actual wire encoding,
+        # not just compact UTF-8, so Czech plans cannot pass here and fail in IDE.
+        require(len(json.dumps(result).encode()) <= MAX_SNAPSHOT_BYTES,
+                'Bridge export exceeds 2 MiB wire budget')
         return result
 
     def create(self, request, actor, origin):
@@ -296,7 +301,7 @@ class IdeBridge:
         from spikes.workspace import PendingOperation
         pending = False
         try:
-            view = self.projects.open(project_id)
+            view = self.projects.plan_view(project_id)
         except PendingOperation:
             from spikes.metadata import validate_snapshot
             git = self.projects.repository(project_id)
@@ -321,6 +326,7 @@ class IdeBridge:
                 remaining -= len(messages)
                 sessions.append(dict(session_id=row['id'], connection_id=record.get('connection_id'), repository=record['repository'],
                                      revision=record['snapshot']['revision'], revoked=bool(row['revoked']),
+                                     bound=bool(record.get('bound')), export_documents=bool(record.get('export_documents')),
                                      commit_id=record['snapshot']['commit_id'],
                                      expires_at=record['expires_at'], messages=messages))
         from spikes.ide_queue import status as queue_status
@@ -329,7 +335,7 @@ class IdeBridge:
             if not queued: continue
             value = None
             if not pending and not session['revoked']:
-                try: value = queue_status(self, records[session['session_id']])
+                try: value = queue_status(self, records[session['session_id']], view=view)
                 except (ValueError, OSError, sqlite3.Error, PendingOperation): pass
             for entry in queued:
                 entry['queue_reviewable'] = bool(value and not value['blockers'] and

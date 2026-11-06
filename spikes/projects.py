@@ -146,6 +146,17 @@ class Projects:
                                    and result['replication']['role'] == 'read-only-replica')
         return result
 
+    def plan_view(self, project_id):
+        """Read the validated committed plan without history, artifact list or local draft."""
+        import time
+        workspace = self.workspace(project_id, blocking=not self.network,
+                                   deadline=time.monotonic() + 30 if self.network else None)
+        result = workspace.read_project(project_id, network=self.network, plan_only=True)
+        result['replication'] = self.replication(project_id)
+        result['read_only'] = bool(result['replication']
+                                   and result['replication']['role'] == 'read-only-replica')
+        return result
+
     def preview(self, project_id, artifact_id, expected_head, page=1):
         import re
         import time

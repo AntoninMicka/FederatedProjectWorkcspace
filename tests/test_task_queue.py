@@ -132,9 +132,33 @@ class TaskQueueTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.service.execute(dict(project_id=second, action='status'), self.owner)
         self.assertEqual(['TASK-A'], self.status()['task_ids'])
 
+    def test_status_uses_validated_plan_without_full_project_open_or_history(self):
+        from spikes.storage import Git
+        run = Git.run
+        def no_history(git, *args, **kwargs):
+            self.assertNotEqual(args[0], 'rev-list', 'Queue status must not reload project history')
+            return run(git, *args, **kwargs)
+        with patch.object(Projects, 'open', side_effect=AssertionError('full project reload')), \
+                patch.object(Git, 'run', no_history), \
+                patch('spikes.plan_draft.read_plan_draft', side_effect=AssertionError('draft read')):
+            result = self.status()
+        self.assertEqual(result['expected_head'], self.head)
+        self.assertTrue(result['valid'])
+
+    def test_unrelated_head_change_revalidates_selection_without_writing_queue(self):
+        self.act('add', 'TASK-A')
+        with self.service._lock(self.pid,self.owner) as path:
+            before=path.read_bytes()
+        head=self.save(BODY+'\nUnrelated description.\n')
+        result=self.status()
+        self.assertEqual(result['expected_head'],head)
+        self.assertTrue(result['valid']);self.assertFalse(result['stale'])
+        with self.service._lock(self.pid,self.owner) as path:
+            self.assertEqual(path.read_bytes(),before)
+
     def test_add_checks_current_request_head_and_revision_without_global_revalidation(self):
         self.act('add', 'TASK-A'); old = self.status(); self.save(BODY + '\nA description.\n')
-        self.assertTrue(self.status()['stale']); self.assertFalse(self.status()['valid'])
+        self.assertFalse(self.status()['stale']); self.assertTrue(self.status()['valid'])
         with self.assertRaises(ValueError): self.act('add', 'TASK-X', view=old)
         view = self.act('add', 'TASK-X')
         self.assertEqual(['TASK-A', 'TASK-X'], view['task_ids'])
@@ -266,7 +290,7 @@ class TaskQueueTests(unittest.TestCase):
                 self.act('move', identifier, target_index=0)
         with self.assertRaises(ValueError): self.act('move', 'TASK-X', target_index=0, extra=True)
         view = Projects(self.node).open(self.pid)
-        with patch.object(self.service.projects, 'open', return_value=dict(view, read_only=True)):
+        with patch.object(self.service.projects, 'plan_view', return_value=dict(view, read_only=True)):
             with self.assertRaises(ValueError): self.act('move', 'TASK-X', target_index=0, view=original)
         with self.assertRaises(ValueError):
             self.service.execute(dict(project_id=self.pid, action='move', task_id='TASK-X', target_index=0,
@@ -276,9 +300,9 @@ class TaskQueueTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.act('move', 'TASK-A', target_index=0, view=original)
         self.save(BODY + '\nChanged roadmap.\n')
         stale = self.status()
-        self.assertTrue(stale['stale'])
-        self.assertTrue(all(not item['can_move_up'] and not item['can_move_down'] for item in stale['items']))
-        with self.assertRaises(ValueError): self.act('move', 'TASK-A', target_index=0)
+        self.assertFalse(stale['stale']); self.assertTrue(stale['valid'])
+        self.assertTrue(next(i for i in stale['items'] if i['id']=='TASK-A')['can_move_up'])
+        self.assertEqual(['TASK-A','TASK-X'],self.act('move', 'TASK-A', target_index=0)['task_ids'])
 
     def test_move_invalid_graph_and_busy_lock_keep_saved_order(self):
         self.act('add', 'TASK-A'); self.act('add', 'TASK-X')
@@ -332,11 +356,47 @@ TaskQueue(sys.argv[1]).execute(request,sys.argv[2],checkpoint=stop)
         request = dict(project_id=self.pid, action='move', task_id='TASK-X', target_index=0,
                        expected_head=prior['expected_head'], revision=prior['revision'])
         with self.assertRaises(QueueOutcomeUnknown): self.service.execute(request, self.owner, checkpoint=external_commit)
-        self.assertTrue(self.status()['stale'])
+        self.assertFalse(self.status()['stale']); self.assertTrue(self.status()['valid'])
         with self.assertRaises(ValueError): self.service.execute(request, self.owner)
 
 
 class QueueBrowserLogicTests(unittest.TestCase):
+    def test_queue_load_is_single_flight_and_only_refreshes_changed_plan_scope(self):
+        import shutil
+        from spikes.desktop_ui import JS
+        if not shutil.which('node'):self.skipTest('Node required')
+        source=JS[JS.index('async function loadTaskQueue(){'):JS.index('async function changeTaskQueue(')]
+        script=r'''
+const assert=require('node:assert/strict');
+let activeProject={id:'p',head:'h1'},taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='',taskQueueLoading=null;
+const elements=new Map();
+const document={querySelector(id){if(!elements.has(id))elements.set(id,{hidden:true,textContent:''});return elements.get(id);}};
+let graphs=0,sidebars=[],calls=[],resolveStatus;
+const renderTaskQueue=()=>{},renderTaskPlan=()=>graphs++,renderTaskPlanSidebar=(plan,options)=>sidebars.push({plan,options});
+let answer=new Promise(resolve=>resolveStatus=resolve),planAnswer={commit_id:'h2',plan:{nodes:[]}};
+async function projectRequest(path,body){calls.push({path,body});return path==='/v1/task-queue'?await answer:planAnswer;}
+''' + source + r'''
+(async()=>{
+ const first=loadTaskQueue(),second=loadTaskQueue();assert.equal(calls.length,1);
+ resolveStatus({project_id:'p',expected_head:'h1'});await Promise.all([first,second]);
+ assert.equal(calls.length,1);assert.equal(graphs,0);assert.equal(sidebars.length,0);
+ answer={project_id:'p',expected_head:'h2'};calls=[];await loadTaskQueue();
+ assert.deepEqual(calls.map(c=>c.path),['/v1/task-queue','/v1/projects/open']);
+ assert.deepEqual(calls[1].body,{project_id:'p',scope:'plan'});
+ assert.equal(activeProject.head,'h2');assert.equal(graphs,0);
+ assert.deepEqual(sidebars[0],{plan:planAnswer.plan,options:{loadQueue:false,renderGraph:false}});
+ answer={project_id:'p',expected_head:'h3'};planAnswer={commit_id:'h4',plan:{nodes:[]}};
+ await loadTaskQueue();assert.equal(taskQueueView,null);assert.equal(activeProject.head,'h2');
+ assert.match(taskQueueMessage,/během čtení změnil/);
+ answer=new Promise(resolve=>resolveStatus=resolve);const oldProject=activeProject;
+ const old=loadTaskQueue();activeProject={id:'other',head:'other-head'};
+ resolveStatus({project_id:'p',expected_head:'h2'});await old;
+ assert.equal(taskQueueView,null);assert.equal(activeProject.id,'other');assert.equal(oldProject.head,'h2');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_adjacent_move_controls_match_topological_order_for_all_legal_permutations(self):
         nodes = {id_: dict(id=id_, checked=False, depends_on=deps) for id_, deps in [
             ('TASK-A', []), ('TASK-B', ['TASK-A']), ('TASK-C', ['TASK-B']),

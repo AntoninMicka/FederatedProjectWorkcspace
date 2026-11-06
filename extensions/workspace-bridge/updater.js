@@ -30,7 +30,7 @@ function createUpdater(vscode, context, request, report) {
   }
   return async function check(manual = false) {
     if (busy || !vscode.workspace.isTrusted) return;
-    if (!manual && Date.now() - lastCheck < 60 * 60 * 1000) return;
+    if (!manual && Date.now() - lastCheck < 60 * 1000) return;
     busy = true;
     lastCheck = Date.now();
     let temporary;
@@ -72,6 +72,9 @@ function createUpdater(vscode, context, request, report) {
       temporary = undefined;
       await reload();
     } catch (error) {
+      // A transport/installer failure must not suppress healing for an hour.
+      // The host's minute timer bounds retries; successful checks stay throttled.
+      lastCheck = 0;
       report('Aktualizace Workspace: ' + error.message);
       if (manual) await vscode.window.showErrorMessage('Aktualizace Workspace: ' + error.message);
     } finally {

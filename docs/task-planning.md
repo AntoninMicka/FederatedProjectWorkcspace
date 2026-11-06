@@ -276,3 +276,12 @@ po změně roadmapy je nutné načíst aktuální stav, není však nutné nejpr
 opravit celou existující frontu. Zápis zachová ostatní položky a jejich
 chyby. Fronta zůstává `valid=false`, dokud není její obsah platný; neplatnou
 frontu nelze předat do IDE. Přidání žádnou položku nepřijímá ani nedokončuje.
+
+### Automatické posouzení fronty po změně plánu
+
+Fronta se při načtení ověří proti současnému grafu. Pokud její položky a pořadí
+stále vyhovují, změna HEAD sama práci neblokuje a není potřeba „Znovu ověřit“.
+Skutečné problémy zůstávají vypsané u fronty; jejich odstranění se neodvozuje
+od potvrzení agenta. Otevření fronty nenačítá historii ani katalog podkladů
+projektu a při změně revize obnoví jen plánovou část. Předání do IDE obnoví
+snapshot dosavadního přiřazení, pokud je již povolený export a nečeká review.

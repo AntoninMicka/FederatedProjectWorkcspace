@@ -977,7 +977,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 </div>
 <div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
 <h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
-<button id="task-queue-refresh" type="button">Obnovit frontu</button> <button id="task-queue-revalidate" type="button" disabled>Znovu ověřit</button>
+<button id="task-queue-refresh" type="button">Obnovit frontu</button>
 <p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
@@ -4331,15 +4331,14 @@ document.querySelector('#settings-model-detail button').addEventListener('click'
 const roadmapSvg='http://www.w3.org/2000/svg';
 function roadmapElement(name,attributes={}){const item=document.createElementNS(roadmapSvg,name);for(const [key,value] of Object.entries(attributes))item.setAttribute(key,String(value));return item;}
 let taskPlanProjection=null,taskPlanSelection=null;
-let taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='';
+let taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='',taskQueueLoading=null;
 function queueIsCurrent(){return taskQueueView&&activeProject&&taskQueueView.project_id===activeProject.id&&taskQueueView.expected_head===activeProject.head;}
 function taskPlanMatches(item,mode){return !mode||(mode==='following'?Boolean(queueIsCurrent()&&taskQueueView.valid&&taskQueueView.following.includes(item.id)):['ready','blocked'].includes(mode)?Boolean(item[mode]):planStatus(item)===mode);}
 function renderTaskQueue(){
  syncPlanQueueAddState();
  const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
- document.querySelector('#task-queue-revalidate').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
  document.querySelector('#task-queue-publish').disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView?.valid||Boolean(activeProject?.readOnly);
- if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu; pokud se změnila roadmapa, znovu otevřete projekt.';return;}
+ if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu.';return;}
  status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
  for(const [index,item] of taskQueueView.items.entries()){
   const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button'),moves=document.createElement('span');
@@ -4401,16 +4400,36 @@ async function reviewQueueReport(report,decision){
   if(activeProject!==project)return;
   taskQueueBusy=false;
   // Reload in place: the user stays on the queue and the plan shows the new state.
-  if(result.result?.commit_id){const view=await projectRequest('/v1/projects/open',{project_id:project.id});
+  if(result.result?.commit_id){const view=await projectRequest('/v1/projects/open',{project_id:project.id,scope:'plan'});
    if(activeProject!==project)return;project.head=view.commit_id;installTaskPlanViews(view);}
   else await loadTaskQueue();
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu; připravené review lze bezpečně dokončit.';}}
  finally{taskQueueBusy=false;renderTaskQueue();}
 }
 async function loadTaskQueue(){
- if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;
- try{const result=await projectRequest('/v1/task-queue',{project_id:project.id,action:'status'});if(generation!==taskQueueGeneration||activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();}
- catch(error){if(generation===taskQueueGeneration&&activeProject===project){taskQueueMessage=error.message;renderTaskQueue();}}
+ if(taskQueueBusy)return;
+ const project=activeProject;
+ if(taskQueueLoading?.project===project&&taskQueueLoading.head===project?.head)return taskQueueLoading.promise;
+ const generation=++taskQueueGeneration;
+ taskQueueView=null;taskQueueMessage='Načítám frontu…';renderTaskQueue();if(!project)return;
+ const pending={project,head:project.head};
+ pending.promise=(async()=>{
+  try{
+   const result=await projectRequest('/v1/task-queue',{project_id:project.id,action:'status'});
+   if(generation!==taskQueueGeneration||activeProject!==project)return;
+   if(result.expected_head!==project.head){
+    const view=await projectRequest('/v1/projects/open',{project_id:project.id,scope:'plan'});
+    if(generation!==taskQueueGeneration||activeProject!==project)return;
+    if(view.commit_id!==result.expected_head)throw Error('Plán se během čtení změnil; obnovte frontu.');
+    project.head=view.commit_id;
+    document.querySelector('#project-commit').textContent=view.commit_id;
+    renderTaskPlanSidebar(view.plan,{loadQueue:false,renderGraph:false});
+   }
+   taskQueueView=result;taskQueueMessage='';renderTaskQueue();
+   if(!document.querySelector('#plan-panel').hidden)renderTaskPlan();
+  }catch(error){if(generation===taskQueueGeneration&&activeProject===project){taskQueueView=null;taskQueueMessage=error.message;renderTaskQueue();}}
+ })().finally(()=>{if(taskQueueLoading===pending)taskQueueLoading=null;});
+ taskQueueLoading=pending;return pending.promise;
 }
 async function changeTaskQueue(action,taskId,targetIndex){
  if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
@@ -4427,14 +4446,13 @@ document.querySelector('#task-queue-publish').addEventListener('click',async()=>
  if(!queueIsCurrent()||!taskQueueView.valid||activeProject.readOnly||taskQueueBusy)return;
  const project=activeProject,view=taskQueueView,target=document.querySelector('#task-queue-status');
  try{const state=await projectRequest('/v1/ide-bridge/status',{project_id:project.id});
- const choices=state.sessions.filter(s=>s.connection_id&&!s.revoked&&s.commit_id===project.head);if(!choices.length)throw Error('Nastavte aktuální přiřazení projektu v Nastavení → IDE a povolte export podkladů.');
+ const choices=state.sessions.filter(s=>s.connection_id&&!s.revoked&&s.bound&&s.export_documents&&s.expires_at*1000>Date.now());if(!choices.length)throw Error('Nastavte aktuální přiřazení projektu v Nastavení → IDE a povolte export podkladů.');
  const selected=choices.length===1?choices[0]:choices.find(s=>s.session_id===window.prompt('Vyberte ID mapování: '+choices.map(s=>s.session_id+' '+s.repository).join('; ')));if(!selected)return;
  const result=await projectRequest('/v1/ide-queue/publish',{project_id:project.id,session_id:selected.session_id,expected_head:project.head,queue_revision:view.revision,repository_commit:null});
  if(activeProject!==project)return;target.textContent=result.blockers.length?'Balíček je neúplný: '+result.blockers.join('; '):'Balíček '+result.packet_id.slice(0,12)+' připraven. Synchronizujte VSCodium.';
  }catch(error){if(activeProject===project)target.textContent=error.message;}
 });
 document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
-document.querySelector('#task-queue-revalidate').addEventListener('click',()=>changeTaskQueue('revalidate'));
 
 function renderPlanDescription(target,item){
  if(item.description_markdown)renderMarkdown(item.description_markdown,target,null,true);
@@ -4634,14 +4652,14 @@ async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWo
 async function openTaskQueue(){if(!activeProject||!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));selectMainTab(document.querySelector('#task-queue-tab'));closeMobileSidebar();closeCompactSidebarMenu();await loadTaskQueue();}
 document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
 function installTaskPlanViews(result){renderTaskPlanSidebar(result.plan);}
-function renderTaskPlanSidebar(value){
- taskQueueView=null;loadTaskQueue();
+function renderTaskPlanSidebar(value,{loadQueue=true,renderGraph=true}={}){
+ if(loadQueue){taskQueueView=null;loadTaskQueue();}
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
- if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.'+(value.error?' '+value.error:''):value?.status==='draft'?'Rozpracovaný soubor z disku · pouze náhled.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
+ if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.'+(value.error?' '+value.error:''):value?.status==='draft'?'Rozpracovaný soubor z disku · pouze náhled.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();if(renderGraph)renderTaskPlan();return;}
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
  status.textContent=value.profile==='software-development/v1'?`${milestones.length} milníků · ${batches.length} dávek · ${value.nodes.filter(item=>item.type==='task').length} úkolů`:`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
  for(const milestone of milestones){const row=document.createElement('li'),button=document.createElement('button'),children=document.createElement('ul');row.setAttribute('role','treeitem');row.setAttribute('aria-expanded','true');button.type='button';button.dataset.planSelection=milestone.id;button.textContent=`${milestone.id} · ${milestone.title}`;button.addEventListener('click',()=>openTaskPlan({kind:'milestone',id:milestone.id,title:milestone.title}));children.setAttribute('role','group');for(const batch of batches.filter(item=>item.parent_id===milestone.id)){const child=document.createElement('li'),batchButton=document.createElement('button');child.setAttribute('role','treeitem');batchButton.type='button';batchButton.dataset.planSelection=batch.id;batchButton.textContent=`${batch.id} · ${batch.title}`;batchButton.addEventListener('click',()=>openTaskPlan({kind:'batch',id:batch.id,parent_id:milestone.id,title:batch.title}));batchButton.append(planStatusBadge(batch));child.append(batchButton);children.append(child);}button.append(planStatusBadge(milestone));row.append(button,children);hierarchy.append(row);}
- for(const subgraph of value.subgraphs){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planSubgraph=subgraph.id;button.textContent=`${subgraph.title} (${subgraph.task_ids.length})`;button.addEventListener('click',()=>openTaskPlan({...subgraph,kind:'subgraph'}));row.append(button);list.append(row);}updateTaskPlanTreeSelection();renderTaskPlan();
+ for(const subgraph of value.subgraphs){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planSubgraph=subgraph.id;button.textContent=`${subgraph.title} (${subgraph.task_ids.length})`;button.addEventListener('click',()=>openTaskPlan({...subgraph,kind:'subgraph'}));row.append(button);list.append(row);}updateTaskPlanTreeSelection();if(renderGraph)renderTaskPlan();
 }
 document.querySelector('#open-main-plan').addEventListener('click',()=>openTaskPlan());
 
@@ -8553,7 +8571,7 @@ class DesktopHandler(Handler):
             try:
                 from spikes.ide_queue import publish
                 from spikes.ide_bridge import IdeBridge
-                return self.reply(200, publish(IdeBridge(self.server.projects.node_path, network=getattr(self.server.projects, 'network', False)), getattr(self, 'actor', None), request))
+                return self.reply(200, publish(IdeBridge(self.server.projects.node_path, network=getattr(self.server.projects, 'network', False)), getattr(self, 'actor', None), request, automatic=True))
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/task-queue':
@@ -9206,6 +9224,10 @@ class DesktopHandler(Handler):
                 receipt = Sources(node).import_source(request['source'], request['operation_id'])
                 return self.reply(200, {'id': request['source'].get('project_id'),
                                         'commit_id': receipt['commit_id']})
+            if (self.path == '/v1/projects/open' and isinstance(request, dict)
+                    and set(request) == {'project_id', 'scope'} and request['scope'] == 'plan'
+                    and isinstance(request['project_id'], str)):
+                return self.reply(200, projects.plan_view(request['project_id']))
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))

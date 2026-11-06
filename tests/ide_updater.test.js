@@ -80,3 +80,24 @@ test('unavailable connection is checked again without waiting for an hour; trans
   await failed();assert.ok(f.errors.some(e => e.includes('backend unavailable')));
   assert.equal(f.installs.length, 0);
 });
+test('automatic checks recover from transport failure on the next timer tick', async () => {
+  const f=fixture();let requests=0;
+  const check=createUpdater(f.vscode,{extension:{packageJSON:{version:'0.4.1'}}},async full=>{
+    requests++;
+    if(requests===1)throw Error('connection refused');
+    return full?f.download:f.metadata;
+  },text=>f.errors.push(text));
+  await check();assert.equal(f.installs.length,0);
+  await check();assert.equal(f.installs.length,1);
+  assert.equal(requests,3);
+  assert(f.errors.some(x=>x.includes('connection refused')));
+});
+test('new backend releases are detected on the next minute tick after a healthy check', async t => {
+  let now=Date.now();t.mock.method(Date,'now',()=>now);
+  const f=fixture();f.metadata.version='0.4.1';
+  await f.check();assert.equal(f.installs.length,0);
+  f.metadata.version='0.4.2';
+  await f.check();assert.equal(f.installs.length,0);
+  now+=60000;
+  await f.check();assert.equal(f.installs.length,1);
+});

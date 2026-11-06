@@ -68,6 +68,16 @@ test('ordinary files, retry after transport failure, receipt recovery and no Git
   assert.equal(await bridge.git(f.repo, 'status', '--porcelain'), '');
   assert.equal((await fs.stat(path.join(f.root, 'snapshot.json'))).mode & 0o777, 0o600);
 });
+test('large snapshots stay readable when pretty JSON would exceed the file budget', async t => {
+  const f=await fixture(t);
+  f.response.snapshot.tasks=Array.from({length:1000},(_,i)=>({id:'TASK-'+i,
+    description:'x'.repeat(1400),checklist:Array.from({length:10},()=>({text:'checkpoint',checked:false}))}));
+  const snapshot=f.response.snapshot;
+  assert(Buffer.byteLength(JSON.stringify(snapshot))<=2*1024*1024);
+  assert(Buffer.byteLength(JSON.stringify(snapshot,null,2))>2*1024*1024);
+  await bridge.sync(f.root,f.pairing,f.repo,null,async()=>f.response);
+  assert.deepEqual(JSON.parse(await bridge.read(path.join(f.root,'snapshot.json'))),snapshot);
+});
 test('rejects Git-contained mailbox, symlinks, repository mismatch and wrong server response', async t => {
   const f = await fixture(t);
   await assert.rejects(bridge.sync(path.join(f.repo, 'mailbox'), f.pairing, f.repo, null, async () => f.response), /mimo Git/);

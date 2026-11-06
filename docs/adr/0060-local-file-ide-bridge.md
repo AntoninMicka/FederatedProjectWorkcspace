@@ -71,7 +71,8 @@ akceptace. Codex není hostitelem rozšíření; orchestrace a spuštění patř
 
 Export vyžaduje validní plán se stabilními ID; obsahuje přesný projektový
 commit, revizi plánu a všechny kanonické definice včetně zahrnutých souborů.
-Je immutable v rámci relace, nejvýše 1 MiB. Při změně HEAD je relace stale a
+Je immutable v rámci relace; původní limit 1 MiB nahrazuje níže popsaný
+rozpočet 2 MiB pro HTTP podobu snapshotu. Při změně HEAD je relace stale a
 nové zprávy mají stale receipt. Původní kontrakt vyžadoval ruční vytvoření
 nového propojení; automatickou obnovu již potvrzeného cíle od 0.2.4 vymezuje
 doplnění níže. Snapshot běžící relace se nepřepisuje. Zdrojový repozitář zůstává oddělený: zpráva
@@ -267,3 +268,30 @@ společné desktop/web UI a editorová API. Žádný nový provider ani závislo
 FUSE, FileSystemProvider a přímý bridge Git writer byly odmítnuty: nejsou
 potřeba pro lokální export a obcházely by stávající recovery hranice.
 Důkazy a platformní omezení drží [specifikace DEV-03](../ide-workspace-sidebar.md).
+
+## Rozpočet exportu většího plánu (6. 11. 2026)
+
+Skutečný plán hostitelského projektu s 765 položkami překročil původní limit
+1 MiB: validovaný Git snapshot měl export 1 168 508 bajtů v kompaktním UTF-8
+JSON a 1 308 168 bajtů v HTTP podobě. Autosync proto opakoval chybu
+`Bridge export exceeds 1 MiB`; nové párování ani obnova spojení ji neřeší.
+
+Backend dovoluje snapshot do 2 MiB v přesném kódování `Handler.reply`
+(`json.dumps`, včetně escapování Unicode). IDE od verze 0.5.8 ukládá snapshot
+jako kompaktní JSON bez odsazování, takže přijatá data nepřekročí dosavadní
+2 MiB limit souborové čtečky. HTTP limit 4 MiB ponechává prostor pro obálku
+odpovědi. Žádná položka, popis ani zdrojový text se nezkracují. Snapshot,
+který překročí tento rozpočet, zůstává explicitní chybou; nehlásí se jako
+aktuální neúplný export. Dokumentové a bezpečnostní limity se nemění.
+
+Reuse/adapt: existující snapshot, HTTP odpověď, ověřená souborová čtečka,
+atomic-file helper a autosync. Nové úložiště ani druhý writer nejsou potřeba.
+Crash boundaries a recovery se nemění: snapshot je poslední zveřejněný soubor
+exportu; temporary + fsync + rename zachovává původní soubor při přerušení.
+Opakovaný poll obnoví stejná data. Změna neprovádí projektový zápis do Gitu,
+indexu či journalu, nemění oprávnění a nesnižuje kontroly integrity.
+
+Ověření zahrnuje export přes 1 MiB přes skutečné HTTP do skutečné schránky,
+druhý autosync a úplnou shodu dat po načtení čtečkou IDE; dále případ, kdy by
+odsazovaný JSON překročil souborový limit, a odmítnutí přes limit HTTP podoby
+kvůli escapování českých znaků bez projektové mutace.

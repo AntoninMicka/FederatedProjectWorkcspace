@@ -191,7 +191,9 @@ async function sync(root, pairing, repoRoot, ca, transport = request) {
     + 'Fronta: queue.json a neměnné packets/<id>/manifest.json s AGENT.md. Navazující položky jsou pouze k prohlížení; postup určuje lidské přijetí ve Workspace.\n'
     + 'Pravidla a připnutý kontext: agent-context.json vzniká pouze explicitním předáním z panelu.\n');
   // The snapshot is published last. Recovery reruns the same immutable export.
-  await atomic(path.join(root, 'snapshot.json'), JSON.stringify(result.snapshot, null, 2));
+  // Keep accepted snapshots within read()'s 2 MiB limit; indentation can add
+  // hundreds of KiB to large plans without changing their content.
+  await atomic(path.join(root, 'snapshot.json'), JSON.stringify(result.snapshot));
   await atomic(path.join(root, 'STATUS.json'), JSON.stringify({stale: result.stale, synchronized_at: new Date().toISOString()}, null, 2));
   return result;
 }

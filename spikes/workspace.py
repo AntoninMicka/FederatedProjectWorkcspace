@@ -260,7 +260,7 @@ class Workspace:
             self.index.rebuild(self.git)
             return query(self.git)
 
-    def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False):
+    def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False, plan_only=False):
         """Return one committed project view under the shared writer lock."""
         with self.journal.lock(), self.journal.connect() as db:
             if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
@@ -294,8 +294,13 @@ class Workspace:
                     raise StaleIndex('Project changed while reading preview')
                 return dict(id=artifact_id, commit_id=commit, metadata=metadata,
                             path=path, raw=entries[path], sidecar=sidecar)
-            todo = main_todo_view(files, entities, project_id)
             plan = project_task_graph(files, entities, project_id, commit)
+            if plan_only:
+                if self.git.head() != commit:
+                    raise StaleIndex('HEAD changed while reading plan; retry')
+                return dict(id=project_id, title=meta['title'], commit_id=commit,
+                            main_todo_id=main_todo_id(project_id), plan=plan)
+            todo = main_todo_view(files, entities, project_id)
             revisions = self.git.run('rev-list', '--topo-order',
                                      f'--max-count={MAX_PROJECT_HISTORY + 1}', commit).stdout.splitlines()
             history = []
