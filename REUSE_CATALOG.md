@@ -1147,3 +1147,15 @@ v UI i existujícím SVG exportu, bez změny stavu či výpočtu závislostí.
 Odstraněna je duplicitní obrazovka Nastavení a její klientský loader;
 doménové API a historická data zůstávají zachované. **Reject:** druhý
 plán, nové stavové pole nebo mazání historických plánovacích podkladů.
+
+Důvody zákazu přidání do fronty **reuse/adaptují** současný výsledek
+`TaskQueue.status` (`stale`, `valid`, `issues`, `following`) a připravenost
+uzlu z validovaného grafu. Obnovení fronty současně aktualizuje tlačítko
+v otevřeném detailu. **Reject:** obcházení vlastních předpokladů položky, automatické mazání
+fronty nebo další perzistentní stav. Chybová odpověď zůstává viditelná.
+
+Přidání do neplatné pracovní fronty **adaptuje** původní `assess`, kontrolu
+HEAD/revize, zámek a atomický writer `TaskQueue._write`. Ověřuje vlastní
+předpoklady přidávaného uzlu; existující chyby zůstanou v `issues` a dál
+blokují publikaci balíčku. Nezavádí jiný writer ani automatickou akceptaci.
+Crash boundaries se nemění; upřesnění viz ADR 0062.

@@ -260,3 +260,19 @@ zachovává střed viditelné části v mezích posuvníků. Škáluje současn�
 indikace, počítadla i spojnice. Detail zůstává v původní velikosti. Přiblížení
 se zachovává mezi úrovněmi a při návratu z editoru v téže relaci aplikace;
 nejde o změnu uloženého plánu ani exportovaného SVG.
+
+### Proč nelze položku přidat do fronty
+
+Detail položky zobrazuje přímo u tlačítka **Přidat do fronty** důvod zákazu:
+nenačtený aktuální stav fronty, vlastní chybějící předpoklady, již přidanou
+položku nebo projekt pouze pro čtení. Důvod i tlačítko se obnoví při načtení
+a změně fronty bez nutnosti znovu otevřít detail. Chyba obnovení se zachová
+jako vysvětlení; nepovažuje se za prázdnou platnou frontu.
+
+Chyba jiné položky ve frontě neblokuje přidání připraveného úkolu. Totéž
+platí pro navazující úkol, jehož vlastní nesplněné předpoklady jsou již před
+ním ve frontě. Přidání ověřuje aktuální HEAD projektu a revizi fronty;
+po změně roadmapy je nutné načíst aktuální stav, není však nutné nejprve
+opravit celou existující frontu. Zápis zachová ostatní položky a jejich
+chyby. Fronta zůstává `valid=false`, dokud není její obsah platný; neplatnou
+frontu nelze předat do IDE. Přidání žádnou položku nepřijímá ani nedokončuje.

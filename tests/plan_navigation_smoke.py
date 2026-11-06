@@ -41,6 +41,13 @@ try:
  await openTaskPlan({kind:'batch',id:'BATCH-01',title:'Dávka'});
  const task=()=>taskPlanProjection.nodes.find(node=>node.id==='TASK-01-01');
  showTaskPlanDetail(task());await tick();
+ const savedQueue=taskQueueView;
+ taskQueueView={project_id:activeProject.id,expected_head:activeProject.head,valid:false,stale:true,task_ids:[],following:[],issues:['MON-06: nesplněný předpoklad chybí před položkou: MON-08']};
+ syncPlanQueueAddState();check(!document.querySelector('[data-plan-add]').disabled&&!document.querySelector('#plan-queue-add-reason').textContent,'unrelated queue issue blocks ready task');
+ check(document.querySelector('#task-queue-publish').disabled,'invalid queue must not publish');
+ taskQueueView={...taskQueueView,valid:true,stale:false,issues:[]};syncPlanQueueAddState();
+ check(!document.querySelector('[data-plan-add]').disabled&&!document.querySelector('#plan-queue-add-reason').textContent,'detail button did not refresh with queue');
+ taskQueueView=savedQueue;syncPlanQueueAddState();
  const graph=document.querySelector('#plan-graph');graph.scrollTop=240;graph.scrollLeft=80;
  changePlanZoom(.9);graph.scrollTop=240;
  const before=capturePlanPosition();check(before.scrolls[0].top===240,'fixture must scroll');

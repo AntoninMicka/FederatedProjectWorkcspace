@@ -30,11 +30,13 @@ class Element {
  append(...items){this.children.push(...items);}
  replaceChildren(){this.children=[];}
  addEventListener(name,fn){this.listeners[name]=fn;}
+ setAttribute(name,value){this[name]=value;}
 }
 const previewContent=new Element('preview'),detail=new Element('detail'),opened=[];
 const document={createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),querySelector:()=>detail};
 const openPreview=id=>opened.push(id),addConflictLineClasses=()=>{};
 const taskPlanProjection=null;
+const taskQueueMessage='';
 const taskQueueBusy=false,queueIsCurrent=()=>false,taskQueueView=null,activeProject=null;
 const changeTaskQueue=()=>assert.fail('Unloaded queue must not mutate');
 const buttons=el=>[...(el.tag==='button'?[el]:[]),...el.children?.flatMap(buttons)||[]];

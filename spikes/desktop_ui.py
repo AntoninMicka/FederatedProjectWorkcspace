@@ -4335,6 +4335,7 @@ let taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessag
 function queueIsCurrent(){return taskQueueView&&activeProject&&taskQueueView.project_id===activeProject.id&&taskQueueView.expected_head===activeProject.head;}
 function taskPlanMatches(item,mode){return !mode||(mode==='following'?Boolean(queueIsCurrent()&&taskQueueView.valid&&taskQueueView.following.includes(item.id)):['ready','blocked'].includes(mode)?Boolean(item[mode]):planStatus(item)===mode);}
 function renderTaskQueue(){
+ syncPlanQueueAddState();
  const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
  document.querySelector('#task-queue-revalidate').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
  document.querySelector('#task-queue-publish').disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView?.valid||Boolean(activeProject?.readOnly);
@@ -4409,7 +4410,7 @@ async function reviewQueueReport(report,decision){
 async function loadTaskQueue(){
  if(taskQueueBusy)return;const project=activeProject,generation=++taskQueueGeneration;taskQueueView=null;taskQueueMessage='';renderTaskQueue();if(!project)return;
  try{const result=await projectRequest('/v1/task-queue',{project_id:project.id,action:'status'});if(generation!==taskQueueGeneration||activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();}
- catch(error){if(generation===taskQueueGeneration)document.querySelector('#task-queue-status').textContent=error.message;}
+ catch(error){if(generation===taskQueueGeneration&&activeProject===project){taskQueueMessage=error.message;renderTaskQueue();}}
 }
 async function changeTaskQueue(action,taskId,targetIndex){
  if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
@@ -4457,11 +4458,25 @@ function showPlanChildrenSummary(batch){
  detail.append(close,heading,full);appendPlanChildren(detail,batch,{brief:true});
  if(!taskPlanProjection.nodes.some(node=>node.parent_id===batch.id)){const empty=document.createElement('p');empty.textContent='Dávka zatím nemá podúkoly.';detail.append(empty);}
 }
+function planQueueAddBlocker(item){
+ if(activeProject?.readOnly)return 'Projekt je pouze pro čtení.';
+ if(taskQueueBusy)return 'Probíhá změna fronty.';
+ if(!queueIsCurrent())return taskQueueMessage||'Fronta není načtená pro aktuální revizi projektu. Obnovte frontu.';
+ if(taskQueueView.task_ids.includes(item.id))return 'Položka už je ve frontě.';
+ if(!item.ready&&!taskQueueView.following.includes(item.id))return 'Nesplněné předpoklady: '+(item.start_blockers||item.depends_on).join(', ')+'.';
+ return '';
+}
+function syncPlanQueueAddState(){
+ const button=document.querySelector('#plan-detail [data-plan-add]');if(!button)return;
+ const item=taskPlanProjection?.nodes.find(node=>node.id===button.dataset.planAdd);if(!item)return;
+ const reason=planQueueAddBlocker(item);button.disabled=Boolean(reason);button.title=reason;
+ const message=document.querySelector('#plan-queue-add-reason');if(message)message.textContent=reason;
+}
 function showTaskPlanDetail(item){
  planDetailId=item.id;planDetailMode='item';
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
  const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;planDetailId=null;document.querySelector('#plan-graph').focus();});detail.append(close);
- if(!item.checked){const add=document.createElement('button');add.type='button';add.textContent='Přidat do fronty';add.disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView.valid||Boolean(activeProject?.readOnly)||taskQueueView.task_ids.includes(item.id)||!(item.ready||taskQueueView.following.includes(item.id));add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add);}
+ if(!item.checked){const add=document.createElement('button'),message=document.createElement('p'),reason=planQueueAddBlocker(item);add.type='button';add.textContent='Přidat do fronty';add.dataset.planAdd=item.id;add.disabled=Boolean(reason);add.title=reason;message.id='plan-queue-add-reason';message.setAttribute('role','status');message.textContent=reason;add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add,message);}
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title,planStatusBadge(item));
  if(taskPlanProjection?.profile==='software-development/v1'&&['batch','milestone'].includes(item.type)){const children=taskPlanProjection.nodes.filter(node=>node.parent_id===item.id),open=document.createElement('button');open.type='button';open.dataset.planOpenChildren=item.id;open.textContent=(item.type==='batch'?'Zobrazit úkoly':'Zobrazit dávky')+' ('+children.length+')';open.addEventListener('click',()=>openTaskPlan({kind:item.type,id:item.id,parent_id:item.parent_id,title:item.title}));detail.append(open);}
  if(item.parent_id){const up=document.createElement('button');up.type='button';up.dataset.planParent=item.parent_id;up.textContent='O úroveň výš · '+item.parent_id;up.addEventListener('click',()=>openTaskPlan(planParentSelection(item)));detail.append(up);}
