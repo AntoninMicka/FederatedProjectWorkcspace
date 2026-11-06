@@ -232,7 +232,7 @@ dávky. Přehled nemění výběr grafu; návrat do plánu zachovává i tento r
 Pod dávkami nejsou trvale rozbalené malé karty. Kliknutí na zbytek karty
 stále otevírá detail dávky. Velké karty mají větší plochu a ohraničené texty; celý název a stav jsou dostupné v tooltipu a přístupném popisku.
 Jediná výplň celé buňky vyjadřuje efektivní stav, včetně odvozeného SUM.
-Připravenost ani kritická cesta nepřidávají další konkurenční barvu či rámeček.
+Připravenost a kritická cesta jsou doplňkové indikace rámečku podle legendy.
 Výběr stavu a připravenosti používá jeden filtr. Pravidla dokončení a odvození
 stavů v uloženém plánu se tím nemění.
 
@@ -241,12 +241,18 @@ zůstává pod položkou **Projekty**.
 
 ### Indikace a přiblížení hlavní roadmapy
 
-Buňky hlavní roadmapy i podrobnějšího grafu zobrazují podle existujících
-vazeb **! Blokováno**, **◆ Kritická cesta** a **⇉ Souběžně připraveno**.
-Legenda vysvětluje symboly; tooltip a přístupný popisek obsahují jejich
-celé názvy. Indikace doplňují efektivní stav položky, nemění jeho výplň ani
-význam počítadla N/M. Připravenost používá stejný výpočet závislostí jako
-filtr Připravené; neurčuje dostupnost konkrétního výpočetního uzlu.
+Buňky hlavní roadmapy i podrobnějšího grafu používají původní vizuální
+indikace: **silnější rámeček** označuje kritickou cestu a **zelený přerušovaný
+rámeček** souběžnou připravenost. Oba se mohou kombinovat. **Blokování má
+světle fialovou výplň**, odlišnou od červeného stavu Selhalo; tooltip a
+přístupný popisek nadále uvádějí efektivní stav i indikace. Stejná fialová
+platí pro export SVG. Legenda ukazuje skutečný vzhled indikací, nikoli
+samostatné symboly. Význam počítadla N/M se nemění. Připravenost používá
+stejný výpočet závislostí jako filtr Připravené.
+
+Alternativní roadmapa byla odstraněna z nabídky a panelů Nastavení; plán
+projektu je dostupný v hlavním pohledu **Plán**. Doménové API původního
+grafu zůstává kvůli kompatibilitě, rozhraní Nastavení jej již nenačítá.
 
 Tlačítka **− / procenta / +** mění velikost grafu po 10 procentních bodech
 v rozsahu 50–200 %. Kliknutí na procenta vrací 100 %. Změna přiblížení

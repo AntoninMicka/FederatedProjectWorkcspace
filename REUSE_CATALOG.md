@@ -1140,3 +1140,10 @@ Zoom používá jednu škálu celého vykresleného grafu a původní posuvníky
 vrací se jako součást existujícího UI snapshotu editoru. **Reject:** nový
 plánovací algoritmus, změny uložených stavů nebo druhý exportní formát.
 Jde pouze o UI stav bez nových persistentních zápisů a recovery hranic.
+
+Vzhled indikací **reuse/adaptuje** původní silný/přerušovaný rámeček
+alternativní roadmapy. Blokování používá samostatnou fialovou výplň
+v UI i existujícím SVG exportu, bez změny stavu či výpočtu závislostí.
+Odstraněna je duplicitní obrazovka Nastavení a její klientský loader;
+doménové API a historická data zůstávají zachované. **Reject:** druhý
+plán, nové stavové pole nebo mazání historických plánovacích podkladů.

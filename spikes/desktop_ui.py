@@ -305,7 +305,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-models-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-models-tab">Modely</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení modelů">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-models-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-ide-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-ide-tab">IDE a editory</button></li>
-<li class="sidebar-list-row" data-settings-item="settings-roadmap-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-roadmap-tab">Roadmapa</button><details class="sidebar-item-menu"><summary aria-label="Akce roadmapy">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-roadmap-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-access-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-access-tab">Dostupnost aplikace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení dostupnosti aplikace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-access-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-profile-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
@@ -546,7 +545,6 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
 <button id="settings-models-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-models-panel" tabindex="-1">Modely</button>
 <button id="settings-ide-tab" type="button" role="tab" aria-selected="false" aria-controls="ide-bridge-panel" tabindex="-1">IDE a editory</button>
-<button id="settings-roadmap-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-roadmap-panel" tabindex="-1">Roadmapa</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
 <button id="settings-access-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-access-panel" tabindex="-1" hidden>Dostupnost</button>
 <button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
@@ -734,17 +732,6 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p>Zapněte propagaci projektu a přiřaďte mu složku nebo soubor .code-workspace. Přiřazení můžete dokončit také příkazem Workspace: Nastavení projektů v IDE.</p>
 <div class="settings-table-wrap"><table id="ide-bridge-projects"><thead><tr><th>Projekt Workspace</th><th>Propagovat</th><th>Projekt v IDE</th><th>Repozitář a instrukce</th><th>Podklady a pravidla</th><th>Stav</th><th>Akce</th></tr></thead><tbody></tbody></table></div>
 <h3>Zprávy z IDE</h3><p>Výsledky a dotazy čekají na vaše posouzení. Přijetí zprávy samo nemění stav úkolu.</p><div id="ide-bridge-sessions"></div>
-</section>
-<section id="settings-roadmap-panel" class="settings-card roadmap-card" role="tabpanel" aria-labelledby="settings-roadmap-tab" hidden>
-<div class="roadmap-heading"><div><h2>Historická roadmapa vývoje produktu</h2><p>Archivovaný přehled dávek a závislostí. Aktuální plán otevřete v roadmapě příslušného projektu Workspace.</p></div>
-<button id="roadmap-export" type="button" disabled>Stáhnout SVG</button></div>
-<div class="roadmap-controls" aria-label="Filtry roadmapy"><label>Milník <select id="roadmap-lane-filter"><option value="">Všechny</option></select></label>
-<label>Stav <select id="roadmap-status-filter"><option value="">Všechny</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="completed">Dokončeno</option><option value="blocked">Blokováno</option><option value="deferred">Odloženo</option></select></label>
-<label class="roadmap-check"><input id="roadmap-ready-filter" type="checkbox"> Jen souběžně připravené</label></div>
-<p id="roadmap-status" role="status" aria-live="polite">Graf zatím nebyl načten.</p>
-<div class="roadmap-legend" aria-label="Legenda"><span class="completed">Dokončeno</span><span class="in-progress">Probíhá</span><span class="planned">Plánováno</span><span class="deferred">Odloženo</span><span class="critical">Kritická cesta</span><span class="ready">Souběžně připraveno</span></div>
-<div id="roadmap-graph" class="roadmap-graph" tabindex="0" aria-label="Graf roadmapy"></div>
-<aside id="roadmap-detail" class="roadmap-detail" aria-live="polite"><h3>Detail dávky</h3><p>Vyberte uzel v grafu.</p></aside>
 </section>
 <section id="settings-cms-panel" class="settings-card cms-card" role="tabpanel" aria-labelledby="settings-cms-tab" hidden>
 <h2>Publikační CMS</h2>
@@ -986,7 +973,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="plan-status" role="status">Otevřete projekt.</p>
 <div class="roadmap-controls"><button id="plan-up" type="button" hidden>O úroveň výš</button><label>Stav <select id="plan-status-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="resolved">Vyřešeno</option><option value="failed">Selhalo</option><option value="completed">Dokončeno</option><option value="deferred">Odloženo</option></select></label><button id="plan-zoom-out" type="button" aria-label="Oddálit roadmapu">−</button><button id="plan-zoom-reset" type="button" aria-label="Vrátit velikost roadmapy na 100 %">100 %</button><button id="plan-zoom-in" type="button" aria-label="Přiblížit roadmapu">+</button><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
 <details id="plan-subgraphs" hidden><summary>Výřezy roadmapy</summary><ul id="sidebar-plan-list" aria-label="Výřezy roadmapy"></ul></details>
-<div id="plan-new-root"><button id="plan-add-root" type="button" hidden>Přidat kořenovou položku</button><div id="plan-new-root-form"></div></div><div class="plan-status-legend" aria-label="Legenda stavů"><span class="plan-status-badge" data-status="completed">Dokončeno</span><span class="plan-status-badge" data-status="in progress">Probíhá</span><span class="plan-status-badge" data-status="planned">Plánováno</span><span class="plan-status-badge" data-status="resolved">Vyřešeno</span><span class="plan-status-badge" data-status="failed">Selhalo</span><span class="plan-status-badge" data-status="deferred">Odloženo</span></div><div class="plan-indicator-legend" aria-label="Legenda indikací"><span>! Blokováno</span><span>◆ Kritická cesta</span><span>⇉ Souběžně připraveno</span></div><div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
+<div id="plan-new-root"><button id="plan-add-root" type="button" hidden>Přidat kořenovou položku</button><div id="plan-new-root-form"></div></div><div class="plan-status-legend" aria-label="Legenda stavů"><span class="plan-status-badge" data-status="completed">Dokončeno</span><span class="plan-status-badge" data-status="in progress">Probíhá</span><span class="plan-status-badge" data-status="planned">Plánováno</span><span class="plan-status-badge" data-status="resolved">Vyřešeno</span><span class="plan-status-badge" data-status="failed">Selhalo</span><span class="plan-status-badge" data-status="deferred">Odloženo</span></div><div class="plan-indicator-legend" aria-label="Legenda indikací"><span class="plan-key-blocked">Blokováno</span><span class="plan-key-critical">Kritická cesta</span><span class="plan-key-ready">Souběžně připraveno</span></div><div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
 </div>
 <div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
 <h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
@@ -4341,45 +4328,8 @@ function renderChatOllamaCatalogStatus(value){
 }
 async function loadModelSelection(){try{renderModelSelection(await projectRequest('/v1/model-selection/status',{}));}catch(error){document.querySelector('#settings-models-status').textContent=error.message;}}
 document.querySelector('#settings-model-detail button').addEventListener('click',()=>document.querySelector('#settings-model-detail').close());
-const roadmapSvg='http://www.w3.org/2000/svg';let roadmapProjection=null;
-const roadmapStatusLabels={planned:'plánováno','in progress':'probíhá',completed:'dokončeno',blocked:'blokováno',deferred:'odloženo'};
+const roadmapSvg='http://www.w3.org/2000/svg';
 function roadmapElement(name,attributes={}){const item=document.createElementNS(roadmapSvg,name);for(const [key,value] of Object.entries(attributes))item.setAttribute(key,String(value));return item;}
-function showRoadmapDetail(item){
- const detail=document.querySelector('#roadmap-detail');detail.replaceChildren();
- const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title);
- const list=document.createElement('dl');
- for(const [name,value] of [['Stav',roadmapStatusLabels[item.status]||item.status],['Milník',item.milestone],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Zdroj',item.source],['Vrstva',String(item.depth)],['Kritická cesta',item.critical?'ano':'ne'],['Souběžně připraveno',item.parallel_ready?'ano':'ne']]){
-  const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;description.textContent=value;list.append(term,description);
- }
- detail.append(list);
-}
-function renderRoadmap(){
- if(!roadmapProjection)return;
- const laneFilter=document.querySelector('#roadmap-lane-filter').value,statusFilter=document.querySelector('#roadmap-status-filter').value,readyOnly=document.querySelector('#roadmap-ready-filter').checked;
- const nodes=roadmapProjection.nodes.filter(item=>(!laneFilter||item.milestone===laneFilter)&&(!statusFilter||item.status===statusFilter)&&(!readyOnly||item.parallel_ready));
- const visible=new Set(nodes.map(item=>item.id)),lanes=roadmapProjection.lanes.filter(lane=>nodes.some(item=>item.milestone===lane));
- const graph=document.querySelector('#roadmap-graph');graph.replaceChildren();
- if(!nodes.length){const empty=document.createElement('p');empty.textContent='Zvolenému filtru neodpovídá žádná dávka.';graph.append(empty);return;}
- const maxDepth=Math.max(...nodes.map(item=>item.depth)),positions=new Map(),laneTop=new Map();let y=24;
- for(const lane of lanes){laneTop.set(lane,y);const counts=new Map();for(const item of nodes.filter(node=>node.milestone===lane)){const slot=counts.get(item.depth)||0;counts.set(item.depth,slot+1);positions.set(item.id,{x:170+item.depth*270,y:y+42+slot*82});}y+=Math.max(116,66+Math.max(1,...counts.values())*82);}
- const width=240+(maxDepth+1)*270,height=y+20,svg=roadmapElement('svg',{viewBox:`0 0 ${width} ${height}`,width,height,role:'img','aria-labelledby':'roadmap-svg-title roadmap-svg-description'});
- const svgTitle=roadmapElement('title',{id:'roadmap-svg-title'});svgTitle.textContent='Roadmapa a závislosti feature dávek';
- const description=roadmapElement('desc',{id:'roadmap-svg-description'});description.textContent=`${nodes.length} dávek v ${lanes.length} pruzích. Plná revize ${roadmapProjection.revision}.`;svg.append(svgTitle,description);
- for(const [index,lane] of lanes.entries()){
-  const top=laneTop.get(lane),bottom=index+1<lanes.length?laneTop.get(lanes[index+1])-8:height-18;
-  svg.append(roadmapElement('rect',{x:8,y:top,width:width-16,height:bottom-top,rx:10,fill:'#f0f5f7'}));
-  const label=roadmapElement('text',{x:20,y:top+25,fill:'#23465b','font-size':14,'font-weight':700});label.textContent=lane;svg.append(label);
- }
- for(const item of nodes){const target=positions.get(item.id);for(const parent of item.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);svg.append(roadmapElement('path',{d:`M ${source.x+218} ${source.y+29} C ${source.x+245} ${source.y+29}, ${target.x-27} ${target.y+29}, ${target.x} ${target.y+29}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
- const fills={completed:'#e2f3eb','in progress':'#fff2c7',deferred:'#eef1f3',blocked:'#f8dddd',planned:'#fff'};
- for(const item of nodes){const point=positions.get(item.id),group=roadmapElement('g',{class:'roadmap-node',tabindex:0,role:'button','aria-label':`${item.id}, ${item.title}, ${roadmapStatusLabels[item.status]||item.status}`});
-  const box=roadmapElement('rect',{x:point.x,y:point.y,width:218,height:58,rx:9,fill:fills[item.status]||'#fff',stroke:item.parallel_ready?'#176b60':'#557384','stroke-width':item.critical?4:2});if(item.parallel_ready)box.setAttribute('stroke-dasharray','7 3');group.append(box);
-  const id=roadmapElement('text',{x:point.x+10,y:point.y+22,fill:'#152b38','font-size':12,'font-weight':700});id.textContent=item.id;group.append(id);
-  const subtitle=roadmapElement('text',{x:point.x+10,y:point.y+43,fill:'#4e6674','font-size':11});subtitle.textContent=(item.title.length>31?item.title.slice(0,30)+'…':item.title);group.append(subtitle);
-  const select=()=>showRoadmapDetail(item);group.addEventListener('click',select);group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});svg.append(group);
- }
- graph.append(svg);document.querySelector('#roadmap-status').textContent=`${nodes.length}/${roadmapProjection.nodes.length} dávek · ${roadmapProjection.parallel_ready.length} souběžně připravených · revize ${roadmapProjection.revision.slice(0,12)}`;
-}
 let taskPlanProjection=null,taskPlanSelection=null;
 let taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='';
 function queueIsCurrent(){return taskQueueView&&activeProject&&taskQueueView.project_id===activeProject.id&&taskQueueView.expected_head===activeProject.head;}
@@ -4589,10 +4539,11 @@ function changePlanZoom(value){
  graph.scrollLeft=(graph.scrollLeft+graph.clientWidth/2)*planZoom/prior-graph.clientWidth/2;graph.scrollTop=(graph.scrollTop+graph.clientHeight/2)*planZoom/prior-graph.clientHeight/2;
 }
 function stylePlanCell(cell,item){
- cell.dataset.status=planStatus(item);cell.style.backgroundColor=planStatusColors[planStatus(item)]||'#fff';
- const flags=document.createElement('span');flags.className='plan-cell-flags';const labels=[];
- for(const [active,symbol,label] of [[item.blocked,'!','Blokováno'],[item.critical,'◆','Kritická cesta'],[item.ready,'⇉','Souběžně připraveno']]){if(!active)continue;const flag=document.createElement('span');flag.textContent=symbol;flag.title=label;flag.setAttribute('aria-label',label);flags.append(flag);labels.push(label);}
- cell.title=[item.id+' · '+item.title,planStatusLabels[planStatus(item)]||'Stav neznámý',...labels].join(' · ');cell.setAttribute('aria-label',cell.title);if(labels.length)cell.append(flags);
+ cell.dataset.status=planStatus(item);cell.dataset.blocked=String(Boolean(item.blocked));cell.dataset.critical=String(Boolean(item.critical));cell.dataset.ready=String(Boolean(item.ready));
+ cell.style.backgroundColor=item.blocked?'#ede0fa':planStatusColors[planStatus(item)]||'#fff';
+ cell.style.borderWidth=item.critical?'4px':'2px';cell.style.borderStyle=item.ready?'dashed':'solid';cell.style.borderColor=item.ready?'#176b60':'#557384';
+ const labels=[[item.blocked,'Blokováno'],[item.critical,'Kritická cesta'],[item.ready,'Souběžně připraveno']].filter(([active])=>active).map(([,label])=>label);
+ cell.title=[item.id+' · '+item.title,planStatusLabels[planStatus(item)]||'Stav neznámý',...labels].join(' · ');cell.setAttribute('aria-label',cell.title);
 }
 
 function appendPlanBatchProgress(canvas,card,batch,point,cardWidth,cardHeight){
@@ -4754,13 +4705,6 @@ document.querySelector('#ide-bridge-form').addEventListener('submit',async event
  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
 });
 
-async function loadRoadmap(){
- const status=document.querySelector('#roadmap-status');status.textContent='Načítám a validuji roadmapu…';document.querySelector('#roadmap-export').disabled=true;
- try{roadmapProjection=await projectRequest('/v1/roadmap/graph',{format:'json'});const select=document.querySelector('#roadmap-lane-filter'),selected=select.value;select.replaceChildren();const all=document.createElement('option');all.value='';all.textContent='Všechny';select.append(all);for(const lane of roadmapProjection.lanes){const option=document.createElement('option');option.value=lane;option.textContent=lane;select.append(option);}select.value=roadmapProjection.lanes.includes(selected)?selected:'';renderRoadmap();document.querySelector('#roadmap-export').disabled=false;}
- catch(error){roadmapProjection=null;document.querySelector('#roadmap-graph').replaceChildren();status.textContent=error.message;}
-}
-for(const control of document.querySelectorAll('#roadmap-lane-filter,#roadmap-status-filter,#roadmap-ready-filter'))control.addEventListener('change',renderRoadmap);
-document.querySelector('#roadmap-export').addEventListener('click',async event=>{if(!roadmapProjection)return;event.currentTarget.disabled=true;try{const result=await projectRequest('/v1/roadmap/graph',{format:'svg',revision:roadmapProjection.revision});const blob=new Blob([result.svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`roadmap-${result.revision.slice(0,12)}.svg`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);}catch(error){document.querySelector('#roadmap-status').textContent=error.message;}finally{event.currentTarget.disabled=false;}});
 function selectSettingsTab(selected){
  for(const tab of settingsTabs){
   const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
@@ -4772,7 +4716,6 @@ function selectSettingsTab(selected){
  if(selected.id==='settings-profile-tab')loadUserProfile();
  if(selected.id==='settings-backend-tab')loadBackendCatalog();
  if(selected.id==='settings-models-tab')loadModelSelection();
- if(selected.id==='settings-roadmap-tab')loadRoadmap();
  if(selected.id==='settings-ide-tab')loadIdeBridge();
 }
 for(const [index,tab] of settingsTabs.entries()){

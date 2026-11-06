@@ -88,9 +88,12 @@ try:
  check(filteredCounter?.textContent==='1/12','filter changed total');filteredCounter.click();
  check(document.querySelectorAll('#plan-detail [data-plan-child]').length===12,'filter hid summary children');
  document.querySelector('#plan-status-filter').value='';renderTaskPlan();
- check(document.querySelector('.plan-cell-flags [aria-label="Blokováno"]'),'blocked indication missing');
- check(document.querySelector('.plan-cell-flags [aria-label="Kritická cesta"]'),'critical indication missing');
- check(document.querySelector('.plan-cell-flags [aria-label="Souběžně připraveno"]'),'ready indication missing');
+ check(!document.querySelector('.plan-cell-flags'),'symbol indicators should be removed');
+ check(!document.querySelector('#settings-roadmap-tab')&&!document.querySelector('#settings-roadmap-panel')&&!document.querySelector('[data-settings-tab="settings-roadmap-tab"]'),'alternative settings roadmap remains');
+ const blocked=document.querySelector('.plan-batch-card[data-blocked="true"]');check(blocked&&getComputedStyle(blocked).backgroundColor==='rgb(237, 224, 250)','blocked needs distinct violet fill');
+ check(getComputedStyle(blocked).backgroundColor!==planStatusColors.failed,'blocked must not reuse failed fill');
+ check(document.querySelector('.plan-batch-card[data-critical="true"]'),'critical fixture missing');
+ check(document.querySelector('.plan-batch-card[data-ready="true"]'),'ready fixture missing');
  document.querySelector('#plan-zoom-reset').click();const baseWidth=document.querySelector('.plan-batch-card').getBoundingClientRect().width;
  document.querySelector('#plan-zoom-out').click();check(planZoom===.9&&document.querySelector('#plan-zoom-reset').textContent==='90 %','zoom out control');
  check(Math.abs(document.querySelector('.plan-batch-card').getBoundingClientRect().width-baseWidth*.9)<1,'zoom did not scale cards');
@@ -101,7 +104,8 @@ try:
  for(const card of document.querySelectorAll('.plan-batch-card')){
   check(!card.querySelector('.plan-status-badge'),'duplicate card status');
   check(getComputedStyle(card).overflow==='hidden','unbounded card');
-  check(getComputedStyle(card).borderStyle==='solid','competing readiness border');
+  check(getComputedStyle(card).borderStyle===(card.dataset.ready==='true'?'dashed':'solid'),'readiness border incorrect');
+  check(getComputedStyle(card).borderTopWidth===(card.dataset.critical==='true'?'4px':'2px'),'critical border incorrect');
   const c=card.getBoundingClientRect();for(const child of card.children){const r=child.getBoundingClientRect();check(r.right<=c.right&&r.bottom<=c.bottom,'card text box overflows');}
  }
  check(!document.querySelector('#plan-state-filter')&&document.querySelector('#plan-status-filter'),'duplicate state filters');
