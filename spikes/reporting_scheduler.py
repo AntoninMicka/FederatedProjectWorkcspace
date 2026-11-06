@@ -34,8 +34,8 @@ def calendar_period(start_local, kind, zone, revision):
     start = datetime.fromisoformat(start_local)
     require(start.tzinfo is not None and start.isoformat() == start.astimezone(ZoneInfo(zone)).isoformat(),
             'Explicit timezone offset required')
-    if kind == 'weekly':
-        end_date = start.date() + timedelta(days=7)
+    if kind in {'daily', 'weekly'}:
+        end_date = start.date() + timedelta(days=1 if kind == 'daily' else 7)
     else:
         require(kind in {'monthly', 'quarterly', 'annual'}, 'Custom periods require explicit manual intent')
         month = start.year * 12 + start.month - 1 + {'monthly': 1, 'quarterly': 3, 'annual': 12}[kind]

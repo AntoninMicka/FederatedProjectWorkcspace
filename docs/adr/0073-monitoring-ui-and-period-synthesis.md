@@ -4,6 +4,11 @@
 
 Datum: 2026-11-05. Stav: lokální implementace MON-05 k review.
 
+Navazující [ADR 0074](0074-independent-monitoring-definitions.md) zavádí
+samostatná propojená sledování místo více period uvnitř jedné definice.
+Níže popsaný původní formát/runtime zůstává kompatibilní cestou do explicitní
+migrace; tento dokument nedokládá akceptaci nápravy MON-08.
+
 ## Rozsah a autorita
 
 Základ implementace je `10e8a277ef37d469c012375baa0ff425ce6017f6`

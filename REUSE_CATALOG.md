@@ -1123,6 +1123,17 @@ Další persistentní writer, automatický worker a závislost UI na vývojovýc
 skriptech byly **reject**; projektová data a recovery se nemění. Podrobnosti:
 [Zdroje v aplikaci](docs/rss-pilot.md#sekce-zdroje-v-aplikaci).
 
+MON-08-01 **reuse/adaptuje** Reporting record/revision/PinnedRef a jeho
+společnou validaci kandidáta v původním Workspace writeru, Monitoring
+materializační receipts a EvaluationScale, ReportingScheduler a HTTP/RBAC.
+Nový je uzavřený WatchDefinition a DAG vstupů nad stabilními identitami;
+kalendář doplňuje skutečný lokální den včetně DST. Příprava běhu připíná
+vlastní i upstream definice do existujících rules/task/run struktur.
+Druhý konfigurační writer, run journal, provider SDK a automatická migrace
+byly **reject**. Veřejná i dostupná soukromá inventura byly zkontrolovány;
+externí kód se nepřenášel. Recovery a hranice:
+[ADR 0074](docs/adr/0074-independent-monitoring-definitions.md).
+
 Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
 Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
 zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný

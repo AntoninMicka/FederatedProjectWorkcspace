@@ -135,6 +135,12 @@ class Monitoring:
             receipt=self._receipt(pid,op)
         return self.reporting.pin(pid,operation_uuid(op,'record:0'),receipt['commit_id'])
 
+    def _scale(self,pid,watch_id,privacy,operation_label='scale-op'):
+        return self._record(pid,'EvaluationScale',dict(schema='fpw-reporting-scale-v1',title='Vývoj a důkazy v1',
+            comparison_policy='same-revision-only',dimensions={k:[dict(value=v,label=str(v),criteria='Úroveň '+str(v)+' vyžaduje konkrétní doložený scope.')
+                for v in (['insufficient','low','medium','high'] if k=='confidence' else range(6))] for k in DIMENSIONS}),
+            ident(watch_id,operation_label),privacy)
+
     def ready(self,pid,cfg):
         """Materialize a declarative revision; never mutate an earlier step's intent."""
         self._writable(pid);version=self.version(cfg);ns=ident(cfg['id'],version);privacy=cfg['privacy']
@@ -149,10 +155,7 @@ class Monitoring:
                 urls=cfg['urls'],source_role='unknown',license=dict(identifier=cfg['access_note'],terms_ref=rule,
                     capture_allowed=True,retention_policy=rule))
             policy_ref=self._doc(pid,ident(ns,'collector-policy'),'Sledování — schválený sběr',encoded(policy).decode(),ident(ns,'policy-op'),privacy)
-        scale=self._record(pid,'EvaluationScale',dict(schema='fpw-reporting-scale-v1',title='Vývoj a důkazy v1',
-            comparison_policy='same-revision-only',dimensions={k:[dict(value=v,label=str(v),criteria='Úroveň '+str(v)+' vyžaduje konkrétní doložený scope.')
-                for v in (['insufficient','low','medium','high'] if k=='confidence' else range(6))] for k in DIMENSIONS}),
-            ident(cfg['id'],'scale-op'),privacy)
+        scale=self._scale(pid,cfg['id'],privacy)
         op=ident(ns,'task-op');receipt=self._receipt(pid,op)
         if receipt is not None:return self.reporting.pin(pid,operation_uuid(op,'record:0'),receipt['commit_id'])
         data=self.reporting.read(pid);tips=set(data['tips']);prior=[r for r in data['records'] if r['type']=='ReportingTask'
@@ -554,7 +557,11 @@ class Monitoring:
         except (OSError,ValueError):binding=None
         now=datetime.fromtimestamp(self.clock(),timezone.utc)
         next_runs={c['id']:{kind:calendar_period(self.boundary(c,kind,now).isoformat(),kind,c['timezone'],'iso-calendar-v1')['end_local'] for kind in c['periods']} for c in watches}
-        return dict(project_id=pid,commit_id=head,watches=watches,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
+        from spikes.monitoring_definitions import MonitoringDefinitions
+        definition_view=MonitoringDefinitions(self.node).read(pid)
+        require(definition_view['commit_id']==head,'Projekt se během čtení sledování změnil; obnovte přehled.')
+        definitions=definition_view['definitions']
+        return dict(project_id=pid,commit_id=head,watches=watches,definitions=definitions,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
             inputs=[dict(id=id_,title=m['title'],privacy=m['privacy']) for id_,m in entities.items()
                     if m.get('file') and not files['artifacts/'+id_+'/'+m['file']].startswith(MARKER.encode())],
             profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self.last_errors.get(pid) or self.last_errors.get('runtime'))

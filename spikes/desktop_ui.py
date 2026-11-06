@@ -8329,7 +8329,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8561,12 +8561,20 @@ class DesktopHandler(Handler):
                 if not isinstance(request,dict) or 'project_id' not in request:return self.send_error(400)
                 action=self.path.rsplit('/',1)[-1];pid=request['project_id']
                 service._data(pid,network=getattr(self.server.projects,'network',False))
+                if action=='definitions' and set(request)=={'project_id'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).read(pid)
+                    result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    return self.reply(200,result)
                 if action=='view' and set(request)=={'project_id'}:
                     result=service.view(pid,network=getattr(self.server.projects,'network',False))
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
                     return self.reply(200,result)
                 service._writable(pid)
-                if action=='save' and set(request)=={'project_id','operation_id','base_head','watch','new'}:
+                if action=='definition-save' and set(request)=={'project_id','operation_id','base_head','watch_id','previous','privacy','definition'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).save({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
+                elif action=='save' and set(request)=={'project_id','operation_id','base_head','watch','new'}:
                     result=service.save({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
                 elif action=='run' and set(request)=={'project_id','watch_id','kind'}:
                     result=service.run_now(pid,request['watch_id'],request['kind'])

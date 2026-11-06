@@ -17,8 +17,9 @@ from spikes.metadata import parse_json, require, safe_path, timestamp, uuid, Val
 SCHEMA = 'fpw-reporting-record-v1'
 PRIVACY = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 DIMENSIONS = ('maturity', 'relevance', 'novelty', 'impact', 'confidence')
-PERIODS = {'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
+PERIODS = {'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
 TYPES = {
+    'WatchDefinition': ('watch', 'title goal scope active schedule inputs selection evaluation report placement'),
     'ReportingTask': ('task', 'title goal scope source_policy calendar selection_policy scale_ref outputs execution retention_policy'),
     'EvaluationScale': ('scale', 'title dimensions comparison_policy'),
     'Source': ('source', 'task_ref title locator declared_author source_role publication_date imported_at retrieved_at capture_state raw_ref availability license'),
@@ -156,7 +157,9 @@ def period(value):
         require(start < end, 'Empty reporting period')
         if value['kind'] != 'custom':
             require(start.time() == end.time() == datetime.min.time(), 'Calendar boundaries must be midnight')
-            if value['kind'] == 'weekly':
+            if value['kind'] == 'daily':
+                require((end.date() - start.date()).days == 1, 'Daily interval spans one local day')
+            elif value['kind'] == 'weekly':
                 require(start.weekday() == 0 and (end.date() - start.date()).days == 7,
                         'Weekly interval starts Monday and spans seven local days')
             else:
@@ -226,7 +229,10 @@ def validate_record(record):
     for key in ('categories', 'entities', 'geographies', 'tags', 'limitations'):
         if key in v:
             sequence(v[key], text)
-    if kind == 'ReportingTask':
+    if kind == 'WatchDefinition':
+        from spikes.monitoring_definition_schema import validate_definition
+        validate_definition(v)
+    elif kind == 'ReportingTask':
         scope(v['scope'])
         for key in ('source_policy', 'selection_policy', 'retention_policy'):
             ref(v[key])
@@ -445,6 +451,8 @@ def records(files, entities):
                     require(id_ not in active, 'Cyclic reporting revisions')
                     active.add(id_); stack.append((id_, True))
                     stack.extend((p['artifact_id'], False) for p in result[id_]['previous'])
+    from spikes.monitoring_definition_schema import validate_graph
+    validate_graph(result)
     publications = set()
     corrections = set()
     for record in result.values():
