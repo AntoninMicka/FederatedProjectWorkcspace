@@ -115,7 +115,7 @@ async function activate(context) {
         summary = result.stale ? 'Zadání je zastaralé. Pro aktuální revizi použijte Workspace: Nastavení projektů.' : 'Workspace synchronizován: 1 projekt.';
       } else {
         const current = await catalog(config);
-        let count = 0, stale = 0, failed = 0;
+        let count = 0, stale = 0, failed = 0, waitingReview = 0;
         for (const [session, local] of Object.entries(config.mappings || {})) {
           let mapping = current.mappings.find(item => item.session_id === session);
           if (!mapping && !local.refresh) {
@@ -148,6 +148,13 @@ async function activate(context) {
                     {viewColumn: editor.viewColumn, preserveFocus: true, preview: false});
               }
             }
+            if (result.queue_refresh_error === 'Queue refresh waits for human review') {
+              // An intentional review boundary is not a broken connection.
+              await bridge.atomic(path.join(mailbox(mapping.session_id), 'STATUS.json'), JSON.stringify({
+                stale: true, waiting_review: true, synchronized_at: new Date().toISOString()}));
+              count++; stale++; waitingReview++;
+              continue;
+            }
             if (result.queue_refresh_error) throw Error(result.queue_refresh_error);
             // Export queue/context even when the sidebar views are closed.
             if (result.has_queue) {
@@ -160,10 +167,12 @@ async function activate(context) {
             count++; if (result.stale) stale++;
           } catch (error) { failed++; await unavailable(mapping?.session_id || session,error); output.appendLine((mapping?.title || local.refresh?.title || session) + ': ' + error.message); }
         }
-        status.text = `${current.name}: ${count} projektů` + (stale ? ` · ${stale} zastaralých` : '') + (failed ? ` · ${failed} chyb` : '');
+        status.text = `${current.name}: ${count} projektů` + (stale ? ` · ${stale} zastaralých` : '') + (waitingReview ? ` · ${waitingReview} čeká na posouzení` : '') + (failed ? ` · ${failed} chyb` : '');
         warning = Boolean(stale || failed || !count);
         summary = `Synchronizace Workspace: ${count} projektů, ${stale} zastaralých, ${failed} chyb.`;
-        if (stale || !count) summary += ' Použijte Workspace: Nastavení projektů.';
+        if (waitingReview) summary += ` ${waitingReview} projektů čeká na posouzení výsledků ve Workspace.`;
+        if (stale) summary += ' Obnova zadání se zopakuje automaticky; nevyřízené zprávy zůstávají zachované.';
+        if (!count && !failed) summary += ' Použijte Workspace: Nastavení projektů.';
         if (failed) summary += ' Podrobnosti najdete ve výstupu Workspace bridge.';
       }
       if (!quiet) {
@@ -175,11 +184,18 @@ async function activate(context) {
       status.text = error.code === 'ECONNREFUSED' ? 'Workspace: čeká na spuštění' : 'Workspace: chyba spojení';
       output.appendLine(error.message);
       if (!quiet) vscode.window.showErrorMessage(error.message);
-    } finally { await sidebar.refresh(); busy = false; }
+    } finally {
+      try { await sidebar.refresh(); }
+      catch (error) { output.appendLine('Panel: ' + error.message); }
+      finally { busy = false; }
+    }
   }
   async function hasPendingMessages(session) {
     const root = mailbox(session);
-    for (const name of await fs.readdir(path.join(root, 'inbox'))) {
+    let names;
+    try { names = await fs.readdir(path.join(root, 'inbox')); }
+    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+    for (const name of names) {
       if (!/^[0-9a-f-]{36}\.json$/.test(name)) continue;
       try {
         const receipt = JSON.parse(await bridge.read(path.join(root, 'receipts', name)));

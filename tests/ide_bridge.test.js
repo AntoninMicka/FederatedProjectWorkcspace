@@ -92,7 +92,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     title: 'Project ' + index, expected_head: 'b'.repeat(40)}));
   let mappings = [], folderPick = 0, selection = 'both';
   const synchronizations = [], notices = [];
-  let syncMode = 'ok';
+  let syncMode = 'ok', failSidebar = false, missingInbox = false;
   let loseMapResponse = false, loseBindResponse = false, mapCalls = 0, failStore = '';
   const originalRequest = bridge.connectionRequest, originalSync = bridge.sync;
   bridge.connectionRequest = async (_pairing, request) => {
@@ -119,9 +119,11 @@ test('plugin settings map multiple projects and restore them after restart', asy
   bridge.sync = async (root, child, repository) => {
     synchronizations.push({root, session: child.session_id, repository});
     if (syncMode === 'failed' || (syncMode === 'partial' && repository === first.repo)) throw new Error('socket hang up');
-    await fs.mkdir(path.join(root, 'inbox'), {recursive: true});
+    await fs.mkdir(root, {recursive: true, mode: 0o700});
+    await fs.mkdir(path.join(root, 'inbox'), {recursive: true, mode: 0o700});
     await fs.mkdir(path.join(root, 'receipts'), {recursive: true});
-    return {stale: syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
+    if (missingInbox) { missingInbox = false; await fs.rm(path.join(root, 'inbox'), {recursive: true}); }
+    return {queue_refresh_error: syncMode === 'review' ? 'Queue refresh waits for human review' : null, stale: syncMode === 'review' || syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
   };
   const vscode = {env: {}, StatusBarAlignment: {Left: 1},
     commands: {registerCommand: (name, callback) => {commands.set(name, callback);return {dispose(){}};}},
@@ -134,7 +136,14 @@ test('plugin settings map multiple projects and restore them after restart', asy
       showWarningMessage: async (message, options) => { if (!options?.modal) notices.push({kind: 'warning', message}); return 'Přiřadit'; },
       showQuickPick: async (items, options) => options.canPickMany ? (selection==='both' ? items : []) : items[folderPick++]}}
   ;
-  Module._load = function(name, parent, isMain) {return name === 'vscode' ? vscode : load.call(this, name, parent, isMain);};
+  Module._load = function(name, parent, isMain) {
+    if (name === 'vscode') return vscode;
+    if (name === './sidebar' && parent.filename.endsWith('/workspace-bridge/extension.js'))
+      return {createSidebar: () => ({refresh: async () => {
+        if (failSidebar) {failSidebar = false; throw Error('panel failed');}
+      }})};
+    return load.call(this, name, parent, isMain);
+  };
   const extensionPath = require.resolve('../extensions/workspace-bridge/extension');
   delete require.cache[extensionPath];
   const extension = require(extensionPath);
@@ -174,6 +183,16 @@ test('plugin settings map multiple projects and restore them after restart', asy
     assert.equal(notices.length, 1);
     assert.equal(notices[0].kind, 'warning');
     assert.match(notices[0].message, pattern);
+  }
+  syncMode = 'review'; notices.length = 0;
+  await commands.get('workspaceBridge.sync')();
+  assert.match(notices[0].message, /2 projektů, 2 zastaralých, 0 chyb/);
+  assert.match(notices[0].message, /čeká na posouzení/);
+  for (const mapping of mappings) {
+    const file = path.join(first.base,'storage','bridge-private','sessions',mapping.session_id,'STATUS.json');
+    const status = JSON.parse(await fs.readFile(file,'utf8'));
+    assert.equal(status.waiting_review,true);
+    assert.equal(status.error,undefined);
   }
   syncMode = 'ok'; notices.length = 0;
   await commands.get('workspaceBridge.sync')();
@@ -242,6 +261,17 @@ test('plugin settings map multiple projects and restore them after restart', asy
     await commands.get('workspaceBridge.sync')();
     assert.equal(notices.at(-1).kind, 'info');
   }
+  // A presentation failure must not leave the synchronization guard latched.
+  failSidebar = true;
+  await commands.get('workspaceBridge.sync')();
+  const syncsBefore = synchronizations.length;
+  await commands.get('workspaceBridge.sync')();
+  assert.equal(synchronizations.length, syncsBefore + 2);
+  // An interrupted/local cleanup before inbox creation is an empty outbox, not a blocker.
+  projects[0].expected_head = '4'.repeat(40); missingInbox = true;
+  await commands.get('workspaceBridge.sync')();
+  assert.equal(mappings.find(m => m.project_id === previous.project_id).expected_head, projects[0].expected_head);
+  assert.equal(notices.at(-1).kind, 'info');
   selection='none';
   await commands.get('workspaceBridge.configure')();
   assert.equal(notices.at(-1).kind, 'warning');
