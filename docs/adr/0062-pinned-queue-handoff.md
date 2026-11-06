@@ -155,8 +155,9 @@ změnou: následný nesoulad HEAD se znovu projeví jako stale stav.
 IDE 0.4.3 exportuje queue/context i při zavřeném sidebaru. Původní cache,
 ověřování digestů a zveřejnění manifestu až po úplném stažení zůstávají.
 Nová generace neodstraňuje starou. Source baseline adaptuje již existující
-opravu `fix/queue-source-head`: IDE zjistí zdrojový HEAD lokálně a při použití
-ověří návaznost historie. Reuse/adapt: `TaskQueue.assess`, `publish`,
+opravu `fix/queue-source-head`: IDE zjišťovalo zdrojový HEAD lokálně a při
+použití ověřovalo návaznost historie. Tuto podmínku ruší doplnění
+z 6. 11. 2026 níže. Reuse/adapt: `TaskQueue.assess`, `publish`,
 `snapshot`, existující bridge transakce, atomic-file helper a cache;
 nový scheduler, úložiště ani externí komponenta nejsou potřeba.
 
@@ -193,3 +194,26 @@ fronty a `QueueOutcomeUnknown` podle bodu 5; po ztrátě výsledku se stav načt
 Ruční žádost používá inbox a UUID deduplikaci podle bodu 3 a review zůstává podle
 bodu 4. Stav `queue.json` je poslední známý; plugin jej při výpadku označí jako
 neaktuální a nenabídne předání ani žádost.
+
+## Obnova IDE bez závislosti na historii programu (6. 11. 2026)
+
+Na výslovný požadavek uživatele není zdrojový commit ani jeho ancestry
+podmínkou synchronizace či předání fronty. Squash/rebase, shallow clone nebo
+stará lokální `source-baseline.json` nemají vyžadovat nové předání. IDE nadále
+ověřuje identitu repozitáře; aktuální HEAD se zaznamenává jako provenance
+výsledků. Původní manifesty a baseline soubory se nemění ani nemažou.
+Revize kanonického Workspace, identita/podpis připojení, oprávnění, digesty
+podkladů a lidská akceptace zůstávají závazné.
+
+Čekání na lidské review se zobrazuje jako čekání, nikoli chyba spojení.
+Zadání přitom zůstává stale a nelze je použít jako aktuální. Chyba vykreslení
+panelu vždy uvolní synchronizační guard, takže další poll pokračuje. Chybějící
+inbox při kontrole obnovy znamená žádné čekající zprávy; jiné filesystem chyby
+se neignorují. Obnova stale zadání již nenabádá k opakovanému nastavení projektů.
+
+Reuse/adapt: stávající discovery, autosync, `bridge.repository`, persistovaný
+refresh intent a atomic-file helper; žádný druhý writer ani scheduler.
+Crash boundaries zůstávají podle tohoto ADR a ADR 0060: změna neprovádí zápis
+do projektového Gitu, indexu ani journalu. Lokální STATUS je obnovitelná
+projekce; po pádu jej další poll přepíše. Neprovádí se slepý replay neznámých
+mutací, automatické review, změna credentials ani spuštění desktopu.
