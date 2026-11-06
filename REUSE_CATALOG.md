@@ -66,6 +66,14 @@ endpointu. **Reject:** druhý registr stavů, implicitní akceptace od agenta
 nebo přepis checkboxů při read-only agregaci. Recovery zůstává v existující
 Workspace transakci; pravidla zachycuje ADR 0067.
 
+Oprava vnořeného náhledu roadmapy **adaptuje** existující textový
+`renderMarkdown` ve sdíleném desktop/web UI. Zásobník odsazení zachovává
+rodiče odrážek i přes prázdné řádky; odkazy, diff zvýraznění a inertní text
+používají původní cesty. **Reject:** další Markdown knihovna, nový renderer
+nebo změna plánovacích dat. Parser grafu navíc poskytuje původní odsazení
+popisu jako read-only Markdown projekci; detail znovu používá tentýž renderer
+a existující uzly grafu pro navigaci na podúkoly.
+
 Manuály (`NEW-DC6B8DEEF2-TASK-1`) **reuse/adaptují** společný sidebar,
 `showWorkspacePage`, ochranu `canLeaveWorkspaceEditors` a bezpečný textový
 `renderMarkdown` v `spikes/desktop_ui.py`. Obsah zůstává v existujících

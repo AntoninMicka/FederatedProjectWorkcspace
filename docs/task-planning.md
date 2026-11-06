@@ -139,3 +139,19 @@ SUM lze zapsat přímo do značky skupiny, například
 `- [SUM] [MILESTONE-DEV] DEV` s následujícím řádkem `  - type: milestone`.
 Tento zápis zachová agregaci při uložení i úpravě názvu. Pro běžný úkol
 či podmínku checklistu značka SUM povolená není.
+
+## Vnořené odrážky v náhledu zdrojového seznamu
+
+Markdown náhled zachovává odsazení odrážek: popis dávky, vnořené části
+popisu a podřízené úkoly zůstávají ve svých seznamech. Prázdný řádek před
+podúkolem nezruší jeho vizuální vazbu na dávku. Návrat k menšímu odsazení
+uzavře příslušnou úroveň, například při začátku další dávky.
+
+Náhled nepřepisuje zdrojový dokument ani identifikátory úkolů. Validace
+plánovacího grafu zůstává samostatná; struktura vnořeného seznamu nenahrazuje
+kontrolu stabilních ID, vztahů a typů uzlů.
+
+Detail položky v Plánu používá samostatnou Markdown projekci popisu, která
+zachovává odrážky a jejich odsazení. Textová projekce zůstává dostupná pro
+stručné karty a kompatibilní klienty. Podúkoly dávky se zobrazují zvlášť jako
+odkazy do jejich detailů; netvoří součást popisu rodiče.

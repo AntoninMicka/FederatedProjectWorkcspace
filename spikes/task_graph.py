@@ -110,7 +110,7 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             link = DOCUMENT_LINK.fullmatch(title)
             pending = {'id': task_id, 'title': title, 'checked': checked.lower() == 'x',
                        'indent': indent_value, 'relations': defaultdict(list),
-                       'description_lines': [],
+                       'description_lines': [], 'description_markdown_lines': [],
                        'checklist': [],
                        'type': None, 'status_mode': 'sum' if checked.lower() == 'sum' else None,
                        'status_declared': False, 'sum_marker': checked.lower() == 'sum', 'parent_id': parent_id,
@@ -150,6 +150,8 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             text = description.group(2).strip()
             require(text and '\0' not in text, 'Popis uzlu nesmí být prázdný.')
             pending['description_lines'].append(text)
+            relative_indent = max(0, len(description.group(1).expandtabs(4)) - pending['indent'] - 2)
+            pending['description_markdown_lines'].append(' ' * relative_indent + '- ' + text)
             require(len('\n'.join(pending['description_lines']).encode('utf-8'))
                     <= MAX_DESCRIPTION_BYTES,
                     f'Popis uzlu {pending["id"]} přesahuje limit 8 KiB.')
@@ -363,6 +365,7 @@ def project_task_graph(files, entities, project_id, commit_id):
                          if key != 'depends_on' and values}
             nodes.append({'id': task_id, 'title': task['title'], **statuses[task_id],
                           'description': '\n'.join(task['description_lines']),
+                          'description_markdown': '\n'.join(task['description_markdown_lines']),
                           'checklist': task['checklist'],
                           'checked': task['checked'],
                           'depends_on': parents, 'relations': relations, 'depth': depths[task_id],

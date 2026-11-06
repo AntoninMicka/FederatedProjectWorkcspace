@@ -4435,6 +4435,19 @@ document.querySelector('#task-queue-publish').addEventListener('click',async()=>
 document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
 document.querySelector('#task-queue-revalidate').addEventListener('click',()=>changeTaskQueue('revalidate'));
 
+function renderPlanDescription(target,item){
+ if(item.description_markdown)renderMarkdown(item.description_markdown,target,null,true);
+ else appendProjectArtifactLinks(target,item.description||'bez popisu');
+}
+function appendPlanChildren(target,item){
+ const children=(taskPlanProjection?.nodes||[]).filter(node=>node.parent_id===item.id);
+ if(!children.length)return;
+ const section=document.createElement('section');section.className='plan-detail-children';
+ const heading=document.createElement('h4');heading.textContent=item.type==='milestone'?'Dávky':'Podúkoly';
+ const list=document.createElement('ul');
+ for(const child of children){const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.planChild=child.id;button.textContent=child.id+' · '+child.title;button.addEventListener('click',()=>showTaskPlanDetail(child));row.append(button,planStatusBadge(child));list.append(row);}
+ section.append(heading,list);target.append(section);
+}
 function showTaskPlanDetail(item){
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
  const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;document.querySelector('#plan-graph').focus();});detail.append(close);
@@ -4442,7 +4455,7 @@ function showTaskPlanDetail(item){
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title,planStatusBadge(item));
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
  const checklist=(item.checklist||[]).map(value=>(value.checked?'☑ ':'☐ ')+value.text).join('\\n');
- for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',(item.status_mode==='sum'?'SUM · ':'')+planStatusLabels[planStatus(item)]],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);
+ for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',(item.status_mode==='sum'?'SUM · ':'')+planStatusLabels[planStatus(item)]],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;if(name==='Popis')renderPlanDescription(description,item);else appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);appendPlanChildren(detail,item);
  if(activeProject&&!activeProject.readOnly&&item.source?.artifact_id){const edit=document.createElement('button');edit.type='button';edit.textContent='Upravit tuto položku';edit.addEventListener('click',()=>openPlanItemEditor(item));detail.append(edit);appendPlanItemActions(detail,item);}
  if(item.source?.artifact_id){const open=document.createElement('button');open.type='button';open.textContent='Otevřít zdrojový seznam';open.addEventListener('click',()=>openPreview(item.source.artifact_id));detail.append(open);}
 }
@@ -4571,7 +4584,7 @@ document.querySelector('#open-task-queue').addEventListener('click',openTaskQueu
 function renderTaskPlanSidebar(value){
  taskQueueView=null;loadTaskQueue();
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
- if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.':'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
+ if(!value||value.status!=='ready'){status.textContent=value?.status==='invalid'?'Hlavní TODO nemá platný plánovací formát.'+(value.error?' '+value.error:''):'Plán zatím není dostupný.';document.querySelector('#plan-export').disabled=true;updateTaskPlanTreeSelection();renderTaskPlan();return;}
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line),batches=value.nodes.filter(item=>item.type==='batch');
  status.textContent=value.profile==='software-development/v1'?`${milestones.length} milníků · ${batches.length} dávek · ${value.nodes.filter(item=>item.type==='task').length} úkolů`:`${value.nodes.length} úkolů · ${value.subgraphs.length} podgrafů`;document.querySelector('#plan-export').disabled=false;
  for(const milestone of milestones){const row=document.createElement('li'),button=document.createElement('button'),children=document.createElement('ul');row.setAttribute('role','treeitem');row.setAttribute('aria-expanded','true');button.type='button';button.dataset.planSelection=milestone.id;button.textContent=`${milestone.id} · ${milestone.title}`;button.addEventListener('click',()=>openTaskPlan({kind:'milestone',id:milestone.id,title:milestone.title}));children.setAttribute('role','group');for(const batch of batches.filter(item=>item.parent_id===milestone.id)){const child=document.createElement('li'),batchButton=document.createElement('button');child.setAttribute('role','treeitem');batchButton.type='button';batchButton.dataset.planSelection=batch.id;batchButton.textContent=`${batch.id} · ${batch.title}`;batchButton.addEventListener('click',()=>openTaskPlan({kind:'batch',id:batch.id,parent_id:milestone.id,title:batch.title}));batchButton.append(planStatusBadge(batch));child.append(batchButton);children.append(child);}button.append(planStatusBadge(milestone));row.append(button,children);hierarchy.append(row);}
@@ -4849,24 +4862,33 @@ function appendProjectArtifactLinks(target,text){
   const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=match[1];button.title='Otevřít projektový podklad';button.addEventListener('click',()=>openPreview(match[3]));target.append(button);offset=match.index+match[0].length;
  }target.append(document.createTextNode(text.slice(offset)));
 }
-function renderMarkdown(text,target=previewContent,lineClasses=null){
+function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
- let fence=null,code=null,list=null,lineIndex=0;
+ let fence=null,code=null,lists=[],lineIndex=0;
  for(const line of text.split('\\n')){
   const marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
   if(marker && (!fence || (marker[1][0]===fence[0] && marker[1].length>=fence.length && !marker[2].trim()))){
-   list=null;
+   lists=[];
    if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');addConflictLineClasses(code,lineClasses,lineIndex);target.append(code);}
    lineIndex++;
    continue;
   }
   if(fence){code.textContent+=line+'\\n';addConflictLineClasses(code,lineClasses,lineIndex);lineIndex++;continue;}
   const heading=line.match(/^(#{1,6})\\s+(.*)$/);
-  const bullet=line.match(/^\\s*[-*+]\\s+(.*)$/);
-  if(bullet){if(!list){list=document.createElement('ul');target.append(list);}
-   const item=document.createElement('li');if(target===previewContent)appendProjectArtifactLinks(item,bullet[1]);else item.textContent=bullet[1];addConflictLineClasses(item,lineClasses,lineIndex);list.append(item);lineIndex++;continue;}
-  list=null;const element=document.createElement(heading?'h'+heading[1].length:'p');
-  if(target===previewContent)appendProjectArtifactLinks(element,heading?heading[2]:line);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
+  const bullet=line.match(/^([ \\t]*)[-*+]\\s+(.*)$/);
+  if(bullet){
+   const indent=[...bullet[1]].reduce((column,char)=>column+(char==='\\t'?4-column%4:1),0);
+   while(lists.length&&lists.at(-1).indent>indent)lists.pop();
+   if(!lists.length||lists.at(-1).indent<indent){
+    const list=document.createElement('ul');(lists.at(-1)?.item||target).append(list);lists.push({indent,list,item:null});
+   }
+   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2]);else item.textContent=bullet[2];
+   addConflictLineClasses(item,lineClasses,lineIndex);lists.at(-1).list.append(item);lists.at(-1).item=item;lineIndex++;continue;
+  }
+  // A blank line separates list paragraphs, not the batch from its children.
+  if(!line.trim()){lineIndex++;continue;}
+  lists=[];const element=document.createElement(heading?'h'+heading[1].length:'p');
+  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
  }
 }
 const projectConflicts=document.querySelector('#project-conflicts');
