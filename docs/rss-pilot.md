@@ -10,6 +10,31 @@ o izolovanou experimentální evidenci, nikoli integrovanou funkci Sledování.
 Plán a akceptaci drží Workspace; tento pilot nedokončuje MON-08-01/02/03.
 Inoreader není implementovaný. Neprobíhá LLM zpracování ani stahování článků.
 
+## Sekce Zdroje v aplikaci
+
+Hlavní panel obsahuje samostatnou RSS ikonu **Zdroje**, dostupnou i bez
+otevřeného projektu. Záložka **Všechny** zobrazuje společný chronologický
+přehled; záložky kanálů jej filtrují. První nakonfigurovaný kanál je
+ČT24 — Výběr redakce. Tlačítko **Načíst kanály / Načíst kanál** spustí ruční
+odběr. Položky ukazují kanál, datum publikace, titulek, dostupného autora
+a odkaz na článek. Obsah zdroje se nevkládá jako HTML.
+
+Desktop i web sdílejí stejnou stránku a reader `spikes.rss_reader`.
+Webový přehled vyžaduje přihlášení; síťový odběr může spustit administrátor.
+Klient předává pouze ID schváleného kanálu, nikdy vlastní URL. Otevření
+stránky pouze načte přehled bez síťového odběru. Neúspěšné načtení zachová
+předchozí položky a viditelně označí chybu nebo neznámý výsledek. Jednotlivé
+kanály se mohou načíst nejvýše jednou za 30 sekund; paralelní refresh se odmítne.
+
+Jde o veřejné kanály a paměťovou cache konkrétního backendového procesu,
+oddělenou od projektových dat. Po restartu je třeba kanály znovu načíst.
+Přidávání a trvalé ukládání odběrů, Inoreader a automatické kontroly zatím
+nejsou součástí této sekce. Nevzniká Git/SQLite transakce ani nový writer.
+Při přerušení HTTP odpovědi lze nejdřív znovu otevřít přehled (bez dalšího GET
+zdroje); výsledek se neoznačuje za úspěšný jen podle klientského timeoutu.
+Nový proces začne s prázdnou cache. Ruční integrace do UI nemění akceptaci
+MON-08 ani neaktivuje automatický monitoring.
+
 ## Použití
 
 Z kořene zdrojového repozitáře, v prostředí s přístupem k veřejnému HTTPS:
@@ -67,7 +92,7 @@ Integrace do Sledování musí následně použít schválený datový model,
 konektorový kontrakt, stávající Workspace writer a recovery podle
 [ADR 0069](adr/0069-reporting-source-collector.md) a
 [ADR 0073](adr/0073-monitoring-ui-and-period-synthesis.md). Pilot ještě nemá
-podmíněné HTTP požadavky, plánování, filtry, UI ani projektový import a
+podmíněné HTTP požadavky, plánování, filtry ani projektový import a
 nepředstavuje produkční RSS službu.
 
 ## Ověření 6. 11. 2026
@@ -84,3 +109,9 @@ nezměněných. SHA-256 XML obou odpovědí:
 Výsledky běhů jsou dočasná lokální evidence pod `/tmp/ct24-rss-probe/`;
 články ani surový feed se do zdrojového Gitu nepřidávají. Tyto dva běhy
 neprokazují dlouhodobou dostupnost kanálu nebo automatický provoz.
+
+UI ověření: 10 původních reader testů, 2 testy cache/kanálů a 2 skutečné
+HTTPS/RBAC testy prošly. Izolovaný Qt/WebEngine test ověřil hlavní navigaci
+bez projektu, agregaci dvou syntetických kanálů, filtraci záložkou,
+klávesnicové přepínání, inertní titulek a návrat na úvodní stránku. Jde
+o automatizovaný smoke, nikoli ruční akceptaci v běžném profilu.

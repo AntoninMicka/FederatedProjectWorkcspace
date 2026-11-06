@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.monitoring_ui import HTML as MONITORING_HTML, CSS as MONITORING_CSS, JS as MONITORING_JS
+from spikes.rss_sources_ui import HTML as SOURCES_HTML, CSS as SOURCES_CSS, JS as SOURCES_JS
 from spikes.plan_status_ui import PLAN_STATUS_JS, PLAN_STATUS_CSS
 from spikes.manuals import manual_catalog
 from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
@@ -2206,6 +2207,7 @@ async function navigateSidebarTab(tab){
  const finish=()=>{closeMobileSidebar();closeCompactSidebarMenu();return true;};
  if(tab.id==='manuals-tab'){selectSidebarTab(tab);showWorkspacePage(document.querySelector('#manuals-view'));await loadManuals();return finish();}
  if(tab.id==='projects-tab'){showProjectLanding();return finish();}
+ if(tab.id==='sources-sidebar-tab'){selectSidebarTab(tab);showWorkspacePage(document.querySelector('#sources-view'));await loadSources();return finish();}
  if(tab.id==='settings-sidebar-tab'){await openSettings();return finish();}
  if(tab.id==='federation-tab'){await openFederationSharing();return finish();}
  selectSidebarTab(tab);
@@ -8291,6 +8293,11 @@ HTML = HTML.replace('<button id="presentation-tab"', '<button id="monitoring-tab
 HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id="outputs-overview-panel"',1)
 CSS += MONITORING_CSS
 JS = MONITORING_JS + JS
+HTML = HTML.replace('<button id="tools-tab"', '<button id="sources-sidebar-tab" role="tab" aria-label="Zdroje" aria-controls="sidebar-sources" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="1"/><path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14"/></svg><span class="sidebar-tab-label" role="tooltip">Zdroje</span></button><button id="tools-tab"', 1)
+HTML = HTML.replace('<div id="sidebar-projects"', '<div id="sidebar-sources" role="tabpanel" aria-labelledby="sources-sidebar-tab" tabindex="0" hidden><h2>Zdroje</h2><p>Kanály a společný přehled článků.</p></div><div id="sidebar-projects"', 1)
+HTML = HTML.replace('<main>', '<main>'+SOURCES_HTML, 1)
+CSS += SOURCES_CSS
+JS = SOURCES_JS + JS
 JS += ADMIN_JS + FILE_EDIT_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
@@ -8322,7 +8329,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8506,6 +8513,20 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
+        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh'}:
+            from spikes.rss_sources import sources_for
+            if not isinstance(request, dict):return self.send_error(400)
+            try:
+                service=sources_for(self.server)
+                if self.path.endswith('/view') and not request:
+                    result=service.view()
+                elif self.path.endswith('/refresh') and set(request)=={'channel_id'}:
+                    result=service.refresh(request['channel_id'])
+                else:return self.send_error(400)
+                result['can_refresh']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                return self.reply(200,result)
+            except (ValueError, TypeError, KeyError) as exc:
+                return self.reply(422,{'error':str(exc)})
         if self.path.startswith('/v1/artifacts/git/'):
             if not isinstance(request,dict):return self.send_error(400)
             if getattr(self.server.projects,'network',False):return self.send_error(403)

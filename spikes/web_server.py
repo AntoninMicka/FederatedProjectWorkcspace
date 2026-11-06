@@ -211,6 +211,10 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh'}:
+            if self.path.endswith('/refresh') and not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            return super().dispatch(request)
         if self.path.startswith('/v1/ide-bridge/'):
             if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
                 return self.dispatch_ide_bridge(request)

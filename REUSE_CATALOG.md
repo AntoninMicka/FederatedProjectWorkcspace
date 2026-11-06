@@ -1115,6 +1115,14 @@ inventura byly zkontrolovány; externí kód se nepřenášel. Nejde o dokončen
 konektor nebo integraci do monitoringu. Scope a recovery:
 [RSS pilot](docs/rss-pilot.md).
 
+Sekce **Zdroje** nad RSS pilotem **reuse/adaptuje** společnou desktop/web
+navigaci, HTTP autentizaci a Administration RBAC. Reader je přesunutý do
+`spikes.rss_reader`, CLI zůstává tenký kompatibilní vstup. Nová je paměťová
+cache veřejných kanálů a přehled s jednotlivými/agregovanými záložkami.
+Další persistentní writer, automatický worker a závislost UI na vývojových
+skriptech byly **reject**; projektová data a recovery se nemění. Podrobnosti:
+[Zdroje v aplikaci](docs/rss-pilot.md#sekce-zdroje-v-aplikaci).
+
 Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
 Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
 zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný
