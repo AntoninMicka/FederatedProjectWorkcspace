@@ -8,7 +8,7 @@ from uuid import uuid4
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor, QWebEngineScript
 from spikes.artifacts import Artifacts, main_todo_id
 from spikes.chat_service import ChatService
 from spikes.desktop import request_policy
@@ -49,12 +49,13 @@ def main():
             profile = QWebEngineProfile(app); interceptor = Interceptor(profile)
             profile.setUrlRequestInterceptor(interceptor)
             view = QWebEngineView(); page = QWebEnginePage(profile, view); view.setPage(page)
+            bootstrap=QWebEngineScript();bootstrap.setInjectionPoint(QWebEngineScript.DocumentCreation);bootstrap.setWorldId(QWebEngineScript.MainWorld);bootstrap.setSourceCode('window.workspaceAutoStart=false;');page.scripts().insert(bootstrap)
             view.resize(1280, 900); view.show()
             phase = 0
             checks = [
                 "typeof openRegisteredProject==='function'",
-                "activeProject&&taskPlanProjection?.status==='ready'&&queueIsCurrent()",
-                "!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-graph').getBoundingClientRect().top<350&&document.querySelector('.plan-batch-card .plan-status-badge')?.textContent==='SUM · Plánováno'",
+                "window.statusProjectOpened&&activeProject&&taskPlanProjection?.status==='ready'&&queueIsCurrent()",
+                "!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-graph').getBoundingClientRect().top<350&&document.querySelector('.plan-batch-card')?.dataset.status==='planned'&&!document.querySelector('.plan-batch-card .plan-status-badge')",
                 "document.querySelector('#plan-item-status-control select')?.value==='sum'&&!artifactEditorView.hidden",
                 "artifactEditorDirty&&artifactEditorForm.elements.body.value.includes('status: in progress')",
                 "taskPlanProjection?.nodes.find(n=>n.id==='BATCH-01')?.status==='in progress'&&artifactEditorView.hidden&&queueIsCurrent()",
@@ -67,7 +68,7 @@ def main():
                 "activeProject.head!==window.beforeLiteralHead&&taskPlanProjection?.nodes.find(n=>n.id==='MILESTONE-01')?.status_mode==='sum'&&artifactEditorView.hidden&&queueIsCurrent()",
             ]
             commands = [
-                'openRegisteredProject('+json.dumps(pid)+')',
+                'openRegisteredProject('+json.dumps(pid)+').then(()=>window.statusProjectOpened=true)',
                 'openTaskPlan()',
                 "openPlanItemEditor(taskPlanProjection.nodes.find(n=>n.id==='BATCH-01'))",
                 "(()=>{const s=document.querySelector('#plan-item-status-control select');s.value='in progress';s.dispatchEvent(new Event('change'));})()",

@@ -210,3 +210,26 @@ ověření a kontextová nápověda jsou v rozbalovací části **Nástroje a n�
 Vlastnosti dokumentu zůstávají samostatně rozbalovací; pro náhled externě
 rozepsaného souboru a editor jedné položky se prázdné vlastnosti nezobrazují.
 Toto rozložení používá společnou hlavičku a tělo stránky jako ostatní editory.
+
+## Návrat do plánu a hierarchie pohledů
+
+Editor otevřený z plánu uchovává výběr milníku/dávky, filtr, otevřený detail
+položky i vodorovnou a svislou pozici grafu a detailu. Zavření bez změn
+nebo úspěšné uložení vrací tento pohled; po uložení se detail načte z nové
+revize. Neúspěšné uložení ponechá text v editoru. Návrat se váže na konkrétní
+projekt, nepřenáší se mezi projekty ani po restartu aplikace.
+
+Graf nabízí **O úroveň výš**, detail úkolu obdobně odkaz na dávku a detail
+dávky na milník. Nad milníkem je hlavní roadmapa. Karta vždy otevírá pouze
+detail; vstup do podrobnějšího grafu zůstává samostatnou akcí.
+
+V hlavní roadmapě jsou pod dávkou malé karty jejích úkolů s názvem.
+Kliknutí otevře detail úkolu. Velké karty mají větší plochu a ohraničené
+texty; celý název a stav jsou dostupné v tooltipu a přístupném popisku.
+Jediná výplň celé buňky vyjadřuje efektivní stav, včetně odvozeného SUM.
+Připravenost ani kritická cesta nepřidávají další konkurenční barvu či rámeček.
+Výběr stavu a připravenosti používá jeden filtr. Pravidla dokončení a odvození
+stavů v uloženém plánu se tím nemění.
+
+Panel **Úkoly** otevírá náhled hlavního seznamu úkolů. Přehled projektu
+zůstává pod položkou **Projekty**.

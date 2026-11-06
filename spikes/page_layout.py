@@ -130,6 +130,7 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #plan-panel .plan-layout:has(#plan-detail[hidden]){grid-template-columns:minmax(0,1fr)}
 #plan-panel #plan-graph{height:100%;min-height:0;max-height:none;min-width:0;box-sizing:border-box;overflow:auto}
 #plan-panel #plan-detail{min-height:0;min-width:0;margin:0;padding:10px 12px;overflow:auto;overscroll-behavior:contain;color:#213746}
+.plan-batch-card{width:270px;overflow:hidden;display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}.plan-batch-card strong{flex:none;max-height:2.6em;overflow:hidden;font-size:13px;line-height:1.3}.plan-batch-card span{min-height:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.3;margin:0}.plan-batch-card small{flex:none;max-height:2.5em}.plan-milestone-label{overflow:hidden;overflow-wrap:anywhere}.plan-milestone-label span{max-height:8em;overflow:hidden}.plan-mini-task{position:absolute;z-index:3;box-sizing:border-box;height:42px;min-width:0;padding:4px;border:1px solid #557384;border-radius:5px;font-size:10px;line-height:1.25;color:#18384a;overflow:hidden;overflow-wrap:anywhere;text-align:left}.plan-mini-task:focus-visible{outline:3px solid #176b60}
 #plan-panel #plan-detail dl{grid-template-columns:minmax(90px,.7fr) minmax(0,1.6fr)}
 @media(max-width:900px){
  #plan-panel .plan-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,3fr) minmax(0,2fr)}

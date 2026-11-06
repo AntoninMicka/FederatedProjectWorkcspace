@@ -503,7 +503,7 @@ class SpanTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node required for editor controls')
     def test_scoped_editor_preserves_dirty_guard_draft_and_operation_on_lost_reply(self):
         from spikes.desktop_ui import JS
-        fill = JS[JS.index('function fillArtifactEditor('):JS.index('async function closeArtifactEditor(')]
+        fill = JS[JS.index('function fillArtifactEditor('):JS.index('let planEditorReturn=')]
         controls = JS[JS.index('async function openPlanItemEditor('):JS.index('async function openNewArtifactEditor(')]
         harness = r'''
 const assert=require('node:assert/strict');
@@ -512,6 +512,7 @@ const elements=new Map(),button={disabled:false};
 const document={querySelector(id){if(!elements.has(id))elements.set(id,{textContent:'',remove(){}});return elements.get(id);}};
 const artifactEditorForm={elements:Object.fromEntries(['body','title','filename','description','tags'].map(n=>[n,field()])),querySelector:()=>button};
 let activeProject={id:'p',head:'h',mainTodoId:'main',readOnly:false},artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false;
+let planEditorReturn=null;function capturePlanPosition(){return null;}
 let allow=false,failed=true,calls=[],filled=[],artifactEditorView={hidden:true},taskPlanProjection={nodes:[]};
 const artifactEditorStatus={textContent:''},artifactRawWidget={configure:()=>Promise.resolve()};
 const crypto={randomUUID:()=>String(calls.length)};

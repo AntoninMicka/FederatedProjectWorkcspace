@@ -1121,3 +1121,12 @@ Karta otevírá pouze detail včetně úpravy závislostí; dvojklik graf nepře
 Detail milníku/dávky nabízí stejný vstup před dlouhým popisem. **Reject:**
 nový parser, duplikovaný graf či přepis uživatelova zadání kvůli navigaci.
 Změna pouze zobrazuje data; nepřidává zápisy ani recovery hranice.
+
+Návrat z editoru a rodičovská navigace **reuse/adaptují** `openTaskPlan`,
+`openPlanItemEditor`, existující raw editor a `parent_id` validovaného grafu.
+Pozice pohledu je pouze dočasný projektově vázaný UI stav; zápisy nadále
+obsluhuje původní transakce. Miniatury úkolů používají stejné uzly, detail
+položky a efektivní `planStatus` jako velké karty. Panel Úkoly znovu používá
+`openMainTodoPreview`. **Reject:** druhý plán, přepis uložených stavů kvůli
+barevnosti, nový writer či persistentní ukládání scroll pozic. Nové crash
+boundaries ani recovery zápisů nevznikají.

@@ -984,7 +984,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="plan-panel" role="tabpanel" aria-labelledby="plan-main-tab" hidden>
 <div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Roadmapa projektu</h1></div>
 <p id="plan-status" role="status">Otevřete projekt.</p>
-<div class="roadmap-controls"><label>Zobrazení <select id="plan-state-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="completed">Dokončené</option></select></label><label>Stav <select id="plan-status-filter"><option value="">Všechny</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="resolved">Vyřešeno</option><option value="failed">Selhalo</option><option value="completed">Dokončeno</option><option value="deferred">Odloženo</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
+<div class="roadmap-controls"><button id="plan-up" type="button" hidden>O úroveň výš</button><label>Stav <select id="plan-status-filter"><option value="">Všechny položky</option><option value="ready">Připravené</option><option value="following">Navazující</option><option value="blocked">Blokované</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="resolved">Vyřešeno</option><option value="failed">Selhalo</option><option value="completed">Dokončeno</option><option value="deferred">Odloženo</option></select></label><button id="plan-export" type="button" disabled>Stáhnout SVG</button></div>
 <details id="plan-subgraphs" hidden><summary>Výřezy roadmapy</summary><ul id="sidebar-plan-list" aria-label="Výřezy roadmapy"></ul></details>
 <div id="plan-new-root"><button id="plan-add-root" type="button" hidden>Přidat kořenovou položku</button><div id="plan-new-root-form"></div></div><div class="plan-status-legend" aria-label="Legenda stavů"><span class="plan-status-badge" data-status="completed">Dokončeno</span><span class="plan-status-badge" data-status="in progress">Probíhá</span><span class="plan-status-badge" data-status="planned">Plánováno</span><span class="plan-status-badge" data-status="resolved">Vyřešeno</span><span class="plan-status-badge" data-status="failed">Selhalo</span><span class="plan-status-badge" data-status="deferred">Odloženo</span></div><div class="plan-layout"><div id="plan-graph" class="roadmap-graph" aria-live="polite" role="region" aria-label="Graf plánu" tabindex="0"></div><section id="plan-detail" class="roadmap-detail" aria-label="Detail vybrané položky" tabindex="0" hidden></section></div>
 </div>
@@ -1356,7 +1356,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .task-queue-list{max-height:30vh;overflow-y:auto;overscroll-behavior:contain}.task-queue-list li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0}.task-queue-reports{flex-basis:100%;margin-left:12px}.task-queue-reports p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}.task-queue-list li button:first-child{text-align:left;overflow-wrap:anywhere}
 .roadmap-card{max-width:none}.roadmap-heading,.roadmap-controls,.roadmap-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.roadmap-heading{justify-content:space-between}.roadmap-heading h2{margin-bottom:4px}.roadmap-heading p{margin-top:0}.roadmap-controls{padding:12px 0}.roadmap-controls label:not(.roadmap-check){display:flex;align-items:center;gap:7px}.roadmap-check{display:flex;align-items:center;gap:7px}.roadmap-legend{margin:10px 0;font-size:12px}.roadmap-legend span{padding:4px 8px;border:2px solid #557384;border-radius:999px;background:#fff}.roadmap-legend .completed{background:#e2f3eb;border-color:#26735e}.roadmap-legend .in-progress{background:#fff2c7;border-color:#9a6900}.roadmap-legend .deferred{background:#eef1f3;border-color:#87939a}.roadmap-legend .critical{border-width:4px}.roadmap-legend .ready{border-color:#176b60;border-style:dashed}.roadmap-graph{min-height:360px;max-height:62vh;overflow:auto;border:1px solid #cbd7de;border-radius:12px;background:#f7fafb;overscroll-behavior:contain}.roadmap-graph svg{display:block;min-width:100%}.roadmap-node{cursor:pointer}.roadmap-node:focus rect,.roadmap-node:hover rect{filter:drop-shadow(0 3px 4px #17334255);stroke:#0d6b5d;stroke-width:4}.roadmap-detail{margin-top:12px;padding:12px 14px;border-left:4px solid #176b60;background:#eff8f5}.roadmap-detail h3{margin:0 0 6px}.roadmap-detail dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;margin:0}.roadmap-detail dt{font-weight:700}.roadmap-detail dd{margin:0;overflow-wrap:anywhere}
 .plan-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px}.plan-layout .roadmap-graph{min-width:0}.plan-layout .roadmap-detail{margin-top:0}.roadmap-detail dd{white-space:pre-line}#sidebar-plan h3{font-size:13px;margin:16px 0 0}#sidebar-plan-list button{width:100%;text-align:left;background:transparent;color:#dce8f1;padding:9px 7px}#sidebar-plan-tree{max-height:55%;overflow:auto}#sidebar-plan-tree,#sidebar-plan-tree ul{list-style:none;padding:0;margin:8px 0}#sidebar-plan-tree ul{margin:2px 0 2px 12px;padding-left:10px;border-left:1px solid #496072}#sidebar-plan-tree button{width:100%;padding:7px 6px;background:transparent;color:#dce8f1;text-align:left;font-size:12px}#sidebar-plan-tree button:hover,#sidebar-plan-tree button[aria-current="true"]{background:#274154}#sidebar-plan-tree button[aria-current="true"]{border-left:3px solid #79c9ac}
-.plan-roadmap-canvas{position:relative;min-width:100%;background:#f7fafb}.plan-milestone-lane{position:absolute;left:0;border-radius:11px;background:#edf3f5}.plan-milestone-lane:nth-of-type(even){background:#f1f5f6}.plan-milestone-label{position:sticky;left:0;z-index:4;box-sizing:border-box;width:220px;height:100%;padding:16px 18px;border:0;border-right:1px solid #cfdae0;border-radius:11px 0 0 11px;background:#edf3f5;color:#18384a;text-align:left}.plan-milestone-label strong,.plan-milestone-label span{display:block}.plan-milestone-label span{margin-top:7px;color:#526b79;font-size:12px;line-height:1.35;white-space:pre-line}.plan-milestone-label:hover,.plan-milestone-label:focus-visible{background:#e2eeeb;outline:2px solid #176b60;outline-offset:-2px}.plan-roadmap-edges{position:absolute;inset:0;z-index:1;pointer-events:none}.plan-batch-card{position:absolute;z-index:2;box-sizing:border-box;width:220px;min-height:70px;padding:10px;border:2px solid #557384;border-radius:10px;background:#fff;color:#152b38;text-align:left}.plan-batch-card strong,.plan-batch-card span,.plan-batch-card small{display:block}.plan-batch-card span{margin-top:4px;color:#385160;font-size:12px}.plan-batch-card small{max-height:2.6em;margin-top:5px;overflow:hidden;color:#607987;font-size:11px;line-height:1.25;white-space:pre-line}.plan-batch-card[data-completed="true"]{background:#e2f3eb}.plan-batch-card[data-blocked="true"]{background:#f8dddd}.plan-batch-card[data-ready="true"]{border-color:#176b60;border-style:dashed}.plan-batch-card[data-critical="true"]{border-width:4px}.plan-batch-card:hover,.plan-batch-card:focus-visible{border-color:#0d6b5d;box-shadow:0 3px 6px #17334233;outline:none}
+.plan-roadmap-canvas{position:relative;min-width:100%;background:#f7fafb}.plan-milestone-lane{position:absolute;left:0;border-radius:11px;background:#edf3f5}.plan-milestone-lane:nth-of-type(even){background:#f1f5f6}.plan-milestone-label{position:sticky;left:0;z-index:4;box-sizing:border-box;width:220px;height:100%;padding:16px 18px;border:0;border-right:1px solid #cfdae0;border-radius:11px 0 0 11px;background:#edf3f5;color:#18384a;text-align:left}.plan-milestone-label strong,.plan-milestone-label span{display:block}.plan-milestone-label span{margin-top:7px;color:#526b79;font-size:12px;line-height:1.35;white-space:pre-line}.plan-milestone-label:hover,.plan-milestone-label:focus-visible{background:#e2eeeb;outline:2px solid #176b60;outline-offset:-2px}.plan-roadmap-edges{position:absolute;inset:0;z-index:1;pointer-events:none}.plan-batch-card{position:absolute;z-index:2;box-sizing:border-box;width:220px;min-height:70px;padding:10px;border:2px solid #557384;border-radius:10px;background:#fff;color:#152b38;text-align:left}.plan-batch-card strong,.plan-batch-card span,.plan-batch-card small{display:block}.plan-batch-card span{margin-top:4px;color:#385160;font-size:12px}.plan-batch-card small{max-height:2.6em;margin-top:5px;overflow:hidden;color:#607987;font-size:11px;line-height:1.25;white-space:pre-line}.plan-batch-card[data-completed="true"]{background:#e2f3eb}.plan-batch-card:hover,.plan-batch-card:focus-visible{border-color:#0d6b5d;box-shadow:0 3px 6px #17334233;outline:none}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,clamp(230px,calc((100vh - 166px)/2),312px));grid-auto-rows:clamp(230px,calc((100vh - 166px)/2),312px);gap:16px}
 .plan-item-form{display:grid;gap:10px;max-width:640px;margin:10px 0}.plan-item-form label{display:grid;gap:4px}.plan-item-form fieldset{display:grid;gap:6px;min-width:0;margin:0}.plan-item-form input,.plan-item-form textarea,.plan-item-form select{width:100%;box-sizing:border-box}.plan-item-form button{justify-self:start}
@@ -2223,12 +2223,13 @@ async function navigateSidebarTab(tab){
  if(tab.id==='federation-tab'){await openFederationSharing();return finish();}
  selectSidebarTab(tab);
  showWorkspacePage(activeProject?projectView:document.querySelector('#project-home'));
- const destinations={'chats-tab':'chat-tab','todo-tab':'project-overview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
+ const destinations={'chats-tab':'chat-tab','todo-tab':'preview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
  if(activeProject&&destinations[tab.id])selectMainTab(document.getElementById(destinations[tab.id]));
  if(tab.id==='artifacts-tab'&&typeof showArtifactOverview==='function')await showArtifactOverview();
  if(tab.id==='tools-tab')juliaModelDetail.hidden=true;
  if(tab.id==='chats-tab')await loadChat();
  if(tab.id==='plan-tab')await openTaskPlan();
+ if(tab.id==='todo-tab'&&activeProject){await openMainTodoPreview();selectSidebarTab(tab);}
  if(tab.id==='presentations-tab'&&activeProject)await openOutputsOverview();
  return finish();
 }
@@ -2845,16 +2846,33 @@ function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
  if(artifactEditorItem)artifactEditorItem.workingDraft=Boolean(doc.working_draft);artifactEditorForm.querySelector('button[type="submit"]').disabled=Boolean(doc.working_draft);
  const taskPlan=!rawOnly&&Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:Boolean(doc.working_draft)}).then(()=>configureTaskPlanEditor(taskPlan));
 }
+let planEditorReturn=null,planDetailId=null;
+function capturePlanPosition(){
+ if(!activeProject||document.querySelector('#plan-panel').hidden||projectView.hidden)return null;
+ const scrolls=['#plan-graph','#plan-detail','#plan-panel .workspace-page-body','#sidebar-plan'];
+ return {project_id:activeProject.id,selection:taskPlanSelection?structuredClone(taskPlanSelection):null,detail:document.querySelector('#plan-detail').hidden?null:planDetailId,filter:document.querySelector('#plan-status-filter').value,scrolls:scrolls.map(selector=>{const el=document.querySelector(selector);return {selector,top:el?.scrollTop||0,left:el?.scrollLeft||0};})};
+}
+async function restorePlanPosition(position){
+ if(!position||activeProject?.id!==position.project_id)return false;
+ document.querySelector('#plan-status-filter').value=position.filter;
+ if(!await openTaskPlan(position.selection))return false;
+ const detail=taskPlanProjection?.nodes.find(node=>node.id===position.detail);if(detail)showTaskPlanDetail(detail);
+ const restore=()=>{for(const row of position.scrolls){const el=document.querySelector(row.selector);if(el){el.scrollTop=row.top;el.scrollLeft=row.left;}}};restore();requestAnimationFrame(restore);return true;
+}
+function planParentSelection(item){const parent=taskPlanProjection?.nodes.find(node=>node.id===item?.parent_id);return parent?{kind:parent.type,id:parent.id,parent_id:parent.parent_id,title:parent.title}:null;}
+function updatePlanUpButton(){const button=document.querySelector('#plan-up');button.hidden=!taskPlanSelection;}
+document.querySelector('#plan-up').addEventListener('click',()=>{const item=taskPlanProjection?.nodes.find(node=>node.id===taskPlanSelection?.id);openTaskPlan(planParentSelection(item));});
 async function closeArtifactEditor(){
- const item=artifactEditorItem;
+ const item=artifactEditorItem,position=planEditorReturn;
  if(!await canLeaveWorkspaceEditors())return;
  artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;
+ planEditorReturn=null;if(await restorePlanPosition(position))return;
  if(activeProject){showWorkspacePage(projectView);if(item&&!item.new)await openPreview(item.id);else if(typeof showArtifactOverview==='function')await showArtifactOverview();}
 }
 async function openArtifactEditor(item,deleteMode=false){
  if(!activeProject||activeProject.readOnly||item.kind!=='document')return;
  if(!await canLeaveWorkspaceEditors())return;
- await openPreview(item.id);if(selectedArtifact!==item.id)return;
+ planEditorReturn=capturePlanPosition();await openPreview(item.id);if(selectedArtifact!==item.id)return;
  const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
  showWorkspacePage(artifactEditorView);
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
@@ -2869,6 +2887,7 @@ async function openArtifactEditor(item,deleteMode=false){
 }
 async function openPlanItemEditor(task){
  if(!activeProject||activeProject.readOnly||!task.source?.artifact_id||!await canLeaveWorkspaceEditors())return;
+ planEditorReturn=capturePlanPosition();
  const project=activeProject,item={id:task.source.artifact_id,kind:'document',planItem:true};artifactEditorItem=item;
  try{
   const result=await projectRequest('/v1/artifacts/editor/plan-item/open',{project_id:project.id,artifact_id:item.id,task_id:task.id,expected_head:project.head});
@@ -2896,7 +2915,7 @@ async function savePlanItemEditor(navigate=true){
   const result=await projectRequest('/v1/artifacts/editor/plan-item/save',{operation_id:attempt.operation_id,item:attempt.item},120000);
   if(activeProject!==project||artifactEditorItem!==item)return false;
   artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;project.head=result.commit_id;artifactEditorView.hidden=true;
-  if(navigate){await openRegisteredProject(result.project_id);if(await openTaskPlan()){const updated=taskPlanProjection?.nodes.find(n=>n.id===model.task_id);if(updated)showTaskPlanDetail(updated);}}
+  if(navigate){const position=planEditorReturn;planEditorReturn=null;await openRegisteredProject(result.project_id);if(!await restorePlanPosition(position)){if(await openTaskPlan()){const updated=taskPlanProjection?.nodes.find(n=>n.id===model.task_id);if(updated)showTaskPlanDetail(updated);}}}
   return true;
  }catch(error){artifactEditorStatus.textContent=error.message+' Rozepsaný text zůstává v editoru; po nejasném výsledku zachovejte stejnou operaci.';return false;}
  finally{button.disabled=false;body.readOnly=false;if(stateSelect)stateSelect.disabled=false;}
@@ -2927,7 +2946,7 @@ async function saveArtifactEditor(navigate=true){
  const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
- try{const id=artifactEditorItem.id,projectId=activeProject.id;const result=await projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document},120000);artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem.new=false;artifactEditorItem=null;activeProject.head=result.commit_id;artifactEditorView.hidden=true;if(navigate){await openRegisteredProject(projectId);await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}return true;}
+ try{const id=artifactEditorItem.id,projectId=activeProject.id;const result=await projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document},120000);artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem.new=false;artifactEditorItem=null;activeProject.head=result.commit_id;artifactEditorView.hidden=true;if(navigate){const position=planEditorReturn;planEditorReturn=null;await openRegisteredProject(projectId);if(!await restorePlanPosition(position)){await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}}return true;}
  catch(error){artifactEditorStatus.textContent=error.message;return false;}finally{button.disabled=false;}
 }
 artifactEditorForm.addEventListener('submit',async event=>{event.preventDefault();await saveArtifactEditor();});
@@ -4363,7 +4382,7 @@ function renderRoadmap(){
 let taskPlanProjection=null,taskPlanSelection=null;
 let taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='';
 function queueIsCurrent(){return taskQueueView&&activeProject&&taskQueueView.project_id===activeProject.id&&taskQueueView.expected_head===activeProject.head;}
-function taskPlanMatches(item,mode){const status=document.querySelector('#plan-status-filter')?.value;if(status&&planStatus(item)!==status)return false;return !mode||(mode==='completed'?planStatus(item)==='completed':mode==='following'?Boolean(queueIsCurrent()&&taskQueueView.valid&&taskQueueView.following.includes(item.id)):item[mode]);}
+function taskPlanMatches(item,mode){return !mode||(mode==='following'?Boolean(queueIsCurrent()&&taskQueueView.valid&&taskQueueView.following.includes(item.id)):['ready','blocked'].includes(mode)?Boolean(item[mode]):planStatus(item)===mode);}
 function renderTaskQueue(){
  const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
  document.querySelector('#task-queue-revalidate').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
@@ -4479,11 +4498,13 @@ function appendPlanChildren(target,item){
  section.append(heading,list);target.append(section);
 }
 function showTaskPlanDetail(item){
+ planDetailId=item.id;
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
- const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;document.querySelector('#plan-graph').focus();});detail.append(close);
+ const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;planDetailId=null;document.querySelector('#plan-graph').focus();});detail.append(close);
  if(!item.checked){const add=document.createElement('button');add.type='button';add.textContent='Přidat do fronty';add.disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView.valid||Boolean(activeProject?.readOnly)||taskQueueView.task_ids.includes(item.id)||!(item.ready||taskQueueView.following.includes(item.id));add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add);}
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title,planStatusBadge(item));
  if(taskPlanProjection?.profile==='software-development/v1'&&['batch','milestone'].includes(item.type)){const children=taskPlanProjection.nodes.filter(node=>node.parent_id===item.id),open=document.createElement('button');open.type='button';open.dataset.planOpenChildren=item.id;open.textContent=(item.type==='batch'?'Zobrazit úkoly':'Zobrazit dávky')+' ('+children.length+')';open.addEventListener('click',()=>openTaskPlan({kind:item.type,id:item.id,parent_id:item.parent_id,title:item.title}));detail.append(open);}
+ if(item.parent_id){const up=document.createElement('button');up.type='button';up.dataset.planParent=item.parent_id;up.textContent='O úroveň výš · '+item.parent_id;up.addEventListener('click',()=>openTaskPlan(planParentSelection(item)));detail.append(up);}
  const list=document.createElement('dl'),relations=Object.entries(item.relations||{}).flatMap(([kind,targets])=>targets.map(target=>`${kind}: ${target}`));
  const checklist=(item.checklist||[]).map(value=>(value.checked?'☑ ':'☐ ')+value.text).join('\\n');
  for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',(item.status_mode==='sum'?'SUM · ':'')+planStatusLabels[planStatus(item)]],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;if(name==='Popis')renderPlanDescription(description,item);else appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);appendPlanChildren(detail,item);
@@ -4548,24 +4569,29 @@ function appendPlanItemActions(detail,item){
  action('Smazat položku',()=>openPlanDeletion(host,item));
  detail.append(host);
 }
+function stylePlanCell(cell,item){cell.dataset.status=planStatus(item);cell.style.backgroundColor=planStatusColors[planStatus(item)]||'#fff';cell.title=item.id+' · '+item.title+' · '+(planStatusLabels[planStatus(item)]||'Stav neznámý');cell.setAttribute('aria-label',cell.title);}
+function appendPlanMiniTasks(canvas,batch,point,mode,cardWidth,cardHeight){
+ const tasks=taskPlanProjection.nodes.filter(node=>node.type==='task'&&node.parent_id===batch.id&&taskPlanMatches(node,mode));
+ tasks.forEach((task,index)=>{const cell=document.createElement('button');cell.type='button';cell.className='plan-mini-task';cell.dataset.planTask=task.id;cell.textContent=task.title;cell.style.left=(point.x+(index%3)*(cardWidth/3))+'px';cell.style.top=(point.y+cardHeight+8+Math.floor(index/3)*48)+'px';cell.style.width=(cardWidth/3-4)+'px';stylePlanCell(cell,task);cell.addEventListener('click',()=>showTaskPlanDetail(task));canvas.append(cell);});
+}
 function renderProfiledTaskRoadmap(value,mode,graph,status){
  const milestones=value.nodes.filter(item=>item.type==='milestone').sort((a,b)=>(a.source?.path||'').localeCompare(b.source?.path||'')||a.line-b.line);
  const batches=value.nodes.filter(item=>item.type==='batch'&&taskPlanMatches(item,mode));
  const visibleMilestones=mode?milestones.filter(item=>batches.some(batch=>batch.parent_id===item.id)):milestones;
  if(!visibleMilestones.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné dávky.';graph.append(empty);status.textContent='0 dávek';return;}
- const visible=new Set(batches.map(item=>item.id)),labelWidth=220,columnWidth=270,cardWidth=220,cardHeight=130,laneGap=10,lanePadding=18;
+ const visible=new Set(batches.map(item=>item.id)),labelWidth=220,columnWidth=310,cardWidth=270,cardHeight=164,laneGap=10,lanePadding=18;
  const positions=new Map(),lanes=[];let top=10,maxDepth=0;
- for(const milestone of visibleMilestones){const laneBatches=batches.filter(item=>item.parent_id===milestone.id),slots=new Map();let maxSlot=0;
-  for(const batch of laneBatches){const depth=batch.dependency_depth||0,slot=slots.get(depth)||0;slots.set(depth,slot+1);maxSlot=Math.max(maxSlot,slot);maxDepth=Math.max(maxDepth,depth);positions.set(batch.id,{x:labelWidth+28+depth*columnWidth,y:top+lanePadding+slot*(cardHeight+10)});}
-  const height=laneBatches.length?lanePadding*2+(maxSlot+1)*cardHeight+maxSlot*10:96;lanes.push({milestone,top,height});top+=height+laneGap;
+ for(const milestone of visibleMilestones){const laneBatches=batches.filter(item=>item.parent_id===milestone.id),slots=new Map();const miniHeight=Math.max(0,...laneBatches.map(batch=>Math.ceil(value.nodes.filter(node=>node.type==='task'&&node.parent_id===batch.id&&taskPlanMatches(node,mode)).length/3)*48));let maxSlot=0;
+  for(const batch of laneBatches){const depth=batch.dependency_depth||0,slot=slots.get(depth)||0;slots.set(depth,slot+1);maxSlot=Math.max(maxSlot,slot);maxDepth=Math.max(maxDepth,depth);positions.set(batch.id,{x:labelWidth+28+depth*columnWidth,y:top+lanePadding+slot*(cardHeight+miniHeight+24)});}
+  const height=laneBatches.length?lanePadding*2+(maxSlot+1)*(cardHeight+miniHeight+14)+maxSlot*10:96;lanes.push({milestone,top,height});top+=height+laneGap;
  }
  const width=Math.max(graph.clientWidth||0,labelWidth+68+(maxDepth+1)*columnWidth),height=top;
  const canvas=document.createElement('div');canvas.className='plan-roadmap-canvas';canvas.style.width=`${width}px`;canvas.style.height=`${height}px`;
- for(const lane of lanes){const row=document.createElement('div');row.className='plan-milestone-lane';row.style.top=`${lane.top}px`;row.style.width=`${width}px`;row.style.height=`${lane.height}px`;const label=document.createElement('button');label.type='button';label.className='plan-milestone-label';label.setAttribute('aria-label',`${lane.milestone.id}, ${lane.milestone.title}`);const id=document.createElement('strong'),description=document.createElement('span');id.textContent=`${lane.milestone.id} · ${lane.milestone.title}`;description.textContent=lane.milestone.description||'Bez doplňujícího popisu.';label.append(id,description,planStatusBadge(lane.milestone));label.addEventListener('click',()=>showTaskPlanDetail(lane.milestone));row.append(label);canvas.append(row);}
+ for(const lane of lanes){const row=document.createElement('div');row.className='plan-milestone-lane';row.style.top=`${lane.top}px`;row.style.width=`${width}px`;row.style.height=`${lane.height}px`;const label=document.createElement('button');label.type='button';label.className='plan-milestone-label';label.setAttribute('aria-label',`${lane.milestone.id}, ${lane.milestone.title}`);const id=document.createElement('strong'),description=document.createElement('span');id.textContent=`${lane.milestone.id} · ${lane.milestone.title}`;description.textContent=lane.milestone.description||'Bez doplňujícího popisu.';stylePlanCell(label,lane.milestone);label.append(id,description);label.addEventListener('click',()=>showTaskPlanDetail(lane.milestone));row.append(label);canvas.append(row);}
  const svg=roadmapElement('svg',{class:'plan-roadmap-edges',viewBox:`0 0 ${width} ${height}`,width,height,'aria-hidden':'true'});
  for(const batch of batches){const target=positions.get(batch.id);if(!target)continue;for(const parent of batch.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);if(!source)continue;svg.append(roadmapElement('path',{d:`M ${source.x+cardWidth} ${source.y+cardHeight/2} C ${source.x+cardWidth+28} ${source.y+cardHeight/2}, ${target.x-28} ${target.y+cardHeight/2}, ${target.x} ${target.y+cardHeight/2}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
  canvas.append(svg);
- for(const batch of batches){const point=positions.get(batch.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.status=planStatus(batch);card.dataset.completed=String(batch.checked);card.dataset.blocked=String(batch.blocked);card.dataset.ready=String(batch.ready);card.dataset.critical=String(batch.critical);card.setAttribute('aria-label',`${batch.id}, ${batch.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=batch.id;title.textContent=batch.title;description.textContent=batch.description||'Bez doplňujícího popisu.';card.append(id,title,description,planStatusBadge(batch));card.addEventListener('click',()=>showTaskPlanDetail(batch));canvas.append(card);}
+ for(const batch of batches){const point=positions.get(batch.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.status=planStatus(batch);card.dataset.completed=String(batch.checked);card.dataset.blocked=String(batch.blocked);card.dataset.ready=String(batch.ready);card.dataset.critical=String(batch.critical);card.setAttribute('aria-label',`${batch.id}, ${batch.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=batch.id;title.textContent=batch.title;description.textContent=batch.description||'Bez doplňujícího popisu.';stylePlanCell(card,batch);card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(batch));canvas.append(card);appendPlanMiniTasks(canvas,batch,point,mode,cardWidth,cardHeight);}
  graph.append(canvas);status.textContent=`${batches.length}/${value.nodes.filter(item=>item.type==='batch').length} dávek · ${visibleMilestones.length} milníků · ${value.ready.filter(id=>visible.has(id)).length} připravených · hlavní roadmapa`;
 }
 function renderProfiledTaskLevel(value,mode,graph,status,selection){
@@ -4575,7 +4601,7 @@ function renderProfiledTaskLevel(value,mode,graph,status,selection){
  const visibleBatches=mode?selectedBatches.filter(batch=>tasks.some(task=>task.parent_id===batch.id)):selectedBatches;
  if(!visibleBatches.length){const empty=document.createElement('p');empty.textContent='Vybraný pohled neobsahuje žádné dávky s odpovídajícími úkoly.';graph.append(empty);status.textContent='0 úkolů';return;}
  const visibleTasks=tasks.filter(task=>visibleBatches.some(batch=>batch.id===task.parent_id)),visible=new Set(visibleTasks.map(item=>item.id));
- const labelWidth=220,columnWidth=270,cardWidth=220,cardHeight=138,laneGap=10,lanePadding=18;
+ const labelWidth=220,columnWidth=310,cardWidth=270,cardHeight=174,laneGap=10,lanePadding=18;
  const minDepth=visibleTasks.length?Math.min(...visibleTasks.map(item=>item.dependency_depth||0)):0;
  const positions=new Map(),lanes=[];let top=10,maxDepth=0;
  for(const batch of visibleBatches){const laneTasks=visibleTasks.filter(item=>item.parent_id===batch.id),slots=new Map();let maxSlot=0;
@@ -4584,20 +4610,21 @@ function renderProfiledTaskLevel(value,mode,graph,status,selection){
  }
  const width=Math.max(graph.clientWidth||0,labelWidth+68+(maxDepth+1)*columnWidth),height=top;
  const canvas=document.createElement('div');canvas.className='plan-roadmap-canvas plan-task-level';canvas.style.width=`${width}px`;canvas.style.height=`${height}px`;
- for(const lane of lanes){const row=document.createElement('div');row.className='plan-milestone-lane plan-batch-lane';row.style.top=`${lane.top}px`;row.style.width=`${width}px`;row.style.height=`${lane.height}px`;const label=document.createElement('button');label.type='button';label.className='plan-milestone-label plan-batch-label';label.setAttribute('aria-label',`${lane.batch.id}, ${lane.batch.title}`);const id=document.createElement('strong'),description=document.createElement('span');id.textContent=`${lane.batch.id} · ${lane.batch.title}`;description.textContent=lane.batch.description||'Bez doplňujícího popisu.';label.append(id,description,planStatusBadge(lane.batch));label.addEventListener('click',()=>showTaskPlanDetail(lane.batch));row.append(label);canvas.append(row);}
+ for(const lane of lanes){const row=document.createElement('div');row.className='plan-milestone-lane plan-batch-lane';row.style.top=`${lane.top}px`;row.style.width=`${width}px`;row.style.height=`${lane.height}px`;const label=document.createElement('button');label.type='button';label.className='plan-milestone-label plan-batch-label';label.setAttribute('aria-label',`${lane.batch.id}, ${lane.batch.title}`);const id=document.createElement('strong'),description=document.createElement('span');id.textContent=`${lane.batch.id} · ${lane.batch.title}`;description.textContent=lane.batch.description||'Bez doplňujícího popisu.';stylePlanCell(label,lane.batch);label.append(id,description);label.addEventListener('click',()=>showTaskPlanDetail(lane.batch));row.append(label);canvas.append(row);}
  const svg=roadmapElement('svg',{class:'plan-roadmap-edges',viewBox:`0 0 ${width} ${height}`,width,height,'aria-hidden':'true'});
  for(const task of visibleTasks){const target=positions.get(task.id);if(!target)continue;for(const parent of task.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);if(!source)continue;svg.append(roadmapElement('path',{d:`M ${source.x+cardWidth} ${source.y+cardHeight/2} C ${source.x+cardWidth+28} ${source.y+cardHeight/2}, ${target.x-28} ${target.y+cardHeight/2}, ${target.x} ${target.y+cardHeight/2}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
  canvas.append(svg);
- for(const task of visibleTasks){const point=positions.get(task.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card plan-task-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.status=planStatus(task);card.dataset.completed=String(task.checked);card.dataset.blocked=String(task.blocked);card.dataset.ready=String(task.ready);card.dataset.critical=String(task.critical);card.setAttribute('aria-label',`${task.id}, ${task.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=task.id;title.textContent=task.title;const done=(task.checklist||[]).filter(item=>item.checked).length,criteria=(task.checklist||[]).length;description.textContent=(task.description||'Bez doplňujícího popisu.')+(criteria?`\nPodmínky: ${done}/${criteria}`:'');card.append(id,title,description,planStatusBadge(task));card.addEventListener('click',()=>showTaskPlanDetail(task));canvas.append(card);}
+ for(const task of visibleTasks){const point=positions.get(task.id);if(!point)continue;const card=document.createElement('button');card.type='button';card.className='plan-batch-card plan-task-card roadmap-node';card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;card.style.height=`${cardHeight}px`;card.dataset.status=planStatus(task);card.dataset.completed=String(task.checked);card.dataset.blocked=String(task.blocked);card.dataset.ready=String(task.ready);card.dataset.critical=String(task.critical);card.setAttribute('aria-label',`${task.id}, ${task.title}`);const id=document.createElement('strong'),title=document.createElement('span'),description=document.createElement('small');id.textContent=task.id;title.textContent=task.title;const done=(task.checklist||[]).filter(item=>item.checked).length,criteria=(task.checklist||[]).length;description.textContent=(task.description||'Bez doplňujícího popisu.')+(criteria?`\nPodmínky: ${done}/${criteria}`:'');stylePlanCell(card,task);card.append(id,title,description);card.addEventListener('click',()=>showTaskPlanDetail(task));canvas.append(card);}
  graph.append(canvas);status.textContent=`${visibleTasks.length} úkolů · ${visibleBatches.length} dávek · ${selection.title}`;
 }
 document.querySelector('#plan-add-root').addEventListener('click',()=>{const host=document.querySelector('#plan-new-root-form');if(host.childElementCount)host.replaceChildren();else openPlanItemForm(host,null);});
 function renderTaskPlan(){
  const value=taskPlanProjection,graph=document.querySelector('#plan-graph'),status=document.querySelector('#plan-status');graph.replaceChildren();
+ updatePlanUpButton();
  document.querySelector('#plan-add-root').hidden=!(value?.status==='ready'&&activeProject&&!activeProject.readOnly);document.querySelector('#plan-new-root-form').replaceChildren();
  if(!value){status.textContent='Otevřete projekt.';return;}
  if(value.status!=='ready'){status.textContent=value.status==='missing'?'Projekt zatím nemá hlavní seznam úkolů.':value.status==='draft'?`Rozpracovaný soubor z disku · zatím není uložený v plánu.${value.error?' '+value.error:''}`:`Plán není validní: ${value.error||'neplatný formát'}. Zobrazená struktura je pouze pro čtení.`;return;}
- const mode=document.querySelector('#plan-state-filter').value,scope=taskPlanSelection?.kind==='subgraph'?new Set(taskPlanSelection.task_ids):null;
+ const mode=document.querySelector('#plan-status-filter').value,scope=taskPlanSelection?.kind==='subgraph'?new Set(taskPlanSelection.task_ids):null;
  if(value.profile==='software-development/v1'&&!taskPlanSelection){renderProfiledTaskRoadmap(value,mode,graph,status);return;}
  if(value.profile==='software-development/v1'&&['milestone','batch'].includes(taskPlanSelection?.kind)){renderProfiledTaskLevel(value,mode,graph,status,taskPlanSelection);return;}
  const nodes=value.nodes.filter(item=>(!scope||scope.has(item.id))&&taskPlanMatches(item,mode)),visible=new Set(nodes.map(item=>item.id));
@@ -4625,7 +4652,7 @@ function renderTaskPlanSidebar(value){
 document.querySelector('#open-main-plan').addEventListener('click',()=>openTaskPlan());
 
 document.querySelector('#plan-status-filter').addEventListener('change',renderTaskPlan);
-document.querySelector('#plan-state-filter').addEventListener('change',renderTaskPlan);
+
 document.querySelector('#plan-export').addEventListener('click',()=>{if(taskPlanProjection?.status!=='ready')return;const blob=new Blob([taskPlanProjection.svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`plan-${taskPlanProjection.revision.slice(0,12)}.svg`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);});
 
 let ideBridgeState={connections:[],projects:[]};

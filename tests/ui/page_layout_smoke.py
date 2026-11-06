@@ -68,7 +68,7 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  check(!document.querySelector('#sidebar-plan').textContent.includes('Podgrafy')&&document.querySelector('#plan-subgraphs').hidden,'Obsolete sidebar subgraphs remain');
  document.querySelector('#task-queue-list li button').click();await tick();check(!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-detail').textContent.includes('Queued task'),'Queue item did not open roadmap detail');
  const planPanel=document.querySelector('#plan-panel'),planLayout=workspacePageLayouts.get(planPanel),graph=document.querySelector('#plan-graph'),detail=document.querySelector('#plan-detail');
- check(planLayout.header.contains(document.querySelector('#plan-state-filter'))&&planLayout.header.contains(document.querySelector('#plan-export'))&&planLayout.header.contains(document.querySelector('#plan-status')),'Plan controls waste content space');
+ check(planLayout.header.contains(document.querySelector('#plan-status-filter'))&&planLayout.header.contains(document.querySelector('#plan-export'))&&planLayout.header.contains(document.querySelector('#plan-status')),'Plan controls waste content space');
  taskPlanProjection={...plan,profile:'software-development/v1',nodes:[{id:'M',title:'Milestone',type:'milestone',depends_on:[]},...Array.from({length:120},(_,index)=>({id:'B-'+index,title:'Batch '+index,type:'batch',parent_id:'M',dependency_depth:index%8,checked:false,ready:true,depends_on:[]}))]};renderTaskPlan();
  showTaskPlanDetail({...queueNode,description:'Long selected item description.\n'.repeat(250)});await tick();
  const headerTop=planLayout.header.getBoundingClientRect().top;
