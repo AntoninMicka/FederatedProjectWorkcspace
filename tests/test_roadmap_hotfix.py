@@ -22,7 +22,7 @@ class RoadmapHotfixTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
     def test_project_links_open_nested_documents_and_keep_unsafe_text_inert(self):
         helper = JS[JS.index('function appendProjectArtifactLinks('):JS.index('const projectConflicts=')]
-        detail = JS[JS.index('function showTaskPlanDetail('):JS.index('function renderProfiledTaskRoadmap(')]
+        detail = JS[JS.index('function renderPlanDescription('):JS.index('function renderProfiledTaskRoadmap(')]
         script = r'''
 const assert=require('node:assert/strict');
 class Element {
@@ -30,10 +30,13 @@ class Element {
  append(...items){this.children.push(...items);}
  replaceChildren(){this.children=[];}
  addEventListener(name,fn){this.listeners[name]=fn;}
+ setAttribute(name,value){this[name]=value;}
 }
 const previewContent=new Element('preview'),detail=new Element('detail'),opened=[];
 const document={createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),querySelector:()=>detail};
 const openPreview=id=>opened.push(id),addConflictLineClasses=()=>{};
+const taskPlanProjection=null;
+const taskQueueMessage='';
 const taskQueueBusy=false,queueIsCurrent=()=>false,taskQueueView=null,activeProject=null;
 const changeTaskQueue=()=>assert.fail('Unloaded queue must not mutate');
 const buttons=el=>[...(el.tag==='button'?[el]:[]),...el.children?.flatMap(buttons)||[]];
