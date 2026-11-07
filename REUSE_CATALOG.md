@@ -5,6 +5,17 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+`F-M5-FULL-DATA-SYNC-01` **reuse/adaptuje** nativní bundle transport,
+`validate_history`, reportingové `validate_git`, původní peer/branch policy,
+sync journal a Workspace CAS/Index recovery. Stejný přesný bundle se sémanticky
+ověří v izolovaném object store při exportu i příjmu; nevzniká druhý writer,
+DB ani payload formát. Hidden ref neznamená dostupný přenesený vstup.
+Explicitní `ConflictResolution` zachovává doménové review a historii.
+Nový transport, přepis konfliktu a implicitní execute grant byly **reject**.
+Dosavadní veřejná/soukromá inventura nedokládá další potřebnou implementaci;
+externí kód se nepřebírá. Scope/recovery:
+[ADR 0081](docs/adr/0081-complete-project-data-sync.md).
+
 Katalog verzovaný v Gitu obsahuje technologie, komponenty tohoto workspace a pouze externí zdrojové repozitáře s ověřenou veřejnou dostupností.
 
 ## Externí zdrojové repozitáře

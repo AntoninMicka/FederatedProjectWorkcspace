@@ -477,7 +477,7 @@ def immutable_transition(base_files, candidate_files, base_entities, candidate_e
                 'Reporting revisions are immutable; create a successor')
 
 
-def validate_git(git, files, entities, base_files=None):
+def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
     """Resolve all local references against exact commits before journal/CAS.
 
     Cross-project refs fail closed in MON-01: their authorization belongs to
@@ -488,7 +488,11 @@ def validate_git(git, files, entities, base_files=None):
     all_records = records(files, entities)
     if not all_records:
         return
-    project = parse_project(git.run('show', 'HEAD:project.json', binary=True).stdout)['id']
+    if head != 'HEAD':
+        hex_id(head, commit=True)
+        require(git.run('rev-parse','--verify',head+'^{commit}').stdout.strip()==head,
+                'Reporting validation needs an exact commit')
+    project = parse_project(git.run('show', head+':project.json', binary=True).stdout)['id']
     cache = {}
     def resolve(reference, expected=None):
         ref(reference, batch=True)
@@ -501,7 +505,8 @@ def validate_git(git, files, entities, base_files=None):
             require(reference['project_id'] == project, 'Cross-project reporting refs require authorized handoff')
             commit = reference['commit_id']
             if commit not in cache:
-                require(git.run('rev-parse', '--verify', commit + '^{commit}').stdout.strip() == commit,
+                pinned_commit=git.run('rev-parse','--verify',commit+'^{commit}',check=False)
+                require(pinned_commit.returncode==0 and pinned_commit.stdout.strip() == commit,
                         'Reference must pin a commit')
                 committed_project(git, commit, project, check_worktree=False)
                 selected = git.snapshot(commit)
@@ -576,7 +581,7 @@ def validate_git(git, files, entities, base_files=None):
                     'Knowledge cutoff cannot be in the future')
             require(git.run('rev-parse', '--verify', v['input_head'] + '^{commit}').stdout.strip() == v['input_head'],
                     'Report input_head must be a commit')
-            require(git.run('merge-base', '--is-ancestor', v['input_head'], 'HEAD', check=False).returncode == 0,
+            require(git.run('merge-base', '--is-ancestor', v['input_head'], head, check=False).returncode == 0,
                     'Report input_head must belong to project history')
             for key in ('events', 'sources', 'stories', 'assessments', 'scale_refs'):
                 for reference in v[key]:

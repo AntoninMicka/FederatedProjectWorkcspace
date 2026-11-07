@@ -296,6 +296,9 @@ def _build_bundle(node, project_id, scope):
             require(bundle.stat().st_size <= MAX_BUNDLE,
                     'Content sync bundle exceeds 64 MiB')
             payload = bundle.read_bytes()
+            # Validate the exact transfer object graph, not the sender's larger
+            # object store (which may also contain hidden/unreachable inputs).
+            _validate_git_bundle(payload, refs, project_id, Path(directory)/'verify.git')
         require(_inventory(workspace.git, scope) == refs,
                 'Shared branches changed during bundle preparation')
         return refs, payload
@@ -308,6 +311,22 @@ def _payloads(exchange, payload):
     return payload[:boundary], payload[boundary:]
 
 
+def _validate_git_bundle(payload, refs, project_id, repo):
+    """Check the complete native bundle in an isolated object store."""
+    repo.mkdir(mode=0o700)
+    git=Git(repo);git_run(git,'init','--bare','--template=')
+    bundle=repo.parent/('verify-'+str(uuid4())+'.bundle');bundle.write_bytes(payload)
+    try:
+        listed=git_run(git,'bundle','list-heads',str(bundle)).stdout.splitlines()
+        actual=sorted([{'head':line.split()[0],'ref':line.split()[1]} for line in listed],key=lambda row:row['ref'])
+        require(actual==refs,'Git bundle refs differ from signed inventory')
+        git_run(git,'-c','protocol.file.allow=always','fetch','--no-tags',str(bundle),
+                *[row['ref']+':'+row['ref'] for row in actual])
+        for row in actual:validate_history(git,row['head'],project_id,PRIVACY)
+    finally:
+        bundle.unlink(missing_ok=True)
+
+
 def _verify_bundle(node, exchange, payload, service=None):
     bundle_payload, chat_payload = _payloads(exchange, payload)
     require(hashlib.sha256(bundle_payload).hexdigest() == exchange['bundle_sha256'],
@@ -316,17 +335,7 @@ def _verify_bundle(node, exchange, payload, service=None):
         root = private_root(node)
         with tempfile.TemporaryDirectory(prefix='sharing-verify-', dir=root) as directory:
             directory = Path(directory)
-            bundle = directory / 'project.bundle'; bundle.write_bytes(bundle_payload)
-            repo = directory / 'repo.git'; repo.mkdir(mode=0o700)
-            git = Git(repo); git_run(git, 'init', '--bare', '--template=')
-            listed = git_run(git, 'bundle', 'list-heads', str(bundle)).stdout.splitlines()
-            actual = sorted([{'head': line.split()[0], 'ref': line.split()[1]}
-                             for line in listed], key=lambda row: row['ref'])
-            require(actual == exchange['refs'], 'Git bundle refs differ from signed inventory')
-            git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags',
-                    str(bundle), *[row['ref'] + ':' + row['ref'] for row in actual])
-            for row in actual:
-                validate_history(git, row['head'], exchange['project_id'], PRIVACY)
+            _validate_git_bundle(bundle_payload,exchange['refs'],exchange['project_id'],directory/'repo.git')
     require(hashlib.sha256(chat_payload).hexdigest() == exchange['chat_sha256'],
             'Project chat payload differs from signed exchange')
     chats = None
