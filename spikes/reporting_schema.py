@@ -564,6 +564,19 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
             require(meta['kind'] == 'source', 'Captured bytes must be immutable source')
         if kind=='SourceFinding':
             _,definition=resolve(v['definition_ref'],'WatchDefinition')
+            if 'audit' in v['selection']:
+                require(v['selection']['audit']['pipeline']==definition['value']['selection'].get('pipeline'),
+                        'Finding filter differs from pinned definition')
+            if 'evaluation_ref' in v['selection']:
+                evaluation=v['selection']['evaluation_ref'];meta,_=resolve(evaluation)
+                selected=files if 'at' in evaluation else cache[evaluation['commit_id']][0]
+                audit=parse_json(selected[evaluation['path']])
+                require(meta['kind']=='snapshot' and meta['file']=='assistance.json' and
+                        audit.get('schema')=='fpw-monitoring-evaluation-v1','Invalid finding evaluation audit')
+                require(audit['pipeline']==definition['value']['selection'].get('pipeline') and
+                        audit['run_ref'] in record['provenance']['run_refs'] and
+                        audit['result']['decision']==v['selection']['decision'] and
+                        audit['result']['trustworthiness'] in {'unverified','insufficient'},'Finding evaluation provenance differs')
             inputs=[i for i in definition['value']['inputs'] if i['id']==v['input_id']]
             require(len(inputs)==1 and inputs[0]['kind']=='external' and inputs[0]['connector']=='rss-atom','Finding input is not an RSS source')
             require(inputs[0]['locator']==v['item']['source_locator'] and v['item']['source_id']==v['input_id'],'Finding source differs from definition')

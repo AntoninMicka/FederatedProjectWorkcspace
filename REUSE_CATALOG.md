@@ -1144,6 +1144,15 @@ externí kód se nepřenášel. Žádný provider nebyl připojený jen na zákl
 přijetí konfiguračních metadat. Scope/recovery:
 [ADR 0075](docs/adr/0075-source-connector-contract.md).
 
+MON-08-04 **reuse/adaptuje** WatchDefinition piny/revize, SourceItem, RSS
+publication plan, Reporting assistance audit, ContextBuilder, RoleRegistry
+a existující backend run journal. Přidává malý uzavřený vyhodnocovač a
+izolovaný stdlib regex podproces s časovým/CPU/paměťovým limitem; vlákno s
+nezrušitelným regexem a nový workflow/provider framework jsou odmítnuté.
+Soukromá inventura nedokládá shodnou implementaci; žádný její kód ani
+neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0077](docs/adr/0077-monitoring-filter-pipelines.md).
+
 MON-08-03 **reuse/adaptuje** Reporting/Workspace writer, sémantickou validaci,
 raw source metadata a receipts, původní ReportingScheduler DB/owner/grants,
 SourceCollector origin backoff, RSS observe aliases a společný SourceItem.

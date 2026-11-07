@@ -29,12 +29,13 @@ try:
   from tests.test_monitoring_definitions import definition
   from tests.test_rss_pilot import rss
   from uuid import uuid4
-  cfg=definition();watch_id=str(uuid4())
+  from tests.test_monitoring_filters import pipeline
+  cfg=definition();cfg['selection']['pipeline']=pipeline();watch_id=str(uuid4())
   saved=MonitoringDefinitions(f.node).save(dict(project_id=f.project,base_head=f.git.head(),watch_id=watch_id,
     previous=[],privacy='project',definition=cfg),str(uuid4()))
   server.monitoring.rss_runtime.fetcher=lambda *a,**kw:dict(status=200,raw=rss(),validators={'if-none-match':'"browser"'})
   server.monitoring.rss_runtime.configure(dict(project_id=f.project,watch_id=watch_id,input_id=cfg['inputs'][0]['id'],
-    definition_ref=saved['definition_ref'],enabled=True,mode='queue-all'),confirm=True)
+    definition_ref=saved['definition_ref'],enabled=True,mode='pipeline'),confirm=True)
   server.monitoring.rss_runtime.tick(f.project)
   from spikes.chat_service import ChatService
   server.chat_service=ChatService(f.node,server.projects)
@@ -45,29 +46,33 @@ try:
   page=Page(profile,app);phase=0;busy=False
   commands={
    1:'window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+')',
-   2:"document.querySelector('#sidebar-monitoring-new').click()",
-   3:"monitoringForm.elements.name.value='Browser test';monitoringForm.elements.goal.value='Sledovat ověřené změny';monitoringForm.elements.start.value='2026-03-23';monitoringForm.elements.presentation.checked=true;monitoringForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringForm.requestSubmit()",
-   4:"document.querySelector('#sidebar-monitoring-list button').click()",
-   5:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Spustit nyní').click()",
-   6:"document.querySelector('#sidebar-report-list button').click()",
-   7:"document.querySelector('#monitoring-detail input[type=checkbox]').click();[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Vydat zprávu').click()",
-   8:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Otevřít navázanou prezentaci').click()"}
+   2:"document.querySelector('#monitoring-findings-list button').click()",
+   3:"document.querySelector('#monitoring-detail input').value='Other';[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Vyhodnotit ukázku').click()",
+   4:"document.querySelector('#sidebar-monitoring-new').click()",
+   5:"monitoringForm.elements.name.value='Browser test';monitoringForm.elements.goal.value='Sledovat ověřené změny';monitoringForm.elements.start.value='2026-03-23';monitoringForm.elements.presentation.checked=true;monitoringForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringForm.requestSubmit()",
+   6:"document.querySelector('#sidebar-monitoring-list button').click()",
+   7:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Spustit nyní').click()",
+   8:"document.querySelector('#sidebar-report-list button').click()",
+   9:"document.querySelector('#monitoring-detail input[type=checkbox]').click();[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Vydat zprávu').click()",
+   10:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Otevřít navázanou prezentaci').click()"}
   checks={
    0:"typeof loadMonitoring==='function'",
    1:"activeProject&&monitoringView&&monitoringView.project_id===activeProject.id&&document.querySelector('#monitoring-rss-list').textContent.includes('kontrola každých 15 min')",
-   2:"!monitoringForm.hidden",
-   3:"monitoringView?.watches.length===1&&!monitoringDirty&&monitoringForm.hidden",
-   4:"[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Spustit nyní')",
-   5:"monitoringView?.reports.some(r=>r.state==='review')",
-   6:"document.querySelector('#presentations-tab').getAttribute('aria-selected')==='true'&&document.querySelector('#monitoring-detail pre')?.textContent.includes('Nebyla doložena významná změna.')&&document.querySelector('#monitoring-detail input[type=checkbox]')",
-   7:"monitoringView?.reports.some(r=>r.state==='completed'&&r.presentation_id)&&[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Otevřít navázanou prezentaci')",
-   8:"presentationEditorDeck&&presentationEditorArtifact===monitoringView.reports[0].presentation_id&&document.querySelector('#presentation-report-link')&&!document.querySelector('#presentation-panel').hidden"}
+   2:"document.querySelector('#monitoring-detail h3')?.textContent.includes('Náhled pravidel')",
+   3:"document.querySelector('#monitoring-detail pre')?.textContent.includes('discarded')&&document.querySelector('#monitoring-detail pre')?.textContent.includes('topic')",
+   4:"!monitoringForm.hidden",
+   5:"monitoringView?.watches.length===1&&!monitoringDirty&&monitoringForm.hidden",
+   6:"[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Spustit nyní')",
+   7:"monitoringView?.reports.some(r=>r.state==='review')",
+   8:"document.querySelector('#presentations-tab').getAttribute('aria-selected')==='true'&&document.querySelector('#monitoring-detail pre')?.textContent.includes('Nebyla doložena významná změna.')&&document.querySelector('#monitoring-detail input[type=checkbox]')",
+   9:"monitoringView?.reports.some(r=>r.state==='completed'&&r.presentation_id)&&[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Otevřít navázanou prezentaci')",
+   10:"presentationEditorDeck&&presentationEditorArtifact===monitoringView.reports[0].presentation_id&&document.querySelector('#presentation-report-link')&&!document.querySelector('#presentation-panel').hidden"}
   def received(value):
    global phase,busy
    busy=False
    if value!='ready':return
    phase+=1
-   if phase==9:print('monitoring browser OK',flush=True);app.exit(0);return
+   if phase==11:print('monitoring browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy

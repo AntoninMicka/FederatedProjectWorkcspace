@@ -160,6 +160,10 @@ class Reporting:
                     require(value['item']['provenance']['raw_sha256']==(raw_ref or value['raw_ref'])['sha256'],'RSS capture hash differs')
                     if raw_ref is not None:value['raw_ref']=deepcopy(raw_ref)
                     value['item']['imported_at']=now
+                    if assistance is not None:
+                        audit_path=f'artifacts/{operation_uuid(operation_id,"assistance")}/assistance.json'
+                        value['selection']['evaluation_ref']=dict(artifact_id=operation_uuid(operation_id,'assistance'),
+                            path=audit_path,sha256=digest(changes[audit_path]),at='same-commit')
                 require(isinstance(previous, list), 'Invalid predecessors')
                 old_decisions = []
                 for parent in previous:
@@ -222,7 +226,8 @@ class Reporting:
                 if spec['type']=='SourceFinding' and _source_capture is not None:
                     record['provenance']['method']='import'
                 if assistance is not None:
-                    require(spec['type'] in {'Event', 'Story', 'EvidenceAssessment'},
+                    require(spec['type'] in {'Event', 'Story', 'EvidenceAssessment'} or
+                            (spec['type']=='SourceFinding' and assistance['audit'].get('schema')=='fpw-monitoring-evaluation-v1'),
                             'Assistance cannot change definitions or publish reports')
                     require(PRIVACY[spec['privacy']] >= PRIVACY[assistance['context_privacy']],
                             'Assisted reporting privacy would be relaxed')

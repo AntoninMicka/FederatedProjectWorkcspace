@@ -37,6 +37,8 @@ local placement a ne-local-only privacy. Interval se bere z `input.poll.seconds`
 - `capture-only`: zachytit nález bez tvrzení, že proběhl sémantický filtr.
 - `queue-all`: výslovně vybrat všechny nové/opravované položky do fronty.
   To není automatické rozhodnutí o relevanci či pokroku.
+- `pipeline`: použít verzovaná [pravidla MON-08-04](monitoring-filters.md),
+  uložit průchod kroky; u LLM počkat na explicitní pokračování.
 - `enabled=false`: pozastavit existující binding, i když se definice změnila.
 
 Původní backendový worker provádí tick každých 10 sekund. Splatný RSS input
@@ -76,8 +78,9 @@ se uloží atomicky přes původní writer. Nezměněný feed nevytvoří dalš�
 Stavy jsou captured, selected, pending, processed, discarded s důvodem,
 processing failed a unknown. SourceFinding.selection obsahuje explicitní
 rozhodnutí, důvod a verzi/hash jednoduché capture/include-all policy;
-definition_ref připíná i původní pravidla. Obecné keyword/regex postupy
-patří MON-08-04. Volný text pravidel se netváří jako vykonaný filtr.
+definition_ref připíná i původní pravidla. Keyword/regex postupy a LLM
+pokračování popisuje [MON-08-04](monitoring-filters.md).
+Volný text pravidel se netváří jako vykonaný filtr.
 Změna režimu sama nezpracuje znovu staré nálezy; ty lze výslovně posunout
 stavovou operací nebo pozdější re-evaluací.
 

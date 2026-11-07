@@ -70,7 +70,12 @@ def validate_definition(value):
     sequence(value['inputs'], input_, minimum=1)
     require(len({item['id'] for item in value['inputs']}) == len(value['inputs']), 'Duplicate watch input identity')
     for key in ('selection', 'evaluation'):
-        fields(value[key], 'revision instructions')
+        names = 'revision instructions'
+        if key == 'selection' and isinstance(value[key], dict) and 'pipeline' in value[key]:
+            from spikes.monitoring_filters import validate_pipeline
+            validate_pipeline(value[key]['pipeline'])
+            names += ' pipeline'
+        fields(value[key], names)
         text(value[key]['revision']); text(value[key]['instructions'])
         require(len(value[key]['revision']) <= 100 and len(value[key]['instructions']) <= 8000,
                 'Watch rules exceed limit')

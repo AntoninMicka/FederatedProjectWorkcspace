@@ -4,7 +4,7 @@
 HTML='''<div id="monitoring-panel" role="tabpanel" aria-labelledby="monitoring-tab" hidden>
 <header><h2>Sledování a zprávy</h2><p>Společný cíl a historie, samostatné zadání pro každé období.</p></header>
 <p id="monitoring-status" role="status" aria-live="polite"></p>
-<section id="monitoring-rss-section" hidden><h3>Průběžný sběr RSS</h3><ul id="monitoring-rss-list"></ul></section>
+<section id="monitoring-rss-section" hidden><h3>Průběžný sběr RSS</h3><ul id="monitoring-rss-list"></ul><h4>Výběr položek</h4><ul id="monitoring-findings-list"></ul></section>
 <div class="monitoring-grid"><section><h3>Sledování</h3><button id="monitoring-new" type="button">Nové sledování</button>
 <ul id="monitoring-watches"></ul></section><section id="monitoring-detail"><p>Vyberte sledování nebo zprávu.</p></section></div>
 <form id="monitoring-form" hidden>
@@ -45,7 +45,7 @@ const monitoringForm=document.querySelector('#monitoring-form');
 const monitoringStatus=document.querySelector('#monitoring-status');
 const monitoringLabels={weekly:'Týden',monthly:'Měsíc',quarterly:'Čtvrtletí',annual:'Rok / výroční zpráva'};
 const monitoringStates={succeeded:'Staženo',fetching:'Stahuje se',prepared:'Připraveno',collecting:'Zpracovává se',review:'K posouzení',approved:'Schváleno',issuing:'Vydává se',issued:'Vydáno, čeká na doručení',completed:'Vydáno',failed:'Chyba',cancelled:'Zrušeno',unknown:'Neznámý výsledek — vyžaduje dohledání'};
-function clearMonitoring(){monitoringView=null;monitoringEdit=null;monitoringAttempt=null;monitoringDirty=false;monitoringForm.hidden=true;document.querySelector('#monitoring-rss-section').hidden=true;for(const id of ['monitoring-watches','monitoring-reports','sidebar-monitoring-list','sidebar-report-list','monitoring-rss-list'])document.getElementById(id)?.replaceChildren();}
+function clearMonitoring(){monitoringView=null;monitoringEdit=null;monitoringAttempt=null;monitoringDirty=false;monitoringForm.hidden=true;document.querySelector('#monitoring-rss-section').hidden=true;for(const id of ['monitoring-watches','monitoring-reports','sidebar-monitoring-list','sidebar-report-list','monitoring-rss-list','monitoring-findings-list'])document.getElementById(id)?.replaceChildren();}
 async function canLeaveMonitoring(){if(!monitoringDirty&&!monitoringAttempt)return true;return resolveEditorLeave('Sledování',saveMonitoring,()=>{monitoringDirty=false;monitoringAttempt=null;monitoringForm.hidden=true;});}
 function monitoringOpen(section='tools'){selectSidebarTab(document.querySelector(section==='outputs'?'#presentations-tab':'#tools-tab'));selectMainTab(document.querySelector('#monitoring-tab'));}
 function monitoringButton(label,action,disabled=false){const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=disabled;b.addEventListener('click',async()=>{try{await action();}catch(error){monitoringStatus.textContent=error.message;}});return b;}
@@ -61,7 +61,18 @@ function renderMonitoring(){
  document.querySelector('#monitoring-new').disabled=readonly;document.querySelector('#sidebar-monitoring-new').disabled=readonly;
  monitoringStatus.textContent=monitoringView.error||`${monitoringView.watches.length} sledování · ${monitoringView.reports.length} zpráv`;
  const rss=monitoringView.rss,rssList=document.querySelector('#monitoring-rss-list');rssList.replaceChildren();
- document.querySelector('#monitoring-rss-section').hidden=!rss?.bindings?.length;
+ document.querySelector('#monitoring-rss-section').hidden=!rss?.bindings?.length&&!rss?.findings?.length;
+ const findingsList=document.querySelector('#monitoring-findings-list');findingsList.replaceChildren();
+ for(const finding of rss?.findings||[]){const value=finding.value,li=document.createElement('li'),summary=document.createElement('p');
+  summary.textContent=value.item.title+' — '+value.stage+' · '+value.selection.reason;li.append(summary);
+  const evaluation=rss.evaluations?.[finding.revision_id];if(evaluation){const p=document.createElement('p'),r=evaluation.result;
+   p.textContent='Relevance: '+(r.relevance??'neznámá')+' · Potenciální význam: '+(r.significance??'neznámý')+' · Důvěryhodnost tvrzení: '+r.trustworthiness;li.append(p);
+   for(const step of evaluation.steps){const p=document.createElement('p');p.textContent=step.id+' · '+step.outcome+' · '+step.reason;li.append(p);}}
+  const audit=value.selection.audit;if(audit){const details=document.createElement('details'),caption=document.createElement('summary');caption.textContent='Pravidla a vysvětlení';details.append(caption);
+   for(const step of audit.result.steps){const p=document.createElement('p');p.textContent=step.id+' · '+step.kind+' · '+step.outcome+' · '+step.reason;details.append(p);}
+   details.append(monitoringButton('Náhled pravidel na ukázce',()=>showMonitoringFilterPreview(value.item,audit.pipeline)));li.append(details);}
+  findingsList.append(li);
+ }
  for(const binding of rss?.bindings||[]){const li=document.createElement('li');
   const at=value=>value?new Date(typeof value==='number'?value*1000:value).toLocaleString('cs-CZ'):'dosud neproběhla';
   const pending=rss.polls.filter(p=>p.binding===binding.key).at(-1);
@@ -80,6 +91,24 @@ function renderMonitoring(){
   const list=document.getElementById(id);list.replaceChildren();
   for(const report of monitoringView.reports){const li=document.createElement('li');li.append(monitoringButton(`${report.name} · ${monitoringLabels[report.kind]||report.kind} · ${report.period.start_local.slice(0,10)} · ${monitoringStates[report.state]||report.state}`,()=>{monitoringOpen('outputs');showMonitoringReport(report);}));list.append(li);}
  }
+}
+function showMonitoringFilterPreview(item,pipeline){
+ const target=document.querySelector('#monitoring-detail');target.replaceChildren();
+ const heading=document.createElement('h3');heading.textContent='Náhled pravidel · '+pipeline.revision;target.append(heading);
+ const note=document.createElement('p');note.textContent='Ukázka nic nepublikuje a nespouští LLM. Chybějící jazyk se neodhaduje.';target.append(note);
+ const title=document.createElement('input'),content=document.createElement('textarea');title.value=item.title;content.value=item.content;
+ for(const [label,control] of [['Název ukázky',title],['Text ukázky',content]]){const l=document.createElement('label');l.textContent=label;l.append(control);target.append(l);}
+ const output=document.createElement('pre');output.setAttribute('aria-live','polite');
+ const projectId=activeProject.id;
+ target.append(monitoringButton('Vyhodnotit ukázku',async()=>{
+  if(activeProject?.id!==projectId)return;
+  const sample={...item,title:title.value,content:content.value};
+  sample.content_sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(sample.content))),b=>b.toString(16).padStart(2,'0')).join('');
+  if(activeProject?.id!==projectId||!output.isConnected)return;
+  const preview=await monitoringRequest('filter-preview',{pipeline,items:[sample]});
+  if(activeProject?.id!==projectId||!output.isConnected)return;
+  const result=preview.results[0];output.textContent=result.decision+' · '+result.reason+'\n'+result.steps.map(s=>s.id+' · '+s.outcome+' · '+s.reason).join('\n');
+ }));target.append(output);
 }
 function showMonitoringWatch(watch){
  const target=document.querySelector('#monitoring-detail');target.replaceChildren();const h=document.createElement('h3');h.textContent=watch.name;target.append(h);

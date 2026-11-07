@@ -63,7 +63,7 @@ class RSSMonitoring:
     def configure(self,request,*,confirm=False):
         fields(request,'project_id watch_id input_id definition_ref enabled mode')
         require(confirm is True and type(request['enabled']) is bool,'Explicit RSS configuration confirmation is required')
-        require(request['mode'] in {'capture-only','queue-all'},'Unknown RSS collection mode')
+        require(request['mode'] in {'capture-only','queue-all','pipeline'},'Unknown RSS collection mode')
         for key in ('project_id','watch_id','input_id'):uuid(request[key])
         config=deepcopy(request);key='/'.join(config[k] for k in ('project_id','watch_id','input_id'))
         if not request['enabled']:
@@ -75,6 +75,7 @@ class RSSMonitoring:
                 db.execute('UPDATE rss_bindings SET document=? WHERE key=?',(encoded(paused),key))
             return paused
         _,row,input_=self._definition(config,grant=False)
+        require(request['mode']!='pipeline' or 'pipeline' in row['value']['selection'], 'Pipeline mode requires explicit rules')
         public_url(input_['locator'])
         SourceContext(config['input_id'],input_['locator'],self.stamp(),row['privacy'],input_['access']['retention']).validate()
         config.update(key=key,url=input_['locator'],interval=input_['poll']['seconds'],privacy=row['privacy'])
@@ -127,10 +128,11 @@ class RSSMonitoring:
         ws,row,input_=self._definition(config);ws.recover();head=ws.git.head()
         files=ws.git.snapshot(head);entities=validate_snapshot(files);rs=records(files,entities)
         parents={p['artifact_id'] for r in rs.values() for p in r['previous']}
-        tips={r['entity_id']:r for r in rs.values() if r['type']=='SourceFinding' and r['revision_id'] not in parents
-              and r['value']['input_id']==config['input_id'] and r['value']['item']['source_locator']==config['url']}
+        watch_tips={r['entity_id']:r for r in rs.values() if r['type']=='SourceFinding' and r['revision_id'] not in parents
+              and rs[r['value']['definition_ref']['artifact_id']]['entity_id']==config['watch_id']}
+        tips={key:r for key,r in watch_tips.items() if r['value']['input_id']==config['input_id']
+              and r['value']['item']['source_locator']==config['url']}
         # Findings from another watch must not become this watch's processing queue.
-        tips={key:r for key,r in tips.items() if rs[r['value']['definition_ref']['artifact_id']]['entity_id']==config['watch_id']}
         prior=dict(schema=OBSERVATION,url=config['url'],records=[dict(id=key,aliases=r['value']['aliases'],revisions=[
             dict(observed_at=r['value']['item']['discovered_at'],entry=dict(content_sha256=r['value']['entry_sha256']))]) for key,r in tips.items()])
         raw=base64.b64decode(response['raw'],validate=True);feed=parse_feed(raw,config['url'])
@@ -154,6 +156,19 @@ class RSSMonitoring:
             specs.append(dict(type='SourceFinding',value=value,entity_id=entity,privacy=config['privacy'],
                 previous=[pinned(config['project_id'],head,old['revision_id'],files,entities)] if old else []))
         batch('rss-atom',[s['value']['item'] for s in specs])
+        if config['mode']=='pipeline' and specs:
+            from spikes.monitoring_filters import evaluate
+            preview=evaluate(row['value']['selection']['pipeline'],[s['value']['item'] for s in specs],
+                previous=[watch_tips[key]['value']['item'] for key in sorted(watch_tips)
+                          if watch_tips[key]['value']['selection']['decision']=='selected'])
+            for spec,result in zip(specs,preview['results']):
+                decision=result['decision'];value=spec['value']
+                value['stage']={'selected':'pending','discarded':'discarded','waiting':'captured','error':'failed'}[decision]
+                audit={k:deepcopy(preview[k]) for k in ('engine','pipeline','pipeline_sha256','items_sha256','previous_sha256','languages')}
+                audit['input_head']=head
+                audit['result']=result
+                value['selection']=dict(decision=decision if decision in {'selected','discarded'} else 'not-evaluated',
+                    reason=result['reason'],filter_revision=preview['pipeline']['revision'],filter_sha256=preview['pipeline_sha256'],audit=audit)
         return dict(request=dict(project_id=config['project_id'],base_head=head,records=specs),
             operation_id=ident(poll_id,'publication'),capture=dict(raw=response['raw'],url=config['url'],
                 definition_ref=config['definition_ref'],input_id=config['input_id'],mime=response.get('content_type')))
@@ -237,13 +252,19 @@ class RSSMonitoring:
         data=self.reporting.read(project_id)
         parents={p['artifact_id'] for r in data['records'] for p in r['previous']}
         findings=[r for r in data['records'] if r['type']=='SourceFinding' and r['revision_id'] not in parents]
+        files=self.reporting.artifacts.workspace(project_id).git.snapshot(data['commit_id']);evaluations={}
+        for row in findings:
+            pin=row['value']['selection'].get('evaluation_ref')
+            if pin:
+                audit=json.loads(files[pin['path']]);require(digest(files[pin['path']])==pin['sha256'],'Finding evaluation audit changed')
+                evaluations[row['revision_id']]=dict(result=audit['result'],steps=audit['steps'])
         with self.scheduler.db() as db:
             bindings=[json.loads(r[0]) for r in db.execute('SELECT document FROM rss_bindings') if json.loads(r[0])['project_id']==project_id]
             keys={b['key'] for b in bindings}
             polls=[dict(id=r[0],state=r[1],binding=r[2],error=(json.loads(r[3]) or {}).get('error') if r[3] else None)
                    for r in db.execute('SELECT id,state,binding,result FROM rss_polls') if r[2] in keys]
         public_bindings=[{k:v for k,v in b.items() if k!='validators'} for b in bindings]
-        return dict(project_id=project_id,commit_id=data['commit_id'],bindings=public_bindings,polls=polls,findings=findings)
+        return dict(project_id=project_id,commit_id=data['commit_id'],bindings=public_bindings,polls=polls,findings=findings,evaluations=evaluations)
 
     def reconcile(self,project_id,poll_id,*,confirm=False):
         require(confirm is True,'Explicit RSS reconciliation is required')

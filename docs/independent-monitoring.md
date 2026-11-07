@@ -7,6 +7,8 @@ měsíční syntézy. Každé sledování má vlastní identitu a neměnné revi
 jeden hlavní rozvrh, vstupy, pravidla a zadání výstupu. Interval kontroly
 externího zdroje se ukládá u daného vstupu; nemění rozvrh zprávy.
 Rozhodnutí, kompatibilita a recovery: [ADR 0074](adr/0074-independent-monitoring-definitions.md).
+Volitelná verzovaná `selection.pipeline` a její náhled:
+[filtry a vyhodnocování](monitoring-filters.md).
 
 ## Datový kontrakt
 

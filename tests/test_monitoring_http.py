@@ -67,6 +67,12 @@ class MonitoringHTTPTests(unittest.TestCase):
         self.assertFalse(json.loads(raw)['can_manage'])
         self.assertEqual(self.call('definition-save',request,headers)[0],403)
         self.assertEqual(self.call('rss-status',{},headers)[0],200)
+        from tests.test_monitoring_filters import pipeline,source
+        head=json.loads(self.call('definitions',{},headers)[1])['commit_id']
+        code,raw,_=self.call('filter-preview',dict(pipeline=pipeline(),items=[source()]),headers)
+        self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw)['results'][0]['decision'],'selected')
+        self.assertEqual(json.loads(self.call('definitions',{},headers)[1])['commit_id'],head)
+        self.assertEqual(self.call('filter-preview',dict(pipeline=pipeline(),items=[]),{'Authorization':'Bearer invalid'})[0],401)
         self.assertEqual(self.call('rss-configure',rss_request,headers)[0],403)
         self.assertEqual(self.call('rss-tick',{},headers)[0],403)
         self.assertEqual(self.call('definitions',{}, {'Authorization':'Bearer invalid'})[0],401)
