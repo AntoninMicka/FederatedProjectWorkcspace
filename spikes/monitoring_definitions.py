@@ -7,6 +7,7 @@ It performs no connector dispatch, LLM call, publication or node placement.
 """
 from copy import deepcopy
 import json
+from pathlib import Path
 
 from spikes.metadata import require, uuid, validate_snapshot
 from spikes.monitoring_definition_schema import normalize_definition, validate_definition, validate_graph
@@ -27,10 +28,18 @@ class MonitoringDefinitions:
         ws = self.reporting.artifacts.workspace(project_id)
         files = ws.git.snapshot(data['commit_id']); entities = validate_snapshot(files)
         result = []
+        bindings=[]
+        node=Path(self.node).absolute()
+        if (node.parent/('.'+node.name+'.reporting-runs')).exists():
+            with ReportingScheduler(node).db() as db:
+                bindings=[json.loads(r[0]) for r in db.execute('SELECT document FROM rss_bindings')]
         for identity, row in definitions.items():
+            configured=[b for b in bindings if b['project_id']==project_id and b['watch_id']==identity
+                        and b['definition_ref']['artifact_id']==row['revision_id']]
+            runtime_state=('collection-configured' if any(b['enabled'] for b in configured) else 'collection-paused') if configured else 'not-connected'
             result.append(dict(watch_id=identity, definition_ref=pinned(project_id, data['commit_id'],
                 row['revision_id'], files, entities), definition=deepcopy(row['value']), privacy=row['privacy'],
-                version=digest(encoded(row['value'])), runtime_state='not-connected'))
+                version=digest(encoded(row['value'])), runtime_state=runtime_state))
         require(ws.git.head() == data['commit_id'], 'Project changed while reading watch definitions')
         return dict(project_id=project_id, commit_id=data['commit_id'], definitions=result)
 

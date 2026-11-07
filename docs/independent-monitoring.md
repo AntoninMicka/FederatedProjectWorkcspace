@@ -106,7 +106,10 @@ Přerušená materializace znovu použije původní rules/scale/task receipts.
 
 ## Co je a není zapojené
 
-Modelový přehled vrací `runtime_state=not-connected`. `active` je požadovaná
+Modelový přehled bez připojeného runtime vrací `runtime_state=not-connected`.
+Po [MON-08-03](recurring-rss.md) rozlišuje také `collection-configured` a
+`collection-paused` pro výslovně nastavený RSS binding téže revize. Tyto
+stavy nejsou potvrzením vykonaného reportu nebo LLM zpracování. `active` je požadovaná
 konfigurace, nikoli důkaz vykonávaného workeru nebo souhlas s externím
 požadavkem. Collect-only a vzdálené běhy se přes přípravu reportingového
 intentu odmítnou. Ani připravený lokální report neprovádí síť, LLM, dispatch
@@ -114,7 +117,7 @@ nebo automatické vydání.
 
 Současný formulář/worker MON-05 dál čte původní markerový formát. Nevzniká
 tichá migrace starých period na nová sledování. Formuláře nového modelu,
-pravidelný sběr RSS, skutečný výběr vydaných upstream zpráv a migrace jsou
+skutečný výběr vydaných upstream zpráv a migrace jsou
 navazující práce MON-08. Sekce Zdroje zatím zůstává ručním readerem.
 Tato dokumentace není potvrzením akceptace celého monitoringu.
 

@@ -30,7 +30,7 @@ Skutečné credentials nejsou argumentem normalizace ani součástí metadat.
 
 `read(config, SourceContext, continuation=None)` a
 `normalize(payload, SourceContext)` vracejí `fpw-source-batch-v1`:
-`{schema, connector, items, continuation}`. Konkrétní payload normalizace
+`{schema, connector, items, continuation, not_modified}`. Konkrétní payload normalizace
 je uzavřený podle adaptéru: RSS `{raw,url}`, dokument `{raw,content_type,url}`,
 search seznam `{title,url,snippet}`; Workspace reader jej sestaví z ověřeného
 ReportingTask, ReportSnapshot a přesných Markdown bajtů. Normalizace přebírá
@@ -72,15 +72,17 @@ a 4 MiB JSON, jednoho textu 131072 znaků. Překročení je chyba bez tichého
 zkrácení. Dokumentový adaptér používá původní bounded HTML projekci.
 RSS zachovává původní bezpečný XML parser, robots a ověření DNS/IP/TLS.
 
-Všechny aktuální adaptéry deklarují `continuation.kind=none`, `persisted=false`.
-Cursor, conditional GET a periodické kontroly zatím nejsou implementované;
-neprázdné pokračování u read operace selže. Metadata availability neprokazují
+RSS po [MON-08-03](recurring-rss.md) deklaruje `continuation.kind=http-validators`;
+jeho read přijímá `{validators}` a explicitně vrací `not_modified=true` při
+304. Connector sám continuation neukládá (`persisted=false`); trvalé uložení
+a periodicitu vlastní původní reportingový run journal. Ostatní adaptéry
+zatím deklarují `kind=none`. Nepodporované pokračování selže. Metadata availability neprokazují
 dostupnost konkrétní externí služby. Search/platform credentials a budoucí
 stav pokračování zůstávají v node-local službě, nikoli v synchronizovaných
 definicích. Retention v položce je pravidlo předané aplikací, nikoli nový
 automatický retention worker.
 
-## Ověření
+## Ověření při MON-08-02
 
 `python3 -m unittest tests.test_source_connectors tests.test_rss_pilot tests.test_rss_sources.RSSSourcesTests -v`:
 25 testů OK. Ověřeny jsou společné item/batch schéma pro RSS, HTML/text,

@@ -102,7 +102,7 @@ class ConnectorContractTests(unittest.TestCase):
         self.assertEqual(catalog['workspace-output']['availability']['state'], 'not-configured')
         for row in catalog.values():
             self.assertFalse(row['config_schema']['additionalProperties'])
-            self.assertEqual(row['continuation']['kind'], 'none')
+            self.assertEqual(row['continuation']['kind'], 'http-validators' if row['id']=='rss-atom' else 'none')
             self.assertEqual(row['credential_storage'], 'node-local')
             self.assertNotIn('api-token', row['config_fields'])
             self.assertIn('max_items', row['limits'])

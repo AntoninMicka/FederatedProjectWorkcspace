@@ -1057,7 +1057,13 @@ class StaticHTMLAdapter:
         return self._get(url, binding, self.resolver, deadline, self.monotonic)
 
     @classmethod
-    def _get(cls, url, binding, resolver, deadline, monotonic):
+    def _get(cls, url, binding, resolver, deadline, monotonic, *, conditional=None):
+        conditional = conditional or {}
+        require(isinstance(conditional, dict) and conditional.keys() <= {'if-none-match', 'if-modified-since'},
+                'Unsupported conditional source headers')
+        for value in conditional.values():
+            require(isinstance(value, str) and 0 < len(value) <= MAX_HEADER_VALUE
+                    and all(32 <= ord(c) < 127 for c in value), 'Invalid conditional source header')
         parsed = urlsplit(url); addresses = cls._resolve(parsed.hostname, resolver)
         family, address = addresses[0]
         sock = None; sent = False
@@ -1080,7 +1086,8 @@ class StaticHTMLAdapter:
                        'Accept: text/html, text/plain\r\nAccept-Encoding: '
                        + ('identity' if parsed.path == '/robots.txt' else 'gzip, identity')
                        + '\r\n'
-                       'Connection: close\r\n\r\n').encode('ascii')
+                       + ''.join(key+': '+value+'\r\n' for key,value in conditional.items())
+                       + 'Connection: close\r\n\r\n').encode('ascii')
             sock.settimeout(remaining()); sock.sendall(request); sent = True
             sock.settimeout(remaining())
             response = http.client.HTTPResponse(sock, method='GET'); response.begin()

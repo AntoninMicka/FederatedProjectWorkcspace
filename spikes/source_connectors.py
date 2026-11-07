@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 from spikes.metadata import require, timestamp, validate_snapshot
 from spikes.public_source import project_document
 from spikes.reporting_schema import PRIVACY, digest, encoded, fields, hex_id, ref, text, validate_record
-from spikes.rss_reader import MAX_BYTES, MAX_ITEMS, fetch, parse_feed
+from spikes.rss_reader import MAX_BYTES, MAX_ITEMS, fetch_response, checked_validators, parse_feed
 from spikes.source_collector import public_url
 
 ITEM = 'fpw-source-item-v1'
@@ -117,7 +117,7 @@ def batch(connector, items):
     require(len(items) <= LIMITS['max_items'], 'Connector item count exceeds limit')
     for value in items:
         validate_item(value); require(value['connector'] == connector, 'Mixed connector batch')
-    value = dict(schema=BATCH, connector=connector, items=items, continuation=None)
+    value = dict(schema=BATCH, connector=connector, items=items, continuation=None, not_modified=False)
     require(len(encoded(value)) <= LIMITS['max_batch_bytes'], 'Connector batch exceeds limit')
     return value
 
@@ -153,15 +153,25 @@ class RSSConnector(SourceConnector):
     permissions, config_fields = ('public-network',), ('url',)
     state, reason, operations = 'ready', 'Přímý ruční odběr je dostupný.', ('read', 'normalize')
 
-    def __init__(self, fetcher=fetch): self.fetcher = fetcher
+    def __init__(self, fetcher=None): self.fetcher = fetcher
+
+    def describe(self):
+        result=super().describe()
+        if self.fetcher is None:result['continuation']=dict(kind='http-validators',persisted=False)
+        return result
 
     def read(self, config, context, *, continuation=None):
         fields(config, 'url'); context.validate()
-        require(continuation is None, 'RSS continuation is not implemented')
+        require(continuation is None or (isinstance(continuation,dict) and set(continuation)=={'validators'}), 'Invalid RSS continuation')
+        require(continuation is None or self.fetcher is None,'RSS continuation is unavailable for this transport')
         require(context.privacy != 'local-only', 'Local-only source cannot make network requests')
         require(config['url'] == context.locator, 'Feed URL differs from source context')
         public_url(config['url'])
-        return self.normalize(dict(raw=self.fetcher(config['url']), url=config['url']), context)
+        if self.fetcher is not None:return self.normalize(dict(raw=self.fetcher(config['url']),url=config['url']),context)
+        response=fetch_response(config['url'],validators=checked_validators(continuation['validators'] if continuation else {}))
+        result=(batch(self.id,[]) if response['status']==304 else self.normalize(dict(raw=response['raw'],url=config['url']),context))
+        result.update(continuation=dict(validators=response['validators']),not_modified=response['status']==304)
+        return result
 
     def normalize(self, payload, context):
         fields(payload, 'raw url')

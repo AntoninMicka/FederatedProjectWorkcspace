@@ -3,6 +3,10 @@
 
 # Přímý RSS/Atom pilot
 
+Projektový [průběžný sběr RSS](recurring-rss.md) navazuje samostatným
+výslovně potvrzeným runtime. Níže popsaný původní CLI a globální ruční
+reader se tím nezapínají jako automatické projektové sledování.
+
 Navazující [kontrakt zdrojových konektorů](source-connectors.md) sjednocuje
 položky readeru s dalšími typy zdrojů. V API sekce Zdroje je dostupný jako
 `items`; původní `entries` zůstává kompatibilní UI projekcí. Nové revize

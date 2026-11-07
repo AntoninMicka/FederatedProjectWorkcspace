@@ -1144,6 +1144,16 @@ externí kód se nepřenášel. Žádný provider nebyl připojený jen na zákl
 přijetí konfiguračních metadat. Scope/recovery:
 [ADR 0075](docs/adr/0075-source-connector-contract.md).
 
+MON-08-03 **reuse/adaptuje** Reporting/Workspace writer, sémantickou validaci,
+raw source metadata a receipts, původní ReportingScheduler DB/owner/grants,
+SourceCollector origin backoff, RSS observe aliases a společný SourceItem.
+Conditional GET rozšiřuje existující bounded DNS/IP/TLS transport pouze
+o dvě validované hlavičky. Nové jsou SourceFinding a schema-3 tabulky
+rss_bindings/rss_polls v původním journalu; druhá DB, writer, daemon,
+provider SDK a automatická lidská akceptace byly **reject**. Veřejná i
+dostupná soukromá inventura byly zkontrolovány; externí kód se nepřenášel.
+Recovery a hranice: [ADR 0076](docs/adr/0076-recurring-rss-findings.md).
+
 Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
 Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
 zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný

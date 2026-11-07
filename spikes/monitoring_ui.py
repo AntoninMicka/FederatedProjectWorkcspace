@@ -4,6 +4,7 @@
 HTML='''<div id="monitoring-panel" role="tabpanel" aria-labelledby="monitoring-tab" hidden>
 <header><h2>Sledování a zprávy</h2><p>Společný cíl a historie, samostatné zadání pro každé období.</p></header>
 <p id="monitoring-status" role="status" aria-live="polite"></p>
+<section id="monitoring-rss-section" hidden><h3>Průběžný sběr RSS</h3><ul id="monitoring-rss-list"></ul></section>
 <div class="monitoring-grid"><section><h3>Sledování</h3><button id="monitoring-new" type="button">Nové sledování</button>
 <ul id="monitoring-watches"></ul></section><section id="monitoring-detail"><p>Vyberte sledování nebo zprávu.</p></section></div>
 <form id="monitoring-form" hidden>
@@ -44,7 +45,7 @@ const monitoringForm=document.querySelector('#monitoring-form');
 const monitoringStatus=document.querySelector('#monitoring-status');
 const monitoringLabels={weekly:'Týden',monthly:'Měsíc',quarterly:'Čtvrtletí',annual:'Rok / výroční zpráva'};
 const monitoringStates={succeeded:'Staženo',fetching:'Stahuje se',prepared:'Připraveno',collecting:'Zpracovává se',review:'K posouzení',approved:'Schváleno',issuing:'Vydává se',issued:'Vydáno, čeká na doručení',completed:'Vydáno',failed:'Chyba',cancelled:'Zrušeno',unknown:'Neznámý výsledek — vyžaduje dohledání'};
-function clearMonitoring(){monitoringView=null;monitoringEdit=null;monitoringAttempt=null;monitoringDirty=false;monitoringForm.hidden=true;for(const id of ['monitoring-watches','monitoring-reports','sidebar-monitoring-list','sidebar-report-list'])document.getElementById(id)?.replaceChildren();}
+function clearMonitoring(){monitoringView=null;monitoringEdit=null;monitoringAttempt=null;monitoringDirty=false;monitoringForm.hidden=true;document.querySelector('#monitoring-rss-section').hidden=true;for(const id of ['monitoring-watches','monitoring-reports','sidebar-monitoring-list','sidebar-report-list','monitoring-rss-list'])document.getElementById(id)?.replaceChildren();}
 async function canLeaveMonitoring(){if(!monitoringDirty&&!monitoringAttempt)return true;return resolveEditorLeave('Sledování',saveMonitoring,()=>{monitoringDirty=false;monitoringAttempt=null;monitoringForm.hidden=true;});}
 function monitoringOpen(section='tools'){selectSidebarTab(document.querySelector(section==='outputs'?'#presentations-tab':'#tools-tab'));selectMainTab(document.querySelector('#monitoring-tab'));}
 function monitoringButton(label,action,disabled=false){const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=disabled;b.addEventListener('click',async()=>{try{await action();}catch(error){monitoringStatus.textContent=error.message;}});return b;}
@@ -59,6 +60,16 @@ function renderMonitoring(){
  if(!monitoringView)return;const readonly=activeProject?.readOnly||!monitoringView.can_manage;
  document.querySelector('#monitoring-new').disabled=readonly;document.querySelector('#sidebar-monitoring-new').disabled=readonly;
  monitoringStatus.textContent=monitoringView.error||`${monitoringView.watches.length} sledování · ${monitoringView.reports.length} zpráv`;
+ const rss=monitoringView.rss,rssList=document.querySelector('#monitoring-rss-list');rssList.replaceChildren();
+ document.querySelector('#monitoring-rss-section').hidden=!rss?.bindings?.length;
+ for(const binding of rss?.bindings||[]){const li=document.createElement('li');
+  const at=value=>value?new Date(typeof value==='number'?value*1000:value).toLocaleString('cs-CZ'):'dosud neproběhla';
+  const pending=rss.polls.filter(p=>p.binding===binding.key).at(-1);
+  li.textContent=binding.url+' — '+(binding.enabled?'Zapnuto':'Pozastaveno')+' · kontrola každých '+Math.round(binding.interval/60)+' min · poslední úspěšná: '+at(binding.last_success)+' · příští: '+at(binding.next_due);
+  if(pending?.state==='unknown')li.textContent+=' · Neznámý výsledek, čeká na dohledání.';
+  if(binding.last_error)li.textContent+=' · '+binding.last_error;
+  rssList.append(li);
+ }
  for(const id of ['monitoring-watches','sidebar-monitoring-list']){
   const list=document.getElementById(id);list.replaceChildren();
   for(const watch of monitoringView.watches){const li=document.createElement('li');const valid=monitoringView.granted[watch.id];

@@ -75,6 +75,7 @@ class Monitoring:
         self.node=Path(node);self.projects=projects;self.clock=clock
         self.reporting=Reporting(node);self.artifacts=Artifacts(node)
         self._scheduler=None
+        self._rss_runtime=None
         self.collector=collector or SourceCollector(node,clock=clock)
         self.adapter_factory=adapter_factory;self.last_errors={};self.lock=threading.Lock()
         self.stop_event=threading.Event();self.thread=None
@@ -83,6 +84,13 @@ class Monitoring:
     def scheduler(self):
         if self._scheduler is None:self._scheduler=ReportingScheduler(self.node,clock=self.clock)
         return self._scheduler
+
+    @property
+    def rss_runtime(self):
+        if self._rss_runtime is None:
+            from spikes.rss_monitoring import RSSMonitoring
+            self._rss_runtime=RSSMonitoring(self.node,clock=self.clock,scheduler=self.scheduler)
+        return self._rss_runtime
 
     def _data(self,pid,*,network=False):
         ws=self.projects.workspace(pid,blocking=True);head=ws.git.head()
@@ -449,6 +457,7 @@ class Monitoring:
             for project in ids:
                 try:
                     data=self._data(project)
+                    self.rss_runtime.tick(project)
                     for cfg in self.watches(data[2],data[3]):
                         if not cfg['active'] or not self.granted(project,cfg):continue
                         try:
@@ -561,7 +570,9 @@ class Monitoring:
         definition_view=MonitoringDefinitions(self.node).read(pid)
         require(definition_view['commit_id']==head,'Projekt se během čtení sledování změnil; obnovte přehled.')
         definitions=definition_view['definitions']
-        return dict(project_id=pid,commit_id=head,watches=watches,definitions=definitions,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
+        rss_status=self.rss_runtime.status(pid)
+        require(rss_status['commit_id']==head,'Projekt se během čtení RSS změnil; obnovte přehled.')
+        return dict(project_id=pid,commit_id=head,watches=watches,definitions=definitions,rss=rss_status,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
             inputs=[dict(id=id_,title=m['title'],privacy=m['privacy']) for id_,m in entities.items()
                     if m.get('file') and not files['artifacts/'+id_+'/'+m['file']].startswith(MARKER.encode())],
             profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self.last_errors.get(pid) or self.last_errors.get('runtime'))

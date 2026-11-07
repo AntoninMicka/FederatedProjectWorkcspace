@@ -18,6 +18,10 @@ přidává typ `WatchDefinition` a denní `Period` pro samostatná propojená
 sledování. Jejich [modelové API](independent-monitoring.md) samo neprovádí
 automatický sběr ani syntézu; původní cílový reportingový tok tím není akceptovaný.
 
+Rozšíření MON-08-03 v [ADR 0076](adr/0076-recurring-rss-findings.md) přidává
+`SourceFinding` pro neměnné RSS nálezy, jejich opravy a processing stavy.
+Jde o untrusted zdrojová data, nikoli potvrzené Events nebo EvidenceAssessment.
+
 ## 1. Verze, identity a společné typy
 
 Projektové záznamy mají obálku `schema: fpw-reporting-record-v1` s právě
@@ -27,7 +31,7 @@ přípustné. Nullable hodnoty jsou explicitní `null`, nikoli chybějící pole
 | Pole | Typ a význam |
 | --- | --- |
 | `schema` | Přesně `fpw-reporting-record-v1`. |
-| `type` | `ReportingTask`, `Event`, `Source`, `Story`, `EvidenceAssessment`, `EvaluationScale`, `ReportSnapshot`; rozšíření ADR 0074 přidává `WatchDefinition`. |
+| `type` | `ReportingTask`, `Event`, `Source`, `Story`, `EvidenceAssessment`, `EvaluationScale`, `ReportSnapshot`; ADR 0074 přidává `WatchDefinition`, ADR 0076 `SourceFinding`. |
 | `entity_id` | Kanonické UUID stabilní identity napříč revizemi. |
 | `revision_id` | Nové kanonické UUID každé neměnné revize; rovná se ID jejího projektového artefaktu. |
 | `previous` | Seznam 0–2 `PinnedRef` stejné identity a typu. Genesis má prázdný seznam; dva rodiče znamenají výslovně posouzené sloučení větví. |

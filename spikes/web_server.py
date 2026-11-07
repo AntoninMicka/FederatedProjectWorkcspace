@@ -591,7 +591,7 @@ class WebHandler(DesktopHandler):
         if self.path.startswith('/v1/monitoring/'):
             if not isinstance(request,dict) or not self.server.administration.allowed(self.actor,request.get('project_id')):
                 return self.send_error(403)
-            if self.path not in {'/v1/monitoring/view','/v1/monitoring/definitions'} and (not self.server.administration.is_admin(self.actor) or not self._can_write(request.get('project_id'))):
+            if self.path not in {'/v1/monitoring/view','/v1/monitoring/definitions','/v1/monitoring/rss-status'} and (not self.server.administration.is_admin(self.actor) or not self._can_write(request.get('project_id'))):
                 return self.send_error(403)
         if self.path in {'/v1/artifacts/editor/plan-item/save', '/v1/artifacts/editor/plan-item/create',
                          '/v1/artifacts/editor/plan-item/dependencies', '/v1/artifacts/editor/plan-item/delete'}:

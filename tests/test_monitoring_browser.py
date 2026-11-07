@@ -25,6 +25,17 @@ f=test_reporting.ReportingTests('test_manual_event_multiple_sources_and_read_pro
 try:
  with running_api('http',handler=DesktopHandler,projects=Projects(f.node)) as server:
   server.monitoring=Monitoring(f.node,server.projects);server.presentation_documents=PresentationDocuments(f.node)
+  from spikes.monitoring_definitions import MonitoringDefinitions
+  from tests.test_monitoring_definitions import definition
+  from tests.test_rss_pilot import rss
+  from uuid import uuid4
+  cfg=definition();watch_id=str(uuid4())
+  saved=MonitoringDefinitions(f.node).save(dict(project_id=f.project,base_head=f.git.head(),watch_id=watch_id,
+    previous=[],privacy='project',definition=cfg),str(uuid4()))
+  server.monitoring.rss_runtime.fetcher=lambda *a,**kw:dict(status=200,raw=rss(),validators={'if-none-match':'"browser"'})
+  server.monitoring.rss_runtime.configure(dict(project_id=f.project,watch_id=watch_id,input_id=cfg['inputs'][0]['id'],
+    definition_ref=saved['definition_ref'],enabled=True,mode='queue-all'),confirm=True)
+  server.monitoring.rss_runtime.tick(f.project)
   from spikes.chat_service import ChatService
   server.chat_service=ChatService(f.node,server.projects)
   profile=QWebEngineProfile(app)
@@ -43,7 +54,7 @@ try:
    8:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Otevřít navázanou prezentaci').click()"}
   checks={
    0:"typeof loadMonitoring==='function'",
-   1:"activeProject&&monitoringView&&monitoringView.project_id===activeProject.id",
+   1:"activeProject&&monitoringView&&monitoringView.project_id===activeProject.id&&document.querySelector('#monitoring-rss-list').textContent.includes('kontrola každých 15 min')",
    2:"!monitoringForm.hidden",
    3:"monitoringView?.watches.length===1&&!monitoringDirty&&monitoringForm.hidden",
    4:"[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Spustit nyní')",

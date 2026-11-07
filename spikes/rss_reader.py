@@ -158,8 +158,18 @@ def observe(feed, observed_at, previous=None):
     return result
 
 
-def fetch(feed_url, *, transport=None):
+def checked_validators(validators):
+    require(validators is None or isinstance(validators,dict),'Invalid RSS validators')
+    conditional = {} if validators is None else dict(validators)
+    require(conditional.keys() <= {'if-none-match','if-modified-since'}, 'Invalid RSS validators')
+    for value in conditional.values():
+        require(isinstance(value,str) and 0<len(value)<=8192 and all(32<=ord(c)<127 for c in value), 'Invalid RSS validator')
+    return conditional
+
+
+def fetch_response(feed_url, *, validators=None, transport=None):
     public_url(feed_url)
+    conditional = checked_validators(validators)
     binding = PublicSourceBinding.parse(dict(schema_version=1, binding_id=str(uuid4()),
         revision='rss-pilot-v1', adapter='static-html-v1', origins=[url_origin(feed_url)],
         user_agent='WorkspaceRSSPilot/0.1', auth='none', max_wire_bytes=MAX_BYTES,
@@ -168,12 +178,17 @@ def fetch(feed_url, *, transport=None):
     deadline = time.monotonic() + binding.timeout_seconds
 
     def get(url):
-        result = (transport(url) if transport else StaticHTMLAdapter._get(
-            url, binding, socket.getaddrinfo, deadline, time.monotonic))
-        require(result.url == url and result.status == 200, 'RSS request failed; redirects/retries are not automatic')
+        headers = conditional if url == feed_url else {}
+        result = ((transport(url) if validators is None else transport(url,headers)) if transport else StaticHTMLAdapter._get(
+            url, binding, socket.getaddrinfo, deadline, time.monotonic, conditional=headers))
+        if result.status in {429,503}:
+            error=RSSUnavailable('RSS source is rate limited or unavailable')
+            error.retry_after=result.headers.get('retry-after');raise error
+        require(result.url == url and (result.status == 200 or (url == feed_url and result.status == 304 and conditional)),
+                'RSS request failed; redirects/retries are not automatic')
         require(time.monotonic() < deadline and len(result.body) <= MAX_BYTES, 'RSS response exceeds limits')
         headers = StaticHTMLAdapter._headers(result.headers)
-        if 'content-length' in headers:
+        if 'content-length' in headers and result.status != 304:
             require(headers['content-length'].isdigit() and
                     int(headers['content-length']) == len(result.body), 'Incomplete RSS response')
         return HTTPResult(result.status, headers, result.body, result.url)
@@ -184,11 +199,27 @@ def fetch(feed_url, *, transport=None):
     robot_bytes = TextAdapter._decode(robots, binding.serialize())
     require(_robots_allowed(robot_bytes, urlsplit(feed_url).path, binding.user_agent), 'RSS path is disallowed by robots')
     target = get(feed_url)
+    require('no-store' not in target.headers.get('cache-control', '').lower(), 'Feed prohibits storing probe evidence')
+    if target.status == 304:
+        require(not target.body, 'Unexpected RSS 304 body')
+        updated=dict(conditional)
+        for header,key in [('etag','if-none-match'),('last-modified','if-modified-since')]:
+            if target.headers.get(header):updated[key]=target.headers[header]
+        return dict(status=304,raw=None,validators=checked_validators(updated))
     mime = target.headers.get('content-type', '').split(';')[0].strip().lower()
     require(mime in {'application/rss+xml', 'application/atom+xml', 'application/xml', 'text/xml'},
             'RSS pilot requires an XML response')
     require('no-store' not in target.headers.get('cache-control', '').lower(), 'Feed prohibits storing probe evidence')
-    return TextAdapter._decode(target, binding.serialize())
+    updated={key:target.headers[header] for header,key in [('etag','if-none-match'),('last-modified','if-modified-since')] if target.headers.get(header)}
+    return dict(status=200,raw=TextAdapter._decode(target, binding.serialize()),validators=checked_validators(updated),content_type=mime)
+
+
+class RSSUnavailable(ValueError):
+    retry_after = None
+
+
+def fetch(feed_url, *, transport=None):
+    return fetch_response(feed_url,transport=transport)['raw']
 
 
 def main(argv=None):

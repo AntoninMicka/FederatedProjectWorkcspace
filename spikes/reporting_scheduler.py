@@ -94,18 +94,27 @@ class ReportingScheduler:
                     kind TEXT NOT NULL, cutoff TEXT, snapshot BLOB NOT NULL,
                     PRIMARY KEY(project_id,task_entity,kind))''')
                 db.execute('CREATE TABLE watch_grants(project_id TEXT NOT NULL,watch_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(project_id,watch_id))')
+                tables={'schema_info','runs','cutoffs','watch_grants'};version=[(2,*self.owner)]
             else:
                 version=db.execute('SELECT version,node_id,owner_id FROM schema_info').fetchall() if 'schema_info' in tables else []
                 if tables=={'schema_info','runs','cutoffs'} and version==[(1,*self.owner)]:
                     db.execute('CREATE TABLE watch_grants(project_id TEXT NOT NULL,watch_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(project_id,watch_id))')
                     db.execute('UPDATE schema_info SET version=2');tables.add('watch_grants');version=[(2,*self.owner)]
-                require(tables == {'schema_info', 'runs', 'cutoffs','watch_grants'} and version == [(2,*self.owner)],
-                        'Unknown reporting run journal schema or owner')
                 require([r[1] for r in db.execute('PRAGMA table_info(runs)')] ==
                         ['run_id','reservation','request_digest','document','candidate','task_entity',
                          'delivery_required','lease_owner','lease_token','lease_until'], 'Unknown run columns')
                 require([r[1] for r in db.execute('PRAGMA table_info(cutoffs)')] ==
                         ['project_id','task_entity','kind','cutoff','snapshot'], 'Unknown cutoff columns')
+            base={'schema_info','runs','cutoffs','watch_grants'}
+            if tables==base and version==[(2,*self.owner)]:
+                db.execute('CREATE TABLE rss_bindings(key TEXT PRIMARY KEY,document BLOB NOT NULL)')
+                db.execute('CREATE TABLE rss_polls(id TEXT PRIMARY KEY,binding TEXT NOT NULL,state TEXT NOT NULL,document BLOB NOT NULL,result BLOB,plan BLOB,receipt BLOB)')
+                db.execute('UPDATE schema_info SET version=3')
+                tables|={'rss_bindings','rss_polls'};version=[(3,*self.owner)]
+            require(tables==base|{'rss_bindings','rss_polls'} and version==[(3,*self.owner)],
+                    'Unknown reporting run journal schema or owner')
+            require([r[1] for r in db.execute('PRAGMA table_info(rss_bindings)')]==['key','document'], 'Unknown RSS binding columns')
+            require([r[1] for r in db.execute('PRAGMA table_info(rss_polls)')]==['id','binding','state','document','result','plan','receipt'], 'Unknown RSS poll columns')
             yield db
             db.commit()
         except BaseException:

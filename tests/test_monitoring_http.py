@@ -42,6 +42,16 @@ class MonitoringHTTPTests(unittest.TestCase):
         request=dict(operation_id=str(uuid4()),base_head=view['commit_id'],watch_id=watch_id,
                      previous=[],privacy='project',definition=definition())
         code,raw,_=self.call('definition-save',request);self.assertEqual(code,200,raw)
+        saved=json.loads(raw)
+        rss_request=dict(watch_id=watch_id,input_id=request['definition']['inputs'][0]['id'],
+            definition_ref=saved['definition_ref'],enabled=True,mode='queue-all',confirm=True)
+        self.assertEqual(self.call('rss-configure',dict(rss_request,confirm=False))[0],422)
+        code,raw,_=self.call('rss-configure',rss_request);self.assertEqual(code,200,raw)
+        from tests.test_rss_pilot import rss
+        self.f.server.monitoring.rss_runtime.fetcher=lambda *a,**kw:dict(status=200,raw=rss(),validators={'if-none-match':'"test"'})
+        code,raw,_=self.call('rss-tick',{});self.assertEqual(code,200,raw)
+        self.assertEqual(len(json.loads(raw)['findings']),1)
+        self.assertNotIn('validators',json.loads(raw)['bindings'][0])
         code,raw,_=self.call('definitions',{});self.assertEqual(code,200,raw)
         self.assertEqual(json.loads(raw)['definitions'][0]['watch_id'],watch_id)
         def admin(body):
@@ -56,4 +66,7 @@ class MonitoringHTTPTests(unittest.TestCase):
         code,raw,_=self.call('definitions',{},headers);self.assertEqual(code,200,raw)
         self.assertFalse(json.loads(raw)['can_manage'])
         self.assertEqual(self.call('definition-save',request,headers)[0],403)
+        self.assertEqual(self.call('rss-status',{},headers)[0],200)
+        self.assertEqual(self.call('rss-configure',rss_request,headers)[0],403)
+        self.assertEqual(self.call('rss-tick',{},headers)[0],403)
         self.assertEqual(self.call('definitions',{}, {'Authorization':'Bearer invalid'})[0],401)

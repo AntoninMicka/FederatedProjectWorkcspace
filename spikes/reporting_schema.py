@@ -19,6 +19,7 @@ PRIVACY = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 DIMENSIONS = ('maturity', 'relevance', 'novelty', 'impact', 'confidence')
 PERIODS = {'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
 TYPES = {
+    'SourceFinding': ('finding', 'definition_ref input_id item aliases entry_sha256 stage selection change_reason raw_ref'),
     'WatchDefinition': ('watch', 'title goal scope active schedule inputs selection evaluation report placement'),
     'ReportingTask': ('task', 'title goal scope source_policy calendar selection_policy scale_ref outputs execution retention_policy'),
     'EvaluationScale': ('scale', 'title dimensions comparison_policy'),
@@ -229,7 +230,10 @@ def validate_record(record):
     for key in ('categories', 'entities', 'geographies', 'tags', 'limitations'):
         if key in v:
             sequence(v[key], text)
-    if kind == 'WatchDefinition':
+    if kind == 'SourceFinding':
+        from spikes.rss_finding_schema import validate_finding
+        validate_finding(v)
+    elif kind == 'WatchDefinition':
         from spikes.monitoring_definition_schema import validate_definition
         validate_definition(v)
     elif kind == 'ReportingTask':
@@ -411,6 +415,8 @@ def records(files, entities):
                     'Reporting envelope differs from metadata')
             require(meta['kind'] == ('snapshot' if record['type'] == 'ReportSnapshot' else 'document'),
                     'Invalid reporting artifact kind')
+            if record['type']=='SourceFinding':
+                require(meta['provenance']=='external','Finding metadata must remain external source data')
             result[id_] = record
     identities = {}
     parents = set()
@@ -426,6 +432,11 @@ def records(files, entities):
             parents.add(before['revision_id'])
             if record['type'] in {'Event', 'Source'}:
                 require(before['value']['imported_at'] == record['value']['imported_at'], 'Import time is immutable')
+            if record['type']=='SourceFinding':
+                prior=before['value'];current=record['value']
+                require(current['input_id']==prior['input_id'] and all(current['item'][k]==prior['item'][k] for k in ('source_id','source_locator')), 'Finding identity changed')
+                require(set(prior['aliases'])<=set(current['aliases']),'Finding aliases are append-only')
+                require(all(current['item'][k]==prior['item'][k] for k in ('discovered_at','imported_at')),'Finding first-seen/import times are immutable')
             if record['type'] == 'Story':
                 old, new = before['value']['decisions'], record['value']['decisions']
                 require(new[:len(old)] == old, 'Story decisions are append-only')
@@ -551,6 +562,13 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
         if kind == 'Source' and v['raw_ref'] is not None:
             meta, _ = resolve(v['raw_ref'])
             require(meta['kind'] == 'source', 'Captured bytes must be immutable source')
+        if kind=='SourceFinding':
+            _,definition=resolve(v['definition_ref'],'WatchDefinition')
+            inputs=[i for i in definition['value']['inputs'] if i['id']==v['input_id']]
+            require(len(inputs)==1 and inputs[0]['kind']=='external' and inputs[0]['connector']=='rss-atom','Finding input is not an RSS source')
+            require(inputs[0]['locator']==v['item']['source_locator'] and v['item']['source_id']==v['input_id'],'Finding source differs from definition')
+            require(v['item']['privacy']==record['privacy'],'Finding privacy differs from envelope')
+            meta,_=resolve(v['raw_ref']);require(meta['kind']=='source','Finding raw capture must be a source')
         if kind == 'Event':
             for source in v['sources']:
                 _, source_record = resolve(source, 'Source')
