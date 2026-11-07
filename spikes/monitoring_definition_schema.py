@@ -91,7 +91,21 @@ def validate_definition(value):
         require(len(value[key]['revision']) <= 100 and len(value[key]['instructions']) <= 8000,
                 'Watch rules exceed limit')
     report = value['report']
-    fields(report, 'mode instructions formats language required_sections')
+    fields(report, 'mode instructions formats language required_sections'+(' analysis' if 'analysis' in report else ''))
+    if 'analysis' in report:
+        from spikes.reporting_schema import ref
+        analysis=report['analysis'];fields(analysis,'revision input_level case_studies target')
+        text(analysis['revision']);require(len(analysis['revision'])<=100,'Analysis revision exceeds limit')
+        choice(analysis['input_level'],{'weekly','monthly','mixed'})
+        def case(item):
+            fields(item,'ref status note');ref(item['ref']);text(item['note'])
+            choice(item['status'],{'ongoing','stalled','abandoned','completed','unknown'})
+            require(len(item['note'])<=2000,'Case study note exceeds limit')
+        sequence(analysis['case_studies'],case)
+        if analysis['target'] is not None:
+            from spikes.context_builder import Target
+            fields(analysis['target'],'binding_id binding_revision boundary target_id model');Target(**analysis['target']).validate()
+        require((analysis['target'] is not None)==(report['mode']=='llm'),'Analytical target requires explicit LLM mode')
     choice(report['mode'], {'collect-only', 'deterministic', 'llm'})
     text(report['instructions']); text(report['language'])
     require(len(report['instructions']) <= 8000 and len(report['language']) <= 50, 'Report instructions exceed limit')

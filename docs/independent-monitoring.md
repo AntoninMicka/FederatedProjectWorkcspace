@@ -11,6 +11,8 @@ Volitelná verzovaná `selection.pipeline` a její náhled:
 [filtry a vyhodnocování](monitoring-filters.md).
 Spustitelná deterministická syntéza ze zmrazených upstream vydání a nálezů:
 [řetězení sledování](watch-synthesis.md).
+Vlastní analytické zadání, srovnatelnost a modelové pokračování delších zpráv:
+[analytická syntéza](synthesis-analysis.md).
 
 ## Datový kontrakt
 

@@ -72,6 +72,9 @@ def windows(schedule, period, mode):
 
 
 class WatchSynthesis:
+    @staticmethod
+    def _public_run(run):return {k:v for k,v in run.items() if k!='assistance_context'}
+
     def __init__(self,node):
         self.node=node;self.reporting=Reporting(node);self.scheduler=ReportingScheduler(node)
         self.model=MonitoringDefinitions(node);self.monitoring=Monitoring(node,self.reporting.artifacts.projects)
@@ -88,7 +91,8 @@ class WatchSynthesis:
         tips=validate_graph(rs);value=row['value']
         require(tips[row['entity_id']]['revision_id']==row['revision_id'] and value['active'],'Watch is superseded or paused')
         require(value['placement']['mode']=='local','Remote synthesis is not connected')
-        require(value['report']['mode']=='deterministic','This synthesis runtime requires explicit deterministic mode')
+        require(value['report']['mode'] in {'deterministic','llm'},'Synthesis requires a report mode')
+        if value['report']['mode']=='llm':require(value['report'].get('analysis',{}).get('target') is not None,'LLM synthesis requires an explicit analytical model target')
         require(period['kind']==value['schedule']['kind'] and period['timezone']==value['schedule']['timezone'],'Synthesis period differs from definition')
         from spikes.reporting_schema import period as validate_period
         validate_period(period);require(moment(period['end_utc']).timestamp()<=self.scheduler.now(),'Synthesis period has not closed')
@@ -112,6 +116,9 @@ class WatchSynthesis:
             if link['kind']=='watch':
                 require(not link['include_drafts'],'Portable draft inputs are not available; issued reports are required')
                 upstream=tips[link['watch_id']];upstream_pin=pin(upstream)
+                settings=value['report'].get('analysis')
+                if settings and link['take']=='reports' and settings['input_level']!='mixed':
+                    require(upstream['value']['schedule']['kind']==settings['input_level'],'Upstream level differs from analytical definition')
                 require(PRIVACY[row['privacy']]>=PRIVACY[upstream['privacy']],'Input would relax privacy')
                 if link['take']=='reports':
                     expected=windows(upstream['value']['schedule'],period,p['window'])
@@ -183,7 +190,7 @@ class WatchSynthesis:
         require(plan['definition_ref']['artifact_id']==definition_ref['artifact_id'] and plan['definition_ref']['sha256']==definition_ref['sha256']
                 and plan['period']==period and plan['external_refs']==external_refs,'Period already has a different frozen intent; explicit correction required')
         job=self.model.prepare_run(pid,plan['definition_ref'],period,ident(slot,'run'),frozen_inputs=manifest_ref,knowledge_cutoff=plan['knowledge_cutoff'])
-        return dict(state=job['state'],run=job,manifest_ref=manifest_ref,complete=plan['complete'],missing=plan['missing'])
+        return dict(state=job['state'],run=self._public_run(job),manifest_ref=manifest_ref,complete=plan['complete'],missing=plan['missing'])
 
     def _manifest(self,run):
         ws=self.reporting.artifacts.workspace(run['project_id']);files=ws.git.snapshot(run['input_head']);metas=validate_snapshot(files)
@@ -191,7 +198,7 @@ class WatchSynthesis:
         raw,_=SourceCollector.resolve(ws,run['project_id'],ref,files,metas)
         return ref,validate_manifest(json.loads(raw))
 
-    def execute(self,pid,definition_ref,period,*,external_refs=None,checkpoint=lambda stage:None):
+    def execute(self,pid,definition_ref,period,*,external_refs=None,model_execution=None,checkpoint=lambda stage:None):
         prepared=self.prepare(pid,definition_ref,period,external_refs=external_refs,checkpoint=checkpoint)
         if 'run' not in prepared:return prepared
         run=prepared['run']
@@ -201,8 +208,14 @@ class WatchSynthesis:
             if until<=self.scheduler.now():
                 try:self.scheduler.claim(run['run_id'],str(uuid4()))
                 except ValueError:pass
-                prepared.update(run=self.scheduler.get(run['run_id']),state='unknown')
+                prepared.update(run=self._public_run(self.scheduler.get(run['run_id'])),state='unknown')
         if run['state']!='prepared':return prepared
+        _,initial_plan=self._manifest(run)
+        ws=self.reporting.artifacts.workspace(pid);initial_files=ws.git.snapshot(ws.git.head())
+        raw,_=SourceCollector.resolve(ws,pid,initial_plan['definition_ref'],initial_files,validate_snapshot(initial_files))
+        if json.loads(raw)['value']['report']['mode']=='llm':
+            from spikes.synthesis_model import validate_execution
+            validate_execution(model_execution,json.loads(raw)['value'])
         claimed=self.scheduler.claim(run['run_id'],str(uuid4()),lease_seconds=600);run=claimed['run']
         try:
             manifest_ref,plan=self._manifest(run)
@@ -234,11 +247,34 @@ class WatchSynthesis:
             value['synthesis']=dict(manifest_ref=manifest_ref,complete=plan['complete'],missing=plan['missing'])
             if plan['missing']:value['limitations'].append('Neúplné vstupy: '+'; '.join(plan['missing']))
             markdown='\n'.join(lines)+'\n'
+            generation=None
+            if period['kind'] in {'monthly','quarterly','annual'} or 'analysis' in definition['value']['report']:
+                from spikes.synthesis_analysis import from_git,render
+                ledger=from_git(ws,pid,plan,manifest_ref,definition['value'],definition['privacy'],files,metas)
+                analysis_ref=self.monitoring._doc(pid,ident(run['run_id'],'analysis'),'Sledování — analytická evidence',
+                    encoded(ledger).decode(),ident(run['run_id'],'analysis-op'),definition['privacy'])
+                checkpoint('synthesis-analysis')
+                actual=ws.git.snapshot(ws.git.head())[analysis_ref['path']]
+                require(json.loads(actual)==ledger,'Stored analytical ledger differs from frozen evidence')
+                value['analysis_ref']=analysis_ref
+                markdown=render(ledger,definition['value']['report']['required_sections'])
+                if definition['value']['report']['mode']=='llm':
+                    from spikes.synthesis_model import execute as model_execute
+                    markdown,generation=model_execute(self,run,claimed['lease_token'],definition,ledger,analysis_ref,
+                        manifest_ref,model_execution,checkpoint)
+                    value['generation']=generation
+                if ledger['gaps'] and not plan['missing']:value['limitations'].append('Převzaté zprávy obsahují mezery ve vstupech.')
+                if any('Omezený zdroj:' in limit for limit in ledger['limitations']):value['reproducibility']='limited-inputs'
+                head=ws.git.head()
             self.scheduler.stage(run['run_id'],claimed['lease_token'],dict(project_id=pid,base_head=head,records=[dict(
-                type='ReportSnapshot',entity_id=None,previous=[],privacy=definition['privacy'],value=value,markdown=markdown)]),checkpoint=checkpoint)
+                type='ReportSnapshot',entity_id=None,previous=[],privacy=definition['privacy'],value=value,markdown=markdown)]),checkpoint=checkpoint,_generation=generation)
         except Exception:
-            self.scheduler.fail(run['run_id'],claimed['lease_token']);raise
-        prepared.update(state='review',run=self.scheduler.get(run['run_id']))
+            outcome='failed'
+            if model_execution is not None:
+                model=model_execution.adapter.runs.get(ident(run['run_id'],'analytical-model'))
+                if model and model['state'] in {'dispatching','unknown'}:outcome='unknown'
+            self.scheduler.fail(run['run_id'],claimed['lease_token'],outcome=outcome);raise
+        prepared.update(state='review',run=self._public_run(self.scheduler.get(run['run_id'])))
         return prepared
 
     def publish(self,run_id,approval_digest,*,confirm=False,checkpoint=lambda stage:None):
@@ -251,12 +287,18 @@ class WatchSynthesis:
         if ws.receipt(run_id) is None:
             files=ws.git.snapshot(ws.git.head());guard(ws,files,validate_snapshot(files))
         self.scheduler.approve(run_id,approval_digest,confirm=confirm)
-        return self.scheduler.publish(run_id,checkpoint=checkpoint,_publication_guard=guard)
+        return self._public_run(self.scheduler.publish(run_id,checkpoint=checkpoint,_publication_guard=guard))
 
-    def retry(self,run_id,*,confirm=False):
+    def retry(self,run_id,*,confirm=False,model_execution=None):
         run=self.scheduler.get(run_id);_,plan=self._manifest(run)
+        ws=self.reporting.artifacts.workspace(run['project_id']);files=ws.git.snapshot(ws.git.head())
+        raw,_=SourceCollector.resolve(ws,run['project_id'],plan['definition_ref'],files,validate_snapshot(files))
+        definition=json.loads(raw)['value']
+        if definition['report']['mode']=='llm':
+            from spikes.synthesis_model import validate_execution
+            validate_execution(model_execution,definition)
         self.scheduler.retry(run_id,confirm=confirm)
-        return self.execute(run['project_id'],plan['definition_ref'],plan['period'],external_refs=plan['external_refs'])
+        return self.execute(run['project_id'],plan['definition_ref'],plan['period'],external_refs=plan['external_refs'],model_execution=model_execution)
 
     def freshness(self,pid,report_ref):
         ws,head,files,metas,rs=self._snapshot(pid)
@@ -265,7 +307,7 @@ class WatchSynthesis:
         pin=report['value']['synthesis']['manifest_ref'];raw,_=SourceCollector.resolve(ws,pid,pin,files,metas);plan=json.loads(raw)
         selected={n['ref']['artifact_id'] for n in self.trace(pid,report_ref,_operative=True)['nodes'] if n['ref']['artifact_id']!=report_ref['artifact_id']};changed=[]
         for row in rs.values():
-            if row['revision_id']==report_ref['artifact_id']:continue
+            if row['revision_id']==report_ref['artifact_id'] or row['revision_id'] in selected:continue
             if row['type']=='ReportSnapshot' and row['value']['corrects'] and row['value']['corrects']['artifact_id'] in selected:
                 changed.append(self.reporting.pin(pid,row['revision_id'],head))
             elif any(p['artifact_id'] in selected for p in row['previous']):changed.append(self.reporting.pin(pid,row['revision_id'],head))
@@ -295,6 +337,8 @@ class WatchSynthesis:
                 except (ValueError,UnicodeError):document={}
                 if isinstance(document,dict) and document.get('schema')==SCHEMA:
                     refs=[document['definition_ref']]+[p for i in document['inputs'] for p in i['refs']]
+                elif isinstance(document,dict) and document.get('schema')=='fpw-synthesis-analysis-v1':
+                    refs=document['evidence_refs']
             for child in refs:
                 if 'at' in child:child={k:v for k,v in child.items() if k!='at'}|dict(project_id=pid,commit_id=pin['commit_id'])
                 pending.append((child,key))

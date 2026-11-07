@@ -3,6 +3,10 @@
 
 # MON-08-05 — řetězení uložených výstupů
 
+Navazující [MON-08-06](synthesis-analysis.md) přidává analytickou evidenci
+měsíčních/ročních běhů a explicitní modelové pokračování. Níže uvedené
+omezení na deterministické výňatky popisuje původní krok MON-08-05.
+
 `WatchSynthesis` připraví report z jednoho nebo více upstream sledování,
 případně z kombinace uložených nálezů a explicitních externích zachycení.
 Rozhodnutí a crash hranice: [ADR 0078](adr/0078-frozen-watch-synthesis-inputs.md).

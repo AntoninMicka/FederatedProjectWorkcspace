@@ -226,6 +226,8 @@ def validate_record(record):
         require(type(v['synthesis']['complete']) is bool,'Invalid synthesis completeness')
         sequence(v['synthesis']['missing'],text)
         require(v['synthesis']['complete']==(not v['synthesis']['missing']),'Synthesis completeness differs from gaps')
+    if kind=='ReportSnapshot' and isinstance(v,dict) and 'analysis_ref' in v:
+        require('synthesis' in v,'Analysis requires frozen synthesis inputs');ref(v['analysis_ref']);names+=' analysis_ref'
     fields(v, 'schema ' + names)
     require(v['schema'] == 'fpw-reporting-' + suffix + '-v1', 'Unknown reporting value version')
     for key in ('title', 'goal', 'summary', 'correction_reason', 'declared_author'):
@@ -677,6 +679,33 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                     missing=(not link['expected'] or covered!={encoded(p) for p in link['expected']}) if config['kind']=='watch' and config['take']=='reports' else not link['refs']
                     require(bool(link['missing'])==missing and (not missing or link['policy']['missing']=='allow-incomplete'),
                             'Synthesis hides missing or unapproved incomplete inputs')
+                if 'analysis_ref' in v:
+                    analysis=v['analysis_ref'];meta,_=resolve(analysis)
+                    ledger=parse_json(cache[analysis['commit_id']][0][analysis['path']])
+                    from spikes.synthesis_analysis import from_git
+                    from types import SimpleNamespace
+                    expected=from_git(SimpleNamespace(git=git),project,plan,manifest,watch['value'],record['privacy'],files,entities)
+                    require(meta['kind']=='document' and ledger==expected,'Analytical ledger differs from exact frozen evidence')
+                    if v['generation']['mode']=='assisted':
+                        context=v['generation']['context_manifest_ref'];meta,_=resolve(context)
+                        audit=parse_json(cache[context['commit_id']][0][context['path']])
+                        from spikes.synthesis_model import validate_result,SCHEMA as COMMENTARY,ROLE,INSTRUCTION
+                        require(audit.get('schema')==COMMENTARY and audit['ledger_ref']==analysis and
+                                audit['context']['target']==watch['value']['report']['analysis']['target'] and
+                                audit['context']['task']['role_id']=='analyst' and audit['context']['task']['role_revision']==ROLE,
+                                'Analytical model audit differs from definition')
+                        require(audit['instruction']==INSTRUCTION+ledger['instruction'] and
+                                audit['context']['task']['instruction_sha256']==digest(audit['instruction'].encode()),'Analytical model instruction differs')
+                        selected_ids={analysis['artifact_id'],watch['revision_id'],manifest['artifact_id']}|{p['artifact_id'] for p in ledger['evidence_refs']}
+                        require({i['input_id'] for i in audit['context']['inputs']}==selected_ids,'Analytical model context omits frozen evidence')
+                        exact={p['artifact_id']:p for p in ledger['evidence_refs']+[analysis,manifest,plan['definition_ref']]}
+                        require(all(i['source']=='project' and i['path']==exact[i['input_id']]['path'] and
+                                    i['sha256']==exact[i['input_id']]['sha256'] for i in audit['context']['inputs']),
+                                'Analytical context differs from frozen source bytes')
+                        validate_result(audit['result'],ledger)
+                        from spikes.synthesis_analysis import render
+                        require(digest(render(ledger,watch['value']['report']['required_sections'],audit['result']).encode())==
+                                audit['result_sha256']==v['generation']['result_sha256'],'Analytical model render differs from verified result')
             _snapshot(v, task['value'], resolve)
             require(moment(v['knowledge_cutoff']) <= moment(record['recorded_at']),
                     'Knowledge cutoff cannot be in the future')

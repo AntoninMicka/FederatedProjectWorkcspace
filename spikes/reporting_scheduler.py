@@ -147,6 +147,16 @@ class ReportingScheduler:
         with self.db() as db:
             return self._row(db, run_id)[0]
 
+    def bind_assistance_context(self,run_id,token,context):
+        """Freeze provider context in the existing FULL journal before dispatch."""
+        require(isinstance(context,dict) and len(encoded(context))<=8*1024*1024,'Assistance context exceeds limit')
+        with self.db() as db:
+            run,row=self._row(db,run_id);self._lease(run,row,token)
+            old=run.get('assistance_context')
+            require(old is None or old==context,'Original assistance context cannot be replaced')
+            run['assistance_context']=deepcopy(context);self._save(db,run)
+        return context
+
     def is_correction(self,run_id):
         with self.db() as db:
             return self._row(db,run_id)[1][7].startswith('correction:')

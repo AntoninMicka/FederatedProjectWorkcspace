@@ -1144,6 +1144,16 @@ externí kód se nepřenášel. Žádný provider nebyl připojený jen na zákl
 přijetí konfiguračních metadat. Scope/recovery:
 [ADR 0075](docs/adr/0075-source-connector-contract.md).
 
+MON-08-06 **reuse/adaptuje** Reporting records/canonical_events, zmrazené
+WatchSynthesis manifesty, Workspace receipts, původní scheduler FULL journal,
+ContextBuilder/RoleRegistry a provider adapter/run journals. Nové jsou bounded
+analytický ledger, renderer a JSON role; node-local PreparedContext rozšiřuje
+stejný run JSON. Parsování souhrnné prózy jako potvrzené skutečnosti, druhý
+writer/journal, automatické hledání a model fallback jsou odmítnuté.
+Soukromá inventura nedokládá shodný evidence/recovery kontrakt; žádný její
+kód ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0079](docs/adr/0079-longitudinal-synthesis-analysis.md).
+
 MON-08-05 **reuse/adaptuje** Reporting/Workspace a jeho immutable receipts,
 ReportingScheduler reservation/lease/review/publication, WatchDefinition DAG,
 source capture/import piny a společné review UI. Nový selektor zmrazí
