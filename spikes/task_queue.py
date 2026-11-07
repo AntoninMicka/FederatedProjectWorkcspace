@@ -63,11 +63,43 @@ def adjacent_moves(task_ids, position, nodes, enabled):
             reason = 'Položka je na začátku fronty.' if offset < 0 else 'Položka je na konci fronty.'
         else:
             before, after = (task_ids[target], task_ids[position]) if offset < 0 else (task_ids[position], task_ids[target])
-            if before in dependency_start_blockers(nodes[after]['depends_on'], nodes):
+            if after in nodes and before in dependency_start_blockers(nodes[after]['depends_on'], nodes):
                 reason = f'{after} závisí na {before}; předpoklad musí zůstat před položkou.'
         result['can_move_' + direction] = not reason
         result['move_' + direction + '_reason'] = reason
     return result
+
+
+def repair_order(task_ids, graph):
+    """Stable dependency-first repair; never discard an existing queue reference."""
+    nodes={n['id']:n for n in graph['nodes']};visited={};ordered=[]
+    for root in task_ids:
+        stack=[(root,False)]
+        while stack:
+            identifier,finish=stack.pop()
+            if finish:
+                visited[identifier]=2;ordered.append(identifier);continue
+            if visited.get(identifier)==2:continue
+            require(identifier not in visited,'Cyklické závislosti nelze opravit pořadím fronty.')
+            require(len(visited)<10000,'Oprava by překročila limit 10000 položek fronty.')
+            visited[identifier]=1;stack.append((identifier,True))
+            node=nodes.get(identifier)
+            dependencies=dependency_start_blockers(node['depends_on'],nodes) if node else []
+            stack.extend((d,False) for d in reversed(dependencies))
+    return ordered
+
+
+def queue_faults(task_ids, graph, accepted):
+    """Compare individual violations, allowing a move to fix some of many edges."""
+    nodes={n['id']:n for n in graph['nodes']};seen=set();faults=set()
+    for identifier in task_ids:
+        node=nodes.get(identifier)
+        if node is None:faults.add(('missing',identifier))
+        elif node['checked'] and identifier not in accepted:faults.add(('completed',identifier))
+        else:
+            faults.update(('dependency',identifier,d) for d in dependency_start_blockers(node['depends_on'],nodes) if d not in seen)
+        seen.add(identifier)
+    return faults
 
 
 class TaskQueue:
@@ -162,6 +194,10 @@ class TaskQueue:
                   'remove-preview': {'task_id', 'revision', 'expected_head'},
                   'remove': {'task_id', 'revision', 'expected_head', 'preview_sha256'},
                   'revalidate': {'revision', 'expected_head'},
+                  'repair-preview': {'revision', 'expected_head'},
+                  'repair': {'revision', 'expected_head', 'preview_sha256'},
+                  'remove-single-preview': {'task_id', 'revision', 'expected_head'},
+                  'remove-single': {'task_id', 'revision', 'expected_head', 'preview_sha256'},
                   'move': {'task_id', 'target_index', 'revision', 'expected_head'},
                   'set-flag': {'task_id', 'flag', 'value', 'revision', 'expected_head'}}
         require(isinstance(action, str) and action in fields and set(request) == common | fields[action],
@@ -208,11 +244,24 @@ class TaskQueue:
                 require(type(request['revision']) is int and request['revision'] == state['revision'],
                         'Fronta se změnila; načtěte ji znovu.')
                 require(request['expected_head'] == head, 'Roadmapa se změnila; načtěte ji znovu.')
-                if action in {'add', 'remove-preview', 'remove', 'move', 'set-flag'}:
+                if action in {'add', 'remove-preview', 'remove', 'remove-single-preview','remove-single','move', 'set-flag'}:
                     require(isinstance(request['task_id'], str), 'Task ID required')
             should_write = action != 'status'
+            if action in {'repair-preview','repair'}:
+                repaired=repair_order(state['task_ids'],graph)
+                repair_issues,_=assess(repaired,graph,accepted)
+                original_ids=set(state['task_ids'])
+                preview=dict(project_id=project_id,owner_id=actor_id,expected_head=head,
+                             revision=state['revision'],original_ids=state['task_ids'],task_ids=repaired,
+                             added_ids=[i for i in repaired if i not in original_ids],
+                             issues=repair_issues)
+                digest=hashlib.sha256(canonical(preview)).hexdigest()
+                if action=='repair-preview':return dict(preview,preview_sha256=digest)
+                require(request['preview_sha256']==digest,'Náhled opravy se změnil; načtěte jej znovu.')
+                require(not repair_issues,'; '.join(repair_issues))
+                should_write=repaired!=state['task_ids'] or state['project_head']!=head
+                state['task_ids']=repaired
             if action == 'move':
-                require(not stale and not issues, 'Nejprve znovu ověřte frontu vůči roadmapě.')
                 identifier, target = request['task_id'], request['target_index']
                 require(identifier in state['task_ids'], 'Položka není ve frontě.')
                 require(type(target) is int and 0 <= target < len(state['task_ids']),
@@ -221,7 +270,8 @@ class TaskQueue:
                 reordered.remove(identifier)
                 reordered.insert(target, identifier)
                 move_issues, _ = assess(reordered, graph, accepted)
-                require(not move_issues, '; '.join(move_issues))
+                require(queue_faults(reordered,graph,accepted)<=queue_faults(state['task_ids'],graph,accepted),
+                        'Přesun přidává chybu fronty: '+'; '.join(move_issues))
                 should_write = reordered != state['task_ids']
                 state['task_ids'] = reordered
             if action == 'set-flag':
@@ -250,11 +300,11 @@ class TaskQueue:
                         'Položka není dostupná, je dokončená nebo je již ve frontě.')
                 require(node['ready'] or identifier in following, 'Nesplněný předpoklad není ve frontě.')
                 state['task_ids'].append(identifier)
-            if action in {'remove-preview', 'remove'}:
+            if action in {'remove-preview', 'remove','remove-single-preview','remove-single'}:
                 identifier = request['task_id']
                 require(identifier in state['task_ids'], 'Položka není ve frontě.')
                 removed = {identifier}
-                while True:
+                while action in {'remove-preview','remove'}:
                     # Only prerequisites that still block starting require a retained queue reference.
                     expanded = removed | {i for i in state['task_ids'] if i in nodes
                                            and set(dependency_start_blockers(nodes[i]['depends_on'], nodes)) & removed}
@@ -263,15 +313,16 @@ class TaskQueue:
                 preview = dict(project_id=project_id, owner_id=actor_id, expected_head=head,
                                revision=state['revision'], task_id=identifier,
                                removed_ids=[i for i in state['task_ids'] if i in removed])
+                if action in {'remove-single-preview','remove-single'}:preview['cascade']=False
                 digest = hashlib.sha256(canonical(preview)).hexdigest()
-                if action == 'remove-preview':
+                if action in {'remove-preview','remove-single-preview'}:
                     return dict(preview, preview_sha256=digest)
                 require(request['preview_sha256'] == digest, 'Dopad odebrání se změnil; načtěte nový náhled.')
                 state['task_ids'] = [i for i in state['task_ids'] if i not in removed]
                 state['held_task_ids'] = [i for i in state['held_task_ids'] if i not in removed]
             if should_write:
                 issues, following = assess(state['task_ids'], graph, accepted)
-                if action not in {'remove', 'add'}: require(not issues, '; '.join(issues))
+                if action not in {'remove','remove-single','add','move'}: require(not issues, '; '.join(issues))
                 state.update(revision=state['revision'] + 1, project_head=head)
                 require(workspace.git.head() == head, 'Roadmapa se změnila před zápisem.')
                 self._write(path, state, checkpoint); stale = False
@@ -294,5 +345,5 @@ class TaskQueue:
                                     reports=item_reports(i, nodes, state),
                                     children=[n['id'] for n in graph['nodes'] if n['parent_id'] == i],
                                     **adjacent_moves(state['task_ids'], position, nodes,
-                                                     not stale and not issues and not view.get('read_only')))
+                                                     not view.get('read_only')))
                                for position, i in enumerate(state['task_ids'])])

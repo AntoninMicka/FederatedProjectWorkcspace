@@ -979,6 +979,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
 <h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
 <button id="task-queue-refresh" type="button">Obnovit frontu</button>
+<button id="task-queue-repair" type="button" disabled>Opravit pořadí a předpoklady…</button>
 <p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
@@ -4340,8 +4341,9 @@ function renderTaskQueue(){
  syncPlanQueueAddState();
  const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
  document.querySelector('#task-queue-publish').disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView?.valid||Boolean(activeProject?.readOnly);
+ document.querySelector('#task-queue-repair').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
  if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu.';return;}
- status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
+ status.textContent=taskQueueMessage||(taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje opravu. ${taskQueueView.issues.join('; ')}`);
  for(const [index,item] of taskQueueView.items.entries()){
   const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button'),moves=document.createElement('span');
   open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.held?' · Pozastaveno':''}${item.children?.length?` · Dávka: ${item.children.length} podúkolů`:''}${item.agent_confirmed?' · Agent hlásí splnění':''}${item.user_requested?' · Ruční žádost z IDE':''}${item.user_confirmed?' · Přijato uživatelem':''}`;
@@ -4349,7 +4351,7 @@ function renderTaskQueue(){
   moves.className='task-queue-order-controls';
   for(const [direction,offset,symbol,label] of [['up',-1,'↑','Posunout nahoru'],['down',1,'↓','Posunout dolů']]){
    const button=document.createElement('button');button.type='button';button.className='task-queue-move-'+direction;button.textContent=symbol;button.ariaLabel=`${label}: ${item.id}`;button.title=button.ariaLabel+(item['move_'+direction+'_reason']?' — '+item['move_'+direction+'_reason']:'');
-   button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||!taskQueueView.valid||item['can_move_'+direction]!==true;
+   button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||item['can_move_'+direction]!==true;
    button.addEventListener('click',async()=>{
     const projectAtClick=activeProject;await changeTaskQueue('move',item.id,index+offset);
     if(activeProject!==projectAtClick||document.querySelector('#task-queue-panel').hidden)return;
@@ -4384,6 +4386,9 @@ function renderTaskQueue(){
    }
    row.append(reports);
   }
+  const single=document.createElement('button');single.type='button';single.textContent='Vyřadit jen tento odkaz';
+  single.title='Zachová ostatní položky včetně následníků. Zbývající předpoklady lze opravit bez vyprázdnění fronty.';
+  single.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);single.addEventListener('click',()=>changeTaskQueue('remove-single',item.id));row.append(single);
   list.append(row);
  }
 }
@@ -4439,8 +4444,14 @@ async function changeTaskQueue(action,taskId,targetIndex){
  try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
  if(action==='move')request.target_index=targetIndex;
  if(action==='set-flag')Object.assign(request,targetIndex);
- if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
- const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
+ if(action==='remove'||action==='remove-single'){const preview=await projectRequest('/v1/task-queue',{...request,action:action+'-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}${action==='remove-single'?' · Ostatní odkazy zůstanou zachované.':''}`))return;request.preview_sha256=preview.preview_sha256;}
+ if(action==='repair'){
+  const preview=await projectRequest('/v1/task-queue',{...request,action:'repair-preview'});if(activeProject!==project)return;
+  if(preview.issues.length){taskQueueMessage='Opravu zatím nelze dokončit: '+preview.issues.join('; ')+'. Chybné odkazy můžete vyřadit jednotlivě; ostatní položky zůstanou.';return;}
+  if(!window.confirm(`Opravit frontu se zachováním současných položek?\nDoplněné předpoklady: ${preview.added_ids.join(', ')||'žádné'}\nVýsledné pořadí:\n${preview.task_ids.join('\\n')}`))return;
+  request.preview_sha256=preview.preview_sha256;
+ }
+ const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;taskQueueMessage='';renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
  finally{taskQueueBusy=false;renderTaskQueue();}
 }
@@ -4455,6 +4466,7 @@ document.querySelector('#task-queue-publish').addEventListener('click',async()=>
  }catch(error){if(activeProject===project)target.textContent=error.message;}
 });
 document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
+document.querySelector('#task-queue-repair').addEventListener('click',()=>changeTaskQueue('repair'));
 
 function renderPlanDescription(target,item){
  if(item.description_markdown)renderMarkdown(item.description_markdown,target,null,true);

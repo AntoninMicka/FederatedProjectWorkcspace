@@ -249,6 +249,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(403, queue('add', extra, headers)[0])
         self.assertEqual(403, queue('move', dict(extra, target_index=0), headers)[0])
         self.assertEqual(403, queue('set-flag', dict(extra, flag='held', value=True), headers)[0])
+        for action in ('repair-preview','repair','remove-single-preview','remove-single'):
+            self.assertEqual(403,queue(action,extra,headers)[0])
         state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
             'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {pid: 'editor'}})
         self.assertEqual(200, queue('add', extra, headers)[0])
@@ -260,6 +262,17 @@ class WebTests(unittest.TestCase):
         self.assertEqual(422, queue('move', dict(extra, task_id='TASK-X', revision=2, target_index=1), headers)[0])
         self.assertEqual(422, queue('remove', dict(extra, revision=3, preview_sha256='bad'), headers)[0])
         self.assertEqual(head, self.server.projects.repository(pid).head())
+
+        head=Artifacts(self.root/'node.json').save(dict(project_id=pid,artifact_id=main_todo_id(pid),
+            base_head=head,title='Roadmap',body='- [ ] [TASK-A] A\n  - depends_on: TASK-X\n- [ ] [TASK-B] B\n  - depends_on: TASK-A\n- [ ] [TASK-X] X\n',new=False),str(uuid4()))['commit_id']
+        before=json.loads(queue('status')[1]);self.assertFalse(before['valid'])
+        repair=dict(revision=before['revision'],expected_head=head)
+        code,data,_=queue('repair-preview',repair);self.assertEqual(200,code,data)
+        preview=json.loads(data);self.assertEqual(preview['added_ids'],['TASK-X'])
+        code,data,_=queue('repair',dict(repair,preview_sha256=preview['preview_sha256']))
+        self.assertEqual(200,code,data);self.assertTrue(json.loads(data)['valid'])
+        self.assertEqual(json.loads(data)['task_ids'],['TASK-X','TASK-A'])
+        self.assertEqual(json.loads(queue('status',headers=headers)[1])['revision'],3)
 
     def test_roadmap_graph_projection_and_revision_pinned_svg_export(self):
         code, data, _ = self.request(path='/v1/roadmap/graph',

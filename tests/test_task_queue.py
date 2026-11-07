@@ -189,6 +189,7 @@ class TaskQueueTests(unittest.TestCase):
         result=self.act('add', 'TASK-X')
         self.assertEqual(['TASK-A','TASK-X'], result['task_ids'])
         self.assertEqual(before['issues'], result['issues']);self.assertFalse(result['valid'])
+        preview=self.act('repair-preview');self.assertIn('TASK-A',preview['task_ids']);self.assertTrue(preview['issues'])
 
     def test_new_dependency_invalidates_existing_order_and_remove_recovers(self):
         self.act('add', 'TASK-A'); self.act('add', 'TASK-B')
@@ -197,6 +198,95 @@ class TaskQueueTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.act('revalidate')
         preview = self.act('remove-preview', 'TASK-B')
         self.assertTrue(self.act('remove', 'TASK-B', preview_sha256=preview['preview_sha256'])['valid'])
+
+    def test_repair_inserts_prerequisites_and_preserves_existing_items_flags_and_plan(self):
+        for identifier in ('TASK-A','TASK-B','TASK-C'):self.act('add',identifier)
+        held=self.act('set-flag','TASK-B',flag='held',value=True)
+        self.save(BODY.replace('depends_on: TASK-A','depends_on: TASK-A, TASK-X'))
+        before=self.status();self.assertFalse(before['valid'])
+        preview=self.act('repair-preview')
+        self.assertEqual(preview['task_ids'],['TASK-A','TASK-X','TASK-B','TASK-C'])
+        self.assertEqual(preview['added_ids'],['TASK-X']);self.assertEqual(preview['issues'],[])
+        self.assertEqual(self.status(),before)
+        repaired=self.act('repair',preview_sha256=preview['preview_sha256'])
+        self.assertTrue(repaired['valid']);self.assertEqual(repaired['revision'],before['revision']+1)
+        self.assertTrue(next(i for i in repaired['items'] if i['id']=='TASK-B')['held'])
+        self.assertEqual(repaired['flag_audit'],held['flag_audit'])
+        self.assertEqual(Projects(self.node).repository(self.pid).head(),before['expected_head'])
+        self.assertEqual(TaskQueue(self.node).execute(dict(project_id=self.pid,action='status'),self.owner),repaired)
+        noop=self.act('repair-preview')
+        self.assertEqual(self.act('repair',preview_sha256=noop['preview_sha256'])['revision'],repaired['revision'])
+
+    def test_invalid_queue_can_be_reordered_incrementally_without_new_faults(self):
+        for identifier in ('TASK-A','TASK-B','TASK-C','TASK-X','TASK-READY'):self.act('add',identifier)
+        self.save(BODY.replace('depends_on: TASK-A','depends_on: TASK-A, TASK-X, TASK-READY'))
+        self.assertFalse(self.status()['valid'])
+        first=self.act('move','TASK-X',target_index=1)
+        self.assertFalse(first['valid']);self.assertEqual(len(first['issues']),1)
+        self.assertEqual(len(first['task_ids']),5)
+        self.assertTrue(next(i for i in first['items'] if i['id']=='TASK-READY')['can_move_up'])
+        final=self.act('move','TASK-READY',target_index=2)
+        self.assertTrue(final['valid'])
+        with self.assertRaises(ValueError):self.act('move','TASK-C',target_index=0)
+        self.assertEqual(self.status(),final)
+
+    def test_repair_keeps_missing_reference_until_explicit_single_removal(self):
+        for identifier in ('TASK-A','TASK-B','TASK-C'):self.act('add',identifier)
+        self.save(BODY.replace('- [ ] [TASK-A] A\n','').replace('depends_on: TASK-A','depends_on: TASK-X'))
+        before=self.status();preview=self.act('repair-preview')
+        self.assertIn('TASK-A',preview['task_ids']);self.assertTrue(preview['issues'])
+        with self.assertRaises(ValueError):self.act('repair',preview_sha256=preview['preview_sha256'])
+        self.assertEqual(before,self.status())
+        single=self.act('remove-single-preview','TASK-A');self.assertEqual(single['removed_ids'],['TASK-A'])
+        removed=self.act('remove-single','TASK-A',preview_sha256=single['preview_sha256'])
+        self.assertEqual(removed['task_ids'],['TASK-B','TASK-C'])
+        preview=self.act('repair-preview');repaired=self.act('repair',preview_sha256=preview['preview_sha256'])
+        self.assertEqual(repaired['task_ids'],['TASK-X','TASK-B','TASK-C']);self.assertTrue(repaired['valid'])
+
+    def test_single_removal_does_not_cascade_and_cannot_reuse_cascade_preview(self):
+        for identifier in ('TASK-A','TASK-B','TASK-C'):self.act('add',identifier)
+        preview=self.act('remove-preview','TASK-A')
+        with self.assertRaises(ValueError):self.act('remove-single','TASK-A',preview_sha256=preview['preview_sha256'])
+        single=self.act('remove-single-preview','TASK-A')
+        result=self.act('remove-single','TASK-A',preview_sha256=single['preview_sha256'])
+        self.assertEqual(result['task_ids'],['TASK-B','TASK-C']);self.assertFalse(result['valid'])
+
+    def test_repair_preview_rejects_revision_head_digest_and_readonly_changes(self):
+        self.act('add','TASK-A');preview=self.act('repair-preview');before=self.status()
+        with self.assertRaises(ValueError):self.act('repair',preview_sha256='bad')
+        with patch.object(self.service.projects,'plan_view',return_value=dict(
+                self.service.projects.plan_view(self.pid),read_only=True)):
+            with self.assertRaises(ValueError):self.act('repair',view=before,preview_sha256=preview['preview_sha256'])
+        self.act('add','TASK-X')
+        with self.assertRaises(ValueError):self.act('repair',view=before,preview_sha256=preview['preview_sha256'])
+        preview=self.act('repair-preview');before=self.status();self.save(BODY+'\nChanged.\n')
+        with self.assertRaises(ValueError):self.act('repair',view=before,preview_sha256=preview['preview_sha256'])
+
+    def test_repair_process_crashes_leave_original_or_complete_repaired_queue(self):
+        script='''
+import json,os,sys
+from spikes.task_queue import TaskQueue
+def stop(stage):
+ if stage==sys.argv[4]:os._exit(73)
+TaskQueue(sys.argv[1]).execute(json.load(open(sys.argv[2])),sys.argv[3],checkpoint=stop)
+'''
+        for stage in ('queue-before-replace','queue-after-replace'):
+            with self.subTest(stage=stage):
+                # Distinct owner isolates each crash without emptying a saved queue.
+                self.owner=str(uuid4());self.save(BODY+'\nCrash setup '+stage+'\n')
+                for identifier in ('TASK-A','TASK-B'):self.act('add',identifier)
+                self.save(BODY.replace('depends_on: TASK-A','depends_on: TASK-A, TASK-X'))
+                before=self.status();preview=self.act('repair-preview')
+                request=dict(project_id=self.pid,action='repair',expected_head=before['expected_head'],
+                             revision=before['revision'],preview_sha256=preview['preview_sha256'])
+                path=self.root/'repair.json';path.write_text(json.dumps(request))
+                child=subprocess.run([sys.executable,'-c',script,str(self.node),str(path),self.owner,stage],capture_output=True,text=True,timeout=30)
+                self.assertEqual(child.returncode,73,child.stderr)
+                after=self.status()
+                self.assertEqual(after['task_ids'],before['task_ids'] if stage=='queue-before-replace' else preview['task_ids'])
+                if stage=='queue-before-replace':self.service.execute(request,self.owner)
+                else:
+                    with self.assertRaises(ValueError):self.service.execute(request,self.owner)
 
     def test_before_and_after_replace_failure_no_blind_retry(self):
         self.act('add', 'TASK-A'); prior = self.status()
@@ -455,6 +545,15 @@ response={project_id:'project',expected_head:'head',valid:true,issues:[],revisio
 let original=projectRequest;
 projectRequest=async(path,body)=>{if(body.action==='remove-preview'){calls.push(body);return {removed_ids:['TASK-A'],preview_sha256:'digest'};}return original(path,body);};
 await changeTaskQueue('remove','TASK-A');assert.equal(calls.filter(c=>c.action==='remove').length,1);assert.equal(calls.at(-1).preview_sha256,'digest');
+taskQueueView={project_id:'project',expected_head:'head',valid:false,issues:['missing dependency'],revision:3,task_ids:['TASK-A'],items:[{id:'TASK-A',title:'A',can_move_up:true}]};
+renderTaskQueue();assert(!document.querySelector('#task-queue-repair').disabled);
+assert(!document.querySelector('#task-queue-list').children[0].children[2].children[0].disabled);
+projectRequest=async(path,body)=>{
+ if(body.action==='repair-preview'){calls.push(body);return {task_ids:['TASK-X','TASK-A'],added_ids:['TASK-X'],issues:[],preview_sha256:'repair-digest'};}
+ return original(path,body);
+};
+confirm=false;await changeTaskQueue('repair');assert.equal(calls.filter(c=>c.action==='repair').length,0);
+confirm=true;await changeTaskQueue('repair');assert.equal(calls.filter(c=>c.action==='repair').length,1);assert.equal(calls.at(-1).preview_sha256,'repair-digest');
 reject=true;await changeTaskQueue('add','TASK-X');assert.equal(taskQueueView,null);assert(document.querySelector('#task-queue-status').textContent.includes('unknown'));
 let count=calls.length;await changeTaskQueue('add','TASK-X');assert.equal(calls.length,count);
 reject=false;taskQueueView={project_id:'project',expected_head:'head',valid:true,issues:[],revision:9,task_ids:['TASK-A'],items:[]};

@@ -438,6 +438,22 @@ assert.ok(!q.startable(null,'A'));
         self.head=self.save(self.body+'\nExternal edit.\n')
         self.assertFalse(status(self.service,self.record)['current'])
 
+    def test_repair_retains_original_packet_and_new_packet_has_complete_selection(self):
+        original=self.packet()
+        self.head=self.save(self.body.replace('depends_on: TASK-01','depends_on: TASK-01, TASK-04')+
+                            '- [ ] [TASK-04] New prerequisite\n')
+        self.assertFalse(self.qstatus()['valid'])
+        preview=self.act('repair-preview')
+        repaired=self.act('repair',preview_sha256=preview['preview_sha256'])
+        self.assertEqual(repaired['task_ids'],['TASK-01','TASK-04','TASK-02','TASK-03'])
+        self.assertEqual(original,load(self.service,self.record['session_id'],original['packet_id']))
+        self.assertTrue(status(self.service,self.record,original)['blockers'])
+        self.request.update(expected_head=self.head,queue_revision=repaired['revision'])
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        replacement=load(self.service,self.record['session_id'])
+        self.assertNotEqual(original['packet_id'],replacement['packet_id'])
+        self.assertEqual(repaired['task_ids'],[t['id'] for t in replacement['manifest']['tasks']])
+
     def test_reordered_queue_refreshes_packet_without_mutating_history_or_acceptance(self):
         original = self.packet(); message = self.message(original); self.send(message)
         accepted = self.review(message); self.poll(); self.poll()
