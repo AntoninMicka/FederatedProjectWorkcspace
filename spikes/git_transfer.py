@@ -52,6 +52,11 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
             require(item['privacy'] in allowed_privacy,
                     'Transfer grant does not allow ' + item['privacy'] +
                     ' entity ' + item['id'] + ' in commit ' + commit)
+        # Metadata alone cannot establish complete, usable reporting inputs.
+        # Validate each historical revision in its own context, including bare
+        # repositories whose HEAD is unborn or points at a different branch.
+        from spikes.reporting_schema import validate_git
+        validate_git(git, candidate, entities, head=commit)
     return len(commits)
 
 
