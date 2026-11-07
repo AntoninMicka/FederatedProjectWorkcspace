@@ -13,6 +13,8 @@ Spustitelná deterministická syntéza ze zmrazených upstream vydání a nález
 [řetězení sledování](watch-synthesis.md).
 Vlastní analytické zadání, srovnatelnost a modelové pokračování delších zpráv:
 [analytická syntéza](synthesis-analysis.md).
+Umístění na další uzel má samostatný [návrh MON-08-07](adr/0080-monitoring-execution-placement.md)
+a [fyzický PoC runbook](monitoring-placement-poc.md); remote runtime zatím není implementovaný.
 
 ## Datový kontrakt
 

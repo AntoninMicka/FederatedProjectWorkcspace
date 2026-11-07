@@ -1144,6 +1144,17 @@ externí kód se nepřenášel. Žádný provider nebyl připojený jen na zákl
 přijetí konfiguračních metadat. Scope/recovery:
 [ADR 0075](docs/adr/0075-source-connector-contract.md).
 
+MON-08-07, fáze **designed**, navrhuje **reuse/adapt** Administration
+trust/mapping/CAS a podpisových primitives, ReportingScheduler rezervací a
+fencingu, RSS/backend effect journalů, ContextBuilder a Workspace receipts.
+Existující obousměrný Git sync zůstává datovým transportem; není execution
+autorita. Deployment preference nejsou ověření živého uzlu ani grant.
+Druhý projektový writer, sdílená SQLite DB, automatická volba koordinátora
+a převzetí unknown jiným uzlem jsou **reject**. Soukromá inventura nedokládá
+shodný execution/reconciliation kontrakt; kód ani neveřejné detaily se
+nepřenášejí. Zatím jde o návrh, nikoli přenos implementace či hardware PoC:
+[ADR 0080](docs/adr/0080-monitoring-execution-placement.md).
+
 MON-08-06 **reuse/adaptuje** Reporting records/canonical_events, zmrazené
 WatchSynthesis manifesty, Workspace receipts, původní scheduler FULL journal,
 ContextBuilder/RoleRegistry a provider adapter/run journals. Nové jsou bounded
