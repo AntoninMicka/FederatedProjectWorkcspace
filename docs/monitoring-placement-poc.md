@@ -3,7 +3,7 @@
 
 # MON-08-07 — plán fyzického PoC Omnia ↔ desktop
 
-Stav: **připravený návrh ověření, neprovedeno**. Autority a recovery popisuje
+Stav: **interní journal implementován, vzdálený runtime a fyzický PoC neprovedeny**. Autority a recovery popisuje
 [ADR 0080](adr/0080-monitoring-execution-placement.md). Dokument ani JSON
 příklady neaktivují worker, grant, přiřazení nebo nový endpoint.
 
@@ -14,18 +14,47 @@ syntézu. `placement.mode!=local` zůstává odmítnuté. Existují peer mapping
 obousměrný Git sync, doménové journaly a lokální scheduler fencing, ale tyto
 komponenty zatím netvoří jeden vzdálený monitoring execution protocol.
 
+První implementační řez je `spikes/monitoring_execution_journal.py`:
+interní koordinační evidence nad stejným ReportingScheduler FULL journalem,
+s explicitní migrací v3 → v4. Logical effect key neobsahuje vykonavatele,
+epoch ani definici; obsah intentu a přiřazení se ukládají odděleně a při
+opakované rezervaci se kontroluje shoda obou. Změněná revize nesmí znovu rezervovat stejný
+účinek. Jediný begin přechod se trvale uloží před případným dispatch;
+opakovaný begin není nové povolení. Výsledek znamená pouze
+`result-awaiting-import`, nikoli import nebo dokončení Workspace úkolu.
+Unknown, begun a dosud neimportovaný výsledek blokují další slot streamu.
+Explicitní převzetí je zatím možné pouze před begin, se zvýšením fence a
+zachováním historie. Pro unknown není přidána administrátorská zkratka.
+
+Tento modul není grant ani síťové API. Není zatím zapojen do RSS/model
+dispatchu; neověřuje peer, schopnosti, projektové oprávnění nebo podpisy.
+Tyto kontroly musí doplnit navazující autentizovaná execution vrstva před
+voláním interního journalu. Neexistuje zde import receipt transition, takže
+výsledek zůstává blokovaný do její implementace. Unit testy ověřují souběh,
+rollback před commitem, restart po begin, původní výsledek po unknown,
+fencing, migrace a odmítnutí ztracené autority. Nejsou fyzickým PoC.
+
+Crash boundaries: rezervace a každý přechod jsou samostatné SQLite transakce
+`synchronous=FULL`; pád před commitem se vrátí na předchozí stav. Pád po begin
+commitu a před potvrzením zanechá `begun`, které neopravňuje druhý dispatch.
+Pád po uložení výsledku dovolí znovu dohledat stejný descriptor. Migrace
+nevytváří vedlejší DB; chybějící v4 tabulka nebo celý existující journal
+vyžaduje recovery místo nové prázdné autority. Workspace/Git import zatím
+není součástí těchto přechodů a jeho crash hranice se nemění.
+
 Při návrhu byla read-only nalezena výchozí lokální node konfigurace a jeden
 zapamatovaný deployment target. To není ověření živé identity/pinu, služby,
 aktuálního peer mapování nebo možnosti vykonat MON-08-07. Místní adresy,
 cesty k deployment konfiguraci a skutečné node UUID nejsou veřejný runbook.
-Neproběhlo SSH spojení, deployment, změna trustu ani spuštění uživatelského odběru.
+SSH pokus během implementace skončil odmítnutím přihlášení veřejným klíčem.
+Deployment, změna trustu ani spuštění uživatelského odběru neproběhly.
 
-Před fyzickým PoC je nutné implementovat a lokálně ověřit:
+Před fyzickým PoC zbývá implementovat a lokálně ověřit:
 
 1. Samostatný signed execution agreement a jeho CAS/migraci v Administration;
    změny nesmějí přidat execute k existujícím read/replicate grantům.
-2. Bounded capability read model a explicitní assignment, pevný coordinator
-   a unikátní logical effect key v původním reporting journalu.
+2. Bounded capability read model, autorizace explicitního assignmentu a
+   pevného koordinátora nad implementovanou unikátní rezervací.
 3. Claim/begin-effect/result/reconciliation kontrakt nad peer auth; worker
    staging oddělený od projektového writeru a stable backend effect ID.
 4. Guardy lokálního i vzdáleného RSS/model dispatchu, aby dva synchronizované

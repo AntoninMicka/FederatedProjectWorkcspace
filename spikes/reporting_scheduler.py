@@ -111,10 +111,16 @@ class ReportingScheduler:
                 db.execute('CREATE TABLE rss_polls(id TEXT PRIMARY KEY,binding TEXT NOT NULL,state TEXT NOT NULL,document BLOB NOT NULL,result BLOB,plan BLOB,receipt BLOB)')
                 db.execute('UPDATE schema_info SET version=3')
                 tables|={'rss_bindings','rss_polls'};version=[(3,*self.owner)]
-            require(tables==base|{'rss_bindings','rss_polls'} and version==[(3,*self.owner)],
+            v3=base|{'rss_bindings','rss_polls'}
+            if tables==v3 and version==[(3,*self.owner)]:
+                db.execute('CREATE TABLE execution_effects(id TEXT PRIMARY KEY,stream TEXT NOT NULL,document BLOB NOT NULL)')
+                db.execute('UPDATE schema_info SET version=4')
+                tables.add('execution_effects');version=[(4,*self.owner)]
+            require(tables==v3|{'execution_effects'} and version==[(4,*self.owner)],
                     'Unknown reporting run journal schema or owner')
             require([r[1] for r in db.execute('PRAGMA table_info(rss_bindings)')]==['key','document'], 'Unknown RSS binding columns')
             require([r[1] for r in db.execute('PRAGMA table_info(rss_polls)')]==['id','binding','state','document','result','plan','receipt'], 'Unknown RSS poll columns')
+            require([r[1] for r in db.execute('PRAGMA table_info(execution_effects)')]==['id','stream','document'], 'Unknown execution effect columns')
             yield db
             db.commit()
         except BaseException:

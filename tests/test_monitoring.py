@@ -137,7 +137,7 @@ class MonitoringTests(unittest.TestCase):
         job=self.service.execute(self.pid,self.cfg,self.period())
         scheduler=self.service.scheduler
         with scheduler.db() as db:
-            db.execute('DROP TABLE watch_grants');db.execute('DROP TABLE rss_bindings');db.execute('DROP TABLE rss_polls');db.execute('UPDATE schema_info SET version=1')
+            db.execute('DROP TABLE watch_grants');db.execute('DROP TABLE rss_bindings');db.execute('DROP TABLE rss_polls');db.execute('DROP TABLE execution_effects');db.execute('UPDATE schema_info SET version=1')
         migrated=ReportingScheduler(self.node)
         self.assertEqual(migrated.get(job['run_id']),job)
         self.assertFalse(migrated.watch_granted(self.pid,self.cfg['id'],'a'*64))

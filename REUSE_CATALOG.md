@@ -1152,7 +1152,11 @@ autorita. Deployment preference nejsou ověření živého uzlu ani grant.
 Druhý projektový writer, sdílená SQLite DB, automatická volba koordinátora
 a převzetí unknown jiným uzlem jsou **reject**. Soukromá inventura nedokládá
 shodný execution/reconciliation kontrakt; kód ani neveřejné detaily se
-nepřenášejí. Zatím jde o návrh, nikoli přenos implementace či hardware PoC:
+nepřenášejí. První interní implementace adaptuje původní ReportingScheduler
+FULL journal (migrace v4) pro unikátní logical effect reservation, immutable
+intent, begin/result přechody a fencing převzetí před begin. Nová DB ani
+writer nevznikají. Signed agreement, autentizovaný dispatch, import a fyzický
+PoC zbývají; journal sám není execution oprávnění:
 [ADR 0080](docs/adr/0080-monitoring-execution-placement.md).
 
 MON-08-06 **reuse/adaptuje** Reporting records/canonical_events, zmrazené
