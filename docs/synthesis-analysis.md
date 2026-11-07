@@ -101,3 +101,57 @@ Ověření: explicitní unittest moduly `tests.test_synthesis_analysis`,
 `tests.test_synthesis_model` a relevantní původní Reporting/Definitions/
 Scheduler/Monitoring/HTTPS/Qt regrese. Syntetický backend a dočasné projekty
 nenahrazují živou referenční akceptaci MON-08-12; plná sada patří závěru dávky.
+
+## MON-08-06 po začlenění plné synchronizace
+
+Navazující review vychází z aktuálního Workspace projektu
+`c898b941-8eb0-4406-8dad-6e2b96c06d59`, exportní revize
+`c3ee867bcf19915337e3d23cf32b63f8964ed1952604480d920e1d360309595d`,
+projektový commit `997a6e6c868f05a3316906fe3971c6d142b428ad`.
+`F-M5-FULL-DATA-SYNC-01` je v tomto exportu dokončený a oba předpoklady
+MON-08-06 jsou splněné. To samo neznamená přijetí implementace MON-08-06.
+
+Dosavadní implementace ADR 0079 se nevytváří znovu. Nový integrační scénář
+`tests.test_synthesis_federation` používá dva oddělené dočasné uzly,
+schválené peer identity a původní podepsaný Git bundle transport:
+
+1. První uzel vydá dvě týdenní zprávy nad revizemi stejné události a stejné
+   explicitně posouzené škály. Změna maturity je 1 → 3.
+2. Úplné definice a podklady se synchronizují na druhý uzel; ten vytvoří
+   vlastní měsíční analýzu. Jedna událost má dvě zmínky, nikoli dvě identity
+   či dva nezávislé důkazy. Chybějící týdny zůstávají jako mezery.
+3. Druhý uzel vytvoří roční analýzu přes vydaný měsíc, včetně sestupu
+   k původní události/hodnocení a zachování ongoing případové studie.
+4. Vydání se synchronizují zpět. Na prvním uzlu se z jejich přesných pinů
+   ověří deduplikace, trace k původním důkazům a freshness bez falešné opravy.
+
+Scénář výslovně zakazuje nový connector fetch. Neznámé datum se neodvozuje
+ze záznamu a reference-only evidence zachová `limited-inputs`. Běhové
+journaly a oprávnění zůstávají node-local; na druhém uzlu se explicitně volá
+původní WatchSynthesis, nejde o vzdálený dispatch nebo aktivaci pouhým sync.
+Persistence a recovery zůstávají podle ADR 0079 a ADR 0081, bez nové vrstvy.
+
+Akceptační pokrytí:
+
+| Požadavek | Ověření |
+| --- | --- |
+| Opakovaná událost se nezapočítá vícekrát | native monthly/annual a federovaný průchod |
+| Roční závěr je dohledatelný přes měsíce k důkazům | federovaný trace a native annual |
+| Neověřené tvrzení se nepovýší na ověřený fakt | ledger/model regresní testy |
+| Změna škály se nevykazuje jako pokrok | ledger změny škály, claimu a metodiky |
+| Mezery v obdobích zůstanou viditelné | native a federovaný ledger gaps |
+| Přímý roční přehled z týdnů | native annual s input_level=weekly |
+
+Selektory: `python3 -m unittest tests.test_synthesis_analysis
+tests.test_synthesis_model tests.test_synthesis_federation -v` (na jednom řádku).
+Jde o izolované deterministické/syntetické ověření, nikoli fyzický Omnia PoC,
+živý modelový běh nebo lidskou akceptaci celé dávky MON-08.
+
+Výsledky navazujícího ověření 7. 11. 2026: `tests.test_synthesis_analysis`
+a `tests.test_synthesis_model` — **16 testů OK**, 96,561 s;
+`tests.test_synthesis_federation` — **1 test OK**, 207,324 s.
+Výměna uzlů volá přímo původní transportní služby nad skutečnými Git bundle;
+není to nový HTTPS test ani vzdálený dispatch. Síťová vrstva má samostatnou
+evidenci F-M5-FULL-DATA-SYNC-01. Běhové timeouty produktu se nemění;
+test pro závěrečné čtení otevírá nový nativní handle s vlastní platností.
+Celkem 17 cílených testů, bez opakování plné sady před koncem dávky.
