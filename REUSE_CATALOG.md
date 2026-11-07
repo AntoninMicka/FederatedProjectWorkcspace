@@ -985,6 +985,16 @@ refresh zachovává staré balíčky a lidské receipts. Nový writer, databáze
 journal ani samostatný frontend by duplikovaly existující hranice. Recovery
 a akceptaci doplňuje [fronta úkolů](docs/task-queue.md).
 
+Hotfix opravy fronty v MON-08 **reuse/adaptuje** TaskQueue `assess`,
+`dependency_start_blockers`, stávající owner/project lock a atomický JSON
+writer. Přidává explicitní repair-preview/repair a jednotlivé vyřazení
+odkazu; zachovává příznaky, audit a neměnné IDE balíčky/receipts. Ruční
+přesun v neplatné frontě nesmí přidat novou chybu. Druhý writer/journal,
+vyprázdnění celé fronty, tiché mazání chyb a bypass IDE publication/review
+guardů jsou **reject**. Veřejná i dosavadní soukromá inventura nepřináší
+další potřebnou komponentu; externí kód se nepřebírá. Scope a recovery:
+[fronta úkolů](docs/task-queue.md).
+
 PLAN-QUEUE-02 **reuse/adaptuje** `TaskQueue`, `IdeBridge`, jeho scoped
 messages/receipts/review, `Workspace.transact`, metadata a task graph,
 content-addressed export a nativní sidebar. Nový modul izoluje immutable packet,

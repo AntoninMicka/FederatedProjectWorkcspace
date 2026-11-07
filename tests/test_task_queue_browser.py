@@ -26,7 +26,7 @@ try:
  f.owner=ProjectCreation(f.node).author_id()
  for identifier in ('TASK-A','TASK-B','TASK-C'):f.act('add',identifier)
  f.act('set-flag','TASK-B',flag='held',value=True)
- f.save(BODY.replace('depends_on: TASK-A','depends_on: TASK-A, TASK-X'))
+ f.save(BODY.replace('depends_on: TASK-A','depends_on: TASK-A, TASK-X').replace('- [ ] [TASK-A]','- [x] [TASK-A]'))
  with running_api('http',handler=DesktopHandler,projects=Projects(f.node)) as server:
   server.chat_service=ChatService(f.node,server.projects)
   profile=QWebEngineProfile(app)
@@ -43,8 +43,8 @@ try:
    0:"typeof openTaskQueue==='function'",
    1:"window.opened&&activeProject",
    2:"!projectView.hidden&&!document.querySelector('#task-queue-panel').hidden&&taskQueueView&&!taskQueueBusy&&!taskQueueView.valid&&!document.querySelector('#task-queue-repair').disabled",
-   3:"!taskQueueBusy&&window.previewText.includes('TASK-X')&&!taskQueueView.valid&&queueCalls.filter(c=>c.action==='repair').length===0&&taskQueueView.task_ids.length===3",
-   4:"!taskQueueBusy&&taskQueueView?.valid&&JSON.stringify(taskQueueView.task_ids)===JSON.stringify(['TASK-A','TASK-X','TASK-B','TASK-C'])&&taskQueueView.items.find(i=>i.id==='TASK-B').held&&queueCalls.filter(c=>c.action==='repair').length===1"}
+   3:"!taskQueueBusy&&window.previewText.includes('TASK-X')&&window.previewText.includes('TASK-A')&&window.previewText.includes('vyřazení')&&!taskQueueView.valid&&queueCalls.filter(c=>c.action==='repair').length===0&&taskQueueView.task_ids.length===3",
+   4:"!taskQueueBusy&&taskQueueView?.valid&&JSON.stringify(taskQueueView.task_ids)===JSON.stringify(['TASK-X','TASK-B','TASK-C'])&&taskQueueView.items.find(i=>i.id==='TASK-B').held&&queueCalls.filter(c=>c.action==='repair').length===1"}
   def received(value):
    global phase,busy
    busy=False

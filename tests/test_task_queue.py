@@ -189,7 +189,29 @@ class TaskQueueTests(unittest.TestCase):
         result=self.act('add', 'TASK-X')
         self.assertEqual(['TASK-A','TASK-X'], result['task_ids'])
         self.assertEqual(before['issues'], result['issues']);self.assertFalse(result['valid'])
-        preview=self.act('repair-preview');self.assertIn('TASK-A',preview['task_ids']);self.assertTrue(preview['issues'])
+        preview=self.act('repair-preview');self.assertEqual(preview['removed_ids'],['TASK-A'])
+        self.assertEqual(preview['task_ids'],['TASK-X']);self.assertFalse(preview['issues'])
+
+    def test_repair_previews_five_completed_references_and_keeps_unfinished_flags_and_history(self):
+        completed=['TASK-A','TASK-B','TASK-C','TASK-X','TASK-D']
+        for identifier in completed+['TASK-READY']:self.act('add',identifier)
+        self.act('set-flag','TASK-B',flag='held',value=True)
+        held=self.act('set-flag','TASK-READY',flag='held',value=True)
+        body=BODY
+        for identifier in completed:body=body.replace('- [ ] ['+identifier+']','- [x] ['+identifier+']')
+        self.save(body);before=self.status();self.assertEqual(len(before['issues']),5)
+        preview=self.act('repair-preview')
+        self.assertEqual(preview['removed_ids'],completed);self.assertEqual(preview['task_ids'],['TASK-READY'])
+        self.assertEqual(preview['issues'],[]);self.assertEqual(before,self.status())
+        forged=dict(preview,removed_ids=[]);forged.pop('preview_sha256')
+        from spikes.task_queue import canonical
+        import hashlib
+        with self.assertRaises(ValueError):
+            self.act('repair',preview_sha256=hashlib.sha256(canonical(forged)).hexdigest())
+        repaired=self.act('repair',preview_sha256=preview['preview_sha256'])
+        self.assertTrue(repaired['valid']);self.assertEqual(repaired['task_ids'],['TASK-READY'])
+        self.assertTrue(repaired['items'][0]['held']);self.assertEqual(repaired['flag_audit'],held['flag_audit'])
+        self.assertEqual(before['expected_head'],Projects(self.node).repository(self.pid).head())
 
     def test_new_dependency_invalidates_existing_order_and_remove_recovers(self):
         self.act('add', 'TASK-A'); self.act('add', 'TASK-B')
@@ -522,8 +544,8 @@ const elements=new Map();
 function element(){return {children:[],dataset:{},disabled:false,textContent:'',replaceChildren(){this.children=[];},append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
 const document={querySelector(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},createElement:element};
 let activeProject={id:'project',head:'head',readOnly:false};
-let calls=[],response=null,reject=false,confirm=false;
-const window={confirm(){return confirm;}};
+let calls=[],response=null,reject=false,confirm=false,confirmationText='';
+const window={confirm(text){confirmationText=text;return confirm;}};
 function renderTaskPlan(){}
 async function projectRequest(path,body){calls.push(body);if(reject)throw new Error('unknown');return response;}
 '''
@@ -549,10 +571,10 @@ taskQueueView={project_id:'project',expected_head:'head',valid:false,issues:['mi
 renderTaskQueue();assert(!document.querySelector('#task-queue-repair').disabled);
 assert(!document.querySelector('#task-queue-list').children[0].children[2].children[0].disabled);
 projectRequest=async(path,body)=>{
- if(body.action==='repair-preview'){calls.push(body);return {task_ids:['TASK-X','TASK-A'],added_ids:['TASK-X'],issues:[],preview_sha256:'repair-digest'};}
+ if(body.action==='repair-preview'){calls.push(body);return {task_ids:['TASK-X','TASK-A'],added_ids:['TASK-X'],removed_ids:['DONE-01','DONE-02','DONE-03','DONE-04','DONE-05'],issues:[],preview_sha256:'repair-digest'};}
  return original(path,body);
 };
-confirm=false;await changeTaskQueue('repair');assert.equal(calls.filter(c=>c.action==='repair').length,0);
+confirm=false;await changeTaskQueue('repair');assert.equal(calls.filter(c=>c.action==='repair').length,0);assert(confirmationText.includes('DONE-01, DONE-02, DONE-03, DONE-04, DONE-05'));
 confirm=true;await changeTaskQueue('repair');assert.equal(calls.filter(c=>c.action==='repair').length,1);assert.equal(calls.at(-1).preview_sha256,'repair-digest');
 reject=true;await changeTaskQueue('add','TASK-X');assert.equal(taskQueueView,null);assert(document.querySelector('#task-queue-status').textContent.includes('unknown'));
 let count=calls.length;await changeTaskQueue('add','TASK-X');assert.equal(calls.length,count);

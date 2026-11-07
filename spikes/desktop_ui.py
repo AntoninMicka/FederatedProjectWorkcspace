@@ -4448,7 +4448,7 @@ async function changeTaskQueue(action,taskId,targetIndex){
  if(action==='repair'){
   const preview=await projectRequest('/v1/task-queue',{...request,action:'repair-preview'});if(activeProject!==project)return;
   if(preview.issues.length){taskQueueMessage='Opravu zatím nelze dokončit: '+preview.issues.join('; ')+'. Chybné odkazy můžete vyřadit jednotlivě; ostatní položky zůstanou.';return;}
-  if(!window.confirm(`Opravit frontu se zachováním současných položek?\nDoplněné předpoklady: ${preview.added_ids.join(', ')||'žádné'}\nVýsledné pořadí:\n${preview.task_ids.join('\\n')}`))return;
+  if(!window.confirm(`Opravit frontu se zachováním nedokončených položek?\nDokončené odkazy k vyřazení: ${(preview.removed_ids||[]).join(', ')||'žádné'}\nDoplněné předpoklady: ${preview.added_ids.join(', ')||'žádné'}\nVýsledné pořadí:\n${preview.task_ids.join('\\n')}`))return;
   request.preview_sha256=preview.preview_sha256;
  }
  const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;taskQueueMessage='';renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;

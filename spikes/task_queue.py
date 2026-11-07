@@ -248,12 +248,18 @@ class TaskQueue:
                     require(isinstance(request['task_id'], str), 'Task ID required')
             should_write = action != 'status'
             if action in {'repair-preview','repair'}:
-                repaired=repair_order(state['task_ids'],graph)
+                # Completed tasks no longer need a working-queue reference.
+                # Their removal is explicit in the revision-bound preview;
+                # native completion receipts and immutable packets remain intact.
+                removed=[i for i in state['task_ids'] if i in nodes and nodes[i]['checked']]
+                removed_set=set(removed)
+                repaired=repair_order([i for i in state['task_ids'] if i not in removed_set],graph)
                 repair_issues,_=assess(repaired,graph,accepted)
                 original_ids=set(state['task_ids'])
                 preview=dict(project_id=project_id,owner_id=actor_id,expected_head=head,
                              revision=state['revision'],original_ids=state['task_ids'],task_ids=repaired,
                              added_ids=[i for i in repaired if i not in original_ids],
+                             removed_ids=removed,
                              issues=repair_issues)
                 digest=hashlib.sha256(canonical(preview)).hexdigest()
                 if action=='repair-preview':return dict(preview,preview_sha256=digest)
@@ -261,6 +267,7 @@ class TaskQueue:
                 require(not repair_issues,'; '.join(repair_issues))
                 should_write=repaired!=state['task_ids'] or state['project_head']!=head
                 state['task_ids']=repaired
+                state['held_task_ids']=[i for i in state['held_task_ids'] if i not in removed_set]
             if action == 'move':
                 identifier, target = request['task_id'], request['target_index']
                 require(identifier in state['task_ids'], 'Položka není ve frontě.')

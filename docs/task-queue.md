@@ -28,6 +28,12 @@ B před A se odmítne. Nezávislé položky lze přesouvat a dokončený předpo
 nemusí být ve frontě. Neplatný či cyklický graf se odmítá už při načtení;
 přesun samotný nemění vztahy v roadmapě.
 
+Hotfix v dávce MON-08 umožňuje přesuny i v neplatné pracovní frontě nad
+platným aktuálním grafem. Každý přesun smí odstranit nebo zachovat jednotlivé
+chyby, nesmí přidat novou. Frontu s více porušenými závislostmi tak lze opravit
+postupně. Neplatná fronta zůstává zablokovaná pro předání do IDE; přesun ani
+oprava nemění dokončení, souhlasy nebo závislosti v roadmapě.
+
 Server vrací u položek `can_move_up`, `can_move_down` a vysvětlení
 `move_up_reason` / `move_down_reason`. UI zakáže nepřípustný sousední přesun
 a v popisku uvede konkrétní blokující ID. Po přesunu zůstane fokus na téže
@@ -41,11 +47,32 @@ chyběl nesplněný předpoklad. Odebrání dokončené položky závislé polo�
 protože její předpoklad zůstává splněný. Nezávislé položky zůstávají. Změna fronty nebo roadmapy mezi náhledem a
 potvrzením zneplatní náhled.
 
+**Opravit pořadí a předpoklady…** načte náhled úplného výsledného pořadí
+a doplňovaných předpokladů podle aktuální roadmapy. Zachová nedokončené
+odkazy a jejich příznaky; chybějící předpoklady doplní rekurzivně a řadí je
+před následníky. Není to vyprázdnění a nové naplnění fronty. Náhled nic
+nezapisuje a změna se provede až po potvrzení přesného náhledu.
+
+Dokončené položky vypíše náhled jako odkazy k vyřazení z pracovní fronty.
+Jediné potvrzení vyřadí všechny uvedené dokončené odkazy; zbývající fronta,
+audit příznaků, přijaté výsledky a staré IDE balíčky zůstanou zachované.
+Příznak Pozastaveno se zruší pouze u vyřazeného odkazu. Samotný náhled nic
+nemaže a vyřazení nemění dokončení ani historii úkolu v roadmapě.
+
+Odkaz na chybějící položku se nemaže automaticky a zůstává překážkou opravy.
+**Vyřadit jen tento odkaz** nabídne náhled
+odebrání jediné položky a zachová následníky i ostatní odkazy. Ti mohou
+dočasně zůstat neplatní; jejich chybějící předpoklady lze následně doplnit
+opravou. Původní **Odebrat** nadále nabízí explicitní kaskádové odebrání.
+Změna roadmapy nebo revize fronty zneplatní oba typy náhledu.
+
 **Obnovit frontu** pouze načte aktuální stav. Po změně roadmapy znovu otevřete
 projekt a použijte **Znovu ověřit**. Obnova ze staré revize není automatické
 přijetí nových závislostí: chybějící ID, dokončená položka bez navázaného přijatého receiptu nebo předpoklad,
-který chybí před úkolem, zablokují přidávání. Vadné položky lze odebrat
-s náhledem dopadu a zbývající frontu znovu ověřit. Pokud referencované ID
+který chybí před úkolem, zablokují předání do IDE. Nezávislou novou položku
+lze přidat po ověření jejích vlastních předpokladů; nesouvisející chyby tím
+nezmizí. Vadné odkazy lze jednotlivě odebrat s náhledem nebo opravit pořadí
+a předpoklady bez smazání ostatních položek. Pokud referencované ID
 zmizelo, staré vztahy se nevymýšlejí; případné zbývající chyby jsou výslovně
 uvedené a fronta zůstává neplatná, dokud nejsou vyřešené.
 
@@ -74,6 +101,12 @@ povinná pole. `status` je pouze čtení obsahu fronty. `add` a `remove-preview`
 potřebují `task_id`, `revision`, `expected_head`. `remove` navíc potřebuje
 přesný `preview_sha256`. `revalidate` potřebuje `revision`, `expected_head`.
 `move` potřebuje `task_id`, `target_index`, `revision`, `expected_head`.
+`repair-preview` potřebuje `revision`, `expected_head`; `repair` navíc
+`preview_sha256` odvozené z původního i navrženého pořadí, doplněných i
+vyřazovaných dokončených ID,
+chyb, scope a revize. `remove-single-preview` a `remove-single` používají
+stejná pole jako původní remove varianty, ale náhled má `cascade:false`,
+takže digest náhledu nelze zaměnit s kaskádovým odebráním.
 `target_index` je výsledná pozice počítaná od nuly v rozsahu celé fronty;
 musí být celé číslo, nikoli boolean. Například přesun D v A/B/C/D na index 1
 dá A/D/B/C, pokud zůstane platné pořadí závislostí. Stejná cílová pozice nic
@@ -103,6 +136,11 @@ Crash boundaries:
 
 Tyto hranice platí také pro `move`; nepřidává se nový journal ani formát
 fronty. Přesun nemění projektový Git a index ani již zveřejněné IDE balíčky.
+Stejné hranice platí pro `repair` a `remove-single`: všechny kontroly i celý
+nový obsah se dokončí pod původním zámkem, pak se publikuje jediným původním
+atomickým replace. Pád před replace zachová původní frontu, pád po něm
+úplnou novou revizi; nejistota vyžaduje reload. Stav příznaků a jejich audit
+zůstávají zachované, nové předpoklady nejsou implicitně pozastavené ani přijaté.
 Stávající idle refresh podle [ADR 0062](adr/0062-pinned-queue-handoff.md)
 vytvoří další neměnný balíček s novou revizí a pořadím, zachová původní
 balíčky a ověřená lidská přijetí. Čekající lidský review se nadále respektuje.
