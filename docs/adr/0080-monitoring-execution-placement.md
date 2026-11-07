@@ -8,6 +8,14 @@ Runtime, vzdálené dispatch API ani fyzický PoC tímto dokumentem nevznikají.
 MON-08-07 má nejprve designed a následně PoC validated na Omnii a desktopu;
 tento výstup uzavírá první úroveň, nikoli celou akceptaci úkolu.
 
+Upřesnění uživatele 7. 11. 2026: vzdálený dispatch se odkládá. Nejprve vzniká
+[UI pro oddělené zadání těžby a zpracování](../independent-monitoring.md#ui-těžba-a-zpracování-na-samostatných-uzlech-mon-08-09).
+Každá fáze je vlastní propojené WatchDefinition s nezávislým placement;
+zpracování přijímá uložené vybrané nálezy a má explicitní manual/scheduled
+požadavek. Synchronizace výsledků po prvotní filtraci zůstává cílem MON-08-08,
+nikoli účinkem uložení zadání. UI samotné nevydává grant, nepotvrzuje
+dostupnost uzlu a neobchází níže uvedené execution a recovery podmínky.
+
 ## Ověřený výchozí stav
 
 - WatchDefinition již obsahuje placement local/node/capability, ale RSS a

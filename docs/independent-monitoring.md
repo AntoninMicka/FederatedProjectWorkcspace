@@ -150,3 +150,58 @@ Tato dokumentace není potvrzením akceptace celého monitoringu.
 
 Plná závěrečná sada celé dávky MON-08 ani ruční akceptace nového UI tímto
 nebyly provedené. Tento řez nemění autoritativní stav úkolů Workspace.
+
+## UI: těžba a zpracování na samostatných uzlech (MON-08-09)
+
+Na základě upřesnění uživatele 7. 11. 2026 se vzdálený dispatch odkládá;
+nejprve je připraveno zadávání obou fází v UI. Nejde o dokončení celého
+MON-08-09 ani jeho závislostí MON-08-07/08.
+
+Tlačítko **Nový úkol těžby a zpracování** (také nové sledování v postranním
+panelu) otevře společné zadání dvou samostatných WatchDefinition:
+
+- **Těžba:** RSS/Atom kanál, interval kontroly, vlastní uzel, prvotní výběr
+  výrazů/regexu, odstranění duplicit a posouzené podmínky licence/uchování.
+- **Zpracování:** uložené vybrané nálezy těžebního sledování, vlastní uzel,
+  období podkladů, zadání a pravidlový nebo explicitně nastavený modelový
+  režim. `schedule.trigger` je volitelné pole `manual`/`scheduled`;
+  starší definice zůstávají platné. V tomto řezu je scheduled pouze uložené
+  zadání a UI výslovně uvádí chybějící automatické spouštění.
+
+Výběr uzlů obsahuje místní uzel a schválené federované peers z Administration.
+Nedokládá online stav, project mapping, capability ani execute grant. Dostává
+jej pouze správce; ostatním čtenářům se inventář nezpřístupňuje. Neověřený
+nebo později odvolaný vybraný uzel zůstane v editoru označený jako nedostupný;
+nepřepne se na místní. Endpointy, piny a credentials se do formuláře neposílají.
+
+`workflow-save` ukládá obě definice najednou původním Reporting.apply.
+Nepřidává DB, journal, plánovač ani writer. Stejný operation ID má stejný
+receipt; nesprávná druhá fáze neuloží první. Před commitem platí původní
+Workspace journal recovery, po Git ref publication se obnoví index/receipt
+a replay nepřidá další commit. Process-crash test prochází všech šest hranic
+stejně jako původní definition-save. Cyklus a privacy nadále validuje celý
+graf pod původním writer lockem. Uložení nepřiděluje execution oprávnění.
+
+V detailu jsou před aktivací vidět zdroj, filtr, uzel a vazba na podklady.
+**Zapnout místní těžbu** je samostatné potvrzení původního RSS bindingu;
+položky zpracovává jeho původní journal. Úprava definice vyžaduje nové zapnutí
+bindingu pro novou revizi. **Zpracovat uložené nálezy** používá původní
+WatchSynthesis pro uživatelem zvolené uzavřené období, neprovádí nový fetch
+a při chybějících vybraných nálezech vrací waiting-inputs. Vydání návrhu
+zprávy stále vyžaduje samostatné lidské posouzení.
+
+Vzdálené definice lze uložit, ale runtime jejich spuštění nadále odmítá;
+nevzniká automatický fallback. Synchronizace nálezů mezi uzly ani automatický
+časovač zpracování zatím nejsou zapojené. Původní společný formulář zůstává
+explicitně označenou kompatibilní cestou; neproběhla automatická migrace.
+Editor upravuje jednoduchou dvojici RSS → selected findings → zpráva;
+obecný výběr již existujícího sledování a celé vícestupňové řetězce zůstávají
+dalším rozsahem MON-08-09.
+
+Ověření tohoto UI řezu: 7 workflow testů (včetně reálného ukončení procesu
+na šesti crash hranicích), 22 testů definic/syntézy, 4 HTTP/RBAC testy a
+2 skutečné Qt/WebEngine průchody nového i původního formuláře v izolovaných
+testovacích projektech; celkem 35 cílených testů. JavaScript prošel
+`node --check`; snímek skutečného formuláře byl vizuálně zkontrolován.
+Nejde o ruční akceptaci uživatele, fyzický remote PoC ani plnou závěrečnou
+sadu celé dávky.

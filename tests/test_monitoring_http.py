@@ -17,6 +17,18 @@ class MonitoringHTTPTests(unittest.TestCase):
     def call(self,action,body,headers=None):
         return self.f.request(path='/v1/monitoring/'+action,body=json.dumps(dict(project_id=self.pid,**body)),headers=headers)
 
+    def test_workflow_saves_two_definitions_and_run_waits_for_stored_inputs(self):
+        from tests.test_monitoring_workflow import workflow
+        code,raw,_=self.call('view',{});self.assertEqual(code,200,raw);view=json.loads(raw)
+        self.assertTrue(view['execution_nodes']['nodes'][0]['local'])
+        request=workflow(self.pid,view['commit_id']);request.pop('project_id');request['operation_id']=str(uuid4())
+        code,raw,_=self.call('workflow-save',request);self.assertEqual(code,200,raw);saved=json.loads(raw)
+        code,raw,_=self.call('workflow-save',request);self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw),saved)
+        pin=saved['stages']['processing']['definition_ref']
+        code,raw,_=self.call('workflow-run',dict(definition_ref=pin,period_start='2026-10-05'))
+        self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw)['state'],'waiting-inputs')
+        self.assertEqual(self.call('workflow-save',request,{'Authorization':'Bearer invalid'})[0],401)
+
     def test_synthesis_review_publish_trace_and_missing_inputs_use_shared_http(self):
         from tests.test_monitoring_definitions import definition
         from spikes.reporting_scheduler import calendar_period
@@ -50,6 +62,11 @@ class MonitoringHTTPTests(unittest.TestCase):
         admin({'action':'update-user','expected_commit':state['commit_id'],'user_id':user['id'],'active':True,'node_role':'member','memberships':{self.pid:'editor'}})
         headers={'Authorization':'Bearer '+key}
         code,raw,_=self.call('view',{},headers);self.assertEqual(code,200,raw);self.assertFalse(json.loads(raw)['can_manage'])
+        self.assertNotIn('execution_nodes',json.loads(raw))
+        from tests.test_monitoring_workflow import workflow
+        request=workflow(self.pid,json.loads(raw)['commit_id']);request.pop('project_id');request['operation_id']=str(uuid4())
+        self.assertEqual(self.call('workflow-save',request,headers)[0],403)
+        self.assertEqual(self.call('workflow-run',dict(definition_ref={},period_start='2026-10-05'),headers)[0],403)
         code,_,_=self.call('run',{'watch_id':cfg['id'],'kind':'weekly'},headers);self.assertEqual(code,403)
         code,_,_=self.call('view',{}, {'Authorization':'Bearer invalid'});self.assertEqual(code,401)
 

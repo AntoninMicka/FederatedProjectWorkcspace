@@ -57,6 +57,59 @@ class MonitoringDefinitions:
         return dict(receipt=receipt, watch_id=request['watch_id'],
                     definition_ref=self.reporting.pin(request['project_id'], revision, receipt['commit_id']))
 
+    def save_workflow(self, request, operation_id, *, checkpoint=lambda stage: None):
+        """Publish collection + processing in one original Workspace transaction.
+
+        No grants, timers, dispatch or synchronization are activated here.
+        Recovery and idempotency are the same as Reporting.apply, including
+        crashes after Git ref publication and before the receipt/index update.
+        """
+        fields(request, 'project_id base_head privacy collection processing')
+        stages=[]
+        for name in ('collection', 'processing'):
+            stage=request[name];fields(stage, 'watch_id previous definition');uuid(stage['watch_id'])
+            value=validate_definition(normalize_definition(stage['definition']))
+            stages.append(dict(type='WatchDefinition', entity_id=stage['watch_id'],
+                               previous=stage['previous'], privacy=request['privacy'], value=value))
+        collection, processing=stages
+        require(collection['entity_id']!=processing['entity_id'], 'Workflow stages need different identities')
+        require(collection['value']['report']['mode']=='collect-only' and
+                all(i['kind']=='external' and i['connector']=='rss-atom' for i in collection['value']['inputs']),
+                'Collection stage requires RSS inputs and findings output')
+        require('pipeline' in collection['value']['selection'] and
+                all(s['kind'] in {'keywords','regex','restrict','dedup','handoff'}
+                    for s in collection['value']['selection']['pipeline']['steps']),
+                'Initial filtration must be a cheap pipeline')
+        links=processing['value']['inputs']
+        require(processing['value']['report']['mode']!='collect-only' and len(links)==1 and
+                links[0]['kind']=='watch' and links[0]['watch_id']==collection['entity_id'] and
+                links[0]['take']=='findings' and not links[0]['include_drafts'] and
+                links[0].get('policy',{}).get('approval')=='selected',
+                'Processing must consume selected collection findings')
+        require(processing['value']['schedule'].get('trigger') in {'manual','scheduled'},
+                'Choose manual or scheduled processing')
+        receipt=self.reporting.apply(dict(project_id=request['project_id'],base_head=request['base_head'],
+                                         records=stages),operation_id,checkpoint=checkpoint)
+        return dict(receipt=receipt, stages={name:dict(watch_id=request[name]['watch_id'],
+                    definition_ref=self.reporting.pin(request['project_id'],operation_uuid(operation_id,'record:'+str(i)),receipt['commit_id']))
+                    for i,name in enumerate(('collection','processing'))})
+
+    def run_workflow(self, project_id, definition_ref, period_start):
+        """Explicit processing action over stored findings; remote placement stays refused."""
+        from datetime import date, datetime
+        from zoneinfo import ZoneInfo
+        from spikes.reporting_scheduler import calendar_period
+        from spikes.monitoring_synthesis import WatchSynthesis
+        ws=self.reporting.artifacts.workspace(project_id)
+        head=ws.git.head();files=ws.git.snapshot(head);entities=validate_snapshot(files)
+        raw,_=SourceCollector.resolve(ws,project_id,definition_ref,files,entities)
+        row=json.loads(raw);require(row.get('type')=='WatchDefinition','Expected independent watch')
+        value=validate_definition(row['value']);schedule=value['schedule']
+        day=date.fromisoformat(period_start);require(day.isoformat()==period_start,'Expected canonical start date')
+        start=datetime.combine(day,datetime.min.time(),ZoneInfo(schedule['timezone']))
+        period=calendar_period(start.isoformat(),schedule['kind'],schedule['timezone'],'iso-calendar-v1')
+        return WatchSynthesis(self.node).execute(project_id,definition_ref,period)
+
     def prepare_run(self, project_id, definition_ref, period, run_id, *, frozen_inputs=None, knowledge_cutoff=None):
         """Prepare a reporting intent only; execution is a later connector/runtime boundary."""
         # Import lazily: the old UI/worker remains a v1 compatibility reader.

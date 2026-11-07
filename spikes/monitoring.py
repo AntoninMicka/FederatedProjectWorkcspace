@@ -555,6 +555,22 @@ class Monitoring:
                     if row['project_id']==pid:out[cfg['id']].append(dict(run_id=row['run_id'],url=row['preview']['url'],state=row['state'],error=row['error_code']))
         return out
 
+    def execution_nodes(self, administration=None):
+        """Admin-only desired-placement choices; no network probe or execute grant."""
+        if administration is None:
+            from spikes.administration import Administration
+            administration=Administration(self.node,deployment='desktop')
+        node=parse_node(read_config(self.node),location=self.node)
+        nodes=[dict(id=node['id'],name=node['name'],local=True)]
+        if not administration.root.exists():return dict(nodes=nodes,error=None)
+        try:
+            with administration.read_locked() as state:
+                nodes.extend(dict(id=p['id'],name=p['name'],local=False)
+                             for p in state['peers'] if p['trust']=='approved')
+            return dict(nodes=nodes,error=None)
+        except (OSError,ValueError) as exc:
+            return dict(nodes=nodes,error='Seznam federovaných uzlů není dostupný: '+str(exc))
+
     def view(self,pid,*,network=False):
         ws,head,files,entities,rs=self._data(pid,network=network);watches=self.watches(files,entities)
         reports=[]

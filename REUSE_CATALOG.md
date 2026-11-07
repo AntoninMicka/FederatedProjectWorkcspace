@@ -1159,6 +1159,17 @@ writer nevznikají. Signed agreement, autentizovaný dispatch, import a fyzický
 PoC zbývají; journal sám není execution oprávnění:
 [ADR 0080](docs/adr/0080-monitoring-execution-placement.md).
 
+MON-08-09, první UI řez, **reuse/adaptuje** nezávislé WatchDefinition,
+Reporting.apply atomic batch/receipts/graph validation, schválený Administration
+peer inventář, RSS binding/filter pipeline a explicitní WatchSynthesis.
+Nový společný editor ukládá RSS těžbu a navazující zpracování v jednom
+původním zápisu, s odděleným placement a deklarativním manual/scheduled
+požadavkem. Vlastní plánovací DB, druhý writer, implicitní execute grant,
+remote fallback a přepis staršího společného formátu byly **reject**.
+Nový externí zdroj se nepřebírá; dosavadní inventura zůstává podkladem reuse.
+Synchronizace a vzdálený dispatch se tím neimplementují. Scope/recovery:
+[nezávislé sledování — UI](docs/independent-monitoring.md#ui-těžba-a-zpracování-na-samostatných-uzlech-mon-08-09).
+
 MON-08-06 **reuse/adaptuje** Reporting records/canonical_events, zmrazené
 WatchSynthesis manifesty, Workspace receipts, původní scheduler FULL journal,
 ContextBuilder/RoleRegistry a provider adapter/run journals. Nové jsou bounded

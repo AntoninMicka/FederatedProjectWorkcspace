@@ -34,7 +34,9 @@ def validate_definition(value):
     scope(value['scope'])
     require(type(value['active']) is bool, 'Invalid watch active flag')
     schedule = value['schedule']
-    fields(schedule, 'kind timezone start')
+    fields(schedule, 'kind timezone start'+(' trigger' if 'trigger' in schedule else ''))
+    if 'trigger' in schedule:
+        choice(schedule['trigger'], {'manual', 'scheduled'})
     choice(schedule['kind'], KINDS)
     text(schedule['timezone']); text(schedule['start'])
     try:

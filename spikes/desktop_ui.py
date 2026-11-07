@@ -8329,7 +8329,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8579,9 +8579,17 @@ class DesktopHandler(Handler):
                 if action=='view' and set(request)=={'project_id'}:
                     result=service.view(pid,network=getattr(self.server.projects,'network',False))
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    if result['can_manage']:
+                        result['execution_nodes']=service.execution_nodes(getattr(self.server,'administration',None))
                     return self.reply(200,result)
                 service._writable(pid)
-                if action=='synthesis-run' and set(request)<={'project_id','definition_ref','period','external_refs'} and {'definition_ref','period'}<=set(request):
+                if action=='workflow-save' and set(request)=={'project_id','operation_id','base_head','privacy','collection','processing'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).save_workflow({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
+                elif action=='workflow-run' and set(request)=={'project_id','definition_ref','period_start'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).run_workflow(pid,request['definition_ref'],request['period_start'])
+                elif action=='synthesis-run' and set(request)<={'project_id','definition_ref','period','external_refs'} and {'definition_ref','period'}<=set(request):
                     from spikes.monitoring_synthesis import WatchSynthesis
                     result=WatchSynthesis(service.node).execute(pid,request['definition_ref'],request['period'],external_refs=request.get('external_refs'))
                 elif action=='rss-configure' and set(request)=={'project_id','watch_id','input_id','definition_ref','enabled','mode','confirm'}:
