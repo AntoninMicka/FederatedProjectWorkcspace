@@ -17,6 +17,25 @@ class MonitoringHTTPTests(unittest.TestCase):
     def call(self,action,body,headers=None):
         return self.f.request(path='/v1/monitoring/'+action,body=json.dumps(dict(project_id=self.pid,**body)),headers=headers)
 
+    def test_synthesis_review_publish_trace_and_missing_inputs_use_shared_http(self):
+        from tests.test_monitoring_definitions import definition
+        from spikes.reporting_scheduler import calendar_period
+        value=definition('HTTP synthesis','weekly');value['report'].update(mode='deterministic',formats=['markdown'],required_sections=['# Přehled','## Omezení'])
+        value['inputs'][0]['policy']=dict(window='ending-in-period',approval='captured',missing='allow-incomplete')
+        view=json.loads(self.call('definitions',{})[1])
+        code,raw,_=self.call('definition-save',dict(operation_id=str(uuid4()),base_head=view['commit_id'],watch_id=str(uuid4()),previous=[],privacy='project',definition=value))
+        self.assertEqual(code,200,raw);saved=json.loads(raw)
+        request=dict(definition_ref=saved['definition_ref'],period=calendar_period('2026-10-05T00:00:00+02:00','weekly','Europe/Prague','iso-calendar-v1'))
+        code,raw,_=self.call('synthesis-run',request);self.assertEqual(code,200,raw)
+        result=json.loads(raw);self.assertEqual(result['state'],'review');self.assertFalse(result['complete'])
+        code,raw,_=self.call('view',{});self.assertEqual(code,200,raw)
+        row=next(r for r in json.loads(raw)['reports'] if r['id']==result['run']['run_id'])
+        code,raw,_=self.call('publish',dict(run_id=row['id'],approval_digest=row['approval_digest'],confirm=True));self.assertEqual(code,200,raw)
+        issued=json.loads(raw)['workspace_receipt']['snapshot']
+        code,raw,_=self.call('synthesis-trace',dict(report_ref=issued));self.assertEqual(code,200,raw);self.assertTrue(json.loads(raw)['nodes'])
+        code,raw,_=self.call('synthesis-freshness',dict(report_ref=issued));self.assertEqual(code,200,raw);self.assertFalse(json.loads(raw)['potentially_stale'])
+        self.assertEqual(self.call('synthesis-run',request,{'Authorization':'Bearer invalid'})[0],401)
+
     def test_admin_can_create_and_read_watch_editor_cannot_activate_it(self):
         code,raw,_=self.call('view',{});self.assertEqual(code,200,raw);view=json.loads(raw)
         cfg=dict(id=str(uuid4()),name='HTTP watch',goal='Evidence',active=False,privacy='project',timezone='Europe/Prague',

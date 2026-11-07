@@ -57,7 +57,7 @@ class MonitoringDefinitions:
         return dict(receipt=receipt, watch_id=request['watch_id'],
                     definition_ref=self.reporting.pin(request['project_id'], revision, receipt['commit_id']))
 
-    def prepare_run(self, project_id, definition_ref, period, run_id):
+    def prepare_run(self, project_id, definition_ref, period, run_id, *, frozen_inputs=None, knowledge_cutoff=None):
         """Prepare a reporting intent only; execution is a later connector/runtime boundary."""
         # Import lazily: the old UI/worker remains a v1 compatibility reader.
         from spikes.monitoring import Monitoring, ident
@@ -114,6 +114,16 @@ class MonitoringDefinitions:
                     definition_ref=original_pin(upstream['revision_id'])))
         rules = dict(schema='fpw-monitoring-run-rules-v1', definition_ref=definition_ref,
                      input_definitions=inputs)
+        if frozen_inputs is not None:
+            frozen_raw,_=SourceCollector.resolve(ws,project_id,frozen_inputs,files,entities)
+            from spikes.monitoring_synthesis import validate_manifest
+            frozen=validate_manifest(json.loads(frozen_raw))
+            links={link['input_id']:link for link in frozen['inputs']}
+            for item in inputs:
+                link=links[item['input_id']]
+                require(link['definition_ref'] is not None and link['take']==item['take'],'Frozen upstream definition differs')
+                item['definition_ref']=deepcopy(link['definition_ref'])
+            rules['synthesis_manifest']=deepcopy(frozen_inputs)
         namespace = ident(row['revision_id'], digest(encoded(rules)))
         monitoring = Monitoring(self.node, self.reporting.artifacts.projects)
         rules_ref = monitoring._doc(project_id, ident(namespace, 'rules'), 'Sledování — připnutá pravidla běhu',
@@ -136,5 +146,5 @@ class MonitoringDefinitions:
         # Rules/scale/task publication may span several receipts. None dispatches
         # work; the final intent pins their exact Git state in the original journal.
         return scheduler.enqueue(dict(project_id=project_id, task_ref=task, period=period, rules_ref=rules_ref,
-            input_head=ws.git.head(), knowledge_cutoff=scheduler.stamp(), baseline_snapshot=None,
+            input_head=ws.git.head(), knowledge_cutoff=knowledge_cutoff or scheduler.stamp(), baseline_snapshot=None,
             delivery_required=False), run_id)

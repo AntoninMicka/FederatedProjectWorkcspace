@@ -1144,6 +1144,15 @@ externí kód se nepřenášel. Žádný provider nebyl připojený jen na zákl
 přijetí konfiguračních metadat. Scope/recovery:
 [ADR 0075](docs/adr/0075-source-connector-contract.md).
 
+MON-08-05 **reuse/adaptuje** Reporting/Workspace a jeho immutable receipts,
+ReportingScheduler reservation/lease/review/publication, WatchDefinition DAG,
+source capture/import piny a společné review UI. Nový selektor zmrazí
+projektový input manifest před materializací intentu; nevzniká nová DB,
+writer ani síťový účinek. Automatické hledání, druhý journal a přepis vydání
+jsou odmítnuté. Soukromá inventura nedokládá shodný kontrakt; žádný její kód
+ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0078](docs/adr/0078-frozen-watch-synthesis-inputs.md).
+
 MON-08-04 **reuse/adaptuje** WatchDefinition piny/revize, SourceItem, RSS
 publication plan, Reporting assistance audit, ContextBuilder, RoleRegistry
 a existující backend run journal. Přidává malý uzavřený vyhodnocovač a

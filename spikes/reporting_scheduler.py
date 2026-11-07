@@ -400,7 +400,7 @@ class ReportingScheduler:
         checkpoint('run-approved')
         return run
 
-    def publish(self, run_id, *, checkpoint=lambda stage: None):
+    def publish(self, run_id, *, checkpoint=lambda stage: None, _publication_guard=lambda *args:None):
         with self.db() as db:
             run,row=self._row(db,run_id)
             if run['state'] in {'issued','completed'}:
@@ -416,7 +416,8 @@ class ReportingScheduler:
         # Existing writer's request digest and receipt bridge this crash boundary.
         generation=request['records'][0]['value']['generation']
         receipt=self.reporting.apply(request,run_id,confirm=True,checkpoint=checkpoint,
-                                     _generation=generation if generation['mode']=='assisted' else None)
+                                     _generation=generation if generation['mode']=='assisted' else None,
+                                     _publication_guard=_publication_guard)
         checkpoint('workspace-receipt')
         pin=self.reporting.pin(run['project_id'],operation_uuid(run_id,'record:0'),receipt['commit_id'])
         with self.db() as db:

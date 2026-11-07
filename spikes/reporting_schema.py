@@ -219,6 +219,13 @@ def validate_record(record):
     kind = record['type']
     suffix, names = TYPES[kind]
     v = record['value']
+    if kind=='ReportSnapshot' and isinstance(v,dict) and 'synthesis' in v:
+        names+=' synthesis'
+        fields(v['synthesis'],'manifest_ref complete missing')
+        ref(v['synthesis']['manifest_ref'])
+        require(type(v['synthesis']['complete']) is bool,'Invalid synthesis completeness')
+        sequence(v['synthesis']['missing'],text)
+        require(v['synthesis']['complete']==(not v['synthesis']['missing']),'Synthesis completeness differs from gaps')
     fields(v, 'schema ' + names)
     require(v['schema'] == 'fpw-reporting-' + suffix + '-v1', 'Unknown reporting value version')
     for key in ('title', 'goal', 'summary', 'correction_reason', 'declared_author'):
@@ -615,6 +622,61 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                 _, source = resolve(evidence['source_ref'], 'Source')
                 require(source['value']['task_ref'] == v['task_ref'], 'Assessment/source task mismatch')
         if kind == 'ReportSnapshot':
+            if 'synthesis' in v:
+                manifest=v['synthesis']['manifest_ref'];meta,_=resolve(manifest)
+                selected=cache[manifest['commit_id']][0];plan=parse_json(selected[manifest['path']])
+                from spikes.monitoring_synthesis import validate_manifest
+                validate_manifest(plan)
+                require(plan.get('schema')=='fpw-watch-input-manifest-v1' and meta['kind']=='document','Invalid synthesis manifest')
+                resolve(v['rules_ref']);rules=parse_json(cache[v['rules_ref']['commit_id']][0][v['rules_ref']['path']])
+                require(rules.get('synthesis_manifest')==manifest and
+                        rules['definition_ref']['artifact_id']==plan['definition_ref']['artifact_id'] and
+                        rules['definition_ref']['sha256']==plan['definition_ref']['sha256'],'Synthesis manifest differs from task rules')
+                _,watch=resolve(plan['definition_ref'],'WatchDefinition')
+                from spikes.monitoring import ident
+                require(task['entity_id']==ident(watch['entity_id'],'definition-task-entity') and plan['project_id']==project,
+                        'Synthesis belongs to another watch or project')
+                from spikes.monitoring_synthesis import policy,windows
+                configured={i['id']:i for i in watch['value']['inputs']}
+                require({i['input_id'] for i in plan['inputs']}==set(configured),'Frozen input bindings differ from definition')
+                require({i['input_id']:i['definition_ref'] for i in rules['input_definitions']}==
+                        {i['input_id']:i['definition_ref'] for i in plan['inputs'] if i['kind']=='watch'},'Run rules changed frozen upstream definitions')
+                require(plan['period']==v['period'] and plan['knowledge_cutoff']==v['knowledge_cutoff'] and
+                        plan['complete']==v['synthesis']['complete'] and plan['missing']==v['synthesis']['missing'], 'Synthesis differs from frozen inputs')
+                require(git.run('merge-base','--is-ancestor',plan['input_head'],v['input_head'],check=False).returncode==0,'Frozen head is beyond report input head')
+                for link in plan['inputs']:
+                    config=configured[link['input_id']]
+                    require(link['kind']==config['kind'] and link['policy']==policy(config) and
+                            link['take']==config.get('take','captured-source'),'Frozen input policy differs from definition')
+                    if config['kind']=='watch':
+                        _,upstream=resolve(link['definition_ref'],'WatchDefinition')
+                        require(upstream['entity_id']==config['watch_id'],'Frozen input belongs to another watch')
+                        if config['take']=='reports':
+                            require(link['expected']==windows(upstream['value']['schedule'],v['period'],link['policy']['window']),
+                                    'Frozen expected periods differ from upstream calendar')
+                    covered=set()
+                    for pin in link['refs']:
+                        input_meta,input_record=resolve(pin)
+                        if config['kind']=='watch' and config['take']=='reports':
+                            require(input_record is not None and input_record['type']=='ReportSnapshot' and
+                                    input_record['value']['period'] in link['expected'],'Expected an issued input period')
+                            _,input_task=resolve(input_record['value']['task_ref'],'ReportingTask')
+                            require(input_task['entity_id']==ident(config['watch_id'],'definition-task-entity'),'Input report belongs to another watch')
+                            key=encoded(input_record['value']['period']);require(key not in covered,'Duplicate input reporting period');covered.add(key)
+                        elif config['kind']=='watch':
+                            require(input_record is not None and input_record['type']=='SourceFinding','Expected upstream finding')
+                            _,owner=resolve(input_record['value']['definition_ref'],'WatchDefinition')
+                            item=input_record['value'];at=moment(item['item']['discovered_at'])
+                            require(owner['entity_id']==config['watch_id'] and moment(v['period']['start_utc'])<=at<moment(v['period']['end_utc']),'Finding is outside input watch or period')
+                            approval=link['policy']['approval']
+                            require(approval=='captured' or item['stage']=='processed' or approval=='selected' and item['selection']['decision']=='selected','Finding does not satisfy required approval')
+                        require(PRIVACY[record['privacy']]>=PRIVACY[input_meta['privacy']],'Synthesis input would relax privacy')
+                        require(git.run('merge-base','--is-ancestor',pin['commit_id'],plan['input_head'],check=False).returncode==0,'Synthesis pin exceeds frozen head')
+                        at=input_record['recorded_at'] if input_record else input_meta['created_at']
+                        require(moment(at)<=moment(v['knowledge_cutoff']),'Synthesis input exceeds knowledge cutoff')
+                    missing=(not link['expected'] or covered!={encoded(p) for p in link['expected']}) if config['kind']=='watch' and config['take']=='reports' else not link['refs']
+                    require(bool(link['missing'])==missing and (not missing or link['policy']['missing']=='allow-incomplete'),
+                            'Synthesis hides missing or unapproved incomplete inputs')
             _snapshot(v, task['value'], resolve)
             require(moment(v['knowledge_cutoff']) <= moment(record['recorded_at']),
                     'Knowledge cutoff cannot be in the future')
@@ -627,7 +689,10 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                     require(git.run('merge-base', '--is-ancestor', reference['commit_id'], v['input_head'],
                                     check=False).returncode == 0, 'Report input is newer than input_head')
                     _, item = resolve(reference)
-                    require(moment(item['recorded_at']) <= moment(v['knowledge_cutoff']), 'Input is beyond knowledge cutoff')
+                    # Synthesis freezes evidence before deterministic task/scale
+                    # materialization. Only its exact task scale is control data.
+                    control_scale='synthesis' in v and key=='scale_refs' and reference==task['value']['scale_ref']
+                    require(control_scale or moment(item['recorded_at']) <= moment(v['knowledge_cutoff']), 'Input is beyond knowledge cutoff')
             markdown_bytes = (files if 'at' in v['markdown'] else
                               cache[v['markdown']['commit_id']][0])[v['markdown']['path']]
             try:
@@ -636,7 +701,8 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                 raise ValidationError('Report Markdown must be UTF-8') from exc
             require(all(section in markdown for section in task['value']['outputs']['required_sections']),
                     'Report omits required sections')
-            require(v['events'] or 'Nebyla doložena významná změna.' in markdown,
+            frozen_inputs='synthesis' in v and any(link['refs'] for link in plan['inputs'])
+            require(v['events'] or frozen_inputs or 'Nebyla doložena významná změna.' in markdown,
                     'Empty report must explicitly state no demonstrated significant change')
 
 

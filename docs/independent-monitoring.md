@@ -9,6 +9,8 @@ externího zdroje se ukládá u daného vstupu; nemění rozvrh zprávy.
 Rozhodnutí, kompatibilita a recovery: [ADR 0074](adr/0074-independent-monitoring-definitions.md).
 Volitelná verzovaná `selection.pipeline` a její náhled:
 [filtry a vyhodnocování](monitoring-filters.md).
+Spustitelná deterministická syntéza ze zmrazených upstream vydání a nálezů:
+[řetězení sledování](watch-synthesis.md).
 
 ## Datový kontrakt
 

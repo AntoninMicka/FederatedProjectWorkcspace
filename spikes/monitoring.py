@@ -34,7 +34,7 @@ PROFILES={
  'monthly':'Významné události a možné průlomy, jejich důkazy a změny trendů.',
  'quarterly':'Vývoj trendů, benchmarků a zralosti napříč měsíci; rozpory a stagnace.',
  'annual':'Souhrn vývoje od výchozího stavu, pokroky, regrese, limity a rozpracované případové studie.'}
-LABELS=dict(weekly='Týdenní přehled',monthly='Měsíční syntéza',quarterly='Čtvrtletní vývoj',annual='Roční zpráva')
+LABELS=dict(daily='Denní přehled',weekly='Týdenní přehled',monthly='Měsíční syntéza',quarterly='Čtvrtletní vývoj',annual='Roční zpráva')
 MARKER='<!-- '+WATCH+' -->\n'
 UNKNOWN=dict(precision='unknown',start=None,end=None,basis=[])
 
@@ -317,7 +317,7 @@ class Monitoring:
         if kind=='weekly':
             displayed=[(r,reason) for r,reason in changes if reason!='context']
         else:displayed=changes
-        header={'weekly':'Novinky a opravy','monthly':'Významné události a možné průlomy',
+        header={'daily':'Denní podklady','weekly':'Novinky a opravy','monthly':'Významné události a možné průlomy',
                 'quarterly':'Vývoj trendů a benchmarků','annual':'Vývoj od výchozího stavu'}[kind]
         lines=['# Přehled',f'\n{cfg["name"]} — {LABELS[kind]}',
             f'\nObdobí: {run["period"]["start_local"]} — {run["period"]["end_local"]}',
@@ -490,6 +490,11 @@ class Monitoring:
         self._writable(pid);job=self.scheduler.get(run_id)
         require(job['project_id']==pid,'Cizí report.')
         data=self._data(pid);task=data[4].get(job['task_ref']['artifact_id'])
+        try:rules=json.loads(data[2][job['rules_ref']['path']])
+        except (ValueError,UnicodeError):rules={}
+        if isinstance(rules,dict) and 'synthesis_manifest' in rules:
+            from spikes.monitoring_synthesis import WatchSynthesis
+            return WatchSynthesis(self.node).retry(run_id,confirm=confirm)
         cfg=next((c for c in self.watches(data[2],data[3]) if task and ident(c['id'],'task-entity')==task['entity_id']),None)
         require(cfg and cfg['active'] and self.granted(pid,cfg) and self.ready(pid,cfg)==job['task_ref'],
                 'Opakování vyžaduje aktivní původní revizi zadání.')
@@ -507,6 +512,10 @@ class Monitoring:
 
     def publish(self,pid,run_id,sha,confirm):
         self._writable(pid);job=self.scheduler.get(run_id);require(job['project_id']==pid,'Cizí report.')
+        preview=self.scheduler.preview(run_id)
+        if 'synthesis' in preview['request']['records'][0]['value']:
+            from spikes.monitoring_synthesis import WatchSynthesis
+            return WatchSynthesis(self.node).publish(run_id,sha,confirm=confirm)
         self.scheduler.approve(run_id,sha,confirm=confirm)
         result=self.scheduler.publish(run_id)
         data=self._data(pid);cfg=next((c for c in self.watches(data[2],data[3]) if ident(c['id'],'task-entity')==next(
@@ -558,7 +567,11 @@ class Monitoring:
                      superseded=False)
             if job['candidate']:
                 preview=self.scheduler.preview(job['run_id']);row.update(markdown=preview['request']['records'][0]['markdown'],approval_digest=preview['approval_digest'])
+                row['synthesis']=preview['request']['records'][0]['value'].get('synthesis')
             if job['workspace_receipt']:row['report_ref']=job['workspace_receipt']['snapshot']
+            if row.get('synthesis') and row['report_ref']:
+                from spikes.monitoring_synthesis import WatchSynthesis
+                row['freshness']=WatchSynthesis(self.node).freshness(pid,row['report_ref'])
             reports.append(row)
         corrected={r['value']['corrects']['artifact_id'] for r in rs.values() if r['type']=='ReportSnapshot' and r['value']['corrects']}
         for row in reports:row['superseded']=bool(row['report_ref'] and row['report_ref']['artifact_id'] in corrected)

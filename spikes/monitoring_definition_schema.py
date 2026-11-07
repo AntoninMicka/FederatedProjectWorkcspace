@@ -48,7 +48,7 @@ def validate_definition(value):
         require(isinstance(item, dict), 'Expected watch input')
         choice(item.get('kind'), {'external', 'watch'})
         if item['kind'] == 'external':
-            fields(item, 'id kind connector locator poll access')
+            fields(item, 'id kind connector locator poll access' + (' policy' if 'policy' in item else ''))
             choice(item['connector'], {'rss-atom', 'static-text', 'web-search', 'platform-channel'})
             require(item['locator'] == normalize_url(item['locator']), 'Expected canonical source URL')
             require(not urlsplit(item['locator']).query, 'Source query/credentials are outside the watch definition')
@@ -60,12 +60,23 @@ def validate_definition(value):
                     'External source requires explicit access/capture review')
             text(item['access']['terms']); text(item['access']['retention'])
         else:
-            fields(item, 'id kind watch_id take include_drafts')
+            fields(item, 'id kind watch_id take include_drafts' + (' policy' if 'policy' in item else ''))
             uuid(item['watch_id'])
             choice(item['take'], {'findings', 'processed-items', 'reports'})
             require(type(item['include_drafts']) is bool, 'Invalid draft input flag')
             require(not item['include_drafts'] or item['take'] == 'reports',
                     'Draft permission applies only to report inputs')
+            if 'policy' in item:
+                policy=item['policy'];fields(policy,'window approval missing')
+                choice(policy['window'],{'ending-in-period','overlap'})
+                choice(policy['missing'],{'wait','allow-incomplete'})
+                allowed={'reports':{'issued'},'findings':{'captured','selected','processed'},'processed-items':{'processed'}}
+                choice(policy['approval'],allowed[item['take']])
+        if item['kind']=='external' and 'policy' in item:
+            policy=item['policy'];fields(policy,'window approval missing')
+            choice(policy['window'],{'ending-in-period','overlap'})
+            choice(policy['approval'],{'captured','selected','processed'} if item['connector']=='rss-atom' else {'captured'})
+            choice(policy['missing'],{'wait','allow-incomplete'})
         uuid(item['id'])
     sequence(value['inputs'], input_, minimum=1)
     require(len({item['id'] for item in value['inputs']}) == len(value['inputs']), 'Duplicate watch input identity')

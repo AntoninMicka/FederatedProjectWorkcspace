@@ -134,6 +134,8 @@ function showMonitoringReport(report){
  const state=document.createElement('p');state.textContent=(monitoringStates[report.state]||report.state)+(report.error?' · '+report.error:'');target.append(state);
  if(report.superseded){const warning=document.createElement('p');warning.textContent='Existuje vydaná oprava. Tato zpráva i její prezentace zachovávají původní obsah.';target.append(warning);}
  if(report.corrects){const note=document.createElement('p');note.textContent='Oprava předchozího vydání: '+report.corrects.artifact_id;target.append(note);}
+ if(report.synthesis){const note=document.createElement('p');note.textContent=report.synthesis.complete?'Úplná sada vstupních vydání.':'Neúplné vstupy: '+report.synthesis.missing.join('; ');target.append(note);}
+ if(report.freshness?.potentially_stale){const note=document.createElement('p');note.textContent='Existuje novější oprava vstupních podkladů. Tento výstup může být zastaralý; původní vydání zůstává zachované.';target.append(note);}
  const pre=document.createElement('pre');pre.textContent=report.markdown||'Úplný kandidát ještě není připravený. Neznámý běh se automaticky neopakuje.';target.append(pre);
  if(report.markdown)target.append(monitoringButton('Export Markdown',()=>{const a=document.createElement('a'),url=URL.createObjectURL(new Blob([report.markdown],{type:'text/markdown;charset=utf-8'}));a.href=url;a.download='zprava-'+report.period.kind+'-'+report.period.start_local.slice(0,10)+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}));
  const readOnly=activeProject.readOnly||!monitoringView.can_manage;
@@ -144,7 +146,7 @@ function showMonitoringReport(report){
   target.append(monitoringButton('Odmítnout návrh',async()=>{await monitoringRequest('cancel',{run_id:report.id,confirm:true});await loadMonitoring();showMonitoringReport(monitoringView.reports.find(r=>r.id===report.id));},readOnly));
  }
  if(['failed','cancelled'].includes(report.state))target.append(monitoringButton('Nový pokus z původních vstupů',async()=>{await monitoringRequest('retry',{run_id:report.id,confirm:true});await loadMonitoring();showMonitoringReport(monitoringView.reports.find(r=>r.id===report.id));},readOnly));
- if(report.state==='completed'&&!report.superseded)target.append(monitoringButton('Připravit opravu z aktuálních podkladů',async()=>{await monitoringRequest('correct',{run_id:report.id});await loadMonitoring();},readOnly));
+ if(report.state==='completed'&&!report.superseded&&!report.synthesis)target.append(monitoringButton('Připravit opravu z aktuálních podkladů',async()=>{await monitoringRequest('correct',{run_id:report.id});await loadMonitoring();},readOnly));
  if(report.state==='completed')target.append(monitoringButton('Vytvořit / otevřít prezentaci',async()=>{const result=await monitoringRequest('presentation',{run_id:report.id});if(document.body.dataset.runtime==='server'){monitoringStatus.textContent='Prezentace je uložená ve Výstupech; presenter otevřete v desktopu.';await loadMonitoring();}else await openPresentationEditor(result.artifact_id);},readOnly));
  if(report.presentation_id&&!readOnly&&document.body.dataset.runtime!=='server')target.append(monitoringButton('Otevřít navázanou prezentaci',()=>openPresentationEditor(report.presentation_id)));
 }

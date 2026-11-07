@@ -79,7 +79,8 @@ class Reporting:
             return result
 
     def apply(self, request, operation_id, *, confirm=False, checkpoint=lambda stage: None,
-              _assistance=None, _validate_only=False, _generation=None, _source_capture=None, _capture_guard=lambda *args:None):
+              _assistance=None, _validate_only=False, _generation=None, _source_capture=None, _capture_guard=lambda *args:None,
+              _publication_guard=lambda *args:None):
         """Store new revisions; request and approval are frozen by transact's digest.
 
         IDs for the revision and Markdown sibling derive from operation_id, so
@@ -111,6 +112,7 @@ class Reporting:
             files = workspace.git.snapshot(head)
             entities = validate_snapshot(files)
             existing = records(files, entities)
+            _publication_guard(workspace,files,entities)
             now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             changes = {}
             raw_ref=None

@@ -8329,7 +8329,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8563,6 +8563,10 @@ class DesktopHandler(Handler):
                 service._data(pid,network=getattr(self.server.projects,'network',False))
                 if action=='rss-status' and set(request)=={'project_id'}:
                     return self.reply(200,service.rss_runtime.status(pid))
+                if action in {'synthesis-trace','synthesis-freshness'} and set(request)=={'project_id','report_ref'}:
+                    from spikes.monitoring_synthesis import WatchSynthesis
+                    synthesis=WatchSynthesis(service.node)
+                    return self.reply(200,getattr(synthesis,'trace' if action=='synthesis-trace' else 'freshness')(pid,request['report_ref']))
                 if action=='filter-preview' and set(request)<={'project_id','pipeline','items','finding_refs','languages'} and 'pipeline' in request:
                     from spikes.monitoring_filters import FilterPreviews
                     return self.reply(200,FilterPreviews(service.node).preview(pid,request['pipeline'],
@@ -8577,7 +8581,10 @@ class DesktopHandler(Handler):
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
                     return self.reply(200,result)
                 service._writable(pid)
-                if action=='rss-configure' and set(request)=={'project_id','watch_id','input_id','definition_ref','enabled','mode','confirm'}:
+                if action=='synthesis-run' and set(request)<={'project_id','definition_ref','period','external_refs'} and {'definition_ref','period'}<=set(request):
+                    from spikes.monitoring_synthesis import WatchSynthesis
+                    result=WatchSynthesis(service.node).execute(pid,request['definition_ref'],request['period'],external_refs=request.get('external_refs'))
+                elif action=='rss-configure' and set(request)=={'project_id','watch_id','input_id','definition_ref','enabled','mode','confirm'}:
                     result=service.rss_runtime.configure({k:v for k,v in request.items() if k!='confirm'},confirm=request['confirm'])
                     result={k:v for k,v in result.items() if k!='validators'}
                 elif action=='rss-tick' and set(request)=={'project_id'}:
