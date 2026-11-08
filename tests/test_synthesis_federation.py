@@ -49,12 +49,14 @@ class FederatedSynthesisTests(unittest.TestCase):
         week=self.save(weekly)
         monthly=definition('Monthly analysis of stored evidence','monthly',upstream=week['watch_id'])
         monthly['schedule']['start']='2025-01-01'
+        monthly['placement']=dict(mode='node',node_id=self.sync.node_ids[1],capabilities=[])
         monthly['report']['analysis']=dict(revision='month-1',input_level='weekly',target=None,
             case_studies=[dict(ref=self.f.policy,status='ongoing',note='Explicitly ongoing, never inferred complete')])
         monthly['inputs'][0]['policy']=dict(window='ending-in-period',approval='issued',missing='allow-incomplete')
         month=self.save(monthly)
         annual=definition('Annual analysis through monthly evidence','annual',upstream=month['watch_id'])
         annual['schedule']['start']='2025-01-01'
+        annual['placement']=dict(mode='node',node_id=self.sync.node_ids[1],capabilities=[])
         annual['report']['analysis']=dict(revision='annual-1',input_level='monthly',target=None,case_studies=[])
         annual['inputs'][0]['policy']=dict(window='ending-in-period',approval='issued',missing='allow-incomplete')
         year=self.save(annual)

@@ -4,10 +4,12 @@
 JS=r'''
 const monitoringWorkflowForm=document.querySelector('#monitoring-workflow-form');
 let monitoringWorkflowEdit=null;
+function monitoringPlacementIsHere(placement){return placement.mode==='node'&&placement.node_id===monitoringView.node_id;}
 function monitoringNodeName(placement){
- if(placement.mode==='local')return 'Tento uzel';
+ if(placement.mode==='local')return 'Nepřiřazeno — starší relativní volba';
  const node=monitoringView.execution_nodes?.nodes.find(n=>n.id===placement.node_id);
- return node?.name||('Nedostupný uzel · '+(placement.node_id||placement.capabilities.join(', ')));
+ if(monitoringPlacementIsHere(placement))return (node?.name||'Tento uzel')+' · tento uzel';
+ return node?.name||('Jiný uzel · '+(placement.node_id||placement.capabilities.join(', ')));
 }
 function renderMonitoringDefinitions(readonly){
  const list=document.querySelector('#monitoring-definitions');list.replaceChildren();
@@ -16,7 +18,7 @@ function renderMonitoringDefinitions(readonly){
   li.append(monitoringButton(value.title,()=>showMonitoringDefinition(row)));
   const note=document.createElement('span');
   note.textContent=' — '+(collection?'Těžba':'Zpracování')+' · '+monitoringNodeName(value.placement)+' · '+
-   (value.placement.mode!=='local'?'Čeká na vzdálené spouštění':collection?(row.runtime_state==='collection-configured'?'Těžba zapnutá':'Těžba nezapnutá'):
+   (value.placement.mode==='local'?'Vyžaduje explicitní přiřazení uzlu':!monitoringPlacementIsHere(value.placement)?'Přiřazeno jinému uzlu':collection?(row.runtime_state==='collection-configured'?'Těžba zapnutá':'Těžba nezapnutá'):
     value.schedule.trigger==='scheduled'?'Plán uložen, automatické spuštění čeká na zapojení':'Na vyžádání');
   li.append(note);list.append(li);
  }
@@ -64,7 +66,7 @@ function showMonitoringDefinition(row){
  const readonly=activeProject.readOnly||!monitoringView.can_manage,pair=monitoringWorkflowPair(row);
  if(pair)target.append(monitoringButton('Upravit zadání',()=>editMonitoringWorkflow(pair),readonly));
  const projectId=activeProject.id,ref=structuredClone(row.definition_ref);
- if(collection&&value.placement.mode==='local'&&value.inputs.length===1&&value.inputs[0].connector==='rss-atom'){
+ if(collection&&monitoringPlacementIsHere(value.placement)&&value.inputs.length===1&&value.inputs[0].connector==='rss-atom'){
   const configured=row.runtime_state==='collection-configured';
   target.append(monitoringButton(configured?'Pozastavit těžbu':'Zapnout místní těžbu',async()=>{
    if(activeProject?.id!==projectId)return;
@@ -72,7 +74,7 @@ function showMonitoringDefinition(row){
     mode:value.selection.pipeline?'pipeline':'queue-all',confirm:true});
    if(activeProject?.id===projectId)await loadMonitoring();
   },readonly||!value.active));
- }else if(!collection&&value.placement.mode==='local'){
+ }else if(!collection&&monitoringPlacementIsHere(value.placement)){
   const label=document.createElement('label'),date=document.createElement('input');date.type='date';date.value=value.schedule.start;
   label.textContent='Začátek uzavřeného období';label.append(date);target.append(label);
   target.append(monitoringButton('Zpracovat uložené nálezy',async()=>{
@@ -82,16 +84,18 @@ function showMonitoringDefinition(row){
    monitoringStatus.textContent=result.state==='waiting-inputs'?'Čeká na vybrané podklady.':
     result.run?.state==='review'?'Návrh zprávy je připravený k posouzení.':'Stav zpracování: '+result.state;
   },readonly||!value.active));
- }else if(value.placement.mode!=='local'){
-  const pending=document.createElement('p');pending.textContent='Zadání je uložené. Vzdálené spuštění zatím není dostupné; jiný uzel jej automaticky nepřebírá.';target.append(pending);
+ }else if(!monitoringPlacementIsHere(value.placement)){
+  const pending=document.createElement('p');pending.textContent=value.placement.mode==='local'?
+   'Starší relativní přiřazení není jednoznačné. Upravte zadání a vyberte konkrétní uzel pro obě fáze.':
+   'Zadání patří jinému uzlu. Otevřete je na přiřazeném uzlu; tento uzel je automaticky nepřebírá.';target.append(pending);
  }
 }
 function fillMonitoringNodes(select,placement){
  select.replaceChildren();const nodes=monitoringView.execution_nodes?.nodes||[];
- for(const node of nodes){const option=document.createElement('option');option.value=node.local?'local':node.id;option.textContent=node.name+(node.local?' · tento uzel':' · vzdálené spuštění čeká');select.append(option);}
- const selected=placement?.mode==='node'?placement.node_id:'local';
+ for(const node of nodes){const option=document.createElement('option');option.value=node.id;option.textContent=node.name+(node.local?' · tento uzel':' · jiný uzel');select.append(option);}
+ const selected=placement?.mode==='node'?placement.node_id:placement?.mode==='local'?'':monitoringView.node_id;
  if(![...select.options].some(o=>o.value===selected)){
-  const missing=document.createElement('option');missing.value=selected;missing.textContent='Nedostupný uzel · '+selected;select.append(missing);
+  const missing=document.createElement('option');missing.value=selected;missing.textContent=selected?'Uzel mimo místní seznam · '+selected:'Vyberte konkrétní uzel';select.append(missing);
  }
  select.value=selected;
 }
@@ -119,7 +123,7 @@ async function editMonitoringWorkflow(pair=null){
 }
 function monitoringWorkflowPayload(){
  const f=monitoringWorkflowForm.elements,e=monitoringWorkflowEdit;
- const placement=select=>({mode:select.value==='local'?'local':'node',node_id:select.value==='local'?null:select.value,capabilities:[]});
+ const placement=select=>({mode:'node',node_id:select.value,capabilities:[]});
  const base=(title,kind)=>({schema:'fpw-reporting-watch-v1',title,goal:f.goal.value,scope:{entities:[],categories:[],geographies:[],tags:[]},active:true,
   schedule:{kind,timezone:f.timezone.value,start:f.start.value},selection:{revision:'1',instructions:'Prvotní výběr nálezů'},evaluation:{revision:'1',instructions:'Zdroje nejsou potvrzená tvrzení.'}});
  const collection=e.pair?structuredClone(e.pair.collection.definition):base(f.title.value,'daily');

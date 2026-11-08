@@ -23,6 +23,7 @@ from spikes.rss_reader import RSSUnavailable
 from spikes.public_source import url_origin
 from spikes.source_collector import SourceCollector,public_url
 from spikes.source_connectors import RSSConnector,SourceContext,batch
+from spikes.monitoring_placement import local_node_id,require_local_executor
 
 
 class RSSMonitoring:
@@ -52,7 +53,7 @@ class RSSMonitoring:
             ws.git.snapshot(config['definition_ref']['commit_id']),entities)==config['definition_ref'],'RSS definition pin differs')
         inputs=[i for i in row['value']['inputs'] if i['id']==config['input_id']]
         require(len(inputs)==1 and inputs[0]['kind']=='external' and inputs[0]['connector']=='rss-atom','Expected RSS input')
-        require(row['value']['placement']['mode']=='local','Remote RSS placement is not connected')
+        require_local_executor(row['value']['placement'],local_node_id(self.node),'Remote RSS placement is not connected')
         if grant:
             require(self.scheduler.watch_granted(config['project_id'],config['watch_id'],digest(encoded(row['value']))),'RSS approval was revoked')
             with self.scheduler.db() as db:

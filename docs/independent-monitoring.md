@@ -15,6 +15,12 @@ Vlastní analytické zadání, srovnatelnost a modelové pokračování delšíc
 [analytická syntéza](synthesis-analysis.md).
 Umístění na další uzel má samostatný [návrh MON-08-07](adr/0080-monitoring-execution-placement.md)
 a [fyzický PoC runbook](monitoring-placement-poc.md); remote runtime zatím není implementovaný.
+Vlastní uzel se nyní ukládá stejným konkrétním UUID jako jiný uzel. Starší
+relativní `local` vyžaduje nové explicitní přiřazení; samo se po synchronizaci
+neaktivuje. Na přiřazeném uzlu lze po místním potvrzení použít RSS runtime.
+Rozdělení RSS, skenovacích pravidel, poolu a pravidel zpráv včetně požadavku
+na odstranění odmítnutého textu popisuje
+[návrh oddělení pipeline](monitoring-pipeline-separation.md).
 
 ## Datový kontrakt
 

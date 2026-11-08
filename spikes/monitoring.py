@@ -601,7 +601,7 @@ class Monitoring:
         definitions=definition_view['definitions']
         rss_status=self.rss_runtime.status(pid)
         require(rss_status['commit_id']==head,'Projekt se během čtení RSS změnil; obnovte přehled.')
-        return dict(project_id=pid,commit_id=head,watches=watches,definitions=definitions,rss=rss_status,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
+        return dict(project_id=pid,commit_id=head,node_id=definition_view['node_id'],watches=watches,definitions=definitions,rss=rss_status,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
             inputs=[dict(id=id_,title=m['title'],privacy=m['privacy']) for id_,m in entities.items()
                     if m.get('file') and not files['artifacts/'+id_+'/'+m['file']].startswith(MARKER.encode())],
             profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self.last_errors.get(pid) or self.last_errors.get('runtime'))

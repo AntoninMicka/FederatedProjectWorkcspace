@@ -40,7 +40,7 @@ try:
   commands={
    1:'window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(()=>window.workflowProjectOpened=true)',
    2:"document.querySelector('#monitoring-workflow-new').click()",
-   3:"(()=>{const f=monitoringWorkflowForm.elements;f.title.value='Browser těžba';f.goal.value='Sledovat změny';f.start.value='2026-10-05';f.collection_node.value="+json.dumps(peer)+";f.processing_node.value='local';f.terms.value='Synthetic capture permission';f.retention.value='Synthetic test retention';f.keywords.value='first';f.regex.value='first';f.access_confirm.checked=true;f.trigger.value='scheduled';monitoringWorkflowForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringWorkflowForm.requestSubmit()})()",
+   3:"(()=>{const f=monitoringWorkflowForm.elements;f.title.value='Browser těžba';f.goal.value='Sledovat změny';f.start.value='2026-10-05';f.collection_node.value="+json.dumps(peer)+";f.processing_node.value=monitoringView.node_id;f.terms.value='Synthetic capture permission';f.retention.value='Synthetic test retention';f.keywords.value='first';f.regex.value='first';f.access_confirm.checked=true;f.trigger.value='scheduled';monitoringWorkflowForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringWorkflowForm.requestSubmit()})()",
    4:"[...document.querySelectorAll('#monitoring-definitions button')].find(b=>b.textContent==='Browser těžba').click()",
    5:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Upravit zadání').click()",
    6:"monitoringWorkflowForm.elements.trigger.value='manual';monitoringWorkflowForm.elements.access_confirm.checked=true;monitoringWorkflowForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringWorkflowForm.requestSubmit()"}
@@ -49,7 +49,7 @@ try:
    1:"window.workflowProjectOpened&&monitoringView?.project_id===activeProject?.id&&monitoringView?.execution_nodes?.nodes.length===2",
    2:"!projectView.hidden&&!document.querySelector('#monitoring-panel').hidden&&!monitoringWorkflowForm.hidden&&monitoringWorkflowForm.elements.collection_node.options.length===2&&monitoringWorkflowForm.elements.processing_node.options.length===2",
    3:"monitoringView?.definitions.length===2&&monitoringWorkflowForm.hidden&&!monitoringDirty&&monitoringView.definitions.some(r=>r.definition.placement.node_id==="+json.dumps(peer)+")&&monitoringView.definitions.some(r=>r.definition.schedule.trigger==='scheduled')",
-   4:"document.querySelector('#monitoring-detail').textContent.includes('Vzdálené spuštění')",
+   4:"document.querySelector('#monitoring-detail').textContent.includes('Zadání patří jinému uzlu')",
    5:"!monitoringWorkflowForm.hidden&&monitoringWorkflowForm.elements.collection_node.value==="+json.dumps(peer)+"&&monitoringWorkflowForm.elements.trigger.value==='scheduled'&&monitoringWorkflowForm.elements.keywords.value==='first'",
    6:"monitoringWorkflowForm.hidden&&!monitoringDirty&&monitoringView.definitions.length===2&&monitoringView.definitions.some(r=>r.definition.schedule.trigger==='manual')"}
   def received(value):

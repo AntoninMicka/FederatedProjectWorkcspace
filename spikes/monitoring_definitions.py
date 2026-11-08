@@ -15,6 +15,7 @@ from spikes.reporting import Reporting, operation_uuid, pinned
 from spikes.reporting_schema import digest, encoded, fields, records
 from spikes.reporting_scheduler import ReportingScheduler
 from spikes.source_collector import SourceCollector
+from spikes.monitoring_placement import local_node_id, pin_placement, is_local_executor, require_local_executor
 
 
 class MonitoringDefinitions:
@@ -23,6 +24,7 @@ class MonitoringDefinitions:
         self.reporting = Reporting(node)
 
     def read(self, project_id):
+        node_id=local_node_id(self.node)
         data = self.reporting.read(project_id)
         definitions = validate_graph({row['revision_id']: row for row in data['records']})
         ws = self.reporting.artifacts.workspace(project_id)
@@ -40,13 +42,16 @@ class MonitoringDefinitions:
             result.append(dict(watch_id=identity, definition_ref=pinned(project_id, data['commit_id'],
                 row['revision_id'], files, entities), definition=deepcopy(row['value']), privacy=row['privacy'],
                 version=digest(encoded(row['value'])), runtime_state=runtime_state))
+            result[-1]['execution_local']=is_local_executor(row['value']['placement'],node_id)
+            result[-1]['placement_review_required']=row['value']['placement']['mode']=='local'
         require(ws.git.head() == data['commit_id'], 'Project changed while reading watch definitions')
-        return dict(project_id=project_id, commit_id=data['commit_id'], definitions=result)
+        return dict(project_id=project_id, commit_id=data['commit_id'], node_id=node_id, definitions=result)
 
     def save(self, request, operation_id, *, checkpoint=lambda stage: None):
         fields(request, 'project_id base_head watch_id previous privacy definition')
         uuid(request['watch_id'])
         value = validate_definition(normalize_definition(request['definition']))
+        value = pin_placement(value,local_node_id(self.node))
         # Reporting's semantic validator also checks the full stable-identity graph
         # under the writer lock, before journal prepare, including raw editor writes.
         native = dict(project_id=request['project_id'], base_head=request['base_head'], records=[
@@ -68,7 +73,7 @@ class MonitoringDefinitions:
         stages=[]
         for name in ('collection', 'processing'):
             stage=request[name];fields(stage, 'watch_id previous definition');uuid(stage['watch_id'])
-            value=validate_definition(normalize_definition(stage['definition']))
+            value=pin_placement(validate_definition(normalize_definition(stage['definition'])),local_node_id(self.node))
             stages.append(dict(type='WatchDefinition', entity_id=stage['watch_id'],
                                previous=stage['previous'], privacy=request['privacy'], value=value))
         collection, processing=stages
@@ -122,6 +127,7 @@ class MonitoringDefinitions:
         raw, _ = SourceCollector.resolve(ws, project_id, definition_ref, files, entities)
         row = json.loads(raw)
         require(row.get('type') == 'WatchDefinition', 'Expected an independent watch definition')
+        require_local_executor(row['value']['placement'],local_node_id(self.node),'Remote watch placement is not connected')
         scheduler = ReportingScheduler(self.node)
         with scheduler.db() as db:
             saved = db.execute('SELECT document FROM runs WHERE run_id=?', (run_id,)).fetchone()
@@ -139,7 +145,7 @@ class MonitoringDefinitions:
         require(tips[row['entity_id']]['revision_id'] == row['revision_id'], 'Watch definition has been superseded')
         value = row['value']
         require(value['active'], 'Watch is paused')
-        require(value['placement']['mode'] == 'local', 'Remote watch placement is not connected')
+        require_local_executor(value['placement'],local_node_id(self.node),'Remote watch placement is not connected')
         require(value['report']['mode'] != 'collect-only', 'Collection-only runs require the connector runtime')
         require(period['kind'] == value['schedule']['kind'] and
                 period['timezone'] == value['schedule']['timezone'], 'Run period differs from watch schedule')

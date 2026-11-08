@@ -1180,6 +1180,14 @@ Nový externí zdroj se nepřebírá; dosavadní inventura zůstává podkladem 
 Synchronizace a vzdálený dispatch se tím neimplementují. Scope/recovery:
 [nezávislé sledování — UI](docs/independent-monitoring.md#ui-těžba-a-zpracování-na-samostatných-uzlech-mon-08-09).
 
+Oprava identity vykonavatele **reuse/adaptuje** `configuration.parse_node`,
+původní WatchDefinition placement, Reporting writer a RSS/synthesis preflight.
+Vlastní uzel používá stejné veřejné UUID jako peer. Relativní local při importu
+se nepřekládá; automatické převzetí nebo implicitní grant byly **reject**.
+Nový externí kód ani persistentní vrstva nevznikají. Navazující
+[oddělení RSS/poolu/zpráv](docs/monitoring-pipeline-separation.md) je návrh;
+dočasné úložiště a fyzické odstranění odmítnutého textu ještě nejsou implementované.
+
 MON-08-06 **reuse/adaptuje** Reporting records/canonical_events, zmrazené
 WatchSynthesis manifesty, Workspace receipts, původní scheduler FULL journal,
 ContextBuilder/RoleRegistry a provider adapter/run journals. Nové jsou bounded

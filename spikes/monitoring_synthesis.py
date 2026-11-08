@@ -16,6 +16,7 @@ from spikes.reporting_schema import PRIVACY, digest, encoded, fields, moment, re
 from spikes.reporting_schema import ref, text, hex_id, period as validate_period
 from spikes.reporting_scheduler import ReportingScheduler, calendar_period, utc
 from spikes.source_collector import SourceCollector
+from spikes.monitoring_placement import local_node_id,require_local_executor
 
 SCHEMA='fpw-watch-input-manifest-v1'
 
@@ -90,7 +91,7 @@ class WatchSynthesis:
         require(row['type']=='WatchDefinition','Expected independent watch')
         tips=validate_graph(rs);value=row['value']
         require(tips[row['entity_id']]['revision_id']==row['revision_id'] and value['active'],'Watch is superseded or paused')
-        require(value['placement']['mode']=='local','Remote synthesis is not connected')
+        require_local_executor(value['placement'],local_node_id(self.node),'Remote synthesis is not connected')
         require(value['report']['mode'] in {'deterministic','llm'},'Synthesis requires a report mode')
         if value['report']['mode']=='llm':require(value['report'].get('analysis',{}).get('target') is not None,'LLM synthesis requires an explicit analytical model target')
         require(period['kind']==value['schedule']['kind'] and period['timezone']==value['schedule']['timezone'],'Synthesis period differs from definition')
@@ -176,6 +177,7 @@ class WatchSynthesis:
         ws,head,files,metas,rs=self._snapshot(pid);ws._writable()
         raw,_=SourceCollector.resolve(ws,pid,definition_ref,files,metas);definition=json.loads(raw)
         require(definition['type']=='WatchDefinition','Expected independent watch')
+        require_local_executor(definition['value']['placement'],local_node_id(self.node),'Remote synthesis is not connected')
         slot=ident(definition['entity_id'],'synthesis:'+digest(encoded(period)))
         manifest_id=ident(slot,'inputs');operation=ident(slot,'freeze')
         ws.recover();receipt=ws.receipt(operation)
@@ -222,6 +224,7 @@ class WatchSynthesis:
             ws,head,files,metas,rs=self._snapshot(pid)
             raw,_=SourceCollector.resolve(ws,pid,plan['definition_ref'],files,metas);definition=json.loads(raw)
             tips=validate_graph(rs);require(tips[definition['entity_id']]['revision_id']==definition['revision_id'] and definition['value']['active'],'Watch changed after freezing')
+            require_local_executor(definition['value']['placement'],local_node_id(self.node),'Remote synthesis is not connected')
             value,markdown,_=self.monitoring.synthesize(pid,dict(privacy=definition['privacy'],inputs=[],name=definition['value']['title'],
                 goal=definition['value']['goal'],periods={period['kind']:definition['value']['report']['instructions']}),run)
             if any(link['refs'] for link in plan['inputs']):
@@ -283,6 +286,7 @@ class WatchSynthesis:
             tips=validate_graph(records(files,metas));original=plan['definition_ref']
             row=next((r for r in tips.values() if r['revision_id']==original['artifact_id']),None)
             require(row is not None and row['value']['active'],'Synthesis definition was changed or paused')
+            require_local_executor(row['value']['placement'],local_node_id(self.node),'Remote synthesis is not connected')
         ws=self.reporting.artifacts.workspace(run['project_id']);ws.recover()
         if ws.receipt(run_id) is None:
             files=ws.git.snapshot(ws.git.head());guard(ws,files,validate_snapshot(files))

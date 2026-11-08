@@ -16,7 +16,29 @@ požadavek. Synchronizace výsledků po prvotní filtraci zůstává cílem MON-
 nikoli účinkem uložení zadání. UI samotné nevydává grant, nepotvrzuje
 dostupnost uzlu a neobchází níže uvedené execution a recovery podmínky.
 
-## Ověřený výchozí stav
+## Upřesnění identity vykonavatele — 8. 11. 2026
+
+Oprava místního runtime ukládá při explicitním uložení konkrétní node UUID,
+včetně volby vlastního uzlu. `node` se shodným ID místní konfigurace smí
+projít místním preflightem; není potřeba mít sebe v seznamu peerů.
+To samo neuděluje grant, write roli ani automatickou aktivaci RSS.
+Import a čtení nikdy nepřekládají relativní `local` na příjemce. Starší
+`local` zůstává čitelné, ale nesmí vykonávat práci, dokud uživatel výslovně
+nezvolí konkrétní uzel. Kontrola platí i pro obnovené/zamrazené běhy.
+
+Oprava musí být nasazena na oba uzly; starý běžící worker se novým UI
+nezastaví. Shoda UUID není distribuovaný fencing ani implementace níže
+navrženého execution agreement. Dřívější požadavek, že local znamená zdejší
+stroj, se tím pro sdílené definice nahrazuje explicitní identitou.
+Zápis definice používá původní Reporting/Workspace journal a receipts,
+bez nové persistentní vrstvy. Pád před commitem obnovuje původní journal;
+po commitu se přiřazení čte z HEAD. Čtení ani sync nezakládají místní grant.
+
+Oddělení GUI a skutečné odstranění odmítnutého textu má samostatný
+[návrh datového toku](../monitoring-pipeline-separation.md); není tím
+implementováno nové úložiště ani retence.
+
+## Výchozí stav před opravou identity
 
 - WatchDefinition již obsahuje placement local/node/capability, ale RSS a
   příprava nezávislé syntézy přijímají pouze local. Remote metadata tedy dnes
@@ -88,8 +110,8 @@ Offline koordinátor není důvod tuto podmínku obejít.
 
 ## Výběr uzlu, aktivace a preflight
 
-- local znamená tento konkrétní uzel až po node-local aktivaci; import stejné
-  definice na druhém uzlu jej neaktivuje. V řízené federaci je nutné také
+- Starší local potřebuje explicitní přeuložení na konkrétní node ID;
+  import stejné definice na druhém uzlu jej neaktivuje. V řízené federaci je nutné také
   přiřazení od sjednaného koordinátora, nikoli jen lokální watch_grant.
 - node vyžaduje shodu s přesným schváleným veřejným node ID/pinem. Nedostupnost
   cíle nezmění přiřazení na dostupný jiný stroj.
