@@ -94,6 +94,8 @@ def execute(service,run,token,definition,ledger,ledger_ref,manifest_ref,executio
     role=ROLES.resolve('analyst',ROLE);saved=adapter.runs.get(m['run_id'])
     if saved is None or saved['state']!='succeeded':
         handoff=ContextBuilder(ws,run['project_id']).authorize_for_dispatch(prepared,authority=authority,target=target)
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(service.node,run['project_id'],definition['entity_id'])
         adapter.prepare(handoff,binding,role,'json');adapter.dispatch(handoff,binding,role,'json');saved=adapter.runs.get(m['run_id'])
     require(saved['state']=='succeeded' and saved['manifest_sha256']==digest(prepared.manifest_bytes) and
             (saved['role_id'],saved['role_revision'])==('analyst',ROLE),'Model run has no matching successful result')

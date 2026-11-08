@@ -89,6 +89,8 @@ class WatchSynthesis:
         ws,head,files,metas,rs=self._snapshot(pid);ws._writable()
         raw,_=SourceCollector.resolve(ws,pid,definition_ref,files,metas);row=json.loads(raw)
         require(row['type']=='WatchDefinition','Expected independent watch')
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,pid,row['entity_id'])
         tips=validate_graph(rs);value=row['value']
         require(tips[row['entity_id']]['revision_id']==row['revision_id'] and value['active'],'Watch is superseded or paused')
         require_local_executor(value['placement'],local_node_id(self.node),'Remote synthesis is not connected')
@@ -177,6 +179,8 @@ class WatchSynthesis:
         ws,head,files,metas,rs=self._snapshot(pid);ws._writable()
         raw,_=SourceCollector.resolve(ws,pid,definition_ref,files,metas);definition=json.loads(raw)
         require(definition['type']=='WatchDefinition','Expected independent watch')
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,pid,definition['entity_id'])
         require_local_executor(definition['value']['placement'],local_node_id(self.node),'Remote synthesis is not connected')
         slot=ident(definition['entity_id'],'synthesis:'+digest(encoded(period)))
         manifest_id=ident(slot,'inputs');operation=ident(slot,'freeze')
@@ -215,6 +219,8 @@ class WatchSynthesis:
         _,initial_plan=self._manifest(run)
         ws=self.reporting.artifacts.workspace(pid);initial_files=ws.git.snapshot(ws.git.head())
         raw,_=SourceCollector.resolve(ws,pid,initial_plan['definition_ref'],initial_files,validate_snapshot(initial_files))
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,pid,json.loads(raw)['entity_id'])
         if json.loads(raw)['value']['report']['mode']=='llm':
             from spikes.synthesis_model import validate_execution
             validate_execution(model_execution,json.loads(raw)['value'])

@@ -24,6 +24,8 @@ class MonitoringDefinitions:
         self.reporting = Reporting(node)
 
     def read(self, project_id):
+        from spikes.monitoring_migration import retired_ids
+        retired=retired_ids(self.node,project_id)
         node_id=local_node_id(self.node)
         data = self.reporting.read(project_id)
         definitions = validate_graph({row['revision_id']: row for row in data['records']})
@@ -39,7 +41,8 @@ class MonitoringDefinitions:
             configured=[b for b in bindings if b['project_id']==project_id and b['watch_id']==identity
                         and b['definition_ref']['artifact_id']==row['revision_id']]
             runtime_state=('collection-configured' if any(b['enabled'] for b in configured) else 'collection-paused') if configured else 'not-connected'
-            result.append(dict(watch_id=identity, definition_ref=pinned(project_id, data['commit_id'],
+            if identity in retired:runtime_state='migrated'
+            result.append(dict(watch_id=identity, converted=identity in retired, definition_ref=pinned(project_id, data['commit_id'],
                 row['revision_id'], files, entities), definition=deepcopy(row['value']), privacy=row['privacy'],
                 version=digest(encoded(row['value'])), runtime_state=runtime_state))
             result[-1]['execution_local']=is_local_executor(row['value']['placement'],node_id)
@@ -50,6 +53,8 @@ class MonitoringDefinitions:
     def save(self, request, operation_id, *, checkpoint=lambda stage: None):
         fields(request, 'project_id base_head watch_id previous privacy definition')
         uuid(request['watch_id'])
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,request['project_id'],request['watch_id'])
         value = validate_definition(normalize_definition(request['definition']))
         value = pin_placement(value,local_node_id(self.node))
         # Reporting's semantic validator also checks the full stable-identity graph
@@ -73,6 +78,8 @@ class MonitoringDefinitions:
         stages=[]
         for name in ('collection', 'processing'):
             stage=request[name];fields(stage, 'watch_id previous definition');uuid(stage['watch_id'])
+            from spikes.monitoring_migration import require_not_retired
+            require_not_retired(self.node,request['project_id'],stage['watch_id'])
             value=pin_placement(validate_definition(normalize_definition(stage['definition'])),local_node_id(self.node))
             stages.append(dict(type='WatchDefinition', entity_id=stage['watch_id'],
                                previous=stage['previous'], privacy=request['privacy'], value=value))
@@ -127,6 +134,8 @@ class MonitoringDefinitions:
         raw, _ = SourceCollector.resolve(ws, project_id, definition_ref, files, entities)
         row = json.loads(raw)
         require(row.get('type') == 'WatchDefinition', 'Expected an independent watch definition')
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,project_id,row['entity_id'])
         require_local_executor(row['value']['placement'],local_node_id(self.node),'Remote watch placement is not connected')
         scheduler = ReportingScheduler(self.node)
         with scheduler.db() as db:
@@ -204,6 +213,7 @@ class MonitoringDefinitions:
             ident(namespace, 'task-op'), row['privacy'], entity=task_entity, previous=previous)
         # Rules/scale/task publication may span several receipts. None dispatches
         # work; the final intent pins their exact Git state in the original journal.
+        require_not_retired(self.node,project_id,row['entity_id'])
         return scheduler.enqueue(dict(project_id=project_id, task_ref=task, period=period, rules_ref=rules_ref,
             input_head=ws.git.head(), knowledge_cutoff=knowledge_cutoff or scheduler.stamp(), baseline_snapshot=None,
             delivery_required=False), run_id)

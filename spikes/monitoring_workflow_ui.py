@@ -17,7 +17,7 @@ function renderMonitoringDefinitions(readonly){
   const li=document.createElement('li'),value=row.definition,collection=value.report.mode==='collect-only';
   li.append(monitoringButton(value.title,()=>showMonitoringDefinition(row)));
   const note=document.createElement('span');
-  note.textContent=' — '+(collection?'Těžba':'Zpracování')+' · '+monitoringNodeName(value.placement)+' · '+
+  note.textContent=row.converted?' — Převedeno na nové bloky · historie':' — '+(collection?'Těžba':'Zpracování')+' · '+monitoringNodeName(value.placement)+' · '+
    (value.placement.mode==='local'?'Vyžaduje explicitní přiřazení uzlu':!monitoringPlacementIsHere(value.placement)?'Přiřazeno jinému uzlu':collection?(row.runtime_state==='collection-configured'?'Těžba zapnutá':'Těžba nezapnutá'):
     value.schedule.trigger==='scheduled'?'Plán uložen, automatické spuštění čeká na zapojení':'Na vyžádání');
   li.append(note);list.append(li);
@@ -63,6 +63,7 @@ function showMonitoringDefinition(row){
    step.kind==='dedup'?'Vyřazení opakovaného obsahu.':'Filtr: '+step.kind;target.append(p);}
  }else{const p=document.createElement('p');p.textContent='Období: '+(monitoringLabels[value.schedule.kind]||'Den')+' · '+value.report.instructions;target.append(p);}
  if(!value.active){const p=document.createElement('p');p.textContent='Sledování je pozastavené.';target.append(p);}
+ if(row.converted){target.append(blockText('p','Toto sledování bylo převedeno. Původní zadání je archivované; pokračujte v nových blocích.'));return;}
  const readonly=activeProject.readOnly||!monitoringView.can_manage,pair=monitoringWorkflowPair(row);
  if(pair)target.append(monitoringButton('Upravit zadání',()=>editMonitoringWorkflow(pair),readonly));
  const projectId=activeProject.id,ref=structuredClone(row.definition_ref);

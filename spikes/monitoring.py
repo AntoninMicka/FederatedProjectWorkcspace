@@ -126,6 +126,8 @@ class Monitoring:
         return out
 
     def granted(self,pid,cfg):
+        from spikes.monitoring_migration import retired_ids
+        if cfg['id'] in retired_ids(self.node,pid):return False
         return self.scheduler.watch_granted(pid,cfg['id'],digest(encoded(cfg)))
 
     def binding(self):
@@ -188,6 +190,8 @@ class Monitoring:
     def save(self,request,operation_id):
         require(set(request)=={'project_id','base_head','watch','new'},'Neplatný požadavek sledování.')
         cfg=validate_watch(deepcopy(request['watch']));pid=request['project_id'];self._writable(pid)
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,pid,cfg['id'])
         ws,head,files,entities,_=self._data(pid)
         require(request['new'] or (cfg['id'] in entities and entities[cfg['id']]['privacy']==cfg['privacy']),
                 'Soukromí existujícího sledování je neměnné.')

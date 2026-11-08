@@ -26,6 +26,14 @@ soubor či místní granty. **Reject:** nový Git writer, RSS leader, implicitn�
 modelový dispatch a přepis starších sledování. Hranice a recovery:
 [ADR 0082](docs/adr/0082-composable-monitoring-and-message-pools.md).
 
+MON-08-10 **reuse/adaptuje** Reporting/Workspace transakce a CAS receipts,
+původní RSS a reporting journal, již existující worker locks, pool set-union
+import a společný formulářový renderer. Přesný původní náhled je frozen
+migration intent; podpůrné SQLite se nekopíruje. **Reject:** druhý Git writer,
+přepis původní historie, odhad RSS URL z obecné stránky, zploštění reportového
+řetězce bez explicitního mapování a automatická aktivace nových bloků.
+Scope/recovery: [ADR 0083](docs/adr/0083-one-time-monitoring-migration.md).
+
 ## Externí zdrojové repozitáře
 
 Zatím žádné. Před zařazením uvést veřejnou URL, ověřit přístup bez přihlášení a zaznamenat licenci, revizi a důvod reuse/adapt/reject. Samotná veřejná dostupnost neznamená oprávnění k převzetí kódu.

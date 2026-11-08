@@ -46,6 +46,7 @@ async function loadMonitoringBlocks(){
 }
 function renderMonitoringBlocks(){
  if(!blockCatalog)return;
+ document.querySelector('#monitoring-migration-open').disabled=blockReadOnly();
  if(!monitoringView?.error)monitoringStatus.textContent=blockCatalog.blocks.filter(b=>b.value.kind==='task').length+' komplexních úloh · '+blockCatalog.blocks.filter(b=>b.value.kind==='source').length+' zdrojů · '+blockCatalog.blocks.filter(b=>b.value.kind==='pool').length+' poolů';
  const taskList=document.querySelector('#sidebar-monitoring-list');
  taskList.querySelectorAll('[data-composable-task]').forEach(e=>e.remove());
@@ -91,12 +92,12 @@ function renderMonitoringBlocks(){
  const rows=blockRows().filter(b=>b.value.kind===blockTab);
  if(!rows.length)content.append(blockText('p','Zatím žádné položky. Vytvořte blok nebo jej přidejte při sestavování úlohy.'));
  for(const row of rows){
-  const article=document.createElement('article'),c=row.value.config;article.dataset.monitoringBlockId=row.id;article.append(blockText('h3',row.value.title));
+  const readonly=blockReadOnly()||row.migration_pending;const article=document.createElement('article'),c=row.value.config;article.dataset.monitoringBlockId=row.id;article.append(blockText('h3',row.value.title));if(row.migration_pending)article.append(blockText('p','Čeká na dokončení přerušeného převodu.'));
   if(row.value.kind==='task')article.append(blockText('p','Spuštění úlohy: '+(row.run_count||0)));
   const usage=row.used_by||[];article.append(monitoringButton(usage.length?'Využití: '+usage.length+' bloků · '+(row.tasks||[]).length+' úloh':'Zatím nepoužito',()=>{
    const list=document.createElement('ul');for(const id of usage)list.append(blockText('li',blockName(id)));article.append(list);
   }));
-  article.append(monitoringButton('Upravit',()=>editMonitoringBlock(blockTab,row),blockReadOnly()));
+  article.append(monitoringButton('Upravit',()=>editMonitoringBlock(blockTab,row),readonly));
   if(blockTab==='source'){
    article.append(blockText('p',c.connector==='rss-atom'?c.locator+' · každých '+c.poll_seconds/60+' min · redundantní sběr na zapojených uzlech':'Webové hledání na vyžádání: '+c.locator));
    article.append(blockText('p','Podmínky: '+c.terms+' · uchování: '+c.retention));
@@ -105,9 +106,9 @@ function renderMonitoringBlocks(){
     if(row.runtime?.error)article.append(blockText('p',row.runtime.error));
     article.append(monitoringButton(row.runtime?.enabled?'Pozastavit zdejší sběr':'Zapnout sběr na tomto uzlu',async()=>{
      await monitoringRequest('block-configure',{block_id:row.id,enabled:!row.runtime?.enabled,confirm:true});await loadMonitoringBlocks();
-    },blockReadOnly()));
-    if(row.runtime?.error)article.append(monitoringButton('Potvrdit aktuální konfiguraci sběru',async()=>{await monitoringRequest('block-configure',{block_id:row.id,enabled:true,confirm:true});await loadMonitoringBlocks();},blockReadOnly()));
-    article.append(monitoringButton('Zkontrolovat splatné kanály',async()=>{await monitoringRequest('block-tick');await loadMonitoringBlocks();},blockReadOnly()));
+    },readonly));
+    if(row.runtime?.error)article.append(monitoringButton('Potvrdit aktuální konfiguraci sběru',async()=>{await monitoringRequest('block-configure',{block_id:row.id,enabled:true,confirm:true});await loadMonitoringBlocks();},readonly));
+    article.append(monitoringButton('Zkontrolovat splatné kanály',async()=>{await monitoringRequest('block-tick');await loadMonitoringBlocks();},readonly));
    }
   }else if(blockTab==='filter')article.append(blockText('p',c.source_ids.map(blockName).join(', ')+' → '+blockName(c.pool_id)));
   else if(blockTab==='pool'){
@@ -121,7 +122,7 @@ function renderMonitoringBlocks(){
      for(const rev of group.revisions){item.append(blockText('h4',rev.item.title||'Bez názvu'));item.append(blockText('p',rev.item.content||''));
       if(rev.item.url){const a=blockText('a',rev.item.url);a.href=rev.item.url;a.target='_blank';a.rel='noopener noreferrer';item.append(a);}}
      item.append(blockText('p','Vybraly filtry: '+[...new Set(group.contributions.map(c=>blockName(c.filter_id)))].join(', ')));
-     item.append(blockText('p','Pozorovaly uzly: '+[...new Set(group.observations.map(o=>o.node_id))].join(', ')+(group.concurrent_versions?' · více obsahových verzí':'')));
+     item.append(blockText('p','Pozorovaly uzly: '+[...new Set(group.observations.map(o=>o.node_id||'Neznámý původní uzel'))].join(', ')+(group.concurrent_versions?' · více obsahových verzí':'')));
      list.append(item);
     }article.append(list);
    }));
@@ -131,10 +132,10 @@ function renderMonitoringBlocks(){
    article.append(monitoringButton('Sestavit návrh zprávy',async()=>{
     if((c.mode==='llm'||c.search_ids.length)&&!window.confirm('Spustit zpracování včetně nastaveného modelu nebo webového hledání?'))return;
     await monitoringRequest('block-process',{block_id:row.id,run_id:crypto.randomUUID()});blockTab='runs';await loadMonitoringBlocks();
-   },blockReadOnly()||c.node_id!==blockCatalog.node_id));
+   },readonly||c.node_id!==blockCatalog.node_id));
    if(c.schedule.kind==='daily')article.append(monitoringButton(row.runtime?.enabled?'Pozastavit denní zpracování':'Zapnout denní zpracování',async()=>{
     await monitoringRequest('block-configure',{block_id:row.id,enabled:!row.runtime?.enabled,confirm:true});await loadMonitoringBlocks();
-   },blockReadOnly()||c.node_id!==blockCatalog.node_id));
+   },readonly||c.node_id!==blockCatalog.node_id));
   }else{
    article.append(blockText('p',c.instructions));
    for(const kind of ['source','filter','pool','processing']){const ids=blockRows().filter(b=>b.value.kind===kind&&(row.resolved_ids||c[kind+'_ids']).includes(b.id)).map(b=>b.id);article.append(blockText('p',blockLabels[kind]+': '+ids.map(blockName).join(', ')));}
@@ -142,7 +143,7 @@ function renderMonitoringBlocks(){
     if(!window.confirm('Spustit zpracování této úlohy včetně jejích modelů a hledání?'))return;
     await monitoringRequest('block-task-run',{block_id:row.id,run_id:crypto.randomUUID()});
     blockTab='runs';await loadMonitoringBlocks();
-   },blockReadOnly()));
+   },readonly));
   }
   content.append(article);
  }
@@ -153,6 +154,7 @@ function blockField(name,label,type,value,options=[]){
  input.name=name;input.required=!['keywords','regex','search_ids','source_ids','filter_ids','pool_ids'].includes(name);
  if(type==='select'||type==='multi'){
   input.multiple=type==='multi';for(const o of options){const opt=document.createElement('option');opt.value=o.id;opt.textContent=o.title;opt.selected=type==='multi'?(value||[]).includes(o.id):value===o.id;input.append(opt);}
+  if(type==='select'&&value&&!options.some(o=>o.id===value)){const missing=document.createElement('option');missing.value=value;missing.textContent='Původní volba mimo místní seznam · '+value;missing.selected=true;input.append(missing);}
  }else{input.type=type==='textarea'?'text':type;input.value=value??'';if(type==='number'){input.min='1';input.max='3650';}}
  wrap.append(input);blockFields.append(wrap);return input;
 }

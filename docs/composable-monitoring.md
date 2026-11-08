@@ -5,9 +5,8 @@
 
 V projektu otevřete **Nástroje → Sledování a zprávy**. Nová hlavní část má
 šest samostatných přehledů. Starší definice a jejich historie zůstávají
-v rozbalovací části **Starší sledování a dvoufázový editor**. Nové bloky
-starý sběr automaticky nepřevádějí ani nezastavují. Pro tentýž kanál proto
-před zapnutím nového příjmu pozastavte původní odběr na dotčeném uzlu.
+v rozbalovací části **Starší sledování a dvoufázový editor**. Samotné založení nových bloků starý sběr nepřevádí. K přechodu použijte
+níže popsaný jednorázový převod s náhledem; ten po uložení zneplatní starý provoz.
 
 | Přehled | Obsah |
 | --- | --- |
@@ -49,6 +48,49 @@ identitu; restart jej nespustí podruhé. Po výpadku se provede nejvýše aktu�
 splatný slot, nevyrábí se zpětně řada zmeškaných vydání. Webové hledání nemá vlastní periodický sběr; spouští se až jako vstup
 konkrétního sestavení zprávy, případně také při aktivovaném denním zpracování.
 Uložení rozvrhu jej neaktivuje; aktivace zpracování je samostatná místní akce.
+
+## Jednorázový převod starších sledování
+
+V hlavní části je **Jednorázový převod starších sledování → Vybrat sledování
+k převodu**. Před ostrým převodem aktualizujte všechny vykonávající uzly,
+pozastavte starý provoz na ostatních uzlech a vyřešte tam rozpracované/unknown
+operace. Lokální journal jiného uzlu se nepřenáší; samotný náhled na desktopu
+neprokazuje jeho vyřešení na Omnii.
+
+1. Vyberte původní zadání a související vstupní sledování, retenční dobu
+   převzatých zpráv a případné nové konkrétní přiřazení uzlu.
+2. RSS definice s explicitním levným filtrem se rozloží na zdroje, filtr,
+   pool a navazující zpracování/úlohu. U původních víceperiodových dokumentů
+   výslovně vyberte nové vstupní pooly; každé období dostane samostatné
+   zpracování. Stejné mapování lze zvolit jako výslovnou náhradu starého
+   vstupního řetězce. Dokumenty a obecné URL se neodhadují jako RSS.
+3. **Zobrazit náhled převodu** ukáže vazby, počty převzatých/expirujících
+   zpráv, soukromí a upozornění. Nová zpracování budou ruční, s viditelným
+   oknem posledních 1/7/31/93/366 dní podle původní periody; původní kalendář,
+   začátek období a nastavení prezentací zůstávají v archivu. Nejde o zachování
+   starých automatických rozvrhů. Původní analytická metodika s případovými
+   studiemi a jiné nejednoznačné vazby převod blokují; nezploští se potichu.
+4. **Převést podle tohoto náhledu** uloží bloky i migrační audit jedním
+   projektovým commitem a převezme platné vybrané nálezy do poolů. Historické
+   definice, vyřazené položky, reporty a jejich důkazy zůstanou v původním Gitu.
+   Nevyhodnocené položky se nestanou vybranými. Stav unknown/failed vyžaduje
+   posouzení; není vydáván za úspěšný převod nálezu.
+
+Nové bloky zůstávají vypnuté do samostatné aktivace. Staré zadání po převodu
+slouží jako archiv; aktualizované uzly čtou stejný migrační záznam a odmítají
+jeho opětovné spuštění i editaci přes staré API. Opakování dokončeného
+převodu vrátí původní výsledek bez duplicit.
+
+Při přerušení se nabídne **Dokončit přerušený převod**. Nejdřív se obnoví
+původní Workspace operace, poté import a místní granty. Nové bloky nelze
+aktivovat, dokud se převod nedokončí. Před uložením definic lze použít
+**Zrušit dosud neuložený převod** a připravit nový náhled, například po
+souběžné cizí změně. Po Git commitu je nutné původní převod dokončit.
+Jeden převod je omezen na 31 nových bloků a 500 nálezů; nezávislé větší
+skupiny lze převádět odděleně. Podrobnosti: [ADR 0083](adr/0083-one-time-monitoring-migration.md).
+
+Starší formuláře a workery se odstraní až v navazujícím kroku po ověření
+převodů. Čtení historických revizí a jejich provenance musí zůstat dostupné.
 
 ## Sestavení pomocí LLM
 
@@ -109,7 +151,7 @@ Testy používají izolované projekty, syntetické feedy, řízené hodiny a
 modelové transporty. Neprokazují fyzické nasazení na Omnii, dostupnost
 skutečných RSS kanálů ani lidskou akceptaci MON-08-12.
 
-Ověření finálního zdrojového stavu:
+Ověření základního řezu ADR 0082, commit `b9c4a1a` (před přidáním převodu):
 
 - `python3 -m unittest discover -s tests -v`: 1 805 testů, OK, 54 přeskočeno.
 - Samostatný běh s `M0_DESKTOP_TEST=1`: 3 skutečné Qt/WebEngine scénáře OK
@@ -119,3 +161,20 @@ Ověření finálního zdrojového stavu:
   návodech a whitespace celého diffu včetně nových souborů jsou zkontrolované.
 
 Výsledky nejsou ruční akceptací běžného profilu ani nasazením na Omnii.
+
+Ověření doplněného převodu ADR 0083:
+
+- Regresní běh monitoringu, RSS, Reporting, poolů, modelové syntézy a tiskových
+  formulářů: 128 cílených testů OK.
+- Migrační scénáře ověřují devět skutečných ukončení procesu včetně importu
+  zpráv, CAS/stale náhled, idempotentní replay, předcommitové zrušení,
+  blokování unknown a nejednoznačných pravidel a privacy původních podkladů.
+- Podepsaný dvouuzlový test přenesl migrační zákaz i pool; pozorující uzel
+  zůstal původní, granty se nepřenesly.
+- HTTPS/RBAC a dva prohlížečové scénáře: 8 testů OK. Finální migrační Qt scénář
+  samostatně ověřil i zachování vzdáleného node ID mimo místní seznam.
+- JavaScript syntaxe, odkazy a finální diff včetně nových souborů prošly kontrolou.
+
+Plná sada 1 805 testů výše patří předchozímu commitu `b9c4a1a`, nikoli tomuto
+doplnění. Celá závěrečná brána dávky zůstává na jejím finálním předání.
+Živá uživatelská data tato implementační práce nepřeváděla.

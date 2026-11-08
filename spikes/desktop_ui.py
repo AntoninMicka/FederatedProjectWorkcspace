@@ -8341,7 +8341,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8573,6 +8573,12 @@ class DesktopHandler(Handler):
                 if not isinstance(request,dict) or 'project_id' not in request:return self.send_error(400)
                 action=self.path.rsplit('/',1)[-1];pid=request['project_id']
                 service._data(pid,network=getattr(self.server.projects,'network',False))
+                if action=='migration-inventory' and set(request)=={'project_id'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    return self.reply(200,MonitoringMigration(service).inventory(pid))
+                if action=='migration-preview' and {'project_id','watch_ids','retention_days','processing_node_id'}<=set(request)<={'project_id','watch_ids','retention_days','processing_node_id','pool_bindings'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    return self.reply(200,MonitoringMigration(service).preview(pid,request['watch_ids'],request['retention_days'],request['processing_node_id'],pool_bindings=request.get('pool_bindings')))
                 if action=='blocks' and set(request)=={'project_id'}:
                     result=service.composable.catalog(pid)
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
@@ -8601,7 +8607,16 @@ class DesktopHandler(Handler):
                         result['execution_nodes']=service.execution_nodes(getattr(self.server,'administration',None))
                     return self.reply(200,result)
                 service._writable(pid)
-                if action=='blocks-save' and set(request)=={'project_id','base_head','blocks','operation_id'}:
+                if action=='migration-apply' and {'project_id','watch_ids','retention_days','processing_node_id','preview_sha256','operation_id','confirm'}<=set(request)<={'project_id','watch_ids','retention_days','processing_node_id','preview_sha256','operation_id','confirm','pool_bindings'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    result=MonitoringMigration(service).apply(pid,request['watch_ids'],request['retention_days'],request['processing_node_id'],request['preview_sha256'],request['operation_id'],confirm=request['confirm'],pool_bindings=request.get('pool_bindings'))
+                elif action=='migration-cancel' and set(request)=={'project_id','operation_id','confirm'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    result=MonitoringMigration(service).cancel(pid,request['operation_id'],confirm=request['confirm'])
+                elif action=='migration-resume' and set(request)=={'project_id','operation_id'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    result=MonitoringMigration(service).resume(pid,request['operation_id'])
+                elif action=='blocks-save' and set(request)=={'project_id','base_head','blocks','operation_id'}:
                     result=service.composable.blocks.save(pid,request['base_head'],request['blocks'],request['operation_id'])
                 elif action=='block-configure' and set(request)=={'project_id','block_id','enabled','confirm'}:
                     result=service.composable.configure(pid,request['block_id'],request['enabled'],confirm=request['confirm'])

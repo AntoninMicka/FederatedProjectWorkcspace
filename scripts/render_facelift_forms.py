@@ -124,6 +124,8 @@ SHEETS = [
               notice="Pole se mění podle typu bloku. Úlohy sdílejí definice pomocí jejich identity.")),
     sheet("monitoring-compose", "Sledování — sestavení úlohy pomocí LLM", ("#monitoring-compose", "#monitoring-composition-review"),
           ("monitoring-compose",), scale=.78),
+    sheet("monitoring-migration", "Sledování — jednorázový převod", ("#monitoring-migration",),
+          ("monitoring-migration-form",), scale=.7),
     sheet("presentation", "Editor prezentace", ("#presentation-panel",), scale=.48, notes=False),
     sheet("presentation-pdf", "Export prezentace do PDF", ("#presentation-print-dialog",), scale=.82),
     sheet("metadata", "Návrh popisu a štítků", ("#metadata-panel",), scale=.72),

@@ -28,6 +28,11 @@ zpracování a komplexní úlohy. Definice používají stejnou neměnnou obálk
 obsah poolů je samostatná kolekce mimo Git. Uživatelský postup a skutečné
 hranice nové implementace popisuje [návod](composable-monitoring.md).
 
+Jednorázový převod podle [ADR 0083](adr/0083-one-time-monitoring-migration.md)
+přidává neměnný `MonitoringMigration` s původními refs, cílovými block IDs,
+refs převzatých nálezů a hashem posouzeného náhledu. Jen jeho provenance.inputs
+má limit 628 unikátních refs (128 definic + 500 nálezů); ostatní limity zůstávají.
+
 ## 1. Verze, identity a společné typy
 
 Projektové záznamy mají obálku `schema: fpw-reporting-record-v1` s právě

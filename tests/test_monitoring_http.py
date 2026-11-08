@@ -36,6 +36,29 @@ class MonitoringHTTPTests(unittest.TestCase):
         self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw)['state'],'completed')
         self.assertEqual(self.call('blocks',{}, {'Authorization':'Bearer invalid'})[0],401)
 
+    def test_one_time_migration_has_readable_preview_and_admin_only_apply(self):
+        from tests.test_monitoring_workflow import workflow
+        view=json.loads(self.call('view',{})[1])
+        request=workflow(self.pid,view['commit_id']);request.pop('project_id');request['operation_id']=str(uuid4())
+        code,raw,_=self.call('workflow-save',request);self.assertEqual(code,200,raw)
+        saved=json.loads(raw);ids=[r['watch_id'] for r in saved['stages'].values()]
+        options=dict(watch_ids=ids,retention_days=30,processing_node_id=view['node_id'])
+        code,raw,_=self.call('migration-preview',options);self.assertEqual(code,200,raw)
+        plan=json.loads(raw);self.assertEqual(plan['issues'],[])
+        apply=dict(options,preview_sha256=plan['preview_sha256'],operation_id=str(uuid4()),confirm=True)
+        def admin(body):
+            code,raw,_=self.f.request(path='/v1/administration',body=json.dumps(body));self.assertEqual(code,200,raw);return json.loads(raw)
+        state=admin({'action':'list'});state=admin({'action':'create-user','expected_commit':state['commit_id'],'name':'Migration reader','node_role':'member'})
+        key=state['access_key'];user=state['users'][0]
+        admin({'action':'update-user','expected_commit':state['commit_id'],'user_id':user['id'],'active':True,'node_role':'member','memberships':{self.pid:'reader'}})
+        headers={'Authorization':'Bearer '+key}
+        self.assertEqual(self.call('migration-inventory',{},headers)[0],200)
+        self.assertEqual(self.call('migration-preview',options,headers)[0],200)
+        self.assertEqual(self.call('migration-apply',apply,headers)[0],403)
+        code,raw,_=self.call('migration-apply',apply);self.assertEqual(code,200,raw);result=json.loads(raw)
+        code,raw,_=self.call('migration-apply',apply);self.assertEqual(code,200,raw);self.assertEqual(result,json.loads(raw))
+        inventory=json.loads(self.call('migration-inventory',{})[1]);self.assertTrue(all(r['converted'] for r in inventory['items']))
+
     def test_workflow_saves_two_definitions_and_run_waits_for_stored_inputs(self):
         from tests.test_monitoring_workflow import workflow
         code,raw,_=self.call('view',{});self.assertEqual(code,200,raw);view=json.loads(raw)

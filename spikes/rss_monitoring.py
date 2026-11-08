@@ -43,6 +43,8 @@ class RSSMonitoring:
         return row[0] if row else 0
 
     def _definition(self,config,ws=None,files=None,entities=None,*,grant=True):
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,config['project_id'],config['watch_id'])
         ws=ws or self.reporting.artifacts.workspace(config['project_id']);ws._writable()
         if files is None:files=ws.git.snapshot(ws.git.head());entities=validate_snapshot(files)
         rs=records(files,entities);row=rs.get(config['definition_ref']['artifact_id'])
@@ -196,6 +198,8 @@ class RSSMonitoring:
                 configs=[json.loads(r[0]) for r in db.execute('SELECT document FROM rss_bindings')]
             for config in configs:
                 if (project_id and config['project_id']!=project_id) or not config['enabled']:continue
+                from spikes.monitoring_migration import retired_ids
+                if config['watch_id'] in retired_ids(self.node,config['project_id']):continue
                 with self.scheduler.db() as db:
                     poll=db.execute("SELECT id,state,document,result,plan FROM rss_polls WHERE binding=? AND state IN ('prepared','fetched','publishing','unknown') ORDER BY rowid LIMIT 1",(config['key'],)).fetchone()
                     if poll is None and config['next_due']<=self.clock():
@@ -264,6 +268,10 @@ class RSSMonitoring:
             keys={b['key'] for b in bindings}
             polls=[dict(id=r[0],state=r[1],binding=r[2],error=(json.loads(r[3]) or {}).get('error') if r[3] else None)
                    for r in db.execute('SELECT id,state,binding,result FROM rss_polls') if r[2] in keys]
+        from spikes.monitoring_migration import retired_ids
+        retired=retired_ids(self.node,project_id)
+        for binding in bindings:
+            if binding['watch_id'] in retired:binding.update(enabled=False,converted=True)
         public_bindings=[{k:v for k,v in b.items() if k!='validators'} for b in bindings]
         return dict(project_id=project_id,commit_id=data['commit_id'],bindings=public_bindings,polls=polls,findings=findings,evaluations=evaluations)
 

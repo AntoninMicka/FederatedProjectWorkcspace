@@ -19,6 +19,7 @@ PRIVACY = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 DIMENSIONS = ('maturity', 'relevance', 'novelty', 'impact', 'confidence')
 PERIODS = {'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
 TYPES = {
+    'MonitoringMigration': ('migration', 'sources block_ids finding_refs retention_days processing_node_id preview_sha256'),
     'MonitoringBlock': ('block', 'kind title config'),
     'SourceFinding': ('finding', 'definition_ref input_id item aliases entry_sha256 stage selection change_reason raw_ref'),
     'WatchDefinition': ('watch', 'title goal scope active schedule inputs selection evaluation report placement'),
@@ -212,7 +213,14 @@ def validate_record(record):
     provenance = record['provenance']
     fields(provenance, 'method inputs run_refs')
     choice(provenance['method'], {'user', 'import', 'derived', 'migration'})
-    sequence(provenance['inputs'], ref)
+    if record['type']=='MonitoringMigration':
+        # One migration audit pins up to 128 definitions plus 500 imported findings.
+        inputs=provenance['inputs']
+        require(isinstance(inputs,list) and len(inputs)<=628 and len({encoded(i) for i in inputs})==len(inputs),
+                'Migration provenance exceeds limit or repeats a reference')
+        for item in inputs:ref(item)
+    else:
+        sequence(provenance['inputs'], ref)
     def run_ref(item):
         fields(item, 'run_id manifest_sha256 result_sha256')
         uuid(item['run_id']); hex_id(item['manifest_sha256']); hex_id(item['result_sha256'])
@@ -240,7 +248,10 @@ def validate_record(record):
     for key in ('categories', 'entities', 'geographies', 'tags', 'limitations'):
         if key in v:
             sequence(v[key], text)
-    if kind == 'MonitoringBlock':
+    if kind == 'MonitoringMigration':
+        from spikes.monitoring_migration import validate_migration
+        validate_migration(v)
+    elif kind == 'MonitoringBlock':
         from spikes.monitoring_blocks import validate_block
         validate_block(v)
     elif kind == 'SourceFinding':
@@ -479,6 +490,8 @@ def records(files, entities):
     validate_graph(result)
     from spikes.monitoring_blocks import validate_blocks
     validate_blocks(result)
+    from spikes.monitoring_migration import validate_migrations
+    validate_migrations(result)
     publications = set()
     corrections = set()
     for record in result.values():

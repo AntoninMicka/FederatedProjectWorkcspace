@@ -27,6 +27,8 @@ RSS sbírají redundantně všechny místně aktivované oprávněné uzly. Nov�
 nepoužívá výhradního vlastníka ani koordinátora. Nahrazuje výhradní umístění
 RSS z ADR 0080 pro nové bloky; starší WatchDefinition se automaticky nemigrují.
 Umístění LLM zpracování ani pravidla publikace se tím neuvolňují.
+Jednorázový, výslovně posouzený převod starších zadání nově popisuje
+[ADR 0083](0083-one-time-monitoring-migration.md); čtení ani sync převod samy nespouštějí.
 
 Identita položky vychází z connector + stabilní source ID + původní ID/URL.
 Obsahová revize neobsahuje node ID ani časy načtení. Pozorování uzlů a

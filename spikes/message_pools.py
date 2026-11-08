@@ -54,7 +54,8 @@ def validate_entry(row, project_id):
         require(isinstance(v['reason'], str) and 0 < len(v['reason']) <= 4000, 'Invalid filter reason')
     elif kind == 'observation':
         fields(v, 'item_entry node_id observed_at raw_sha256 expires_at')
-        hex_id(v['item_entry']); uuid(v['node_id']); moment(v['observed_at']); moment(v['expires_at'])
+        hex_id(v['item_entry']); moment(v['observed_at']); moment(v['expires_at'])
+        if v['node_id'] is not None: uuid(v['node_id'])
         if v['raw_sha256'] is not None: hex_id(v['raw_sha256'])
     else:
         require(False, 'Unknown pool entry kind')

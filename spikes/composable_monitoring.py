@@ -45,7 +45,9 @@ class ComposableMonitoring:
             jobs = [dict(id=r[0], state=r[1], intent=json.loads(r[2]),
                          result=json.loads(r[3]) if r[3] else None) for r in db.execute(
                 'SELECT id,state,document,result FROM block_jobs WHERE project=? ORDER BY rowid DESC LIMIT 100', (pid,))]
+        pending={b['id'] for j in jobs if j['intent'].get('kind')=='migration' and j['state']!='completed' for b in j['intent'].get('plan',{}).get('blocks',[])}
         for b in result['blocks']:
+            b['migration_pending']=b['id'] in pending
             binding = bindings.get(b['id'])
             b['runtime'] = dict(binding) if binding else None
             if b['runtime']: b['runtime'].pop('validators', None)
@@ -57,9 +59,16 @@ class ComposableMonitoring:
         result.update(node_id=local_node_id(self.node), jobs=jobs)
         return result
 
+    def _require_migration_complete(self,pid,block_id):
+        with self.pools.db() as db:
+            jobs=[json.loads(r[0]) for r in db.execute("SELECT document FROM block_jobs WHERE project=? AND state!='completed'",(pid,))]
+        require(not any(j.get('kind')=='migration' and any(b['id']==block_id for b in j.get('plan',{}).get('blocks',[])) for j in jobs),
+                'Nejdříve dokončete přerušený převod sledování.')
+
     def configure(self, pid, source_id, enabled, *, confirm):
         require(confirm is True and type(enabled) is bool, 'Confirm local intake activation')
         self.monitoring._writable(pid)
+        if enabled:self._require_migration_complete(pid,source_id)
         source = next((b for b in self.blocks.read(pid)['blocks'] if b['id'] == source_id), None)
         require(source is not None, 'Unknown monitoring source')
         value = source['value']; kind = value['kind']
@@ -267,6 +276,7 @@ class ComposableMonitoring:
             return self._process(pid, processing_id, run_id, scheduled=scheduled)
 
     def _process(self, pid, processing_id, run_id, *, scheduled=False):
+        self._require_migration_complete(pid,processing_id)
         uuid(run_id); self.monitoring._writable(pid)
         catalog = self.blocks.read(pid); by_id = {b['id']: b for b in catalog['blocks']}
         block = by_id.get(processing_id)
