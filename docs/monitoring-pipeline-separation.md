@@ -3,6 +3,13 @@
 
 # Oddělení RSS, skenů, poolu a zpráv
 
+Aktualizace 8. 11. 2026: tento původní návrh nahrazuje schválené členění
+na zdroje, filtry, pooly, zpracování a komplexní úlohy v
+[ADR 0082](adr/0082-composable-monitoring-and-message-pools.md) a
+[návodu](composable-monitoring.md). Výhradní RSS uzel a Git ukládání nových
+poolů z níže uvedeného návrhu se nepřebírají. Text níže zachovává původní
+rozbor retence, nikoli aktuální implementační kontrakt.
+
 Stav: **návrh k review**, nikoli implementovaná retence nebo nové GUI.
 Zadání uživatele 8. 11. 2026 upřesňuje MON-08-07/08/09/10 v aktuální dávce.
 Podklad: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`, exportní

@@ -45,7 +45,8 @@ from spikes.storage import Git
 PATH = '/v1/federation/content-sync'
 CONTENT_TYPE = 'application/vnd.federated-workspace.content-sync-v2'
 MAX_ENVELOPE = 64 * 1024
-MAX_BODY = 4 + MAX_ENVELOPE + MAX_BUNDLE + MAX_CHAT_PAYLOAD
+MAX_POOL_PAYLOAD = 8 * 1024 * 1024
+MAX_BODY = 4 + MAX_ENVELOPE + MAX_BUNDLE + MAX_CHAT_PAYLOAD + MAX_POOL_PAYLOAD
 HASH = re.compile(r'[a-f0-9]{40}|[a-f0-9]{64}')
 MAX_REFS = 64
 PRIVACY = frozenset({'public', 'project', 'confidential'})
@@ -176,8 +177,15 @@ def validate_exchange(value):
               'known_remote_refs', 'bundle_size', 'bundle_sha256',
               'chat_inventory', 'known_remote_chats', 'chat_size',
               'chat_sha256'}
+    if isinstance(value, dict) and value.get('schema_version') == 3:
+        fields |= {'pool_size', 'pool_sha256'}
+        require(type(value.get('pool_size')) is int and 0 < value['pool_size'] <= MAX_POOL_PAYLOAD and
+                isinstance(value.get('pool_sha256'), str) and re.fullmatch(r'[a-f0-9]{64}', value['pool_sha256']),
+                'Invalid pool transfer metadata')
+        require(value.get('sharing_level') == 'same-team' and value.get('scope') == {'mode': 'all'},
+                'Pool synchronization requires full same-team project sharing')
     require(isinstance(value, dict) and set(value) == fields
-            and value['schema_version'] == 2, 'Invalid content sync exchange')
+            and value['schema_version'] in {2, 3}, 'Invalid content sync exchange')
     for field in ('operation_id', 'project_id', 'source_node_id', 'recipient_node_id'):
         identifier(value[field])
     require(value['source_node_id'] != value['recipient_node_id']
@@ -227,7 +235,7 @@ def _chat_inventory(value):
 def encode_body(envelope, payload):
     raw = canonical(envelope)
     require(0 < len(raw) <= MAX_ENVELOPE
-            and len(payload) <= MAX_BUNDLE + MAX_CHAT_PAYLOAD,
+            and len(payload) <= MAX_BUNDLE + MAX_CHAT_PAYLOAD + MAX_POOL_PAYLOAD,
             'Content sync body exceeds limits')
     return struct.pack('!I', len(raw)) + raw + payload
 
@@ -305,10 +313,15 @@ def _build_bundle(node, project_id, scope):
 
 
 def _payloads(exchange, payload):
-    expected = exchange['bundle_size'] + exchange['chat_size']
+    expected = exchange['bundle_size'] + exchange['chat_size'] + exchange.get('pool_size', 0)
     require(len(payload) == expected, 'Content sync payload has another size')
     boundary = exchange['bundle_size']
-    return payload[:boundary], payload[boundary:]
+    return payload[:boundary], payload[boundary:boundary+exchange['chat_size']]
+
+
+def _pool_payload(exchange, payload):
+    size = exchange.get('pool_size', 0)
+    return payload[-size:] if size else b''
 
 
 def _validate_git_bundle(payload, refs, project_id, repo):
@@ -347,6 +360,11 @@ def _verify_bundle(node, exchange, payload, service=None):
             recipient_node_id=exchange['recipient_node_id'], service=service)
         require(chat_inventory(chats) == exchange['chat_inventory'],
                 'Project chat payload differs from signed inventory')
+    pools = _pool_payload(exchange, payload)
+    if pools:
+        require(hashlib.sha256(pools).hexdigest() == exchange['pool_sha256'], 'Pool payload digest differs')
+        from spikes.pool_sync import validate
+        validate(pools, exchange['project_id'])
     return bundle_payload, chats
 
 
@@ -582,6 +600,12 @@ def _apply(node, exchange, payload, checkpoint=lambda stage: None,
             recipient_node_id=exchange['recipient_node_id'], service=service)
         conflict = bool(apply_chat_payload(
             node, chats, checkpoint=checkpoint)) or conflict
+    pools = _pool_payload(exchange, payload)
+    if pools and not conflict:
+        authorize()
+        from spikes.pool_sync import apply
+        apply(node, exchange['project_id'], pools, checkpoint=checkpoint,
+              operation_id=exchange['operation_id'], source_node_id=exchange['source_node_id'])
     return conflict
 
 
@@ -616,7 +640,18 @@ def _prepare(service, peer_id, project_id, operation_id, known_remote_refs,
         'chat_size': len(chat_payload),
         'chat_sha256': hashlib.sha256(chat_payload).hexdigest(),
     })
-    payload = bundle_payload + chat_payload
+    pool_payload = b''
+    if force_bundle and scope == {'mode': 'all'} and peer['sharing_level'] == 'same-team':
+        from spikes.pool_sync import export
+        pool_payload = export(service.node, project_id)
+        if pool_payload:
+            require(_inventory(Projects(service.node).workspace(project_id).git, scope) == refs,
+                    'Project changed during pool export; retry with a current snapshot')
+    if pool_payload:
+        exchange = validate_exchange(dict(exchange, schema_version=3, pool_size=len(pool_payload),
+            pool_sha256=hashlib.sha256(pool_payload).hexdigest()))
+    require(_authority(service, peer_id) == (local_id, peer, shares, commit), 'Pool sharing policy changed')
+    payload = bundle_payload + chat_payload + pool_payload
     return (_signature(service.root, exchange, local_id, 'exchange'), payload,
             peer, refs, chats)
 
@@ -695,7 +730,7 @@ class SyncReceiver:
             response_exchange = dict(response_exchange, chat_inventory=[], chat_size=0,
                                      chat_sha256=hashlib.sha256(b'').hexdigest())
             response_chats = b''
-        response_payload = response_bundle + response_chats
+        response_payload = response_bundle + response_chats + _pool_payload(response_exchange, response_payload)
         if local_refs == known or local_chats == known_chats:
             response = _signature(self.service.root, validate_exchange(response_exchange),
                                   local_id, 'exchange')
@@ -747,7 +782,7 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                            else {'mode': 'selected-only',
                                  'branches': ['refs/heads/main'], 'revision': 1}))
         stale_chat_authority = False
-        if envelope.get('exchange', {}).get('schema_version') == 2:
+        if envelope.get('exchange', {}).get('schema_version') in {2, 3}:
             _, pending_chats = _payloads(envelope['exchange'], payload)
             if pending_chats:
                 try:
@@ -757,7 +792,7 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                         service=service)
                 except (AccessDenied, ValueError):
                     stale_chat_authority = True
-        if (envelope.get('exchange', {}).get('schema_version') != 2
+        if (envelope.get('exchange', {}).get('schema_version') not in {2, 3}
                 or envelope['exchange']['source_node_id'] != local_id
                 or envelope['exchange']['sharing_level'] != peer['sharing_level']
                 or envelope['exchange']['scope'] != expected_scope
@@ -788,7 +823,7 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         if changed:
             envelope = _signature(service.root, validate_exchange(exchange),
                                   exchange['source_node_id'], 'exchange')
-            payload = bundle_payload + chat_payload
+            payload = bundle_payload + chat_payload + _pool_payload(exchange, payload)
         with _database(node) as db:
             db.execute('INSERT INTO outbound VALUES (?,?,?,?,?,?)',
                        (peer_id, project_id, operation_id,

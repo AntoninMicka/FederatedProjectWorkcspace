@@ -16,6 +16,13 @@ požadavek. Synchronizace výsledků po prvotní filtraci zůstává cílem MON-
 nikoli účinkem uložení zadání. UI samotné nevydává grant, nepotvrzuje
 dostupnost uzlu a neobchází níže uvedené execution a recovery podmínky.
 
+## Nové samostatné bloky — 8. 11. 2026
+
+Pro nový redundantní RSS příjem nahrazuje výhradní placement
+[ADR 0082](0082-composable-monitoring-and-message-pools.md): všechny místně
+aktivované uzly mohou těžit stejné kanály a kolekce deduplikuje jejich výsledky.
+Starší WatchDefinition a umístění LLM zpracování se automaticky nemigrují.
+
 ## Upřesnění identity vykonavatele — 8. 11. 2026
 
 Oprava místního runtime ukládá při explicitním uložení konkrétní node UUID,

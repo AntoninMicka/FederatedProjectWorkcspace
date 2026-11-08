@@ -19,6 +19,7 @@ PRIVACY = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 DIMENSIONS = ('maturity', 'relevance', 'novelty', 'impact', 'confidence')
 PERIODS = {'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
 TYPES = {
+    'MonitoringBlock': ('block', 'kind title config'),
     'SourceFinding': ('finding', 'definition_ref input_id item aliases entry_sha256 stage selection change_reason raw_ref'),
     'WatchDefinition': ('watch', 'title goal scope active schedule inputs selection evaluation report placement'),
     'ReportingTask': ('task', 'title goal scope source_policy calendar selection_policy scale_ref outputs execution retention_policy'),
@@ -239,7 +240,10 @@ def validate_record(record):
     for key in ('categories', 'entities', 'geographies', 'tags', 'limitations'):
         if key in v:
             sequence(v[key], text)
-    if kind == 'SourceFinding':
+    if kind == 'MonitoringBlock':
+        from spikes.monitoring_blocks import validate_block
+        validate_block(v)
+    elif kind == 'SourceFinding':
         from spikes.rss_finding_schema import validate_finding
         validate_finding(v)
     elif kind == 'WatchDefinition':
@@ -473,6 +477,8 @@ def records(files, entities):
                     stack.extend((p['artifact_id'], False) for p in result[id_]['previous'])
     from spikes.monitoring_definition_schema import validate_graph
     validate_graph(result)
+    from spikes.monitoring_blocks import validate_blocks
+    validate_blocks(result)
     publications = set()
     corrections = set()
     for record in result.values():

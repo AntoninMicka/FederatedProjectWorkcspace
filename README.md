@@ -19,6 +19,9 @@ lokálním [reporting CLI a izolovanou ukázkou](docs/manual-reporting.md).
 Sledování z UI, běžící periodický worker, zadání pro jednotlivá období a zprávy ve
 Výstupech přidává [MON-05](docs/adr/0073-monitoring-ui-and-period-synthesis.md#uživatelský-postup).
 Vydání zprávy vždy vyžaduje lidské posouzení přesného návrhu.
+Nové [samostatné bloky sledování](docs/composable-monitoring.md) oddělují
+zdroje, filtry, synchronizované pooly mimo Git, zpracování a komplexní úlohy
+s ručním nebo LLM sestavením.
 
 [Source Collector](docs/source-collector.md) přidává potvrzený sběr veřejného
 UTF-8 textu podle připnuté policy a samostatný atomický import raw/Source.

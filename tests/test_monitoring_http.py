@@ -17,6 +17,25 @@ class MonitoringHTTPTests(unittest.TestCase):
     def call(self,action,body,headers=None):
         return self.f.request(path='/v1/monitoring/'+action,body=json.dumps(dict(project_id=self.pid,**body)),headers=headers)
 
+    def test_composable_blocks_pool_and_review_use_authenticated_http(self):
+        from tests.test_monitoring_blocks import blocks, response
+        from spikes.reporting_schema import encoded
+        from pathlib import Path
+        node=self.f.root/'node.json'
+        specs=blocks(node)
+        code,raw,_=self.call('blocks',{});self.assertEqual(code,200,raw);view=json.loads(raw)
+        code,raw,_=self.call('blocks-save',dict(base_head=view['commit_id'],blocks=specs,operation_id=str(uuid4())))
+        self.assertEqual(code,200,raw)
+        self.f.server.monitoring.composable.fetcher=lambda *a,**kw:response()
+        code,raw,_=self.call('block-configure',dict(block_id=specs[0]['id'],enabled=True,confirm=True))
+        self.assertEqual(code,200,raw)
+        self.assertEqual(self.call('block-tick',{})[0],200)
+        code,raw,_=self.call('pool-view',dict(pool_id=specs[1]['id']));self.assertEqual(code,200,raw)
+        self.assertEqual(len(json.loads(raw)['messages']),1)
+        code,raw,_=self.call('block-task-run',dict(block_id=specs[4]['id'],run_id=str(uuid4())))
+        self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw)['state'],'completed')
+        self.assertEqual(self.call('blocks',{}, {'Authorization':'Bearer invalid'})[0],401)
+
     def test_workflow_saves_two_definitions_and_run_waits_for_stored_inputs(self):
         from tests.test_monitoring_workflow import workflow
         code,raw,_=self.call('view',{});self.assertEqual(code,200,raw);view=json.loads(raw)

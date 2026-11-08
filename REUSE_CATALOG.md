@@ -18,6 +18,14 @@ externí kód se nepřebírá. Scope/recovery:
 
 Katalog verzovaný v Gitu obsahuje technologie, komponenty tohoto workspace a pouze externí zdrojové repozitáře s ověřenou veřejnou dostupností.
 
+MON-08, samostatné bloky a pooly **adaptují** Reporting/Workspace revize,
+source connector, RSS transport a HTTP validátory, izolovaný evaluator,
+ContextBuilder, existující backend run journal a podepsaný federation exchange.
+Nová autoritativní kolekce mimo Git synchronizuje logické množiny, nikoli SQLite
+soubor či místní granty. **Reject:** nový Git writer, RSS leader, implicitní
+modelový dispatch a přepis starších sledování. Hranice a recovery:
+[ADR 0082](docs/adr/0082-composable-monitoring-and-message-pools.md).
+
 ## Externí zdrojové repozitáře
 
 Zatím žádné. Před zařazením uvést veřejnou URL, ověřit přístup bez přihlášení a zaznamenat licenci, revizi a důvod reuse/adapt/reject. Samotná veřejná dostupnost neznamená oprávnění k převzetí kódu.

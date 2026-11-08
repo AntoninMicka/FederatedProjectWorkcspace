@@ -76,6 +76,7 @@ class Monitoring:
         self.reporting=Reporting(node);self.artifacts=Artifacts(node)
         self._scheduler=None
         self._rss_runtime=None
+        self._composable_runtime=None
         self.collector=collector or SourceCollector(node,clock=clock)
         self.adapter_factory=adapter_factory;self.last_errors={};self.lock=threading.Lock()
         self.stop_event=threading.Event();self.thread=None
@@ -91,6 +92,13 @@ class Monitoring:
             from spikes.rss_monitoring import RSSMonitoring
             self._rss_runtime=RSSMonitoring(self.node,clock=self.clock,scheduler=self.scheduler)
         return self._rss_runtime
+
+    @property
+    def composable(self):
+        if self._composable_runtime is None:
+            from spikes.composable_monitoring import ComposableMonitoring
+            self._composable_runtime = ComposableMonitoring(self)
+        return self._composable_runtime
 
     def _data(self,pid,*,network=False):
         ws=self.projects.workspace(pid,blocking=True);head=ws.git.head()
@@ -458,6 +466,7 @@ class Monitoring:
                 try:
                     data=self._data(project)
                     self.rss_runtime.tick(project)
+                    self.composable.tick(project)
                     for cfg in self.watches(data[2],data[3]):
                         if not cfg['active'] or not self.granted(project,cfg):continue
                         try:

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Shared, inert monitoring UI. All mutations go through authenticated services."""
 HTML='''<div id="monitoring-panel" role="tabpanel" aria-labelledby="monitoring-tab" hidden>
-<header><h2>Sledování a zprávy</h2><p>Společný cíl a historie, samostatné zadání pro každé období.</p></header>
+<header><h2>Sledování a zprávy</h2><p>Samostatné zdroje, filtry a pooly pro opakovaně použitelné úlohy.</p></header>
 <p id="monitoring-status" role="status" aria-live="polite"></p>
 <section aria-labelledby="monitoring-workflow-heading"><h3 id="monitoring-workflow-heading">Těžba a následné zpracování</h3>
 <p>Prvotní filtr vybere nálezy k uložení. Zpracování nad uloženými nálezy může mít vlastní uzel i čas spuštění.</p>
@@ -78,15 +78,15 @@ const monitoringForm=document.querySelector('#monitoring-form');
 const monitoringStatus=document.querySelector('#monitoring-status');
 const monitoringLabels={weekly:'Týden',monthly:'Měsíc',quarterly:'Čtvrtletí',annual:'Rok / výroční zpráva'};
 const monitoringStates={succeeded:'Staženo',fetching:'Stahuje se',prepared:'Připraveno',collecting:'Zpracovává se',review:'K posouzení',approved:'Schváleno',issuing:'Vydává se',issued:'Vydáno, čeká na doručení',completed:'Vydáno',failed:'Chyba',cancelled:'Zrušeno',unknown:'Neznámý výsledek — vyžaduje dohledání'};
-function clearMonitoring(){monitoringView=null;monitoringEdit=null;monitoringAttempt=null;monitoringDirty=false;monitoringForm.hidden=true;monitoringWorkflowForm.hidden=true;monitoringWorkflowEdit=null;document.querySelector('#monitoring-rss-section').hidden=true;for(const id of ['monitoring-definitions','monitoring-watches','monitoring-reports','sidebar-monitoring-list','sidebar-report-list','monitoring-rss-list','monitoring-findings-list'])document.getElementById(id)?.replaceChildren();}
-async function canLeaveMonitoring(){if(!monitoringDirty&&!monitoringAttempt)return true;return resolveEditorLeave('Sledování',saveMonitoring,()=>{monitoringDirty=false;monitoringAttempt=null;monitoringForm.hidden=true;monitoringWorkflowForm.hidden=true;});}
+function clearMonitoring(){blockCatalog=null;blockEdit=null;blockProposal=null;blockParent=null;blockSaving=null;blockComposeRun=null;blockEditor.hidden=true;document.querySelector('#monitoring-block-content').replaceChildren();document.querySelector('#monitoring-compose').hidden=true;document.querySelector('#monitoring-composition-review').hidden=true;monitoringView=null;monitoringEdit=null;monitoringAttempt=null;monitoringDirty=false;monitoringForm.hidden=true;monitoringWorkflowForm.hidden=true;monitoringWorkflowEdit=null;document.querySelector('#monitoring-rss-section').hidden=true;for(const id of ['monitoring-definitions','monitoring-watches','monitoring-reports','sidebar-monitoring-list','sidebar-report-list','monitoring-rss-list','monitoring-findings-list'])document.getElementById(id)?.replaceChildren();}
+async function canLeaveMonitoring(){if(!await canLeaveMonitoringBlocks())return false;if(!monitoringDirty&&!monitoringAttempt)return true;return resolveEditorLeave('Sledování',saveMonitoring,()=>{monitoringDirty=false;monitoringAttempt=null;monitoringForm.hidden=true;monitoringWorkflowForm.hidden=true;});}
 function monitoringOpen(section='tools'){showWorkspacePage(projectView);selectSidebarTab(document.querySelector(section==='outputs'?'#presentations-tab':'#tools-tab'));selectMainTab(document.querySelector('#monitoring-tab'));}
 function monitoringButton(label,action,disabled=false){const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=disabled;b.addEventListener('click',async()=>{try{await action();}catch(error){monitoringStatus.textContent=error.message;}});return b;}
 async function monitoringRequest(action,payload={}){if(!activeProject)throw Error('Otevřete projekt.');return projectRequest('/v1/monitoring/'+action,{project_id:activeProject.id,...payload},120000);}
 let monitoringLoadSequence=0;
 async function loadMonitoring(){
  if(!activeProject)return;const projectId=activeProject.id,sequence=++monitoringLoadSequence;
- try{const result=await monitoringRequest('view');if(activeProject?.id!==projectId||sequence!==monitoringLoadSequence)return;monitoringView=result;activeProject.head=result.commit_id;renderMonitoring();}
+ try{const result=await monitoringRequest('view');if(activeProject?.id!==projectId||sequence!==monitoringLoadSequence)return;monitoringView=result;activeProject.head=result.commit_id;renderMonitoring();await loadMonitoringBlocks();}
  catch(error){if(activeProject?.id===projectId)monitoringStatus.textContent=error.message;}
 }
 function renderMonitoring(){
@@ -217,8 +217,14 @@ async function saveMonitoring(){
 monitoringForm.addEventListener('submit',event=>{event.preventDefault();saveMonitoring();});
 document.querySelector('#monitoring-form-cancel').addEventListener('click',async()=>{if(await canLeaveMonitoring())monitoringForm.hidden=true;});
 document.querySelector('#monitoring-new').addEventListener('click',()=>editMonitoring());
-document.querySelector('#sidebar-monitoring-new').addEventListener('click',()=>editMonitoringWorkflow());
+document.querySelector('#sidebar-monitoring-new').addEventListener('click',async()=>{monitoringOpen();if(!blockCatalog)await loadMonitoringBlocks();if(blockCatalog)editMonitoringBlock('task');});
 setInterval(()=>{if(activeProject&&document.visibilityState!=='hidden'&&!monitoringDirty&&!monitoringAttempt)loadMonitoring();},15000);
 '''
+from spikes.monitoring_blocks_ui import HTML as BLOCKS_HTML, CSS as BLOCKS_CSS, JS as BLOCKS_JS
+HTML = HTML.replace('<section aria-labelledby="monitoring-workflow-heading">', BLOCKS_HTML+'<details><summary>Starší sledování a dvoufázový editor</summary><section aria-labelledby="monitoring-workflow-heading">',1)
+HTML = HTML.replace('<section><h3>Zprávy</h3>', '</details><section><h3>Zprávy</h3>',1)
+CSS += BLOCKS_CSS
 from spikes.monitoring_workflow_ui import JS as WORKFLOW_JS
 JS += WORKFLOW_JS
+
+JS += BLOCKS_JS

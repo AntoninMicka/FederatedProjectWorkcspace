@@ -8299,7 +8299,7 @@ if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
 HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script src="/app.js"></script>')
 CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
-HTML = HTML.replace('<ul id="sidebar-tool-list"', '<h3>Sledování</h3><button id="sidebar-monitoring-new" type="button" disabled>Nové sledování</button><ul id="sidebar-monitoring-list"></ul><h3>Modely a výpočty</h3><ul id="sidebar-tool-list"',1)
+HTML = HTML.replace('<ul id="sidebar-tool-list"', '<h3>Sledování</h3><button id="sidebar-monitoring-new" type="button" disabled>Nová komplexní úloha</button><ul id="sidebar-monitoring-list"></ul><h3>Modely a výpočty</h3><ul id="sidebar-tool-list"',1)
 HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><h3>Zprávy</h3><ul id="sidebar-report-list"></ul><h3>Prezentace</h3>',1)
 HTML = HTML.replace('<button id="presentation-tab"', '<button id="monitoring-tab" role="tab" aria-controls="monitoring-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Sledování a zprávy</button><button id="presentation-tab"',1)
 HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id="outputs-overview-panel"',1)
@@ -8341,7 +8341,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8573,6 +8573,12 @@ class DesktopHandler(Handler):
                 if not isinstance(request,dict) or 'project_id' not in request:return self.send_error(400)
                 action=self.path.rsplit('/',1)[-1];pid=request['project_id']
                 service._data(pid,network=getattr(self.server.projects,'network',False))
+                if action=='blocks' and set(request)=={'project_id'}:
+                    result=service.composable.catalog(pid)
+                    result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    return self.reply(200,result)
+                if action=='pool-view' and set(request)=={'project_id','pool_id'}:
+                    return self.reply(200,dict(messages=service.composable.pools.view(pid,request['pool_id'])))
                 if action=='rss-status' and set(request)=={'project_id'}:
                     return self.reply(200,service.rss_runtime.status(pid))
                 if action in {'synthesis-trace','synthesis-freshness'} and set(request)=={'project_id','report_ref'}:
@@ -8595,7 +8601,23 @@ class DesktopHandler(Handler):
                         result['execution_nodes']=service.execution_nodes(getattr(self.server,'administration',None))
                     return self.reply(200,result)
                 service._writable(pid)
-                if action=='workflow-save' and set(request)=={'project_id','operation_id','base_head','privacy','collection','processing'}:
+                if action=='blocks-save' and set(request)=={'project_id','base_head','blocks','operation_id'}:
+                    result=service.composable.blocks.save(pid,request['base_head'],request['blocks'],request['operation_id'])
+                elif action=='block-configure' and set(request)=={'project_id','block_id','enabled','confirm'}:
+                    result=service.composable.configure(pid,request['block_id'],request['enabled'],confirm=request['confirm'])
+                elif action=='block-tick' and set(request)=={'project_id'}:
+                    service.composable.tick(pid);result=service.composable.catalog(pid)
+                elif action=='block-release' and set(request)=={'project_id','job_id','confirm'}:
+                    service.composable.release_unknown(pid,request['job_id'],confirm=request['confirm']);result={'released':True}
+                elif action=='block-task-run' and set(request)=={'project_id','block_id','run_id'}:
+                    result=service.composable.run_task(pid,request['block_id'],request['run_id'])
+                elif action=='block-process' and set(request)=={'project_id','block_id','run_id'}:
+                    result=service.composable.process(pid,request['block_id'],request['run_id'])
+                elif action=='block-compose' and set(request)=={'project_id','run_id','goal','confirm'}:
+                    result=service.composable.compose(pid,request['run_id'],request['goal'],confirm=request['confirm'])
+                elif action=='block-publish' and set(request)=={'project_id','run_id','approval_digest','confirm'}:
+                    result=service.composable.publish(pid,request['run_id'],request['approval_digest'],confirm=request['confirm'])
+                elif action=='workflow-save'  and set(request)=={'project_id','operation_id','base_head','privacy','collection','processing'}:
                     from spikes.monitoring_definitions import MonitoringDefinitions
                     result=MonitoringDefinitions(service.node).save_workflow({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
                 elif action=='workflow-run' and set(request)=={'project_id','definition_ref','period_start'}:

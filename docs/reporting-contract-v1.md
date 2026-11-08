@@ -22,6 +22,12 @@ Rozšíření MON-08-03 v [ADR 0076](adr/0076-recurring-rss-findings.md) přidá
 `SourceFinding` pro neměnné RSS nálezy, jejich opravy a processing stavy.
 Jde o untrusted zdrojová data, nikoli potvrzené Events nebo EvidenceAssessment.
 
+Rozšíření 8. 11. 2026: [ADR 0082](adr/0082-composable-monitoring-and-message-pools.md)
+přidává typ `MonitoringBlock` pro samostatné zdroje, filtry, pooly,
+zpracování a komplexní úlohy. Definice používají stejnou neměnnou obálku;
+obsah poolů je samostatná kolekce mimo Git. Uživatelský postup a skutečné
+hranice nové implementace popisuje [návod](composable-monitoring.md).
+
 ## 1. Verze, identity a společné typy
 
 Projektové záznamy mají obálku `schema: fpw-reporting-record-v1` s právě
