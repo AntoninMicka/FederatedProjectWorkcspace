@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Native Git initial transfer, public history only, without hooks or merge."""
 import fcntl
+from collections import OrderedDict
 import hashlib
 import json
 import os
@@ -34,6 +35,19 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
             'Invalid transfer privacy scope')
     commits = git_run(git, 'rev-list', '--max-count=501', head).stdout.splitlines()
     require(0 < len(commits) <= 500, 'History exceeds initial-transfer limit of 500 commits')
+    # A child and its parent recur in adjacent validation steps. Keep only two
+    # immutable snapshots, scoped to this call; never cache authorization or
+    # validation results between transfers.
+    snapshots = OrderedDict()
+
+    def snapshot(commit):
+        if commit not in snapshots:
+            snapshots[commit] = git.snapshot(commit)
+            while len(snapshots) > 2:
+                snapshots.popitem(last=False)
+        snapshots.move_to_end(commit)
+        return snapshots[commit]
+
     for commit in commits:
         committed_project(git, commit, project_id, check_worktree=False)
         entries = git_run(git, 'ls-tree', '-r', '-z', commit).stdout
@@ -43,11 +57,11 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
             require(mode in {'100644', '100755'} and kind == 'blob', 'Symlinks/submodules are not transferable')
             require(path == 'project.json' or path.startswith(('artifacts/', 'registries/')),
                     'Unclassified historical file cannot be transferred: ' + path)
-        entities = validate_snapshot(git.snapshot(commit))
-        candidate = git.snapshot(commit)
+        candidate = snapshot(commit)
+        entities = validate_snapshot(candidate)
         parents = git_run(git, 'show', '-s', '--format=%P', commit).stdout.split()
         for parent in parents:
-            validate_transition(git.snapshot(parent), candidate)
+            validate_transition(snapshot(parent), candidate)
         for item in entities.values():
             require(item['privacy'] in allowed_privacy,
                     'Transfer grant does not allow ' + item['privacy'] +

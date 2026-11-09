@@ -218,6 +218,13 @@ rozpoznáním cesty sdílejí bounded pool, takže pomalé/neúplné hlavičky m
 rezervaci krátce obsadit do původního socket timeoutu; nejde o izolovaný
 server ani ochranu proti zahlcení sítě.
 
+Při vyčerpání všech míst přijímací smyčka zkusí odeslat pevnou pre-dispatch
+HTTP 503 odpověď `server busy`, s `Retry-After: 1` a limitem zápisu 100 ms;
+nevytváří další vlákno ani frontu. Odpojený či nečtoucí klient nemusí
+odpověď převzít. Obsazené webové linky odmítají další operaci bez čekání,
+aby čekání na zámek nezabíralo workery. Desktopový transport zachovává
+původní bounded čekání. Automatický retry se touto změnou nezavádí.
+
 Přesný POST `/v1/diagnostics/status` má samostatnou linku a smí použít
 rezervované místo. Na webu vyžaduje administrátora a read-only autentizaci;
 nezískává projektový zámek, nespouští probe, sync, LLM ani recovery.
@@ -231,6 +238,8 @@ poslední pozorování téže dvojice. Po restartu evidence zmizí. HTTP timeout
 obsazená linka, odmítnutí workeru a selhání sync vypisují bezpečný záznam do
 standardního loggeru služby: bez URL, tokenu, payloadu či textu výjimky.
 Nejde o automatické dumpy Python zásobníků ani průběžný profiler CPU.
+HTTP přehled navíc uvádí počet odmítnutí a aktivní workery: pouze pevnou
+kategorii operace, fázi obsluhy a dobu od přijetí spojení, nikdy raw URL.
 
 Crash boundaries a recovery z ADR 0042 / 0081 / 0082 zůstávají platné:
 diagnostika nezapisuje do Git, projektového indexu ani sync journalu.

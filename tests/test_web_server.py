@@ -30,6 +30,37 @@ from tests.test_notebooklm_import import valid_members
 
 
 class WebTests(unittest.TestCase):
+    def test_full_tls_pool_returns_readable_503_before_dispatch(self):
+        from unittest.mock import patch
+        from spikes.web_server import WebHandler
+        # Reserve every admission slot; no additional handler may be created.
+        for _ in range(self.server.worker_limit):
+            self.assertTrue(self.server._worker_slots.acquire(blocking=False))
+        try:
+            with patch.object(WebHandler, '_do_GET', side_effect=AssertionError('dispatch')):
+                code, body, _ = self.request(method='GET', path='/', body='')
+            self.assertEqual(code, 503)
+            self.assertEqual(json.loads(body), {'error': 'server busy'})
+            self.assertEqual(self.server.http_diagnostics()['admission_rejections'], 1)
+        finally:
+            for _ in range(self.server.worker_limit):
+                self.server._worker_slots.release()
+        self.assertEqual(self.request(method='GET', path='/', body='')[0], 200)
+
+    def test_busy_web_lane_rejects_without_queuing_or_dispatch(self):
+        from unittest.mock import patch
+        from spikes.web_server import WebHandler
+        import time
+        self.server.application_lane.acquire()
+        try:
+            started = time.monotonic()
+            with patch.object(WebHandler, '_do_POST', side_effect=AssertionError('dispatch')):
+                code, body, _ = self.request(path='/v1/projects')
+            self.assertEqual(code, 503, body)
+            self.assertLess(time.monotonic() - started, 1.5)
+        finally:
+            self.server.application_lane.release()
+
     def test_ui_assets_have_reserved_capacity_beside_four_busy_post_workers(self):
         from unittest.mock import patch
         from spikes.web_server import WebHandler
@@ -61,6 +92,10 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(json.loads(body)['scope'], 'local-process')
                 self.assertTrue(json.loads(body)['http']['ui_capacity_reserved'])
                 self.assertTrue(json.loads(body)['http']['lanes_busy']['application_lane'])
+                requests = json.loads(body)['http']['requests']
+                self.assertTrue(any(item['kind'] == 'application_lane'
+                                    and item['stage'] == 'processing' for item in requests))
+                self.assertTrue(all(item['elapsed_ms'] >= 0 for item in requests))
                 # The fifth POST cannot occupy capacity reserved for the UI.
                 code, _, _ = self.request(path='/v1/projects')
                 self.assertEqual(code, 503)

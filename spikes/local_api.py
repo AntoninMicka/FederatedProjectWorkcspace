@@ -57,6 +57,8 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self.shutdown_clean = None
         self._worker_condition = threading.Condition()
         self._active_requests = set()
+        self._request_details = {}
+        self._admission_rejections = 0
         self._admission_open = True
         super().__init__(server_address, handler)
 
@@ -66,7 +68,23 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 self.shutdown_request(request)
                 return
         if not self._worker_slots.acquire(blocking=False):
-            logging.getLogger(__name__).warning('http_admission_rejected reason=worker_limit')
+            logging.getLogger(__name__).warning(
+                'http_admission_rejected reason=worker_limit requests=%s',
+                self.http_diagnostics()['requests'])
+            with self._worker_condition:
+                self._admission_rejections += 1
+            # No handler, authentication or dispatch ran. Give fetch a bounded
+            # HTTP failure rather than an unexplained closed connection.
+            payload = b'{"error":"server busy"}'
+            try:
+                request.settimeout(0.1)
+                request.sendall(b'HTTP/1.0 503 Service Unavailable\r\n'
+                    b'Content-Type: application/json\r\n'
+                    b'Content-Length: ' + str(len(payload)).encode() + b'\r\n'
+                    b'Cache-Control: no-store\r\nRetry-After: 1\r\n'
+                    b'Connection: close\r\n\r\n' + payload)
+            except OSError:
+                pass
             self.shutdown_request(request)
             return
         with self._worker_condition:
@@ -75,11 +93,14 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 self.shutdown_request(request)
                 return
             self._active_requests.add(request)
+            self._request_details[request] = {'kind': 'headers', 'stage': 'reading',
+                                              'started': time.monotonic()}
         try:
             super().process_request(request, client_address)
         except BaseException:
             with self._worker_condition:
                 self._active_requests.discard(request)
+                self._request_details.pop(request, None)
                 self._worker_condition.notify_all()
             self._worker_slots.release()
             raise
@@ -90,6 +111,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         finally:
             with self._worker_condition:
                 self._active_requests.discard(request)
+                self._request_details.pop(request, None)
                 self._worker_condition.notify_all()
             self._worker_slots.release()
 
@@ -98,12 +120,25 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
             return len(self._active_requests)
 
     def http_diagnostics(self):
+        with self._worker_condition:
+            active = [{'kind': item['kind'], 'stage': item['stage'],
+                       'elapsed_ms': round((time.monotonic() - item['started']) * 1000)}
+                      for item in self._request_details.values()]
+            rejected = self._admission_rejections
         return {'active_workers': self.active_worker_count(),
                 'worker_limit': self.worker_limit,
+                'admission_rejections': rejected,
+                'requests': active,
                 'ui_capacity_reserved': self.post_slots is not None,
                 'lanes_busy': {name: getattr(self, name).locked() for name in (
                     'application_lane', 'telemetry_lane', 'review_lane',
                     'availability_lane', 'diagnostics_lane')}}
+
+    def describe_request(self, request, kind, stage):
+        with self._worker_condition:
+            item = self._request_details.get(request)
+            if item is not None:
+                item.update(kind=kind, stage=stage)
 
     def shutdown(self):
         with self._worker_condition:
@@ -202,10 +237,18 @@ class Handler(BaseHTTPRequestHandler):
             # Small unit fixtures may compose this handler with an already
             # sequential HTTPServer; only BoundedHTTPServer enables concurrency.
             return operation()
-        if not lane.acquire(timeout=self.server.request_lane_timeout):
+        describe = getattr(self.server, 'describe_request', lambda *args: None)
+        kind = 'content-sync' if self.path == '/v1/federation/content-sync' else lane_name
+        describe(self.request, kind, 'waiting')
+        # On the web, queued requests must not consume capacity reserved for
+        # navigation and diagnostics behind an already running operation.
+        acquired = (lane.acquire(blocking=False) if getattr(self.server, 'post_slots', None)
+                    is not None else lane.acquire(timeout=self.server.request_lane_timeout))
+        if not acquired:
             logging.getLogger(__name__).warning('http_request_busy lane=%s', lane_name)
             return self.reply(503, {'error': 'server busy'})
         try:
+            describe(self.request, kind, 'processing')
             return operation()
         finally:
             lane.release()

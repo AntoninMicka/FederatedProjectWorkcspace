@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.git_transfer import validate_history
@@ -14,6 +15,16 @@ from spikes.storage import Git
 
 
 class GitTransferHistoryTests(unittest.TestCase):
+    def test_linear_history_reads_each_snapshot_once_per_validation(self):
+        commits = self.git.run('rev-list', self.git.head()).stdout.splitlines()
+        with patch.object(self.git, 'snapshot', wraps=self.git.snapshot) as read:
+            self.assertEqual(validate_history(self.git, self.git.head(), self.project_id), len(commits))
+        self.assertEqual([call.args[0] for call in read.call_args_list], commits)
+        # A later transfer must read and validate again, not trust an old cache.
+        with patch.object(self.git, 'snapshot', wraps=self.git.snapshot) as read:
+            validate_history(self.git, self.git.head(), self.project_id)
+        self.assertEqual([call.args[0] for call in read.call_args_list], commits)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         base = Path(self.temp.name)

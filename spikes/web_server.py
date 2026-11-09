@@ -666,6 +666,7 @@ class WebHandler(DesktopHandler):
         # Immutable UI assets use reserved worker capacity and never touch the
         # project writer. OAuth callbacks retain serialized application access.
         if self.path in ASSETS:
+            self.server.describe_request(self.request, 'ui-assets', 'serving')
             return self._do_GET()
         return super().do_GET()
 
