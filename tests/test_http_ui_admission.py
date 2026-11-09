@@ -7,6 +7,34 @@ from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 
 
 class UIAdmissionTests(unittest.TestCase):
+    def test_hidden_presenter_does_not_poll_and_visible_polls_do_not_overlap(self):
+        from spikes.desktop_ui import PUBLIC_JS
+        script = PUBLIC_JS[PUBLIC_JS.index("const screen=document.querySelector('#screen');"):]
+        harness = r'''
+const assert=require('node:assert/strict');
+const listeners={},pending=[];let count=0,interval;
+global.document={hidden:true,querySelector:()=>({}),addEventListener:(name,fn)=>listeners[name]=fn};
+global.addEventListener=()=>{};global.setInterval=fn=>{interval=fn;};
+global.innerWidth=1600;global.innerHeight=900;
+global.fetch=()=>{count++;return new Promise(resolve=>pending.push(resolve));};
+'''
+        checks = r'''
+(async()=>{
+ assert.equal(count,0);interval();assert.equal(count,0);
+ document.hidden=false;listeners.visibilitychange();assert.equal(count,2);
+ interval();interval();assert.equal(count,2);
+ while(pending.length)pending.shift()({ok:false});
+ await new Promise(resolve=>setImmediate(resolve));
+ interval();assert.equal(count,3);
+ document.hidden=true;interval();assert.equal(count,3);
+ while(pending.length)pending.shift()({ok:false});
+ console.log('presenter checks completed');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', harness + script + checks],
+                                capture_output=True, text=True, check=True, timeout=10)
+        self.assertIn('presenter checks completed', result.stdout)
+
     def test_lanes_streaming_abort_and_failure_release_with_real_fetch_objects(self):
         harness = r'''
 const assert=require('node:assert/strict');

@@ -222,8 +222,9 @@ server ani ochranu proti zahlcení sítě.
 Při vyčerpání všech míst přijímací smyčka zkusí odeslat pevnou pre-dispatch
 HTTP 503 odpověď `server busy`, s `Retry-After: 1` a limitem zápisu 100 ms;
 nevytváří další vlákno ani frontu. Odpojený či nečtoucí klient nemusí
-odpověď převzít. Obsazené webové linky odmítají další operaci bez čekání,
-aby čekání na zámek nezabíralo workery. Samostatný nízkoúrovňový
+odpověď převzít. Obsazené UI linky čekají nejvýše 100 ms (nebo kratší nakonfigurovaný
+limit), aby krátké kolize více oken nekončily 503. Delší operaci odmítnou,
+aby čekání na zámek dlouhodobě nezabíralo workery. Samostatný nízkoúrovňový
 transport bez UI rezervace zachovává původní bounded čekání. Automatický retry se touto změnou nezavádí.
 
 Sdílené desktopové/webové UI omezuje vlastní souběh same-origin POST
@@ -258,3 +259,6 @@ diagnostika nezapisuje do Git, projektového indexu ani sync journalu.
 Ztráta diagnostiky při pádu nemění stav přenosu; opakování používá původní
 durable operaci. Změna neruší timeouty a neslibuje opravu samotného sync.
 Zdrojové integrační testy a fyzické nasazení na Omnii se ověřují odděleně.
+
+Veřejné prezentační okno sdílí řízení souběhu a při skrytí neprovádí polling
+ani hlášení poměru stran. Viditelný polling má nanejvýš jeden aktivní pokus.

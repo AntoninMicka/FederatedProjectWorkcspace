@@ -26,6 +26,21 @@ from tests import test_local_api
 
 
 class ProjectTests(unittest.TestCase):
+    def test_desktop_short_cross_window_collision_completes_without_busy_error(self):
+        import threading
+        from spikes.desktop_management import DesktopManagementHandler
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopManagementHandler,
+                         projects=self.projects) as server:
+            server.application_lane.acquire()
+            release = threading.Timer(.025, server.application_lane.release)
+            release.start()
+            try:
+                response = driver.request(server, path='/v1/projects', body=b'{}')
+                self.assertIn(b'HTTP/1.0 200', response)
+            finally:
+                release.join()
+
     def test_desktop_diagnostics_uses_registered_node_without_server_node_attribute(self):
         import json
         from spikes.desktop_management import DesktopManagementHandler

@@ -240,12 +240,14 @@ class Handler(BaseHTTPRequestHandler):
         describe = getattr(self.server, 'describe_request', lambda *args: None)
         kind = 'content-sync' if self.path == '/v1/federation/content-sync' else lane_name
         describe(self.request, kind, 'waiting')
-        # On the web, queued requests must not consume capacity reserved for
-        # navigation and diagnostics behind an already running operation.
-        acquired = (lane.acquire(blocking=False) if getattr(self.server, 'post_slots', None)
+        # Allow brief cross-window collisions, but never occupy UI capacity
+        # for the full application-lane timeout behind a long operation.
+        acquired = (lane.acquire(timeout=min(0.1, self.server.request_lane_timeout)) if getattr(self.server, 'post_slots', None)
                     is not None else lane.acquire(timeout=self.server.request_lane_timeout))
         if not acquired:
-            logging.getLogger(__name__).warning('http_request_busy lane=%s', lane_name)
+            logging.getLogger(__name__).warning('http_request_busy lane=%s requests=%s',
+                lane_name, (self.server.http_diagnostics()['requests']
+                    if hasattr(self.server, 'http_diagnostics') else []))
             return self.reply(503, {'error': 'server busy'})
         try:
             describe(self.request, kind, 'processing')
