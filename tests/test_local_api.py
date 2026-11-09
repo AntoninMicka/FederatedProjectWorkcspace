@@ -18,6 +18,13 @@ from spikes.local_api import Handler, MAX_BODY, private_directory, running_api
 
 
 class LocalAPITests(unittest.TestCase):
+    def test_timeout_logging_excludes_raw_request_and_error_arguments(self):
+        handler = object.__new__(Handler)
+        with self.assertLogs('spikes.local_api', level='WARNING') as logs:
+            handler.log_error('Request timed out: %r', 'private-token-and-payload')
+        self.assertIn('socket_timeout', str(logs.output))
+        self.assertNotIn('private-token-and-payload', str(logs.output))
+
     @contextmanager
     def servers(self):
         with tempfile.TemporaryDirectory() as runtime:

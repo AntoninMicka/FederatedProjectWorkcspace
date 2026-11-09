@@ -206,3 +206,34 @@ a validátor, read-only admin autentizace, stávající panel Zdroje. Obecný wo
 pool s frontou, změna serializace zápisů, neomezená vlákna, nová databáze a
 externí framework se odmítají. Výsledky ověření patří do aktivního TODO a po
 předání do WORK_LOG pod ID této feature, nikoli do historických počtů výše.
+
+## Rozšíření diagnostiky a rezervace UI, 9. 11. 2026
+
+Na výslovné zadání uživatele je změna součástí aktivní RSS větve.
+Síťový web má vedle čtyř běžných HTTP workerů jedno rezervované místo.
+Nejde o druhý proces: čtyři POST operace mohou běžet/čekat současně,
+další běžný POST dostane pre-dispatch 503. Statické GET assety obcházejí
+aplikační zámek. OAuth callback jej stále používá. HTTP spojení před
+rozpoznáním cesty sdílejí bounded pool, takže pomalé/neúplné hlavičky mohou
+rezervaci krátce obsadit do původního socket timeoutu; nejde o izolovaný
+server ani ochranu proti zahlcení sítě.
+
+Přesný POST `/v1/diagnostics/status` má samostatnou linku a smí použít
+rezervované místo. Na webu vyžaduje administrátora a read-only autentizaci;
+nezískává projektový zámek, nespouští probe, sync, LLM ani recovery.
+Sdílení projektů nabízí tlačítko **Diagnostika synchronizace**. Výpis je
+lokální pro právě otevřený uzel, nikoli automaticky sesbíraný z peerů.
+
+Přehled obsahuje počet workerů, obsazené HTTP linky a poslední fázi, časy
+a typ chyby synchronizace. Paměťová evidence drží nejvýše 64 posledních
+dvojic uzel/peer/projekt v procesu; příchozí i odchozí pokus mohou nahradit
+poslední pozorování téže dvojice. Po restartu evidence zmizí. HTTP timeout,
+obsazená linka, odmítnutí workeru a selhání sync vypisují bezpečný záznam do
+standardního loggeru služby: bez URL, tokenu, payloadu či textu výjimky.
+Nejde o automatické dumpy Python zásobníků ani průběžný profiler CPU.
+
+Crash boundaries a recovery z ADR 0042 / 0081 / 0082 zůstávají platné:
+diagnostika nezapisuje do Git, projektového indexu ani sync journalu.
+Ztráta diagnostiky při pádu nemění stav přenosu; opakování používá původní
+durable operaci. Změna neruší timeouty a neslibuje opravu samotného sync.
+Zdrojové integrační testy a fyzické nasazení na Omnii se ověřují odděleně.

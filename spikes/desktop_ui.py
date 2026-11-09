@@ -8365,7 +8365,7 @@ class DesktopHandler(Handler):
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
         '/v1/chat/status', '/v1/chat/configure', '/v1/chat/models',
-        '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
+        '/v1/diagnostics/status', '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
         '/v1/node-telemetry/run',
         '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test', '/v1/chat/availability',
         '/v1/search/status', '/v1/search/configure', '/v1/search/test',
@@ -9050,6 +9050,14 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/diagnostics/status' and request == {}:
+                from spikes.sync_diagnostics import observations
+                return self.reply(200, {'scope': 'local-process',
+                    'active_http_workers': (self.server.active_worker_count()
+                        if hasattr(self.server, 'active_worker_count') else None),
+                    'http': (self.server.http_diagnostics()
+                        if hasattr(self.server, 'http_diagnostics') else None),
+                    'sync': observations(self.server.node)})
             if self.path == '/v1/node-telemetry/status' and isinstance(request, dict) \
                     and set(request) <= {'group'}:
                 return self.reply(200, self.server.chat_service.telemetry_status(

@@ -113,9 +113,10 @@ def secret(path):
 
 
 class WebHandler(DesktopHandler):
+    reserve_ui_worker = True
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     google_drive_callback_path = '/oauth/google-drive/callback'
-    post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
+    post_paths = DesktopHandler.post_paths | {'/v1/diagnostics/status', '/v1/administration', '/v1/session',
                                                '/v1/federation/enroll',
                                                '/v1/federation/catalog/reconcile',
                                                '/v1/federation/content/reconcile',
@@ -153,7 +154,8 @@ class WebHandler(DesktopHandler):
             return True
         try:
             operation = (self.server.administration.authenticate_readonly
-                         if self.path in {'/v1/node-telemetry/status', '/v1/chat/availability'}
+                         if self.path in {'/v1/node-telemetry/status', '/v1/chat/availability',
+                                          '/v1/diagnostics/status'}
                          else self.server.administration.authenticate)
             self.actor = operation(auth)
             return self.actor is not None
@@ -211,6 +213,16 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        if self.path == '/v1/diagnostics/status':
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            if request != {}:
+                return self.send_error(400)
+            from spikes.sync_diagnostics import observations
+            return self.reply(200, {'scope': 'local-process',
+                'active_http_workers': self.server.active_worker_count(),
+                'http': self.server.http_diagnostics(),
+                'sync': observations(self.server.node)})
         if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh'}:
             if self.path.endswith('/refresh') and not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -649,6 +661,13 @@ class WebHandler(DesktopHandler):
         self.send_header('Connection', 'close')
         self.end_headers()
         self.wfile.write(data)
+
+    def do_GET(self):
+        # Immutable UI assets use reserved worker capacity and never touch the
+        # project writer. OAuth callbacks retain serialized application access.
+        if self.path in ASSETS:
+            return self._do_GET()
+        return super().do_GET()
 
 
 class WebServer(BoundedHTTPServer):

@@ -5,6 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Vestavěná diagnostika synchronizace a rezervace webového UI **adaptují**
+stávající bounded HTTP pool, administrační oprávnění, read-only autentizaci,
+panel sdílení a původní sync lifecycle. Pozorování používá stdlib
+`ContextVar`, omezenou paměťovou mapu a bezpečný logger služby. Nový daemon,
+druhý writer, diagnostická databáze a automatický retry jsou **reject**;
+soukromá inventura nedává důvod přebírat externí implementaci.
+Hranice a recovery: [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md).
+
 `F-M5-FULL-DATA-SYNC-01` **reuse/adaptuje** nativní bundle transport,
 `validate_history`, reportingové `validate_git`, původní peer/branch policy,
 sync journal a Workspace CAS/Index recovery. Stejný přesný bundle se sémanticky

@@ -30,6 +30,69 @@ from tests.test_notebooklm_import import valid_members
 
 
 class WebTests(unittest.TestCase):
+    def test_ui_assets_have_reserved_capacity_beside_four_busy_post_workers(self):
+        from unittest.mock import patch
+        from spikes.web_server import WebHandler
+        release = threading.Event()
+        entered = threading.Barrier(5)
+        replies = []
+
+        original_post = WebHandler._do_POST
+
+        def block(handler):
+            if handler.path == '/v1/diagnostics/status':
+                return original_post(handler)
+            entered.wait(timeout=5)
+            if not release.wait(10):
+                return handler.reply(504, {'error': 'test timeout'})
+            return handler.reply(200, {'done': True})
+
+        routes = ['/v1/projects', '/v1/node-telemetry/status',
+                  '/v1/chat/availability', '/v1/roadmap-refinement/list']
+        with patch.object(WebHandler, '_do_POST', block):
+            clients = [threading.Thread(target=lambda route=route:
+                       replies.append(self.request(path=route))) for route in routes]
+            for client in clients:
+                client.start()
+            try:
+                entered.wait(timeout=5)
+                code, body, _ = self.request(path='/v1/diagnostics/status')
+                self.assertEqual(code, 200, body)
+                self.assertEqual(json.loads(body)['scope'], 'local-process')
+                self.assertTrue(json.loads(body)['http']['ui_capacity_reserved'])
+                self.assertTrue(json.loads(body)['http']['lanes_busy']['application_lane'])
+                # The fifth POST cannot occupy capacity reserved for the UI.
+                code, _, _ = self.request(path='/v1/projects')
+                self.assertEqual(code, 503)
+                code, body, _ = self.request(method='GET', path='/', body='')
+                self.assertEqual(code, 200)
+                self.assertIn(b'<html', body.lower() if isinstance(body, bytes) else body.lower().encode())
+            finally:
+                release.set()
+                for client in clients:
+                    client.join(10)
+        self.assertEqual(len(replies), 4)
+        self.assertTrue(all(reply[0] == 200 for reply in replies))
+
+    def test_diagnostics_requires_admin_and_uses_readonly_authentication(self):
+        from unittest.mock import patch
+        self.assertEqual(self.create_project('Diagnostic access')[0], 200)
+        code, raw, _ = self.request(path='/v1/administration', body='{"action":"list"}')
+        self.assertEqual(code, 200)
+        for role in ('member', 'node-admin'):
+            state = json.loads(raw)
+            code, data, _ = self.request(path='/v1/administration', body=json.dumps({
+                'action': 'create-user', 'expected_commit': state['commit_id'],
+                'name': 'Diagnostic ' + role, 'node_role': role}))
+            self.assertEqual(code, 200, data)
+            headers = {'Authorization': 'Bearer ' + json.loads(data)['access_key']}
+            with patch.object(self.server.administration, 'authenticate',
+                              side_effect=AssertionError('mutable authentication')):
+                code, _, _ = self.request(path='/v1/diagnostics/status', headers=headers)
+            self.assertEqual(code, 200 if role == 'node-admin' else 403)
+            code, raw, _ = self.request(path='/v1/administration', body='{"action":"list"}')
+            self.assertEqual(code, 200)
+
     def test_dns_hostname_validation_is_fail_closed(self):
         self.assertEqual(validate_hostname('Workspace.Cacke.Internal'),
                          'workspace.cacke.internal')

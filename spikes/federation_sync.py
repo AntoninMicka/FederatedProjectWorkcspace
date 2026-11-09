@@ -40,6 +40,7 @@ from spikes.project_chat_sync import (
 )
 from spikes.projects import Projects
 from spikes.storage import Git
+from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic
 
 
 PATH = '/v1/federation/content-sync'
@@ -661,6 +662,7 @@ class SyncReceiver:
         self.node = Path(node).absolute()
         self.service = administration or Administration(self.node)
 
+    @received
     def receive(self, envelope, payload, checkpoint=lambda stage: None):
         require(isinstance(envelope, dict) and isinstance(envelope.get('exchange'), dict),
                 'Missing content sync exchange')
@@ -671,6 +673,7 @@ class SyncReceiver:
                 and envelope.get('signer_node_id') == peer['id'],
                 'Content sync exchange does not match relationship')
         _verify(envelope, peer['fingerprint'], 'exchange')
+        phase('receive-verify-history')
         _verify_bundle(self.node, exchange, payload, self.service)
         digest = hashlib.sha256(canonical(envelope) + payload).hexdigest()
         encoded = canonical(envelope).decode('ascii')
@@ -695,6 +698,7 @@ class SyncReceiver:
                     and current_peer['fingerprint'] == peer['fingerprint']
                     and current_peer['sharing_level'] == exchange['sharing_level'],
                     'Content sync authority changed before publication')
+        phase('receive-publication')
         conflict = _apply(self.node, exchange, payload, checkpoint, authorize,
                           self.service)
         with _database(self.node) as db:
@@ -715,6 +719,7 @@ class SyncReceiver:
                                   (peer['id'], exchange['project_id'])).fetchone()
         known = exchange['known_remote_refs']
         known_chats = exchange['known_remote_chats']
+        phase('receive-prepare-response')
         response, response_payload, _, local_refs, local_chats = _prepare(
             self.service, peer['id'], exchange['project_id'],
             exchange['operation_id'], exchange['refs'],
@@ -756,8 +761,10 @@ class SyncReceiver:
         return response, response_payload
 
 
+@observed
 def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                 cancelled=None):
+    phase('prepare')
     cancelled = cancelled or (lambda: False)
     if cancelled():
         raise SyncCancelled('Content sync cancelled before preparation')
@@ -849,9 +856,13 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
     connection = http.client.HTTPSConnection(
         str(address), parsed.port or 443, context=context, timeout=60)
     try:
+        phase('upload')
         connection.request('POST', PATH, body=encode_body(envelope, payload), headers={
             'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc})
-        response = connection.getresponse(); body = response.read(MAX_BODY + 1)
+        phase('wait-response')
+        response = connection.getresponse()
+        phase('download')
+        body = response.read(MAX_BODY + 1)
         require(len(body) <= MAX_BODY, 'Content sync response exceeds limit')
         if response.status == 409:
             raise SyncConflict('Peer reported a content conflict')
@@ -883,6 +894,7 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                 and current_peer['fingerprint'] == peer['fingerprint']
                 and current_peer['sharing_level'] == returned['sharing_level'],
                 'Content sync authority changed before response publication')
+    phase('local-publication')
     conflict = _apply(node, returned, response_payload,
                       authorize=authorize_response, service=service)
     accepted = _refs(response_envelope['accepted_source_refs'])
@@ -938,6 +950,7 @@ class ContentSyncControl:
             sent_state, remote_state = _sync_state(sent), _sync_state(remote)
             result[peer + ':' + project] = {
                 'state': state, 'detail': detail,
+                'diagnostic': sync_diagnostic(self.node, peer, project),
                 'chat_summary': {
                     'shared': len(sent_state['chats']),
                     'received': len(remote_state['chats']),
@@ -1011,12 +1024,14 @@ class ContentSyncControl:
                              'eligible': reason is None, 'reason': reason})
         return rows
 
+    @observed
     def synchronize(self, peer_id, project_id, *, cancelled=None):
         try:
             root = private_root(self.node)
             fd = os.open(root / 'federation-content-sync.lock',
                          os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             with os.fdopen(fd, 'a+b') as lock:
+                phase('wait-lock')
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 return synchronize(self.node, peer_id, project_id,
                                    deployment=self.deployment,

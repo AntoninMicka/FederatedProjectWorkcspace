@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import hmac
 import json
+import logging
 import os
 from pathlib import Path
 import secrets
@@ -41,11 +42,15 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
             raise ValueError('Request lane timeout must be positive')
         if not isinstance(shutdown_timeout, (int, float)) or shutdown_timeout <= 0:
             raise ValueError('Shutdown timeout must be positive')
-        self._worker_slots = threading.BoundedSemaphore(max_workers)
+        reserve_ui = bool(getattr(handler, 'reserve_ui_worker', False))
+        self.worker_limit = max_workers + int(reserve_ui)
+        self.post_slots = threading.BoundedSemaphore(max_workers) if reserve_ui else None
+        self._worker_slots = threading.BoundedSemaphore(max_workers + int(reserve_ui))
         self.application_lane = threading.Lock()
         self.telemetry_lane = threading.Lock()
         self.review_lane = threading.Lock()
         self.availability_lane = threading.Lock()
+        self.diagnostics_lane = threading.Lock()
         self.backend_availability = BackendAvailability()
         self.request_lane_timeout = lane_timeout
         self.shutdown_timeout = shutdown_timeout
@@ -61,6 +66,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 self.shutdown_request(request)
                 return
         if not self._worker_slots.acquire(blocking=False):
+            logging.getLogger(__name__).warning('http_admission_rejected reason=worker_limit')
             self.shutdown_request(request)
             return
         with self._worker_condition:
@@ -90,6 +96,14 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
     def active_worker_count(self):
         with self._worker_condition:
             return len(self._active_requests)
+
+    def http_diagnostics(self):
+        return {'active_workers': self.active_worker_count(),
+                'worker_limit': self.worker_limit,
+                'ui_capacity_reserved': self.post_slots is not None,
+                'lanes_busy': {name: getattr(self, name).locked() for name in (
+                    'application_lane', 'telemetry_lane', 'review_lane',
+                    'availability_lane', 'diagnostics_lane')}}
 
     def shutdown(self):
         with self._worker_condition:
@@ -132,6 +146,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass  # Do not log request URLs, headers, tokens or payloads.
+
+    def log_error(self, format, *args):
+        # BaseHTTPRequestHandler sends socket timeouts here, otherwise silently
+        # discarded by log_message. Never interpolate its request/error text.
+        reason = 'socket_timeout' if format.startswith('Request timed out') else 'http_error'
+        logging.getLogger(__name__).warning('http_request_failed reason=%s', reason)
 
     def reply(self, code, payload):
         data = json.dumps(payload).encode()
@@ -183,6 +203,7 @@ class Handler(BaseHTTPRequestHandler):
             # sequential HTTPServer; only BoundedHTTPServer enables concurrency.
             return operation()
         if not lane.acquire(timeout=self.server.request_lane_timeout):
+            logging.getLogger(__name__).warning('http_request_busy lane=%s', lane_name)
             return self.reply(503, {'error': 'server busy'})
         try:
             return operation()
@@ -190,7 +211,22 @@ class Handler(BaseHTTPRequestHandler):
             lane.release()
 
     def do_POST(self):
-        lane_name = ('availability_lane' if self.path in {'/v1/chat/availability', '/v1/tasks/run-control'}
+        slots = getattr(self.server, 'post_slots', None)
+        reserved_diagnostic = self.path == '/v1/diagnostics/status'
+        if reserved_diagnostic:
+            slots = None
+        if slots is not None and not slots.acquire(blocking=False):
+            logging.getLogger(__name__).warning('http_request_busy reason=ui_worker_reserved')
+            return self.reply(503, {'error': 'server busy'})
+        try:
+            return self._admitted_POST()
+        finally:
+            if slots is not None:
+                slots.release()
+
+    def _admitted_POST(self):
+        lane_name = ('diagnostics_lane' if self.path == '/v1/diagnostics/status'
+                     else 'availability_lane' if self.path in {'/v1/chat/availability', '/v1/tasks/run-control'}
                      else 'telemetry_lane' if self.path == '/v1/node-telemetry/status'
                      else 'review_lane' if self.path in {
                          '/v1/roadmap-refinement/list',
