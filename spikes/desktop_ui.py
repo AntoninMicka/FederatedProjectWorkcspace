@@ -9057,7 +9057,8 @@ class DesktopHandler(Handler):
                         if hasattr(self.server, 'active_worker_count') else None),
                     'http': (self.server.http_diagnostics()
                         if hasattr(self.server, 'http_diagnostics') else None),
-                    'sync': observations(self.server.node)})
+                    'sync': (observations(projects.node_path)
+                        if projects.node_path is not None else [])})
             if self.path == '/v1/node-telemetry/status' and isinstance(request, dict) \
                     and set(request) <= {'group'}:
                 return self.reply(200, self.server.chat_service.telemetry_status(

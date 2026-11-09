@@ -26,6 +26,32 @@ from tests import test_local_api
 
 
 class ProjectTests(unittest.TestCase):
+    def test_desktop_diagnostics_uses_registered_node_without_server_node_attribute(self):
+        import json
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.sync_diagnostics import observed
+
+        @observed
+        def transfer(node, peer_id, project_id):
+            return None
+
+        transfer(self.node_path, AUTHOR, ENTITY)
+        driver = test_local_api.LocalAPITests()
+        for projects in (self.projects, Projects()):
+            with self.subTest(configured=projects.node_path is not None):
+                with running_api('http', handler=DesktopManagementHandler,
+                                 projects=projects) as server:
+                    self.assertFalse(hasattr(server, 'node'))
+                    response = driver.request(server, path='/v1/diagnostics/status', body=b'{}')
+                header, body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b' 200 ', header)
+                result = json.loads(body)
+                self.assertEqual(result['scope'], 'local-process')
+                if projects.node_path is None:
+                    self.assertEqual(result['sync'], [])
+                else:
+                    self.assertTrue(any(row['project_id'] == ENTITY for row in result['sync']))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='project reads ')
         self.addCleanup(self.temp.cleanup)
