@@ -1334,8 +1334,10 @@ def main():
         view.closing = True
         window.close()
         # Destroy pages before their off-the-record profile.
-        from shiboken6 import delete
-        delete(window)
+        from shiboken6 import delete, isValid
+        for widget in (public_window, window):
+            if isValid(widget):
+                delete(widget)
         delete(profile)
     if args.smoke and result == 0:
         print('desktop smoke: backend stopped', flush=True)

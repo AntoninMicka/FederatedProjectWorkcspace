@@ -52,6 +52,30 @@ class ProjectTests(unittest.TestCase):
                 else:
                     self.assertTrue(any(row['project_id'] == ENTITY for row in result['sync']))
 
+    def test_desktop_reserves_ui_capacity_and_rejects_busy_lane_without_waiting(self):
+        import json
+        import time
+        from spikes.desktop_management import DesktopManagementHandler
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopManagementHandler,
+                         projects=self.projects) as server:
+            self.assertEqual(server.worker_limit, 5)
+            self.assertTrue(server.http_diagnostics()['ui_capacity_reserved'])
+            server.application_lane.acquire()
+            try:
+                started = time.monotonic()
+                response = driver.request(server, path='/v1/projects', body=b'{}')
+                self.assertIn(b'HTTP/1.0 503', response)
+                self.assertLess(time.monotonic() - started, 1.5)
+                response = driver.request(server, method='GET', path='/', body=b'')
+                self.assertIn(b'HTTP/1.0 200', response)
+                response = driver.request(server, path='/v1/diagnostics/status', body=b'{}')
+                header, body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b'HTTP/1.0 200', header)
+                self.assertTrue(json.loads(body)['http']['lanes_busy']['application_lane'])
+            finally:
+                server.application_lane.release()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='project reads ')
         self.addCleanup(self.temp.cleanup)

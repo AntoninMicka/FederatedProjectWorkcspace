@@ -210,7 +210,8 @@ předání do WORK_LOG pod ID této feature, nikoli do historických počtů vý
 ## Rozšíření diagnostiky a rezervace UI, 9. 11. 2026
 
 Na výslovné zadání uživatele je změna součástí aktivní RSS větve.
-Síťový web má vedle čtyř běžných HTTP workerů jedno rezervované místo.
+Síťový web i skutečný desktopový management server mají vedle čtyř
+běžných HTTP workerů jedno rezervované místo.
 Nejde o druhý proces: čtyři POST operace mohou běžet/čekat současně,
 další běžný POST dostane pre-dispatch 503. Statické GET assety obcházejí
 aplikační zámek. OAuth callback jej stále používá. HTTP spojení před
@@ -222,8 +223,8 @@ Při vyčerpání všech míst přijímací smyčka zkusí odeslat pevnou pre-di
 HTTP 503 odpověď `server busy`, s `Retry-After: 1` a limitem zápisu 100 ms;
 nevytváří další vlákno ani frontu. Odpojený či nečtoucí klient nemusí
 odpověď převzít. Obsazené webové linky odmítají další operaci bez čekání,
-aby čekání na zámek nezabíralo workery. Desktopový transport zachovává
-původní bounded čekání. Automatický retry se touto změnou nezavádí.
+aby čekání na zámek nezabíralo workery. Samostatný nízkoúrovňový
+transport bez UI rezervace zachovává původní bounded čekání. Automatický retry se touto změnou nezavádí.
 
 Přesný POST `/v1/diagnostics/status` má samostatnou linku a smí použít
 rezervované místo. Na webu vyžaduje administrátora a read-only autentizaci;

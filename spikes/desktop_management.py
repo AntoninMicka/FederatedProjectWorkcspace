@@ -29,7 +29,15 @@ ASSETS = {**BASE_ASSETS,
 
 
 class DesktopManagementHandler(DesktopHandler):
+    reserve_ui_worker = True
     assets = ASSETS
+
+    def do_GET(self):
+        if self.path in self.assets:
+            self.server.describe_request(self.request, 'ui-assets', 'serving')
+            return self._do_GET()
+        return super().do_GET()
+
     post_paths = DesktopHandler.post_paths | {'/v1/administration',
         '/v1/federation/enroll',
         '/v1/federation/catalog/reconcile',
