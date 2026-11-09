@@ -8319,6 +8319,8 @@ document.querySelector('[data-settings-item="settings-access-tab"]').hidden=fals
 document.querySelector('#presenter-fullscreen').hidden=false;
 document.querySelector('#federation-tab').hidden=false;
 """
+from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
+JS = HTTP_UI_ADMISSION_JS + JS
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
 PUBLIC_JS = SLIDE_JS + '''
 const screen=document.querySelector('#screen');

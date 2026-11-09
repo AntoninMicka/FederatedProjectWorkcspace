@@ -226,6 +226,17 @@ odpověď převzít. Obsazené webové linky odmítají další operaci bez ček
 aby čekání na zámek nezabíralo workery. Samostatný nízkoúrovňový
 transport bez UI rezervace zachovává původní bounded čekání. Automatický retry se touto změnou nezavádí.
 
+Sdílené desktopové/webové UI omezuje vlastní souběh same-origin POST
+požadavků na jednu operaci v každé přesné backendové lince. Nejvýše 64
+čekajících požadavků na linku zůstává pouze v paměti prohlížeče; backendové
+workery čekáním nezabírají. Telemetrie, dostupnost/run-control, review a
+diagnostika mají oddělené pořadí. Zrušený čekající požadavek se neodešle.
+Uvolnění linky čeká na konec těla odpovědi, ne pouze na hlavičky;
+streamovaná odpověď se přesto předá svému konzumentovi ihned. Čtecí kopie
+průběžně zahazuje chunky, nevytváří archiv odpovědi. Síťová chyba ani HTTP
+odmítnutí nezpůsobí automatický retry. Toto řízení souběhu není durable
+fronta a po zavření stránky se čekající požadavky neobnovují.
+
 Přesný POST `/v1/diagnostics/status` má samostatnou linku a smí použít
 rezervované místo. Na webu vyžaduje administrátora a read-only autentizaci;
 nezískává projektový zámek, nespouští probe, sync, LLM ani recovery.
