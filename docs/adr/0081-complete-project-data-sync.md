@@ -83,3 +83,37 @@ schéma plus přesný transportní patch. Není to merge, nasazení ani akceptac
 MON-08. Po začlenění obou větví se podmíněný test zapojí do běžné sady.
 
 Ověření: [full-data-sync](../full-data-sync.md).
+
+## 10. 11. 2026 — dokončený replay bez opakovaného průchodu historií
+
+Lokální oprava dostupnosti navazuje na oddělení HTTP domén v ADR 0050.
+Příjem nadále vlastní společný receive zámek z
+[auditu HTTP](../http-concurrency-ownership.md). Nemění se protokol ani schéma
+journalu; nová nebo nedokončená operace dál projde celou validací historie
+před publikací. Neplatný nový vstup nevytvoří durable inbound intent.
+
+Po ověření aktuální identity peeru, úrovně sdílení a podpisu lze nejprve
+vyhledat původní operation ID v inbound journalu. Dokončený záznam lze použít
+jen při shodě digestu, celé kanonické obálky a všech payload bajtů. Pouhá
+existence ID nebo nedokončeného intentu nestačí. Historická sémantika těchto
+přesných bajtů už byla ověřena před jejich původní publikací; dokončený replay
+proto neopakuje import bundle do validačního repozitáře ani průchod historií.
+
+Znovu se však kontrolují velikosti a podepsané digesty payload částí, privacy
+a aktivní mapování příchozích chatů a validita poolů. U uložené odpovědi se
+ověří původní lokální podpis/identita, vazba na operaci a oba uzly, aktuální
+projektový/branch scope, dostupnost registrovaného projektu a oprávnění
+příjemců odchozích chatů. Projektová kontrola připojí jen Git handle, nikoli
+Workspace journal/index. Registr autority
+musí být od první kontroly příchozího podpisu do závěrečné kontroly stejný.
+Chybějící lokální identita se pro replay nevytváří znovu. Neplatné aktuální
+oprávnění nebo poškozená odpověď znamená odmítnutí, ne přegenerování odpovědi
+pod stejným ID.
+Diagnostika rozlišuje fázi `receive-replay` od `receive-verify-history`.
+
+Crash hranice se nemění: před uložením odpovědi se obnovuje původní intent
+s úplnou validací; po uložení se mohou vrátit jen původní autorizované bajty.
+Odmítnutý replay původní intent/odpověď nemaže a nepublikuje Git, chat ani
+pool. Mezi journalovým lookupem a kontrolou oprávnění se nedrží SQLite
+transakce. Po ztrátě HTTP odpovědi je stále nutné použít stejné operation ID
+a stejné bajty; nevzniká automatický retry ani nový writer.

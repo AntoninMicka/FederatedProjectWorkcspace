@@ -5,6 +5,13 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Dokončený content-sync replay **adaptuje** stávající inbound journal,
+přesnou shodu požadavku a oddělení validace payloadu od průchodu Git historií.
+**Reuse:** podpisy a původní lokální identita, současný branch scope, mapování
+chatů, pool validátor a receive zámek. **Reject:** neověřená obecná cache,
+nový formát/journal, změna odpovědi pod stejným ID a automatický retry.
+Oprávnění a recovery: [doplnění ADR 0081](docs/adr/0081-complete-project-data-sync.md).
+
 HTTP oprava z 9. 11. 2026 **adaptuje** existující bounded admission,
 browserové Web Locks, read-only autentizaci, katalog Git snapshotů a vzor
 uzlového `flock`. **Reuse:** Workspace writer/journal/CAS, sync replay,

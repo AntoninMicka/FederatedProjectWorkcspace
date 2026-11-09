@@ -25,7 +25,7 @@ from spikes.administration import (
     identifier,
 )
 from spikes.configuration import committed_project, parse_node, read_config
-from spikes.federation_accounts import canonical
+from spikes.federation_accounts import MappingSignatures, canonical
 from spikes.git_transfer import MAX_BUNDLE, git_run, validate_history
 from spikes.journal import sync_dir
 from spikes.metadata import require
@@ -367,17 +367,23 @@ def _validate_git_bundle(payload, refs, project_id, repo):
         bundle.unlink(missing_ok=True)
 
 
-def _verify_bundle(node, exchange, payload, service=None):
+def _verify_payload(exchange, payload):
+    """Check bounded signed payload parts, without traversing Git history."""
     bundle_payload, chat_payload = _payloads(exchange, payload)
     require(hashlib.sha256(bundle_payload).hexdigest() == exchange['bundle_sha256'],
             'Content sync bundle differs from signed exchange')
-    if bundle_payload:
-        root = private_root(node)
-        with tempfile.TemporaryDirectory(prefix='sharing-verify-', dir=root) as directory:
-            directory = Path(directory)
-            _validate_git_bundle(bundle_payload,exchange['refs'],exchange['project_id'],directory/'repo.git')
     require(hashlib.sha256(chat_payload).hexdigest() == exchange['chat_sha256'],
             'Project chat payload differs from signed exchange')
+    pools = _pool_payload(exchange, payload)
+    if pools:
+        require(hashlib.sha256(pools).hexdigest() == exchange['pool_sha256'], 'Pool payload digest differs')
+        from spikes.pool_sync import validate
+        validate(pools, exchange['project_id'])
+    return bundle_payload, chat_payload
+
+
+def _verify_incoming_payload(exchange, payload, service):
+    bundle_payload, chat_payload = _verify_payload(exchange, payload)
     chats = None
     if chat_payload:
         require(service is not None, 'Chat payload validation requires local authority')
@@ -387,11 +393,16 @@ def _verify_bundle(node, exchange, payload, service=None):
             recipient_node_id=exchange['recipient_node_id'], service=service)
         require(chat_inventory(chats) == exchange['chat_inventory'],
                 'Project chat payload differs from signed inventory')
-    pools = _pool_payload(exchange, payload)
-    if pools:
-        require(hashlib.sha256(pools).hexdigest() == exchange['pool_sha256'], 'Pool payload digest differs')
-        from spikes.pool_sync import validate
-        validate(pools, exchange['project_id'])
+    return bundle_payload, chats
+
+
+def _verify_bundle(node, exchange, payload, service=None):
+    bundle_payload, chats = _verify_incoming_payload(exchange, payload, service)
+    if bundle_payload:
+        root = private_root(node)
+        with tempfile.TemporaryDirectory(prefix='sharing-verify-', dir=root) as directory:
+            directory = Path(directory)
+            _validate_git_bundle(bundle_payload,exchange['refs'],exchange['project_id'],directory/'repo.git')
     return bundle_payload, chats
 
 
@@ -693,22 +704,75 @@ class SyncReceiver:
         with _inbound_lock(self.node):
             return self._receive(envelope, payload, checkpoint)
 
+    def _replay(self, exchange, payload, response, response_payload, *, authority):
+        # Only reached after exact equality with a completed durable request.
+        # Its historical Git semantics are already validated, but authority is
+        # live: both incoming chat mappings and outgoing cached bytes matter.
+        phase('receive-replay')
+        _verify_incoming_payload(exchange, payload, self.service)
+        require(isinstance(response, dict) and set(response) == {
+            'exchange', 'signer_node_id', 'public_key', 'signature',
+            'accepted_source_refs', 'accepted_source_chats', 'conflict'},
+            'Invalid saved content sync response')
+        identity = MappingSignatures(self.service.root)
+        require(identity.key.is_file()
+                and (identity.root / 'federation-key.identity').is_file(),
+                'Saved response requires the original local identity')
+        signed = {key: response[key] for key in
+                  ('exchange', 'signer_node_id', 'public_key', 'signature')}
+        returned = validate_exchange(_verify(
+            signed, identity.identity()['fingerprint'], 'exchange')['exchange'])
+        _refs(response['accepted_source_refs'])
+        _chat_inventory(response['accepted_source_chats'])
+        require(type(response['conflict']) is bool, 'Invalid saved conflict state')
+        local_id, peer, shares, commit = authority
+        require(returned['operation_id'] == exchange['operation_id']
+                and returned['project_id'] == exchange['project_id']
+                and returned['source_node_id'] == local_id
+                and response['signer_node_id'] == local_id
+                and returned['recipient_node_id'] == peer['id']
+                and returned['sharing_level'] == peer['sharing_level']
+                and peer['sharing_level'] == exchange['sharing_level'],
+                'Saved response authority changed')
+        scope = _policy(peer, shares, exchange['project_id'])
+        expected_scope = scope or {'mode': 'selected-only',
+                                  'branches': ['refs/heads/main'], 'revision': 1}
+        require(returned['scope'] == expected_scope
+                and (not response_payload or scope is not None),
+                'Saved response exceeds current project sharing policy')
+        binding = _binding(self.node, exchange['project_id'])
+        if response_payload:
+            require(binding is not None, 'Saved response project is no longer registered')
+            # Current registration/metadata must still be available. Attaching
+            # a read-only Git handle must not initialize or wait for a journal.
+            Projects(self.node).repository(exchange['project_id'])
+        _, chats = _verify_payload(returned, response_payload)
+        if chats:
+            validate_export_authority(chats, project_id=exchange['project_id'],
+                source_node_id=local_id, recipient_node_id=peer['id'], service=self.service)
+        # A concurrent registry change during the checks is not permission to
+        # send stale bytes. Keep the original journal unchanged on refusal.
+        require(_authority(self.service, peer['id']) == (local_id, peer, shares, commit),
+                'Content sync authority changed during replay')
+        require(_binding(self.node, exchange['project_id']) == binding,
+                'Project registration changed during replay')
+        return response, response_payload
+
     def _receive(self, envelope, payload, checkpoint):
         require(isinstance(envelope, dict) and isinstance(envelope.get('exchange'), dict),
                 'Missing content sync exchange')
         exchange = validate_exchange(envelope['exchange'])
-        local_id, peer, _, _ = _authority(self.service, exchange['source_node_id'])
+        authority = _authority(self.service, exchange['source_node_id'])
+        local_id, peer, _, _ = authority
         require(exchange['recipient_node_id'] == local_id
                 and exchange['sharing_level'] == peer['sharing_level']
                 and envelope.get('signer_node_id') == peer['id'],
                 'Content sync exchange does not match relationship')
         _verify(envelope, peer['fingerprint'], 'exchange')
-        phase('receive-verify-history')
-        _verify_bundle(self.node, exchange, payload, self.service)
         digest = hashlib.sha256(canonical(envelope) + payload).hexdigest()
         encoded = canonical(envelope).decode('ascii')
+        saved = None
         with _database(self.node) as db:
-            db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT request_digest,envelope,bundle,'
                              'response_envelope,response_bundle FROM inbound '
                              'WHERE operation_id=?', (exchange['operation_id'],)).fetchone()
@@ -717,8 +781,16 @@ class SyncReceiver:
                         and bytes(row[2]) == payload,
                         'Content sync operation ID belongs to another request')
                 if row[3] is not None:
-                    return json.loads(row[3]), bytes(row[4])
-            else:
+                    require(row[4] is not None, 'Incomplete saved content sync response')
+                    saved = (json.loads(row[3]), bytes(row[4]))
+        if saved is not None:
+            return self._replay(exchange, payload, *saved, authority=authority)
+        phase('receive-verify-history')
+        _verify_bundle(self.node, exchange, payload, self.service)
+        # No new intent is persisted until full validation has succeeded.
+        # The receiver lock spans lookup, validation and response publication.
+        if row is None:
+            with _database(self.node) as db:
                 db.execute('INSERT INTO inbound VALUES (?,?,?,?,NULL,NULL)',
                            (exchange['operation_id'], digest, encoded, payload))
         def authorize():

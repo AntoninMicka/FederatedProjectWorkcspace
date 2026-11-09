@@ -119,7 +119,7 @@ The controlled-delay HTTP tests substitute only the slow protocol/handler
 body; the signed-exchange test exercises actual validation and publication.
 Neither automated evidence nor an offscreen Qt run proves acceptance in the
 user's running desktop. Remaining application-domain contention and the
-38-second history verification cost still need separate investigation. This
+history verification cost for new/incomplete requests still need separate investigation. This
 is an audited split of specific owners, not a claim that every route is now
 parallel or that Omnia synchronization is accepted. Remote deployment remains
 outside this change.
@@ -154,3 +154,32 @@ Recorded validation of this source change:
   `QT_QPA_PLATFORM=offscreen` and `M0_DESKTOP_TEST=1`.
 - Documentation links and `git diff --check` passed. No source commit, remote
   deployment or authoritative Workspace acceptance was performed.
+
+## 10 November follow-up: completed replay
+
+The validation above records the HTTP split delivered in source commit
+`5cb6210`; it is not a new full-suite result for this follow-up.
+The [ADR 0081 addendum](adr/0081-complete-project-data-sync.md) now specifies
+the fast completed replay: authenticate the peer/signature, match the exact
+durable canonical envelope and payload, then recheck live authority for the
+incoming request and cached response without traversing historical Git objects.
+The saved response must still be signed by the original local identity and
+fit the current sharing scope, project registration and outgoing chat mappings.
+No regenerated response or new publication is allowed on this path.
+
+New/incomplete requests retain full history validation. Tests also verify
+that rejected retries keep their journal record unchanged and that interrupted
+ref/chat/pool publication recovers through the original operation.
+
+After the last code/test change, the focused run passed **46 tests, OK,
+one skipped** (the optional Qt UI scenario):
+
+```sh
+python3 -m unittest tests.test_federation_sync tests.test_sync_diagnostics tests.test_message_pool_sync tests.test_full_data_sync -v
+```
+
+This includes a real pinned HTTPS replay with byte-identical output and a
+test guard that fails if any historical Git validation runs during replay.
+The full suite was not repeated for this ongoing repair slice. Remaining
+application-domain ownership work and ordinary local acceptance are still open;
+this result does not authorize Omnia deployment or authoritative task completion.
