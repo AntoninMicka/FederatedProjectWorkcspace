@@ -26,7 +26,7 @@ HTTP_UI_ADMISSION_JS = r'''
   const done=new Promise(resolve=>{finish=resolve;});
   state.tail=previous.then(()=>done);
   const release=()=>{if(!released){released=true;state.pending--;finish();}};
-  const request=previous.then(async()=>{
+  const dispatch=async()=>{
    try{
     if(signal?.aborted)throw aborted();
     const response=await send(input,options);
@@ -38,6 +38,18 @@ HTTP_UI_ADMISSION_JS = r'''
     (async()=>{try{while(!(await reader.read()).done){}}catch(error){}finally{reader.releaseLock();release();}})();
     return response;
    }catch(error){release();throw error;}
+  };
+  const request=previous.then(()=>{
+   const locks=window.navigator?.locks;
+   if(!locks?.request)return dispatch();
+   // One origin-wide lock joins independent pages (main UI and presenter).
+   // Return headers immediately, but hold ownership until response EOF.
+   return new Promise((resolve,reject)=>{
+    locks.request('fpw-http-'+key,signal?{signal}:{},async()=>{
+     try{resolve(await dispatch());await done;}
+     catch(error){reject(error);}
+    }).catch(error=>{release();reject(error);});
+   });
   });
   if(!signal)return request;
   let onAbort;

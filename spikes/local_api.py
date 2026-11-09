@@ -122,6 +122,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
     def http_diagnostics(self):
         with self._worker_condition:
             active = [{'kind': item['kind'], 'stage': item['stage'],
+                       'operation': item.get('operation', 'unclassified'),
                        'elapsed_ms': round((time.monotonic() - item['started']) * 1000)}
                       for item in self._request_details.values()]
             rejected = self._admission_rejections
@@ -134,11 +135,13 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                     'application_lane', 'telemetry_lane', 'review_lane',
                     'availability_lane', 'diagnostics_lane')}}
 
-    def describe_request(self, request, kind, stage):
+    def describe_request(self, request, kind, stage, operation=None):
         with self._worker_condition:
             item = self._request_details.get(request)
             if item is not None:
                 item.update(kind=kind, stage=stage)
+                if operation is not None:
+                    item['operation'] = operation
 
     def shutdown(self):
         with self._worker_condition:
@@ -238,8 +241,11 @@ class Handler(BaseHTTPRequestHandler):
             # sequential HTTPServer; only BoundedHTTPServer enables concurrency.
             return operation()
         describe = getattr(self.server, 'describe_request', lambda *args: None)
+        # Only literal declared routes can enter diagnostics. Unknown URLs and
+        # query strings may contain secrets and must never be retained.
+        operation_name = self.path if self.path in self.post_paths else 'unclassified'
         kind = 'content-sync' if self.path == '/v1/federation/content-sync' else lane_name
-        describe(self.request, kind, 'waiting')
+        describe(self.request, kind, 'waiting', operation_name)
         # Allow brief cross-window collisions, but never occupy UI capacity
         # for the full application-lane timeout behind a long operation.
         acquired = (lane.acquire(timeout=min(0.1, self.server.request_lane_timeout)) if getattr(self.server, 'post_slots', None)

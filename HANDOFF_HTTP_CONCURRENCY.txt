@@ -1,0 +1,163 @@
+PŘEDÁNÍ PRO WEBOVÝ PATCH — SOUBĚH HTTP A NÁHRADA GLOBÁLNÍHO ZÁMKU
+Datum: 9. 11. 2026
+
+ÚČEL A OPRÁVNĚNÍ
+
+Tento text vznikl výjimečně na výslovnou žádost uživatele jako podklad pro
+patch přes web. Není druhým živým TODO ani změnou autoritativního Workspace
+plánu. Respektuj AGENTS.md a platná ADR. Neaktivuj jiné archivované úkoly.
+
+Uživatel chce problém vyřešit lokálně. Další aktualizace Omnie je zastavená,
+dokud nebude řešení fungovat v běžném lokálním provozu. Neprováděj deploy,
+restart vzdáleného serveru, commit, push ani merge bez příslušného oprávnění.
+Blíží se plánovaný výpadek proudu; nyní se předává stav, nikoli hotová oprava.
+
+VÝCHOZÍ ZDROJOVÝ STAV PŘI SEPSÁNÍ
+
+Repozitář: FederatedProjectWorkcspace
+Větev: feature/rss-direct-pilot
+HEAD: 8a3723525c39c03742be70df87da82731097bfa6
+
+Uživatel výslovně požadoval pokračovat v této větvi, aby ladění nekomplikovalo
+množství větví. Nemíchej sem další nesouvisející funkce.
+
+Pracovní strom obsahuje dvě necommitnuté, ROZPRACOVANÉ A NEOVĚŘENÉ změny:
+- spikes/http_ui_admission.py: přidání navigator.locks pro koordinaci
+  požadavků mezi stránkami stejného originu; není doložen test dvou oken
+  ani podpora tohoto mechanismu v konkrétním uživatelském Qt běhu.
+- spikes/local_api.py: doplnění známé API cesty do diagnostiky workeru,
+  pouze při přesné shodě s deklarovaným post_paths. Raw URL a query se
+  nesmějí logovat. Ani tato poslední změna zatím nebyla ověřena testy.
+
+Webový checkout samotného HEAD tyto dva lokální diffy nemusí obsahovat.
+Neoznačuj je za součást commitu ani za hotové řešení. Před patchem zjisti
+skutečný dostupný stav; zachovej existující práci. Necommituj ji automaticky.
+
+CO UŽIVATEL POZORUJE
+
+Synchronizace sledování mezi desktopovým Workspace a Omnií selhávala.
+Omnia není poškozená ani vypnutá: služba běží, ale Workspace na ní není
+spolehlivě použitelný. Stejné problémy dostupnosti se projevují i lokálně.
+UI opakovaně hlásilo server busy a Failed to fetch.
+
+Příklady posledních lokálních záznamů:
+http_request_busy lane=application_lane requests=[
+ {'kind':'application_lane','stage':'processing','elapsed_ms':490},
+ {'kind':'application_lane','stage':'waiting','elapsed_ms':100}]
+http_request_busy lane=application_lane requests=[
+ {'kind':'application_lane','stage':'processing','elapsed_ms':1341},
+ {'kind':'application_lane','stage':'waiting','elapsed_ms':102},
+ {'kind':'telemetry_lane','stage':'processing','elapsed_ms':46}]
+
+Nejde tedy jen o mimořádně dlouhé zamrznutí. Limit čekání 100 ms odmítá
+požadavky i při běžných operacích trvajících stovky ms až přes jednu sekundu.
+Starší logy také dokládaly zaplnění HTTP poolu workery čekajícími na zámek.
+
+Samostatné měření příchozí synchronizace ukázalo přibližně 38 sekund ve fázi
+receive-verify-history. Stav finished bez chyby a poslední fáze tohoto
+konkrétního pokusu odpovídaly návratu již uložené odpovědi stejné operace:
+ověření historie se provádí ještě před kontrolou dokončeného inbound replaye.
+Není to důkaz úspěšného přenosu všech aktuálních změn mezi uzly.
+
+Dřívější měření Omnie ukázalo výrazné CPU vytížení Python vláken a přibližně
+1,1 GiB dostupné RAM. Samo o sobě neurčilo konkrétní CPU bottleneck.
+Hláška GBM/Vulkan není důkaz příčiny HTTP kolizí. Varování o zrušení WebEngine
+profilu mělo samostatnou opravu rušení prezentačního okna před profilem.
+
+DOSAVADNÍ ÚPRAVY A JEJICH MEZE
+
+Zdroj už obsahuje:
+- omezený HTTP pool a rezervované místo pro UI/diagnostiku na webu i desktopu;
+- načítání statických UI assetů mimo aplikační zámek;
+- řízenou pre-dispatch HTTP 503 odpověď při vyčerpání poolu, kde ji klient
+  stihne převzít, místo pouhého zavření spojení;
+- samostatný diagnostický endpoint /v1/diagnostics/status; na síťovém webu
+  pouze pro administrátora s read-only autentizací;
+- omezenou procesní diagnostiku fází synchronizace, aktivních workerů a časů;
+- browserové řazení požadavků po backendových linkách v jedné stránce;
+- zastavení pollingu skrytého prezentačního okna a nepřekrývání jeho pollů;
+- krátké bounded čekání na UI linku, nyní nejvýše 100 ms;
+- omezení duplicitních čtení Git snapshotů během jednoho ověření historie.
+
+Tyto změny NEVYŘEŠILY uživatelův běžný provoz. Neprezentuj je jako dokončenou
+opravu dostupnosti. Neřeš další patch jen přidáním workerů, zvýšením timeoutu,
+potlačením logů nebo dalšími automatickými retry.
+
+Browserové řazení jedné stránky samo nekoordinuje všechna okna, další klienty
+ani přenosy peerů. Ani Web Locks nemá být náhradou správného řízení backendu.
+U klienta bez podpory poslední rozpracovaná změna zůstává u lokálního řazení.
+
+PRACOVNÍ DIAGNÓZA A SMĚR NÁHRADY
+
+Společný application_lane je příliš hrubý: rozdílné HTTP operace soutěží
+o jeden zámek. Uživatel jej přirovnal k Big Kernel Lock. To je pracovní
+architektonická diagnóza podložená kolizemi, ne dokončený audit všech datových
+závodů nebo důkaz, že jediná změna zámku vyřeší veškeré selhávání synchronizace.
+
+Globální zámek se NESMÍ jen odebrat. Musí jej nahradit doložené vlastnictví
+sdíleného stavu a explicitní řízení operací. Nejprve proveď inventuru:
+1. Které routy skutečně zapisují do projektu, uzlové administrace, journalu,
+   konfigurace nebo sdíleného procesního stavu?
+2. Které údajně čtecí routy při čtení inicializují či migrují databázi nebo
+   zapisují stav? Ty nelze jen přesunout do paralelní read-only linky.
+3. Jaké zámky už zajišťují Workspace, Git CAS, projektový journal a registry?
+4. Které dlouhé operace drží HTTP handler a aplikační zámek přes síťové čekání
+   nebo úplné ověřování historie?
+
+Kandidátní návrh, který je nutné ověřit podle existující implementace:
+- Serializovat nutné projektové zápisy po projektu přes stávající Workspace
+  transakce/journal; nevytvářet druhého writera.
+- Oddělit uzlové mutace a chránit jejich skutečný sdílený stav.
+- Bezpečná čtení provádět nad konzistentními validovanými snapshoty.
+- Dlouhé operace vést jako omezené sledované úlohy mimo dobu obsluhy HTTP;
+  reuse existující sync task a journal infrastruktury před novým job systémem.
+- Mít bounded admission/backpressure a zachovat dostupné UI i diagnostiku.
+- Rozhodnout chování při souběžném požadavku, zrušení, timeoutu a shutdownu;
+  neplést pre-dispatch odmítnutí s neurčitým výsledkem po dispatch.
+
+BEZPEČNOST A RECOVERY
+
+Zachovat Git jako autoritu projektových dat, SQLite index jako obnovitelnou
+projekci a journal jako autoritu nedokončených operací. Zachovat identity,
+podpisy, privacy, členství, branch policy, validaci celé přenášené historie,
+CAS a sémantickou validaci vztahů. Neobcházet tyto kontroly kvůli výkonu.
+
+Zachovat stabilní ID operace a bezpečný replay přesně stejných bajtů.
+Timeout po dispatch není důvod k automatickému novému zápisu či LLM pokusu.
+Nemaž čekající sync operace, projekty, konfiguraci, certifikáty ani credentials.
+Příjem definic sledování nesmí sám aktivovat sběr nebo zpracování na příjemci.
+
+Před implementací popsat crash boundaries pro dotčené vrstvy a změny recovery;
+navázat zejména na ADR 0042, 0049, 0050, 0081 a 0082 podle rozsahu.
+Diagnostika nesmí obsahovat tokeny, payloady ani citlivé URL/query.
+
+REPRODUKCE A AKCEPTACE
+
+Nejdříve vytvořit lokální reprodukci běžného souběhu, nikoli pouze izolovaný
+test jednoho zámku: hlavní UI, telemetrie, stavové dotazy, presenter ve skrytém
+i viditelném stavu, více klientů/oken a pomalejší projektová operace.
+Simulovat alespoň operace kolem 0,5 s, přes 1 s a dlouhou synchronizaci.
+
+Ověřit:
+- Běžné ovládání a načítání UI nekončí systematicky 503/Failed to fetch.
+- Diagnostika a stop/control zůstávají dostupné během dlouhé operace.
+- Zápisy téhož projektu nemohou závodit; serializace není jen v browseru.
+- Zamýšlená souběžnost různých projektů/čtení má důkaz konzistence.
+- Fronty a počet workerů jsou omezené, bez růstu vláken a hladovění.
+- Chybové cesty, zrušení, replay, shutdown a recovery zachovají původní
+  důkazy a rozliší completed, failed, unknown a pending.
+- Log/diagnostika umožní určit konkrétní bezpečně označenou operaci,
+  která zámek drží; samotné application_lane nestačí.
+
+Dřívější cílené testy a Qt smoke procházely, ale běžný uživatelův provoz
+opakovaně selhal. Poslední dokončený běh PŘED dvěma rozpracovanými diffy:
+122 cílených testů, OK, 16 přeskočených; skutečný izolovaný Qt/WebEngine
+smoke prošel. Není to ověření posledního pracovního stromu ani celé sady.
+Lokální pomocné logy jsou v ignorované .worktrees/sync-diagnostics-evidence/;
+webový checkout je nemusí mít. Plná sada nebyla v tomto řezu spuštěna.
+
+Po dokončení patche provést cílené behaviorální i recovery testy. Závěrečné
+ověření celé dávky a případné předání PR musí splnit AGENTS.md; cílené testy
+nenahrazují požadovanou plnou bránu. Oddělit zdrojové testy, skutečný lokální
+provoz a vzdálené nasazení. Omnia se aktualizuje teprve po lokální akceptaci
+a novém oprávnění uživatele, nikoli automaticky po zelených unit testech.
