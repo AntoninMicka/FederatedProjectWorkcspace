@@ -19,6 +19,7 @@ import threading
 import time
 
 from spikes.backend_availability import BackendAvailability
+from spikes.http_admission_policy import LANES, ROUTE_LANES, request_lane
 
 from spikes.metadata import parse_json, ValidationError
 
@@ -46,11 +47,8 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self.worker_limit = max_workers + int(reserve_ui)
         self.post_slots = threading.BoundedSemaphore(max_workers) if reserve_ui else None
         self._worker_slots = threading.BoundedSemaphore(max_workers + int(reserve_ui))
-        self.application_lane = threading.Lock()
-        self.telemetry_lane = threading.Lock()
-        self.review_lane = threading.Lock()
-        self.availability_lane = threading.Lock()
-        self.diagnostics_lane = threading.Lock()
+        for name in LANES:
+            setattr(self, name + '_lane', threading.Lock())
         self.backend_availability = BackendAvailability()
         self.request_lane_timeout = lane_timeout
         self.shutdown_timeout = shutdown_timeout
@@ -131,9 +129,8 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 'admission_rejections': rejected,
                 'requests': active,
                 'ui_capacity_reserved': self.post_slots is not None,
-                'lanes_busy': {name: getattr(self, name).locked() for name in (
-                    'application_lane', 'telemetry_lane', 'review_lane',
-                    'availability_lane', 'diagnostics_lane')}}
+                'lanes_busy': {name + '_lane': getattr(self, name + '_lane').locked()
+                               for name in LANES}}
 
     def describe_request(self, request, kind, stage, operation=None):
         with self._worker_condition:
@@ -243,7 +240,7 @@ class Handler(BaseHTTPRequestHandler):
         describe = getattr(self.server, 'describe_request', lambda *args: None)
         # Only literal declared routes can enter diagnostics. Unknown URLs and
         # query strings may contain secrets and must never be retained.
-        operation_name = self.path if self.path in self.post_paths else 'unclassified'
+        operation_name = self.path if self.path in self.post_paths or self.path in ROUTE_LANES else 'unclassified'
         kind = 'content-sync' if self.path == '/v1/federation/content-sync' else lane_name
         describe(self.request, kind, 'waiting', operation_name)
         # Allow brief cross-window collisions, but never occupy UI capacity
@@ -276,16 +273,8 @@ class Handler(BaseHTTPRequestHandler):
                 slots.release()
 
     def _admitted_POST(self):
-        lane_name = ('diagnostics_lane' if self.path == '/v1/diagnostics/status'
-                     else 'availability_lane' if self.path in {'/v1/chat/availability', '/v1/tasks/run-control'}
-                     else 'telemetry_lane' if self.path == '/v1/node-telemetry/status'
-                     else 'review_lane' if self.path in {
-                         '/v1/roadmap-refinement/list',
-                         '/v1/roadmap-refinement/detail',
-                         '/v1/roadmap-refinement/reconcile/preview'}
-                     else 'application_lane')
         return self._in_request_lane(
-            self._do_POST, lane_name=lane_name)
+            self._do_POST, lane_name=request_lane(self.path))
 
     def _do_POST(self):
         authority = self.request_authority()
@@ -377,10 +366,8 @@ def running_api(transport, runtime=None, *, handler=Handler, projects=None,
             raise
         server.allowed_uid = os.getuid()
         server.authority = 'workspace.local'
-        server.application_lane = threading.Lock()
-        server.telemetry_lane = threading.Lock()
-        server.review_lane = threading.Lock()
-        server.availability_lane = threading.Lock()
+        for name in LANES:
+            setattr(server, name + '_lane', threading.Lock())
         server.backend_availability = BackendAvailability()
         server.request_lane_timeout = REQUEST_LANE_TIMEOUT
     elif transport == 'http':

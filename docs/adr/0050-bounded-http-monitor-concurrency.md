@@ -262,3 +262,29 @@ Zdrojové integrační testy a fyzické nasazení na Omnii se ověřují odděle
 
 Veřejné prezentační okno sdílí řízení souběhu a při skrytí neprovádí polling
 ani hlášení poměru stran. Viditelný polling má nanejvýš jeden aktivní pokus.
+
+## 9. 11. 2026 — oddělení prověřených vlastníků při opravě dostupnosti
+
+Běžný lokální provoz nadále dokládal kolize společné aplikační linky i při
+operacích kolem 0,5–1,3 sekundy. Původní akceptace monitorovacího PoC není
+akceptací obecné dostupnosti. Konkrétní inventuru, důvod změny a recovery
+popisuje [HTTP concurrency audit](../http-concurrency-ownership.md).
+
+Příjem content sync, katalog projektů a prezentační stav mají samostatné
+serializované HTTP domény. Přesnou tabulku rout sdílí backend s browserem.
+Zbytek operací zůstává v konzervativní aplikační doméně; zejména názvy
+`status` a `preview` nejsou důkazem absence zápisů nebo recovery.
+Katalog a prezentační doména na webu používají read-only autentizaci.
+Projektové zápisy nadále rozhoduje existující Workspace journal/writer/CAS.
+
+Celý inbound replay/publikační cyklus navíc vlastní uzlový neblokující
+receive `flock`, společný i pro více listenerů a přímé volání receiveru.
+Je oddělený od outbound zámku: příjem nesmí čekat na vlastní odesílání,
+které čeká na odpověď peeru. Obsazení vrátí `503` bez doménového dispatch;
+nedokončená durable operace se nezahazuje ani automaticky neopakuje.
+Pád pouze uvolní procesní zámky; původní journaly zůstávají autoritou.
+Počet workerů, timeouty, shutdown a bezpečnostní validace se nemění.
+
+Jde o implementovaný lokální řez s automatizovaným ověřením, nikoli lidskou
+akceptaci opravy všech kolizí, úplné odstranění aplikační domény nebo nové
+nasazení na Omnii.

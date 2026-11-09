@@ -30,6 +30,85 @@ from tests.test_notebooklm_import import valid_members
 
 
 class WebTests(unittest.TestCase):
+    def test_slow_content_receive_does_not_own_ui_application_or_presenter(self):
+        import time
+        from spikes.web_server import WebHandler
+        # Keep the real TLS server, admission, authentication and UI handlers.
+        # Only the expensive peer protocol body is gated deterministically.
+        for slow_path, duration in (('/v1/federation/content-sync', .5),
+                                    ('/v1/chat/test', 1.2)):
+            with self.subTest(slow_path=slow_path):
+                entered, release = threading.Event(), threading.Event()
+                results = []
+                original = WebHandler._do_POST
+
+                def gated(handler):
+                    if handler.path != slow_path:
+                        return original(handler)
+                    entered.set()
+                    if not release.wait(5):
+                        return handler.reply(504, {'error': 'test timeout'})
+                    time.sleep(duration)
+                    return handler.reply(200, {'done': True})
+
+                with patch.object(WebHandler, '_do_POST', gated):
+                    worker = threading.Thread(target=lambda: results.append(
+                        self.request(path=slow_path)))
+                    worker.start()
+                    try:
+                        self.assertTrue(entered.wait(2))
+                        for method, path, body in (
+                                ('GET', '/', ''),
+                                ('POST', '/v1/projects', '{}'),
+                                ('POST', '/v1/presentation/public', '{}'),
+                                ('POST', '/v1/presentation/control', '{"action":"blackout"}'),
+                                ('POST', '/v1/node-telemetry/status', '{}'),
+                                ('POST', '/v1/diagnostics/status', '{}')):
+                            code, raw, _ = self.request(method=method, path=path, body=body)
+                            self.assertEqual(code, 200, (path, raw))
+                            self.assertTrue(worker.is_alive())
+                        if slow_path.endswith('content-sync'):
+                            code, raw, _ = self.request(path='/v1/counter',
+                                                       body='{"action":"increment"}')
+                            self.assertEqual(code, 200, raw)
+                            self.assertEqual(json.loads(raw)['value'], 1)
+                        code, raw, _ = self.request(path=slow_path)
+                        self.assertEqual(code, 503, raw)
+                        diagnostic = self.server.http_diagnostics()
+                        owner = next(row for row in diagnostic['requests']
+                                     if row['operation'] == slow_path)
+                        self.assertEqual(owner['stage'], 'processing')
+                        self.assertLessEqual(diagnostic['active_workers'], diagnostic['worker_limit'])
+                    finally:
+                        release.set()
+                        worker.join(5)
+                    self.assertFalse(worker.is_alive())
+                    self.assertEqual(results[0][0], 200, results)
+
+    def test_catalog_and_presenter_authentication_is_readonly(self):
+        self.assertEqual(self.create_project('Concurrent catalog')[0], 200)
+        code, raw, _ = self.request(path='/v1/administration', body='{"action":"list"}')
+        self.assertEqual(code, 200, raw)
+        state = json.loads(raw)
+        code, raw, _ = self.request(path='/v1/administration', body=json.dumps({
+            'action': 'create-user', 'expected_commit': state['commit_id'],
+            'name': 'Catalog reader', 'node_role': 'member'}))
+        self.assertEqual(code, 200, raw)
+        key = json.loads(raw)['access_key']
+        self.server.application_lane.acquire()
+        try:
+            with patch.object(self.server.administration, 'authenticate',
+                              side_effect=AssertionError('mutable authentication')):
+                for path in ('/v1/projects', '/v1/presentation/public'):
+                    code, raw, _ = self.request(path=path, headers={'Authorization': 'Bearer ' + key})
+                    self.assertEqual(code, 200, raw)
+                    if path == '/v1/projects':
+                        self.assertEqual(json.loads(raw)['projects'], [])
+                    self.assertEqual(self.request(path=path, headers={
+                        'Authorization': 'Bearer invalid'})[0], 401)
+        finally:
+            self.server.application_lane.release()
+
     def test_full_tls_pool_returns_readable_503_before_dispatch(self):
         from unittest.mock import patch
         from spikes.web_server import WebHandler
@@ -55,7 +134,7 @@ class WebTests(unittest.TestCase):
         try:
             started = time.monotonic()
             with patch.object(WebHandler, '_do_POST', side_effect=AssertionError('dispatch')):
-                code, body, _ = self.request(path='/v1/projects')
+                code, body, _ = self.request(path='/v1/counter')
             self.assertEqual(code, 503, body)
             self.assertLess(time.monotonic() - started, 1.5)
         finally:
@@ -78,7 +157,7 @@ class WebTests(unittest.TestCase):
                 return handler.reply(504, {'error': 'test timeout'})
             return handler.reply(200, {'done': True})
 
-        routes = ['/v1/projects', '/v1/node-telemetry/status',
+        routes = ['/v1/counter', '/v1/node-telemetry/status',
                   '/v1/chat/availability', '/v1/roadmap-refinement/list']
         with patch.object(WebHandler, '_do_POST', block):
             clients = [threading.Thread(target=lambda route=route:

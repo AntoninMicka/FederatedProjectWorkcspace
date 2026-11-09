@@ -80,6 +80,9 @@ class ProjectTests(unittest.TestCase):
             try:
                 started = time.monotonic()
                 response = driver.request(server, path='/v1/projects', body=b'{}')
+                self.assertIn(b'HTTP/1.0 200', response)
+                response = driver.request(server, path='/v1/counter',
+                                          body=b'{"action":"increment"}')
                 self.assertIn(b'HTTP/1.0 503', response)
                 self.assertLess(time.monotonic() - started, 1.5)
                 response = driver.request(server, method='GET', path='/', body=b'')

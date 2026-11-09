@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: MPL-2.0
 from pathlib import Path
 import os
+import http.client
+import json
+import secrets
 import ssl
 import subprocess
 import sys
@@ -16,7 +19,7 @@ from spikes.administration import Administration, AccessDenied
 from spikes.chat_threads import ChatThreads
 from spikes.federation_accounts import MappingSignatures
 from spikes.federation_sync import (
-    ContentSyncControl, ContentSyncScheduler, SyncCancelled, SyncReceiver,
+    ContentSyncControl, ContentSyncScheduler, SyncCancelled, SyncReceiver, SyncBusy,
     _apply, _build_bundle, _prepare, synchronize,
 )
 from spikes.git_transfer import git_run
@@ -38,6 +41,88 @@ class AllowLoopback:
 
 
 class FederationSyncTests(unittest.TestCase):
+    def test_signed_https_receive_allows_ui_and_preserves_concurrent_project_edit(self):
+        from spikes.web_server import make_server
+        from spikes.federation_sync import _verify_bundle
+        self.exchange(0, 1)
+        source_head = self.commit_marker(0, 'Incoming revision')
+        tls = NetworkBackend(self.nodes[1]).generate('127.0.0.1', 8443, '127.0.0.0/8')
+        token_path = self.root / 'http-token'
+        token = secrets.token_urlsafe(32)
+        token_path.write_text(token); token_path.chmod(0o600)
+        server = make_server('127.0.0.1', 0, '192.168.100.0/24',
+                            tls['cert'], tls['key'], token_path, self.nodes[1])
+        thread = threading.Thread(target=server.serve_forever); thread.start()
+        self.addCleanup(server.server_close); self.addCleanup(thread.join)
+        self.addCleanup(server.shutdown)
+        endpoint = 'https://127.0.0.1:' + str(server.server_port)
+        self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
+                    endpoint=endpoint, trust='approved', sharing_level='same-team')
+        trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+        entered, release = threading.Event(), threading.Event()
+        results, errors = [], []
+
+        def verify(node, *args, **kwargs):
+            if Path(node) == self.nodes[1] and not entered.is_set():
+                entered.set()
+                if not release.wait(10):
+                    raise TimeoutError('test verification gate')
+            return _verify_bundle(node, *args, **kwargs)
+
+        def transfer():
+            try:
+                results.append(synchronize(self.nodes[0], self.node_ids[1],
+                                           self.project_id, deployment='web'))
+            except Exception as exc:
+                errors.append(exc)
+
+        with patch('spikes.federation_sync._verify_bundle', side_effect=verify):
+            worker = threading.Thread(target=transfer); worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                for path in ('/v1/projects', '/v1/presentation/public', '/v1/diagnostics/status'):
+                    connection = http.client.HTTPSConnection('127.0.0.1', server.server_port,
+                        context=ssl.create_default_context(cafile=tls['ca']), timeout=3)
+                    try:
+                        connection.request('POST', path, body='{}', headers={
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token})
+                        response = connection.getresponse(); body = response.read()
+                        self.assertEqual(response.status, 200, (path, body))
+                        if path.endswith('diagnostics/status'):
+                            self.assertTrue(json.loads(body)['http']['lanes_busy']['content_sync_lane'])
+                    finally:
+                        connection.close()
+                    self.assertTrue(worker.is_alive())
+                # A genuine Workspace write while incoming history is being
+                # verified must survive as a divergent head, never be replaced.
+                local_head = self.commit_marker(1, 'Concurrent local revision')
+            finally:
+                release.set(); worker.join(10)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(results[0]['state'], 'conflict')
+        self.assertEqual(Projects(self.nodes[0]).workspace(self.project_id).git.head(), source_head)
+        self.assertEqual(Projects(self.nodes[1]).workspace(self.project_id).git.head(), local_head)
+
+    def test_receiver_ownership_covers_distinct_instances_and_releases_on_failure(self):
+        from spikes.federation_sync import _inbound_lock
+        receiver = SyncReceiver(self.nodes[1], self.services[1])
+        with _inbound_lock(self.nodes[1]):
+            with patch.object(receiver, '_receive', side_effect=AssertionError('dispatch')):
+                with self.assertRaises(SyncBusy):
+                    receiver.receive({}, b'')
+        # Failed validation must release ownership; a valid exchange and exact
+        # replay must still publish and return the same response.
+        with self.assertRaises(ValueError):
+            receiver.receive({}, b'')
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        result = receiver.receive(envelope, payload)
+        self.assertEqual(SyncReceiver(self.nodes[1], self.services[1]).receive(
+            envelope, payload), result)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)

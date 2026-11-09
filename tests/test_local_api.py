@@ -110,6 +110,12 @@ class LocalAPITests(unittest.TestCase):
             '/v1/roadmap-refinement/list': 'review_lane',
             '/v1/roadmap-refinement/detail': 'review_lane',
             '/v1/roadmap-refinement/reconcile/preview': 'review_lane',
+            '/v1/projects': 'catalog_lane',
+            '/v1/presentation/status': 'presentation_lane',
+            '/v1/presentation/control': 'presentation_lane',
+            '/v1/presentation/public': 'presentation_lane',
+            '/v1/presentations/use': 'presentation_lane',
+            '/v1/federation/content-sync': 'content_sync_lane',
         }
 
         class LaneHandler(Handler):

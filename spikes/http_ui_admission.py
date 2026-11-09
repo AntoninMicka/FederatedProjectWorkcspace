@@ -2,15 +2,17 @@
 # SPDX-License-Identifier: MPL-2.0
 """Browser-side admission matching the server's serialized request lanes."""
 
+import json
+
+from spikes.http_admission_policy import ROUTE_LANES
+
+
 HTTP_UI_ADMISSION_JS = r'''
 (()=>{
  const send=window.fetch.bind(window),lanes=new Map();
- const reviews=new Set(['/v1/roadmap-refinement/list','/v1/roadmap-refinement/detail','/v1/roadmap-refinement/reconcile/preview']);
+ const routeLanes=Object.freeze(__FPW_ROUTE_LANES__);
  function lane(path){
-  if(path==='/v1/diagnostics/status')return 'diagnostics';
-  if(path==='/v1/node-telemetry/status')return 'telemetry';
-  if(path==='/v1/chat/availability'||path==='/v1/tasks/run-control')return 'availability';
-  return reviews.has(path)?'review':'application';
+  return Object.hasOwn(routeLanes,path)?routeLanes[path]:'application';
  }
  window.fetch=(input,options={})=>{
   const url=new URL(typeof input==='string'||input instanceof URL?input:input.url,location.href);
@@ -57,4 +59,4 @@ HTTP_UI_ADMISSION_JS = r'''
   return Promise.race([request,cancelled]).finally(()=>signal.removeEventListener('abort',onAbort));
  };
 })();
-'''
+'''.replace('__FPW_ROUTE_LANES__', json.dumps(ROUTE_LANES, sort_keys=True))

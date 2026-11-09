@@ -65,6 +65,32 @@ class SyncCancelled(Exception):
     pass
 
 
+class SyncBusy(Exception):
+    """Another inbound exchange owns this node's replay/publication lifecycle."""
+
+
+@contextmanager
+def _inbound_lock(node):
+    # Separate from the outbound lock: two nodes must be able to receive while
+    # their outbound workers wait for the other node's response. This lock also
+    # covers callers through a second listener and direct/native receivers.
+    path = private_root(node) / 'federation-content-receive.lock'
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'a+b') as handle:
+        info = os.fstat(handle.fileno())
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                and info.st_nlink == 1 and not info.st_mode & 0o077,
+                'Unsafe content receive lock')
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise SyncBusy('Content receiver is busy') from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def _journal_path(node):
     path = private_root(node) / 'federation-content-sync.sqlite'
     fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -664,6 +690,10 @@ class SyncReceiver:
 
     @received
     def receive(self, envelope, payload, checkpoint=lambda stage: None):
+        with _inbound_lock(self.node):
+            return self._receive(envelope, payload, checkpoint)
+
+    def _receive(self, envelope, payload, checkpoint):
         require(isinstance(envelope, dict) and isinstance(envelope.get('exchange'), dict),
                 'Missing content sync exchange')
         exchange = validate_exchange(envelope['exchange'])
@@ -1230,6 +1260,8 @@ def reply(handler):
         handler.send_response(200); handler.send_header('Content-Type', CONTENT_TYPE)
         handler.send_header('Content-Length', str(len(raw))); handler.end_headers()
         handler.wfile.write(raw)
+    except SyncBusy:
+        return handler.reply(503, {'error': 'Content receiver is busy'})
     except SyncConflict:
         return handler.reply(409, {'error': 'Content histories diverged'})
     except (ValueError, AccessDenied, OSError, sqlite3.Error, subprocess.SubprocessError):

@@ -5,6 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+HTTP oprava z 9. 11. 2026 **adaptuje** existující bounded admission,
+browserové Web Locks, read-only autentizaci, katalog Git snapshotů a vzor
+uzlového `flock`. **Reuse:** Workspace writer/journal/CAS, sync replay,
+prezentační sessions a shutdown. **Reject:** druhý writer/job journal,
+plošné odstranění zámku, navyšování timeoutů/workerů a automatické retry.
+Rozsah inventury, vlastnictví a crash boundaries:
+[HTTP concurrency audit](docs/http-concurrency-ownership.md).
+
 Vestavěná diagnostika synchronizace a rezervace webového UI **adaptují**
 stávající bounded HTTP pool, administrační oprávnění, read-only autentizaci,
 panel sdílení a původní sync lifecycle. Pozorování používá stdlib

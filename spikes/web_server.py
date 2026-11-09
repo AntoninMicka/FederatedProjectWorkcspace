@@ -155,7 +155,9 @@ class WebHandler(DesktopHandler):
         try:
             operation = (self.server.administration.authenticate_readonly
                          if self.path in {'/v1/node-telemetry/status', '/v1/chat/availability',
-                                          '/v1/diagnostics/status'}
+                                          '/v1/diagnostics/status', '/v1/projects',
+                                          '/v1/presentations/use', '/v1/presentation/status',
+                                          '/v1/presentation/control', '/v1/presentation/public'}
                          else self.server.administration.authenticate)
             self.actor = operation(auth)
             return self.actor is not None
