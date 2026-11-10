@@ -1370,3 +1370,49 @@ failure, HTTP ownership and safe diagnostics. `git diff --check` passed; the
 full suite was not repeated for this follow-up. A final read-only live snapshot
 showed eight local runtime rows idle and zero pending outbound rows; that
 observation predates loading this queue change and is not its live acceptance.
+
+### Native export snapshot ownership follow-up
+
+A fresh read-only receiver sample after automatic startup confirmed 503 during
+`receive-check-destination` and `receive-prepare-response`, with no HTTP worker
+admission rejections. A local deterministic reproduction held export history
+validation at a barrier: both a project read and an incoming exchange/native
+write then failed on the project's exclusive journal flock. The content export
+held that owner through history traversal, pack creation and exact-pack
+verification; initial/replica export had the same long critical section.
+
+Both export paths now capture/check snapshots under short native journal
+ownership and perform expensive Git work outside it. Content sync stages only
+captured commit IDs under their original selected ref names in a private bare
+repo, creates the bundle there and retains full validation of the exact
+transferred graph. Initial/replica export keeps its normalized main ref and
+existing isolated-history validation. The existing Git phase budgets, privacy,
+branch policy, signature/authority checks and bundle limits are unchanged.
+Initialized Workspace attachment reuses the existing read factory; it does not
+turn these operations into unguarded reads.
+
+Before returning a payload, native ownership is reacquired and pending intent,
+clean worktree and the frozen refs/head are checked again. A concurrent native
+commit remains intact and aborts the stale export as transient busy. A dirty
+edit remains intact and requires conflict resolution. A newly prepared native
+operation retains its own recovery; export neither recovers nor clears it.
+Temporary bare repos are disposable before durable transfer intent (ADR
+0003/0042/0081). Existing outbound/inbound journals and immutable saved response
+replay remain authoritative after publication. No protocol/schema, automatic
+transport retry, cross-node transaction or new persistent writer is introduced.
+
+This removes demonstrated long read-only export ownership, not legitimate
+exclusion during actual publication. The live receiver was not updated by this
+source change. Loading the corresponding code on Omnia as well as the desktop
+and verifying automatic startup remains separate from the local regression.
+
+Final focused verification for native export ownership: 98 tests OK (1 optional
+skip), including both exporter protocols, content-sync replay/authority/privacy,
+full-data reporting pins, initial transfer/replication, manual FIFO, HTTP
+ownership and six direct snapshot-concurrency cases. The new cases reproduce
+the pre-change writer collision, then verify incoming/read progress during
+slow export, preserved concurrent commit, dirty edit retention, pending native
+write recovery with exactly one commit, and rejection after registration is
+removed. `git diff --check` passed. The full suite was not repeated for this
+follow-up; loading the new backend code on both nodes and live startup
+acceptance remain outstanding.

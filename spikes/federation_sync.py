@@ -345,47 +345,63 @@ def _inventory(git, scope):
     return sorted(rows, key=lambda row: row['ref'])
 
 
+def _bundle_snapshot(workspace, scope, expected=None):
+    """Brief native owner for snapshot admission/final publication checks."""
+    with workspace.journal.lock(), workspace.journal.connect() as db:
+        if workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+            raise SyncBusy('Shared project has an unfinished publication')
+        workspace._branch()
+        refs = _inventory(workspace.git, scope)
+        if expected is not None and refs != expected:
+            raise SyncBusy('Shared branches changed during bundle preparation')
+        workspace._read_locked(db)
+        if git_run(workspace.git, 'status', '--porcelain', '--untracked-files=all').stdout:
+            raise SyncConflict('Shared project worktree has local changes')
+        require(refs, 'Sharing scope selects no local branch')
+        # External Git users do not acquire our journal flock either.
+        if _inventory(workspace.git, scope) != refs:
+            raise SyncBusy('Shared branches changed during snapshot admission')
+        return refs
+
+
 @git_budget()
 def _build_bundle(node, project_id, scope, *, verified=None, peer_known_refs=None):
     binding = _binding(node, project_id)
     if binding is None:
         return [], b''
-    workspace = Projects(node).workspace(project_id, blocking=False)
-    with workspace.journal.lock(), workspace.journal.connect() as db:
-        workspace._branch(); workspace._read_locked(db)
-        require(not git_run(workspace.git, 'status', '--porcelain',
-                            '--untracked-files=all').stdout,
-                'Shared project worktree must be clean')
-        refs = _inventory(workspace.git, scope)
-        require(refs, 'Sharing scope selects no local branch')
-        if peer_known_refs is not None and refs == _refs(peer_known_refs):
-            # This exact inventory would be stripped from the exchange anyway.
-            # Omit export work, never validation of bytes that WILL be sent.
-            return refs, b''
-        if (verified is not None and verified.payload
-                and verified.project_id == project_id and verified.scope == canonical(scope)
-                and verified.refs == tuple((row['ref'], row['head']) for row in refs)):
-            # _prepare matched this request-local proof to the original peer.
-            # Exact immutable heads imply the same fully validated object graph;
-            # return the same bounded transfer bytes, not a new unchecked pack.
-            require(_inventory(workspace.git, scope) == refs,
-                    'Shared branches changed during bundle preparation')
-            return refs, verified.payload
-        for row in refs:
-            validate_history(workspace.git, row['head'], project_id, PRIVACY)
-        with tempfile.TemporaryDirectory(prefix='sharing-sync-') as directory:
-            bundle = Path(directory) / 'project.bundle'
-            git_run(workspace.git, 'bundle', 'create', str(bundle),
-                    *[row['ref'] for row in refs])
-            require(bundle.stat().st_size <= MAX_BUNDLE,
-                    'Content sync bundle exceeds 64 MiB')
-            payload = bundle.read_bytes()
-            # Validate the exact transfer object graph, not the sender's larger
-            # object store (which may also contain hidden/unreachable inputs).
-            _validate_git_bundle(payload, refs, project_id, Path(directory)/'verify.git')
-        require(_inventory(workspace.git, scope) == refs,
-                'Shared branches changed during bundle preparation')
-        return refs, payload
+    workspace = Projects(node).workspace(project_id, blocking=False, for_read=True)
+    refs = _bundle_snapshot(workspace, scope)
+    if peer_known_refs is not None and refs == _refs(peer_known_refs):
+        # No bytes are exported; the next request observes any subsequent head.
+        return refs, b''
+    if (verified is not None and verified.payload
+            and verified.project_id == project_id and verified.scope == canonical(scope)
+            and verified.refs == tuple((row['ref'], row['head']) for row in refs)):
+        _bundle_snapshot(workspace, scope, refs)
+        return refs, verified.payload
+
+    # Git objects named by captured heads are immutable. Do not own a project
+    # writer while traversing history, fetching objects or verifying a pack.
+    for row in refs:
+        validate_history(workspace.git, row['head'], project_id, PRIVACY)
+    with tempfile.TemporaryDirectory(prefix='sharing-sync-') as directory:
+        root = Path(directory)
+        (root / 'export.git').mkdir(mode=0o700)
+        exported = Git(root / 'export.git')
+        git_run(exported, 'init', '--bare', '--template=')
+        git_run(exported, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags',
+                str(workspace.git.root),
+                *[row['head'] + ':' + row['ref'] for row in refs])
+        bundle = root / 'project.bundle'
+        git_run(exported, 'bundle', 'create', str(bundle), *[row['ref'] for row in refs])
+        require(bundle.stat().st_size <= MAX_BUNDLE, 'Content sync bundle exceeds 64 MiB')
+        payload = bundle.read_bytes()
+        # Keep validation of the exact exported graph, not only source history.
+        _validate_git_bundle(payload, refs, project_id, root / 'verify.git')
+    if _binding(node, project_id) != binding:
+        raise SyncBusy('Project registration changed during bundle preparation')
+    _bundle_snapshot(workspace, scope, refs)
+    return refs, payload
 
 
 def _payloads(exchange, payload):

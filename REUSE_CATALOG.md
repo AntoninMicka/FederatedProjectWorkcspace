@@ -1498,3 +1498,12 @@ exact native transfer recovery. A bounded volatile FIFO aligns manual admission
 with existing node capacity one; the scheduler yields to it. **Reject:** a
 second persistent writer/job journal, transport retries, deleting pending
 payloads on cancellation and sharing the outbound lock with inbound responses.
+
+Native export ownership: **adapt/reuse** initialized Workspace read attachment,
+native journal/index validation, frozen commit IDs, the existing isolated bare
+export pattern from `git_transfer.export_bundle`, exact-graph validation and
+Git phase budgets. Content sync retains original ref names; initial/replica
+transfer retains normalized main. **Reject:** copying live working files,
+exporting moving refs without final ownership checks, holding the journal over
+all history/pack work, weakening privacy/history validation or adding a cache
+that acts as a second authority.

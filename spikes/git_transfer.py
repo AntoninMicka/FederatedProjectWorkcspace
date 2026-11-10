@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Native Git initial transfer, public history only, without hooks or merge."""
-from spikes.request_ownership import bounded_flock
+from spikes.request_ownership import bounded_flock, ProjectBusy
 import fcntl
 from collections import OrderedDict
 import hashlib
@@ -79,30 +79,50 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
     return len(commits)
 
 
+def _export_head(ws, expected=None):
+    """Capture/check an export snapshot under the native writer, never pack here."""
+    with ws.journal.lock(), ws.journal.connect() as db:
+        if ws._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+            raise ProjectBusy('Project has an unfinished publication')
+        ws._branch()
+        head = ws.git.head()
+        if expected is not None and head != expected:
+            raise ProjectBusy('Source changed during export')
+        ws._read_locked(db)
+        require(not git_run(ws.git, 'status', '--porcelain', '--untracked-files=all').stdout,
+                'Project must be clean')
+        require(git_run(ws.git, 'rev-parse', '--is-shallow-repository').stdout.strip() == 'false',
+                'Shallow history is not transferable')
+        grafts = Path(git_run(ws.git, 'rev-parse', '--git-path', 'info/grafts').stdout.strip())
+        require(not (grafts if grafts.is_absolute() else ws.git.root / grafts).exists(),
+                'Git grafts are not supported')
+        if ws.git.head() != head:
+            raise ProjectBusy('Source changed during export snapshot')
+        return head
+
+
 @git_budget()
 def export_bundle(node, project_id, allowed_privacy=frozenset({'public'})):
-    ws = Projects(node).workspace(project_id, blocking=False)
-    with ws.journal.lock(), ws.journal.connect() as db:
-        ws._branch(); ws._read_locked(db)
-        require(not git_run(ws.git, 'status', '--porcelain', '--untracked-files=all').stdout, 'Project must be clean')
-        require(git_run(ws.git, 'rev-parse', '--is-shallow-repository').stdout.strip() == 'false', 'Shallow history is not transferable')
-        grafts = Path(git_run(ws.git, 'rev-parse', '--git-path', 'info/grafts').stdout.strip())
-        require(not (grafts if grafts.is_absolute() else ws.git.root / grafts).exists(), 'Git grafts are not supported')
-        head = ws.git.head()
-        with tempfile.TemporaryDirectory(prefix='fw-export-') as directory:
-            root = Path(directory); repo = root / 'export.git'; repo.mkdir()
-            git = Git(repo)
-            git_run(git, 'init', '--bare', '--template=', '--initial-branch=main')
-            git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags', str(ws.git.root), head)
-            git_run(git, 'update-ref', 'refs/heads/main', head, '0' * 40)
-            # Verify the exact exported graph, independently of source configuration.
-            count = validate_history(git, head, project_id, allowed_privacy)
-            path = root / 'project.bundle'
-            git_run(git, 'bundle', 'create', str(path), 'refs/heads/main')
-            require(path.stat().st_size <= MAX_BUNDLE, 'Bundle exceeds 64 MiB')
-            payload = path.read_bytes()
-        require(ws.git.head() == head, 'Source changed during export')
-        return payload, head, count
+    projects = Projects(node)
+    binding = next((row for row in projects._bindings() if row['project_id'] == project_id), None)
+    ws = projects.workspace(project_id, blocking=False, for_read=True)
+    head = _export_head(ws)
+    with tempfile.TemporaryDirectory(prefix='fw-export-') as directory:
+        root = Path(directory); repo = root / 'export.git'; repo.mkdir(mode=0o700)
+        git = Git(repo)
+        git_run(git, 'init', '--bare', '--template=', '--initial-branch=main')
+        git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags', str(ws.git.root), head)
+        git_run(git, 'update-ref', 'refs/heads/main', head, '0' * 40)
+        # Verify exact exported history independently of source configuration.
+        count = validate_history(git, head, project_id, allowed_privacy)
+        path = root / 'project.bundle'
+        git_run(git, 'bundle', 'create', str(path), 'refs/heads/main')
+        require(path.stat().st_size <= MAX_BUNDLE, 'Bundle exceeds limit')
+        payload = path.read_bytes()
+    if binding is None or binding not in Projects(node)._bindings():
+        raise ProjectBusy('Project registration changed during export')
+    _export_head(ws, head)
+    return payload, head, count
 
 
 def transfer(node, target, project_id, operation_id, ca):
