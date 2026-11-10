@@ -10,6 +10,7 @@ import fcntl
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from spikes.request_ownership import ProjectBusy, bounded_project_requests
 import re
 import sqlite3
 import ssl
@@ -767,8 +768,11 @@ class SyncReceiver:
 
     @received
     def receive(self, envelope, payload, checkpoint=lambda stage: None):
-        with _inbound_lock(self.node):
-            return self._receive(envelope, payload, checkpoint)
+        try:
+            with bounded_project_requests(), _inbound_lock(self.node):
+                return self._receive(envelope, payload, checkpoint)
+        except (BlockingIOError, ProjectBusy) as exc:
+            raise SyncBusy('Content project is busy') from exc
 
     def _replay(self, exchange, payload, response, response_payload, *, authority):
         # Only reached after exact equality with a completed durable request.
@@ -1053,6 +1057,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         require(len(body) <= MAX_BODY, 'Content sync response exceeds limit')
         if response.status == 409:
             raise SyncConflict('Peer reported a content conflict')
+        if response.status == 503:
+            raise SyncBusy('Peer is temporarily busy; retry the same operation')
         if response.status != 200:
             raise SyncRejected('Peer rejected content sync')
         response_envelope, response_payload = decode_body(body)
@@ -1227,6 +1233,8 @@ class ContentSyncControl:
             state = 'cancelled'; detail = str(exc); error = exc
         except SyncConflict as exc:
             state = 'conflict'; detail = str(exc); error = exc
+        except (SyncBusy, ProjectBusy, BlockingIOError) as exc:
+            state = 'busy'; detail = 'Project is temporarily busy; saved operation retained'; error = exc
         except (AccessDenied, SyncRejected) as exc:
             state = 'rejected'; detail = str(exc); error = exc
         except (ConnectionError, TimeoutError, ssl.SSLError, OSError) as exc:

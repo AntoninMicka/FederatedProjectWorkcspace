@@ -13,6 +13,10 @@ nemění autority a recovery kontrakty z
 
 ## Kontext
 
+Aktualizace 10. 11. 2026: oddělení auditovaných projektových operací popisuje
+dodatek na konci tohoto ADR. Původní společná aplikační linka nadále platí pro
+zbývající neauditované operace, nikoli pro níže vyjmenovanou projektovou skupinu.
+
 Desktopový loopback server v `running_api('http')` i síťový TLS `WebServer`
 před touto změnou používaly jednovláknový `HTTPServer`. Streamovaná odpověď
 proto vlastnila jediný obslužný tok až do dokončení providerového běhu a
@@ -288,3 +292,56 @@ Počet workerů, timeouty, shutdown a bezpečnostní validace se nemění.
 Jde o implementovaný lokální řez s automatizovaným ověřením, nikoli lidskou
 akceptaci opravy všech kolizí, úplné odstranění aplikační domény nebo nové
 nasazení na Omnii.
+
+## Dodatek 10. 11. 2026 — projektové vlastnictví po autentizaci
+
+Přesný seznam `PROJECT_ROUTES` v `http_admission_policy.py` odděluje 24
+projektových operací: otevření projektu, náhled a historii artefaktů, editor
+včetně položek plánu, Stage/Commit a projektové konflikty. Každá položka
+explicitně určuje umístění `project_id`, včetně vnořeného dokumentu, položky,
+resolution či preview. Neodvozuje se z názvu URL. Tyto handlery používají
+request-local služby; nepřepisují `server.projects`, vybranou prezentaci ani
+líně vytvořenou sdílenou službu. Zbývající operace si ponechávají předchozí
+vlastnictví a vyžadují další audit.
+
+Tato skupina nejprve provede Host/Origin, autentizaci a bounded načtení JSON.
+Teprve potom validuje kanonické UUID a získá procesní zámek příslušného projektu,
+s čekáním nejvýše 100 ms nebo menším nastaveným limitem. RBAC, privacy a celá
+validace doménového requestu zůstávají v původním dispatchi. Registry bootstrap
+včetně migrace proběhne na webu před vytvořením listeneru; projektová webová
+autentizace používá existující read-only cestu. Dva různé projekty proto
+nesdílejí HTTP zámek a nejsou zařazené za stream v aplikační lince.
+
+Ani projektové čtení zde není deklarované jako čistě read-only: stále může
+inicializovat journal nebo obnovit index. Tyto účinky vlastní projektový journal.
+Request-local ContextVar přepne každý Journal flock získávaný během HTTP operace
+na neblokující režim, včetně journalů vytvořených hluboko v desktopových službách.
+Obsazení se přenáší samostatnou výjimkou `ProjectBusy`, aby se neztratilo v
+obecné obsluze `OSError` jako validační chyba. Mimo tento kontext se původní
+nativní režim zamykání nemění. Přímý SyncReceiver používá stejnou omezenou
+hranici i bez HTTP adaptéru; svůj receive flock nadále drží samostatně.
+
+Obsazený HTTP vlastník vrací 503, Retry-After a `outcome=not-started`. Obsazení
+journalu během doménového dispatch vrací konzervativní `outcome=unknown`: mohla
+již proběhnout dřívější fáze stejné operace. Klient zachová původní operation ID;
+503 není automatický retry ani příslib, že neproběhl žádný zápis. Synchronizační
+klient rozlišuje HTTP 503 stavem `busy` a zachovává původní outbound envelope.
+422 nadále znamená odmítnutý obsah, 409 konflikt vyžadující rozhodnutí.
+
+Browser sdílí stejnou tabulku a používá frontu/Web Lock podle projektu, včetně
+vnořených requestů. Celkově přijme nejvýše 64 čekajících či aktivních požadavků
+na stránku. Nezvyšuje počet HTTP workerů. Procesní mapa vlastníků zahazuje
+nepoužívané klíče; diagnostika uvádí deklarovanou operaci a validované project ID.
+
+Persistentní formát, journal a Git CAS se nemění. Před admission nevzniká intent.
+Po zapsání intentu, po Git publikaci i po ztracené odpovědi se použije stejné
+recovery podle ADR 0003/0081. Procesní zámek není důkaz úspěchu a jeho uvolnění
+nevyvolává recovery. Konfliktní pracovní soubory se nepřepisují. Tato změna
+neodstraňuje zbývající aplikační linku ani nemění federační protokol.
+
+Stejná request-local hranice omezuje také flock administračního registru:
+projektový write_guard nesmí HTTP worker neomezeně zablokovat přes node state.
+Mimo request kontext zůstává jeho původní blokující režim. Desktop i web
+bootstrapují administraci před spuštěním listeneru. Automatizované důkazy a
+zbývající rozsah jsou v `docs/http-concurrency-ownership.md`; lidská akceptace
+ani nasazení se z těchto testů neodvozují.

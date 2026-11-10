@@ -412,3 +412,55 @@ Local file conflicts additionally gain explicit reviewed keep/commit and
 restore-with-journal-backup actions. They reuse the existing Stage/Commit and
 journal recovery paths; crash boundaries and the limited web permission are
 documented in ADR 0043. No choice has been executed on the real roadmap.
+
+## Follow-up: project ownership rather than global HTTP serialization
+
+The 10 November continuation starts from source `5e9856f` on the same branch.
+The bridge reports the same canonical project/repository/export revision with
+`stale=false`, synchronized at `2026-11-10T09:02:46.804Z`. The user explicitly
+requested continued removal of the global application lock; no task acceptance
+or Workspace plan change is inferred.
+
+The exact `PROJECT_ROUTES` table now moves 24 audited routes out of the
+application fallback, including both reads with initialization effects and
+project writes. Their HTTP lock is keyed by canonical project UUID after
+successful authentication and bounded body parsing. Existing project journal,
+semantic validation, privacy, receipts and Git CAS remain authoritative.
+The table specifies nested scope fields for editor, conflict and Stage/Commit
+requests; the browser uses the same scopes. Each project owns its response until
+EOF, while other projects and the existing node lane may progress.
+
+Every HTTP project journal acquisition is nonblocking through request-local
+context, including the desktop's formerly blocking default. This prevents
+workers accumulating behind a journal after removing HTTP serialization.
+Unknown publication outcomes preserve the original request identity. Native
+background workflows retain their previous locking unless they are incoming
+sync receivers. The complete crash contract is in the 10 November ADR 0050
+addendum. This is an additional completed ownership slice, not completion of
+all of stage A: stream/configuration/shared-service ownership and a migration
+of all remaining routes still require audit. The receive lane remains serialized
+per node; this change does not introduce concurrent inbound exchanges per project.
+
+Live read-only inspection found completed responses on Omnia even for locally
+pending operations. It also found `BlockingIOError` at destination checking and
+response preparation, previously mapped to HTTP 422 and permanent rejection.
+The source now maps these collisions to 503 and stores transient sender state
+`busy`; an isolated signed HTTPS scenario verifies the same saved operation ID
+is reused and completed after the collision clears. No live pending envelope
+was deleted, replaced, or replayed by this diagnostic inspection.
+
+The node registry flock also uses bounded acquisition in request context, so a
+project's write guard cannot reintroduce an unlimited HTTP wait on node state.
+Web and desktop initialize/migrate administration before their listener starts.
+Outside request context registry locking retains its native behavior.
+
+Verification of this follow-up: 175 targeted HTTP, signed sync, administration,
+journal, artifact and repair tests passed (11 optional skips). An additional
+94 project/Workspace/web ownership checks passed (10 optional skips) before the
+final registry-lock adjustment. Five browser-admission checks passed, including
+real Qt/WebEngine origin-wide admission. The native Qt conflict scenario then
+passed while both application and content-receive HTTP lanes were held: project
+opening, restore, commit, lost response and same-ID retry all completed through
+the actual browser admission wrapper and native API. The project-switch Qt
+scenario also passed. `git diff --check` and compilation passed. The full suite
+has not run; there is no claim of completed stage A or live Omnia acceptance.

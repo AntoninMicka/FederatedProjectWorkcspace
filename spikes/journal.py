@@ -101,9 +101,17 @@ class Journal:
 
     @contextmanager
     def lock(self):
+        from spikes.request_ownership import bounded_project_wait, ProjectBusy
         fd = os.open(self.state / 'writer.lock', os.O_CREAT | os.O_RDWR, 0o600)
         with os.fdopen(fd, 'a+b') as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX | (0 if self.blocking else fcntl.LOCK_NB))
+            bounded = bounded_project_wait.get()
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | (
+                    0 if self.blocking and not bounded else fcntl.LOCK_NB))
+            except BlockingIOError as exc:
+                if bounded:
+                    raise ProjectBusy('Project journal is busy') from exc
+                raise
             try:
                 yield
             finally:

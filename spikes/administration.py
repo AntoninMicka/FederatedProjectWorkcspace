@@ -112,7 +112,12 @@ class Administration:
             raise ValueError('Unsafe administration directory')
         fd = os.open(self.root / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a+b') as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+            from spikes.request_ownership import bounded_project_wait, ProjectBusy
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | (
+                    fcntl.LOCK_NB if bounded_project_wait.get() else 0))
+            except BlockingIOError as exc:
+                raise ProjectBusy('Node registry is busy') from exc
             git = Git(self.repo)
             if not self.repo.exists():
                 self.repo.mkdir(mode=0o700)

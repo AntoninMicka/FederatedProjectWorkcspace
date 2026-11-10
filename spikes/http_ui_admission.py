@@ -4,14 +4,15 @@
 
 import json
 
-from spikes.http_admission_policy import ROUTE_LANES
+from spikes.http_admission_policy import ROUTE_LANES, PROJECT_ROUTES
 
 
 HTTP_UI_ADMISSION_JS = r'''
 (()=>{
- const send=window.fetch.bind(window),lanes=new Map();
+ const send=window.fetch.bind(window),lanes=new Map();let totalPending=0;
  const now=()=>globalThis.performance?.now?.()??Date.now();
  const routeLanes=Object.freeze(__FPW_ROUTE_LANES__);
+ const projectFields=Object.freeze(__FPW_PROJECT_FIELDS__);
  function lane(path){
   return Object.hasOwn(routeLanes,path)?routeLanes[path]:'application';
  }
@@ -23,13 +24,19 @@ HTTP_UI_ADMISSION_JS = r'''
   const signal=options.signal||input?.signal;
   const aborted=()=>signal?.reason||new DOMException('Požadavek byl zrušen.','AbortError');
   if(signal?.aborted)return Promise.reject(aborted());
-  const key=lane(url.pathname+url.search),state=lanes.get(key)||{tail:Promise.resolve(),pending:0};
-  if(state.pending>=64)return Promise.reject(new DOMException('Příliš mnoho čekajících požadavků.','QuotaExceededError'));
-  lanes.set(key,state);state.pending++;
+  let key=lane(url.pathname+url.search);
+  if(key==='project'){
+   try{const body=JSON.parse(options.body),field=projectFields[url.pathname],scope=field?body[field]:body;
+    if(typeof scope?.project_id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.project_id))key+=':'+scope.project_id;
+   }catch(error){}
+  }
+  const state=lanes.get(key)||{tail:Promise.resolve(),pending:0};
+  if(totalPending>=64)return Promise.reject(new DOMException('Příliš mnoho čekajících požadavků.','QuotaExceededError'));
+  lanes.set(key,state);state.pending++;totalPending++;
   const previous=state.tail;let finish,released=false;
   const done=new Promise(resolve=>{finish=resolve;});
   state.tail=previous.then(()=>done);
-  const release=()=>{if(!released){released=true;if(timing&&timing.headers_at!==undefined)timing.drain_ms=Math.round(now()-timing.headers_at);state.pending--;finish();}};
+  const release=()=>{if(!released){released=true;if(timing&&timing.headers_at!==undefined)timing.drain_ms=Math.round(now()-timing.headers_at);state.pending--;totalPending--;if(!state.pending)lanes.delete(key);finish();}};
   const dispatch=async()=>{
    try{
     if(signal?.aborted)throw aborted();
@@ -63,4 +70,5 @@ HTTP_UI_ADMISSION_JS = r'''
   return Promise.race([request,cancelled]).finally(()=>signal.removeEventListener('abort',onAbort));
  };
 })();
-'''.replace('__FPW_ROUTE_LANES__', json.dumps(ROUTE_LANES, sort_keys=True))
+'''.replace('__FPW_ROUTE_LANES__', json.dumps(ROUTE_LANES, sort_keys=True)).replace(
+    '__FPW_PROJECT_FIELDS__', json.dumps(PROJECT_ROUTES, sort_keys=True))

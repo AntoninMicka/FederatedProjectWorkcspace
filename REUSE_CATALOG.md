@@ -1371,3 +1371,10 @@ automaticky nerozhoduje o uživatelských změnách (ADR 0043).
 Otevírání projektů adaptuje existující validaci a obnovitelný index přidáním
 omezené procesní cache přesného HEAD (ADR 0022), odloženého načítání skrytých
 panelů a standardní HTTP komprese. Samostatná persistentní cache je odmítnuta.
+
+Projektové HTTP vlastnictví adaptuje existující přesnou admission tabulku,
+BoundedHTTPServer, ContextVar a autoritativní Journal flock. Stejné pole rozsahu
+používá browser i server; procesní mapa zahazuje neaktivní projekty. Reuse nativní
+Stage/Commit, Workspace CAS a synchronizačního replaye zachovává recovery.
+Odmítnuty jsou druhý persistentní writer, zvýšení worker poolu, automatický
+retry a označení inicializačních čtení za read-only. Viz dodatek ADR 0050.

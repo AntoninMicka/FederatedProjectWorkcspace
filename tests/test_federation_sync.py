@@ -407,11 +407,13 @@ class FederationSyncTests(unittest.TestCase):
             worker = threading.Thread(target=transfer); worker.start()
             try:
                 self.assertTrue(entered.wait(5))
-                for path in ('/v1/projects', '/v1/presentation/public', '/v1/diagnostics/status'):
+                for path in ('/v1/projects', '/v1/projects/open', '/v1/presentation/public', '/v1/diagnostics/status'):
                     connection = http.client.HTTPSConnection('127.0.0.1', server.server_port,
                         context=ssl.create_default_context(cafile=tls['ca']), timeout=3)
                     try:
-                        connection.request('POST', path, body='{}', headers={
+                        request_body = ({'project_id':self.project_id}
+                                        if path == '/v1/projects/open' else {})
+                        connection.request('POST', path, body=json.dumps(request_body), headers={
                             'Content-Type': 'application/json',
                             'Authorization': 'Bearer ' + token})
                         response = connection.getresponse(); body = response.read()
@@ -973,9 +975,25 @@ class FederationSyncTests(unittest.TestCase):
         self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
                     endpoint=endpoint, trust='approved', sharing_level='same-team')
         trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+        # A transient native writer collision is 503, not permanent rejection.
+        # Both sides retain the exact request identity for the next attempt.
+        from spikes.federation_sync import _database
+        with patch.object(SyncReceiver, '_receive', side_effect=BlockingIOError()):
+            with self.assertRaises(SyncBusy):
+                ContentSyncControl(self.nodes[0], deployment='web').synchronize(
+                    self.node_ids[1], self.project_id)
+        with _database(self.nodes[0]) as db:
+            pending_id = db.execute('SELECT operation_id FROM outbound WHERE peer_id=? AND project_id=?',
+                (self.node_ids[1], self.project_id)).fetchone()[0]
+        status = ContentSyncControl(self.nodes[0], deployment='web').statuses()[
+            self.node_ids[1] + ':' + self.project_id]
+        self.assertEqual(status['state'], 'busy')
         result = synchronize(self.nodes[0], self.node_ids[1], self.project_id,
                              deployment='web')
         self.assertEqual(result['state'], 'idle')
+        with _database(self.nodes[1]) as db:
+            self.assertIsNotNone(db.execute('SELECT response_envelope FROM inbound WHERE operation_id=?',
+                (pending_id,)).fetchone()[0])
         # A lost HTTPS response is replayed byte-for-byte through the actual
         # peer protocol handler, without another Git verification or export.
         from spikes.federation_sync import _database, encode_body, PATH, CONTENT_TYPE

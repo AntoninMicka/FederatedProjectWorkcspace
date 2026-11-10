@@ -20,7 +20,8 @@ import threading
 import time
 
 from spikes.backend_availability import BackendAvailability
-from spikes.http_admission_policy import LANES, ROUTE_LANES, request_lane
+from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, request_lane
+from spikes.request_ownership import ProjectLanes, ProjectBusy, bounded_project_requests
 
 from spikes.metadata import parse_json, ValidationError
 
@@ -71,6 +72,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         for name in LANES:
             setattr(self, name + '_lane', threading.Lock())
         self.backend_availability = BackendAvailability()
+        self.project_lanes = ProjectLanes()
         self.request_lane_timeout = lane_timeout
         self.shutdown_timeout = shutdown_timeout
         self.shutdown_clean = None
@@ -142,6 +144,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         with self._worker_condition:
             active = [{'kind': item['kind'], 'stage': item['stage'],
                        'operation': item.get('operation', 'unclassified'),
+                       **({'project_id': item['project_id']} if 'project_id' in item else {}),
                        'elapsed_ms': round((time.monotonic() - item['started']) * 1000)}
                       for item in self._request_details.values()]
             rejected = self._admission_rejections
@@ -153,13 +156,15 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 'lanes_busy': {name + '_lane': getattr(self, name + '_lane').locked()
                                for name in LANES}}
 
-    def describe_request(self, request, kind, stage, operation=None):
+    def describe_request(self, request, kind, stage, operation=None, project_id=None):
         with self._worker_condition:
             item = self._request_details.get(request)
             if item is not None:
                 item.update(kind=kind, stage=stage)
                 if operation is not None:
                     item['operation'] = operation
+                if project_id is not None:
+                    item['project_id'] = project_id
 
     def shutdown(self):
         with self._worker_condition:
@@ -229,6 +234,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Connection', 'close')
+        if code == 503:
+            self.send_header('Retry-After', '1')
         self.end_headers()
         try:
             self.wfile.write(data)
@@ -305,8 +312,36 @@ class Handler(BaseHTTPRequestHandler):
                 slots.release()
 
     def _admitted_POST(self):
-        return self._in_request_lane(
-            self._do_POST, lane_name=request_lane(self.path))
+        with bounded_project_requests():
+            try:
+                if self.path in PROJECT_ROUTES:
+                    return self._do_POST()
+                return self._in_request_lane(
+                    self._do_POST, lane_name=request_lane(self.path))
+            except ProjectBusy as exc:
+                return self.reply(503, {'error': 'project busy',
+                    'retry': 'same-operation', 'outcome': exc.outcome})
+
+    def _dispatch_request(self, request):
+        if self.path not in PROJECT_ROUTES:
+            return self.dispatch(request)
+        from uuid import UUID
+        field = PROJECT_ROUTES[self.path]
+        scope = request.get(field) if field and isinstance(request, dict) else request
+        try:
+            project_id = scope['project_id']
+            if not isinstance(project_id, str) or str(UUID(project_id)) != project_id:
+                raise ValueError('Invalid project ID')
+        except (KeyError, TypeError, ValueError, AttributeError):
+            return self.send_error(400)
+        lanes = getattr(self.server, 'project_lanes', None)
+        if lanes is None:
+            return self.dispatch(request)
+        describe = getattr(self.server, 'describe_request', lambda *args: None)
+        describe(self.request, 'project', 'waiting', self.path, project_id)
+        with lanes.acquire(project_id, min(0.1, self.server.request_lane_timeout)):
+            describe(self.request, 'project', 'processing', self.path, project_id)
+            return self.dispatch(request)
 
     def _do_POST(self):
         authority = self.request_authority()
@@ -341,7 +376,7 @@ class Handler(BaseHTTPRequestHandler):
             request = parse_json(body, self.max_body)
         except (ValidationError, UnicodeError, ValueError):
             return self.send_error(400)
-        self.dispatch(request)
+        self._dispatch_request(request)
 
     def do_GET(self):
         return self._in_request_lane(self._do_GET)

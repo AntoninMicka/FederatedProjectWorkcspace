@@ -336,8 +336,12 @@ def main():
         ProjectDeletion(node_path).recover()
     except Exception as exc:
         QMessageBox.warning(None, 'Odstranění projektu nebylo dokončeno', str(exc))
+    ProjectCreation(node_path).initialize_node()
+    administration = Administration(node_path, deployment='desktop')
+    with administration.locked():
+        pass
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server, desktop_bridge(node_path, server):
-        server.administration = Administration(node_path, deployment='desktop')
+        server.administration = administration
         server.user_profile = UserProfile(node_path)
         server.gamepad_settings = GamepadSettings(node_path)
         server.presentation_documents = PresentationDocuments(node_path)

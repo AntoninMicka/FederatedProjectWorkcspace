@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import BoundedHTTPServer
+from spikes.http_admission_policy import PROJECT_ROUTES
 from spikes.chat_service import ChatService
 from spikes.project_creation import ProjectCreation
 from spikes.project_creation_actions import ProjectCreationActions
@@ -154,7 +155,7 @@ class WebHandler(DesktopHandler):
             return True
         try:
             operation = (self.server.administration.authenticate_readonly
-                         if self.path in {'/v1/node-telemetry/status', '/v1/chat/availability',
+                         if self.path in PROJECT_ROUTES or self.path in {'/v1/node-telemetry/status', '/v1/chat/availability',
                                           '/v1/diagnostics/status', '/v1/projects',
                                           '/v1/presentations/use', '/v1/presentation/status',
                                           '/v1/presentation/control', '/v1/presentation/public'}
@@ -719,9 +720,14 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     hostname = validate_hostname(hostname)
     token = secret(token_file)
     creator = ProjectCreation(node)
+    creator.initialize_node('Web workspace')
     if creator.database.exists():
         creator.recover()
         ProjectDeletion(node).recover()
+    administration = Administration(node)
+    # Bootstrap/migrate before binding a listener or authenticating readers.
+    with administration.locked():
+        pass
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(cert, key)
@@ -758,7 +764,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     server.notebooklm_import_actions = NotebookLMImportActions(
         node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
     server.google_drive_import = GoogleDriveImport(node)
-    server.administration = Administration(node)
+    server.administration = administration
     from spikes.monitoring import Monitoring
     server.monitoring=Monitoring(Path(node),server.projects)
     server.monitoring.start()

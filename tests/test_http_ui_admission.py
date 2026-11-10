@@ -10,6 +10,37 @@ from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 
 
 class UIAdmissionTests(unittest.TestCase):
+    def test_project_queues_share_nested_scope_and_bound_total_waiters(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=[];
+global.fetch=async(path,options)=>{sent.push([path,JSON.parse(options.body)]);return new Response(new ReadableStream({start(c){controllers.push(c);}}));};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222';
+ const post=(path,body)=>fetch(path,{method:'POST',body:JSON.stringify(body)});
+ const save=await post('/v1/artifacts/editor/save',{document:{project_id:a}});
+ const waiting=post('/v1/projects/open',{project_id:a});
+ const other=await post('/v1/projects/open',{project_id:b});
+ assert.equal(sent.length,2,'Independent project was serialized or same-project read bypassed its writer');
+ assert.equal(sent[1][1].project_id,b);
+ controllers[0].enqueue(new TextEncoder().encode('{}'));controllers[0].close();await save.text();
+ const opened=await waiting;assert.equal(sent.length,3);
+ for(const c of controllers.slice(1)){c.enqueue(new TextEncoder().encode('{}'));c.close();}
+ await opened.text();await other.text();await new Promise(r=>setTimeout(r,20));
+ const promises=[];
+ for(let i=0;i<64;i++)promises.push(post('/v1/projects/open',{project_id:i.toString(16).padStart(8,'0')+'-3333-4333-8333-333333333333'}));
+ await assert.rejects(post('/v1/projects/open',{project_id:a}),{name:'QuotaExceededError'});
+ await Promise.all(promises);
+ for(const c of controllers.slice(3)){c.enqueue(new TextEncoder().encode('{}'));c.close();}
+ console.log('project queue ownership OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('project queue ownership OK', result.stdout)
+
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1',
                          'Requires real Qt/WebEngine')
     def test_real_webengine_two_pages_use_origin_wide_admission(self):
@@ -182,12 +213,14 @@ const end=path=>{controls.get(path).enqueue(new TextEncoder().encode('{}'));cont
  const abort=new AbortController();
  const cancelled=fetch('/v1/cancelled',{method:'POST',signal:abort.signal});
  abort.abort();await assert.rejects(cancelled,{name:'AbortError'});
+ const projectRead=await post('/v1/artifacts/preview');
  const opening=post('/v1/projects/open');
  await new Promise(resolve=>setTimeout(resolve,25));
  assert(!calls.includes('/v1/projects/open'));
  end('/v1/a');await first.text();
  const second=await b;assert(!calls.includes('/v1/cancelled'));
  end('/v1/b');await second.text();
+ end('/v1/artifacts/preview');await projectRead.text();
  const opened=await opening;end('/v1/projects/open');await opened.text();
  await new Promise(resolve=>setTimeout(resolve,25));
  assert(opened.fpwAdmissionTiming.queue_ms>=20,'Project timing omitted browser queue');

@@ -13,6 +13,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage
 from spikes.artifacts import Artifacts
 from spikes.desktop_ui import HTML, CSS, JS, DesktopHandler
 from spikes.local_api import running_api
+from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 
@@ -28,7 +29,9 @@ for number in range(2):
     identities.append(dict(id=pid, head=head, path=path))
 
 app = QApplication([]); page = QWebEnginePage()
-with running_api('http', handler=DesktopHandler, projects=Projects(node)) as server:
+# Simulate simultaneous ownership by a long application operation and inbound
+# sync. Real project HTTP/UI operations must still complete independently.
+with running_api('http', handler=DesktopHandler, projects=Projects(node)) as server, server.application_lane, server.content_sync_lane:
     config = dict(origin=server.origin, token=server.token, projects=identities)
     script = r'''
 window.localResolutionSmoke={done:false};
@@ -36,7 +39,7 @@ window.localResolutionSmoke={done:false};
  const config=CONFIG,check=(value,message)=>{if(!value)throw Error(message);};
  let lost=false,confirmations=[];
  projectRequest=async(path,body)=>{
-  const response=await window.nativeFetch(config.origin+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify(body)});
+  const response=await window.fetch(config.origin+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.token},body:JSON.stringify(body)});
   const value=await response.json();if(!response.ok){const error=Error(value.error||String(response.status));error.status=response.status;throw error;}
   if(path.endsWith('/local-confirm')){
    confirmations.push(body.operation_id);
@@ -84,7 +87,8 @@ window.localResolutionSmoke={done:false};
     def loaded(ok):
         if not ok:
             app.exit(2); return
-        page.runJavaScript(script); QTimer.singleShot(100, poll)
+        page.runJavaScript('window.fetch=window.nativeFetch;' + HTTP_UI_ADMISSION_JS + script)
+        QTimer.singleShot(100, poll)
 
     page.loadFinished.connect(loaded)
     prefix = "window.workspaceAutoStart=false;window.nativeFetch=window.fetch;window.fetch=async()=>{throw Error('test-offline')};window.requestAnimationFrame=()=>0;"
