@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Bounded Google Drive Picker import with durable local staging."""
 from spikes.request_ownership import bounded_flock
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 import base64
 from datetime import datetime, timezone
 import fcntl
@@ -204,7 +204,7 @@ class GoogleDriveImport:
             bounded_flock(lock, fcntl.LOCK_EX, resource='Google Drive import')
             fd = os.open(self.database, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             os.close(fd)
-            with sqlite3.connect(self.database, timeout=2) as db:
+            with closing(sqlite3.connect(self.database, timeout=2)) as db, db:
                 db.executescript('''
                     PRAGMA synchronous=FULL;
                     CREATE TABLE IF NOT EXISTS configuration (

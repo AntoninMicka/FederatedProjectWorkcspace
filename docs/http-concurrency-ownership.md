@@ -1060,6 +1060,44 @@ Compilation and `git diff --check` passed. The full suite and live IDE/Omnia
 acceptance have not run for this slice.
 
 The broader run also emitted two SQLite ResourceWarnings whose allocation was
-not localized. Four focused web-route tests with allocation tracing passed
-without reproducing them. This is retained as an open native connection-lifecycle
-observation, not attributed to a specific store or claimed fixed by this slice.
+not localized at that stage. Four focused web-route tests with allocation tracing
+passed without reproducing them. The following connection-lifecycle investigation
+records their subsequently confirmed origin and fix.
+
+## Confirmed SQLite warning origin and connection release
+
+Continuation from `af8cfa3` on the same branch, under the existing source repair
+authorization. Bridge status is stale/awaiting review; no planning, acceptance
+or real-profile credential changes are made.
+
+Allocation tracing of the Google Drive HTTPS configuration/authorize fixture
+reproduced exactly two unclosed-database ResourceWarnings, both allocated in
+`GoogleDriveImport.locked`. They were garbage-collected later during unrelated
+web tests, so the warning's emission frame did not identify its owner. The native
+SQLite connection context manager committed/rolled back but never closed the
+connection. No IDE bridge store was implicated by this reproduction.
+
+The locked Drive context now nests the original transaction context inside
+stdlib `closing`, so commit/rollback runs first, connection close second, and
+release of the existing file owner last. This also covers schema initialization
+failure before the context yields and commit-time SQLite contention. Timeout,
+SQL/schema, fsync, explicit commits, OAuth/privacy policy and import intent/Git
+publication/reconciliation remain unchanged under ADR 0032/0003. This releases
+resources deterministically; it does not establish that these warnings caused
+the reported UI latency or that all SQLite ownership has been audited.
+
+The new deterministic closure check failed on the original code. After the fix,
+13 allocation-traced Drive import and original HTTPS tests passed without
+ResourceWarnings, including success/rollback, initialization failure, busy
+commit rollback and subsequent access. Existing import revision/provenance,
+revocation and publication-recovery tests ran using fake Drive transport and
+temporary projects; no live Google account was contacted.
+
+Final verification: the original 203-test IDE/queue/local/web/browser regression
+passed after the fix (10 optional skips) with ResourceWarnings explicitly enabled
+and no ResourceWarning output. The 13-test allocation-traced Drive selection
+also passed without warnings; these selections overlap on the HTTPS fixture.
+The reproduced pre-fix HTTPS fixture emitted exactly two unclosed-database
+warnings from the same allocation site. Compilation and `git diff --check`
+passed. The full repository suite and live Omnia/Google Drive acceptance have
+not run for this change.

@@ -155,3 +155,13 @@ typed bounded HTTP busy; native policies, queue revisions, packet digests,
 pending-human-review and Workspace recovery remain unchanged. IDE credentials
 are rechecked after admission. Multi-project export/probes/packaging and whole
 operation duration remain open, along with other application domains.
+
+### SQLite ResourceWarning follow-up
+
+The two warnings from the IDE/web regression were traced to the Drive import
+connection context, not to their later garbage-collection emission frame.
+`GoogleDriveImport.locked` now explicitly closes its connection after native
+commit/rollback and before releasing its file owner, including entry/commit
+failures. Native timeouts and persistent/recovery behavior are unchanged.
+This fixes the reproduced leak; remaining SQLite stores still need their own
+audit and no end-to-end performance result is inferred from warning removal.

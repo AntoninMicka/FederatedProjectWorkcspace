@@ -1461,3 +1461,9 @@ původní autoritou; projektový účinek používá Workspace writer/receipt re
 Credential se znovu ověří po čekání na HTTP vlastníka. Read-only zařazení pollu,
 nový queue writer, automatická akceptace či resend a smazání busy stavů byly
 odmítnuty: status/refresh mohou obnovovat existující nativní operace.
+
+Google Drive connection lifetime **adaptuje** existující stdlib `closing` kolem
+původního SQLite transakčního kontextu. Commit/rollback a pak close proběhnou před
+uvolněním stávajícího flocku i při chybě inicializace či commitu. Nový writer,
+connection pool, změna schématu nebo timeoutů nejsou pro doložený leak potřebné;
+importní intent a Workspace recovery zůstávají podle ADR 0032/0003.
