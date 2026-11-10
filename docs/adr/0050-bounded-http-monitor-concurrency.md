@@ -544,3 +544,14 @@ Společný providerový vlastník zůstává záměrný kvůli recovery lifecycl
 Jeho odstranění vyžaduje samostatný návrh nativního vlastnictví běhů; tato změna
 nezavádí nové sledované úlohy ani změnu federačního protokolu. CPU/disk/fsync
 a celá vícefázová operace nemají tímto rozhodnutím nový absolutní časový limit.
+
+### Startovací kapacita napříč doménami
+
+Oddělené domény neomezují součet paralelních dotazů jednoho dashboardu.
+Po reprodukci vyčerpání workerů při startu dashboard čte projekty postupně,
+s lehkou validovanou TODO projekcí přes existujícího projektového vlastníka
+(`scope=dashboard`). Skrytý koš a chat se načítají při explicitní navigaci;
+přepnutí projektu zneplatní další background čtení. Kolize creation registru
+v bounded kontextu je typed busy, zatímco skutečný `CreationConflict` zůstává
+chybou. Nativní journal/CAS/index recovery ani limity poolu se nemění; nejde
+o globální záruku kapacity napříč všemi nezávislými klienty.

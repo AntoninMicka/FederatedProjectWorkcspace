@@ -3160,7 +3160,15 @@ function renderProjectCatalog(items){
 }
 async function loadDashboardTasks(items,request){
  const list=document.querySelector('#dashboard-task-list'),status=document.querySelector('#dashboard-task-status');list.replaceChildren();status.textContent='Načítám úkoly…';
- const available=items.filter(item=>item.available),results=await Promise.allSettled(available.map(item=>projectRequest('/v1/projects/open',{project_id:item.id})));
+ const available=items.filter(item=>item.available),results=[];
+ // Background dashboard work must not fill the ordinary HTTP worker pool.
+ // Foreground navigation increments catalogRequest; finish the current read,
+ // then stop before admitting another project. Never retry a failed request.
+ for(const item of available){
+  if(request!==catalogRequest||document.querySelector('#project-home').hidden)return;
+  try{results.push({status:'fulfilled',value:await projectRequest('/v1/projects/open',{project_id:item.id,scope:'dashboard'})});}
+  catch(reason){results.push({status:'rejected',reason});}
+ }
  if(request!==catalogRequest)return;
  let unavailable=0,openCount=0;
  for(let index=0;index<results.length;index++){
@@ -3252,9 +3260,10 @@ async function loadProjects(selectedId=null){
   const result=await projectRequest('/v1/projects',{details:true});
   if(request!==catalogRequest)return;
   renderProjectCatalog(result.projects);
-  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),...(!activeProject?[loadChat()]:[])]);
   projectStatus.textContent=result.projects.length ? 'Přehled je připravený.' : 'Zatím nemáte žádný projekt.';
-  if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
+  if(selectedId && result.projects.some(p=>p.id===selectedId)){await openRegisteredProject(selectedId);return;}
+  // Trash and chat are loaded by their explicit navigation handlers.
+  if(!document.querySelector('#project-home').hidden)await loadDashboardTasks(result.projects,request);
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
 
@@ -9450,9 +9459,11 @@ class DesktopHandler(Handler):
                 return self.reply(200, {'id': request['source'].get('project_id'),
                                         'commit_id': receipt['commit_id']})
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
-                    and set(request) == {'project_id', 'scope'} and request['scope'] == 'plan'
+                    and set(request) == {'project_id', 'scope'}
+                    and isinstance(request['scope'], str) and request['scope'] in {'plan', 'dashboard'}
                     and isinstance(request['project_id'], str)):
-                return self.reply(200, projects.plan_view(request['project_id']))
+                return self.reply(200, (projects.plan_view if request['scope'] == 'plan'
+                                        else projects.dashboard_view)(request['project_id']))
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))

@@ -364,7 +364,7 @@ class Workspace:
             self.index.rebuild(self.git)
             return query(self.git)
 
-    def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False, plan_only=False):
+    def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False, plan_only=False, dashboard_only=False):
         """Return one committed project view under the shared writer lock."""
         with self.journal.lock(), self.journal.connect() as db:
             if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
@@ -376,7 +376,7 @@ class Workspace:
                 raise StaleIndex('Project changed; reopen preview')
             meta = committed_project(self.git, commit, project_id)
             cache_key = None
-            if (artifact_id is None and not plan_only
+            if (artifact_id is None and not plan_only and not dashboard_only
                     and not any((self.git.root / '.git' / name).exists()
                                 for name in ('shallow', 'info/grafts'))
                     and not self.git.run('for-each-ref', '--count=1', '--format=%(refname)',
@@ -414,6 +414,12 @@ class Workspace:
                     raise StaleIndex('Project changed while reading preview')
                 return dict(id=artifact_id, commit_id=commit, metadata=metadata,
                             path=path, raw=entries[path], sidecar=sidecar)
+            if dashboard_only:
+                todo = main_todo_view(files, entities, project_id)
+                if self.git.head() != commit:
+                    raise StaleIndex('HEAD changed while reading dashboard; retry')
+                return dict(id=project_id, title=meta['title'], commit_id=commit,
+                            main_todo_id=main_todo_id(project_id), main_todo=todo)
             plan = project_task_graph(files, entities, project_id, commit)
             if plan_only:
                 if self.git.head() != commit:

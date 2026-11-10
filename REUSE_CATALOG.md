@@ -1485,3 +1485,9 @@ only deadline enforcement and response ownership are adapted. A small isolated
 stdlib resolver bounds hostname DNS without retaining blocked resolver threads.
 No external implementation or new persistent scheduler/writer is introduced.
 The native journal/CAS recovery remains authoritative.
+
+Startup-capacity regression: **adapt/reuse** native scoped project views,
+committed TODO projection, catalog-request invalidation and typed bounded
+ownership. Dashboard reuses the existing project route/owner and native
+journal/index/privacy checks. **Reject:** more HTTP workers, automatic replay,
+full-history reads for every startup card and a second persistent cache/writer.

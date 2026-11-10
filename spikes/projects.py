@@ -157,11 +157,18 @@ class Projects:
 
     def plan_view(self, project_id):
         """Read the validated committed plan without history, artifact list or local draft."""
+        return self._scoped_view(project_id, plan_only=True)
+
+    def dashboard_view(self, project_id):
+        """Validated committed TODO projection without history or local draft."""
+        return self._scoped_view(project_id, dashboard_only=True)
+
+    def _scoped_view(self, project_id, **scope):
         deadline = (time.monotonic() + 30
                     if self.network or bounded_project_wait.get() else None)
         workspace = self.workspace(project_id, blocking=not self.network,
                                    deadline=deadline, for_read=True)
-        result = workspace.read_project(project_id, network=self.network, plan_only=True)
+        result = workspace.read_project(project_id, network=self.network, **scope)
         result['replication'] = self.replication(project_id)
         result['read_only'] = bool(result['replication']
                                    and result['replication']['role'] == 'read-only-replica')

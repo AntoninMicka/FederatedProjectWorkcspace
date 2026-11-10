@@ -1278,3 +1278,47 @@ also reproduced on the baseline HEAD.
 - `git diff --check` passed. No separate configured build/lint exists.
 - No Omnia deployment, real-profile performance acceptance or authoritative
   Workspace task acceptance is inferred from these local results.
+
+### Startup admission regression
+
+Observed during ordinary startup after `a822287`: independent domains filled
+all four POST slots with telemetry, hidden project trash and full project reads;
+further requests hit `ui_worker_reserved` / `worker_limit`. Removing the global
+application owner did not itself bound dashboard fan-out across projects.
+
+The landing dashboard now reads available projects sequentially through the
+existing per-project `/v1/projects/open` owner with `scope=dashboard`. This
+validated committed TODO projection omits history, task graph, local draft and
+conflict inspection. It retains native journal/index checks, privacy and the
+same view deadline; it is not an unowned pure read. Foreground navigation
+invalidates the catalog request, preventing another background project read.
+Selected projects open before dashboard work. Hidden trash/chat load only on
+explicit navigation, not catalog refresh/startup. No worker-limit increase,
+request replay or automatic retry is introduced.
+
+A node project-creation flock collision now raises typed `ProjectBusy` inside
+bounded request/sync context. Outside that context native callers retain
+`CreationConflict`.
+Actual persistent-state/identity/recovery conflicts remain `CreationConflict`;
+they must not all be reclassified as transient. The sync controller records a
+lock collision as busy and preserves the exact pending envelope and operation
+ID, rather than reporting a semantic creation error. The class-only historical
+log cannot establish which cause applied to those earlier instances.
+
+Persistent boundaries remain ADR 0003/0050/0081: reads reject pending intent,
+existing recovery remains the only writer, index rebuild is under the native
+owner, and publication/receipt/replay ordering is unchanged. This fixes the
+observed startup fan-out, not a guarantee against every independent client's
+capacity burst. Live desktop/Omnia startup acceptance remains separate.
+
+Focused verification for the startup follow-up: 63 project/creation/desktop
+regressions OK (4 skips), final startup module 6 OK (1 Qt opt-in skip),
+Qt-enabled startup module 6 OK including the real 12-project WebEngine landing,
+and 122 federation/navigation/admission/web regressions OK (12 skips).
+The final scope validation separately rejects null/list/object/unknown values
+with 400. Native tests cover committed-only TODO, pending-intent refusal and
+single-publication recovery, privacy, HTTP authentication/project ownership,
+and busy versus semantic-conflict classification with the same pending bytes.
+`git diff --check` passed. The previous 1,990-test full gate applies to
+`a822287`; it was not repeated for this follow-up. No live instance was restarted
+or deployed as part of this source verification.

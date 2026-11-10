@@ -389,6 +389,8 @@ class ProjectTests(unittest.TestCase):
         path.write_bytes(markdown(meta));self.gits[0].commit('Local-only source')
         with self.assertRaises(ValidationError):
             Projects(self.node_path,network=True).plan_view(ENTITY)
+        with self.assertRaises(ValidationError):
+            Projects(self.node_path,network=True).dashboard_view(ENTITY)
 
     def test_interrupted_initialization_and_rebuild_can_be_retried(self):
         with patch('spikes.workspace.Index', side_effect=RuntimeError('before index initialization')):
