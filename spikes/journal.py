@@ -6,9 +6,9 @@ from contextlib import contextmanager
 import fcntl
 import os
 from pathlib import Path
-import sqlite3
 import stat
 
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, safe_path, validate_snapshot
 
 
@@ -91,13 +91,9 @@ class Journal:
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.database, timeout=2)
-        db.execute('PRAGMA synchronous=FULL')
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        with sqlite_connection(self.database, resource='Project journal', timeout=2) as db:
+            db.execute('PRAGMA synchronous=FULL')
+            yield db
 
     @contextmanager
     def lock(self):

@@ -2,14 +2,13 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """M0 experiment for controlled repositories; not a production Git sandbox."""
-from contextlib import closing
 import json
 import os
 from pathlib import Path
-import sqlite3
 import subprocess
 import time
 
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, validate_snapshot
 
 
@@ -135,7 +134,7 @@ class Index:
         self.path = Path(path)
         fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         os.close(fd)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Project index') as db:
             version = self._version(db)
             if version == 0:
                 tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -202,7 +201,7 @@ class Index:
             imported = meta['import']; importer = imported['importer']
             imports.append((id_, *(imported.get(key) for key in self.IMPORT_FIELDS),
                             importer['name'], importer.get('version')))
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Project index') as db:
             db.execute('PRAGMA foreign_keys=ON')
             db.execute('BEGIN IMMEDIATE')
             if self._version(db) != self.VERSION:
@@ -239,7 +238,7 @@ class Index:
         return commit
 
     def _read(self, git, query):
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Project index') as db:
             db.execute('BEGIN')
             if self._version(db) == 0:
                 raise StaleIndex('Legacy index must be rebuilt from current HEAD')

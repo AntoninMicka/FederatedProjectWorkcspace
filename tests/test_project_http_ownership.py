@@ -3,6 +3,9 @@
 import fcntl
 import http.client
 import json
+import sqlite3
+import time
+from contextlib import closing
 from pathlib import Path
 import tempfile
 import threading
@@ -39,6 +42,45 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
             return response.status, json.loads(response.read()), dict(response.getheaders())
         finally:
             connection.close()
+
+    def test_sqlite_index_and_journal_collision_release_http_worker(self):
+        ws = self.projects.workspace(self.ids[0])
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            for path in (ws.index.path, ws.journal.database):
+                with self.subTest(database=path.name), closing(sqlite3.connect(path)) as owner:
+                    owner.execute('BEGIN EXCLUSIVE')
+                    started = time.monotonic()
+                    status, payload, headers = self.post(server, '/v1/projects/open',
+                                                        {'project_id': self.ids[0]})
+                    self.assertEqual(status, 503, payload)
+                    self.assertEqual(payload['outcome'], 'unknown')
+                    self.assertEqual(headers['Retry-After'], '1')
+                    self.assertLess(time.monotonic() - started, 1)
+                    self.assertEqual(self.post(server, '/v1/projects/open',
+                                              {'project_id': self.ids[1]})[0], 200)
+                    owner.rollback()
+                self.assertEqual(self.post(server, '/v1/projects/open',
+                                          {'project_id': self.ids[0]})[0], 200)
+
+    def test_conflict_status_contention_is_busy_without_hiding_conflicts(self):
+        from spikes.federation_sync import _database, _journal_path
+        peer_id = str(uuid4())
+        with _database(self.node) as db:
+            db.execute('INSERT INTO runtime VALUES (?,?,?,?,?,?)',
+                       (peer_id, self.ids[0], 'conflict', '', '', ''))
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            with closing(sqlite3.connect(_journal_path(self.node))) as owner:
+                owner.execute('BEGIN EXCLUSIVE')
+                started = time.monotonic()
+                status, payload, _ = self.post(server, '/v1/projects/open',
+                                               {'project_id': self.ids[0]})
+                self.assertEqual(status, 503, payload)
+                self.assertLess(time.monotonic() - started, 1)
+                owner.rollback()
+            status, payload, _ = self.post(server, '/v1/projects/open',
+                                           {'project_id': self.ids[0]})
+            self.assertEqual(status, 200, payload)
+            self.assertEqual(payload['sync_conflicts'], [{'peer_id': peer_id}])
 
     def test_blocked_project_does_not_block_another_project_or_node_route(self):
         entered, release = threading.Event(), threading.Event()

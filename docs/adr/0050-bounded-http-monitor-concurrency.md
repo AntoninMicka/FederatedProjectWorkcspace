@@ -417,3 +417,19 @@ Projektový JSON a NDJSON klient zachovávají rozlišení a z neúplné odpově
 nevyrábějí potvrzený výsledek. Automatický retry ani zahození backend journalu
 se nezavádí. Úplný kontrakt, stale-export výjimka podle instrukce uživatele a
 99 cílených testů včetně skutečného Qt jsou v navazujícím auditním dokumentu.
+
+### SQLite contention při otevření projektu
+
+Projektový journal, projektový index (včetně inicializace a rebuild) a read-only
+čtení stavu sync konfliktů adaptují stávající bounded request kontext: SQLite
+busy timeout je v něm nulový. BUSY/LOCKED včetně rozšířených kódů přejdou do
+stávajícího `ProjectBusy`; ostatní databázové chyby se nepřeklasifikují.
+HTTP worker při kolizi nečeká na databázi. Mimo tento kontext zůstávají původní
+nativní timeouty. Nejde o celkový deadline SQL/disku ani dokončení auditu všech
+SQLite stores; inicializující čtení se tím nestávají čistě read-only.
+
+Transakční recovery zůstává podle ADR 0003: rollback aktuální nepotvrzené
+transakce neruší dříve uložený intent ani publikovaný Git commit. Při busy během
+indexace zůstává stejná rozpracovaná operace a recovery dokončí její index a
+receipt. Žádný nový writer, retry, schema či WAL migrace se nezavádí. Důkazy
+a zbývající rozsah jsou v [auditu vlastnictví](../http-concurrency-ownership.md).

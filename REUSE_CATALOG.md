@@ -1414,3 +1414,11 @@ Existující číselné IPv4 endpointy nepotřebují DNS; původní podpisy, TLS
 journal, receipt a replay zůstávají autoritou. Samostatný HTTP klient, watchdog
 vlákna a automatické opakování byly odmítnuty: nepřidávají potřebnou garanci a
 mohly by oddělit životnost transportu od původní operace.
+
+SQLite HTTP ownership **adaptuje** existující stdlib transakce a request-local
+`bounded_project_requests`: projektový journal/index a read-only stav konfliktů
+při obsazení nečekají a používají stávající `ProjectBusy`/HTTP 503 kontrakt.
+Nativní timeouty, explicitní commity, journal a Git CAS zůstávají zachované.
+Samostatný writer, connection pool, WAL migrace a automatické opakování byly
+odmítnuty jako nepotřebné pro odstranění čekání na těchto zámcích. Recovery
+používá původní Workspace operaci podle ADR 0003.

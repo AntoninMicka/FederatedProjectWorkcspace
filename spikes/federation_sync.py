@@ -6,7 +6,7 @@ import ipaddress
 import json
 import os
 import fcntl
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from spikes.request_ownership import ProjectBusy, bounded_project_requests
@@ -41,6 +41,7 @@ from spikes.project_chat_sync import (
     validate_export_authority, validate_payload as validate_chat_payload,
 )
 from spikes.projects import Projects
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.storage import Git
 from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic
 
@@ -182,7 +183,8 @@ def project_conflict_statuses(node, project_id):
     info = path.lstat()
     require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and info.st_nlink == 1
             and not info.st_mode & 0o077, 'Unsafe content sync journal')
-    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
+    with sqlite_connection(path.as_uri() + '?mode=ro', uri=True, timeout=2,
+                           resource='Content sync conflict status') as db:
         return [{'peer_id': row[0]} for row in db.execute(
             "SELECT peer_id FROM runtime WHERE project_id=? AND state='conflict' ORDER BY peer_id",
             (project_id,))]

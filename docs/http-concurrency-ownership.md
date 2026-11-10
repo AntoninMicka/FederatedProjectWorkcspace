@@ -694,3 +694,45 @@ budgets. The native sync test preserves the exact outbound bytes through
 lost-response timeout and busy admission, then clears the intent only after
 successful receipt and retains one inbound operation. Compilation and
 `git diff --check` passed. The full suite has not run.
+
+## SQLite ownership on the project-open path
+
+Continuation from `8a18117`, same branch and user-authorized source continuation
+with the previously recorded stale export. The user reports improved live
+responsiveness; this is not acceptance of the remaining concurrency work.
+
+The project journal, all project-index connections (initialization, reads and
+rebuild) and the read-only content-sync conflict-status query now adapt the
+existing `bounded_project_requests` context. In that context SQLite busy timeout
+is zero: an occupied database cannot repeatedly park an HTTP worker. Native
+callers retain their previous timeouts (journal/conflict query 2 seconds, index
+5 seconds). The adapter translates only SQLite BUSY/LOCKED primary and extended
+error codes to `ProjectBusy`; schema, corruption and other SQL errors keep their
+original meaning. The existing HTTP adapter produces 503/same-operation and
+preserves unknown outcomes. There is no sleep, automatic retry or new writer.
+
+Transaction and crash boundaries remain ADR 0003: failures before publication
+roll back the current uncommitted SQLite transaction. Earlier explicit journal
+commits and filesystem/Git publication stay durable. In particular, index
+contention after Git publication leaves the same unfinished journal operation;
+recovery rebuilds the projection and completes its receipt without a second
+commit. Commit-time SQLite contention also rolls back uncommitted changes and
+closes the connection before returning busy. The adapter does not clear intent
+or infer that the overall request never started. Conflict-status contention
+cannot silently produce an empty conflict list; after release the original
+conflict remains visible through project open.
+
+This slice removes SQLite lock sleeping at these specific boundaries, not SQL
+execution time, disk/fsync latency or a whole-request deadline. Project reads
+still acquire their journal owner and may initialize/rebuild state; they are
+not reclassified as pure reads. Other node/provider SQLite stores and native
+background callers remain to be audited. No WAL, schema, migration or persistent
+format change is introduced. This source change has not been deployed here.
+
+Final verification: 129 targeted SQLite ownership, HTTP project ownership,
+project reads, storage/projection, journal, Workspace and federation-sync tests
+passed (3 optional skips). Real lock collisions cover journal/index open and
+conflict visibility, SQLite shared-cache extended LOCKED, commit-time rollback,
+independent project progress and recovery after Git publication. Existing
+process-crash recovery tests ran in this selection. Compilation and
+`git diff --check` passed; the full suite and live deployment have not run.

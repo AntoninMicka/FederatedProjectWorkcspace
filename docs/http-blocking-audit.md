@@ -91,3 +91,13 @@ headers and body. See `http-concurrency-ownership.md` for recovery boundaries.
 Slow continuous responses no longer extend these three transport waits.
 Provider/hostname DNS, incoming slow bodies and non-network work remain open;
 this does not close the broader elapsed-time inventory.
+
+### Project-open SQLite follow-up
+
+Project journal/index connections and the read-only sync-conflict query now
+use zero SQLite busy timeout inside bounded request context and map only
+BUSY/LOCKED to typed busy. Native timeout policies and transaction recovery
+remain unchanged. Tests exercise HTTP 503 with independent project progress,
+commit-time rollback and recovery after Git publication. This supersedes the
+SQLite row for these paths only: other stores, SQL execution, disk latency and
+initialization/repair during project reads remain open.
