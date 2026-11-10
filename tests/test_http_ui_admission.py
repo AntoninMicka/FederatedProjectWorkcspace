@@ -10,6 +10,183 @@ from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 
 
 class UIAdmissionTests(unittest.TestCase):
+    def test_project_client_preserves_admission_and_uncertain_response_outcomes(self):
+        from spikes.desktop_ui import JS
+        start=JS.index('async function projectRequest(')
+        request=JS[start:JS.index('\n}',start)+2]
+        start=JS.index('async function streamRequest(')
+        request+='\n'+JS[start:JS.index('\n}',start)+2]
+        script=r'''
+const assert=require('node:assert/strict');
+global.scheduleBackendStateRefresh=()=>{};
+'''+request+r'''
+(async()=>{
+ const before=Object.assign(new Error('not sent'),{name:'TimeoutError',phase:'admission',outcome:'not-started',status:503});
+ global.fetch=async()=>{throw before;};
+ await assert.rejects(projectRequest('/v1/chat/send',{}),e=>e===before&&e.outcome==='not-started');
+ global.fetch=async()=>({status:200,json:async()=>{throw new SyntaxError('incomplete body');}});
+ await assert.rejects(projectRequest('/v1/chat/send',{}),{outcome:'unknown',status:408,retry:'same-operation'});
+ global.fetch=async()=>({ok:false,status:503,json:async()=>({error:'busy',outcome:'not-started',retry:'same-operation'})});
+ await assert.rejects(projectRequest('/v1/chat/send',{}),{outcome:'not-started',status:503});
+ global.fetch=async()=>new Response('{"type":"error","status":503,"error":"busy","outcome":"unknown","retry":"same-operation"}\n');
+ await assert.rejects(streamRequest('/v1/chat/send-stream',{},()=>{}),{status:503,outcome:'unknown',retry:'same-operation'});
+ global.fetch=async()=>new Response('{"type":"status","status":"working"}\n');
+ await assert.rejects(streamRequest('/v1/chat/send-stream',{},()=>{}),{status:408,outcome:'unknown',retry:'same-operation'});
+ console.log('client outcomes OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('client outcomes OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires real Qt/WebEngine')
+    def test_real_webengine_expired_origin_lock_wait_never_reaches_backend(self):
+        script=r'''
+import json
+from PySide6.QtCore import QTimer,QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
+from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
+from spikes.local_api import Handler,running_api
+writes=[]
+class Fixture(Handler):
+ post_paths={'/v1/write','/v1/diagnostics/status'}
+ def _do_GET(self):
+  self.reply(200,{'ready':True})
+ def dispatch(self,request):
+  if self.path=='/v1/write':writes.append(request['operation_id'])
+  self.reply(200,{'ok':True})
+app=QApplication([])
+with running_api('http',handler=Fixture) as server:
+ profile=QWebEngineProfile(app);pages=[QWebEnginePage(profile,app) for _ in range(2)]
+ loaded=set();phase=0;checking=False
+ options=json.dumps({'method':'POST','headers':{'Content-Type':'application/json','Authorization':'Bearer '+server.token},'body':'{"operation_id":"fixed-review-id"}'})
+ def install(i,ok):
+  if not ok:return app.exit(3)
+  pages[i].runJavaScript(HTTP_UI_ADMISSION_JS+';true',0,lambda value:loaded.add(i))
+ for i,page in enumerate(pages):
+  page.loadFinished.connect(lambda ok,i=i:install(i,ok));page.setUrl(QUrl(server.origin+'/'))
+ def received(raw):
+  global phase,checking
+  checking=False;value=json.loads(raw) if raw else {}
+  if phase==1 and value.get('held'):
+   phase=2
+   pages[1].runJavaScript("fetch('/v1/write',"+options+").then(()=>window.expired={unexpected:true}).catch(e=>window.expired={name:e.name,outcome:e.outcome,phase:e.phase});fetch('/v1/diagnostics/status',"+options+").then(r=>window.diagnostic=r.status);")
+  elif phase==2 and value.get('expired'):
+   assert value['expired']=={'name':'TimeoutError','outcome':'not-started','phase':'admission'},value
+   assert value.get('diagnostic')==200 and writes==[],(value,writes)
+   phase=3;pages[0].runJavaScript('releaseHeld()')
+   pages[1].runJavaScript("fetch('/v1/write',"+options+").then(r=>r.json()).then(v=>window.retried=v);")
+  elif phase==3 and value.get('retried'):
+   assert writes==['fixed-review-id'],writes
+   print('real origin-lock timeout, independent diagnostic and exact retry OK',flush=True);app.exit(0)
+ def poll():
+  global phase,checking
+  if len(loaded)!=2 or checking:return
+  if phase==0:
+   phase=1;pages[0].runJavaScript("navigator.locks.request('fpw-http-application',async()=>{window.held=true;await new Promise(resolve=>window.releaseHeld=resolve);});")
+  checking=True
+  page=pages[0] if phase==1 else pages[1]
+  page.runJavaScript('JSON.stringify({held:window.held,expired:window.expired,diagnostic:window.diagnostic,retried:window.retried})',0,received)
+ timer=QTimer();timer.timeout.connect(poll);timer.start(30)
+ QTimer.singleShot(12000,lambda:app.exit(2));code=app.exec()
+ for page in pages:page.deleteLater()
+ app.processEvents();profile.deleteLater();app.processEvents()
+ raise SystemExit(code)
+'''
+        result=subprocess.run([sys.executable,'-c',script],capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('exact retry OK',result.stdout)
+
+    def run_deadline_case(self, transport, checks):
+        harness = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+let stamp=0,sequence=0;const timers=new Map(),calls=[];
+global.performance={now:()=>stamp};
+global.setTimeout=(fn,ms)=>{const id=++sequence;timers.set(id,{fn,at:stamp+ms});return id;};
+global.clearTimeout=id=>timers.delete(id);
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
+const advance=async ms=>{stamp+=ms;for(const [id,timer] of [...timers])if(timer.at<=stamp){timers.delete(id);timer.fn();}await tick();};
+const post=(path,options={})=>fetch(path,{method:'POST',...options});
+'''
+        script = harness + transport + HTTP_UI_ADMISSION_JS + '\n(async()=>{' + checks + r'''
+console.log('deadline checks OK');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+'''
+        result = subprocess.run(['node','-e',script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('deadline checks OK', result.stdout)
+
+    def test_expired_and_cancelled_fifo_entries_never_send_or_retain_capacity(self):
+        self.run_deadline_case(r'''
+const controls=new Map();
+global.fetch=async(path,options)=>{calls.push([path,options]);return new Response(new ReadableStream({start(c){controls.set(path,c);}}));};
+''', r'''
+const first=await post('/v1/held');
+for(let round=0;round<4;round++){
+ const waiting=Array.from({length:63},(_,i)=>post('/v1/expired-'+round+'-'+i).catch(e=>e));
+ await assert.rejects(post('/v1/full'),{name:'QuotaExceededError',outcome:'not-started'});
+ let inspected=0;const body={toString(){inspected++;return '{}';}};
+ await assert.rejects(post('/v1/projects/open',{body}),{name:'QuotaExceededError',outcome:'not-started'});
+ assert.equal(inspected,0,'Full queue decoded a rejected body');
+ await advance(5001);
+ for(const error of await Promise.all(waiting))assert.equal(error.outcome,'not-started');
+ assert.equal(calls.length,1);assert.equal(timers.size,0);
+}
+const controller=new AbortController();
+const cancelled=post('/v1/cancelled',{signal:controller.signal}).catch(e=>e);
+controller.abort('explicit caller reason');const error=await cancelled;
+assert.equal(error.outcome,'not-started');assert.equal(error.cause,'explicit caller reason');
+const expiredLate=post('/v1/delayed-timer').catch(e=>e);stamp+=5001;
+controls.get('/v1/held').close();await first.text();
+assert.equal((await expiredLate).outcome,'not-started','Throttled timer permitted late dispatch');
+const body='{"operation_id":"fixed-original-operation"}',sent=await post('/v1/retry',{body});
+assert.deepEqual(calls.map(v=>v[0]),['/v1/held','/v1/retry']);assert.equal(calls[1][1].body,body);
+controls.get('/v1/retry').close();await sent.text();await tick();assert.equal(timers.size,0);
+''')
+
+    def test_web_lock_wait_has_same_deadline_and_no_late_dispatch(self):
+        self.run_deadline_case(r'''
+let parked;
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{locks:{request(name,options,callback){return new Promise((resolve,reject)=>{
+ parked={name,callback};options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});
+});}}}});
+global.fetch=async(path,options)=>{calls.push(path);return new Response('{}');};
+''', r'''
+const waiting=post('/v1/waiting').catch(e=>e);await tick();
+assert.equal(parked.name,'fpw-http-application');await advance(5001);
+const error=await waiting;assert.equal(error.name,'TimeoutError');assert.equal(error.phase,'admission');
+assert.equal(error.outcome,'not-started');assert.equal(error.dispatched,false);
+await assert.rejects(parked.callback());assert.equal(calls.length,0);
+navigator.locks.request=()=>{throw new DOMException('denied','SecurityError');};
+await assert.rejects(post('/v1/denied'),{name:'SecurityError',outcome:'not-started'});
+navigator.locks.request=async(name,options,callback)=>callback();
+const response=await post('/v1/after');await response.text();await tick();
+assert.deepEqual(calls,['/v1/after']);assert.equal(timers.size,0);
+''')
+
+    def test_abort_after_send_is_unknown_and_does_not_release_owner_early(self):
+        self.run_deadline_case(r'''
+let deliver,body;
+global.fetch=async(path,options)=>{calls.push([path,options]);
+ if(calls.length===1)return new Promise(resolve=>{deliver=resolve;});
+ return new Response('{}');
+};
+''', r'''
+const controller=new AbortController(),original='{"operation_id":"original-id"}';
+const sent=post('/v1/sent',{signal:controller.signal,body:original}).catch(e=>e);await tick();
+assert.equal(calls.length,1);controller.abort();const error=await sent;
+assert.equal(error.outcome,'unknown');assert.equal(error.dispatched,true);
+const waiting=post('/v1/must-not-overlap').catch(e=>e);await advance(5001);
+assert.equal((await waiting).outcome,'not-started');assert.equal(calls.length,1);
+deliver(new Response(new ReadableStream({start(c){body=c;}})));await tick();
+const after=post('/v1/after');await tick();assert.equal(calls.length,1,'Headers released uncertain owner');
+body.close();const response=await after;await response.text();await tick();
+assert.deepEqual(calls.map(v=>v[0]),['/v1/sent','/v1/after']);assert.equal(calls[0][1].body,original);
+assert.equal(timers.size,0);
+''')
+
     def test_stream_queue_does_not_hold_settings_and_preserves_provider_order(self):
         script = r'''
 const assert=require('node:assert/strict');
@@ -155,7 +332,7 @@ const locks={request(name,options,callback){
  queues.set(name,result.catch(()=>{}));return result;
 }};
 function page(id){
- const scope={URL,DOMException,Promise,location:{href:'http://localhost/',origin:'http://localhost'},
+ const scope={URL,DOMException,Promise,AbortController,setTimeout,clearTimeout,location:{href:'http://localhost/',origin:'http://localhost'},
   navigator:{locks},fetch:async(path)=>{
    calls.push(id+path);
    return new Response(new ReadableStream({start(controller){controls.set(id+path,controller);}}));

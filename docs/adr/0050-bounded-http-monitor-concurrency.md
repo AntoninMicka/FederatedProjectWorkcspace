@@ -402,3 +402,18 @@ oprávnění a identita probe odpovědi. Čtecí agregace tím nevstupuje zpět 
 výlučného bootstrapu přes pomocný dotaz. Poslední cílený běh prošel 293 testy
 včetně skutečného Qt; přímý katalog/probe dalších 11. Plná sada a širší audit
 nejsou dokončené. Výsledek není nová fyzická akceptace Omnie.
+
+### Pětisekundová browser admission hranice
+
+Browser má společný limit pěti sekund pro čekání ve FIFO a na originový Web
+Lock. Nejde o timeout již spuštěného streamu. Zrušené/vypršelé položky se z FIFO
+odeberou a uvolní kapacitu; nevytváří se neomezený řetězec příslibů za otevřeným
+streamem. Pozdní timer/lock callback před fetch znovu ověří elapsed deadline.
+
+Před zavoláním transportu má neúspěch `outcome=not-started` pro tento pokus.
+Po zavolání fetch je nejistota `unknown`; původní signál a operation ID se
+nemění. Caller abort neuvolňuje obsazenou linku před EOF/chybou transportu.
+Projektový JSON a NDJSON klient zachovávají rozlišení a z neúplné odpovědi
+nevyrábějí potvrzený výsledek. Automatický retry ani zahození backend journalu
+se nezavádí. Úplný kontrakt, stale-export výjimka podle instrukce uživatele a
+99 cílených testů včetně skutečného Qt jsou v navazujícím auditním dokumentu.

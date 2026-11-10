@@ -1400,3 +1400,10 @@ Sdílené registry snapshoty adaptují existující `Administration.read_locked`
 a read-only autentizaci. Podpisová identita používá původní atomický bootstrap
 s explicitně neinicializujícím čtením; žádná rotace či jiný credential store.
 Revalidace účtu probíhá před doménovým dispatch po admission.
+
+Browser admission adaptuje stávající přesnou tabulku, Web Locks, AbortController
+a Response EOF drainer. Promise-tail frontu nahrazuje odstranitelné FIFO se
+stejnou celkovou kapacitou 64 a pětisekundovým pre-dispatch budgetem. Zachovává
+body/ID, rozlišuje not-started od unknown a nepřebírá backend recovery. Odmítnuty
+jsou timeout aktivního provideru v admission vrstvě, automatický resend a
+uvolnění aktivního vlastníka pouze podle zrušení calleru.

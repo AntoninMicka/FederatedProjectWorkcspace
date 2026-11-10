@@ -585,3 +585,71 @@ The full suite has not run; the wider HTTP ownership batch is not complete.
 These changes remain local and have not been deployed to Omnia in this turn.
 No source commit, push, Workspace acceptance or live end-to-end speed claim is
 inferred from the tests.
+
+## Bounded browser admission, continuation from `4e6dabb`
+
+The working tree was clean at the start of this slice. The saved canonical
+project/repository mapping and export revision were read back, but bridge state
+was `stale=true, waiting_review=true`, last synchronized at
+`2026-11-10T11:45:57.847Z`. The user explicitly instructed continuing this same
+HTTP repair from the available context because synchronization was failing.
+This does not mark the export fresh, complete review, activate a different
+Workspace task or change the authoritative plan.
+
+Browser admission now has one five-second elapsed budget covering both its
+page-local queue and origin-wide Web Lock acquisition. Capacity remains 64
+active/queued requests across the page, with the existing exact route/action/
+project classification. The deadline starts at the call, not after reaching
+the front of the queue. A monotonic dispatch-time check also refuses an expired
+entry when a hidden page's timer was throttled. Only the classification fields
+needed for project/action ownership are decoded; unrelated large request bodies
+are passed through without a redundant JSON parse.
+
+The former promise-tail chain is replaced by a removable FIFO. Expired/cancelled
+waiters leave the queue and free their counted capacity without retaining a
+chain behind an indefinitely open stream. Surviving entries retain order.
+Cancelling Web Lock acquisition uses its own AbortController; it never cancels
+a held lock or silently falls back to uncoordinated dispatch. A late callback
+checks the entry again and cannot resurrect an expired request.
+
+The uncertainty boundary is invoking the original fetch transport, not proof
+that the peer received any bytes. Before that call, timeout, cancellation,
+capacity rejection or lock acquisition failure report `phase=admission`,
+`outcome=not-started`, `dispatched=false`. This describes this attempt; an older
+attempt of the same operation might already exist remotely. Caller cancellation
+after transport invocation is conservatively `outcome=unknown`. Its error does
+not release an active owner: the existing response clone must reach EOF or
+transport failure. The five-second timer is cleared before fetch starts; it is
+not a provider execution limit or a total network deadline.
+
+No request body, operation/run ID, approval digest or original transport signal
+is rewritten. There is no automatic resend. Explicit retry retains the caller's
+original payload and operation identity. Caller cancellation reasons remain
+available as `cause`; the admission error itself carries the stage/outcome.
+`projectRequest` preserves this classification instead of converting all
+TimeoutError/AbortError values to unknown. Incomplete JSON/NDJSON responses stay
+unknown (status 408 in the client), so existing pending-run handling retains the
+original identity. Stream error frames preserve backend outcome/retry fields.
+No terminal stream result is fabricated from a partial body.
+
+Persistent formats and authorities remain unchanged under ADR 0050/0081. A
+cancelled queued attempt made no transport call. A disconnect after dispatch
+is not rollback; the backend journal, receipts, semantic validation and Git CAS
+remain the recovery authority. Browser ownership never substitutes for them.
+
+Validation: a final targeted run passed **99 tests** with real Qt/WebEngine
+enabled, covering admission, task streams, web/TLS, local API and project
+ownership. The new two-page Qt scenario held an origin Web Lock beyond the real
+five-second budget: the waiting write never reached the backend, diagnostics
+continued and an explicit retry sent its original ID exactly once. Virtual-clock
+checks cover repeated expiration of 63 waiters behind an open body, cancellation,
+late timer/lock callbacks, dispatch uncertainty, unchanged payloads and retained
+ownership after caller abort. Client checks cover incomplete JSON and missing
+terminal NDJSON results. Compilation and `git diff --check` passed. The full suite
+has not run; live Omnia performance/acceptance and total network deadlines remain
+separate. No deployment or source commit was performed in this slice.
+
+The final admission-boundary check passed all **11 admission tests**, including
+real Qt, after moving the full-queue rejection ahead of request-body decoding.
+This avoids expensive parsing for an attempt that cannot be admitted. These
+11 tests overlap the 99-test run; they are not an additional distinct total.

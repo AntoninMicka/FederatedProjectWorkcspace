@@ -2501,15 +2501,16 @@ async function projectRequest(path,body,timeout=60000){
   path==='/v1/chat/status' || path==='/v1/external/status' || path==='/v1/media/status' ||
   path==='/v1/google-drive/status' || path.startsWith('/v1/backend-metrics/');
  try{
-  let response;
+  let response,result;
   try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
-  }catch(error){if(error?.name==='TimeoutError' || error?.name==='AbortError' ||
+   result=await response.json();
+  }catch(error){if(error?.phase==='admission'||error?.phase==='transport')throw error;
+   if(response||error?.name==='TimeoutError' || error?.name==='AbortError' ||
      String(error?.message || '').toLowerCase().includes('signal timed out')){
-    const timeoutError=new Error('Čekání na odpověď vypršelo. Operace mohla na backendu doběhnout; obnovte stav a původní běh automaticky neopakujte.');
-    timeoutError.status=408;timeoutError.outcome='unknown';throw timeoutError;
+    const timeoutError=new Error('Odpověď nelze bezpečně potvrdit. Operace mohla na backendu doběhnout; obnovte stav a původní běh automaticky neopakujte.');
+    timeoutError.status=408;timeoutError.outcome='unknown';timeoutError.retry='same-operation';timeoutError.phase='response';timeoutError.cause=error;throw timeoutError;
    }throw error;}
-  const result=await response.json();
   if(path==='/v1/projects/open'&&result&&typeof result==='object'&&response.fpwAdmissionTiming)try{Object.defineProperty(result,'fpwAdmissionTiming',{value:response.fpwAdmissionTiming});}catch(error){}
   if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
    error.status=response.status;error.diagnostic=result.diagnostic;
@@ -5633,19 +5634,23 @@ function threadWritable(){return !activeThread || (activeThread.status==='active
 async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=>{}){
  const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
- if(!response.ok)throw Object.assign(new Error('Streamovaný požadavek byl odmítnut.'),{status:response.status});
+ if(!response.ok){let value;try{value=await response.json();}catch(error){throw Object.assign(new Error('Odpověď streamu nelze potvrdit; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});}
+  throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,phase:'response'});}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
- while(true){const part=await reader.read();buffer+=decoder.decode(part.value || new Uint8Array(),{stream:!part.done});
+ try{while(true){const part=await reader.read();buffer+=decoder.decode(part.value || new Uint8Array(),{stream:!part.done});
   let newline;while((newline=buffer.indexOf('\\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);
    if(!line)continue;const event=JSON.parse(line);
    if(event.type==='delta' && typeof event.delta==='string')onDelta(event.delta);
    else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
    else if(event.type==='deadline')onDeadline(event);
    else if(event.type==='result')result=event.result;
-   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status});
+   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status,outcome:event.outcome,retry:event.retry,phase:'response'});
    else throw new Error('Neplatná událost streamu.');}
   if(part.done)break;}
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
+ }catch(error){if(error.status!==undefined)throw error;
+  throw Object.assign(new Error('Stream skončil bez potvrzeného výsledku; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});
+ }finally{reader.releaseLock();}
 }
 async function externalStreamRequest(request,onDelta){
  return streamRequest('/v1/external/send-stream',request,onDelta);
