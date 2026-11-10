@@ -43,7 +43,7 @@ def reply_probe(handler):
             return handler.send_error(400)
         identifier(request['challenge'])
         service = handler.server.administration
-        with service.locked() as (_, _, _, node):
+        with service.read_current() as (_, _, _, node):
             signatures = MappingSignatures(service.root)
             identity = signatures.identity()
             payload = dict(schema_version=1, node_id=node['id'], challenge=request['challenge'],

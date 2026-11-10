@@ -4,7 +4,7 @@
 
 import json
 
-from spikes.http_admission_policy import ROUTE_LANES, PROJECT_ROUTES
+from spikes.http_admission_policy import ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES
 
 
 HTTP_UI_ADMISSION_JS = r'''
@@ -13,7 +13,10 @@ HTTP_UI_ADMISSION_JS = r'''
  const now=()=>globalThis.performance?.now?.()??Date.now();
  const routeLanes=Object.freeze(__FPW_ROUTE_LANES__);
  const projectFields=Object.freeze(__FPW_PROJECT_FIELDS__);
- function lane(path){
+ const actionLanes=Object.freeze(__FPW_ACTION_LANES__);
+ function lane(path,body){
+  const actions=Object.hasOwn(actionLanes,path)?actionLanes[path]:null;
+  if(actions&&typeof body?.action==='string'&&Object.hasOwn(actions,body.action))return actions[body.action];
   return Object.hasOwn(routeLanes,path)?routeLanes[path]:'application';
  }
  window.fetch=(input,options={})=>{
@@ -24,9 +27,10 @@ HTTP_UI_ADMISSION_JS = r'''
   const signal=options.signal||input?.signal;
   const aborted=()=>signal?.reason||new DOMException('Požadavek byl zrušen.','AbortError');
   if(signal?.aborted)return Promise.reject(aborted());
-  let key=lane(url.pathname+url.search);
+  let body;try{body=JSON.parse(options.body);}catch(error){}
+  let key=lane(url.pathname+url.search,body);
   if(key==='project'){
-   try{const body=JSON.parse(options.body),field=projectFields[url.pathname],scope=field?body[field]:body;
+   try{const field=projectFields[url.pathname],scope=field?body[field]:body;
     if(typeof scope?.project_id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.project_id))key+=':'+scope.project_id;
    }catch(error){}
   }
@@ -71,4 +75,5 @@ HTTP_UI_ADMISSION_JS = r'''
  };
 })();
 '''.replace('__FPW_ROUTE_LANES__', json.dumps(ROUTE_LANES, sort_keys=True)).replace(
-    '__FPW_PROJECT_FIELDS__', json.dumps(PROJECT_ROUTES, sort_keys=True))
+    '__FPW_PROJECT_FIELDS__', json.dumps(PROJECT_ROUTES, sort_keys=True)).replace(
+    '__FPW_ACTION_LANES__', json.dumps(ACTION_LANES, sort_keys=True))

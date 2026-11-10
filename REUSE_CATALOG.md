@@ -1388,3 +1388,15 @@ provider timeoutů bez auditu jejich recovery. Viz docs/http-blocking-audit.md.
 Konfigurace ChatService adaptuje původní RLock přes stejný bounded ownership
 kontext; zachovává reentranci a existující credential/reset journal. Nezavádí
 nový konfigurační writer ani současný reset během chráněné konfigurace.
+
+Providerová HTTP skupina adaptuje původní bounded server a přesnou společnou
+server/browser admission tabulku. Zachovává společné pořadí streamů,
+konfigurace, recovery a souvisejících lifecycle operací; vlastníky Git/SQLite
+nenahrazuje. Administrace `list` používá vlastní agregující linku nad původním
+registry flockem a sync stores. Startup ověřuje úplnost klasifikace registrovaných
+rout. Odmítnuto je odebrání pouze tří stream zámků při ponechání jejich
+konkurujících mutací bez společného vlastníka, nový executor a navýšení workerů.
+Sdílené registry snapshoty adaptují existující `Administration.read_locked`
+a read-only autentizaci. Podpisová identita používá původní atomický bootstrap
+s explicitně neinicializujícím čtením; žádná rotace či jiný credential store.
+Revalidace účtu probíhá před doménovým dispatch po admission.

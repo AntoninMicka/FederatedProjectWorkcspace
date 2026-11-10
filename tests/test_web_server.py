@@ -30,6 +30,42 @@ from tests.test_notebooklm_import import valid_members
 
 
 class WebTests(unittest.TestCase):
+    def test_account_revoked_between_authentication_and_admission_cannot_dispatch(self):
+        from spikes.web_server import WebHandler
+        _, raw, _ = self.request(path='/v1/administration',body='{"action":"list"}')
+        state=json.loads(raw)
+        code, raw, _ = self.request(path='/v1/administration',body=json.dumps({
+            'action':'create-user','expected_commit':state['commit_id'],
+            'name':'Revoked','node_role':'node-admin'}))
+        self.assertEqual(code,200,raw);state=json.loads(raw)
+        user,key=state['users'][0],state['access_key']
+        original=WebHandler.authorized
+        def revoke_after_auth(handler, auth):
+            allowed=original(handler,auth)
+            if allowed and handler.actor.get('id')==user['id']:
+                self.server.administration.request(
+                    {'id':None,'node_role':'federation-admin','memberships':{}},
+                    {'action':'update-user','expected_commit':state['commit_id'],
+                     'user_id':user['id'],'active':False,'node_role':'member','memberships':{}})
+            return allowed
+        with patch.object(WebHandler,'authorized',revoke_after_auth):
+            code, raw, _ = self.request(path='/v1/administration',body='{"action":"list"}',
+                headers={'Authorization':'Bearer '+key})
+        self.assertEqual(code,401,raw)
+
+    def test_account_authentication_shares_registry_reader_on_other_routes(self):
+        code, raw, _ = self.request(path='/v1/administration',body='{"action":"list"}')
+        self.assertEqual(code,200,raw);state=json.loads(raw)
+        code, raw, _ = self.request(path='/v1/administration',body=json.dumps({
+            'action':'create-user','expected_commit':state['commit_id'],
+            'name':'Reader','node_role':'member'}))
+        self.assertEqual(code,200,raw);key=json.loads(raw)['access_key']
+        with self.server.administration.read_locked():
+            code, raw, _ = self.request(path='/v1/session',body='{}',
+                headers={'Authorization':'Bearer '+key})
+            self.assertEqual(code,200,raw)
+            self.assertEqual(json.loads(raw)['node_role'],'member')
+
     def test_slow_content_receive_does_not_own_ui_application_or_presenter(self):
         import time
         from spikes.web_server import WebHandler
@@ -63,6 +99,7 @@ class WebTests(unittest.TestCase):
                                 ('POST', '/v1/presentation/public', '{}'),
                                 ('POST', '/v1/presentation/control', '{"action":"blackout"}'),
                                 ('POST', '/v1/node-telemetry/status', '{}'),
+                                ('POST', '/v1/administration', '{"action":"list"}'),
                                 ('POST', '/v1/diagnostics/status', '{}')):
                             code, raw, _ = self.request(method=method, path=path, body=body)
                             self.assertEqual(code, 200, (path, raw))
@@ -1701,7 +1738,7 @@ def result(value):
  elif phase==1:
   phase=2;run("document.querySelector('.project-card').click();")
  elif phase==2:
-  phase=3;run("(()=>{document.querySelector('#tools-tab').click();document.querySelector('#tools-main-tab').click();const toolbar=document.querySelector('.sidebar-tool-primary-actions'),list=document.querySelector('#sidebar-tool-list'),input=document.querySelector('#julia-import-file');if(!toolbar||list.children.length!==0||!document.querySelector('#sidebar-tools-status').textContent.includes('Počet nástrojů: 0')||!document.querySelector('#julia-editor-new')){juliaToolsStatus.textContent='FAIL: Julia tool evidence unavailable';return;}const transfer=new DataTransfer();transfer.items.add(new File(['# imported smoke\\nvalue = 7\\n'],'smoke-model.jl',{type:'text/x-julia'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()")
+  phase=3;run("(async()=>{await navigateSidebarTab(document.querySelector('#tools-tab'));await navigateMainTab(document.querySelector('#tools-main-tab'));const toolbar=document.querySelector('.sidebar-tool-primary-actions'),list=document.querySelector('#sidebar-tool-list'),input=document.querySelector('#julia-import-file');if(!toolbar||list.children.length!==0||!document.querySelector('#sidebar-tools-status').textContent.includes('Počet nástrojů: 0')||!document.querySelector('#julia-editor-new')){juliaToolsStatus.textContent='FAIL: Julia tool evidence unavailable';return;}const transfer=new DataTransfer();transfer.items.add(new File(['# imported smoke\\nvalue = 7\\n'],'smoke-model.jl',{type:'text/x-julia'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()")
  elif phase==3:
   phase=4;run("(()=>{const root=document.querySelector('#julia-source-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]'),textarea=root.querySelector('[data-raw-content]');if(juliaEditor.elements.title.value!=='smoke-model'||!textarea.value.includes('imported smoke')||!juliaToolsStatus.textContent.includes('lokálním konceptu')){juliaEditorStatus.textContent='FAIL: Julia import draft unavailable';return;}if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor je Julia')||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia file help unavailable';return;}select.value='julia.function';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Julia funkce'||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia pattern help unavailable';return;}textarea.setSelectionRange(textarea.value.length,textarea.value.length);root.querySelector('[data-raw-insert]').click();if(!textarea.value.includes('function model')){juliaEditorStatus.textContent='FAIL: Julia pattern insertion unavailable';return;}root.querySelector('[data-raw-validate]').click();})()")
  elif phase==4:
@@ -1716,7 +1753,7 @@ def poll():
  checks={
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
- 2:"!document.querySelector('#project-view').hidden&&document.querySelector('#sidebar-tools-status').textContent.startsWith('Počet nástrojů:')?'ready':'waiting'",
+ 2:"!document.querySelector('#project-view').hidden?'ready':'waiting'",
  3:"(()=>{if(document.querySelector('#julia-source-raw-widget [data-raw-pattern]')?.querySelector('option[value=\\\"julia.function\\\"]')&&!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('imported smoke'))return'ready';const s=juliaEditorStatus.textContent||juliaToolsStatus.textContent;return s&&s.startsWith('FAIL:')?s:'waiting'})()",
  4:"(()=>{const failure=juliaEditorStatus.textContent;if(failure.startsWith('FAIL:'))return failure;return document.querySelector('#julia-source-raw-widget [data-raw-status]').textContent.startsWith('Obsah je validní')?'ready':'waiting'})()",
  5:"!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('function model')?'ready':'FAIL: Julia draft was discarded without confirmation'",
@@ -1797,13 +1834,14 @@ def result(value):
  if phase==0: phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
  elif phase==1: phase=2;run("[...document.querySelectorAll('#sidebar-project-list button')].find(b=>b.dataset.id==="+json.dumps(project)+").click();")
  elif phase==2: phase=3;run("document.querySelector('#plan-tab').click();")
- elif phase==3: phase=4;run("document.querySelector('#sidebar-plan-list button').click();")
+ elif phase==3: phase=4;run("[...document.querySelectorAll('#sidebar-plan-list button')].find(button=>button.textContent.startsWith('Rozhraní (')).click();")
  elif phase==4: phase=5;run("document.querySelector('.roadmap-node').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));")
  elif phase==5: finish('project plan smoke: main graph, subgraph and keyboard detail OK',0)
 def poll():
  global ticks
  ticks+=1
- if ticks>350: finish('project plan timeout at '+str(phase));return
+ if ticks>350:
+  view.page().runJavaScript("JSON.stringify({selection:taskPlanSelection,status:document.querySelector('#plan-status').textContent,nodes:document.querySelectorAll('.roadmap-node').length,head:activeProject?.head,queue:taskQueueView?.expected_head})",lambda value:finish('project plan timeout at '+str(phase)+' '+str(value)));return
  checks={0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('#sidebar-project-list button')?'ready':'waiting'",2:"document.querySelector('#project-title').textContent==='Plánovaný projekt'&&!document.querySelector('#project-view').hidden?'ready':'waiting'",3:"!document.querySelector('#plan-panel').hidden&&document.querySelectorAll('.roadmap-node').length===3?'ready':'waiting'",4:"document.querySelectorAll('.roadmap-node').length===2?'ready':'waiting'",5:"document.querySelector('#plan-detail h3').textContent.includes('UI-01')||document.querySelector('#plan-detail h3').textContent.includes('DOC-01')?'ready':'waiting'"}
  view.page().runJavaScript(checks[phase],result)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100)

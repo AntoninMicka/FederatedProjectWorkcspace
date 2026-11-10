@@ -12,6 +12,30 @@ from spikes.project_creation import ProjectCreation
 
 
 class AdministrationTests(unittest.TestCase):
+    def test_http_registry_reads_share_owner_without_bootstrap_or_identity_creation(self):
+        from spikes.request_ownership import bounded_project_requests
+        self.service.bootstrap()
+        before = self.state()
+        identity_files = {p:p.read_bytes() for p in (
+            self.service.root/'federation-key.pem', self.service.root/'federation-key.identity')}
+        with self.service.read_locked(), bounded_project_requests():
+            with patch.object(self.service, 'locked', side_effect=AssertionError('exclusive bootstrap')):
+                self.assertEqual(self.state(), before)
+                pid = json.loads(self.node.read_text())['projects'][0]['project_id']
+                self.assertIsNone(self.service.project_replication(pid))
+                from spikes.project_chat_sync import active_mapping_count
+                self.assertEqual(active_mapping_count(self.service, str(uuid4()), pid), 0)
+                from spikes.administration import content_authority
+                with self.assertRaises(AccessDenied):
+                    content_authority(self.service, str(uuid4()), pid, 'refs/heads/main')
+        self.assertEqual({p:p.read_bytes() for p in identity_files}, identity_files)
+        marker = self.service.root / 'federation-key.identity'
+        marker.unlink()
+        with bounded_project_requests():
+            with self.assertRaisesRegex(ValueError, 'startup initialization'):
+                self.state()
+        self.assertFalse(marker.exists(), 'Read-only listing recreated identity')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name); self.node = self.root / 'node.json'

@@ -10,6 +10,36 @@ from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 
 
 class UIAdmissionTests(unittest.TestCase):
+    def test_stream_queue_does_not_hold_settings_and_preserves_provider_order(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path,options)=>{const body=JSON.parse(options.body),key=path+':'+(body.action||'');sent.push(key);return new Response(new ReadableStream({start(c){controllers.set(key,c);}}));};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const post=(path,body={})=>fetch(path,{method:'POST',body:JSON.stringify(body)});
+ const stream=await post('/v1/chat/send-stream');
+ const mutation=post('/v1/administration',{action:'create-user'});
+ const recovery=post('/v1/chat/status');
+ const settings=await post('/v1/administration',{action:'list'});
+ const independent=await post('/v1/user-profile',{action:'load'});
+ const control=await post('/v1/tasks/run-control',{action:'stop'});
+ assert(!sent.includes('/v1/administration:create-user'),'Mutation bypassed active stream');
+ assert(!sent.includes('/v1/chat/status:'),'Recovery bypassed active stream');
+ for(const key of ['/v1/administration:list','/v1/user-profile:load','/v1/tasks/run-control:stop'])assert(sent.includes(key),'Independent request held behind stream: '+key);
+ const end=key=>{const c=controllers.get(key);c.enqueue(new TextEncoder().encode('{}'));c.close();};
+ end('/v1/chat/send-stream:');await stream.text();
+ const changed=await mutation;assert(!sent.includes('/v1/chat/status:'));end('/v1/administration:create-user');await changed.text();
+ const recovered=await recovery;end('/v1/chat/status:');await recovered.text();
+ end('/v1/administration:list');end('/v1/user-profile:load');end('/v1/tasks/run-control:stop');
+ await Promise.all([settings.text(),independent.text(),control.text()]);console.log('provider ordering OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('provider ordering OK', result.stdout)
+
     def test_project_queues_share_nested_scope_and_bound_total_waiters(self):
         script = r'''
 const assert=require('node:assert/strict');
@@ -51,10 +81,10 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
 from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 from spikes.local_api import Handler,running_api
-entered=threading.Event();finished=threading.Event();catalog_during=[]
+entered=threading.Event();finished=threading.Event();catalog_during=[];admin_during=[]
 class Fixture(Handler):
  reserve_ui_worker=True
- post_paths={'/v1/chat/test','/v1/chat/send','/v1/projects'}
+ post_paths={'/v1/chat/test','/v1/chat/send','/v1/projects','/v1/administration'}
  def _do_GET(self):
   raw=b'<!doctype html><title>Admission fixture</title>'
   self.send_response(200);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
@@ -62,6 +92,7 @@ class Fixture(Handler):
   if self.path=='/v1/chat/test':
    entered.set();time.sleep(1.2);finished.set()
   elif self.path=='/v1/projects':catalog_during.append(not finished.is_set())
+  elif self.path=='/v1/administration':admin_during.append(not finished.is_set())
   self.reply(200,{'ok':True})
 app=QApplication([])
 with running_api('http',handler=Fixture) as server:
@@ -78,6 +109,7 @@ with running_api('http',handler=Fixture) as server:
  def start_other():
   if not entered.is_set():return QTimer.singleShot(10,start_other)
   pages[1].runJavaScript("for(const path of ['/v1/chat/send','/v1/projects'])fetch(path,"+options+").then(r=>results.push([path,r.status])).catch(()=>results.push(['error',0]));")
+  pages[1].runJavaScript("fetch('/v1/administration',{..."+options+",body:JSON.stringify({action:'list'})}).then(r=>results.push(['/v1/administration',r.status]));")
  def inspect():
   global started,checking
   if len(loaded)==2 and not started:
@@ -91,8 +123,8 @@ with running_api('http',handler=Fixture) as server:
    def second(raw):
     global checking
     checking=False;b=json.loads(raw)
-    if len(a)!=1 or len(b)!=2:return
-    if a!=[['slow',200]] or sorted(b)!=[['/v1/chat/send',200],['/v1/projects',200]] or catalog_during!=[True]:
+    if len(a)!=1 or len(b)!=3:return
+    if a!=[['slow',200]] or sorted(b)!=[['/v1/administration',200],['/v1/chat/send',200],['/v1/projects',200]] or catalog_during!=[True] or admin_during!=[True]:
      print('ownership failure',a,b,catalog_during,flush=True);return app.exit(5)
     print('real two-page Web Locks admission verified',flush=True);app.exit(0)
    pages[1].runJavaScript('JSON.stringify(results)',0,second)

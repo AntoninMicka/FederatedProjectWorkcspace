@@ -61,7 +61,7 @@ def content_policy_allows(scope, ref):
 def content_authority(service, peer_id, project_id, ref):
     """Return the current bounded content-sharing authority for one branch."""
     identifier(peer_id); identifier(project_id)
-    with service.locked() as (_, state, _, _):
+    with service.read_current() as (_, state, _, _):
         peer = next((row for row in state['peers'] if row['id'] == peer_id), None)
         if (not peer or peer['trust'] != 'approved'
                 or peer['sharing_level'] not in {'same-team', 'same-company'}):
@@ -164,7 +164,7 @@ class Administration:
             yield git, state, commit, node
 
     @contextmanager
-    def read_locked(self):
+    def read_locked(self, *, snapshot=False):
         """Read a current registry without bootstrap, migration or file creation."""
         if self.node != self.node.resolve():
             raise ValueError('Node path contains symlinks')
@@ -186,7 +186,20 @@ class Administration:
             self.validate(state, node['id'])
             if state['schema_version'] != 6:
                 raise ValueError('Registry requires startup migration')
-            yield state
+            yield (git, state, head, node) if snapshot else state
+
+    def bootstrap(self):
+        """Prepare registry and signing identity before concurrent readers."""
+        with self.locked():
+            MappingSignatures(self.root).identity()
+
+    @contextmanager
+    def read_current(self):
+        """Shared initialized snapshot in requests; retain native bootstrap."""
+        from spikes.request_ownership import bounded_project_wait
+        owner = self.read_locked(snapshot=True) if bounded_project_wait.get() else self.locked()
+        with owner as snapshot:
+            yield snapshot
 
     def validate(self, state, node_id):
         version = state.get('schema_version')
@@ -377,7 +390,7 @@ class Administration:
             return False
 
     def mapped_actions(self, user_id, mapping_id, manifest, entity_id, local_actions):
-        with self.locked() as (_, state, _, _):
+        with self.read_current() as (_, state, _, _):
             mapping = next((m for m in state['mappings'] if m['spec']['id'] == mapping_id), None)
             if not mapping or not self.mapping_active(state, mapping):
                 return set()
@@ -440,7 +453,7 @@ class Administration:
         identifier(replication_id)
         if role not in {'primary', 'read-only-replica'}:
             raise ValueError('Invalid replication role')
-        with self.locked() as (_, state, commit, _):
+        with self.read_current() as (_, state, commit, _):
             replication = next((row for row in state['replications']
                                 if row['spec']['id'] == replication_id), None)
             if (not replication or not replication['enabled']
@@ -460,7 +473,7 @@ class Administration:
     def project_replication(self, project_id):
         """Return this node's durable project role, including inactive grants."""
         identifier(project_id)
-        with self.locked() as (_, state, commit, _):
+        with self.read_current() as (_, state, commit, _):
             replication = next((row for row in state['replications']
                                 if row['spec']['project_id'] == project_id
                                 and not row['revocation']), None)
@@ -760,7 +773,7 @@ class Administration:
         if not auth.startswith('Bearer ') or len(auth) > 256 or not self.node.exists():
             return None
         digest = hashlib.sha256(auth[7:].encode()).hexdigest()
-        with self.locked() as (_, state, _, _):
+        with self.read_current() as (_, state, _, _):
             path = self.root / 'credentials.sqlite'
             if not path.exists():
                 return None
@@ -820,6 +833,10 @@ class Administration:
         action = request.get('action')
         if not isinstance(action, str):
             raise ValueError('Expected action name')
+        from spikes.request_ownership import bounded_project_wait
+        if action == 'list' and set(request) == {'action'} and bounded_project_wait.get():
+            with self.read_locked(snapshot=True) as (_, state, commit, _):
+                return self.public(state, commit, actor)
         with self.locked() as (git, state, commit, node):
             if action == 'list' and set(request) == {'action'}:
                 return self.public(state, commit, actor)
@@ -1041,6 +1058,7 @@ class Administration:
                 replication['enabled'] = False
 
     def public(self, state, commit, actor):
+        from spikes.request_ownership import bounded_project_wait
         users = [{k: v for k, v in u.items() if k != 'credential_ref'} for u in state['users']]
         if self.deployment == 'desktop':
             users = [self.local_account(state, ProjectCreation(self.node).author_id())]
@@ -1050,7 +1068,8 @@ class Administration:
                 'peers': state['peers'] if self.is_admin(actor) else [],
                 'project_shares': state.get('project_shares', [])
                 if self.is_admin(actor) else [],
-                'mapping_identity': MappingSignatures(self.root).identity() if self.is_admin(actor) else None,
+                'mapping_identity': MappingSignatures(self.root).identity(
+                    initialize=not bounded_project_wait.get()) if self.is_admin(actor) else None,
                 'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if self.is_admin(actor) else [],
                 'replications': [dict(
                     replication,

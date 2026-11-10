@@ -157,7 +157,7 @@ def validate_catalog(value):
 
 def _authority(service, peer_id):
     identifier(peer_id)
-    with service.locked() as (_, state, commit, _):
+    with service.read_current() as (_, state, commit, _):
         peer = next((item for item in state['peers'] if item['id'] == peer_id), None)
         if (not peer or peer['trust'] != 'approved'
                 or peer['sharing_level'] == 'unspecified'):

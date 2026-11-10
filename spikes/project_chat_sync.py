@@ -26,7 +26,7 @@ def chat_root(node):
 
 def _mapping_rows(service, peer_id, project_id):
     """Return active exact local->remote user bindings for one shared project."""
-    with service.locked() as (_, state, _, _):
+    with service.read_current() as (_, state, _, _):
         local_node_id = state['node_id']
         rows = []
         for mapping in state['mappings']:

@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import BoundedHTTPServer
-from spikes.http_admission_policy import PROJECT_ROUTES
+from spikes.http_admission_policy import validate_route_ownership
 from spikes.chat_service import ChatService
 from spikes.project_creation import ProjectCreation
 from spikes.project_creation_actions import ProjectCreationActions
@@ -154,13 +154,7 @@ class WebHandler(DesktopHandler):
             self.actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
             return True
         try:
-            operation = (self.server.administration.authenticate_readonly
-                         if self.path in PROJECT_ROUTES or self.path in {'/v1/node-telemetry/status', '/v1/chat/availability',
-                                          '/v1/diagnostics/status', '/v1/projects',
-                                          '/v1/presentations/use', '/v1/presentation/status',
-                                          '/v1/presentation/control', '/v1/presentation/public'}
-                         else self.server.administration.authenticate)
-            self.actor = operation(auth)
+            self.actor = self.server.administration.authenticate_readonly(auth)
             return self.actor is not None
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
             self.actor = None
@@ -216,6 +210,14 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        # Admission may follow body reading or waiting for another owner.
+        # Bind domain authorization to the current account at dispatch time.
+        if getattr(self, 'actor', {}).get('id') is not None:
+            actor = self.server.administration.authenticate_readonly(
+                self.single('Authorization') or '')
+            if actor is None:
+                return self.send_error(401)
+            self.actor = actor
         if self.path == '/v1/diagnostics/status':
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -713,6 +715,7 @@ def validate_hostname(hostname):
 
 
 def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
+    validate_route_ownership(WebHandler.post_paths)
     network = ipaddress.ip_network(lan)
     if network.version != 4 or network.prefixlen < 8 or not network.is_private:
         raise ValueError('Specify a private IPv4 LAN subnet')
@@ -726,8 +729,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
         ProjectDeletion(node).recover()
     administration = Administration(node)
     # Bootstrap/migrate before binding a listener or authenticating readers.
-    with administration.locked():
-        pass
+    administration.bootstrap()
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(cert, key)

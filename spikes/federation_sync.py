@@ -312,7 +312,7 @@ def decode_body(body):
 
 def _authority(service, peer_id):
     identifier(peer_id)
-    with service.locked() as (_, state, commit, _):
+    with service.read_current() as (_, state, commit, _):
         peer = next((row for row in state['peers'] if row['id'] == peer_id), None)
         if (not peer or peer['trust'] != 'approved'
                 or peer['sharing_level'] not in {'same-team', 'same-company'}):

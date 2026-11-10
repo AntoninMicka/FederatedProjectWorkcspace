@@ -134,21 +134,44 @@ class StreamTaskTests(unittest.TestCase):
             with self.assertRaises(UnknownRun):service.task_route(request,on_delta=lambda _:None,on_status=lambda _:None,control=control)
         self.assertEqual(head,self.git.head())
 
-    def test_http_stop_bypasses_busy_application_lane_and_has_terminal_stream_event(self):
+    def test_http_stream_keeps_settings_available_serializes_mutations_and_can_stop(self):
         entered=threading.Event()
         def blocked(binding,raw,delta,status,control):
             entered.set()
-            deadline=time.monotonic()+3
+            deadline=time.monotonic()+10
             while control.reason is None and time.monotonic()<deadline:time.sleep(.005)
             control.check()
         service,request=self.stream_service(blocked)
         driver=local_api.LocalAPITests();responses=[]
-        with running_api('http',handler=DesktopHandler) as server:
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.administration import Administration
+        from spikes.user_profile import UserProfile
+        with running_api('http',handler=DesktopManagementHandler) as server:
             server.chat_service=service;server.projects=service.projects
+            server.user_profile=UserProfile(service.node_path)
+            server.administration=Administration(service.node_path,deployment='desktop')
+            actor={'id':None,'node_role':'federation-admin','memberships':{}}
+            before=server.administration.request(actor,{'action':'list'})
             thread=threading.Thread(target=lambda:responses.append(driver.request(server,path='/v1/tasks/route-stream',body=json.dumps(request).encode())))
             thread.start()
             try:
                 self.assertTrue(entered.wait(2))
+                self.assertTrue(server.provider_lane.locked())
+                self.assertFalse(server.application_lane.locked())
+                for path,body in [('/v1/counter',{'action':'increment'}),
+                                  ('/v1/user-profile',{'action':'load'}),
+                                  ('/v1/administration',{'action':'list'})]:
+                    response=driver.request(server,path=path,body=json.dumps(body).encode())
+                    self.assertIn(b' 200 ',response.split(b'\r\n',1)[0],response)
+                    self.assertTrue(thread.is_alive())
+                for path,body in [('/v1/chat/status',{}),
+                                  ('/v1/backend-catalog/reset',{'backend_id':'ollama','confirmed':True}),
+                                  ('/v1/administration',{'action':'create-user','name':'Concurrent',
+                                    'node_role':'member','expected_commit':before['commit_id']})]:
+                    response=driver.request(server,path=path,body=json.dumps(body).encode())
+                    self.assertIn(b' 503 ',response.split(b'\r\n',1)[0],response)
+                after=server.administration.request(actor,{'action':'list'})
+                self.assertEqual(after['commit_id'],before['commit_id'])
                 response=driver.request(server,path='/v1/tasks/run-control',body=json.dumps(dict(project_id=ENTITY,run_id=request['run_id'],action='stop')).encode())
                 self.assertIn(b' 200 ',response.split(b'\r\n',1)[0])
             finally:

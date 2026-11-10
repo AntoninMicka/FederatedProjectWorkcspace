@@ -22,6 +22,9 @@ or accept the currently open MON-08 work.
 
 ## Ownership inventory and implemented boundary
 
+This first inventory describes the initial slice. Later sections record the
+project, bounded-resource and provider-domain follow-ups that supersede it.
+
 The exact route table in
 [`http_admission_policy.py`](../spikes/http_admission_policy.py) is shared by
 HTTP handlers and the generated browser admission script. Query variants and
@@ -464,3 +467,121 @@ opening, restore, commit, lost response and same-ID retry all completed through
 the actual browser admission wrapper and native API. The project-switch Qt
 scenario also passed. `git diff --check` and compilation passed. The full suite
 has not run; there is no claim of completed stage A or live Omnia acceptance.
+
+## Provider ownership and administration listing, 10 November continuation
+
+Source baseline `4b50226` on the same branch had a clean working tree. The
+canonical project/repository/export mapping was verified again; bridge state
+was fresh at `2026-11-10T10:16:07.359Z`. This is continued implementation of the
+user's HTTP repair, not acceptance or an authoritative planning change.
+
+The exact policy now classifies all 258 registered desktop/management/web JSON
+routes, plus the four existing peer protocol paths. Of the registered routes,
+136 retain a common provider owner, 86 retain application ownership, 24 use
+project ownership and the other 12 keep existing independent domains. The
+provider owner includes chat/task/external streams and their real conflicts:
+backend configuration/reset/catalogs, chat lifecycle recovery and assignment,
+workflow/autonomy/summary/extraction/media/CMS, and destructive project/node
+administration. This preserves their previous HTTP ordering instead of allowing
+configuration or lifecycle recovery to race an in-flight run. Google Drive and
+project creation/repair/deletion remain conservatively in this domain until a
+finer audit of shared lifecycle state. Provider capacity is one, with no
+additional workers, detached socket writer, retry or second persistent writer.
+
+The other application owners retain their existing serialization and native
+project/SQLite/flock contracts: monitoring/collection/RSS, Julia, source/IDE
+transfer and planning, presentation documents and node preferences. They no
+longer wait behind a provider stream. Monitoring's frozen binding reads and
+native scheduler already run outside HTTP serialization; their own persistence
+and authority checks remain required and are not replaced by a route lane.
+
+`/v1/administration` with the exact action `list` gets a node-status owner after
+authentication and bounded body parsing. Its aggregate can initialize stores and
+record interrupted sync status, so it is not called a pure read. The persistent
+administration flock and separate sync/catalog stores still own those effects.
+Every mutation, malformed or unknown action keeps provider ownership. Browser
+classification reads the same exact action map; thus listing is not queued behind
+stream EOF by origin-wide Web Locks. Backend configuration/recovery intentionally
+remain serialized with the provider, not classified as independent reads.
+
+The three streams also acquire HTTP ownership after authentication and bounded
+body parsing. Web authentication uses the existing read-only registry path.
+Diagnostics add a project UUID only when it is a canonical valid declared value;
+no payload, token or arbitrary URL is recorded. Task stop/extend keeps its
+existing availability owner and can interrupt the provider socket while the
+provider lane is held.
+
+Both production entrypoints validate the registered route inventory before
+serving. A newly registered JSON route without an exact classification fails
+startup; it cannot silently run alongside the provider through an unreviewed
+fallback. Unknown incoming URLs/query variants still fail normal route/security
+validation and never enter domain dispatch.
+
+The persistent crash boundaries remain ADR 0003/0050/0081 and the existing run
+journals: pre-admission refusal does not create a run; dispatch uncertainty keeps
+its original run ID and is not an automatic retry; shutdown can still end a run
+as a crash. Existing disconnect, cancellation and terminal NDJSON error paths
+are preserved. This does not complete the remaining SQLite, browser elapsed-time,
+network deadline or shared application-domain audits.
+
+### Registry read ownership found by the real browser checks
+
+The first broad real-Qt run exposed a real collision: authentication and project
+role lookups still used exclusive bootstrap-capable registry reads while the
+new node-status aggregate ran independently. This could make ordinary opening
+return `resource busy`. Web account authentication now always uses the existing
+read-only registry reader; HTTP registry listing and project replication-role
+lookups use the same shared snapshot, carrying the exact registry commit under
+the shared lock. Native callers outside bounded request context keep their
+previous bootstrap/migration behavior. Account credentials are checked again at
+domain dispatch after body parsing/admission; an account revoked during that
+interval cannot continue with the cached pre-admission actor.
+
+Startup now prepares the existing federation signing identity under the registry
+owner before accepting readers. It uses the same atomic private-key/public-marker
+creation as before, not key rotation. Existing bytes and fingerprints must match.
+A crash before key publication leaves no published identity; after key publication,
+startup derives the marker from that same key. A missing private key with an
+existing marker or a mismatched marker fails closed. HTTP listing uses explicit
+noninitializing identity reads and never recreates a missing identity or marker.
+There is no new persistent format, credential reset or live identity change in
+this source repair.
+
+Two remaining Qt navigation failures were reproduced identically in an isolated
+archive of unchanged `4b50226`: IDE clicked a hidden settings item before async
+settings navigation finished; Julia waited for an eagerly loaded tool catalog
+before navigating to the now on-demand tools tab. The test flows now wait for
+those navigation boundaries. The native IDE install/map/download/revoke, Julia
+pattern/draft and project-plan browser checks subsequently passed together.
+
+The shared request snapshot is also reused by mapping-action and active
+replication checks, chat mapping counts, catalog/content authority snapshots and
+probe identity reads. This prevents the settings aggregate from re-entering an
+exclusive bootstrap path through one of its helper queries. Native readers
+outside bounded request/coordinator context intentionally keep the old bootstrap
+contract; background owners not using that context remain part of the later audit.
+
+### Final verification of the provider slice
+
+A single final targeted run passed **293 tests**, with `M0_DESKTOP_TEST=1`,
+including real Qt/WebEngine, HTTP/TLS, browser Web Locks, task streams,
+project ownership, chat/backend configuration, administration/signing identity,
+signed content sync and replication. The additional direct catalog/network-probe
+run passed **11 tests**. The selected modules were `test_local_api`,
+`test_http_ui_admission`, `test_task_stream`, `test_web_server`,
+`test_project_http_ownership`, `test_chat_service`, `test_backend_catalog`,
+`test_administration`, `test_federation_accounts`, `test_federation_sync`,
+`test_project_replication`, then `test_federation_catalog` and
+`test_desktop_network`.
+
+The earlier intermittent project-plan Qt failure was traced to selecting the
+first random artifact UUID and expecting the two-node “Rozhraní” subgraph even
+when “Jádro” was first. The captured trace showed the one-node “Jádro” selection
+and a matching queue/HEAD, not a lost navigation. Selecting the intended named
+subgraph passed three consecutive native Qt runs and the final regression.
+
+Compilation of the changed runtime modules and `git diff --check` passed.
+The full suite has not run; the wider HTTP ownership batch is not complete.
+These changes remain local and have not been deployed to Omnia in this turn.
+No source commit, push, Workspace acceptance or live end-to-end speed claim is
+inferred from the tests.

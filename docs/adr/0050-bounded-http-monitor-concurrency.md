@@ -365,3 +365,40 @@ neznamená dokončení auditu všech procesních zámků a timeoutů.
 stávající RLock přes bounded HTTP acquisition (100 ms). Reentrance a původní
 nativní chování se zachovávají. Tím se omezuje čekání na vlastníka; neurčuje se
 tím celkový čas jeho chráněné práce a nepovoluje souběžný dispatch/reset.
+
+### Providerová linka a načítání administrace
+
+Navazující přesná klasifikace odděluje providerovou skupinu od aplikační linky.
+Tři streamy sdílejí kapacitu jedna s konfigurací/resetem backendů, chat lifecycle
+recovery, souvisejícími workflow službami a destruktivními projektovými/node
+operacemi. Jejich původní pořadí se zachovává. Ostatní auditované aplikační
+operace používají své dosavadní nativní vlastníky a mohou pokračovat vedle
+providerového čekání. Worker pool ani persistentní protokol se nemění.
+
+Přesná akce `list` na `/v1/administration` dostává samostatnou node-status linku
+po autentizaci a bounded parsování JSON. Není to obecné read-only vyjmutí;
+agregace může zapisovat synchronizační status a inicializovat schéma pod
+existujícími nativními zámky. Mutace a neznámé akce zůstávají v providerové
+skupině. Server i browser používají tutéž tabulku akcí. Streamy také získávají
+linku po autentizaci/těle; stop/extend zůstává nezávislý.
+
+Tabulka obsahuje všech 258 registrovaných JSON rout a čtyři peer protokoly.
+Produkční desktop/web startup odmítne novou registrovanou JSON routu bez
+klasifikace. Podrobné vlastnictví, omezení a crash kontrakty jsou v navazující
+sekci `docs/http-concurrency-ownership.md`; nejde o dokončení celé náhrady.
+
+Reálné browser scénáře navíc odhalily kolizi původních výlučných registry čtení.
+Web autentizace nyní vždy používá stávající read-only cestu; HTTP listing a
+projektová replikační role čtou sdílený snapshot s přesným registry commitem.
+Nativní volání mimo bounded kontext zachovává bootstrap. Startup připraví také
+stávající podpisovou identitu; HTTP čtení její chybějící klíč/marker neinicializuje.
+Původní atomické publikování key/marker a fail-closed integrita se nemění.
+Účet se po admission znovu ověří před doménovým RBAC, aby odvolání během čekání
+nepoužilo starý actor snapshot. Viz podrobné crash boundaries v auditním dokumentu.
+
+Stejný sdílený snapshot v bounded kontextu používají také kontrola mapovaných
+akcí, aktivní replikace, počty chatových mapování, federační katalog/content
+oprávnění a identita probe odpovědi. Čtecí agregace tím nevstupuje zpět do
+výlučného bootstrapu přes pomocný dotaz. Poslední cílený běh prošel 293 testy
+včetně skutečného Qt; přímý katalog/probe dalších 11. Plná sada a širší audit
+nejsou dokončené. Výsledek není nová fyzická akceptace Omnie.

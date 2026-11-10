@@ -16,6 +16,7 @@ from spikes.desktop_management import ASSETS, DesktopManagementHandler as Deskto
 from spikes.administration import Administration
 from spikes.ide_bridge import desktop_bridge
 from spikes.local_api import running_api
+from spikes.http_admission_policy import validate_route_ownership
 from spikes.projects import Projects
 from spikes.project_creation import CreationConflict, ProjectCreation, default_node_path
 from spikes.project_creation_actions import ProjectCreationActions
@@ -332,14 +333,14 @@ def main():
     app = QApplication([sys.argv[0]])
     app.setApplicationName('Projektový workspace')
     node_path = args.node or default_node_path()
+    validate_route_ownership(DesktopHandler.post_paths)
     try:
         ProjectDeletion(node_path).recover()
     except Exception as exc:
         QMessageBox.warning(None, 'Odstranění projektu nebylo dokončeno', str(exc))
     ProjectCreation(node_path).initialize_node()
     administration = Administration(node_path, deployment='desktop')
-    with administration.locked():
-        pass
+    administration.bootstrap()
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server, desktop_bridge(node_path, server):
         server.administration = administration
         server.user_profile = UserProfile(node_path)

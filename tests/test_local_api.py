@@ -18,6 +18,18 @@ from spikes.local_api import Handler, MAX_BODY, private_directory, running_api
 
 
 class LocalAPITests(unittest.TestCase):
+    def test_production_route_inventory_requires_classification_for_new_routes(self):
+        from spikes.http_admission_policy import validate_route_ownership, request_lane
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.web_server import WebHandler
+        validate_route_ownership(DesktopManagementHandler.post_paths)
+        validate_route_ownership(WebHandler.post_paths)
+        with self.assertRaisesRegex(ValueError, 'ownership audit'):
+            validate_route_ownership(WebHandler.post_paths | {'/v1/new-mutation'})
+        self.assertEqual(request_lane('/v1/administration', {'action':'list'}), 'node_status_lane')
+        for request in ({'action':'create-user'}, {'action':[]}, {}, None):
+            self.assertEqual(request_lane('/v1/administration', request), 'provider_lane')
+
     def test_timeout_logging_excludes_raw_request_and_error_arguments(self):
         handler = object.__new__(Handler)
         with self.assertLogs('spikes.local_api', level='WARNING') as logs:
@@ -105,6 +117,11 @@ class LocalAPITests(unittest.TestCase):
     def test_merged_readonly_routes_keep_independent_lanes(self):
         routes = {
             '/v1/counter': 'application_lane',
+            '/v1/chat/send-stream': 'provider_lane',
+            '/v1/tasks/route-stream': 'provider_lane',
+            '/v1/external/send-stream': 'provider_lane',
+            '/v1/chat/status': 'provider_lane',
+            '/v1/administration': 'provider_lane',
             '/v1/node-telemetry/status': 'telemetry_lane',
             '/v1/chat/availability': 'availability_lane',
             '/v1/roadmap-refinement/list': 'review_lane',

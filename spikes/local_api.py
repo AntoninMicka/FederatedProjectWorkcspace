@@ -20,7 +20,7 @@ import threading
 import time
 
 from spikes.backend_availability import BackendAvailability
-from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, request_lane
+from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, STREAM_ROUTES, request_lane
 from spikes.request_ownership import ProjectLanes, ProjectBusy, bounded_project_requests
 
 from spikes.metadata import parse_json, ValidationError
@@ -318,7 +318,7 @@ class Handler(BaseHTTPRequestHandler):
     def _admitted_POST(self):
         with bounded_project_requests():
             try:
-                if self.path in PROJECT_ROUTES:
+                if self.path in PROJECT_ROUTES or self.path in ACTION_LANES or self.path in STREAM_ROUTES:
                     return self._do_POST()
                 return self._in_request_lane(
                     self._do_POST, lane_name=request_lane(self.path))
@@ -329,8 +329,7 @@ class Handler(BaseHTTPRequestHandler):
                     # A stream already sent HTTP 200. Report its terminal error
                     # inside NDJSON, never append a second HTTP response.
                     self.close_connection = True
-                    if self.path in {'/v1/chat/send-stream', '/v1/tasks/route-stream',
-                                     '/v1/external/send-stream'}:
+                    if self.path in STREAM_ROUTES:
                         try:
                             self.wfile.write(json.dumps(dict(payload, type='error', status=503)).encode()+b'\n')
                             self.wfile.flush()
@@ -340,6 +339,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(503, payload)
 
     def _dispatch_request(self, request):
+        if self.path in STREAM_ROUTES and isinstance(request, dict):
+            from uuid import UUID
+            pid = request.get('project_id')
+            try:
+                if isinstance(pid, str) and str(UUID(pid)) == pid:
+                    self.server.describe_request(self.request, 'provider_lane', 'waiting', self.path, pid)
+            except (ValueError, AttributeError):
+                pass
+        if self.path in ACTION_LANES or self.path in STREAM_ROUTES:
+            return self._in_request_lane(lambda: self.dispatch(request),
+                lane_name=request_lane(self.path, request))
         if self.path not in PROJECT_ROUTES:
             return self.dispatch(request)
         from uuid import UUID
