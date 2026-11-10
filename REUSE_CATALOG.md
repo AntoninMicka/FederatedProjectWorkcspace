@@ -543,6 +543,21 @@ writer a externí sync framework byly odmítnuty. Soukromá inventura nenabídla
 komponentu se shodnou branch policy, Git autoritou a crash hranicemi.
 Rozhodnutí: [ADR 0042](docs/adr/0042-bidirectional-native-git-sharing-sync.md).
 
+Výkonová oprava nečinného synchronizování **reuse/adaptuje** původní
+`last_sent.refs` a podepsané `known_remote_refs`, inventuru větví a writer lock:
+Git export, který by byl následně zahozen, se přesně při shodě inventáře vůbec
+nevytváří. Nevzniká persistentní validační cache ani další transport.
+Polling monitoringu adaptuje stávající explicitní načítání a viditelnost panelu;
+automatické čtení nepřekrývá rozpracované čtení ani editaci. Uložení stále vyvolá
+nové čtení, nesdílí starou odpověď před zápisem. Nový scheduler/framework není potřeba.
+
+Otevírání projektu **reuse/adaptuje** nativní `git cat-file --batch-check` a
+`git log --no-walk=unsorted -z` pro původních nejvýše 20 historických commitů.
+Zůstává přesná kontrola ID, pořadí, typu objektu a limitu 64 KiB před čtením
+formátovaných metadat. Stávající navigace načítá monitoring, modely, review a
+chat až při jejich otevření; fronta úkolů a přehled konfliktů zůstávají oddělené.
+Nevzniká cache aktuálního projektu ani alternativní historie či writer.
+
 `F-M5-CONFLICT-RESOLUTION-01` **reuse/adaptuje** stávající
 `ArtifactHistory`, bezpečný Markdown preview, Git wrapper, snapshot validaci,
 Workspace/Journal/Index a nativní 3-way schopnosti Git CLI. Git určí merge base,
@@ -1348,3 +1363,11 @@ HEAD/revize, zámek a atomický writer `TaskQueue._write`. Ověřuje vlastní
 předpoklady přidávaného uzlu; existující chyby zůstanou v `issues` a dál
 blokují publikaci balíčku. Nezavádí jiný writer ani automatickou akceptaci.
 Crash boundaries se nemění; upřesnění viz ADR 0062.
+
+Řešení místních změn blokujících synchronizaci adaptuje existující náhled
+konfliktů, ArtifactGit Stage/Commit a Workspace journal. Obnova souboru z HEAD
+uchovává původní obsah v privátním journalu; nevytváří druhý writer ani
+automaticky nerozhoduje o uživatelských změnách (ADR 0043).
+Otevírání projektů adaptuje existující validaci a obnovitelný index přidáním
+omezené procesní cache přesného HEAD (ADR 0022), odloženého načítání skrytých
+panelů a standardní HTTP komprese. Samostatná persistentní cache je odmítnuta.

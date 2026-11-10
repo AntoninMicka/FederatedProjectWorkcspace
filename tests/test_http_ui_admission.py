@@ -182,9 +182,17 @@ const end=path=>{controls.get(path).enqueue(new TextEncoder().encode('{}'));cont
  const abort=new AbortController();
  const cancelled=fetch('/v1/cancelled',{method:'POST',signal:abort.signal});
  abort.abort();await assert.rejects(cancelled,{name:'AbortError'});
+ const opening=post('/v1/projects/open');
+ await new Promise(resolve=>setTimeout(resolve,25));
+ assert(!calls.includes('/v1/projects/open'));
  end('/v1/a');await first.text();
  const second=await b;assert(!calls.includes('/v1/cancelled'));
  end('/v1/b');await second.text();
+ const opened=await opening;end('/v1/projects/open');await opened.text();
+ await new Promise(resolve=>setTimeout(resolve,25));
+ assert(opened.fpwAdmissionTiming.queue_ms>=20,'Project timing omitted browser queue');
+ assert(opened.fpwAdmissionTiming.headers_ms>=0);
+ assert(opened.fpwAdmissionTiming.drain_ms>=0);
  end('/v1/node-telemetry/status');await t2;
  end('/v1/node-telemetry/status');end('/v1/diagnostics/status');
  await tick();await tick();

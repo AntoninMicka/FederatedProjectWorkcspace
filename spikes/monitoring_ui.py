@@ -83,11 +83,15 @@ async function canLeaveMonitoring(){if(!await canLeaveMonitoringBlocks())return 
 function monitoringOpen(section='tools'){showWorkspacePage(projectView);selectSidebarTab(document.querySelector(section==='outputs'?'#presentations-tab':'#tools-tab'));selectMainTab(document.querySelector('#monitoring-tab'));}
 function monitoringButton(label,action,disabled=false){const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=disabled;b.addEventListener('click',async()=>{try{await action();}catch(error){monitoringStatus.textContent=error.message;}});return b;}
 async function monitoringRequest(action,payload={}){if(!activeProject)throw Error('Otevřete projekt.');return projectRequest('/v1/monitoring/'+action,{project_id:activeProject.id,...payload},120000);}
-let monitoringLoadSequence=0;
+let monitoringLoadSequence=0,monitoringLoads=0;
 async function loadMonitoring(){
- if(!activeProject)return;const projectId=activeProject.id,sequence=++monitoringLoadSequence;
+ if(!activeProject)return;const projectId=activeProject.id,sequence=++monitoringLoadSequence;monitoringLoads++;
  try{const result=await monitoringRequest('view');if(activeProject?.id!==projectId||sequence!==monitoringLoadSequence)return;monitoringView=result;activeProject.head=result.commit_id;renderMonitoring();await loadMonitoringBlocks();}
- catch(error){if(activeProject?.id===projectId)monitoringStatus.textContent=error.message;}
+ catch(error){if(activeProject?.id===projectId&&sequence===monitoringLoadSequence)monitoringStatus.textContent=error.message;}
+ finally{monitoringLoads--;}
+}
+function refreshVisibleMonitoring(){
+ if(activeProject&&!document.hidden&&document.querySelector('#monitoring-panel')?.getClientRects().length&&!monitoringDirty&&!monitoringAttempt&&!monitoringLoads)return loadMonitoring();
 }
 function renderMonitoring(){
  if(!monitoringView)return;const readonly=activeProject?.readOnly||!monitoringView.can_manage;
@@ -218,7 +222,8 @@ monitoringForm.addEventListener('submit',event=>{event.preventDefault();saveMoni
 document.querySelector('#monitoring-form-cancel').addEventListener('click',async()=>{if(await canLeaveMonitoring())monitoringForm.hidden=true;});
 document.querySelector('#monitoring-new').addEventListener('click',()=>editMonitoring());
 document.querySelector('#sidebar-monitoring-new').addEventListener('click',async()=>{monitoringOpen();if(!blockCatalog)await loadMonitoringBlocks();if(blockCatalog)editMonitoringBlock('task');});
-setInterval(()=>{if(activeProject&&document.visibilityState!=='hidden'&&!monitoringDirty&&!monitoringAttempt)loadMonitoring();},15000);
+setInterval(refreshVisibleMonitoring,15000);
+document.addEventListener('visibilitychange',refreshVisibleMonitoring);
 '''
 from spikes.monitoring_blocks_ui import HTML as BLOCKS_HTML, CSS as BLOCKS_CSS, JS as BLOCKS_JS
 HTML = HTML.replace('<section aria-labelledby="monitoring-workflow-heading">', BLOCKS_HTML+'<details><summary>Starší sledování a dvoufázový editor</summary><section aria-labelledby="monitoring-workflow-heading">',1)

@@ -42,7 +42,7 @@ try:
   page=Page(profile,app);phase=0;busy=False
   ids=json.dumps([b['id'] for b in specs])
   commands={
-   1:'window.blockTestIds='+ids+';window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(()=>window.blocksOpened=true)',
+   1:'window.blockTestIds='+ids+';window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(async()=>{await navigateMainTab(document.getElementById("monitoring-tab"));window.blocksOpened=true})',
    2:"monitoringOpen();blockTab='source';renderMonitoringBlocks()",
    3:"editMonitoringBlock('filter',blockCatalog.blocks.find(b=>b.id===blockTestIds[2]))",
    4:"(()=>{for(const o of blockEditor.elements.source_ids.options)o.selected=true;blockEditor.requestSubmit()})()",

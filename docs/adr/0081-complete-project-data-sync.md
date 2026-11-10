@@ -143,3 +143,22 @@ Jakýkoli jiný head, další lokální větev, jiný scope, peer nebo operation
 ponechá původní úplnou exportní validaci. Chaty a pooly se stále sestavují
 ze současného stavu s původními kontrolami. Kontext není persistentní cache,
 nezapisuje se do journalu a nezavádí nový protokolový parametr.
+
+## Doplnění 2026-11-10 — vynechání nepotřebného exportu
+
+Při shodě celého aktuálního scope inventáře větví s inventářem, který peer
+již zná, se Git bundle v protokolu neposílá. Dříve se přesto nejprve vytvořil
+a dvakrát sémanticky ověřil, aby jej volající následně zahodil. Kontrola přesné
+shody se proto přesouvá do přípravy pod původní project writer lock, až po
+ověření aktuálního projektu, indexu a čistoty worktree, ale před export historie.
+Odesílatel používá pouze naposledy potvrzené `last_sent.refs`; příjemce porovnává
+aktuální inventář s podepsaným `known_remote_refs` požadavku.
+
+Změněný head, přidaná větev nebo jiný scope, jehož inventář se liší, používá
+původní úplný export a validaci. Shoda není validační cache ani oprávnění
+k přenosu: pouze vynechá Git bajty, které by se stejně neposlaly. Nepravdivé
+peer hlášení může způsobit vynechání odpovědi, nikoli publikaci či přenos
+neověřeného grafu. Nové příchozí Git bajty nadále procházejí plnou sémantickou
+validací. Aktuální identity, podpisy, sharing policy, chaty a pooly se kontrolují
+nezávisle. Nevzniká další persistentní stav, nemění se protokol ani crash/recovery
+hranice, a uložený nedokončený outbound request se kvůli této optimalizaci nepřepisuje.

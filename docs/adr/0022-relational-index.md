@@ -101,3 +101,27 @@ výměny, pády procesu při migraci i rebuild a recovery přes Workspace.
 Integrační scénář používá skutečné native služby importu, metadata editace,
 přejmenování a odstranění, zachování přesných zdrojových bajtů a obnovu chybějící
 DB. Výsledky a omezení uzavřené dávky drží [WORK_LOG](../../WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15); nevzniká paralelní roadmapa.
+
+## Doplnění 2026-11-10 — procesní cache ověřeného přehledu
+
+Opakované úplné otevření stejného projektu smí použít již ověřený přehled
+neměnného Git commitu. Klíčem jsou kořen, stavový adresář, project ID, přesný
+HEAD a síťový režim. Cache je pouze v paměti procesu, nejvýše osm položek
+a 16 MiB serializovaných přehledů a jejich ověřených projekcí; při restartu
+zaniká. Ukládají se neměnné JSON bajty a každý volající dostává novou kopii.
+Při Git replacements, grafts či shallow historii se cache nepoužije.
+
+Cache není další autorita indexu ani oprávnění: každý požadavek znovu ověří
+registraci a filesystem, vlastnictví journalu, nepřítomnost rozpracované operace,
+větev, aktuální HEAD a shodu pracovního `project.json` s commitem. Pod původním
+writer lockem načte aktuální SQLite projekci a porovná ji s dříve ověřenou
+projekcí přesného commitu. Chybějící/stale index se obnoví původní cestou;
+poškozená či podvržená projekce se nevydává za aktuální. Změna HEAD nebo indexová
+neshoda zůstává chybou. HTTP autentizace/RBAC a stav replikace se nadále ověřují
+pro každý požadavek; lokální cache se nesdílí se síťovým režimem.
+
+U nezměněného HEAD se vynechá opakované čtení a parsování celého Git snapshotu,
+výpočet grafu a historie. Podrobný náhled artefaktu a plánovací draft cache
+nepoužívají. Souhrn místních změn a příchozích větví je živý a načítá se zvlášť,
+nikoli z cache; podrobný diff zůstává v existujícím řešiteli konfliktů.
+Persistentní vrstvy a crash/recovery hranice ADR 0003 se touto cache nemění.

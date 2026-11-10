@@ -133,6 +133,36 @@ class FederationSyncTests(unittest.TestCase):
             self.assertEqual(SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload), expected)
         self.assertEqual(target.read_text(), 'New local edit\n')
 
+    def test_unchanged_exchange_skips_git_export_on_both_nodes(self):
+        self.commit_marker(0, 'Shared history');self.exchange(0, 1)
+        from spikes.federation_sync import _inventory
+        git = Projects(self.nodes[0]).workspace(self.project_id).git
+        refs = _inventory(git, {'mode': 'all'})
+        with patch('spikes.federation_sync.validate_history', side_effect=AssertionError('export history')), \
+             patch('spikes.federation_sync._validate_git_bundle', side_effect=AssertionError('transfer history')):
+            envelope, payload, _, local, _ = _prepare(
+                self.services[0], self.node_ids[1], self.project_id, str(uuid4()), refs,
+                force_bundle=True, peer_known_refs=refs)
+            self.assertEqual(local, refs)
+            self.assertEqual(envelope['exchange']['bundle_size'], 0)
+            response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+            self.assertEqual(response['exchange']['bundle_size'], 0)
+        self.assertEqual(Projects(self.nodes[1]).workspace(self.project_id).git.head(), git.head())
+
+    def test_known_inventory_does_not_skip_new_heads_or_new_branches(self):
+        from spikes.federation_sync import _inventory
+        self.commit_marker(0, 'Original')
+        git = Projects(self.nodes[0]).workspace(self.project_id).git
+        known = _inventory(git, {'mode': 'all'})
+        self.commit_marker(0, 'New head')
+        with patch('spikes.federation_sync.validate_history', side_effect=ValueError('validation required')):
+            with self.assertRaisesRegex(ValueError, 'validation required'):
+                _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'}, peer_known_refs=known)
+        known = _inventory(git, {'mode': 'all'});git_run(git, 'branch', 'new-branch')
+        with patch('spikes.federation_sync.validate_history', side_effect=ValueError('validation required')):
+            with self.assertRaisesRegex(ValueError, 'validation required'):
+                _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'}, peer_known_refs=known)
+
     def test_direct_application_still_requires_full_history_validation(self):
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,

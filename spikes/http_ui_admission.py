@@ -10,6 +10,7 @@ from spikes.http_admission_policy import ROUTE_LANES
 HTTP_UI_ADMISSION_JS = r'''
 (()=>{
  const send=window.fetch.bind(window),lanes=new Map();
+ const now=()=>globalThis.performance?.now?.()??Date.now();
  const routeLanes=Object.freeze(__FPW_ROUTE_LANES__);
  function lane(path){
   return Object.hasOwn(routeLanes,path)?routeLanes[path]:'application';
@@ -18,6 +19,7 @@ HTTP_UI_ADMISSION_JS = r'''
   const url=new URL(typeof input==='string'||input instanceof URL?input:input.url,location.href);
   const method=(options.method||input?.method||'GET').toUpperCase();
   if(url.origin!==location.origin||method!=='POST'||!url.pathname.startsWith('/v1/'))return send(input,options);
+  const timing=url.pathname==='/v1/projects/open'?{queued_at:now(),queue_ms:null,headers_ms:null,drain_ms:null}:null;
   const signal=options.signal||input?.signal;
   const aborted=()=>signal?.reason||new DOMException('Požadavek byl zrušen.','AbortError');
   if(signal?.aborted)return Promise.reject(aborted());
@@ -27,11 +29,13 @@ HTTP_UI_ADMISSION_JS = r'''
   const previous=state.tail;let finish,released=false;
   const done=new Promise(resolve=>{finish=resolve;});
   state.tail=previous.then(()=>done);
-  const release=()=>{if(!released){released=true;state.pending--;finish();}};
+  const release=()=>{if(!released){released=true;if(timing&&timing.headers_at!==undefined)timing.drain_ms=Math.round(now()-timing.headers_at);state.pending--;finish();}};
   const dispatch=async()=>{
    try{
     if(signal?.aborted)throw aborted();
+    const dispatched=now();if(timing)timing.queue_ms=Math.round(dispatched-timing.queued_at);
     const response=await send(input,options);
+    if(timing){timing.headers_at=now();timing.headers_ms=Math.round(timing.headers_at-dispatched);try{Object.defineProperty(response,'fpwAdmissionTiming',{value:timing});}catch(error){}}
     // Headers alone do not mean the server has released its lane. Drain a
     // clone without accumulating chunks, while returning the original stream
     // immediately to its consumer (including streaming chat).

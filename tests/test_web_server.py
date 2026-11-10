@@ -928,7 +928,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="outputs-overview-panel" role="tabpanel"', WEB_HTML)
         self.assertIn('id="outputs-overview-list"', WEB_HTML)
         self.assertIn("querySelector('#outputs-overview-tab').hidden=false", WEB_JS)
-        self.assertIn("if(tab.id==='presentations-tab'&&activeProject)await openOutputsOverview()", WEB_JS)
+        self.assertIn("if(tab.id==='presentations-tab'&&activeProject){const project=activeProject;await openOutputsOverview();", WEB_JS)
         self.assertIn("projectRequest('/v1/outputs/definitions'", WEB_JS)
         self.assertNotIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", WEB_JS)
@@ -1424,6 +1424,77 @@ class WebTests(unittest.TestCase):
         self.assertEqual(first[0],200);self.assertEqual(second[0],200)
         self.assertEqual(json.loads(first[1]),json.loads(second[1]))
         self.assertEqual(len(json.loads(self.request()[1])['projects']),1)
+
+    def test_local_change_resolution_web_preview_confirm_and_reader_denial(self):
+        _, data, _ = self.create_project('Local edit')
+        project = json.loads(data)['id']; node = self.root / 'node.json'
+        workspace = Projects(node).workspace(project); artifact = str(uuid4())
+        head = Artifacts(node).save(dict(project_id=project, artifact_id=artifact,
+            base_head=workspace.git.head(), title='Document', body='Saved\n', new=True), str(uuid4()))['commit_id']
+        path = f'artifacts/{artifact}/content.md'; target = workspace.git.root / path
+        for choice in ('restore', 'keep'):
+            target.write_text('Reviewed working edit\n')
+            request = dict(project_id=project, expected_head=head, path=path, choice=choice)
+            code, data, _ = self.request(path='/v1/projects/conflicts/local-preview', body=json.dumps(request))
+            self.assertEqual(code, 200, data); preview = json.loads(data)
+            operation = str(uuid4())
+            confirmation = dict(**preview, operation_id=operation, message='Reviewed decision', confirm=True)
+            code, data, _ = self.request(path='/v1/projects/conflicts/local-confirm', body=json.dumps(confirmation))
+            self.assertEqual(code, 200, data); result = json.loads(data)
+            repeated = self.request(path='/v1/projects/conflicts/local-confirm', body=json.dumps(confirmation))
+            self.assertEqual(repeated[0], 200, repeated[1])
+            self.assertEqual(json.loads(repeated[1]), result)
+            if choice == 'restore':
+                self.assertEqual(workspace.git.head(), head)
+                self.assertEqual(target.read_text(), 'Saved\n')
+                self.assertEqual(result['backup_operation_id'], operation)
+            else:
+                self.assertNotEqual(workspace.git.head(), head)
+                self.assertEqual(workspace.git.snapshot(result['commit_id'])[path], b'Reviewed working edit\n')
+                head = result['commit_id']
+        target.write_text('Reader must not resolve this\n')
+        state = json.loads(self.request(path='/v1/administration', body='{"action":"list"}')[1])
+        state = json.loads(self.request(path='/v1/administration', body=json.dumps(dict(
+            action='create-user', expected_commit=state['commit_id'], name='Reader', node_role='member')))[1])
+        user, key = state['users'][0], state['access_key']
+        self.request(path='/v1/administration', body=json.dumps(dict(action='update-user',
+            expected_commit=state['commit_id'], user_id=user['id'], active=True,
+            node_role='member', memberships={project:'reader'})))
+        headers = {'Authorization':'Bearer '+key}
+        self.assertEqual(403, self.request(path='/v1/projects/conflicts/local-preview',
+            body=json.dumps(dict(project_id=project, expected_head=head, path=path, choice='restore')), headers=headers)[0])
+        self.assertEqual(403, self.request(path='/v1/projects/conflicts/local-confirm',
+            body=json.dumps(confirmation), headers=headers)[0])
+        self.assertEqual(target.read_text(), 'Reader must not resolve this\n')
+
+    def test_project_open_negotiates_compact_gzip_without_changing_the_view(self):
+        import gzip
+        _, data, _ = self.create_project('Compressed project')
+        pid = json.loads(data)['id']; node = self.root / 'node.json'
+        head = Projects(node).open(pid)['commit_id']
+        Artifacts(node).save(dict(project_id=pid, artifact_id=main_todo_id(pid),
+            base_head=head, title='Příliš žluťoučké úkoly',
+            body=''.join(f'- [ ] [TASK-{number}] Příliš žluťoučký úkol {number}\n' for number in range(1000)),
+            new=True), str(uuid4()))
+        body = json.dumps({'project_id':pid})
+        code, raw, headers = self.request(path='/v1/projects/open', body=body)
+        self.assertEqual(code, 200, raw)
+        self.assertNotIn('Content-Encoding', headers)
+        self.assertIn('Příliš'.encode(), raw)
+        code, packed, headers = self.request(path='/v1/projects/open', body=body,
+            headers={'Accept-Encoding':'br, gzip;q=0.8'})
+        self.assertEqual(code, 200, packed)
+        self.assertEqual(headers['Content-Encoding'], 'gzip')
+        self.assertEqual(headers['Vary'], 'Accept-Encoding')
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        self.assertEqual(int(headers['Content-Length']), len(packed))
+        self.assertEqual(json.loads(gzip.decompress(packed)), json.loads(raw))
+        self.assertLess(len(packed), len(raw) // 4)
+        code, uncompressed, headers = self.request(path='/v1/projects/open', body=body,
+            headers={'Accept-Encoding':'gzip;q=0'})
+        self.assertEqual(code, 200)
+        self.assertNotIn('Content-Encoding', headers)
+        self.assertEqual(json.loads(uncompressed), json.loads(raw))
 
     def test_admin_previews_plans_and_confirms_server_local_notebooklm_export(self):
         archive = self.notebook_archive()

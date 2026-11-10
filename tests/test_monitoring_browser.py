@@ -38,7 +38,7 @@ try:
     if 'Error' in message:print('JS:',message,line,flush=True)
   page=Page(profile,app);phase=0;busy=False
   commands={
-   1:'window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(()=>window.workflowProjectOpened=true)',
+   1:'window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(async()=>{await navigateMainTab(document.getElementById("monitoring-tab"));window.workflowProjectOpened=true})',
    2:"document.querySelector('#monitoring-workflow-new').click()",
    3:"(()=>{const f=monitoringWorkflowForm.elements;f.title.value='Browser těžba';f.goal.value='Sledovat změny';f.start.value='2026-10-05';f.collection_node.value="+json.dumps(peer)+";f.processing_node.value=monitoringView.node_id;f.terms.value='Synthetic capture permission';f.retention.value='Synthetic test retention';f.keywords.value='first';f.regex.value='first';f.access_confirm.checked=true;f.trigger.value='scheduled';monitoringWorkflowForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringWorkflowForm.requestSubmit()})()",
    4:"[...document.querySelectorAll('#monitoring-definitions button')].find(b=>b.textContent==='Browser těžba').click()",
@@ -114,7 +114,7 @@ try:
     if 'Error' in message:print('JS:',message,line,flush=True)
   page=Page(profile,app);phase=0;busy=False
   commands={
-   1:'window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+')',
+   1:'window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(()=>navigateMainTab(document.getElementById("monitoring-tab")))',
    2:"document.querySelector('#monitoring-findings-list button').click()",
    3:"document.querySelector('#monitoring-detail input').value='Other';[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Vyhodnotit ukázku').click()",
    4:"document.querySelector('#monitoring-new').click()",

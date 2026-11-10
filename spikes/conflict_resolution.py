@@ -184,7 +184,12 @@ class ConflictResolution:
                             diff = text; remaining -= size
                 except UnicodeError:
                     pass
-            rows.append({'path': path, 'diff': diff or None,
+            parts = path.split('/')
+            resolvable = (len(parts) == 3 and parts[0] == 'artifacts' and parts[2] != 'metadata.json'
+                and old is not None and new is not None and old != new
+                and before.get('/'.join(parts[:2]) + '/metadata.json')
+                    == current.get('/'.join(parts[:2]) + '/metadata.json'))
+            rows.append({'path': path, 'diff': diff or None, 'can_resolve': resolvable,
                          'status': 'unsupported' if not path.startswith(('artifacts/', 'registries/'))
                                    else 'staged' if old == new else
                                    'added' if old is None else

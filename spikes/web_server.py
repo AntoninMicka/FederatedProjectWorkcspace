@@ -617,6 +617,13 @@ class WebHandler(DesktopHandler):
             if (not isinstance(resolution, dict)
                     or not self._can_write(resolution.get('project_id'))):
                 return self.send_error(403)
+        if self.path == '/v1/projects/conflicts/local-preview':
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
+        if self.path == '/v1/projects/conflicts/local-confirm':
+            preview = request.get('preview') if isinstance(request, dict) else None
+            if not isinstance(preview, dict) or not self._can_write(preview.get('project_id')):
+                return self.send_error(403)
         if self.path == '/v1/artifacts/delete/confirm':
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)

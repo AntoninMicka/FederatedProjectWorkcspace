@@ -342,7 +342,7 @@ def _inventory(git, scope):
     return sorted(rows, key=lambda row: row['ref'])
 
 
-def _build_bundle(node, project_id, scope, *, verified=None):
+def _build_bundle(node, project_id, scope, *, verified=None, peer_known_refs=None):
     binding = _binding(node, project_id)
     if binding is None:
         return [], b''
@@ -354,6 +354,10 @@ def _build_bundle(node, project_id, scope, *, verified=None):
                 'Shared project worktree must be clean')
         refs = _inventory(workspace.git, scope)
         require(refs, 'Sharing scope selects no local branch')
+        if peer_known_refs is not None and refs == _refs(peer_known_refs):
+            # This exact inventory would be stripped from the exchange anyway.
+            # Omit export work, never validation of bytes that WILL be sent.
+            return refs, b''
         if (verified is not None and verified.payload
                 and verified.project_id == project_id and verified.scope == canonical(scope)
                 and verified.refs == tuple((row['ref'], row['head']) for row in refs)):
@@ -702,7 +706,7 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
 
 
 def _prepare(service, peer_id, project_id, operation_id, known_remote_refs,
-             *, known_remote_chats=None, force_bundle, verified=None):
+             *, known_remote_chats=None, force_bundle, verified=None, peer_known_refs=None):
     local_id, peer, shares, commit = _authority(service, peer_id)
     scope = _policy(peer, shares, project_id)
     if verified is not None and not (
@@ -714,7 +718,7 @@ def _prepare(service, peer_id, project_id, operation_id, known_remote_refs,
             and verified.scope == canonical(scope)):
         verified = None
     refs, bundle_payload = ([], b'') if scope is None else _build_bundle(
-        service.node, project_id, scope, verified=verified)
+        service.node, project_id, scope, verified=verified, peer_known_refs=peer_known_refs)
     chats, chat_payload = ([], b'') if scope is None else export_project_chats(
         service.node, service, peer_id, project_id)
     if not chats:
@@ -905,7 +909,7 @@ class SyncReceiver:
             self.service, peer['id'], exchange['project_id'],
             exchange['operation_id'], exchange['refs'],
             known_remote_chats=exchange['chat_inventory'], force_bundle=True,
-            verified=verified)
+            verified=verified, peer_known_refs=known)
         response_exchange = response['exchange']
         response_bundle, response_chats = _payloads(
             response_exchange, response_payload)
@@ -997,7 +1001,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         operation_id = str(uuid4())
         envelope, payload, peer, local_refs, local_chats = _prepare(
             service, peer_id, project_id, operation_id, last_remote['refs'],
-            known_remote_chats=last_remote['chats'], force_bundle=True)
+            known_remote_chats=last_remote['chats'], force_bundle=True,
+            peer_known_refs=last_sent['refs'])
         exchange = envelope['exchange']
         bundle_payload, chat_payload = _payloads(exchange, payload)
         changed = False

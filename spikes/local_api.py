@@ -5,6 +5,7 @@
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import hmac
+import gzip
 import json
 import logging
 import os
@@ -22,6 +23,26 @@ from spikes.backend_availability import BackendAvailability
 from spikes.http_admission_policy import LANES, ROUTE_LANES, request_lane
 
 from spikes.metadata import parse_json, ValidationError
+
+
+def _accepts_project_gzip(headers):
+    accepted = False
+    for line in headers.get_all('Accept-Encoding', []):
+        for item in line.split(','):
+            parts = [part.strip().lower() for part in item.split(';')]
+            if parts[0] != 'gzip':
+                continue
+            quality = 1.0
+            try:
+                for parameter in parts[1:]:
+                    if parameter.startswith('q='):
+                        quality = float(parameter[2:])
+            except ValueError:
+                continue
+            if quality == 0:
+                return False
+            accepted = accepted or 0 < quality <= 1
+    return accepted
 
 MAX_BODY = 4096
 MAX_HTTP_WORKERS = 4
@@ -189,11 +210,22 @@ class Handler(BaseHTTPRequestHandler):
         logging.getLogger(__name__).warning('http_request_failed reason=%s', reason)
 
     def reply(self, code, payload):
-        data = json.dumps(payload).encode()
+        project_view = code == 200 and self.path == '/v1/projects/open'
+        data = (json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode()
+                if project_view else json.dumps(payload).encode())
+        compressed = False
+        if project_view and len(data) >= 1024 and _accepts_project_gzip(self.headers):
+            packed = gzip.compress(data, compresslevel=1, mtime=0)
+            if len(packed) < len(data):
+                data = packed; compressed = True
         self.close_connection = True
         self.send_response_only(code)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(data)))
+        if project_view:
+            self.send_header('Vary', 'Accept-Encoding')
+        if compressed:
+            self.send_header('Content-Encoding', 'gzip')
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Connection', 'close')

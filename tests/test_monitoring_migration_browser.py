@@ -42,7 +42,7 @@ try:
     if 'Error' in message:print('JS:',message,line,flush=True)
   page=Page(profile,app);phase=0;busy=False
   commands={
-   1:'window.migrationOriginalNode='+json.dumps(remote)+';window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(()=>window.migrationOpened=true)',
+   1:'window.migrationOriginalNode='+json.dumps(remote)+';window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(async()=>{await navigateMainTab(document.getElementById("monitoring-tab"));window.migrationOpened=true})',
    2:"monitoringOpen();document.querySelector('#monitoring-migration-open').click()",
    3:"monitoringMigrationForm.requestSubmit()",
    4:"monitoringMigrationForm.elements.retention_days.value='31';monitoringMigrationForm.elements.retention_days.dispatchEvent(new Event('input',{bubbles:true}))",

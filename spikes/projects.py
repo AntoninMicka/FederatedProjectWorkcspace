@@ -133,6 +133,8 @@ class Projects:
         workspace = self.workspace(project_id, blocking=not self.network,
                                    deadline=time.monotonic() + 30 if self.network else None)
         result = workspace.read_project(project_id, network=self.network)
+        from spikes.federation_sync import project_conflict_statuses
+        result['sync_conflicts'] = project_conflict_statuses(self.node_path, project_id)
         if not self.network:
             from spikes.plan_draft import read_plan_draft
             try:

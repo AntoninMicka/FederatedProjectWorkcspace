@@ -304,3 +304,111 @@ interval, read-only desktop-journal inspection confirmed `conflict` / `Peer
 reported a content conflict` and the same pending operation ID
 `dc97cb95-dcba-4c5c-a759-f4d2dbcc30b8`. No manual new operation or roadmap
 resolution was introduced to obtain that result.
+
+## Omnia idle-work investigation, 10 November
+
+Live read-only diagnostics of the deployed conflict release found about
+1.2 GB available RAM and 146 GB free disk. The backend's lifetime CPU average
+was about 83% of one core. Two HTTP snapshots five seconds apart showed the
+same `/v1/monitoring/view` holding `application_lane` at 9.449 and 14.634 seconds.
+Independent sync requests recorded 4.3–21.3 seconds overall, mainly in
+`receive-prepare-response`. Moving sync admission did not eliminate CPU work.
+
+Two sources of avoidable work were confirmed in code:
+
+- Monitoring polled every 15 seconds even when its panel was hidden, and could
+  enqueue another refresh while an earlier one was still running. Automatic
+  refresh now requires a visible panel and document, no dirty/pending editor,
+  and no outstanding monitoring read. Explicit post-save reads remain fresh;
+  an older pre-save response cannot replace their result.
+- Unchanged Git inventories were exported and fully validated before their
+  bundles were discarded. The exact known-inventory comparison now omits that
+  export under the original writer lock; new heads/branches and any Git bytes
+  actually transferred retain full validation (ADR 0081 addendum).
+
+An isolated two-node fixture with 20 added commits measured full preparation
+at 1.068 seconds versus 0.043 seconds for an unchanged inventory (zero Git
+payload bytes). These are local timings, not an Omnia performance guarantee.
+The global application lane and remaining implicit-writing read routes are
+unchanged; this repair does not claim a complete HTTP ownership replacement.
+
+Verification after the final runtime change: **85 focused tests passed, one
+optional Qt scenario skipped**, covering federation sync/catalog, diagnostics,
+pool/full-data recovery, monitoring and asynchronous polling behavior. Two
+existing real Qt/WebEngine monitoring scenarios also passed with isolated
+temporary nodes, including editing/saving and review/publication. The full
+suite was not run for this repair. Archive
+`6cad07d2b52ddaa898befef634e6b65bd80eb9aaafe921a670bda3fc769bca98`
+was explicitly approved for a separate application-only deployment.
+
+Deployment readback verified the exact four runtime modules, restarted active
+service, unchanged unit/identity/credentials/TLS, main HEAD and roadmap bytes,
+and retained saved requests. The live conflict endpoint still returned the
+preserved roadmap diff. Service CPU accounting over approximately five-second
+samples measured **124.9% of one core before** and **23.5% immediately after**
+the update. Only diagnostics requests were present in the latter HTTP samples.
+These short windows straddle a restart and different request activity; they
+are not a controlled steady-state UI benchmark or human acceptance. Existing
+web pages must reload their JavaScript to adopt the monitoring polling change.
+
+The user subsequently reported that project opening/switching was still slow.
+That feedback is a failed UI acceptance of the first performance repair,
+despite the lower short-window CPU sample. Isolated profiling of a native
+clone of the main project found 66 Git subprocesses and five snapshot reads
+for an empty monitoring overview, plus 60 Git subprocesses for project opening.
+The browser also awaited monitoring, Julia definitions/status, roadmap review
+and chat before finishing the project landing.
+
+The project-opening follow-up batches the existing 20-entry history read:
+object IDs/types/sizes are checked in one bounded `cat-file --batch-check`,
+then one NUL-delimited `git log --no-walk=unsorted` reads the verified commits
+in their original order. The 64 KiB commit limit, truncation, exact HEAD,
+privacy, project/index validation and writer-lock boundaries stay intact.
+The isolated opening profile used 22 Git subprocesses after this change.
+
+The project overview no longer awaits hidden monitoring, Julia, roadmap-review
+or chat loads. Existing navigation requests them on entry to the relevant
+section; delayed Julia results are discarded if the active project changes.
+Conflict-summary and task-queue reads retain their independent behavior.
+This does not optimize the internals of the monitoring view itself and must
+not be described as resolving every application-lane contention case.
+
+Project/Workspace tests passed **33 scenarios, two optional Qt skips**. Four
+real Qt monitoring/blocks/migration scenarios passed after explicitly opening
+the monitoring section. An isolated real Qt smoke checks the project landing
+and on-demand entry points; the local-conflict smoke also passed. The broader
+navigation smoke exposed a stale TODO destination expectation; identical
+failure was reproduced with the unchanged HEAD before correcting that test
+expectation to the existing preview-tab behavior.
+The corrected smoke then passed all ten navigation destinations and its
+save/discard/cancel checks. The project-opening follow-up was separately
+approved as archive
+`60edcdcf11f508989e07c777f8651213504575cdcc533147de3ba27e4cbd5518`.
+
+That archive was deployed and the five runtime module hashes, active restart,
+unit/identity/credentials/TLS, saved requests, main HEAD and local roadmap bytes
+were verified unchanged as intended. Authenticated `/v1/projects/open` returned
+HTTP 200 with the same HEAD, 1,098,624 response bytes, 353 artifacts and 20
+history entries: one pre-update sample took 6.313 seconds, one post-update
+sample 4.009 seconds. These are single measurements around a restart, not a
+controlled average. The short post-update CPU sample was 19.7% of one core.
+The live conflict endpoint still returned the local roadmap diff. The actual
+opening response in that single loopback sample took roughly four seconds;
+this excludes browser admission, network transfer, decoding and rendering.
+The user subsequently rejected the deployment: switching takes substantially
+longer and can fail to complete. It is not accepted as a performance fix.
+
+The next source change preserves the currently opened project until its
+replacement response succeeds, and makes a switch failure visible. Previously
+the project was cleared before the response and the error could remain hidden.
+`workspaceLastProjectOpen` records request, render and paint durations, including
+browser admission timing, to distinguish a backend sample from actual switching.
+Opening also defers the task queue, conflict details and graph until needed.
+An exact-HEAD process cache retains validated views under the checks documented
+in ADR 0022; compact, negotiated gzip reduces project-opening response transfer.
+These changes require separate deployment and live acceptance.
+
+Local file conflicts additionally gain explicit reviewed keep/commit and
+restore-with-journal-backup actions. They reuse the existing Stage/Commit and
+journal recovery paths; crash boundaries and the limited web permission are
+documented in ADR 0043. No choice has been executed on the real roadmap.

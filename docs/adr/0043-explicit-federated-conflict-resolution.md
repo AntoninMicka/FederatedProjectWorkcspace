@@ -154,3 +154,49 @@ necommitnutou úpravu. Po vyřešení místní změny lze pokračovat stejným o
 ID. Dokončený replay vrací původní odpověď i při novější místní úpravě, protože
 nic znovu nepublikuje. Kontrola čistoty při skutečném zápisu zůstává zachovaná
 kvůli změnám vzniklým až po předběžné kontrole.
+
+### Výslovné vyřešení místní změny
+
+Na další žádost uživatele přibývá k původnímu read-only porovnání samostatný
+náhled/potvrzení pro **obsah jednoho sledovaného artefaktu**. Uživatel může
+zachovat prověřené bajty a uložit je do historie, nebo obnovit uloženou verzi
+pracovního souboru. Metadata, nesledované soubory, registry a odlišná staged
+verze nejsou tímto krokem automaticky přepsány; takový stav vyžaduje vlastní
+posouzení. Akce neřeší následnou divergenci commitnutých větví za uživatele.
+
+Webová varianta vyžaduje současné write RBAC a původní lokální write guard.
+Jde o explicitní výjimku pro tento omezený conflict workflow, nikoli povolení
+obecných Stage/Commit endpointů ve webu: ty nadále zůstávají desktopové.
+Náhled váže project ID, HEAD, větev, jedinou deklarovanou cestu obsahu, přesné
+hashe původních a pracovních bajtů a digest celého rozhodnutí. Síťová cesta
+odmítne `local-only` jak v původním, tak kandidátním snapshotu. Potvrzení znovu
+ověří shodu pod writer lockem; samotný náhled nezapisuje.
+
+**Zachovat:** adaptuje `ArtifactGit.stage` a `ArtifactGit.commit` nad původním
+Workspace writerem. Stage má deterministické dílčí UUID odvozené od hlavního
+operation ID. Digest celého rozhodnutí včetně zprávy je připnutý v obou
+fázích. Crash po Stage se dokončuje stejným intentem; commit prochází původní
+metadata/reporting/plan validací, journalem, CAS a indexací. Pád po CAS ani
+ztracená odpověď nevytvoří druhý commit. Pozdější pracovní bajty zůstávají
+zachované jako další necommitnutá změna, nikoli součást starého rozhodnutí.
+
+**Obnovit:** nový druh `artifact-working-restore` v témže privátním projektovém
+journalu nemění Git HEAD ani Git index. Před zásahem atomicky uloží request
+digest, HEAD/větev/index tree, vlastněnou cestu, původní bajty jako base64 zálohu
+a původní journalové before/after obrazy. Po fsync intentu použije existující
+atomickou souborovou obnovu Journalu. Až po úspěchu v jedné SQLite transakci
+označí operaci dokončenou a odstraní pending payload. Záloha zůstává v privátním
+operation recordu mimo projektový Git; HTTP receipt vrací pouze její operation
+ID, ne zálohované bajty. Nový formát Git artefaktů ani federace nevzniká.
+
+Obnova po pádu před zápisem či po výměně souboru kontroluje původní HEAD,
+větev, Git index a souborové before/after bajty. Cizí editace vede ke konfliktu
+a ponechání intentu i zálohy, nikoli k přepsání. Opakování již dokončené obnovy
+je no-op i při novější pracovní úpravě. Stávající správa oprav může přerušenou
+operaci dokončit přes `Workspace.recover`; downgrade s nedokončenou novou
+operací nemá být vydáván za ověřenou kompatibilní recovery cestu.
+
+UI vyžaduje náhled, popis a explicitní potvrzení. Neznámý výsledek opakuje se
+stejným operation ID; opuštění stránky nezruší serverový intent. Nepotvrzený
+náhled lze zavřít bez změny projektu. Akceptace skutečné uživatelské volby se
+neodvozuje od nasazení ani od testů na dočasných projektech.

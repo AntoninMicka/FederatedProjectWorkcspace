@@ -185,6 +185,71 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(result['history']['entries'][-1]['subject'], 'Change 2 <script>')
         self.assertTrue(all(row['author'] == 'M0 Test' for row in result['history']['entries']))
 
+    def test_batched_history_keeps_unicode_and_rejects_oversized_commit_metadata(self):
+        git = self.gits[0]
+        git.run('commit', '--allow-empty', '--author=Žluťoučký <test@example.invalid>',
+                '-m', 'Příliš žluťoučký <script>')
+        row = self.projects.open(ENTITY)['history']['entries'][0]
+        self.assertEqual(row['author'], 'Žluťoučký')
+        self.assertEqual(row['subject'], 'Příliš žluťoučký <script>')
+        git.run('commit', '--allow-empty', '-m', 'Oversized\n\n' + 'x' * (64 * 1024))
+        with self.assertRaisesRegex(ValidationError, 'Commit metadata exceeds'):
+            self.projects.open(ENTITY)
+
+    def test_unchanged_open_reuses_validated_view_without_reparsing_git_snapshot(self):
+        projects = Projects(self.node_path, network=True)
+        expected = projects.open(ENTITY)
+        with patch('spikes.workspace.Git.snapshot', side_effect=AssertionError('snapshot reread')), \
+             patch('spikes.workspace.project_task_graph', side_effect=AssertionError('graph rebuilt')):
+            value = projects.open(ENTITY)
+            self.assertEqual(value, expected)
+            value['history']['entries'][0]['subject'] = 'Forged in caller'
+            value['artifacts'].clear()
+            self.assertEqual(projects.open(ENTITY), expected)
+
+    def test_cached_open_still_rejects_forged_index_and_dirty_configuration(self):
+        self.projects.open(ENTITY)
+        with closing(sqlite3.connect(self.state() / 'index.sqlite')) as db, db:
+            db.execute("UPDATE entities SET title='Forged'")
+        with self.assertRaises(ValidationError):
+            self.projects.open(ENTITY)
+        (self.state() / 'index.sqlite').unlink()
+        self.projects.open(ENTITY)
+        config = self.gits[0].root / 'project.json'
+        config.write_bytes(config.read_bytes() + b' ')
+        with self.assertRaisesRegex(ValidationError, 'Working project.json differs'):
+            self.projects.open(ENTITY)
+
+    def test_cache_tracks_head_and_never_reuses_local_view_for_network_privacy(self):
+        first = self.projects.open(ENTITY)
+        meta = metadata('Changed'); meta['privacy'] = 'local-only'
+        path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
+        path.write_bytes(markdown(meta)); self.gits[0].commit('New private revision')
+        current = self.projects.open(ENTITY)
+        self.assertNotEqual(current['commit_id'], first['commit_id'])
+        self.assertEqual(current['artifacts'][0]['title'], 'Changed')
+        with self.assertRaises(ValidationError):
+            Projects(self.node_path, network=True).open(ENTITY)
+
+    def test_git_replacement_disables_cached_view(self):
+        first = self.projects.open(ENTITY)
+        path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
+        path.write_bytes(markdown(metadata('Changed')))
+        head = self.gits[0].commit('Changed revision'); self.projects.open(ENTITY)
+        self.gits[0].run('replace', head, first['commit_id'])
+        with self.assertRaises(ValidationError):
+            self.projects.open(ENTITY)
+
+    def test_cached_project_has_fresh_local_change_hint_without_snapshot_reread(self):
+        projects = Projects(self.node_path, network=True)
+        self.assertFalse(projects.open(ENTITY)['conflict_summary']['local_changes'])
+        path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
+        original = path.read_bytes(); path.write_bytes(original + b'\nWorking edit\n')
+        with patch('spikes.workspace.Git.snapshot', side_effect=AssertionError('snapshot reread')):
+            self.assertTrue(projects.open(ENTITY)['conflict_summary']['local_changes'])
+            path.write_bytes(original)
+            self.assertFalse(projects.open(ENTITY)['conflict_summary']['local_changes'])
+
     def test_invalid_registration_and_config_do_not_initialize_state(self):
         original = deepcopy(self.node)
         for changes in [dict(project_id=AUTHOR), dict(root=str(self.base / 'missing')),
