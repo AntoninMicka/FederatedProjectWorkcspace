@@ -1077,6 +1077,39 @@ class FederationSyncTests(unittest.TestCase):
             receipt = db.execute('SELECT response_envelope FROM inbound WHERE operation_id=?',
                                  (saved[0],)).fetchone()
         self.assertIsNotNone(receipt[0])
+        # Error hints cross a real TLS exchange but never change pending bytes.
+        from spikes.request_ownership import ProjectBusy
+        from spikes.sync_diagnostics import phase, snapshot as diagnostic
+        def busy_journal(*args, **kwargs):
+            phase('receive-prepare-response')
+            raise ProjectBusy('private-payload', resource='sync-journal')
+        with patch.object(SyncReceiver, '_receive', side_effect=busy_journal):
+            with self.assertRaises(SyncBusy) as caught:
+                ContentSyncControl(self.nodes[0], deployment='web').synchronize(
+                    self.node_ids[1], self.project_id)
+        self.assertEqual(caught.exception.busy_resource, 'sync-journal')
+        self.assertEqual(caught.exception.peer_phase, 'receive-prepare-response')
+        detail = diagnostic(self.nodes[0], self.node_ids[1], self.project_id, direction='outbound')
+        self.assertEqual(detail['phase'], 'download')
+        self.assertEqual(detail['busy_resource'], 'sync-journal')
+        self.assertEqual(detail['peer_phase'], 'receive-prepare-response')
+        self.assertNotIn('private-payload', str(detail))
+        for hint in ({'busy_resource': 'secret-token', 'peer_phase': 'private-payload'},
+                     {'busy_resource': [], 'peer_phase': {}}, {}):
+            def malicious(handler):
+                return handler.reply(503, dict(hint, error='secret-token private-payload'))
+            with patch.object(ProbeHandler, 'do_POST', malicious):
+                with self.assertRaises(SyncBusy) as caught:
+                    ContentSyncControl(self.nodes[0], deployment='web').synchronize(
+                        self.node_ids[1], self.project_id)
+            self.assertEqual(caught.exception.busy_resource, 'unknown')
+            self.assertIsNone(caught.exception.peer_phase)
+            detail = diagnostic(self.nodes[0], self.node_ids[1], self.project_id, direction='outbound')
+            self.assertNotIn('secret-token', str(detail)); self.assertNotIn('private-payload', str(detail))
+        with _database(self.nodes[0]) as db:
+            preserved = db.execute('SELECT operation_id,envelope,bundle FROM outbound WHERE peer_id=? AND project_id=?',
+                (self.node_ids[1], self.project_id)).fetchone()
+        self.assertEqual(preserved, saved)
         # A transient native writer collision is 503, not permanent rejection.
         # Both sides retain the exact request identity for the next attempt.
         from spikes.federation_sync import _database

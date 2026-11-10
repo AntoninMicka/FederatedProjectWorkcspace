@@ -106,7 +106,7 @@ class Journal:
                     0 if self.blocking and not bounded else fcntl.LOCK_NB))
             except BlockingIOError as exc:
                 if bounded:
-                    raise ProjectBusy('Project journal is busy') from exc
+                    raise ProjectBusy('Project journal is busy', resource='project-journal') from exc
                 raise
             try:
                 yield

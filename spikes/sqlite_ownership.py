@@ -4,7 +4,7 @@
 from contextlib import contextmanager
 import sqlite3
 
-from spikes.request_ownership import ProjectBusy, bounded_project_wait
+from spikes.request_ownership import ProjectBusy, bounded_project_wait, busy_resource_for
 
 
 @contextmanager
@@ -24,7 +24,7 @@ def sqlite_connection(database, *, resource, timeout=5, **options):
     except sqlite3.OperationalError as exc:
         code = getattr(exc, 'sqlite_errorcode', 0) & 0xff
         if bounded and code in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
-            raise ProjectBusy(resource + ' is busy') from exc
+            raise ProjectBusy(resource + ' is busy', resource=busy_resource_for(resource, 'sqlite')) from exc
         raise
     finally:
         if db is not None:

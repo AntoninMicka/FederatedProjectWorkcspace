@@ -233,7 +233,8 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 frames = [json.loads(line) for line in raw.splitlines()]
                 self.assertEqual(frames[-1], {'type':'error','status':503,
-                    'error':'resource busy','outcome':'unknown','retry':'same-operation'})
+                    'error':'resource busy','outcome':'unknown','retry':'same-operation',
+                    'busy_resource':'unknown'})
                 self.assertEqual(self.post(server, '/v1/counter', {'action':'increment'})[0], 200)
             finally:
                 connection.close()

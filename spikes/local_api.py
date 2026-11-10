@@ -334,7 +334,8 @@ class Handler(BaseHTTPRequestHandler):
                     'outcome': 'not-started', 'retry': 'same-operation'})
             except ProjectBusy as exc:
                 payload = {'error': 'resource busy',
-                           'retry': 'same-operation', 'outcome': exc.outcome}
+                           'retry': 'same-operation', 'outcome': exc.outcome,
+                           'busy_resource': exc.busy_resource}
                 if getattr(self, 'response_started', False):
                     # A stream already sent HTTP 200. Report its terminal error
                     # inside NDJSON, never append a second HTTP response.

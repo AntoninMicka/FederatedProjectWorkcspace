@@ -10,11 +10,33 @@ import fcntl
 bounded_project_wait = ContextVar('bounded_project_wait', default=False)
 
 
+BUSY_RESOURCES = frozenset({
+    'unknown', 'incoming-capacity', 'outbound-capacity', 'project-journal',
+    'project-index', 'sync-journal', 'node-registry', 'node-operations',
+    'project-admission', 'process-owner', 'native-owner', 'sqlite',
+    'snapshot-changed', 'pending-publication', 'git-budget',
+})
+_RESOURCE_LABELS = {
+    'Project journal': 'project-journal', 'Project index': 'project-index',
+    'Content synchronization journal': 'sync-journal',
+    'Node registry': 'node-registry',
+}
+
+
+def safe_busy_resource(value):
+    return value if isinstance(value, str) and value in BUSY_RESOURCES else 'unknown'
+
+
+def busy_resource_for(label, default):
+    return _RESOURCE_LABELS.get(label, default) if isinstance(label, str) else default
+
+
 class ProjectBusy(Exception):
     """A project writer is busy; no automatic retry is implied."""
-    def __init__(self, message, *, outcome='unknown'):
+    def __init__(self, message, *, outcome='unknown', resource='unknown'):
         super().__init__(message)
         self.outcome = outcome
+        self.busy_resource = safe_busy_resource(resource)
 
 
 def bounded_flock(handle, mode, *, resource):
@@ -24,7 +46,7 @@ def bounded_flock(handle, mode, *, resource):
         fcntl.flock(handle, mode | (fcntl.LOCK_NB if bounded else 0))
     except BlockingIOError as exc:
         if bounded:
-            raise ProjectBusy(resource + ' is busy') from exc
+            raise ProjectBusy(resource + ' is busy', resource=busy_resource_for(resource, 'native-owner')) from exc
         raise
 
 
@@ -34,7 +56,7 @@ def bounded_process_lock(lock, *, resource):
     acquired = (lock.acquire(timeout=0.1) if bounded_project_wait.get()
                 else lock.acquire())
     if not acquired:
-        raise ProjectBusy(resource + ' is busy')
+        raise ProjectBusy(resource + ' is busy', resource=busy_resource_for(resource, 'process-owner'))
     try:
         yield
     finally:
@@ -56,7 +78,7 @@ class ProjectLanes:
         try:
             acquired = entry[0].acquire(timeout=timeout)
             if not acquired:
-                raise ProjectBusy('Project HTTP owner is busy', outcome='not-started')
+                raise ProjectBusy('Project HTTP owner is busy', outcome='not-started', resource='project-admission')
             yield
         finally:
             if acquired:

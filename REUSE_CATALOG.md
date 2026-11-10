@@ -1507,3 +1507,10 @@ transfer retains normalized main. **Reject:** copying live working files,
 exporting moving refs without final ownership checks, holding the journal over
 all history/pack work, weakening privacy/history validation or adding a cache
 that acts as a second authority.
+
+Busy diagnostics: **adapt/reuse** native `ProjectBusy`, bounded flock/SQLite
+translation, existing sync observations and the existing 503 response. Preserve
+separate inbound/outbound observations and forward only allowlisted resource
+and phase codes. **Reject:** guessing the owner from elapsed time, exposing
+exception text or paths, replacing native recovery, and retrying mutations
+based on diagnostic hints.

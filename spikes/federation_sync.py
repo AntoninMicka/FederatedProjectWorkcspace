@@ -11,7 +11,7 @@ from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock
+from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock, safe_busy_resource
 import re
 import sqlite3
 import ssl
@@ -47,7 +47,7 @@ from spikes.project_chat_sync import (
 from spikes.projects import Projects
 from spikes.sqlite_ownership import sqlite_connection
 from spikes.storage import Git
-from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic
+from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic, current_phase, safe_peer_phase
 
 
 NETWORK_TIMEOUT = 60
@@ -88,7 +88,11 @@ class SyncCancelled(Exception):
 
 
 class SyncBusy(Exception):
-    """Another inbound exchange owns this node's replay/publication lifecycle."""
+    """Transient refusal; diagnostic codes never authorize recovery/retry."""
+    def __init__(self, message='Content sync is busy', *, resource='unknown', peer_phase=None):
+        super().__init__(message)
+        self.busy_resource = safe_busy_resource(resource)
+        self.peer_phase = safe_peer_phase(peer_phase) or safe_peer_phase(current_phase())
 
 
 @contextmanager
@@ -106,7 +110,7 @@ def _inbound_lock(node):
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise SyncBusy('Content receiver is busy') from exc
+            raise SyncBusy('Content receiver is busy', resource='incoming-capacity') from exc
         try:
             yield
         finally:
@@ -349,18 +353,18 @@ def _bundle_snapshot(workspace, scope, expected=None):
     """Brief native owner for snapshot admission/final publication checks."""
     with workspace.journal.lock(), workspace.journal.connect() as db:
         if workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
-            raise SyncBusy('Shared project has an unfinished publication')
+            raise SyncBusy('Shared project has an unfinished publication', resource='pending-publication')
         workspace._branch()
         refs = _inventory(workspace.git, scope)
         if expected is not None and refs != expected:
-            raise SyncBusy('Shared branches changed during bundle preparation')
+            raise SyncBusy('Shared branches changed during bundle preparation', resource='snapshot-changed')
         workspace._read_locked(db)
         if git_run(workspace.git, 'status', '--porcelain', '--untracked-files=all').stdout:
             raise SyncConflict('Shared project worktree has local changes')
         require(refs, 'Sharing scope selects no local branch')
         # External Git users do not acquire our journal flock either.
         if _inventory(workspace.git, scope) != refs:
-            raise SyncBusy('Shared branches changed during snapshot admission')
+            raise SyncBusy('Shared branches changed during snapshot admission', resource='snapshot-changed')
         return refs
 
 
@@ -399,7 +403,7 @@ def _build_bundle(node, project_id, scope, *, verified=None, peer_known_refs=Non
         # Keep validation of the exact exported graph, not only source history.
         _validate_git_bundle(payload, refs, project_id, root / 'verify.git')
     if _binding(node, project_id) != binding:
-        raise SyncBusy('Project registration changed during bundle preparation')
+        raise SyncBusy('Project registration changed during bundle preparation', resource='snapshot-changed')
     _bundle_snapshot(workspace, scope, refs)
     return refs, payload
 
@@ -792,7 +796,11 @@ class SyncReceiver:
             with bounded_project_requests(), _inbound_lock(self.node):
                 return self._receive(envelope, payload, checkpoint)
         except (BlockingIOError, ProjectBusy) as exc:
-            raise SyncBusy('Content project is busy') from exc
+            raise SyncBusy('Content project is busy', resource=getattr(exc, 'busy_resource', 'native-owner')) from exc
+        except GitDeadlineExceeded as exc:
+            exc.busy_resource = 'git-budget'
+            exc.peer_phase = safe_peer_phase(current_phase())
+            raise
 
     def _replay(self, exchange, payload, response, response_payload, *, authority):
         # Only reached after exact equality with a completed durable request.
@@ -1080,7 +1088,15 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         if response.status == 409:
             raise SyncConflict('Peer reported a content conflict')
         if response.status == 503:
-            raise SyncBusy('Peer is temporarily busy; retry the same operation')
+            diagnostic = {}
+            if len(body) <= 4096:
+                try:
+                    value = json.loads(body)
+                    if isinstance(value, dict): diagnostic = value
+                except (ValueError, UnicodeError): pass
+            raise SyncBusy('Peer is temporarily busy; retry the same operation',
+                resource=safe_busy_resource(diagnostic.get('busy_resource')),
+                peer_phase=safe_peer_phase(diagnostic.get('peer_phase')))
         if response.status != 200:
             raise SyncRejected('Peer rejected content sync')
         response_envelope, response_payload = decode_body(body)
@@ -1167,7 +1183,7 @@ class ContentSyncControl:
             sent_state, remote_state = _sync_state(sent), _sync_state(remote)
             result[peer + ':' + project] = {
                 'state': state, 'detail': detail,
-                'diagnostic': sync_diagnostic(self.node, peer, project),
+                'diagnostic': sync_diagnostic(self.node, peer, project, direction='outbound'),
                 'chat_summary': {
                     'shared': len(sent_state['chats']),
                     'received': len(remote_state['chats']),
@@ -1283,7 +1299,9 @@ class ContentSyncControl:
         except SyncConflict as exc:
             state = 'conflict'; detail = str(exc); error = exc
         except (SyncBusy, ProjectBusy, BlockingIOError) as exc:
-            state = 'busy'; detail = 'Project is temporarily busy; saved operation retained'; error = exc
+            if isinstance(exc, BlockingIOError) and current_phase() == 'wait-lock':
+                exc.busy_resource = 'outbound-capacity'
+            state = 'busy'; detail = 'Synchronization deferred; saved operation retained'; error = exc
         except (AccessDenied, SyncRejected) as exc:
             state = 'rejected'; detail = str(exc); error = exc
         except (ConnectionError, TimeoutError, ssl.SSLError, OSError) as exc:
@@ -1523,8 +1541,11 @@ def reply(handler):
         handler.wfile.write(raw)
     except RequestReadTimeout:
         raise
-    except (SyncBusy, GitDeadlineExceeded):
-        return handler.reply(503, {'error': 'Content receiver is busy'})
+    except (SyncBusy, GitDeadlineExceeded) as exc:
+        return handler.reply(503, {'error': 'Content receiver is busy',
+            'busy_resource': safe_busy_resource(getattr(exc, 'busy_resource',
+                'git-budget' if isinstance(exc, GitDeadlineExceeded) else None)),
+            'peer_phase': safe_peer_phase(getattr(exc, 'peer_phase', None))})
     except SyncConflict:
         return handler.reply(409, {'error': 'Content sync requires a conflict decision'})
     except (ValueError, AccessDenied, OSError, sqlite3.Error, subprocess.SubprocessError):

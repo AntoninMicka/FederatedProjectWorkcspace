@@ -53,3 +53,37 @@ class SyncDiagnosticsTests(unittest.TestCase):
             before = diagnostics.snapshot('/tmp/bounded-node', 'peer', '1')
             with patch.object(diagnostics.time, 'monotonic', return_value=10**12):
                 self.assertEqual(before, diagnostics.snapshot('/tmp/bounded-node', 'peer', '1'))
+
+    def test_directions_do_not_overwrite_each_other_or_share_nested_phase(self):
+        @diagnostics.observed(direction='inbound')
+        def incoming(node,peer,project):
+            diagnostics.phase('receive-verify')
+        @diagnostics.observed
+        def outgoing(node,peer,project):
+            diagnostics.phase('download');incoming(node,peer,project)
+            self.assertEqual(diagnostics.current_phase(),'download')
+        outgoing('/tmp/directional-node','peer','project')
+        self.assertEqual(diagnostics.snapshot('/tmp/directional-node','peer','project',direction='outbound')['phase'],'download')
+        self.assertEqual(diagnostics.snapshot('/tmp/directional-node','peer','project',direction='inbound')['phase'],'receive-verify')
+        self.assertEqual(len(diagnostics.observations('/tmp/directional-node')),2)
+
+    def test_safe_resource_metadata_never_logs_exception_text_or_arbitrary_peer_values(self):
+        from spikes.request_ownership import ProjectBusy
+        @diagnostics.observed
+        def outgoing(node,peer,project):
+            error=ProjectBusy('secret-token private-payload',resource='sync-journal')
+            error.peer_phase='receive-prepare-response';raise error
+        with self.assertLogs('spikes.sync_diagnostics',level='WARNING') as logs:
+            with self.assertRaises(ProjectBusy):outgoing('/tmp/resource-node','peer','project')
+        value=diagnostics.snapshot('/tmp/resource-node','peer','project')
+        self.assertEqual(value['busy_resource'],'sync-journal')
+        self.assertEqual(value['peer_phase'],'receive-prepare-response')
+        self.assertNotIn('secret-token',str(value)+str(logs.output))
+        self.assertNotIn('private-payload',str(value)+str(logs.output))
+        @diagnostics.observed
+        def bad(node,peer,project):
+            error=ProjectBusy('private',resource={'secret-token':True})
+            error.peer_phase='private-payload';raise error
+        with self.assertRaises(ProjectBusy):bad('/tmp/resource-node','peer','bad')
+        value=diagnostics.snapshot('/tmp/resource-node','peer','bad')
+        self.assertNotIn('busy_resource',value);self.assertNotIn('peer_phase',value)

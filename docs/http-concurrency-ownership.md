@@ -1416,3 +1416,29 @@ write recovery with exactly one commit, and rejection after registration is
 removed. `git diff --check` passed. The full suite was not repeated for this
 follow-up; loading the new backend code on both nodes and live startup
 acceptance remain outstanding.
+
+### Follow-up: identify the remaining receiver refusal
+
+Read-only live verification on 2026-11-10 confirmed that Omnia's running release
+contains the same `federation_sync.py` and `git_transfer.py` bytes as source
+HEAD `2a55776`; those files predate the running service. This is no longer an
+unloaded export fix. Latest receiver observations still include `SyncBusy`
+during `receive-prepare-response`. At the diagnostic sample the only active
+HTTP worker was the diagnostic request, with zero admission rejections; this
+does not exclude earlier contention. Existing logs discard the underlying
+resource, so the exact remaining owner is not established by these observations.
+
+The follow-up carries allowlisted busy-resource and receiver-phase codes across
+503, separates incoming/outgoing observations, and replaces the unsupported
+UI claim that the project itself is busy with either the known resource or a
+neutral refusal. A real TLS regression verifies known and malicious/unknown
+hints and byte-for-byte preservation of the pending operation. Native flock
+and SQLite regressions check resource codes and rollback. This diagnostic
+change is not a claim that the remaining live contention has been repaired;
+loading it on both endpoints and reproducing startup is still required.
+
+Focused verification: 90 tests OK (1 optional skip), covering content-sync over
+real TLS, retained replay bytes, HTTP/native ownership, manual queue, SQLite,
+immutable export concurrency and browser busy text. `git diff --check` passed.
+The full suite was not rerun for this diagnostic follow-up. No remote release,
+restart, native recovery mutation or source commit was performed.

@@ -118,7 +118,7 @@ class Administration:
                 fcntl.flock(handle, fcntl.LOCK_EX | (
                     fcntl.LOCK_NB if bounded_project_wait.get() else 0))
             except BlockingIOError as exc:
-                raise ProjectBusy('Node registry is busy') from exc
+                raise ProjectBusy('Node registry is busy', resource='node-registry') from exc
             git = Git(self.repo)
             if not self.repo.exists():
                 self.repo.mkdir(mode=0o700)

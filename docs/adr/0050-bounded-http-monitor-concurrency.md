@@ -570,3 +570,19 @@ Po pádu se volatilní dávka sama neobnovuje. Runtime stav nenahrazuje skutečn
 outbound/inbound journal; jeho ID, přesné bajty, CAS a recovery se nemění.
 Čtecí polling stavu smí pokračovat po 408/503, mutace se neopakuje. Stav busy,
 queued či chyba nesmí v UI deklarovat dokončený Git přenos.
+
+### Diagnostika odmítnutého content-sync
+
+Samotné `SyncBusy` nerozlišuje obsazenou kapacitu příjmu, projektový journal,
+SQLite, registr ani změněný snapshot. Nativní vlastníci proto přidávají omezený
+kód `busy_resource`; přijímač ho spolu s omezeným `peer_phase` vrací v odpovědi
+503. Odesílatel přijímá pouze známé hodnoty, nikoli text výjimky, cestu či
+libovolný údaj protistrany. Starší protistrana bez těchto polí znamená neznámý
+důvod; UI nesmí tvrdit, že konkrétně projekt je obsazený. Pozorování příchozího
+a odchozího přenosu mají oddělené klíče, aby si nepřepisovala fázi a výsledek.
+
+Jde pouze o volatilní diagnostické údaje. Nemění se persistentní schémata,
+pořadí zápisů, crash boundaries ani recovery: journal, přesné uložené bajty,
+stabilní ID, validace a CAS zůstávají autoritou. Kód prostředku neopravňuje
+k retry, odstranění pending operace nebo přeskočení validace. Přenos s neznámým
+či známým busy důvodem zůstává nedokončený.
