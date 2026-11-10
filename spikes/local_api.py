@@ -247,6 +247,10 @@ class Handler(BaseHTTPRequestHandler):
     def send_error(self, code, message=None, explain=None):
         self.reply(code, {'error': 'request rejected'})
 
+    def end_headers(self):
+        super().end_headers()
+        self.response_started = True
+
     def single(self, name):
         values = self.headers.get_all(name, [])
         return values[0] if len(values) == 1 else None
@@ -319,8 +323,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._in_request_lane(
                     self._do_POST, lane_name=request_lane(self.path))
             except ProjectBusy as exc:
-                return self.reply(503, {'error': 'project busy',
-                    'retry': 'same-operation', 'outcome': exc.outcome})
+                payload = {'error': 'resource busy',
+                           'retry': 'same-operation', 'outcome': exc.outcome}
+                if getattr(self, 'response_started', False):
+                    # A stream already sent HTTP 200. Report its terminal error
+                    # inside NDJSON, never append a second HTTP response.
+                    self.close_connection = True
+                    if self.path in {'/v1/chat/send-stream', '/v1/tasks/route-stream',
+                                     '/v1/external/send-stream'}:
+                        try:
+                            self.wfile.write(json.dumps(dict(payload, type='error', status=503)).encode()+b'\n')
+                            self.wfile.flush()
+                        except OSError:
+                            pass
+                    return
+                return self.reply(503, payload)
 
     def _dispatch_request(self, request):
         if self.path not in PROJECT_ROUTES:

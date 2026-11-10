@@ -1378,3 +1378,13 @@ používá browser i server; procesní mapa zahazuje neaktivní projekty. Reuse 
 Stage/Commit, Workspace CAS a synchronizačního replaye zachovává recovery.
 Odmítnuty jsou druhý persistentní writer, zvýšení worker poolu, automatický
 retry a označení inicializačních čtení za read-only. Viz dodatek ADR 0050.
+
+Audit blokujících míst adaptuje existující request-local ownership kontext
+pro zbývající file flocks, včetně read-only autentizace. Odchozí sync zachovává
+nativní uzlovou kapacitu i durable envelope; při kolizi neřadí neomezeně další
+vlákna. Stream používá existující NDJSON terminální chybu i po odeslání hlaviček.
+Odmítnuty jsou automatické retry, druhá HTTP odpověď a plošné snížení SQLite či
+provider timeoutů bez auditu jejich recovery. Viz docs/http-blocking-audit.md.
+Konfigurace ChatService adaptuje původní RLock přes stejný bounded ownership
+kontext; zachovává reentranci a existující credential/reset journal. Nezavádí
+nový konfigurační writer ani současný reset během chráněné konfigurace.

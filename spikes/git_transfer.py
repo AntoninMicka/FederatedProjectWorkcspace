@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Native Git initial transfer, public history only, without hooks or merge."""
+from spikes.request_ownership import bounded_flock
 import fcntl
 from collections import OrderedDict
 import hashlib
@@ -149,7 +150,7 @@ def import_bundle(request, payload):
     require(root.stat().st_uid == os.getuid() and not root.stat().st_mode & 0o077, 'Unsafe transfer directory')
     fd = os.open(root / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'a+b') as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+        bounded_flock(handle, fcntl.LOCK_EX, resource='Git transfer')
         stage = root / request['operation_id']
         stage.mkdir(mode=0o700, exist_ok=True)
         require(stage == stage.resolve(), 'Unsafe transfer stage')

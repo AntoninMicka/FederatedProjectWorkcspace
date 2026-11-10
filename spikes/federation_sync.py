@@ -1218,14 +1218,24 @@ class ContentSyncControl:
         return rows
 
     @observed
+    @bounded_project_requests()
     def synchronize(self, peer_id, project_id, *, cancelled=None):
         try:
+            identifier(peer_id); identifier(project_id)
+            if cancelled is not None and cancelled():
+                raise SyncCancelled('Content sync cancelled before ownership')
             root = private_root(self.node)
             fd = os.open(root / 'federation-content-sync.lock',
                          os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             with os.fdopen(fd, 'a+b') as lock:
+                info = os.fstat(lock.fileno())
+                require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                        and info.st_nlink == 1 and not info.st_mode & 0o077,
+                        'Unsafe content send lock')
                 phase('wait-lock')
-                fcntl.flock(lock, fcntl.LOCK_EX)
+                # Preserve capacity one without accumulating background workers
+                # in an uninterruptible queue behind a stalled peer transfer.
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 return synchronize(self.node, peer_id, project_id,
                                    deployment=self.deployment,
                                    cancelled=cancelled)

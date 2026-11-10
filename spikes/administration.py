@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Local federation administration; no peer transport or automatic trust."""
+from spikes.request_ownership import bounded_flock
 from contextlib import contextmanager, closing
 import fcntl
 import getpass
@@ -176,7 +177,7 @@ class Administration:
             raise ValueError('Unsafe administration directory')
         fd = os.open(self.root / 'lock', os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(fd, 'rb') as handle:
-            fcntl.flock(handle, fcntl.LOCK_SH)
+            bounded_flock(handle, fcntl.LOCK_SH, resource='Node registry')
             if not self.repo.is_dir() or self.repo.is_symlink():
                 raise ValueError('Registry is unavailable')
             git = Git(self.repo)

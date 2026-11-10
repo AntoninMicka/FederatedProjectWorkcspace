@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import stat
 import threading
+from spikes.request_ownership import bounded_process_lock
 from types import MappingProxyType
 import unicodedata
 from uuid import UUID, uuid4, uuid5
@@ -552,7 +553,7 @@ class ChatService:
                 'Backend reset is pending; retry reset before configuration or dispatch')
 
     def configure(self, value):
-        with self.backend_configuration_lock:
+        with bounded_process_lock(self.backend_configuration_lock, resource='Backend configuration'):
             self._require_backend_reset_complete('ollama')
             _, bindings, _ = self._stores()
             # The bounded draft is non-authoritative and may remain invalid. Persist it first so
@@ -733,7 +734,7 @@ class ChatService:
         return {'scope': scope, 'tag': tag, 'policy': policy}
 
     def configure_search(self, value):
-        with self.backend_configuration_lock:
+        with bounded_process_lock(self.backend_configuration_lock, resource='Backend configuration'):
             self._require_backend_reset_complete('searxng')
             binding = SearXNGBinding.parse(value)
             SearXNGBindings(self._root()).save(binding)
@@ -827,7 +828,7 @@ class ChatService:
                   'endpoint', 'model', 'target_id', 'max_output_tokens',
                   'timeout_seconds', 'secret'}
         require(set(value) == fields, 'Unknown or missing external backend field')
-        with self.backend_configuration_lock:
+        with bounded_process_lock(self.backend_configuration_lock, resource='Backend configuration'):
             self._require_backend_reset_complete('openai-responses')
             secret = value['secret']
             root = self._root(); credentials = OpenAICredentials(root)
@@ -880,7 +881,7 @@ class ChatService:
                   'knowledge_revision', 'capabilities', 'max_output_tokens',
                   'timeout_seconds', 'secret'}
         require(set(value) == fields, 'Unknown or missing AtlasCloud backend field')
-        with self.backend_configuration_lock:
+        with bounded_process_lock(self.backend_configuration_lock, resource='Backend configuration'):
             self._require_backend_reset_complete('atlascloud-text')
             root = self._root(); candidate = dict(value); secret = candidate.pop('secret')
             AtlasCloudCatalog(root).validate_binding_offer(candidate)
@@ -965,7 +966,7 @@ class ChatService:
                   'timeout_seconds'}
         require(set(value['binding']) == fields,
                 'Unknown or missing ' + spec.name + ' backend field')
-        with self.backend_configuration_lock:
+        with bounded_process_lock(self.backend_configuration_lock, resource='Backend configuration'):
             self._require_backend_reset_complete(spec.adapter_id)
             root = self._root(); candidate = dict(value['binding'])
             DirectCatalog(root, spec).validate_binding_offer(candidate)
@@ -1006,7 +1007,7 @@ class ChatService:
         require(backend_id in {'ollama', 'openai-responses', 'atlascloud-text',
                                'searxng', *DIRECT_BINDINGS},
                 'Unsupported chat backend reset target')
-        with self.backend_configuration_lock:
+        with bounded_process_lock(self.backend_configuration_lock, resource='Backend configuration'):
             root = self._root(); journal = BackendResetJournal(root, backend_id)
             pending = journal.load()
             if pending is None:

@@ -4,6 +4,7 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
 import threading
+import fcntl
 
 
 bounded_project_wait = ContextVar('bounded_project_wait', default=False)
@@ -14,6 +15,30 @@ class ProjectBusy(Exception):
     def __init__(self, message, *, outcome='unknown'):
         super().__init__(message)
         self.outcome = outcome
+
+
+def bounded_flock(handle, mode, *, resource):
+    """Keep native locking unchanged; never park an HTTP worker on a flock."""
+    bounded = bounded_project_wait.get()
+    try:
+        fcntl.flock(handle, mode | (fcntl.LOCK_NB if bounded else 0))
+    except BlockingIOError as exc:
+        if bounded:
+            raise ProjectBusy(resource + ' is busy') from exc
+        raise
+
+
+@contextmanager
+def bounded_process_lock(lock, *, resource):
+    """Retain reentrancy and ownership while bounding HTTP contention."""
+    acquired = (lock.acquire(timeout=0.1) if bounded_project_wait.get()
+                else lock.acquire())
+    if not acquired:
+        raise ProjectBusy(resource + ' is busy')
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 class ProjectLanes:

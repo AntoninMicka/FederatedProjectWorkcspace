@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Shared web/desktop control plane for one-shot personal replication."""
+from spikes.request_ownership import bounded_flock
 import fcntl
 import os
 import ssl
@@ -47,7 +48,7 @@ class ReplicationControl:
         fd = os.open(root / 'replication-control.lock',
                      os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'a+b') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+            bounded_flock(lock, fcntl.LOCK_EX, resource='Project replication')
             return self._synchronize(replication_id)
 
     def _synchronize(self, replication_id):

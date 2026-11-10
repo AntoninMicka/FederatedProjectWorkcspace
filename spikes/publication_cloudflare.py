@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Cloudflare Workers deployment adapter for one host-routed publication portal."""
+from spikes.request_ownership import bounded_flock
 import base64
 from contextlib import contextmanager
 from datetime import date
@@ -274,7 +275,7 @@ class PublicationDeployment:
         fd = os.open(self._root() / 'publication-deployments.lock',
                      os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX); yield
+            bounded_flock(fd, fcntl.LOCK_EX, resource='CMS deployment'); yield
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
 

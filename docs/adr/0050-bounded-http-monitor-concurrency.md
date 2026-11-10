@@ -345,3 +345,23 @@ Mimo request kontext zůstává jeho původní blokující režim. Desktop i web
 bootstrapují administraci před spuštěním listeneru. Automatizované důkazy a
 zbývající rozsah jsou v `docs/http-concurrency-ownership.md`; lidská akceptace
 ani nasazení se z těchto testů neodvozují.
+
+### Navazující audit všech hranic čekání, 10. 11. 2026
+
+[Inventura čekání](../http-blocking-audit.md) rozlišuje HTTP admission,
+file/process zámky, SQLite, Git, síť, browser fronty a shutdown. Samotná kapacita
+fronty či socket inactivity timeout není celkový deadline požadavku.
+Zbývající blokující file flocks v HTTP používají společný `bounded_flock`,
+včetně sdíleného read-only zámku autentizace. Mimo request kontext zůstává
+původní nativní kontrakt. Odchozí sync coordinator má také bounded kontext,
+kontrolu zrušení před admission a neblokující uzlový zámek, s kapacitou jeden.
+
+Typed busy po odeslání hlaviček NDJSON streamu se hlásí terminálním rámcem 503
+s unknown výsledkem, nikoli druhou HTTP odpovědí. Původní worker dál vlastní
+socket. Tato změna nepřesouvá stream do úlohy, nemění jeho run journal ani
+neznamená dokončení auditu všech procesních zámků a timeoutů.
+
+Šest existujících konfiguračních/reset scope v ChatService nyní získává svůj
+stávající RLock přes bounded HTTP acquisition (100 ms). Reentrance a původní
+nativní chování se zachovávají. Tím se omezuje čekání na vlastníka; neurčuje se
+tím celkový čas jeho chráněné práce a nepovoluje souběžný dispatch/reset.

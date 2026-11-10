@@ -3,6 +3,7 @@
 from pathlib import Path
 import os
 import http.client
+import fcntl
 import hashlib
 import json
 import secrets
@@ -42,6 +43,55 @@ class AllowLoopback:
 
 
 class FederationSyncTests(unittest.TestCase):
+    def test_outbound_owner_is_bounded_preserves_pending_and_releases_after_failure(self):
+        from spikes.federation_sync import _database
+        from spikes.network_backend import private_root
+        envelope, payload, _, refs, chats = _prepare(self.services[0],
+            self.node_ids[1], self.project_id, str(uuid4()), [], force_bundle=True)
+        with _database(self.nodes[0]) as db:
+            db.execute('INSERT INTO outbound VALUES (?,?,?,?,?,?)',
+                (self.node_ids[1], self.project_id, envelope['exchange']['operation_id'],
+                 canonical(envelope).decode('ascii'), payload,
+                 canonical({'refs':refs,'chats':chats}).decode('ascii')))
+            before = db.execute('SELECT * FROM outbound').fetchall()
+        control = ContentSyncControl(self.nodes[0], deployment='web')
+        path = private_root(self.nodes[0]) / 'federation-content-sync.lock'
+        with path.open('a+b') as owner:
+            path.chmod(0o600); fcntl.flock(owner, fcntl.LOCK_EX)
+            with patch('spikes.federation_sync.synchronize', side_effect=AssertionError('dispatch')):
+                # A worker thread must terminate while the other owner remains
+                # held, rather than being released by the test's cleanup.
+                errors = []
+                def attempt():
+                    try: control.synchronize(self.node_ids[1], self.project_id)
+                    except Exception as exc: errors.append(exc)
+                worker = threading.Thread(target=attempt, daemon=True); worker.start()
+                worker.join(1)
+                self.assertFalse(worker.is_alive(), 'Waiting indefinitely for outbound owner')
+                self.assertEqual(len(errors), 1)
+                self.assertIsInstance(errors[0], BlockingIOError)
+            with _database(self.nodes[0]) as db:
+                self.assertEqual(db.execute('SELECT * FROM outbound').fetchall(), before)
+            self.assertEqual(control.statuses()[self.node_ids[1]+':'+self.project_id]['state'], 'busy')
+        with patch('spikes.federation_sync.synchronize', side_effect=OSError('transport')):
+            with self.assertRaises(OSError):
+                control.synchronize(self.node_ids[1], self.project_id)
+        with patch('spikes.federation_sync.synchronize', return_value={'state':'idle'}) as sending:
+            self.assertEqual(control.synchronize(self.node_ids[1], self.project_id), {'state':'idle'})
+            sending.assert_called_once()
+        with _database(self.nodes[0]) as db:
+            self.assertEqual(db.execute('SELECT * FROM outbound').fetchall(), before)
+
+    def test_cancelled_outbound_request_does_not_wait_for_owner(self):
+        from spikes.network_backend import private_root
+        path = private_root(self.nodes[0]) / 'federation-content-sync.lock'
+        with path.open('a+b') as owner:
+            path.chmod(0o600); fcntl.flock(owner, fcntl.LOCK_EX)
+            with patch('spikes.federation_sync.synchronize', side_effect=AssertionError('dispatch')):
+                with self.assertRaises(SyncCancelled):
+                    ContentSyncControl(self.nodes[0], deployment='web').synchronize(
+                        self.node_ids[1], self.project_id, cancelled=lambda: True)
+
     def completed_request(self):
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
@@ -1070,12 +1120,16 @@ with running_api('http',handler=DesktopHandler) as server:
    elif policy=='authenticate':info.setHttpHeader(b'Authorization',('Bearer '+server.token).encode())
  profile=QWebEngineProfile(app);interceptor=Interceptor(profile);profile.setUrlRequestInterceptor(interceptor);page=QWebEnginePage(profile,app)
  def received(value):
+  if not value:
+   QTimer.singleShot(20,poll);return
   value=json.loads(value)
   assert value=={'fork':True,'origin':True,'writable':True,'refreshes':True,'syncControls':True},value
   print('project chat fork: WebEngine RW branch verified',flush=True);app.exit(0)
+ def poll():
+  page.runJavaScript('window.forkEvidence||null',0,received)
  def loaded(ok):
   if not ok:return app.exit(3)
-  page.runJavaScript("""activeProject={id:'99999999-9999-4999-8999-999999999999',title:'P'};const t={thread_id:'11111111-1111-4111-8111-111111111111',node_id:'22222222-2222-4222-8222-222222222222',user_id:'33333333-3333-4333-8333-333333333333',status:'active',classification:'brainstorming',created_at:'2026-10-26T12:00:00Z',revision:2,project_id:activeProject.id,assignment_revision:1,response_language:null,forked_from_thread_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',forked_from_digest:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',messages:[],turns:[]};knownThreads=[t];activeThread=t;taskOutcomes=[];document.querySelector('#chat-draft').value='continue';renderThreadList(knownThreads);renderChat(t);let refreshes=0;loadChat=async()=>{refreshes++};document.querySelector('#chats-tab').click();document.dispatchEvent(new CustomEvent('contentsynccompleted',{detail:{projectId:activeProject.id}}));JSON.stringify({fork:document.querySelector('#sidebar-chat-tree').textContent.includes('fork'),origin:document.querySelector('#sidebar-chat-tree').textContent.includes('konflikt aaaaaaaa'),writable:!document.querySelector('#chat-submit').disabled,refreshes:refreshes===2,syncControls:document.querySelector('#admin-sync-all').textContent==='Synchronizovat vše'&&document.querySelector('#admin-sync-automatic').type==='checkbox'})""",0,received)
+  page.runJavaScript("""(async()=>{activeProject={id:'99999999-9999-4999-8999-999999999999',title:'P'};const t={thread_id:'11111111-1111-4111-8111-111111111111',node_id:'22222222-2222-4222-8222-222222222222',user_id:'33333333-3333-4333-8333-333333333333',status:'active',classification:'brainstorming',created_at:'2026-10-26T12:00:00Z',revision:2,project_id:activeProject.id,assignment_revision:1,response_language:null,forked_from_thread_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',forked_from_digest:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',messages:[],turns:[]};knownThreads=[t];activeThread=t;taskOutcomes=[];document.querySelector('#chat-draft').value='continue';renderThreadList(knownThreads);renderChat(t);let refreshes=0;loadChat=async()=>{refreshes++};document.querySelector('#chats-tab').click();await new Promise(resolve=>setTimeout(resolve,0));document.dispatchEvent(new CustomEvent('contentsynccompleted',{detail:{projectId:activeProject.id}}));window.forkEvidence=JSON.stringify({fork:document.querySelector('#sidebar-chat-tree').textContent.includes('fork'),origin:document.querySelector('#sidebar-chat-tree').textContent.includes('konflikt aaaaaaaa'),writable:!document.querySelector('#chat-submit').disabled,refreshes:refreshes===2,syncControls:document.querySelector('#admin-sync-all').textContent==='Synchronizovat vše'&&document.querySelector('#admin-sync-automatic').type==='checkbox'});})()""");QTimer.singleShot(20,poll)
  page.loadFinished.connect(loaded);page.setUrl(QUrl(server.origin+'/'));QTimer.singleShot(10000,lambda:app.exit(2));raise SystemExit(app.exec())
 '''
         result = subprocess.run([sys.executable, '-c', script],
