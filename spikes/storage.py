@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import time
 
+from spikes.git_budget import GitDeadlineExceeded, effective_deadline, check_deadline
 from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, validate_snapshot
 
@@ -24,9 +25,10 @@ class Git:
                    GIT_AUTHOR_EMAIL='m0@example.invalid', GIT_COMMITTER_NAME='M0 Test',
                    GIT_COMMITTER_EMAIL='m0@example.invalid', LC_ALL='C')
         env.update(env_extra or {})
-        timeout = 30 if self.deadline is None else min(30, self.deadline - time.monotonic())
+        deadline = effective_deadline(self.deadline)
+        timeout = 30 if deadline is None else min(30, deadline - time.monotonic())
         if timeout <= 0:
-            raise TimeoutError('Operation deadline exceeded')
+            raise GitDeadlineExceeded('Git operation deadline exceeded')
         return subprocess.run(
             ['git', '-c', f'core.hooksPath={os.devnull}', '-c', 'commit.gpgSign=false',
              '-c', 'core.autocrlf=false', '-c', 'core.fsmonitor=false', *args],
@@ -35,8 +37,7 @@ class Git:
         )
 
     def check_deadline(self):
-        if self.deadline is not None and time.monotonic() >= self.deadline:
-            raise TimeoutError('Operation deadline exceeded')
+        check_deadline(self.deadline)
 
     def head(self):
         return self.run('rev-parse', 'HEAD').stdout.strip()

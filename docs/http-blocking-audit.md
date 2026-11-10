@@ -112,3 +112,14 @@ plan-view now share the existing web 30-second project Git budget from
 registration through view/draft work, with expiry checked before returning.
 CPU/disk calls and ancillary registry Git work are not preempted; complete
 history-validation deadlines and remaining stores are still open.
+
+### Transfer-history budget follow-up
+
+Native history validation, export, content-sync bundle preparation/isolated
+verification and replica bundle verification now share a 60-second budget per
+phase. Existing/new Git wrappers and multiple branches inherit the earlier
+scope/explicit deadline; subprocesses still have at most 30 seconds each.
+Receiver timeout is transient 503, preserving the original pending request.
+This closes repeated per-command/branch timeout resets in these phases, not
+whole-request elapsed time, preemptive CPU/disk cancellation, other Git workflows
+or the remaining global application lane.

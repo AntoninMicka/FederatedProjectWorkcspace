@@ -21,6 +21,7 @@ from spikes.administration import Administration, identifier
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.federation_accounts import MappingSignatures, canonical, openssl
 from spikes.http_deadline import DeadlineHTTPSConnection
+from spikes.git_budget import GitDeadlineExceeded, git_budget
 from spikes.git_transfer import MAX_BUNDLE, git_run, validate_history
 from spikes.journal import RecoveryConflict, sync_dir
 from spikes.metadata import require
@@ -42,6 +43,10 @@ HASH = re.compile(r'[a-f0-9]{40}|[a-f0-9]{64}')
 
 class ReplicationRejected(ValueError):
     pass
+
+
+class ReplicationBusy(TimeoutError):
+    """Temporary peer exhaustion; retain the exact prepared operation."""
 
 
 class ReplicationConflict(ValueError):
@@ -222,6 +227,7 @@ class ReplicationReceiver:
                 'Replication bundle differs from signed request')
         return request, authority
 
+    @git_budget()
     def _validate_bundle(self, request, payload, privacy):
         root = private_root(self.node)
         with tempfile.TemporaryDirectory(prefix='replication-verify-', dir=root) as directory:
@@ -579,6 +585,8 @@ def send(node, replication_id, operation_id, expected_base, *, ca=None,
         connection.check_deadline()
         require(len(raw) <= MAX_ENVELOPE, 'Replication response exceeds limit')
         response_body = json.loads(raw)
+        if response.status == 503:
+            raise ReplicationBusy('Replication peer is busy; retry the same operation')
         if response.status == 409:
             raise ReplicationConflict('Replica reported a conflict')
         if response.status != 200:
@@ -620,6 +628,8 @@ def reply(handler):
         result = ReplicationReceiver(
             handler.server.node, handler.server.administration).receive(envelope, payload)
         return handler.reply(200, result)
+    except GitDeadlineExceeded:
+        return handler.reply(503, {'error': 'Replication validation temporarily unavailable'})
     except (ReplicationConflict, RecoveryConflict, PendingOperation):
         return handler.reply(409, {'error': 'Replication conflicts with replica state'})
     except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):

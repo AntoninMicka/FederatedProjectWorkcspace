@@ -1430,3 +1430,11 @@ Chybějící stav používá původní bootstrap, chyby nejsou důvodem k resetu
 Git čtení desktopového HTTP používá stávající monotónní deadline wrapperu Git.
 Druhý read store, nová cache a automatická recovery pending operací byly
 odmítnuty: existující HEAD/index validace a journal zůstávají autoritou.
+
+Git validační rozpočet **adaptuje** existující wrapper `Git.run`, jeho 30s limit
+podprocesu a nativní `validate_history`. ContextVar přenáší dřívější deadline do
+vnořených kontrol a nových Git wrapperů; nepřidává Git writer ani cache validace.
+Původní HTTP 503, outbox, journal a receipt recovery zachovávají request/operation
+ID při nedokončeném ověření. Vypnutí sémantické validace, nový timeout pro každou
+větev a automatické opakování byly odmítnuty. Dlouhé joby zůstávají samostatným
+protokolovým krokem, nikoli skrytou změnou tohoto transportu.

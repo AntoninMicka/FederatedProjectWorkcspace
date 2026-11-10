@@ -14,6 +14,7 @@ import sys
 import tempfile
 
 from spikes.administration import Administration, identifier
+from spikes.git_budget import git_budget
 from spikes.configuration import committed_project
 from spikes.federation_probe import check_peer
 from spikes.journal import sync_dir
@@ -30,6 +31,7 @@ def git_run(git, *args, **kwargs):
     return git.run(*args, env_extra={'GIT_NO_REPLACE_OBJECTS': '1'}, **kwargs)
 
 
+@git_budget()
 def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'})):
     require(isinstance(allowed_privacy, (set, frozenset)) and bool(allowed_privacy)
             and allowed_privacy <= {'public', 'project', 'confidential'},
@@ -50,6 +52,7 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
         return snapshots[commit]
 
     for commit in commits:
+        git.check_deadline()
         committed_project(git, commit, project_id, check_worktree=False)
         entries = git_run(git, 'ls-tree', '-r', '-z', commit).stdout
         for entry in filter(None, entries.split('\0')):
@@ -72,9 +75,11 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
         # repositories whose HEAD is unborn or points at a different branch.
         from spikes.reporting_schema import validate_git
         validate_git(git, candidate, entities, head=commit)
+        git.check_deadline()
     return len(commits)
 
 
+@git_budget()
 def export_bundle(node, project_id, allowed_privacy=frozenset({'public'})):
     ws = Projects(node).workspace(project_id, blocking=False)
     with ws.journal.lock(), ws.journal.connect() as db:

@@ -1004,6 +1004,30 @@ class FederationSyncTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'local-only'):
             _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'})
 
+    def test_bundle_branches_share_one_validation_budget(self):
+        from spikes.git_budget import GitDeadlineExceeded
+        from spikes.git_transfer import validate_history as native_validate
+        root = Projects(self.nodes[0]).workspace(self.project_id).git
+        head = root.head()
+        root.run('branch', 'other-head', head)
+        clock = [time.monotonic()]
+        checked = []
+        def validation(*args, **kwargs):
+            result = native_validate(*args, **kwargs)
+            checked.append(args[1])
+            clock[0] += 35
+            return result
+        with patch('spikes.git_budget.time.monotonic', side_effect=lambda: clock[0]), \
+             patch('spikes.federation_sync.validate_history', side_effect=validation):
+            with self.assertRaises(GitDeadlineExceeded):
+                _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'})
+        self.assertEqual(checked, [head, head])
+        self.assertEqual(root.head(), head)
+        # Scope restoration permits a subsequent ordinary export.
+        refs, payload = _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'})
+        self.assertEqual(len(refs), 2)
+        self.assertTrue(payload)
+
     def test_pinned_https_endpoint_exchanges_native_bundle(self):
         self.map_users()
         chat_id = self.chat_turn(0, answer='Sent with project sync')
@@ -1056,6 +1080,11 @@ class FederationSyncTests(unittest.TestCase):
         # A transient native writer collision is 503, not permanent rejection.
         # Both sides retain the exact request identity for the next attempt.
         from spikes.federation_sync import _database
+        from spikes.git_budget import GitDeadlineExceeded
+        with patch.object(SyncReceiver, '_receive', side_effect=GitDeadlineExceeded('validation budget')):
+            with self.assertRaises(SyncBusy):
+                synchronize(self.nodes[0], self.node_ids[1], self.project_id,
+                            deployment='web')
         with patch.object(SyncReceiver, '_receive', side_effect=BlockingIOError()):
             with self.assertRaises(SyncBusy):
                 ContentSyncControl(self.nodes[0], deployment='web').synchronize(

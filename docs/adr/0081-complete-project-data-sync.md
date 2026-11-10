@@ -162,3 +162,23 @@ neověřeného grafu. Nové příchozí Git bajty nadále procházejí plnou sé
 validací. Aktuální identity, podpisy, sharing policy, chaty a pooly se kontrolují
 nezávisle. Nevzniká další persistentní stav, nemění se protokol ani crash/recovery
 hranice, a uložený nedokončený outbound request se kvůli této optimalizaci nepřepisuje.
+
+## Sdílený časový rozpočet ověřování historie
+
+Příprava/ověření bundle používá jeden kooperativní 60s rozpočet fáze, sdílený
+vnořenými validacemi, větvemi a Git wrappery. Platí dřívější explicitní deadline
+a dosavadní maximálně 30s limit jednotlivého Git podprocesu. Rozpočet neobnovuje
+nová větev či dočasný repozitář; limit 500 commitů a všechny sémantické/privacy
+kontroly zůstávají. Po dokončení CPU validace se ještě kontroluje vypršení.
+
+Timeout není důkaz neplatného obsahu: přijímací HTTP hranice vrátí 503.
+Sync/replikace zachovají původní operation ID, podepsaný request a payload pro
+nativní explicitní retry/recovery; timeout nepovoluje nový zápis ani smazání
+intentů. Před publikací se uklidí dočasné ověřovací repo, po durable intentu
+platí původní recovery podle ADR 0003. Rozpočet se nevkládá kolem celé publikační
+transakce a nemění žádný persistentní/protokolový formát.
+
+Jde o limit fáze, ne celého HTTP requestu či synchronizace; CPU/fsync se během
+volání preemptivně nepřerušuje. Delší validace vyžaduje budoucí tracked-job návrh,
+ne vynechání kontrol. Důkazy a otevřené hranice viz
+[audit vlastnictví](../http-concurrency-ownership.md).

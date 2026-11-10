@@ -791,3 +791,65 @@ and before final response, and propagation of draft timeout. Existing tests
 cover stale/forged/missing index, pending operations, interrupted initialization,
 privacy and process-crash recovery. Compilation and `git diff --check` passed.
 The full suite and live Omnia acceptance have not run for this change.
+
+## Shared budgets for transfer history validation
+
+Continuation from `50faf0c` on the same branch, under the existing explicit
+source-continuation authorization. Bridge status remains stale/connection
+refused; no Workspace planning/review state changes.
+
+`git_budget` supplies one monotonic 60-second cooperative budget per bundle
+preparation/verification phase. Nested scopes use the earlier deadline; a new
+Git wrapper or another selected branch cannot restart it. `Git.run` consults
+the current context even on wrappers created earlier, taking the minimum of
+its explicit deadline, the remaining scope budget and the existing 30-second
+single-command limit. Scope state is reset on success/failure and is local to
+the current context, not a global mutable Git timeout.
+
+The scope wraps native `validate_history`, public-history export, content-sync
+bundle preparation and isolated bundle verification, and the replication
+receiver's isolated validation. History checks retain all commit/parent,
+privacy, immutable-source and reporting validations, with deadline checkpoints
+between commits and after semantic validation. Expiry after CPU work cannot
+return successful validation. Subprocess timeout inside a phase is classified
+as `GitDeadlineExceeded`; ordinary native commands outside a scope retain their
+existing subprocess behavior.
+
+A receiver validation timeout is HTTP 503, not a claim that the signed content
+is invalid (422). Content-sync retains its existing same-operation busy path.
+Replication maps this response to `ReplicationBusy` (a timeout), so its existing
+control records offline with the same pending operation ID instead of rejected.
+No resend is automatic; an explicit subsequent attempt uses the saved envelope
+and bundle. Completed content-sync replay still uses its existing shortcut.
+
+Crash boundaries remain ADR 0003/0081. An isolated pre-intent timeout cleans up
+its temporary verification stage without publication. If replication already
+persisted its inbound intent and project marker, later history timeout leaves
+that exact unfinished operation and base HEAD; native recovery must validate
+and complete it under the same ID. No journal/receipt deletion, second commit,
+force update or replacement operation is authorized by expiry. Budget scopes
+are not added around the whole publication lifecycle and introduce no new
+persistent format or writer.
+
+This is a per-phase budget, not an end-to-end synchronization deadline. A
+request can contain several separate phases and network exchange; no cumulative
+whole-request limit is claimed. CPU/disk work is checked cooperatively, not
+preempted mid-validator/fsync, and SQLite waits keep their separate ownership
+policy. Large transfers exceeding the budget may require the later tracked-job
+protocol; validation is never skipped to make them fit. Replication's completed
+replay validation order, remaining application-lane operations and background
+job/shutdown ownership still need review. No live Omnia deployment or acceptance
+is claimed for this slice.
+
+Verification: 122 targeted Git budget/history, content-sync, replication,
+storage, Workspace and project-read tests passed (3 optional skips). A separate
+25-test reporting/desktop-transfer/recovery selection passed, including native
+replication timeout after durable intent and the multi-branch shared budget;
+these runs overlap. Real loopback HTTPS checks prove 503 is transient and the
+same operation completes on retry. Deterministic clock tests cover inherited
+remaining time, explicit shorter deadlines, late CPU results, context cleanup
+and thread isolation; immutable-source/reporting validation remains exercised.
+A SQLite ResourceWarning in the regression was traced to an existing test's
+unclosed receipt-query connection; it now closes explicitly, and the focused
+allocation-traced rerun passed without the warning. Compilation and
+`git diff --check` passed. The full suite and live acceptance have not run.

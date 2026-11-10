@@ -28,6 +28,7 @@ from spikes.administration import (
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.federation_accounts import MappingSignatures, canonical
 from spikes.http_deadline import DeadlineHTTPSConnection
+from spikes.git_budget import GitDeadlineExceeded, git_budget
 from spikes.git_transfer import MAX_BUNDLE, git_run, validate_history
 from spikes.journal import sync_dir
 from spikes.metadata import require
@@ -347,6 +348,7 @@ def _inventory(git, scope):
     return sorted(rows, key=lambda row: row['ref'])
 
 
+@git_budget()
 def _build_bundle(node, project_id, scope, *, verified=None, peer_known_refs=None):
     binding = _binding(node, project_id)
     if binding is None:
@@ -401,6 +403,7 @@ def _pool_payload(exchange, payload):
     return payload[-size:] if size else b''
 
 
+@git_budget()
 def _validate_git_bundle(payload, refs, project_id, repo):
     """Check the complete native bundle in an isolated object store."""
     repo.mkdir(mode=0o700)
@@ -1443,7 +1446,7 @@ def reply(handler):
         handler.send_response(200); handler.send_header('Content-Type', CONTENT_TYPE)
         handler.send_header('Content-Length', str(len(raw))); handler.end_headers()
         handler.wfile.write(raw)
-    except SyncBusy:
+    except (SyncBusy, GitDeadlineExceeded):
         return handler.reply(503, {'error': 'Content receiver is busy'})
     except SyncConflict:
         return handler.reply(409, {'error': 'Content sync requires a conflict decision'})

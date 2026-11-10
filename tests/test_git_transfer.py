@@ -25,6 +25,23 @@ class GitTransferHistoryTests(unittest.TestCase):
             validate_history(self.git, self.git.head(), self.project_id)
         self.assertEqual([call.args[0] for call in read.call_args_list], commits)
 
+    def test_history_cannot_return_success_after_semantic_validation_expires(self):
+        import time
+        from spikes.git_budget import GitDeadlineExceeded
+        from spikes.reporting_schema import validate_git
+        clock = [time.monotonic()]
+        original_head = self.git.head()
+        def delayed_validation(*args, **kwargs):
+            result = validate_git(*args, **kwargs)
+            clock[0] += 61
+            return result
+        with patch('spikes.git_budget.time.monotonic', side_effect=lambda: clock[0]), \
+             patch('spikes.reporting_schema.validate_git', side_effect=delayed_validation):
+            with self.assertRaises(GitDeadlineExceeded):
+                validate_history(self.git, original_head, self.project_id)
+        self.assertEqual(self.git.head(), original_head)
+        self.assertGreaterEqual(validate_history(self.git, original_head, self.project_id), 2)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         base = Path(self.temp.name)
