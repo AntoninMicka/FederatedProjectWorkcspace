@@ -20,6 +20,12 @@ from spikes.metadata import ValidationError
 NOW = '2026-10-25T18:00:00+00:00'
 
 
+class _TransportConnection:
+    sock = None
+    def connect(self): pass
+    def getresponse(self): raise AssertionError('Unexpected response before dispatch')
+
+
 class AtlasCloudBackendTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
@@ -229,9 +235,10 @@ class AtlasCloudBackendTests(unittest.TestCase):
             b'data: ' + json.dumps(final).encode() + b'\n', b'\n',
             b'data: [DONE]\n', b'\n'])
         class Response:
+            def close(self): pass
             status = 200
             def readline(self, _limit): return next(lines, b'')
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): pass
             def request(self, *_args, **_kwargs): pass
             def getresponse(self): return Response()

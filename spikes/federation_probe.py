@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Nonce-bound signed connectivity probe, never login or data synchronization."""
+from spikes.http_request_budget import RequestReadTimeout
 import base64
 import hashlib
+from spikes.provider_deadline import budget_connection
 import http.client
 import ipaddress
 import json
@@ -54,6 +56,8 @@ def reply_probe(handler):
                 signature = openssl('pkeyutl', '-sign', '-rawin', '-inkey', str(signatures.key), '-in', str(message))
         return handler.reply(200, dict(payload=payload, public_key=identity['public_key'],
                                        signature=base64.b64encode(signature).decode()))
+    except RequestReadTimeout:
+        raise
     except Exception:
         return handler.reply(422, {'error': 'Node identity unavailable; restore original configuration and keys'})
 
@@ -71,7 +75,7 @@ def check_peer(endpoint, ca, node_id, fingerprint):
     try:
         context = ssl.create_default_context(cafile=str(ca))
         context.minimum_version = ssl.TLSVersion.TLSv1_2
-        connection = http.client.HTTPSConnection(str(address), parsed.port or 443, context=context, timeout=5)
+        connection = budget_connection(http.client.HTTPSConnection(str(address), parsed.port or 443, context=context, timeout=5), 5)
         try:
             connection.request('POST', PATH, body=json.dumps({'challenge': challenge}),
                                headers={'Content-Type': 'application/json'})

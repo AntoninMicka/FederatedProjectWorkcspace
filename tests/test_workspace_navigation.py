@@ -98,7 +98,10 @@ const artifactEditorForm={elements:Object.fromEntries(['title','filename','descr
 const artifactRawWidget={readOnly:false,setDisabled(value){this.readOnly=value;}};
 let juliaEditor={hidden:false},juliaEditorDirty=false,juliaEditorAttempt=null,juliaEditorModel={};
 let presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorView={},presentationEditorDeck={},presentationEditorWorkspace={hidden:false},presentationRawPanel={hidden:true};
-let conflicts=false,projectConflictOperation=null;
+let conflicts=false,projectConflictOperation=null,projectLocalAttempt=null,projectLocalReview=null;
+let allowLocalLeave=false,localDialogCloses=0;
+const window={confirm:()=>allowLocalLeave};
+function closeLocalConflictDialog(){localDialogCloses++;}
 let projectConflictDrafts=new Map();
 function closeConflictDialog(){conflicts=false;}
 function conflictDraftChanged(){return conflicts;}
@@ -131,6 +134,9 @@ const choose=choice=>handlers.get('click')({target:{closest:()=>({dataset:{leave
   dirty();pending=guard();assert.equal(await guard(),false);let prevented=false;handlers.get('cancel')({preventDefault(){prevented=true;}});assert.equal(await pending,false);assert.equal(prevented,true);
   const count=writes;pending=guard();choose('discard');assert.equal(await pending,true);assert.equal(writes,count);assert.equal(await guard(),true);
  }
+ const pendingLocal={operation_id:'same-operation'};projectLocalAttempt=pendingLocal;projectLocalReview={};
+ assert.equal(await canLeaveConflictEditor(),false);assert.equal(projectLocalAttempt,pendingLocal);assert.equal(localDialogCloses,0);
+ allowLocalLeave=true;assert.equal(await canLeaveConflictEditor(),true);assert.equal(projectLocalAttempt,null);assert.equal(projectLocalReview,null);assert.equal(localDialogCloses,1);
  assert.equal(writes,8);assert.equal(artifactEditorTaskEdit,null);assert.equal(artifactEditorForm.elements.title.disabled,false);assert.equal(artifactRawWidget.readOnly,false);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 '''

@@ -37,8 +37,13 @@ class _Reader(io.RawIOBase):
         return True
 
     def readinto(self, buffer):
-        self.transport.settimeout(self.deadline.remaining())
-        count = self.raw.readinto(buffer)
+        self.transport.settimeout(self.deadline.io_timeout()
+            if isinstance(self.deadline, _Socket) else self.deadline.remaining())
+        try:
+            count = self.raw.readinto(buffer)
+        except TimeoutError:
+            self.deadline.remaining()
+            raise
         self.deadline.remaining()
         return count
 
@@ -50,14 +55,31 @@ class _Reader(io.RawIOBase):
 
 
 class _Socket:
-    def __init__(self, transport, deadline):
+    def __init__(self, transport, deadline, *, timeout=None, watchdog=False):
         self.transport, self.deadline = transport, deadline
+        self.timeout = timeout
+        self.watchdog = watchdog
+
+    def remaining(self):
+        remaining = self.deadline.remaining()
+        return min(remaining, self.timeout) if self.timeout is not None else remaining
+
+    def io_timeout(self):
+        remaining = self.remaining()
+        # An attached run watchdog interrupts in-flight I/O at the current hard
+        # deadline. Clamping its kernel wait to the old hard deadline would
+        # wrongly expire a read after the user explicitly extends that run.
+        return self.timeout if self.watchdog and self.timeout is not None else remaining
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
+        self.transport.settimeout(self.remaining())
 
     def __getattr__(self, name):
         return getattr(self.transport, name)
 
     def sendall(self, data, *args, **kwargs):
-        self.transport.settimeout(self.deadline.remaining())
+        self.transport.settimeout(self.io_timeout())
         self.transport.sendall(data, *args, **kwargs)
         self.deadline.remaining()
 
@@ -67,7 +89,7 @@ class _Socket:
         # Native makefile owns its socket reference. HTTP/1.0 getresponse() may
         # close the connection before its returned response body has been read.
         raw = self.transport.makefile('rb', buffering=0)
-        return io.BufferedReader(_Reader(raw, self.transport, self.deadline))
+        return io.BufferedReader(_Reader(raw, self.transport, self))
 
 
 class DeadlineHTTPSConnection(http.client.HTTPSConnection):

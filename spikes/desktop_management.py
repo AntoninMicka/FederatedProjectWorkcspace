@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Native single-OS-user administration, using the existing process token."""
 import sqlite3
+from spikes.request_ownership import ProjectBusy
 import os
 import subprocess
 
@@ -77,6 +78,8 @@ class DesktopManagementHandler(DesktopHandler):
                 return self.reply(200, control.view())
             except AccessDenied:
                 return self.send_error(403)
+            except ProjectBusy:
+                raise
             except Exception:
                 return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/federation/content/reconcile',
@@ -111,6 +114,8 @@ class DesktopManagementHandler(DesktopHandler):
                                         'content_sync_statuses': control.statuses()})
             except AccessDenied:
                 return self.send_error(403)
+            except ProjectBusy:
+                raise
             except Exception:
                 return self.reply(409, {'error': 'Obsah projektu se nepodařilo synchronizovat; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
@@ -130,6 +135,8 @@ class DesktopManagementHandler(DesktopHandler):
                     state['replications'], state['node_id'])})
             except AccessDenied:
                 return self.send_error(403)
+            except ProjectBusy:
+                raise
             except Exception:
                 return self.reply(409, {'error': 'Synchronizaci se nepodařilo dokončit; '
                                                'aktuální stav je uložen pro bezpečné opakování.'})

@@ -27,10 +27,17 @@ class DesktopFederationTests(unittest.TestCase):
         response=connection.getresponse();result=response.status,json.loads(response.read());connection.close()
         return result
 
+    def bootstrap(self, server):
+        # Production initializes identity/registry before accepting HTTP. Reads
+        # must not recreate these persistent layers inside bounded admission.
+        ProjectCreation(self.node).initialize_node()
+        server.administration = Administration(self.node, deployment='desktop')
+        server.administration.bootstrap()
+
     def test_empty_desktop_can_add_peer_before_first_project(self):
         with running_api('http',handler=DesktopManagementHandler,projects=Projects(self.node)) as server:
-            server.administration=Administration(self.node,deployment='desktop')
             self.assertFalse(self.node.exists())
+            self.bootstrap(server)
             code,state=self.request(server,{'action':'list'})
             self.assertEqual(code,200);self.assertEqual(len(state['users']),1);self.assertEqual(state['projects'],[])
             self.assertEqual(state['remote_projects'],[])
@@ -45,7 +52,7 @@ class DesktopFederationTests(unittest.TestCase):
     def test_content_sync_bulk_controls_persist_on_desktop(self):
         with running_api('http',handler=DesktopManagementHandler,
                          projects=Projects(self.node)) as server:
-            server.administration=Administration(self.node,deployment='desktop')
+            self.bootstrap(server)
             code,state=self.request(server,{'action':'list'})
             self.assertEqual(code,200)
             self.assertEqual(state['content_sync_settings'],{
@@ -66,7 +73,7 @@ class DesktopFederationTests(unittest.TestCase):
 
     def test_corrupt_or_lost_previous_identity_is_not_replaced(self):
         with running_api('http',handler=DesktopManagementHandler,projects=Projects(self.node)) as server:
-            server.administration=Administration(self.node,deployment='desktop')
+            self.bootstrap(server)
             self.assertEqual(self.request(server,{'action':'list'})[0],200)
             before=self.node.read_bytes();self.node.write_bytes(b'not JSON')
             self.assertEqual(self.request(server,{'action':'list'})[0],422)

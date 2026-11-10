@@ -519,3 +519,28 @@ Neobnovitelný pending/recovery konflikt se hlásí 409 a zachová stav. Platí 
 boundaries ADR 0003/0061: frozen návrhy, HEAD/digest a operation ID, native receipt
 před outcome, žádný reset ani automatická akceptace/retry. Celkové CPU/Git/disk
 rozpočty a zbývající aplikační domény tím nejsou uzavřené.
+
+### Dokončení domén běžných rout a transportních rozpočtů
+
+Poslední běžné routy opouštějí aplikační linku: nastavení uzlu má vlastní
+serializaci, federační ovládání/stav je oddělené od přenosu katalogu, replikace
+a enrollmentu. Import zdroje přebírá existujícího vlastníka projektu z vnořeného
+`source.project_id`. Peer probe/katalog/replikace mají samostatnou omezenou
+kapacitu. Neznámé routy zůstávají konzervativní; nativní registry, journal,
+transakce a CAS se nemění. Běžné JSON routy získávají doménu až po autentizaci
+a těle; peer protokoly zachovávají vlastní validaci.
+
+Providerové transporty používají celkový monotónní rozpočet přes DNS, connect,
+TLS, odeslání a každý raw read. DNS hostname probíhá v omezeném pomocném procesu,
+který timeout ukončí a sklidí; číselné adresy jej nepotřebují. TLS ověření,
+pinning a hranice před/po dispatchi zůstávají zachované. Streamovaná úloha
+používá původní RunDeadline včetně explicitního prodloužení. Načítání HTTP
+hlaviček/těla navíc omezuje celkových 60 sekund vedle původní sekundové
+nečinnosti. Nedokončený vstup je před dispatchí (`not-started`); pozdější timeout
+neznamená rollback ani oprávnění k nové operaci. Podrobnosti a limity shrnuje
+[ownership audit](../http-concurrency-ownership.md#final-declared-route-and-transport-audit).
+
+Společný providerový vlastník zůstává záměrný kvůli recovery lifecycle a resetu.
+Jeho odstranění vyžaduje samostatný návrh nativního vlastnictví běhů; tato změna
+nezavádí nové sledované úlohy ani změnu federačního protokolu. CPU/disk/fsync
+a celá vícefázová operace nemají tímto rozhodnutím nový absolutní časový limit.

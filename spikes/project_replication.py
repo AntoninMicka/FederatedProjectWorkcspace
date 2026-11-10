@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Signed, grant-bound project replication with durable CAS recovery."""
+from spikes.http_request_budget import RequestReadTimeout
 import base64
 from contextlib import closing
 import hashlib
@@ -628,6 +629,8 @@ def reply(handler):
         result = ReplicationReceiver(
             handler.server.node, handler.server.administration).receive(envelope, payload)
         return handler.reply(200, result)
+    except RequestReadTimeout:
+        raise
     except GitDeadlineExceeded:
         return handler.reply(503, {'error': 'Replication validation temporarily unavailable'})
     except (ReplicationConflict, RecoveryConflict, PendingOperation):

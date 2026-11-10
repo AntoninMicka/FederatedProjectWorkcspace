@@ -76,7 +76,7 @@ class ProjectTests(unittest.TestCase):
                          projects=self.projects) as server:
             self.assertEqual(server.worker_limit, 5)
             self.assertTrue(server.http_diagnostics()['ui_capacity_reserved'])
-            server.application_lane.acquire()
+            server.node_preferences_lane.acquire()
             try:
                 started = time.monotonic()
                 response = driver.request(server, path='/v1/projects', body=b'{}')
@@ -90,9 +90,9 @@ class ProjectTests(unittest.TestCase):
                 response = driver.request(server, path='/v1/diagnostics/status', body=b'{}')
                 header, body = response.split(b'\r\n\r\n', 1)
                 self.assertIn(b'HTTP/1.0 200', header)
-                self.assertTrue(json.loads(body)['http']['lanes_busy']['application_lane'])
+                self.assertTrue(json.loads(body)['http']['lanes_busy']['node_preferences_lane'])
             finally:
-                server.application_lane.release()
+                server.node_preferences_lane.release()
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='project reads ')

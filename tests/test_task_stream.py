@@ -206,6 +206,40 @@ class StreamTaskTests(unittest.TestCase):
         finally:
             control.close();release.set();upstream.shutdown();upstream.server_close();thread.join()
 
+    def test_extension_during_blocked_provider_read_preserves_success(self):
+        from dataclasses import replace
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from tests import test_ollama_backend
+        started = threading.Event()
+        class Slow(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers['Content-Length']))
+                self.send_response(200); self.end_headers()
+                started.set(); time.sleep(.55)
+                for done, text in [(False, 'OK'), (True, '')]:
+                    self.wfile.write(json.dumps(dict(model='gemma3', created_at='now',
+                        response=text, done=done)).encode()+b'\n')
+                self.wfile.flush()
+            def log_message(self, *args): pass
+        upstream = ThreadingHTTPServer(('127.0.0.1', 0), Slow)
+        thread = threading.Thread(target=upstream.serve_forever, daemon=True); thread.start()
+        binding = test_ollama_backend.OllamaBinding.parse(test_ollama_backend.OllamaBindingTests().binding())
+        binding = replace(binding, endpoint='http://127.0.0.1:'+str(upstream.server_port))
+        control = RunDeadline(lambda _: None, soft=.2)
+        def extend():
+            if started.wait(1):
+                time.sleep(.05); control.extend()
+        extender = threading.Thread(target=extend); extender.start()
+        try:
+            control.start()
+            result = OllamaAdapter._http_stream_transport(binding, b'{}', lambda _:None, lambda _:None, control=control)
+            self.assertEqual(result['response'], 'OK')
+            self.assertTrue(control.extended)
+            self.assertIsNone(control.reason)
+        finally:
+            control.close(); extender.join(2)
+            upstream.shutdown(); upstream.server_close(); thread.join(2)
+
     def test_https_deadline_decisions_require_current_writer_and_exact_owner(self):
         from tests import test_web_server
         web=test_web_server.WebTests();web.setUp()

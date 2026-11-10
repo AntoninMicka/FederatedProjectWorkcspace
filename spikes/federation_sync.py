@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Bidirectional, policy-scoped native Git bundle synchronization."""
+from spikes.http_request_budget import RequestReadTimeout
 import hashlib
 import ipaddress
 import json
@@ -9,7 +10,7 @@ import fcntl
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from spikes.request_ownership import ProjectBusy, bounded_project_requests
+from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock
 import re
 import sqlite3
 import ssl
@@ -125,8 +126,9 @@ def _journal_path(node):
 
 @contextmanager
 def _database(node):
-    db = sqlite3.connect(_journal_path(node), timeout=60)
-    try:
+    from spikes.sqlite_ownership import sqlite_connection
+    with sqlite_connection(_journal_path(node), timeout=60,
+                           resource='Content synchronization journal') as db:
         db.execute('PRAGMA synchronous=FULL')
         db.executescript('''
             CREATE TABLE IF NOT EXISTS inbound (
@@ -150,14 +152,7 @@ def _database(node):
                 revision INTEGER NOT NULL CHECK(revision>=0),
                 automatic_enabled INTEGER NOT NULL CHECK(automatic_enabled IN (0,1)));
         ''')
-        try:
-            yield db
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-    finally:
-        db.close()
+        yield db
 
 
 def _sync_state(value):
@@ -1328,14 +1323,14 @@ class ManualSyncTasks:
 
     def active(self, node, peer_id, project_id):
         key = self._key(node, peer_id, project_id)
-        with self.lock:
+        with bounded_process_lock(self.lock, resource='Manual content synchronization'):
             task = self.tasks.get(key)
             return bool(task and task['thread'].is_alive())
 
     def start(self, node, deployment, peer_id, project_id):
         identifier(peer_id); identifier(project_id)
         key = self._key(node, peer_id, project_id)
-        with self.lock:
+        with bounded_process_lock(self.lock, resource='Manual content synchronization'):
             current = self.tasks.get(key)
             if current and current['thread'].is_alive():
                 return False
@@ -1354,7 +1349,7 @@ class ManualSyncTasks:
     def cancel(self, node, peer_id, project_id):
         identifier(peer_id); identifier(project_id)
         key = self._key(node, peer_id, project_id)
-        with self.lock:
+        with bounded_process_lock(self.lock, resource='Manual content synchronization'):
             task = self.tasks.get(key)
             if not task or not task['thread'].is_alive():
                 return False
@@ -1385,7 +1380,7 @@ class ManualSyncTasks:
             if completed and stopping.is_set():
                 self._status(node, peer_id, project_id, 'idle',
                              'Content sync completed before cancellation')
-            with self.lock:
+            with bounded_process_lock(self.lock, resource='Manual content synchronization'):
                 current = self.tasks.get(key)
                 if current and current['stopping'] is stopping:
                     self.tasks.pop(key, None)
@@ -1446,6 +1441,8 @@ def reply(handler):
         handler.send_response(200); handler.send_header('Content-Type', CONTENT_TYPE)
         handler.send_header('Content-Length', str(len(raw))); handler.end_headers()
         handler.wfile.write(raw)
+    except RequestReadTimeout:
+        raise
     except (SyncBusy, GitDeadlineExceeded):
         return handler.reply(503, {'error': 'Content receiver is busy'})
     except SyncConflict:

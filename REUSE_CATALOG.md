@@ -1475,3 +1475,13 @@ zůstává v samostatné procesní doméně. Šest review rout sdílí jeden vla
 stateless katalog/graf zdrojů vlastní referenční linku. Nový plan store, automatické
 review, read-only výjimka pro recovery open a přepínání vybraného decku při save
 byly odmítnuty. Git/journal/CAS, frozen apply intent a receipt recovery se zachovají.
+
+### HTTP admission completion and provider deadlines
+
+**Reuse/adapt:** existing exact `http_admission_policy` domains, per-project
+admission, `sqlite_connection`, raw-read `http_deadline` and task `RunDeadline`.
+Provider/probe/enrollment HTTP keeps stdlib parsing and existing TLS policy;
+only deadline enforcement and response ownership are adapted. A small isolated
+stdlib resolver bounds hostname DNS without retaining blocked resolver threads.
+No external implementation or new persistent scheduler/writer is introduced.
+The native journal/CAS recovery remains authoritative.

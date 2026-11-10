@@ -3,6 +3,7 @@
 """Authenticated desktop-to-server enrollment for client-server peers."""
 import base64
 import hashlib
+from spikes.provider_deadline import budget_connection
 import http.client
 import ipaddress
 import json
@@ -221,8 +222,8 @@ def enroll(node, server_node_id, access_key, *, operation_id=None, ca=None):
     ca = Path(ca) if ca else private_root(node) / (server_node_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    connection = http.client.HTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=10)
+    connection = budget_connection(http.client.HTTPSConnection(
+        str(address), parsed.port or 443, context=context, timeout=10), 10)
     try:
         body = json.dumps(request)
         connection.request('POST', PATH, body=body, headers={

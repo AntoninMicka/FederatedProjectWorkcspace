@@ -78,6 +78,18 @@ class RunDeadline:
             self.extended = True
         return self.snapshot()
 
+    def remaining(self):
+        """Transport budget follows the same absolute, explicitly extended run."""
+        with self.lock:
+            if self.reason or self.closed.is_set():
+                raise TimeoutError('Run deadline stopped')
+            elapsed = max(0, self.clock()-self.started) if self.started is not None else 0
+            remaining = self.soft*(10 if self.extended else 2)-elapsed
+            if remaining <= 0:
+                self.stop('hard-timeout')
+                raise TimeoutError('Run deadline exceeded')
+            return remaining
+
     def check(self):
         self.tick()
         require(self.reason is None, 'Run stopped: '+str(self.reason))

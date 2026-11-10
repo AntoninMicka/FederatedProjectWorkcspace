@@ -1176,3 +1176,105 @@ revision/privacy and presentation receipt/recovery checks ran in temporary
 fixtures. After the final scan-owner diagnostic label correction, its focused
 native/HTTP lock test passed. Compilation and `git diff --check` passed. The
 full repository suite and live Omnia acceptance have not run for this change.
+
+### Final declared-route and transport audit
+
+The last fifteen ordinary application routes now have explicit ownership:
+node preferences (including mutable application-access state and counter),
+federation control/status, individual catalog/replication/enrollment transfers,
+and nested per-project source import. Incoming probe/catalog/replication each
+have separate bounded protocol capacity. All declared JSON routes acquire
+admission after authentication/body parsing; peer protocols retain their own
+validation. Unknown paths/query variants retain conservative application
+admission. This does not bypass authentication, registry/journal locks or CAS.
+
+Catalog and content-sync SQLite contexts and node preference stores reuse
+`sqlite_connection`: HTTP BUSY/LOCKED is typed busy with no lock wait; native
+30/60/5-second policies and commit/rollback/fsync boundaries remain. Catalog
+connections also close on initialization failure. Broad transfer adapters must
+propagate typed busy rather than reporting a semantic conflict. Admission
+failure is not-started; a later native collision remains unknown. Native
+transfer envelopes and operation IDs are preserved.
+
+Provider transports reuse the raw-read deadline infrastructure through
+`budget_connection`, preserving the existing TLS trust/pinning and stdlib HTTP
+parsing. The configured budget spans DNS/connect/TLS/upload/headers/body; a
+finite isolated resolver process bounds hostname resolution and is killed and
+reaped on expiry. Numeric addresses avoid DNS. There are no HTTP retries.
+Ollama keeps its connect/inactivity limits and 180-second unextended transport
+budget; a task stream uses its original RunDeadline (360 seconds, or 1800 only
+after explicit extension). Attached socket cancellation remains in place. All
+responses, including HTTP/1.0 detached bodies, close with the connection owner.
+Connectivity probe/enrollment also use their original 5/10-second values as
+whole transport budgets.
+
+Request headers/body have a shared 60-second raw-read budget in addition to the
+original one-second inactivity timeout. An incomplete body never reaches domain
+dispatch: its 503 has outcome=not-started and keeps same-operation retry advice.
+Header timeout closes the incomplete connection. Protocol adapters propagate
+this input-only timeout; later domain/Git/provider timeouts retain their native
+unknown/recovery handling. No payloads or credentials enter diagnostics.
+
+Provider status/configuration/reset/stream routes intentionally retain their
+shared provider owner: status can recover lifecycle records, and reset/config
+must not race active dispatch. Run-control and availability remain independent.
+Task stream control locks are released before event emission, HTTP output uses
+one writer mutex and the socket's finite write timeout, and cancellation
+interrupts the upstream socket. HTTP shutdown retains its finite grace period;
+an explicitly extended run can outlive it, so forced termination remains an
+unknown native run requiring recovery, never automatic resubmission. Native
+interactive SSH waits are deliberate human authentication, outside ordinary
+HTTP admission. CPU validation, filesystem/fsync duration and whole multi-phase
+jobs are not preemptively bounded by these transport/admission budgets.
+
+These are source/local regression conclusions, not Omnia performance acceptance
+or acceptance of synchronized planning tasks. Synchronization of task semantics
+and their outputs is a separate follow-up; this change adds no protocol/schema,
+automatic job replay or second persistent writer.
+
+Manual-sync task-map ownership (including persistence during start/cancel) and
+node telemetry sampling also reuse bounded HTTP process-lock acquisition.
+Native owners retain their original locks; HTTP cannot wait behind their
+SQLite/GPU work indefinitely. A failure after a cancellation event is set
+remains unknown, preserving cooperative cancellation and native status recovery.
+Desktop QThread joins for explicitly launched native creation/transfer/network/
+interactive deployment remain outside ordinary HTTP admission; this change does
+not force-terminate native writers or promise finite OS filesystem/SSH shutdown.
+
+Full-regression fixture reconciliation: four failures were also reproduced on
+an isolated archive of the unchanged baseline HEAD `f3fdfad`. Desktop federation
+fixtures now call the production node/administration bootstrap before HTTP;
+identity loss/corruption still fails closed. The artifact sidebar test now
+expects the live `conflict_summary.local_changes` hint to change for an
+uncommitted draft while asserting the committed view, Git HEAD and journal
+recovery remain unchanged. Neither fix changes application behavior.
+
+A fifth baseline failure was reproduced in the task-graph static UI smoke:
+its expected sidebar call omitted the existing rendering-options argument.
+The marker now matches the preserved implementation; task/graph behavior and
+planning authority are unchanged. Explicit run extension during a blocked
+provider read has an additional real-upstream regression: the attached native
+watchdog owns the changing hard deadline while kernel inactivity limits remain
+extendable; a stale kernel timeout must not reject an explicitly extended run.
+
+The final capacity regressions now hold the audited node-preferences owner and
+block domain dispatch after authentication/body parsing, rather than assuming
+counter still owns `application_lane` or intercepting `_do_POST` before
+admission. The navigation fixture supplies the existing local-conflict attempt
+state; it also verifies that declining to leave retains that identity and that
+leaving clears only the UI, without another write. Its missing fixture state was
+also reproduced on the baseline HEAD.
+
+#### Final validation (2026-11-10)
+
+- Complete unittest gate via `scripts/test_shards.py --shard N --shards 4`
+  in four isolated copies of the final source: 479 / 524 / 478 / 509 tests,
+  all OK. Total **1,990 tests, 57 optional/legacy skips**. The inventory was
+  checked to include each of the 173 top-level test modules exactly once.
+- SHA-256 checks confirmed every changed Python file matched the tested copies
+  and remained unchanged through the final gate.
+- Final `M0_DESKTOP_TEST=1` offscreen Qt/WebEngine admission regression:
+  **16 tests OK**, including origin-wide queue/deadline and stream EOF ownership.
+- `git diff --check` passed. No separate configured build/lint exists.
+- No Omnia deployment, real-profile performance acceptance or authoritative
+  Workspace task acceptance is inferred from these local results.

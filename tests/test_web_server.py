@@ -167,15 +167,15 @@ class WebTests(unittest.TestCase):
         from unittest.mock import patch
         from spikes.web_server import WebHandler
         import time
-        self.server.application_lane.acquire()
+        self.server.node_preferences_lane.acquire()
         try:
             started = time.monotonic()
-            with patch.object(WebHandler, '_do_POST', side_effect=AssertionError('dispatch')):
+            with patch.object(WebHandler, 'dispatch', side_effect=AssertionError('dispatch')):
                 code, body, _ = self.request(path='/v1/counter')
             self.assertEqual(code, 503, body)
             self.assertLess(time.monotonic() - started, 1.5)
         finally:
-            self.server.application_lane.release()
+            self.server.node_preferences_lane.release()
 
     def test_ui_assets_have_reserved_capacity_beside_four_busy_post_workers(self):
         from unittest.mock import patch
@@ -184,11 +184,11 @@ class WebTests(unittest.TestCase):
         entered = threading.Barrier(5)
         replies = []
 
-        original_post = WebHandler._do_POST
+        original_post = WebHandler.dispatch
 
-        def block(handler):
+        def block(handler, request):
             if handler.path == '/v1/diagnostics/status':
-                return original_post(handler)
+                return original_post(handler, request)
             entered.wait(timeout=5)
             if not release.wait(10):
                 return handler.reply(504, {'error': 'test timeout'})
@@ -196,7 +196,7 @@ class WebTests(unittest.TestCase):
 
         routes = ['/v1/counter', '/v1/node-telemetry/status',
                   '/v1/chat/availability', '/v1/roadmap-refinement/list']
-        with patch.object(WebHandler, '_do_POST', block):
+        with patch.object(WebHandler, 'dispatch', block):
             clients = [threading.Thread(target=lambda route=route:
                        replies.append(self.request(path=route))) for route in routes]
             for client in clients:
@@ -207,9 +207,9 @@ class WebTests(unittest.TestCase):
                 self.assertEqual(code, 200, body)
                 self.assertEqual(json.loads(body)['scope'], 'local-process')
                 self.assertTrue(json.loads(body)['http']['ui_capacity_reserved'])
-                self.assertTrue(json.loads(body)['http']['lanes_busy']['application_lane'])
+                self.assertTrue(json.loads(body)['http']['lanes_busy']['node_preferences_lane'])
                 requests = json.loads(body)['http']['requests']
-                self.assertTrue(any(item['kind'] == 'application_lane'
+                self.assertTrue(any(item['kind'] == 'node_preferences_lane'
                                     and item['stage'] == 'processing' for item in requests))
                 self.assertTrue(all(item['elapsed_ms'] >= 0 for item in requests))
                 # The fifth POST cannot occupy capacity reserved for the UI.

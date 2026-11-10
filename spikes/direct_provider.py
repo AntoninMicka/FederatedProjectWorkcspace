@@ -10,6 +10,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+from spikes.provider_deadline import budget_connection
 import http.client
 import json
 import os
@@ -556,8 +557,8 @@ class DirectAdapter:
 
 
 def _connection(spec, timeout):
-    return http.client.HTTPSConnection(spec.host, 443, timeout=timeout,
-                                       context=ssl.create_default_context())
+    return budget_connection(http.client.HTTPSConnection(spec.host, 443, timeout=timeout,
+                                       context=ssl.create_default_context()), timeout)
 
 
 def _check_status(response, spec):

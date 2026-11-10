@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Signed exchange of project existence without project content or Git history."""
-from contextlib import closing
+from spikes.http_request_budget import RequestReadTimeout
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import ipaddress
@@ -44,6 +45,7 @@ class CatalogStore:
         self.root = private_root(node)
         self.path = self.root / 'federation-catalog.sqlite'
 
+    @contextmanager
     def _open(self):
         fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
@@ -53,26 +55,27 @@ class CatalogStore:
                     'Unsafe federation catalog store')
         finally:
             os.close(fd)
-        db = sqlite3.connect(self.path, timeout=30)
-        db.execute('PRAGMA synchronous=FULL')
-        db.execute('CREATE TABLE IF NOT EXISTS outbound ('
-                   'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
-                   'digest TEXT NOT NULL, projects TEXT NOT NULL)')
-        db.execute('CREATE TABLE IF NOT EXISTS inbound ('
-                   'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
-                   'digest TEXT NOT NULL, projects TEXT NOT NULL, '
-                   'updated_at TEXT NOT NULL)')
-        db.execute('CREATE TABLE IF NOT EXISTS runtime ('
-                   'peer_id TEXT PRIMARY KEY, state TEXT NOT NULL, '
-                   'detail TEXT NOT NULL, updated_at TEXT NOT NULL)')
-        db.commit()
-        return db
+        from spikes.sqlite_ownership import sqlite_connection
+        with sqlite_connection(self.path, timeout=30, resource='Federation catalog') as db:
+            db.execute('PRAGMA synchronous=FULL')
+            db.execute('CREATE TABLE IF NOT EXISTS outbound ('
+                       'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
+                       'digest TEXT NOT NULL, projects TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS inbound ('
+                       'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
+                       'digest TEXT NOT NULL, projects TEXT NOT NULL, '
+                       'updated_at TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS runtime ('
+                       'peer_id TEXT PRIMARY KEY, state TEXT NOT NULL, '
+                       'detail TEXT NOT NULL, updated_at TEXT NOT NULL)')
+            db.commit()
+            yield db
 
     def outbound(self, peer_id, projects):
         identifier(peer_id)
         raw = canonical(projects).decode('ascii')
         digest = hashlib.sha256(raw.encode('ascii')).hexdigest()
-        with closing(self._open()) as db, db:
+        with self._open() as db, db:
             row = db.execute(
                 'SELECT revision,digest,projects FROM outbound WHERE peer_id=?',
                 (peer_id,)).fetchone()
@@ -89,7 +92,7 @@ class CatalogStore:
         raw = canonical(projects).decode('ascii')
         digest = hashlib.sha256(raw.encode('ascii')).hexdigest()
         now = _now()
-        with closing(self._open()) as db, db:
+        with self._open() as db, db:
             row = db.execute(
                 'SELECT revision,digest FROM inbound WHERE peer_id=?',
                 (peer_id,)).fetchone()
@@ -108,12 +111,12 @@ class CatalogStore:
                 'Invalid catalog runtime state')
         require(isinstance(detail, str) and len(detail) <= 500,
                 'Invalid catalog runtime detail')
-        with closing(self._open()) as db, db:
+        with self._open() as db, db:
             db.execute('INSERT OR REPLACE INTO runtime VALUES (?,?,?,?)',
                        (peer_id, state, detail, _now()))
 
     def projections(self):
-        with closing(self._open()) as db:
+        with self._open() as db:
             rows = db.execute(
                 'SELECT peer_id,revision,projects,updated_at FROM inbound '
                 'ORDER BY peer_id').fetchall()
@@ -125,7 +128,7 @@ class CatalogStore:
         return result
 
     def statuses(self):
-        with closing(self._open()) as db:
+        with self._open() as db:
             return {row[0]: {'state': row[1], 'detail': row[2],
                              'updated_at': row[3]}
                     for row in db.execute(
@@ -365,6 +368,8 @@ def reply(handler):
         require(len(raw) == int(length), 'Incomplete project catalog')
         result = receive(handler.server.administration, json.loads(raw))
         return handler.reply(200, result)
+    except RequestReadTimeout:
+        raise
     except AccessDenied:
         return handler.reply(403, {'error': 'Project catalog is not authorized'})
     except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError,

@@ -12,6 +12,7 @@ Unknown routes and query variants keep the conservative application domain.
 # they do not replace server.projects or initialize shared server services.
 PROJECT_ROUTES = {
     '/v1/projects/open': None,
+    '/v1/sources/import': 'source',
     '/v1/outputs/definitions': None,
     '/v1/presentations/open': None,
     '/v1/presentations/save': 'document',
@@ -279,29 +280,32 @@ REFINEMENT_ROUTES = frozenset({
 })
 REFERENCE_ROUTES = frozenset({'/v1/document-patterns', '/v1/roadmap/graph'})
 
+# Node preferences share mutable application-access state. Network transfers
+# never own their control/status domain; native journals/flocks own correctness.
+NODE_PREFERENCE_ROUTES = frozenset({
+    '/v1/application-access', '/v1/counter', '/v1/gamepad/settings',
+    '/v1/gamepad/status', '/v1/session', '/v1/user-profile',
+})
+FEDERATION_CONTROL_ROUTES = frozenset({
+    '/v1/federation/content/cancel', '/v1/federation/content/reconcile',
+    '/v1/federation/content/settings', '/v1/federation/content/start-all',
+    '/v1/replications/status',
+})
+FEDERATION_TRANSFER_LANES = {
+    '/v1/federation/catalog/reconcile': 'catalog_transfer',
+    '/v1/replications/sync': 'replication_transfer',
+    '/v1/federation/enroll': 'enrollment',
+}
+
 # These service domains acquire admission after authentication/body parsing.
 SERVICE_ROUTES = (JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES
-                  | IDE_QUEUE_ROUTES | REFINEMENT_ROUTES | REFERENCE_ROUTES)
+                  | IDE_QUEUE_ROUTES | REFINEMENT_ROUTES | REFERENCE_ROUTES
+                  | NODE_PREFERENCE_ROUTES | FEDERATION_CONTROL_ROUTES
+                  | frozenset(FEDERATION_TRANSFER_LANES))
 
-# Remaining conservative owners: federation controls, source import and node
-# preferences. Their original serialization and native writers remain intact.
-APPLICATION_ROUTES = frozenset({
-    '/v1/application-access',
-    '/v1/counter',
-    '/v1/federation/catalog/reconcile',
-    '/v1/federation/content/cancel',
-    '/v1/federation/content/reconcile',
-    '/v1/federation/content/settings',
-    '/v1/federation/content/start-all',
-    '/v1/federation/enroll',
-    '/v1/gamepad/settings',
-    '/v1/gamepad/status',
-    '/v1/replications/status',
-    '/v1/replications/sync',
-    '/v1/session',
-    '/v1/sources/import',
-    '/v1/user-profile',
-})
+# Unknown paths retain conservative admission. Every declared JSON route now
+# has an audited domain; this does not remove native serialization or recovery.
+APPLICATION_ROUTES = frozenset()
 
 STREAM_ROUTES = frozenset({
     '/v1/chat/send-stream', '/v1/tasks/route-stream', '/v1/external/send-stream',
@@ -331,11 +335,15 @@ ROUTE_LANES = {
     **dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue'),
     **dict.fromkeys(REFINEMENT_ROUTES, 'review'),
     **dict.fromkeys(REFERENCE_ROUTES, 'reference'),
+    **dict.fromkeys(NODE_PREFERENCE_ROUTES, 'node_preferences'),
+    **dict.fromkeys(FEDERATION_CONTROL_ROUTES, 'federation_control'),
+    **FEDERATION_TRANSFER_LANES,
     **dict.fromkeys(APPLICATION_ROUTES, 'application'),
-    # Peer protocols bypass JSON dispatch and keep their existing ownership.
-    '/v1/federation/probe': 'application',
-    '/v1/federation/catalog': 'application',
-    '/v1/federation/replicate': 'application',
+    # Peer protocols validate their own authentication/body before native writes.
+    # Give each protocol bounded capacity without owning unrelated UI domains.
+    '/v1/federation/probe': 'peer_probe',
+    '/v1/federation/catalog': 'peer_catalog',
+    '/v1/federation/replicate': 'peer_replication',
 }
 
 LANES = tuple(sorted({'application', *ROUTE_LANES.values(),

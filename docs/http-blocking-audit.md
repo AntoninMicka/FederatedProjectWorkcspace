@@ -181,3 +181,36 @@ Unrecoverable pending/recovery state now returns 409 without clearing intent.
 Dependency apply retains its frozen IDs/digest and same-ID native receipt
 recovery. This isolates nine more application routes, not all CPU/Git/disk
 elapsed work or the remaining federation/import/preferences/provider owners.
+
+### Final route, provider and input follow-up
+
+Every declared ordinary JSON route now has an explicit domain. The remaining
+application owner is only the conservative unknown-route fallback. Slow
+catalog/replication/enrollment transfers no longer own federation cancellation,
+status/settings, node preferences or project import/read admission. Peer
+protocols have separate bounded capacity; native writers still own correctness.
+Catalog/sync journal and node preference SQLite use bounded HTTP contexts with
+native policies unchanged.
+
+Provider and probe/enrollment transports now have whole-I/O budgets, including
+killable DNS resolution for hostname providers and every raw response read.
+Ollama stream transport follows the original explicitly extendable RunDeadline;
+its existing connect/inactivity policies remain. Input headers/body also have a
+60-second total read budget and one-second inactivity bound before dispatch.
+These close trickling input/output gaps without retrying uncertain requests.
+
+The provider domain is intentionally serialized because lifecycle recovery and
+reset are mutating operations. Its future conversion to independently tracked
+jobs requires native run/config ownership and explicit protocol/recovery design;
+removing its mutex alone would be incorrect. Existing finite shutdown keeps
+unknown-run recovery after forced termination, including extended streams.
+Native human SSH authentication remains intentionally interactive. CPU/disk/
+fsync and whole multi-phase task duration are still not absolute elapsed-time
+guarantees. Task/output synchronization and live Omnia acceptance are separate.
+
+Manual-sync process mutex and telemetry sample mutex are bounded for HTTP as
+well. Background/native I/O can retain ownership under its existing policy;
+HTTP collision does not wait behind it. Short internal worker/diagnostic maps
+hold no external I/O; task control emits outside its state lock. Explicit native
+Qt creation/transfer/network/deployment joins remain lifecycle waits outside
+ordinary HTTP, not new guaranteed shutdown deadlines.

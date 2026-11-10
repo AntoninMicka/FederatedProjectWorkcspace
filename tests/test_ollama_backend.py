@@ -21,6 +21,12 @@ from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaResponseE
 from spikes.node_telemetry import OllamaRuntimePolicy
 
 
+class _TransportConnection:
+    sock = None
+    def connect(self): pass
+    def getresponse(self): raise AssertionError('Unexpected response before dispatch')
+
+
 class OllamaBindingTests(unittest.TestCase):
     def binding(self, **changes):
         value = dict(schema_version=1, binding_id=str(uuid4()), revision='revision-1',
@@ -283,6 +289,7 @@ class OllamaAdapterTests(unittest.TestCase):
         class Socket:
             def settimeout(self, value): self.timeout = value
         class Response:
+            def close(self): pass
             status = 200
             def __init__(self): self.data = bytearray(frames)
             def readline(self, limit):
@@ -290,7 +297,7 @@ class OllamaAdapterTests(unittest.TestCase):
                 newline = self.data.index(10) + 1
                 value = bytes(self.data[:newline]); del self.data[:newline]
                 return value
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): self.sock = Socket()
             def connect(self): pass
             def request(self, method, path, body=None, headers=None):
@@ -310,6 +317,7 @@ class OllamaAdapterTests(unittest.TestCase):
         class Socket:
             def settimeout(self, value): self.timeout = value
         class Response:
+            def close(self): pass
             status = 200
             def __init__(self, first): self.first = first
             def readline(self, limit):
@@ -322,7 +330,7 @@ class OllamaAdapterTests(unittest.TestCase):
             with self.subTest(code=code):
                 handoff = DispatchHandoff(str(uuid4()), str(uuid4()), 'e' * 64,
                                           self.binding.target(), b'{"context":"exact"}')
-                class Connection:
+                class Connection(_TransportConnection):
                     def __init__(self, *args, **kwargs): self.sock = Socket()
                     def connect(self): pass
                     def request(self, *args, **kwargs): pass
@@ -346,7 +354,7 @@ class OllamaAdapterTests(unittest.TestCase):
             def readline(self, limit):
                 reads.append(limit)
                 return super().readline(limit)
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): self.sock = Socket()
             def connect(self): pass
             def request(self, *args, **kwargs): pass
@@ -613,7 +621,7 @@ class OllamaAdapterTests(unittest.TestCase):
                          'transport-unknown')
 
     def test_connect_failure_is_known_and_diagnostic_survives_restart(self):
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): pass
             def connect(self): raise ConnectionRefusedError('refused')
             def close(self): pass
@@ -632,7 +640,7 @@ class OllamaAdapterTests(unittest.TestCase):
 
     def test_timeout_after_request_is_unknown_and_diagnostic_survives_restart(self):
         events = []
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): pass
             def connect(self): events.append('connect')
             def request(self, *args, **kwargs): events.append('request')
@@ -680,8 +688,9 @@ class OllamaAdapterTests(unittest.TestCase):
     def test_http_transport_forbids_redirect(self):
         events = []
         class Response:
+            def close(self): pass
             status = 302
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): events.append(('timeout', kwargs['timeout']))
             def connect(self): events.append('connect')
             def request(self, *args, **kwargs): events.append('request')
@@ -703,9 +712,10 @@ class OllamaAdapterTests(unittest.TestCase):
             def getpeercert(self, binary_form=False):
                 events.append('pin'); return certificate
         class Response:
+            def close(self): pass
             status = 200
             def read(self, limit): return b'{"model":"gemma3","response":"ok"}'
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs):
                 self.sock = Socket(); events.append(('timeout', kwargs['timeout']))
             def connect(self): events.append('connect')
@@ -725,7 +735,7 @@ class OllamaAdapterTests(unittest.TestCase):
             tls_cert_sha256='a' * 64))
         class Socket:
             def getpeercert(self, binary_form=False): return certificate
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): self.sock = Socket()
             def connect(self): events.append('connect')
             def request(self, *args, **kwargs): events.append('request')
@@ -738,9 +748,10 @@ class OllamaAdapterTests(unittest.TestCase):
 
     def test_invalid_wire_json_has_specific_known_diagnostic(self):
         class Response:
+            def close(self): pass
             status = 200
             def read(self, limit): return b'not-json'
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): pass
             def connect(self): pass
             def request(self, *args, **kwargs): pass
@@ -757,10 +768,11 @@ class OllamaAdapterTests(unittest.TestCase):
     def test_probe_reads_only_model_catalog_and_reports_missing_model(self):
         events = []
         class Response:
+            def close(self): pass
             status = 200
             def read(self, limit):
                 return b'{"models":[{"name":"other:latest"}]}'
-        class Connection:
+        class Connection(_TransportConnection):
             def __init__(self, *args, **kwargs): events.append(('timeout', kwargs['timeout']))
             def connect(self): events.append('connect')
             def request(self, method, path, body=None, headers=None):

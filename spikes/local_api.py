@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 
+from spikes.http_request_budget import RequestReadTimeout, request_reader
 from spikes.backend_availability import BackendAvailability
 from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, STREAM_ROUTES, SERVICE_ROUTES, request_lane
 from spikes.request_ownership import ProjectLanes, ProjectBusy, bounded_project_requests
@@ -200,10 +201,13 @@ class Handler(BaseHTTPRequestHandler):
     # One request per connection; never accept pipelined mutations.
     protocol_version = 'HTTP/1.0'
     max_body = MAX_BODY
+    request_read_seconds = 60
 
     def setup(self):
         self.request.settimeout(1)
         super().setup()
+        self.rfile.close()
+        self.rfile = request_reader(self.request, self.request_read_seconds)
 
     def log_message(self, *args):
         pass  # Do not log request URLs, headers, tokens or payloads.
@@ -325,6 +329,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._do_POST()
                 return self._in_request_lane(
                     self._do_POST, lane_name=request_lane(self.path))
+            except RequestReadTimeout:
+                return self.reply(503, {'error': 'request read timeout',
+                    'outcome': 'not-started', 'retry': 'same-operation'})
             except ProjectBusy as exc:
                 payload = {'error': 'resource busy',
                            'retry': 'same-operation', 'outcome': exc.outcome}

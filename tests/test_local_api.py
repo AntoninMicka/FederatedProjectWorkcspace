@@ -116,7 +116,7 @@ class LocalAPITests(unittest.TestCase):
 
     def test_merged_readonly_routes_keep_independent_lanes(self):
         routes = {
-            '/v1/counter': 'application_lane',
+            '/v1/counter': 'node_preferences_lane',
             '/v1/chat/send-stream': 'provider_lane',
             '/v1/tasks/route-stream': 'provider_lane',
             '/v1/external/send-stream': 'provider_lane',
@@ -145,6 +145,11 @@ class LocalAPITests(unittest.TestCase):
         from spikes.http_admission_policy import REFINEMENT_ROUTES, REFERENCE_ROUTES
         routes.update(dict.fromkeys(REFINEMENT_ROUTES, 'review_lane'))
         routes.update(dict.fromkeys(REFERENCE_ROUTES, 'reference_lane'))
+        from spikes.http_admission_policy import (NODE_PREFERENCE_ROUTES,
+            FEDERATION_CONTROL_ROUTES, FEDERATION_TRANSFER_LANES)
+        routes.update(dict.fromkeys(NODE_PREFERENCE_ROUTES, 'node_preferences_lane'))
+        routes.update(dict.fromkeys(FEDERATION_CONTROL_ROUTES, 'federation_control_lane'))
+        routes.update({path: lane+'_lane' for path, lane in FEDERATION_TRANSFER_LANES.items()})
 
         class LaneHandler(Handler):
             post_paths = set(routes)
@@ -198,7 +203,7 @@ class LocalAPITests(unittest.TestCase):
             blocked.start()
             try:
                 self.assertTrue(entered.wait(1))
-                response = self.request(server)
+                response = self.request(server, path='/v1/block', body=b'{}')
                 self.assertIn(b' 503 ', response.split(b'\r\n', 1)[0])
                 self.assertEqual(server.counter, 0)
             finally:
@@ -236,8 +241,8 @@ class LocalAPITests(unittest.TestCase):
                     responses.append(b'')
 
             clients = [threading.Thread(target=request, args=(path,)) for path in (
-                '/v1/block', '/v1/node-telemetry/status', '/v1/counter',
-                '/v1/counter')]
+                '/v1/block', '/v1/node-telemetry/status', '/v1/block',
+                '/v1/block')]
             for client in clients[:2]:
                 client.start()
             self.assertTrue(application_entered.wait(1))
@@ -425,6 +430,48 @@ class LocalAPITests(unittest.TestCase):
                 with running_api('unix', root):
                     self.fail('unsafe parent accepted')
             root.chmod(0o700)
+
+    def test_trickling_body_expires_before_dispatch_and_releases_worker(self):
+        class ShortReadHandler(Handler):
+            request_read_seconds = .15
+        with running_api('http', handler=ShortReadHandler) as server:
+            with self.connect(server) as client:
+                header = (f'POST /v1/counter HTTP/1.1\r\nHost: {server.authority}\r\n'
+                          f'Authorization: Bearer {server.token}\r\n'
+                          'Content-Type: application/json\r\nContent-Length: 100\r\n\r\n')
+                client.sendall(header.encode())
+                for _ in range(4):
+                    client.sendall(b' ')
+                    time.sleep(.04)
+                response = client.recv(4096)
+                self.assertIn(b' 503 ', response)
+                self.assertEqual(server.counter, 0)
+            self.assertIn(b' 200 ', self.request(server))
+            self.assertEqual(server.counter, 1)
+
+    def test_peer_body_deadline_is_transient_before_any_receiver_dispatch(self):
+        from spikes.web_server import WebHandler
+        from spikes import federation_catalog, federation_sync, project_replication
+        class ShortReadHandler(WebHandler):
+            request_read_seconds = .1
+        paths = [('/v1/federation/probe', 'application/json'),
+                 (federation_catalog.PATH, federation_catalog.CONTENT_TYPE),
+                 (federation_sync.PATH, federation_sync.CONTENT_TYPE),
+                 (project_replication.PATH, project_replication.CONTENT_TYPE)]
+        with running_api('http', handler=ShortReadHandler) as server:
+            for path, content_type in paths:
+                with self.subTest(path=path), self.connect(server) as client:
+                    header = (f'POST {path} HTTP/1.1\r\nHost: {server.authority}\r\n'
+                              f'Content-Type: {content_type}\r\nContent-Length: 100\r\n\r\n')
+                    client.sendall(header.encode()+b' ')
+                    response = bytearray()
+                    while True:
+                        data = client.recv(4096)
+                        if not data: break
+                        response.extend(data)
+                    self.assertIn(b' 503 ', response)
+                    self.assertIn(b'not-started', response)
+                    self.assertEqual(server.counter, 0)
 
     def test_stalled_client_and_pipeline_do_not_mutate_twice(self):
         with self.servers() as servers:

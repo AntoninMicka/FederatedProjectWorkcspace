@@ -5,6 +5,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+from spikes.provider_deadline import budget_connection
 import http.client
 import json
 import os
@@ -350,8 +351,8 @@ class AtlasCloudCatalog:
 
     @staticmethod
     def _http_transport(secret):
-        connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
-            timeout=ATLASCLOUD_TIMEOUT, context=ssl.create_default_context())
+        connection = budget_connection(http.client.HTTPSConnection('api.atlascloud.ai', 443,
+            timeout=ATLASCLOUD_TIMEOUT, context=ssl.create_default_context()), ATLASCLOUD_TIMEOUT)
         try:
             connection.request('GET', '/api/v1/models',
                 headers={'Authorization': 'Bearer ' + secret,
@@ -572,8 +573,8 @@ class AtlasCloudAdapter:
 
     @staticmethod
     def _http_transport(binding, request, secret):
-        connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
-            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        connection = budget_connection(http.client.HTTPSConnection('api.atlascloud.ai', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context()), binding.timeout_seconds)
         try:
             path = ('/v1/responses' if binding.protocol == 'openai-responses-v1'
                     else '/v1/chat/completions')
@@ -599,8 +600,8 @@ class AtlasCloudAdapter:
         if binding.protocol == 'openai-chat-completions-v1':
             return AtlasCloudAdapter._http_chat_stream_transport(
                 binding, request, secret, on_delta)
-        connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
-            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        connection = budget_connection(http.client.HTTPSConnection('api.atlascloud.ai', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context()), binding.timeout_seconds)
         try:
             connection.request('POST', '/v1/responses', body=request,
                 headers={'Authorization': 'Bearer ' + secret,
@@ -658,8 +659,8 @@ class AtlasCloudAdapter:
 
     @staticmethod
     def _http_chat_stream_transport(binding, request, secret, on_delta):
-        connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
-            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        connection = budget_connection(http.client.HTTPSConnection('api.atlascloud.ai', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context()), binding.timeout_seconds)
         try:
             connection.request('POST', '/v1/chat/completions', body=request,
                 headers={'Authorization': 'Bearer ' + secret,

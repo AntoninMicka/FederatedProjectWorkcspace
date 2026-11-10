@@ -344,6 +344,40 @@ global.fetch=async(path,options)=>{sent.push(path);return new Response(new Reada
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertIn('planning/document/reference ownership OK', result.stdout)
 
+    def test_federation_transfers_do_not_queue_cancellation_or_project_import(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path,options)=>{sent.push(path);return new Response(new ReadableStream({start(c){controllers.set(path,c);}}));};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const pid='11111111-1111-4111-8111-111111111111';
+ const post=(path,body={project_id:pid})=>fetch(path,{method:'POST',body:JSON.stringify(body)});
+ const catalog=await post('/v1/federation/catalog/reconcile');
+ const replica=await post('/v1/replications/sync');
+ const cancel=await post('/v1/federation/content/cancel');
+ const settings=post('/v1/federation/content/settings');
+ const preferences=await post('/v1/user-profile');
+ const imported=await post('/v1/sources/import',{source:{project_id:pid}});
+ const open=post('/v1/projects/open');
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert(!sent.includes('/v1/federation/content/settings'));
+ assert(!sent.includes('/v1/projects/open'));
+ const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
+ end('/v1/federation/content/cancel');await cancel.text();
+ const configured=await settings;end('/v1/federation/content/settings');await configured.text();
+ end('/v1/sources/import');await imported.text();
+ const opened=await open;end('/v1/projects/open');await opened.text();
+ end('/v1/federation/catalog/reconcile');end('/v1/replications/sync');end('/v1/user-profile');
+ await Promise.all([catalog.text(),replica.text(),preferences.text()]);
+ console.log('federation ownership OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('federation ownership OK', result.stdout)
+
     def test_project_queues_share_nested_scope_and_bound_total_waiters(self):
         script = r'''
 const assert=require('node:assert/strict');

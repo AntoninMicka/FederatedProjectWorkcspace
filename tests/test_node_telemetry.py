@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
+from spikes.request_ownership import ProjectBusy, bounded_project_requests
 from spikes.node_telemetry import NodeTelemetry, OllamaRuntimePolicy
 
 
@@ -22,6 +23,11 @@ class NodeTelemetryTests(unittest.TestCase):
             '  lo: 100 0 0 0 0 0 0 0 100 0 0 0 0 0 0 0\n'
             'eth0: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\n')
         self.times = iter((10.0, 12.0))
+
+    def test_native_sample_owner_does_not_park_http_request(self):
+        telemetry = NodeTelemetry(self.root)
+        with telemetry._lock, bounded_project_requests():
+            with self.assertRaises(ProjectBusy): telemetry.snapshot()
 
     @staticmethod
     def runner(args, **_kwargs):
