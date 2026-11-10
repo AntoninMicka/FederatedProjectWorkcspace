@@ -172,6 +172,87 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(result['artifacts'][0]['title'], 'New committed title')
         self.assertEqual(self.projects.open(OTHER)['artifacts'][0]['title'], 'Druhý projekt')
 
+    def test_initialized_reads_skip_bootstrap_and_preserve_state_bytes(self):
+        from spikes.journal import Journal
+        from spikes.storage import Index
+        previous = self.projects.open(ENTITY)
+        files = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in self.state().iterdir()}
+        with patch.object(Journal, '__init__', side_effect=AssertionError('journal bootstrap')), \
+             patch.object(Index, '__init__', side_effect=AssertionError('index bootstrap')), \
+             patch('spikes.journal.sync_dir', side_effect=AssertionError('bootstrap fsync')):
+            self.assertEqual(self.projects.open(ENTITY), previous)
+            self.assertEqual(self.projects.plan_view(ENTITY)['commit_id'], previous['commit_id'])
+        self.assertEqual({p.name: (p.read_bytes(), p.stat().st_mtime_ns)
+                          for p in self.state().iterdir()}, files)
+
+    def test_attached_read_rejects_foreign_or_empty_journal_owner_without_bootstrap(self):
+        from spikes.journal import Journal
+        self.projects.open(ENTITY)
+        path = self.state() / 'journal.sqlite'
+        for owner in ('/another/project', None):
+            with self.subTest(owner=owner):
+                with closing(sqlite3.connect(path)) as db, db:
+                    db.execute('DELETE FROM owner')
+                    if owner is not None:
+                        db.execute('INSERT INTO owner VALUES (?)', (owner,))
+                before = path.read_bytes()
+                with patch.object(Journal, '__init__', side_effect=AssertionError('unsafe bootstrap')):
+                    with self.assertRaisesRegex(ValidationError, 'Journal belongs'):
+                        self.projects.open(ENTITY)
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_desktop_http_reads_share_git_deadline_and_expiry_returns_no_view(self):
+        from spikes.request_ownership import bounded_project_requests
+        import time
+        self.projects.open(ENTITY)
+        original = Git.run
+        for read in (self.projects.open, self.projects.plan_view):
+            with self.subTest(read=read.__name__):
+                clock = [time.monotonic()]
+                deadlines = []
+                def run(git, *args, **kwargs):
+                    if git.root == self.gits[0].root:
+                        deadlines.append(git.deadline)
+                    result = original(git, *args, **kwargs)
+                    if git.root == self.gits[0].root and args == ('ls-files', '-u'):
+                        clock[0] = git.deadline + .01
+                    return result
+                with bounded_project_requests(), \
+                     patch('spikes.projects.time.monotonic', side_effect=lambda: clock[0]), \
+                     patch.object(Git, 'run', run):
+                    with self.assertRaises(TimeoutError):
+                        read(ENTITY)
+                self.assertTrue(deadlines)
+                self.assertIsNotNone(deadlines[0])
+                self.assertEqual(set(deadlines), {deadlines[0]})
+                self.assertEqual(self.gits[0].head(), self.projects.open(ENTITY)['commit_id'])
+
+    def test_project_deadline_is_not_hidden_as_optional_draft_error(self):
+        from spikes.request_ownership import bounded_project_requests
+        self.projects.open(ENTITY)
+        with bounded_project_requests(), \
+             patch('spikes.plan_draft.read_plan_draft', side_effect=TimeoutError('expired')):
+            with self.assertRaises(TimeoutError):
+                self.projects.open(ENTITY)
+
+    def test_expired_final_read_budget_cannot_return_success(self):
+        from spikes.request_ownership import bounded_project_requests
+        import time
+        self.projects.open(ENTITY)
+        original = self.projects.replication
+        for read in (self.projects.open, self.projects.plan_view):
+            with self.subTest(read=read.__name__):
+                clock = [time.monotonic()]
+                def replication(project_id):
+                    result = original(project_id)
+                    clock[0] += 31
+                    return result
+                with bounded_project_requests(), \
+                     patch('spikes.projects.time.monotonic', side_effect=lambda: clock[0]), \
+                     patch.object(self.projects, 'replication', side_effect=replication):
+                    with self.assertRaises(TimeoutError):
+                        read(ENTITY)
+
     def test_project_history_is_head_bound_and_bounded(self):
         path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
         for index in range(22):

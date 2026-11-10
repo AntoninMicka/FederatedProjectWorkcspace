@@ -70,6 +70,27 @@ class Workspace:
         workspace.write_guard = None
         return workspace
 
+    @classmethod
+    def open_for_read(cls, root, state, *, blocking=True, deadline=None, write_guard=None):
+        """Reuse initialized state without repeating journal bootstrap/fsync.
+
+        Reads still own the journal, refuse pending writes and may rebuild the
+        index. Missing state uses native bootstrap; errors never trigger reset.
+        """
+        if not (Path(state) / 'journal.sqlite').exists():
+            return cls(root, state, blocking=blocking, deadline=deadline,
+                       write_guard=write_guard)
+        workspace = cls.attach(root, state, blocking=blocking, deadline=deadline)
+        with workspace.journal.lock(), workspace.journal.connect() as db:
+            owners = db.execute('SELECT root FROM owner').fetchall()
+            require(owners == [(str(workspace.journal.root),)],
+                    'Journal belongs to another project or is not initialized')
+            index_path = workspace.journal.state / 'index.sqlite'
+            workspace.index = (Index.attach(index_path) if index_path.exists()
+                               else Index(index_path))
+        workspace.write_guard = write_guard
+        return workspace
+
     def _writable(self):
         if self.write_guard is not None:
             self.write_guard()

@@ -101,3 +101,14 @@ remain unchanged. Tests exercise HTTP 503 with independent project progress,
 commit-time rollback and recovery after Git publication. This supersedes the
 SQLite row for these paths only: other stores, SQL execution, disk latency and
 initialization/repair during project reads remain open.
+
+### Initialized project-read follow-up
+
+Open, plan-view and preview now attach existing owned journal/current index
+state without repeated bootstrap. Native initialization/legacy rebuild remains
+for missing/recognized older state. They still use journal ownership and can
+repair stale indexes, so their routes remain serialized. Desktop HTTP open and
+plan-view now share the existing web 30-second project Git budget from
+registration through view/draft work, with expiry checked before returning.
+CPU/disk calls and ancillary registry Git work are not preempted; complete
+history-validation deadlines and remaining stores are still open.

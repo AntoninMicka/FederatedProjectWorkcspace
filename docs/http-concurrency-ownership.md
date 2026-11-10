@@ -736,3 +736,58 @@ conflict visibility, SQLite shared-cache extended LOCKED, commit-time rollback,
 independent project progress and recovery after Git publication. Existing
 process-crash recovery tests ran in this selection. Compilation and
 `git diff --check` passed; the full suite and live deployment have not run.
+
+## Reuse initialized project-read state and bound desktop Git reads
+
+Continuation from `a0aa09a`, same branch and the explicit source-continuation
+authorization. The bridge still reports stale/connection refused; no Workspace
+plan, review or acceptance is changed.
+
+`Projects.open`, `plan_view` and artifact preview request `Workspace.open_for_read`.
+A present journal is attached without repeating schema DDL, chmod or directory
+fsync. Under its existing writer lock, its owner must be exactly the registered
+repository root before the index is opened. A current-version index is attached
+without constructor bootstrap; older recognized versions use the original
+constructor validation and migration/rebuild path. A missing journal/index uses
+native bootstrap. Busy, corrupt, unsupported, foreign-owned or incomplete owner
+state is never treated as a reason to initialize over existing data.
+
+The same registration/filesystem checks, pending-operation refusal, current-HEAD
+index checks, privacy validation, semantic validation and cached-view comparison
+still apply. Reads still acquire project ownership and may rebuild a missing or
+stale index; they are not pure read-only routes and keep their existing lane.
+The native writer and repair attach APIs remain unchanged, including write guards.
+
+The existing 30-second project Git deadline now also covers desktop HTTP open
+and plan-view requests in bounded request context. Registration validation,
+Workspace Git commands, snapshot/history work, index rebuild Git calls and draft
+Git reads share that original deadline, without restarting it at attachment.
+Non-HTTP native desktop callers retain their previous policy. Preview already
+had a shared deadline. A draft timeout is no longer downgraded to an optional
+preview error. A final deadline check prevents returning a successful project
+view after the budget has expired during later processing.
+
+Crash/recovery remains ADR 0003: attachment has no new intent or publication;
+bootstrap and index migration/rebuild retain their existing boundaries. An
+interrupted rebuild keeps its last atomic projection, then is retried from
+validated HEAD. A read does not recover/erase pending writer intent. No journal
+schema, persistent cache, queue, background writer or automatic request retry
+is added.
+
+This is a cooperative Git/read budget, not preemption of CPU validation,
+filesystem/fsync or every ancillary store. Registry-role queries use their own
+existing Git wrapper; this slice does not bound those subprocesses to the
+project deadline. The final check can reject their late result but cannot stop
+them mid-call. Broader Git history validation and the remaining application
+lane still need audit. No Omnia deployment or live acceptance is claimed.
+
+Final verification: 110 targeted project-read, storage/index migration,
+Workspace/journal recovery, HTTP ownership, SQLite ownership and repair tests
+passed (3 optional skips). A separate 13-test preview/draft selection passed
+(2 optional skips). Tests check unchanged state bytes/mtimes and skipped
+bootstrap for initialized reads, foreign/empty owner refusal, recognized legacy
+migration and future-version preservation, shared deadline expiry during Git
+and before final response, and propagation of draft timeout. Existing tests
+cover stale/forged/missing index, pending operations, interrupted initialization,
+privacy and process-crash recovery. Compilation and `git diff --check` passed.
+The full suite and live Omnia acceptance have not run for this change.

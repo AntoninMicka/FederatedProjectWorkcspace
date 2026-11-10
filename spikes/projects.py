@@ -5,9 +5,11 @@
 import os
 from pathlib import Path
 import stat
+import time
 
 from spikes.configuration import parse_node, read_config, committed_project
 from spikes.metadata import require
+from spikes.request_ownership import bounded_project_wait
 from spikes.storage import Git
 from spikes.workspace import Workspace
 
@@ -88,7 +90,7 @@ class Projects:
                 rows.append(row)
         return rows
 
-    def workspace(self, project_id, *, blocking=True, deadline=None):
+    def workspace(self, project_id, *, blocking=True, deadline=None, for_read=False):
         binding = next((b for b in self._bindings() if b['project_id'] == project_id), None)
         require(binding is not None, 'Project is not registered')
         root = directory(binding['root'])
@@ -114,8 +116,9 @@ class Projects:
                     self.node_path, deployment='web' if self.network else 'desktop')
                 if service.repo.exists():
                     service.assert_project_writable(project_id)
-        return Workspace(root, state, blocking=blocking, deadline=deadline,
-                         write_guard=write_guard)
+        factory = Workspace.open_for_read if for_read else Workspace
+        return factory(root, state, blocking=blocking, deadline=deadline,
+                       write_guard=write_guard)
 
     def repository(self, project_id, *, deadline=None):
         """Open only validated committed Git state; never initialize local journals/indexes."""
@@ -129,9 +132,10 @@ class Projects:
         return git
 
     def open(self, project_id):
-        import time
+        deadline = (time.monotonic() + 30
+                    if self.network or bounded_project_wait.get() else None)
         workspace = self.workspace(project_id, blocking=not self.network,
-                                   deadline=time.monotonic() + 30 if self.network else None)
+                                   deadline=deadline, for_read=True)
         result = workspace.read_project(project_id, network=self.network)
         from spikes.federation_sync import project_conflict_statuses
         result['sync_conflicts'] = project_conflict_statuses(self.node_path, project_id)
@@ -141,22 +145,27 @@ class Projects:
                 with workspace.journal.lock():
                     draft=read_plan_draft(workspace,project_id,result['commit_id'])
                 if draft:result['plan_draft']=draft[0]
+            except TimeoutError:
+                raise
             except (OSError,ValueError) as exc:
                 result['plan_draft_error']='Náhled rozpracovaného plánu není dostupný: '+str(exc)
         result['replication'] = self.replication(project_id)
         result['read_only'] = bool(result['replication']
                                    and result['replication']['role'] == 'read-only-replica')
+        workspace.git.check_deadline()
         return result
 
     def plan_view(self, project_id):
         """Read the validated committed plan without history, artifact list or local draft."""
-        import time
+        deadline = (time.monotonic() + 30
+                    if self.network or bounded_project_wait.get() else None)
         workspace = self.workspace(project_id, blocking=not self.network,
-                                   deadline=time.monotonic() + 30 if self.network else None)
+                                   deadline=deadline, for_read=True)
         result = workspace.read_project(project_id, network=self.network, plan_only=True)
         result['replication'] = self.replication(project_id)
         result['read_only'] = bool(result['replication']
                                    and result['replication']['role'] == 'read-only-replica')
+        workspace.git.check_deadline()
         return result
 
     def preview(self, project_id, artifact_id, expected_head, page=1):
@@ -168,7 +177,8 @@ class Projects:
         require(isinstance(expected_head, str) and re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', expected_head),
                 'Invalid preview commit')
         require(type(page) is int and 1 <= page <= 4096, 'Invalid preview page')
-        ws = self.workspace(project_id, blocking=False, deadline=time.monotonic() + 30)
+        ws = self.workspace(project_id, blocking=False, deadline=time.monotonic() + 30,
+                            for_read=True)
         item = ws.read_project(project_id, artifact_id=artifact_id, expected_head=expected_head,
                                network=self.network)
         result = preview(item, page)

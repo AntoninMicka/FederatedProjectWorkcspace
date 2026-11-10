@@ -433,3 +433,18 @@ transakce neruší dříve uložený intent ani publikovaný Git commit. Při bu
 indexace zůstává stejná rozpracovaná operace a recovery dokončí její index a
 receipt. Žádný nový writer, retry, schema či WAL migrace se nezavádí. Důkazy
 a zbývající rozsah jsou v [auditu vlastnictví](../http-concurrency-ownership.md).
+
+### Připojení inicializovaného stavu při projektovém čtení
+
+Otevření projektu, plán a preview mohou místo bootstrapu připojit existující
+journal a aktuální index. Vlastník journalu se ověří pod jeho zámkem ještě před
+otevřením indexu. Chybějící stav a rozpoznané starší projekce používají původní
+inicializaci/obnovu; chyba, obsazení či neplatný vlastník nejsou resetovací cesta.
+Pending, HEAD, privacy a sémantické kontroly se nemění. Čtení může dál opravovat
+index, proto se jeho HTTP linka nepřeklasifikuje na volně souběžnou read-only.
+
+Desktopové HTTP otevření/plán sdílí původní webový 30s Git rozpočet od validace
+registrace po view/draft. Timeout draftu není volitelná chyba; před vrácením view
+se kontroluje konec rozpočtu. CPU/disk a samostatné registry Git volání tím nejsou
+preemptivně přerušovány. Crash boundaries a journal recovery zůstávají ADR 0003;
+změna nepřidává persistentní formát ani automatickou obnovu pending operace.

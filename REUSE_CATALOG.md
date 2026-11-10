@@ -1422,3 +1422,11 @@ Nativní timeouty, explicitní commity, journal a Git CAS zůstávají zachovan�
 Samostatný writer, connection pool, WAL migrace a automatické opakování byly
 odmítnuty jako nepotřebné pro odstranění čekání na těchto zámcích. Recovery
 používá původní Workspace operaci podle ADR 0003.
+
+Inicializované projektové čtení **adaptuje** existující `Workspace.attach` a
+`Journal.attach` s kontrolou vlastníka pod původním zámkem. `Index.attach`
+přebírá aktuální projekci; starší verze používají původní validaci a rebuild.
+Chybějící stav používá původní bootstrap, chyby nejsou důvodem k resetu.
+Git čtení desktopového HTTP používá stávající monotónní deadline wrapperu Git.
+Druhý read store, nová cache a automatická recovery pending operací byly
+odmítnuty: existující HEAD/index validace a journal zůstávají autoritou.

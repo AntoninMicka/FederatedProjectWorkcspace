@@ -34,6 +34,10 @@ class Git:
             check=check, timeout=timeout, input=input,
         )
 
+    def check_deadline(self):
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            raise TimeoutError('Operation deadline exceeded')
+
     def head(self):
         return self.run('rev-parse', 'HEAD').stdout.strip()
 
@@ -177,6 +181,21 @@ class Index:
                 for table, columns in expected.items():
                     require([item[1] for item in db.execute('PRAGMA table_info(' + table + ')')]
                             == columns, 'Unrecognized v2 index; index retained')
+
+    @classmethod
+    def attach(cls, path):
+        """Attach to a current index; retain legacy initialization/validation."""
+        index = cls.__new__(cls)
+        index.path = Path(path)
+        # No creation on this path; an absent file must use explicit bootstrap.
+        fd = os.open(index.path, os.O_RDWR | os.O_NOFOLLOW)
+        os.close(fd)
+        with sqlite_connection(index.path.absolute().as_uri() + '?mode=rw', uri=True,
+                               resource='Project index') as db:
+            version = index._version(db)
+        if version != cls.VERSION:
+            return cls(path)
+        return index
 
     def _version(self, db):
         version = db.execute('PRAGMA user_version').fetchone()[0]

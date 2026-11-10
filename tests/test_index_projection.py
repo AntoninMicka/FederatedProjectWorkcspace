@@ -174,6 +174,22 @@ class ProjectionTests(unittest.TestCase):
                 with self.assertRaises(StaleIndex):
                     query(self.git)
 
+    def test_attach_preserves_legacy_validation_and_current_projection(self):
+        for prepare in (self.legacy, self.v1, self.v2):
+            with self.subTest(version=prepare.__name__):
+                prepare()
+                attached = Index.attach(self.index.path)
+                with self.assertRaises(StaleIndex):
+                    attached.read(self.git)
+                attached.rebuild(self.git)
+                self.assertEqual(Index.attach(self.index.path).read_projection(self.git), self.expected())
+        with closing(sqlite3.connect(self.index.path)) as db, db:
+            db.execute('PRAGMA user_version=77')
+        before = self.index.path.read_bytes()
+        with self.assertRaisesRegex(ValidationError, 'Unsupported index'):
+            Index.attach(self.index.path)
+        self.assertEqual(self.index.path.read_bytes(), before)
+
     def test_legacy_requires_rebuild_and_future_version_is_not_overwritten(self):
         self.legacy()
         reopened = Index(self.index.path)
