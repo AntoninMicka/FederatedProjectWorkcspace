@@ -18,6 +18,7 @@ from spikes.julia_computation import JuliaExecutor, validate_computation
 from spikes.metadata import (MAX_FILE, MAX_METADATA, parse_json, require, safe_path, uuid,
                              validate_snapshot)
 from spikes.output_execution import canonical, digest
+from spikes.request_ownership import bounded_process_lock
 from spikes.project_creation import ProjectCreation
 
 
@@ -404,7 +405,7 @@ class JuliaWorkspaceService:
             self._owned(executor, operation_id, node_id, actor_id, project_id)
             result = executor.status(operation_id, node_id, actor_id)
             key = (node_id, actor_id, operation_id)
-            with self._lock:
+            with bounded_process_lock(self._lock, resource='Julia worker state'):
                 worker = self._workers.get(key)
                 result['worker_active'] = bool(worker and worker.is_alive())
                 result['dispatch_error'] = self._errors.get(key)
@@ -424,7 +425,7 @@ class JuliaWorkspaceService:
                 and record['approval_digest'] == request['approval_digest'],
                 'Julia confirmation differs from prepared preview')
         key = (node_id, actor_id, request['operation_id'])
-        with self._lock:
+        with bounded_process_lock(self._lock, resource='Julia worker state'):
             worker = self._workers.get(key)
             require(worker is None or not worker.is_alive(), 'Julia run is already dispatching')
             self._errors.pop(key, None)
@@ -438,10 +439,10 @@ class JuliaWorkspaceService:
                     # Pre-dispatch rejection intentionally leaves the durable preview
                     # prepared. The session-local diagnostic prevents a polling loop;
                     # durable post-dispatch failures are already in the Julia journal.
-                    with self._lock:
+                    with bounded_process_lock(self._lock, resource='Julia worker state'):
                         self._errors[key] = (str(exc) or exc.__class__.__name__)[:4096]
                 finally:
-                    with self._lock:
+                    with bounded_process_lock(self._lock, resource='Julia worker state'):
                         self._workers.pop(key, None)
 
             worker = threading.Thread(target=run, name='julia-' + request['operation_id'][:8],
@@ -459,7 +460,7 @@ class JuliaWorkspaceService:
         executor = self._executor(project_id); node_id, actor_id = self.identity(user_id)
         self._owned(executor, operation_id, node_id, actor_id, project_id)
         key = (node_id, actor_id, operation_id)
-        with self._lock:
+        with bounded_process_lock(self._lock, resource='Julia worker state'):
             worker = self._workers.get(key)
             require(worker is None or not worker.is_alive(),
                     'Active Julia worker cannot be reconciled')

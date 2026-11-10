@@ -853,3 +853,62 @@ A SQLite ResourceWarning in the regression was traced to an existing test's
 unclosed receipt-query connection; it now closes explicitly, and the focused
 allocation-traced rerun passed without the warning. Compilation and
 `git diff --check` passed. The full suite and live acceptance have not run.
+
+## Julia Workspace ownership domain
+
+Continuation from `ebafac7`, same branch and explicit source-continuation
+authorization. The bridge remains stale/connection refused; no Workspace plan
+or human acceptance changes. This slice moves all twelve exact Julia HTTP
+routes from application admission into one `julia_lane`. The browser uses the
+same route table, retains FIFO/EOF ownership and preserves its existing queue
+capacity and deadlines. Unknown paths/query variants keep conservative fallback.
+
+Ownership audit: `JuliaWorkspaceService` is created at startup and has its own
+worker/error maps, short process lock and native `JuliaRunStore`. It has no
+provider/monitoring service references and does not replace `server.projects`,
+selected presentation state or lazy server services. Its Projects adapter reads
+the current registration file; project writes still use Workspace journal/CAS.
+All Julia routes stay mutually serialized, including status/cancel/reconcile;
+status initializes/queries its run journal and is not a pure-read exemption.
+Native workers already run outside HTTP admission and keep their existing
+journal/state-transition ownership.
+
+Julia's HTTP lane is acquired after authentication and JSON framing/parsing.
+Web project role/privacy checks still run in normal dispatch. Admission refusal
+before dispatch reports 503/not-started/same-operation; collision later in a
+native owner conservatively reports unknown. Diagnostics retain the declared
+operation and validated project ID. Invalid authentication is rejected before
+waiting on Julia. This does not move other application routes after auth.
+
+All Julia worker-map lock scopes now use existing `bounded_process_lock`
+(100 ms in HTTP; original native blocking policy otherwise). Its run-journal
+connections use existing SQLite ownership (zero HTTP busy timeout, original
+30-second native timeout). Initialization/schema validation and explicit state
+commits stay in their original order. Connections roll back uncommitted changes
+and close on failure; BUSY/LOCKED is not a content rejection. No process or
+provider pool is enlarged, and no additional execution worker is introduced.
+
+Crash boundaries remain ADR 0057 and ADR 0003. A pre-dispatch collision retains
+the same durable prepared request and approval, without starting the process.
+Once dispatch may have happened, busy does not prove cancellation or authorize
+a new run ID; existing status/cancel/reconcile governs recovery. Publication is
+still the distinct native Workspace operation with journal/Git CAS/receipt.
+No new persistent format, writer, automatic resend or recovery policy is added.
+
+This is one node-wide Julia domain, not per-project parallel execution. Long
+Julia preparation/runtime verification may still occupy its own lane. Runtime
+hash/CPU/disk deadlines and worker shutdown remain open. Monitoring/RSS and the
+other application owners stay in their existing domain pending their own audit.
+No Omnia deployment or live-performance acceptance is claimed here.
+
+Verification: 134 targeted Julia, local API, project HTTP ownership, browser
+admission, web authorization and SQLite tests passed (12 optional skips).
+The final real Qt/WebEngine browser-admission run passed all 12 tests without
+skips; it overlaps the first selection. New checks cover all twelve exact lane
+mappings, bidirectional independence from application/provider owners, same-domain
+serialization, invalid authentication before admission, FIFO through response
+EOF, native worker/SQLite collision as HTTP unknown and unchanged prepared
+approval/operation with no process started. Existing Julia tests exercise
+execution, cancel, reconciliation, crash/publication and privacy checks using
+test runtimes; they do not establish real Omnia Julia execution acceptance.
+Compilation and `git diff --check` passed. The full suite has not run.

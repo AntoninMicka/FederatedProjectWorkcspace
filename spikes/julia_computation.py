@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Pinned, fail-closed local Julia computations and explicit publication."""
-from contextlib import closing
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import base64
 import hashlib
@@ -13,7 +13,6 @@ import re
 import resource
 import shutil
 import signal
-import sqlite3
 import stat
 import subprocess
 import tempfile
@@ -22,6 +21,7 @@ import tomllib
 
 from spikes.metadata import (MAX_FILE, MAX_METADATA, parse_json, require, safe_path,
                              timestamp, uuid, validate_snapshot)
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.output_execution import MaterializationCache, canonical, digest
 
 
@@ -303,14 +303,14 @@ class JuliaRunStore:
                 'Julia state directory requires owned mode 0700')
         self.path = self.root / 'julia-runs.sqlite'
 
+    @contextmanager
     def connect(self):
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         info = os.fstat(fd); os.close(fd)
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                 and info.st_nlink == 1 and not info.st_mode & 0o077,
                 'Unsafe Julia run journal')
-        db = sqlite3.connect(self.path, timeout=30)
-        try:
+        with sqlite_connection(self.path, resource='Julia run journal', timeout=30) as db:
             db.execute('PRAGMA synchronous=FULL'); db.execute('BEGIN IMMEDIATE')
             db.execute('''CREATE TABLE IF NOT EXISTS runs(
                 operation_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
@@ -325,9 +325,8 @@ class JuliaRunStore:
                 'computation_id', 'request_sha256', 'request_json', 'preview_json',
                 'approval_digest', 'state', 'error', 'receipt_json', 'created_at',
                 'updated_at'], 'Unsupported Julia run journal schema')
-            db.commit(); return closing(db)
-        except Exception:
-            db.close(); raise
+            db.commit()
+            yield db
 
     @staticmethod
     def _owner(row, node_id, user_id):

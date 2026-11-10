@@ -135,6 +135,9 @@ class LocalAPITests(unittest.TestCase):
             '/v1/federation/content-sync': 'content_sync_lane',
         }
 
+        from spikes.http_admission_policy import JULIA_ROUTES
+        routes.update(dict.fromkeys(JULIA_ROUTES, 'julia_lane'))
+
         class LaneHandler(Handler):
             post_paths = set(routes)
 

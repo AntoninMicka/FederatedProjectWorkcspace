@@ -1438,3 +1438,10 @@ Původní HTTP 503, outbox, journal a receipt recovery zachovávají request/ope
 ID při nedokončeném ověření. Vypnutí sémantické validace, nový timeout pro každou
 větev a automatické opakování byly odmítnuty. Dlouhé joby zůstávají samostatným
 protokolovým krokem, nikoli skrytou změnou tohoto transportu.
+
+Julia HTTP doména **adaptuje** stávající přesnou route tabulku, HTTP/Web Locks
+admission, `bounded_process_lock`, SQLite ownership a Julia run journal.
+Všech 12 Julia rout zůstává společně serializovaných; projektová publikace
+používá původní Workspace writer. Stav/approval/run ID ani recovery se nemění.
+Volné read-only zařazení status/cancel/reconcile, druhý writer a nové pooly byly
+odmítnuty: tyto operace sdílejí run lifecycle a status může inicializovat journal.

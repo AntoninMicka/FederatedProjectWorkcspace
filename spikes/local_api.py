@@ -20,7 +20,7 @@ import threading
 import time
 
 from spikes.backend_availability import BackendAvailability
-from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, STREAM_ROUTES, request_lane
+from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, STREAM_ROUTES, JULIA_ROUTES, request_lane
 from spikes.request_ownership import ProjectLanes, ProjectBusy, bounded_project_requests
 
 from spikes.metadata import parse_json, ValidationError
@@ -274,7 +274,7 @@ class Handler(BaseHTTPRequestHandler):
         self.server.counter += 1
         self.reply(200, {'value': self.server.counter})
 
-    def _in_request_lane(self, operation, *, lane_name='application_lane'):
+    def _in_request_lane(self, operation, *, lane_name='application_lane', typed_busy=False):
         lane = getattr(self.server, lane_name, None)
         if lane is None:
             # Small unit fixtures may compose this handler with an already
@@ -294,6 +294,8 @@ class Handler(BaseHTTPRequestHandler):
             logging.getLogger(__name__).warning('http_request_busy lane=%s requests=%s',
                 lane_name, (self.server.http_diagnostics()['requests']
                     if hasattr(self.server, 'http_diagnostics') else []))
+            if typed_busy:
+                raise ProjectBusy('HTTP operation owner is busy', outcome='not-started')
             return self.reply(503, {'error': 'server busy'})
         try:
             describe(self.request, kind, 'processing')
@@ -318,7 +320,8 @@ class Handler(BaseHTTPRequestHandler):
     def _admitted_POST(self):
         with bounded_project_requests():
             try:
-                if self.path in PROJECT_ROUTES or self.path in ACTION_LANES or self.path in STREAM_ROUTES:
+                if (self.path in PROJECT_ROUTES or self.path in ACTION_LANES
+                        or self.path in STREAM_ROUTES or self.path in JULIA_ROUTES):
                     return self._do_POST()
                 return self._in_request_lane(
                     self._do_POST, lane_name=request_lane(self.path))
@@ -339,17 +342,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(503, payload)
 
     def _dispatch_request(self, request):
-        if self.path in STREAM_ROUTES and isinstance(request, dict):
+        if self.path in (STREAM_ROUTES | JULIA_ROUTES) and isinstance(request, dict):
             from uuid import UUID
             pid = request.get('project_id')
             try:
                 if isinstance(pid, str) and str(UUID(pid)) == pid:
-                    self.server.describe_request(self.request, 'provider_lane', 'waiting', self.path, pid)
+                    self.server.describe_request(self.request, request_lane(self.path, request), 'waiting', self.path, pid)
             except (ValueError, AttributeError):
                 pass
-        if self.path in ACTION_LANES or self.path in STREAM_ROUTES:
+        if self.path in ACTION_LANES or self.path in STREAM_ROUTES or self.path in JULIA_ROUTES:
             return self._in_request_lane(lambda: self.dispatch(request),
-                lane_name=request_lane(self.path, request))
+                lane_name=request_lane(self.path, request), typed_busy=self.path in JULIA_ROUTES)
         if self.path not in PROJECT_ROUTES:
             return self.dispatch(request)
         from uuid import UUID

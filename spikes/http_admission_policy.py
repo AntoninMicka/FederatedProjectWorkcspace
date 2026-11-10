@@ -183,7 +183,25 @@ ACTION_LANES = {
     '/v1/administration': {'list': 'node_status'},
 }
 
-# Audited non-provider HTTP owners: monitoring/collection, Julia, planning,
+# Julia owns its worker/error maps and durable run journal independently of
+# providers and monitoring. Keep all twelve HTTP operations serialized together;
+# status/cancel/reconcile are not classified as pure reads.
+JULIA_ROUTES = frozenset({
+    '/v1/julia/cancel',
+    '/v1/julia/definitions',
+    '/v1/julia/editor/delete/confirm',
+    '/v1/julia/editor/delete/preview',
+    '/v1/julia/editor/open',
+    '/v1/julia/editor/save',
+    '/v1/julia/execute',
+    '/v1/julia/output',
+    '/v1/julia/preview',
+    '/v1/julia/publish',
+    '/v1/julia/reconcile',
+    '/v1/julia/status',
+})
+
+# Audited non-provider HTTP owners: monitoring/collection, planning,
 # source/IDE transfer, presentation documents and independent node preferences.
 # Their original application serialization and native writers remain intact.
 APPLICATION_ROUTES = frozenset({
@@ -209,18 +227,6 @@ APPLICATION_ROUTES = frozenset({
     '/v1/ide-bridge/revoke',
     '/v1/ide-bridge/status',
     '/v1/ide-queue/publish',
-    '/v1/julia/cancel',
-    '/v1/julia/definitions',
-    '/v1/julia/editor/delete/confirm',
-    '/v1/julia/editor/delete/preview',
-    '/v1/julia/editor/open',
-    '/v1/julia/editor/save',
-    '/v1/julia/execute',
-    '/v1/julia/output',
-    '/v1/julia/preview',
-    '/v1/julia/publish',
-    '/v1/julia/reconcile',
-    '/v1/julia/status',
     '/v1/monitoring/block-compose',
     '/v1/monitoring/block-configure',
     '/v1/monitoring/block-process',
@@ -300,6 +306,7 @@ ROUTE_LANES = {
     '/v1/federation/content-sync': 'content_sync',
     **dict.fromkeys(PROJECT_ROUTES, 'project'),
     **dict.fromkeys(PROVIDER_ROUTES, 'provider'),
+    **dict.fromkeys(JULIA_ROUTES, 'julia'),
     **dict.fromkeys(APPLICATION_ROUTES, 'application'),
     # Peer protocols bypass JSON dispatch and keep their existing ownership.
     '/v1/federation/probe': 'application',

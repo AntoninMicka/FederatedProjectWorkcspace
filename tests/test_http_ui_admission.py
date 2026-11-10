@@ -217,6 +217,35 @@ global.fetch=async(path,options)=>{const body=JSON.parse(options.body),key=path+
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('provider ordering OK', result.stdout)
 
+    def test_julia_queue_is_independent_and_retains_ownership_until_eof(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStream({start(c){controllers.set(path,c);}}));};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const post=path=>fetch(path,{method:'POST',body:'{}'});
+ const julia=await post('/v1/julia/definitions');
+ const cancel=post('/v1/julia/cancel');
+ const reconcile=post('/v1/julia/reconcile');
+ const application=await post('/v1/counter');
+ const provider=await post('/v1/chat/status');
+ assert(!sent.includes('/v1/julia/cancel'));
+ assert(!sent.includes('/v1/julia/reconcile'));
+ const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
+ end('/v1/julia/definitions');await julia.text();
+ const cancelled=await cancel;assert(!sent.includes('/v1/julia/reconcile'));
+ end('/v1/julia/cancel');await cancelled.text();
+ const reconciled=await reconcile;end('/v1/julia/reconcile');await reconciled.text();
+ end('/v1/counter');end('/v1/chat/status');await Promise.all([application.text(),provider.text()]);
+ console.log('Julia domain EOF ownership OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('Julia domain EOF ownership OK', result.stdout)
+
     def test_project_queues_share_nested_scope_and_bound_total_waiters(self):
         script = r'''
 const assert=require('node:assert/strict');

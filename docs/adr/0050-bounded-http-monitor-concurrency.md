@@ -448,3 +448,18 @@ registrace po view/draft. Timeout draftu není volitelná chyba; před vrácení
 se kontroluje konec rozpočtu. CPU/disk a samostatné registry Git volání tím nejsou
 preemptivně přerušovány. Crash boundaries a journal recovery zůstávají ADR 0003;
 změna nepřidává persistentní formát ani automatickou obnovu pending operace.
+
+### Samostatná Julia Workspace linka
+
+Dvanáct přesně deklarovaných Julia HTTP rout používá vlastní společnou linku
+po autentizaci a načtení JSON. Sdílená tabulka platí i pro browser FIFO/Web Locks;
+status, cancel a reconcile nejsou volné read-only operace. Vlastní worker/error
+mapy a run journal nemají providerové ani monitorovací procesní reference;
+projektová publikace zůstává pod Workspace writerem.
+
+Procesní zámek Julia služby používá bounded HTTP acquisition, SQLite run journal
+nulové HTTP busy čekání; nativní zámky/30s SQLite policy zůstávají. Kolize před
+HTTP dispatch je not-started, pozdější neznámý účinek zůstává unknown se stejným
+ID. Životní cyklus a crash recovery určuje ADR 0057, projektový zápis ADR 0003.
+Nevzniká nový formát, writer, pool ani automatický retry. Izolace neznamená
+celkový deadline runtime/CPU/disku či dokončený audit worker shutdownu.

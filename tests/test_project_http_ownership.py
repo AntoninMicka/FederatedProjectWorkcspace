@@ -82,6 +82,47 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
             self.assertEqual(status, 200, payload)
             self.assertEqual(payload['sync_conflicts'], [{'peer_id': peer_id}])
 
+    def test_julia_owner_is_independent_but_its_routes_remain_serialized(self):
+        entered, release = threading.Event(), threading.Event()
+        results = []
+        class Julia:
+            def definitions(inner, project_id, expected_head):
+                entered.set()
+                if not release.wait(4):
+                    raise AssertionError('Test Julia owner was not released')
+                return {'definitions': []}
+            def status(inner, project_id, operation_id=None, **kwargs):
+                return {'runs': []}
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            server.julia_workspace = Julia()
+            body = {'project_id': self.ids[0], 'expected_head': 'unused-fixture-head'}
+            worker = threading.Thread(target=lambda: results.append(
+                self.post(server, '/v1/julia/definitions', body)))
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(2))
+                self.assertEqual(self.post(server, '/v1/julia/status',
+                    {'project_id': self.ids[0]}, token='invalid')[0], 401)
+                status, payload, _ = self.post(server, '/v1/julia/status',
+                                               {'project_id': self.ids[0]})
+                self.assertEqual(status, 503, payload)
+                self.assertEqual(payload['outcome'], 'not-started')
+                self.assertEqual(self.post(server, '/v1/counter', {'action': 'increment'})[0], 200)
+                self.assertEqual(self.post(server, '/v1/projects/open',
+                                          {'project_id': self.ids[1]})[0], 200)
+            finally:
+                release.set(); worker.join(5)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(results[0][0], 200)
+            # The reverse direction also matters: application/provider owners
+            # cannot prevent an independent Julia status request.
+            server.application_lane.acquire(); server.provider_lane.acquire()
+            try:
+                self.assertEqual(self.post(server, '/v1/julia/status',
+                                          {'project_id': self.ids[0]})[0], 200)
+            finally:
+                server.provider_lane.release(); server.application_lane.release()
+
     def test_blocked_project_does_not_block_another_project_or_node_route(self):
         entered, release = threading.Event(), threading.Event()
         original = Projects.open

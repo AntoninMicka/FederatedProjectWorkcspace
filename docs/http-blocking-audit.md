@@ -123,3 +123,13 @@ Receiver timeout is transient 503, preserving the original pending request.
 This closes repeated per-command/branch timeout resets in these phases, not
 whole-request elapsed time, preemptive CPU/disk cancellation, other Git workflows
 or the remaining global application lane.
+
+### Julia domain follow-up
+
+All twelve Julia Workspace routes now share a dedicated serialized owner after
+authentication/body parsing; they no longer hold the application lane. Their
+worker-map lock and run-journal SQLite waits reuse bounded HTTP ownership, with
+native policies unchanged. Browser FIFO/EOF ownership follows the same exact
+route table. Julia status/cancel/reconcile remain in this mutating domain;
+monitoring/RSS and other application routes remain open. This isolates waiting,
+not the elapsed duration of Julia runtime/CPU/disk work or worker shutdown.
