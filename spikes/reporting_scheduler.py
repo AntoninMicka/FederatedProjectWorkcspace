@@ -8,12 +8,12 @@ import json
 import math
 import os
 from pathlib import Path
-import sqlite3
 import stat
 import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import require, uuid, validate_snapshot
 from spikes.configuration import parse_node, read_config
 from spikes.journal import sync_dir
@@ -77,8 +77,8 @@ class ReportingScheduler:
         info = os.fstat(fd); os.close(fd)
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and
                 info.st_nlink == 1 and not info.st_mode & 0o077, 'Unsafe reporting run journal')
-        db = sqlite3.connect(self.path.as_uri()+'?mode=rw',uri=True,timeout=30)
-        try:
+        with sqlite_connection(self.path.as_uri()+'?mode=rw', uri=True, timeout=30,
+                               resource='Reporting run journal') as db:
             db.execute('PRAGMA synchronous=FULL')
             db.execute('BEGIN IMMEDIATE')
             tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -122,12 +122,6 @@ class ReportingScheduler:
             require([r[1] for r in db.execute('PRAGMA table_info(rss_polls)')]==['id','binding','state','document','result','plan','receipt'], 'Unknown RSS poll columns')
             require([r[1] for r in db.execute('PRAGMA table_info(execution_effects)')]==['id','stream','document'], 'Unknown execution effect columns')
             yield db
-            db.commit()
-        except BaseException:
-            db.rollback()
-            raise
-        finally:
-            db.close()
 
     def now(self):
         value = self.clock()

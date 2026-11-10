@@ -19,6 +19,7 @@ from spikes.configuration import parse_node, read_config
 from spikes.context_builder import Authority, ContextBuilder, ProjectInput, AdHocInput, TaskInstruction
 from spikes.backend_contract import ROLES
 from spikes.metadata import require, uuid, validate_snapshot, parse_json
+from spikes.request_ownership import ProjectBusy, bounded_process_lock
 from spikes.project_creation import ProjectCreation
 from spikes.presentation_documents import new_deck, new_slide, encode_deck
 from spikes.reporting import Reporting, operation_uuid
@@ -74,6 +75,7 @@ class Monitoring:
     def __init__(self,node,projects,*,clock=time.time,collector=None,adapter_factory=None):
         self.node=Path(node);self.projects=projects;self.clock=clock
         self.reporting=Reporting(node);self.artifacts=Artifacts(node)
+        self._services_lock=threading.RLock()
         self._scheduler=None
         self._rss_runtime=None
         self._composable_runtime=None
@@ -83,21 +85,28 @@ class Monitoring:
 
     @property
     def scheduler(self):
-        if self._scheduler is None:self._scheduler=ReportingScheduler(self.node,clock=self.clock)
+        if self._scheduler is None:
+            with bounded_process_lock(self._services_lock,resource='Monitoring services'):
+                if self._scheduler is None:
+                    self._scheduler=ReportingScheduler(self.node,clock=self.clock)
         return self._scheduler
 
     @property
     def rss_runtime(self):
         if self._rss_runtime is None:
-            from spikes.rss_monitoring import RSSMonitoring
-            self._rss_runtime=RSSMonitoring(self.node,clock=self.clock,scheduler=self.scheduler)
+            with bounded_process_lock(self._services_lock,resource='Monitoring services'):
+                if self._rss_runtime is None:
+                    from spikes.rss_monitoring import RSSMonitoring
+                    self._rss_runtime=RSSMonitoring(self.node,clock=self.clock,scheduler=self.scheduler)
         return self._rss_runtime
 
     @property
     def composable(self):
         if self._composable_runtime is None:
-            from spikes.composable_monitoring import ComposableMonitoring
-            self._composable_runtime = ComposableMonitoring(self)
+            with bounded_process_lock(self._services_lock,resource='Monitoring services'):
+                if self._composable_runtime is None:
+                    from spikes.composable_monitoring import ComposableMonitoring
+                    self._composable_runtime = ComposableMonitoring(self)
         return self._composable_runtime
 
     def _data(self,pid,*,network=False):
@@ -456,8 +465,8 @@ class Monitoring:
             self.scheduler.stage(job['run_id'],claim['lease_token'],dict(project_id=pid,base_head=self.projects.repository(pid).head(),records=[
                 dict(type='ReportSnapshot',entity_id=None,previous=[],privacy=cfg['privacy'],value=value,markdown=markdown)]),_generation=generation)
         except Exception as exc:
-            try:self.scheduler.fail(job['run_id'],claim['lease_token'],outcome='unknown' if isinstance(exc,(TimeoutError,)) or 'Unknown' in type(exc).__name__ else 'failed')
-            except (ValueError,OSError):pass
+            try:self.scheduler.fail(job['run_id'],claim['lease_token'],outcome='unknown' if isinstance(exc,(TimeoutError,ProjectBusy)) or 'Unknown' in type(exc).__name__ else 'failed')
+            except (ValueError,OSError,ProjectBusy):pass
             raise
         return self.scheduler.get(job['run_id'])
 

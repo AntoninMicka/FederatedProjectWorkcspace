@@ -5,11 +5,11 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
-import sqlite3
 import stat
 from pathlib import Path
 import time
 
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import require, uuid
 from spikes.reporting_schema import digest, encoded, fields, moment, hex_id
 from spikes.reporting_scheduler import ReportingScheduler
@@ -99,8 +99,8 @@ class MessagePools:
         info = self.path.lstat()
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and
                 info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600, 'Unsafe pool database')
-        db = sqlite3.connect(self.path.as_uri()+'?mode=rw', uri=True, timeout=30)
-        try:
+        with sqlite_connection(self.path.as_uri()+'?mode=rw', uri=True, timeout=30,
+                               resource='Message pools') as db:
             db.execute('PRAGMA synchronous=FULL'); db.execute('PRAGMA secure_delete=ON')
             db.execute('BEGIN IMMEDIATE')
             if initialize:
@@ -117,10 +117,6 @@ class MessagePools:
                 for table, columns in expected.items():
                     require([r[1] for r in db.execute('PRAGMA table_info('+table+')')] == columns, 'Unknown pool columns')
             yield db
-            db.commit()
-        except BaseException:
-            db.rollback(); raise
-        finally: db.close()
 
     def _cleanup(self, db, project_id):
         rows = [json.loads(r[0]) for r in db.execute(

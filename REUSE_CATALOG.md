@@ -1445,3 +1445,11 @@ Všech 12 Julia rout zůstává společně serializovaných; projektová publika
 používá původní Workspace writer. Stav/approval/run ID ani recovery se nemění.
 Volné read-only zařazení status/cancel/reconcile, druhý writer a nové pooly byly
 odmítnuty: tyto operace sdílejí run lifecycle a status může inicializovat journal.
+
+Monitoring/RSS HTTP ownership **adaptuje** přesnou route tabulku, browser FIFO/
+Web Locks, bounded process/SQLite helpers a původní collector flock. Reporting
+leases, RSS poll journal, pool transakce, migration intents a Workspace writer
+zůstávají autoritou. Oddělená paměťová RSS cache má vlastní doménu; projektový
+monitoring jednu společnou doménu a jednorázové vytváření svých lazy služeb.
+Volné read-only zařazení statusu, per-projektový souběh bez auditu, nový writer,
+mazání obsazených journalů a automatický retry unknown operací byly odmítnuty.

@@ -201,32 +201,9 @@ JULIA_ROUTES = frozenset({
     '/v1/julia/status',
 })
 
-# Audited non-provider HTTP owners: monitoring/collection, planning,
-# source/IDE transfer, presentation documents and independent node preferences.
-# Their original application serialization and native writers remain intact.
-APPLICATION_ROUTES = frozenset({
-    '/v1/application-access',
-    '/v1/counter',
-    '/v1/document-patterns',
-    '/v1/federation/catalog/reconcile',
-    '/v1/federation/content/cancel',
-    '/v1/federation/content/reconcile',
-    '/v1/federation/content/settings',
-    '/v1/federation/content/start-all',
-    '/v1/federation/enroll',
-    '/v1/gamepad/settings',
-    '/v1/gamepad/status',
-    '/v1/ide-bridge/connection/create',
-    '/v1/ide-bridge/connection/exchange',
-    '/v1/ide-bridge/connection/map',
-    '/v1/ide-bridge/connection/revoke',
-    '/v1/ide-bridge/connections',
-    '/v1/ide-bridge/create',
-    '/v1/ide-bridge/exchange',
-    '/v1/ide-bridge/review',
-    '/v1/ide-bridge/revoke',
-    '/v1/ide-bridge/status',
-    '/v1/ide-queue/publish',
+# Monitoring lifecycle, publication and sidecar state keep one serialized owner.
+# The manual public RSS cache has no project/monitoring state and owns its lane.
+MONITORING_ROUTES = frozenset({
     '/v1/monitoring/block-compose',
     '/v1/monitoring/block-configure',
     '/v1/monitoring/block-process',
@@ -263,6 +240,41 @@ APPLICATION_ROUTES = frozenset({
     '/v1/monitoring/view',
     '/v1/monitoring/workflow-run',
     '/v1/monitoring/workflow-save',
+})
+RSS_SOURCE_ROUTES = frozenset({
+    '/v1/rss-sources/refresh',
+    '/v1/rss-sources/view',
+})
+
+# These service domains acquire admission after authentication/body parsing.
+SERVICE_ROUTES = JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES
+
+# Audited non-provider HTTP owners: planning,
+# source/IDE transfer, presentation documents and independent node preferences.
+# Their original application serialization and native writers remain intact.
+APPLICATION_ROUTES = frozenset({
+    '/v1/application-access',
+    '/v1/counter',
+    '/v1/document-patterns',
+    '/v1/federation/catalog/reconcile',
+    '/v1/federation/content/cancel',
+    '/v1/federation/content/reconcile',
+    '/v1/federation/content/settings',
+    '/v1/federation/content/start-all',
+    '/v1/federation/enroll',
+    '/v1/gamepad/settings',
+    '/v1/gamepad/status',
+    '/v1/ide-bridge/connection/create',
+    '/v1/ide-bridge/connection/exchange',
+    '/v1/ide-bridge/connection/map',
+    '/v1/ide-bridge/connection/revoke',
+    '/v1/ide-bridge/connections',
+    '/v1/ide-bridge/create',
+    '/v1/ide-bridge/exchange',
+    '/v1/ide-bridge/review',
+    '/v1/ide-bridge/revoke',
+    '/v1/ide-bridge/status',
+    '/v1/ide-queue/publish',
     '/v1/outputs/definitions',
     '/v1/presentations/export/preview',
     '/v1/presentations/open',
@@ -273,8 +285,6 @@ APPLICATION_ROUTES = frozenset({
     '/v1/roadmap-refinement/decide',
     '/v1/roadmap-refinement/decide-all',
     '/v1/roadmap/graph',
-    '/v1/rss-sources/refresh',
-    '/v1/rss-sources/view',
     '/v1/session',
     '/v1/sources/import',
     '/v1/task-queue',
@@ -307,6 +317,8 @@ ROUTE_LANES = {
     **dict.fromkeys(PROJECT_ROUTES, 'project'),
     **dict.fromkeys(PROVIDER_ROUTES, 'provider'),
     **dict.fromkeys(JULIA_ROUTES, 'julia'),
+    **dict.fromkeys(MONITORING_ROUTES, 'monitoring'),
+    **dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources'),
     **dict.fromkeys(APPLICATION_ROUTES, 'application'),
     # Peer protocols bypass JSON dispatch and keep their existing ownership.
     '/v1/federation/probe': 'application',

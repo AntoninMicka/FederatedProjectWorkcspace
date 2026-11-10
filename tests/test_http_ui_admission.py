@@ -246,6 +246,39 @@ global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStrea
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertIn('Julia domain EOF ownership OK', result.stdout)
 
+    def test_monitoring_and_public_rss_have_independent_fifo_eof_owners(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStream({start(c){controllers.set(path,c);}}));};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const post=path=>fetch(path,{method:'POST',body:JSON.stringify({project_id:'11111111-1111-4111-8111-111111111111'})});
+ const monitoring=await post('/v1/monitoring/block-process');
+ const status=post('/v1/monitoring/view');
+ const publish=post('/v1/monitoring/block-publish');
+ const rss=await post('/v1/rss-sources/refresh');
+ const rssView=post('/v1/rss-sources/view');
+ const others=[];
+ for(const path of ['/v1/counter','/v1/projects/open','/v1/chat/status','/v1/julia/status'])others.push([path,await post(path)]);
+ for(const path of ['/v1/monitoring/view','/v1/monitoring/block-publish','/v1/rss-sources/view'])assert(!sent.includes(path),'Owner bypassed: '+path);
+ const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
+ end('/v1/monitoring/block-process');await monitoring.text();
+ const viewed=await status;assert(!sent.includes('/v1/monitoring/block-publish'));
+ end('/v1/monitoring/view');await viewed.text();
+ const published=await publish;end('/v1/monitoring/block-publish');await published.text();
+ assert(!sent.includes('/v1/rss-sources/view'));
+ end('/v1/rss-sources/refresh');await rss.text();
+ const refreshed=await rssView;end('/v1/rss-sources/view');await refreshed.text();
+ for(const [path,response] of others){end(path);await response.text();}
+ console.log('monitoring and public RSS domains OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('monitoring and public RSS domains OK', result.stdout)
+
     def test_project_queues_share_nested_scope_and_bound_total_waiters(self):
         script = r'''
 const assert=require('node:assert/strict');

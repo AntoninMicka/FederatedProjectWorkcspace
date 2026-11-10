@@ -133,3 +133,15 @@ native policies unchanged. Browser FIFO/EOF ownership follows the same exact
 route table. Julia status/cancel/reconcile remain in this mutating domain;
 monitoring/RSS and other application routes remain open. This isolates waiting,
 not the elapsed duration of Julia runtime/CPU/disk work or worker shutdown.
+
+### Monitoring/RSS ownership follow-up
+
+The 36 exact monitoring routes and two standalone RSS-source routes now have
+separate serialized HTTP/browser domains, after authentication/body parsing.
+Their native leases/journals/collector and worker flocks still own correctness.
+Lazy monitoring services are initialized single-flight against background work;
+service/cache process locks and reporting/message-pool SQLite waits use bounded
+HTTP ownership with native policies preserved. A busy collection after its
+lease is unknown and cannot be automatically replayed. Network/provider stores,
+CPU/disk/Git duration, background shutdown and other application owners remain
+open; status is not reclassified as pure read-only.

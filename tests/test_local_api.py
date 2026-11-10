@@ -137,6 +137,9 @@ class LocalAPITests(unittest.TestCase):
 
         from spikes.http_admission_policy import JULIA_ROUTES
         routes.update(dict.fromkeys(JULIA_ROUTES, 'julia_lane'))
+        from spikes.http_admission_policy import MONITORING_ROUTES, RSS_SOURCE_ROUTES
+        routes.update(dict.fromkeys(MONITORING_ROUTES, 'monitoring_lane'))
+        routes.update(dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources_lane'))
 
         class LaneHandler(Handler):
             post_paths = set(routes)

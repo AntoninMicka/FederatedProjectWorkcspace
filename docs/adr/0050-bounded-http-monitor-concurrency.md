@@ -463,3 +463,23 @@ HTTP dispatch je not-started, pozdější neznámý účinek zůstává unknown 
 ID. Životní cyklus a crash recovery určuje ADR 0057, projektový zápis ADR 0003.
 Nevzniká nový formát, writer, pool ani automatický retry. Izolace neznamená
 celkový deadline runtime/CPU/disku či dokončený audit worker shutdownu.
+
+### Oddělení monitoringu a samostatné RSS cache
+
+Přesná tabulka přiřazuje 36 monitoring rout do společné monitoring linky a dvě
+routy veřejných RSS zdrojů do samostatné RSS linky. Obě se získávají po autentizaci
+a načtení JSON, browser používá shodné FIFO/Web Locks vlastnictví do EOF.
+Web RBAC se dál ověřuje při dispatch. Před-dispatch busy je not-started;
+pozdější kolize nativního vlastníka zůstává unknown se stejnou operací.
+
+Lazy scheduler/RSS/composable služby vznikají jednou pod reentrantním procesním
+zámkem i při souběhu s workerem. HTTP process/cache čekání je bounded, SQLite
+ReportingScheduler/MessagePools má nulové HTTP busy čekání; native 30s politika,
+schema checks, rollback a receipty se nemění. Collector zůstává neblokující.
+
+Po collection lease je ProjectBusy unknown, nikoli failed dovolující opakování.
+Při obsazeném journalu zůstává původní lease pro expiry/reconcile. Platí crash
+boundaries ADR 0003/0073/0076/0082/0083; nepřibývá writer, formát, scheduler,
+automatická aktivace ani retry. Nejde o celkový deadline všech network/CPU/disk
+kroků či dokončený shutdown audit. Podrobnosti a důkazy viz
+[audit vlastnictví](../http-concurrency-ownership.md).

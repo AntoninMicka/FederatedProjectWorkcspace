@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import threading
 import time
+from spikes.request_ownership import ProjectBusy, bounded_process_lock, bounded_project_wait
 from spikes.metadata import require
 from spikes.public_source import PublicSourceError
 from spikes.rss_reader import fetch, observe, parse_feed
@@ -29,7 +30,7 @@ class RSSSources:
                 self.cache[channel['id']].update(state='unavailable',error=CONNECTORS[kind]().describe()['availability']['reason'])
 
     def view(self):
-        with self.lock:
+        with bounded_process_lock(self.lock, resource='RSS cache'):
             channels, entries, items = [], [], []
             for channel in self.channels:
                 cached = self.cache[channel['id']]
@@ -53,17 +54,20 @@ class RSSSources:
 
     def refresh(self, channel_id):
         require(channel_id == 'all' or channel_id in self.cache, 'Neznámý kanál.')
-        require(self.refresh_lock.acquire(blocking=False), 'Načítání již probíhá. Obnovte přehled.')
+        if not self.refresh_lock.acquire(blocking=False):
+            if bounded_project_wait.get():
+                raise ProjectBusy('RSS refresh is busy')
+            require(False, 'Načítání již probíhá. Obnovte přehled.')
         try:
             for channel in self.channels:
                 if channel_id not in {'all', channel['id']}:
                     continue
                 kind = channel.get('connector', 'rss-atom')
                 if kind != 'rss-atom':
-                    with self.lock:
+                    with bounded_process_lock(self.lock, resource='RSS cache'):
                         self.cache[channel['id']].update(state='unavailable', error=CONNECTORS[kind]().describe()['availability']['reason'])
                     continue
-                with self.lock:
+                with bounded_process_lock(self.lock, resource='RSS cache'):
                     cached = self.cache[channel['id']]
                     require(cached['attempted'] is None or self.clock() - cached['attempted'] >= 30,
                             'Další načtení kanálu je možné po 30 sekundách.')
@@ -79,11 +83,11 @@ class RSSSources:
                     batch('rss-atom',[RSSConnector().normalize_entry(entry,context,feed['raw_sha256']) for entry in feed['entries']])
                     observation = observe(feed,observed_at,previous)
                 except (ValueError, OSError, PublicSourceError) as exc:
-                    with self.lock:
+                    with bounded_process_lock(self.lock, resource='RSS cache'):
                         cached['state'] = 'unknown' if getattr(exc, 'state', '') == 'unknown' else 'failed'
                         cached['error'] = str(exc)
                 else:
-                    with self.lock:
+                    with bounded_process_lock(self.lock, resource='RSS cache'):
                         cached.update(observation=observation, state='ready', error=None)
             return self.view()
         finally:
@@ -91,7 +95,7 @@ class RSSSources:
 
 
 def sources_for(server):
-    with _CREATION_LOCK:
+    with bounded_process_lock(_CREATION_LOCK, resource='RSS service initialization'):
         if not hasattr(server, 'rss_sources'):
             server.rss_sources = RSSSources()
         return server.rss_sources

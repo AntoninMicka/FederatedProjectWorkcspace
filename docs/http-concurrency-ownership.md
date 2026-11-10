@@ -912,3 +912,78 @@ approval/operation with no process started. Existing Julia tests exercise
 execution, cancel, reconciliation, crash/publication and privacy checks using
 test runtimes; they do not establish real Omnia Julia execution acceptance.
 Compilation and `git diff --check` passed. The full suite has not run.
+
+## Monitoring and standalone RSS ownership domains
+
+Continuation from `c54d077` on the existing branch under explicit authorization
+to finish the monitoring/RSS repair as one coherent change. The canonical
+mapping/revision remains as recorded above; the bridge is stale/connection
+refused, and the user authorized source continuation. No MON-08 activation,
+Workspace-plan mutation, migration acceptance or live deployment is performed.
+
+The exact route table now assigns 36 monitoring routes to one `monitoring_lane`
+and the two standalone RSS-source routes to one `rss_sources_lane`. Both acquire
+HTTP admission after authentication and JSON framing/parsing, preserve web RBAC
+at dispatch and share their classification with browser FIFO/Web Locks. Each
+domain remains serialized through response EOF. Pre-dispatch collision is
+503/not-started/same-operation; later native-owner collision remains unknown.
+Unknown paths/query variants keep application fallback. Worker/queue capacity
+is unchanged.
+
+Ownership audit: Monitoring owns its scheduler, RSS/composable runtimes,
+collector, periodic worker and last-error map. HTTP does not replace server
+projects, presentation selection or provider services. Project writes still use
+Workspace journal/CAS; reporting leases, RSS poll journals, migration intents,
+message-pool transactions and collector/worker flocks remain native authorities.
+Model/search paths construct their own adapters/run stores and explicit context
+manifests, not shared server ChatService objects. Backend binding selection is
+read from the existing atomic configuration; background monitoring already ran
+outside provider HTTP admission. This change does not alter dispatch/privacy
+checks, placement rules, activation or approval policy.
+
+Scheduler, RSS runtime and composable runtime construction is now single-flight
+under one reentrant service-init lock, including native/background callers.
+Only fully constructed objects are published. HTTP contention uses the existing
+100 ms bounded process acquisition; native behavior remains blocking. Recursive
+scheduler access while constructing dependent services remains safe. Failed
+initialization is not published, and missing/corrupt native state is never reset
+or deleted to make another initialization attempt succeed.
+
+ReportingScheduler and MessagePools connections reuse SQLite ownership: HTTP
+busy timeout zero, original native 30 seconds, unchanged schema/owner checks,
+explicit intents and atomic commit/rollback. Collector acquisition stays native
+nonblocking and translates collision to typed busy in HTTP. The standalone RSS
+cache/service-init locks use bounded HTTP acquisition; refresh ownership remains
+nonblocking, with typed HTTP busy and its original native refusal. Cache data,
+cooldown and connector policy are unchanged; no project bytes enter this cache.
+
+Crash boundaries remain ADR 0003, 0073, 0076, 0082 and 0083. A collision before
+claim/dispatch does not create another operation. After a collection lease,
+`ProjectBusy` is unknown, never ordinary failed: the same run is not automatically
+replayed. If its journal is also busy, the unfinished lease remains durable for
+native expiry/reconciliation instead of being erased. Model/search/poll and
+publication intents retain their existing unknown/roll-forward behavior. Pool
+retention still uses secure deletion; synchronization still sends validated
+logical entries, never SQLite or local activation/credentials. No new persistent
+format, writer, scheduler or automatic retry is introduced.
+
+This isolates ownership, not total monitoring execution duration. Network/provider
+substores, CPU/Git/disk work and monitoring worker shutdown retain their existing
+limits and require the later elapsed-time/lifecycle audit. Status can initialize
+or update operational stores; these routes are not declared pure reads. There
+is no finer per-project monitoring concurrency in this slice. The remaining
+application owners (IDE queue/bridge, planning, imports and node preferences)
+still need their own audit. Local tests do not establish live Omnia acceptance.
+
+Final verification: the 201-test monitoring/RSS, migration, synthesis, workflow,
+placement, execution-journal, scheduler, native ownership, HTTP and browser
+selection passed (2 optional skips). The separate 27-test collector, pool-sync,
+SQLite and browser selection passed. Real Qt/WebEngine admission passed all
+13 tests without skips. These selections overlap and are not an aggregate
+unique test total. New checks cover all 38 route mappings, cross-domain HTTP
+progress, same-domain serialization, authentication before admission, native
+SQLite/process/collector contention, single-flight initialization, unchanged
+journal bytes after collision, and unknown collection intent without automatic
+redispatch. Existing crash/migration, retention, placement/privacy and pool-sync
+checks ran against temporary fixtures. Compilation and `git diff --check`
+passed. The full repository suite and live Omnia acceptance have not run.
