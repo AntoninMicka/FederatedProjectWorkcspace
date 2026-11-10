@@ -7,6 +7,7 @@ import ipaddress
 import json
 import os
 import fcntl
+from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,7 @@ import struct
 import subprocess
 import tempfile
 import threading
+import time
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -1129,7 +1131,7 @@ class ContentSyncControl:
             rows = db.execute('SELECT peer_id,project_id,state,detail,last_sent,'
                               'last_remote FROM runtime').fetchall()
         stale = [(peer, project) for peer, project, state, _, _, _ in rows
-                 if state in {'running', 'cancelling'}
+                 if state in {'queued', 'running', 'cancelling'}
                  and not _MANUAL_SYNCS.active(self.node, peer, project)]
         if stale:
             with _database(self.node) as db:
@@ -1137,7 +1139,7 @@ class ContentSyncControl:
                     db.execute(
                         "UPDATE runtime SET state='cancelled',detail=? "
                         'WHERE peer_id=? AND project_id=? '
-                        "AND state IN ('running','cancelling')",
+                        "AND state IN ('queued','running','cancelling')",
                         ('Synchronization was interrupted before completion',
                          peer, project))
             with _database(self.node) as db:
@@ -1225,9 +1227,11 @@ class ContentSyncControl:
 
     @observed
     @bounded_project_requests()
-    def synchronize(self, peer_id, project_id, *, cancelled=None):
+    def synchronize(self, peer_id, project_id, *, cancelled=None, owner_wait=0):
         try:
             identifier(peer_id); identifier(project_id)
+            require(type(owner_wait) in (int, float) and 0 <= owner_wait <= NETWORK_TIMEOUT,
+                    'Invalid synchronization admission wait')
             if cancelled is not None and cancelled():
                 raise SyncCancelled('Content sync cancelled before ownership')
             root = private_root(self.node)
@@ -1241,7 +1245,20 @@ class ContentSyncControl:
                 phase('wait-lock')
                 # Preserve capacity one without accumulating background workers
                 # in an uninterruptible queue behind a stalled peer transfer.
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                deadline = time.monotonic() + owner_wait
+                while True:
+                    if cancelled is not None and cancelled():
+                        raise SyncCancelled('Content sync cancelled before ownership')
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise
+                        # Only the one background manual worker waits here.
+                        # No HTTP worker, new envelope or dispatched request.
+                        time.sleep(min(.05, remaining))
                 return synchronize(self.node, peer_id, project_id,
                                    deployment=self.deployment,
                                    cancelled=cancelled)
@@ -1296,7 +1313,10 @@ class ContentSyncControl:
         if not self.settings()['automatic_enabled']:
             return {'enabled': False, 'attempted': 0}
         attempted = 0
+        if _MANUAL_SYNCS.any_active(self.node):
+            return {'enabled': True, 'attempted': 0}
         for candidate in self.candidates():
+            if _MANUAL_SYNCS.any_active(self.node): break
             if not candidate['eligible']: continue
             attempted += 1
             try:
@@ -1313,9 +1333,12 @@ class ManualSyncTasks:
     A remote peer may already have accepted the request, so cancellation never
     attempts a destructive rollback; a later retry reconciles both histories.
     """
-    def __init__(self):
+    def __init__(self, *, max_pending=64):
+        require(type(max_pending) is int and max_pending > 0, 'Invalid manual sync capacity')
         self.lock = threading.Lock()
         self.tasks = {}
+        self.workers = {}
+        self.max_pending = max_pending
 
     @staticmethod
     def _key(node, peer_id, project_id):
@@ -1327,6 +1350,12 @@ class ManualSyncTasks:
             task = self.tasks.get(key)
             return bool(task and task['thread'].is_alive())
 
+    def any_active(self, node):
+        root = str(Path(node).absolute())
+        with bounded_process_lock(self.lock, resource='Manual content synchronization'):
+            return any(key[0] == root and task['thread'].is_alive()
+                       for key, task in self.tasks.items())
+
     def start(self, node, deployment, peer_id, project_id):
         identifier(peer_id); identifier(project_id)
         key = self._key(node, peer_id, project_id)
@@ -1334,17 +1363,56 @@ class ManualSyncTasks:
             current = self.tasks.get(key)
             if current and current['thread'].is_alive():
                 return False
+            require(sum(k[0] == key[0] for k in self.tasks) < self.max_pending,
+                    'Manual synchronization queue is full')
+            worker = self.workers.get(key[0])
+            fresh = worker is None
+            if fresh:
+                worker = {'queue': deque(), 'thread': threading.Thread(
+                    target=self._drain, args=(key[0],),
+                    name='manual-federation-content-sync', daemon=True)}
             stopping = threading.Event()
-            thread = threading.Thread(
-                target=self._run,
-                args=(Path(node).absolute(), deployment, peer_id,
-                      project_id, stopping, key),
-                name='manual-federation-content-sync', daemon=True)
-            self.tasks[key] = {'thread': thread, 'stopping': stopping}
-            self._status(node, peer_id, project_id, 'running',
-                         'Content synchronization is running')
-            thread.start()
+            self._status(node, peer_id, project_id, 'queued',
+                         'Content synchronization is queued')
+            self.tasks[key] = {'thread': worker['thread'], 'stopping': stopping,
+                               'node': Path(node).absolute(), 'deployment': deployment}
+            worker['queue'].append(key)
+            if fresh:
+                self.workers[key[0]] = worker
+                try:
+                    worker['thread'].start()
+                except BaseException:
+                    self.tasks.pop(key, None)
+                    self.workers.pop(key[0], None)
+                    raise
         return True
+
+    def _drain(self, root):
+        while True:
+            with self.lock:
+                worker = self.workers[root]
+                if not worker['queue']:
+                    self.workers.pop(root)
+                    return
+                key = worker['queue'].popleft()
+                task = self.tasks[key]
+            try:
+                if task['stopping'].is_set():
+                    self._status(task['node'], key[1], key[2], 'cancelled',
+                                 'Content sync cancelled before dispatch')
+                else:
+                    self._status(task['node'], key[1], key[2], 'running',
+                                 'Content synchronization is running')
+                    self._run(task['node'], task['deployment'], key[1], key[2],
+                              task['stopping'], key)
+            except Exception:
+                # A failed status write must not strand the volatile node queue.
+                # Native journal recovery remains authoritative; never resend.
+                pass
+            finally:
+                with self.lock:
+                    if self.tasks.get(key) is task:
+                        self.tasks.pop(key, None)
 
     def cancel(self, node, peer_id, project_id):
         identifier(peer_id); identifier(project_id)
@@ -1372,7 +1440,7 @@ class ManualSyncTasks:
         completed = False
         try:
             ContentSyncControl(node, deployment=deployment).synchronize(
-                peer_id, project_id, cancelled=stopping.is_set)
+                peer_id, project_id, cancelled=stopping.is_set, owner_wait=NETWORK_TIMEOUT)
             completed = True
         except Exception:
             pass
@@ -1380,10 +1448,6 @@ class ManualSyncTasks:
             if completed and stopping.is_set():
                 self._status(node, peer_id, project_id, 'idle',
                              'Content sync completed before cancellation')
-            with bounded_process_lock(self.lock, resource='Manual content synchronization'):
-                current = self.tasks.get(key)
-                if current and current['stopping'] is stopping:
-                    self.tasks.pop(key, None)
 
 
 _MANUAL_SYNCS = ManualSyncTasks()

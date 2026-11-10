@@ -555,3 +555,18 @@ přepnutí projektu zneplatní další background čtení. Kolize creation regis
 v bounded kontextu je typed busy, zatímco skutečný `CreationConflict` zůstává
 chybou. Nativní journal/CAS/index recovery ani limity poolu se nemění; nejde
 o globální záruku kapacity napříč všemi nezávislými klienty.
+
+### Hromadná ruční synchronizace
+
+Jedna odchozí linka uzlu má odpovídajícího jednoho ručního workera s omezenou
+volatilní FIFO (nejvýše 64 aktivních/čekajících cílů), nikoli vlákno pro každý
+projekt. Čekající položky mají stav `queued`, stejné cíle se slučují a čekání
+lze zrušit. Automatický průchod ustoupí ruční dávce. Pouze její background
+worker smí kooperativně čekat na již běžící odchozí owner nejvýše 60 sekund;
+HTTP ani výchozí přímý synchronizační vstup nečekají. Příchozí owner zůstává
+oddělený. Nejde o retry transportu ani nový persistentní job journal.
+
+Po pádu se volatilní dávka sama neobnovuje. Runtime stav nenahrazuje skutečný
+outbound/inbound journal; jeho ID, přesné bajty, CAS a recovery se nemění.
+Čtecí polling stavu smí pokračovat po 408/503, mutace se neopakuje. Stav busy,
+queued či chyba nesmí v UI deklarovat dokončený Git přenos.

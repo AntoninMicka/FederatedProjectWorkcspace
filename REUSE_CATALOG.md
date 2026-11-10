@@ -1491,3 +1491,10 @@ committed TODO projection, catalog-request invalidation and typed bounded
 ownership. Dashboard reuses the existing project route/owner and native
 journal/index/privacy checks. **Reject:** more HTTP workers, automatic replay,
 full-history reads for every startup card and a second persistent cache/writer.
+
+Manual sync batches: **adapt/reuse** existing `ManualSyncTasks`,
+`ContentSyncControl`, node outbound flock, cancellation events, runtime rows and
+exact native transfer recovery. A bounded volatile FIFO aligns manual admission
+with existing node capacity one; the scheduler yields to it. **Reject:** a
+second persistent writer/job journal, transport retries, deleting pending
+payloads on cancellation and sharing the outbound lock with inbound responses.

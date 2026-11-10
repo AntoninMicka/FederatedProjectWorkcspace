@@ -1322,3 +1322,51 @@ and busy versus semantic-conflict classification with the same pending bytes.
 `git diff --check` passed. The previous 1,990-test full gate applies to
 `a822287`; it was not repeated for this follow-up. No live instance was restarted
 or deployed as part of this source verification.
+
+### Manual content-sync batch ownership follow-up
+
+Live read-only diagnostics distinguished receiver 503 during
+`receive-prepare-response` from local outbound `wait-lock` contention. Later
+receiver completions alone did not establish client completion: pending
+outbound rows and changing local busy states remained. Independently, the
+manual-all implementation spawned one worker per target despite a node-wide
+outbound capacity of one, causing avoidable self-contention.
+
+Manual work now has a bounded volatile FIFO (64 accepted targets per node,
+including the active one), one daemon worker per node and coalescing by the
+existing node/peer/project key. Waiting work has explicit `queued` status and
+can be cancelled before dispatch. Foreground HTTP still only enqueues/queries;
+it never waits for transport. Automatic sync yields before reading candidates
+and between projects while manual work is active. A manual worker may wait
+cooperatively for an already active outbound owner for at most 60 seconds,
+checking cancellation every 50 ms. Direct/default coordinator acquisition
+remains nonblocking. This is pre-dispatch admission, not HTTP/provider retry.
+The inbound owner remains separate to avoid bilateral send/receive deadlock.
+
+Crash boundaries retain ADR 0003/0042/0081. `queued` is a runtime projection,
+not an operation intent. Status persistence precedes volatile admission; if
+thread creation fails or the process dies, that queue is not reconstructed or
+automatically restarted. Existing status reconciliation marks the abandoned
+attempt interrupted. Once dispatched, native outbound/inbound journals, exact
+operation ID/envelope, Git CAS and receipt recovery remain authoritative. Queue
+cancellation never deletes earlier pending bytes or rolls back remote work.
+An unsuccessful target does not strand the next queued target and is not
+resubmitted by the queue. Reaching capacity rejects additional targets visibly.
+
+The UI polls queued/running/cancelling work. Transient 408/503 during the
+read-only status poll no longer permanently stops polling; authorization errors
+stop it. This never retries a mutating request. Non-idle summaries use the real
+pending/error detail and must not claim Git data was synchronized merely because
+chat mappings are missing. Receiver preparation 503 remains a distinct transient
+condition; this queue change is not evidence that its native contention vanished.
+No deployment, restart or production acceptance is implied by local tests.
+
+Verification of this follow-up: final targeted batch of 127 tests OK (10
+optional skips), covering native federation/replay, FIFO/capacity, cancellation
+both before dispatch and during outbound admission wait, one publication/native
+recovery, preserved pending ID/payload after response loss and thread-start
+failure, UI queue status/summaries, status-only retry on 408/503, authorization
+failure, HTTP ownership and safe diagnostics. `git diff --check` passed; the
+full suite was not repeated for this follow-up. A final read-only live snapshot
+showed eight local runtime rows idle and zero pending outbound rows; that
+observation predates loading this queue change and is not its live acceptance.
