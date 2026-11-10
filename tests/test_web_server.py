@@ -1381,6 +1381,15 @@ class WebTests(unittest.TestCase):
                                      body=json.dumps(request))
         self.assertEqual(code, 200); self.assertEqual(
             json.loads(data)['conflicts'][0]['ref'], incoming)
+        (workspace.git.root / content).write_text('Uncommitted roadmap change\n')
+        code, data, _ = self.request(path='/v1/projects/conflicts/list',
+                                     body=json.dumps(request))
+        self.assertEqual(code, 200)
+        local_change = json.loads(data)['local_changes'][0]
+        self.assertEqual(local_change['path'], content)
+        self.assertIn('+Uncommitted roadmap change', local_change['diff'])
+        self.assertEqual(git.head(), local)
+        (workspace.git.root / content).write_text('local\n')
         request['incoming_ref'] = incoming
         code, data, _ = self.request(path='/v1/projects/conflicts/preview',
                                      body=json.dumps(request))

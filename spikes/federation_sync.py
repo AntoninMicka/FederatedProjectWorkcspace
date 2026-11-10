@@ -7,7 +7,8 @@ import ipaddress
 import json
 import os
 import fcntl
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 import re
 import sqlite3
@@ -51,6 +52,19 @@ MAX_BODY = 4 + MAX_ENVELOPE + MAX_BUNDLE + MAX_CHAT_PAYLOAD + MAX_POOL_PAYLOAD
 HASH = re.compile(r'[a-f0-9]{40}|[a-f0-9]{64}')
 MAX_REFS = 64
 PRIVACY = frozenset({'public', 'project', 'confidential'})
+
+
+@dataclass(frozen=True, repr=False)
+class _VerifiedInboundBundle:
+    """Request-local proof of the exact Git bytes validated before publication."""
+    operation_id: str
+    project_id: str
+    source_node_id: str
+    recipient_node_id: str
+    source_fingerprint: str
+    scope: bytes
+    refs: tuple
+    payload: bytes
 
 
 class SyncConflict(ValueError):
@@ -151,6 +165,24 @@ def _sync_state(value):
     require(isinstance(parsed, dict) and set(parsed) == {'refs', 'chats'},
             'Invalid stored content sync state')
     return {'refs': _refs(parsed['refs']), 'chats': _chat_inventory(parsed['chats'])}
+
+
+def project_conflict_statuses(node, project_id):
+    """Read the last peer conflict reports without starting/recovering sync."""
+    node = Path(node).absolute()
+    root = node.parent / ('.' + node.name + '.network')
+    if not root.exists():
+        return []
+    path = private_root(node) / 'federation-content-sync.sqlite'
+    if not path.exists():
+        return []
+    info = path.lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and info.st_nlink == 1
+            and not info.st_mode & 0o077, 'Unsafe content sync journal')
+    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
+        return [{'peer_id': row[0]} for row in db.execute(
+            "SELECT peer_id FROM runtime WHERE project_id=? AND state='conflict' ORDER BY peer_id",
+            (project_id,))]
 
 
 def _ref(value):
@@ -310,7 +342,7 @@ def _inventory(git, scope):
     return sorted(rows, key=lambda row: row['ref'])
 
 
-def _build_bundle(node, project_id, scope):
+def _build_bundle(node, project_id, scope, *, verified=None):
     binding = _binding(node, project_id)
     if binding is None:
         return [], b''
@@ -322,6 +354,15 @@ def _build_bundle(node, project_id, scope):
                 'Shared project worktree must be clean')
         refs = _inventory(workspace.git, scope)
         require(refs, 'Sharing scope selects no local branch')
+        if (verified is not None and verified.payload
+                and verified.project_id == project_id and verified.scope == canonical(scope)
+                and verified.refs == tuple((row['ref'], row['head']) for row in refs)):
+            # _prepare matched this request-local proof to the original peer.
+            # Exact immutable heads imply the same fully validated object graph;
+            # return the same bounded transfer bytes, not a new unchecked pack.
+            require(_inventory(workspace.git, scope) == refs,
+                    'Shared branches changed during bundle preparation')
+            return refs, verified.payload
         for row in refs:
             validate_history(workspace.git, row['head'], project_id, PRIVACY)
         with tempfile.TemporaryDirectory(prefix='sharing-sync-') as directory:
@@ -618,7 +659,20 @@ def _apply(node, exchange, payload, checkpoint=lambda stage: None,
            authorize=lambda: None, service=None):
     if not payload:
         return False
-    bundle_payload, chats = _verify_bundle(node, exchange, payload, service)
+    _verify_bundle(node, exchange, payload, service)
+    return _apply_verified_history(node, exchange, payload, checkpoint, authorize, service)
+
+
+def _apply_verified_history(node, exchange, payload, checkpoint, authorize, service):
+    """Publish only the exact bytes whose Git history this call verified.
+
+    Receiver admission already validated history before persisting its intent.
+    Other callers enter through _apply. Never reuse this trust across requests;
+    integrity and current non-Git authority are checked again before publishing.
+    """
+    if not payload:
+        return False
+    bundle_payload, chats = _verify_incoming_payload(exchange, payload, service)
     conflict = False
     if bundle_payload:
         if _binding(node, exchange['project_id']) is None:
@@ -648,11 +702,19 @@ def _apply(node, exchange, payload, checkpoint=lambda stage: None,
 
 
 def _prepare(service, peer_id, project_id, operation_id, known_remote_refs,
-             *, known_remote_chats=None, force_bundle):
+             *, known_remote_chats=None, force_bundle, verified=None):
     local_id, peer, shares, commit = _authority(service, peer_id)
     scope = _policy(peer, shares, project_id)
+    if verified is not None and not (
+            verified.operation_id == operation_id
+            and verified.project_id == project_id
+            and verified.source_node_id == peer_id
+            and verified.recipient_node_id == local_id
+            and verified.source_fingerprint == peer['fingerprint']
+            and verified.scope == canonical(scope)):
+        verified = None
     refs, bundle_payload = ([], b'') if scope is None else _build_bundle(
-        service.node, project_id, scope)
+        service.node, project_id, scope, verified=verified)
     chats, chat_payload = ([], b'') if scope is None else export_project_chats(
         service.node, service, peer_id, project_id)
     if not chats:
@@ -785,8 +847,25 @@ class SyncReceiver:
                     saved = (json.loads(row[3]), bytes(row[4]))
         if saved is not None:
             return self._replay(exchange, payload, *saved, authority=authority)
+        phase('receive-check-destination')
+        if _binding(self.node, exchange['project_id']) is not None:
+            # A completed replay needs no publication. An interrupted project
+            # operation must retain its existing roll-forward path, including
+            # its own dirty worktree. Only reject otherwise unowned local edits.
+            workspace = Projects(self.node).workspace(exchange['project_id'], blocking=False)
+            with workspace.journal.lock(), workspace.journal.connect() as project_db:
+                recovering = (workspace._active(project_db)
+                              or project_db.execute('SELECT 1 FROM pending').fetchone())
+                if not recovering and git_run(
+                        workspace.git, 'status', '--porcelain',
+                        '--untracked-files=all').stdout:
+                    raise SyncConflict('Destination has local changes; review project conflicts')
         phase('receive-verify-history')
-        _verify_bundle(self.node, exchange, payload, self.service)
+        bundle, _ = _verify_bundle(self.node, exchange, payload, self.service)
+        verified = _VerifiedInboundBundle(
+            exchange['operation_id'], exchange['project_id'], peer['id'], local_id, peer['fingerprint'],
+            canonical(exchange['scope']),
+            tuple((row['ref'], row['head']) for row in exchange['refs']), bytes(bundle))
         # No new intent is persisted until full validation has succeeded.
         # The receiver lock spans lookup, validation and response publication.
         if row is None:
@@ -801,8 +880,8 @@ class SyncReceiver:
                     and current_peer['sharing_level'] == exchange['sharing_level'],
                     'Content sync authority changed before publication')
         phase('receive-publication')
-        conflict = _apply(self.node, exchange, payload, checkpoint, authorize,
-                          self.service)
+        conflict = _apply_verified_history(
+            self.node, exchange, payload, checkpoint, authorize, self.service)
         with _database(self.node) as db:
             if exchange['bundle_size'] or exchange['chat_size']:
                 previous = db.execute('SELECT refs FROM accepted WHERE peer_id=? '
@@ -825,7 +904,8 @@ class SyncReceiver:
         response, response_payload, _, local_refs, local_chats = _prepare(
             self.service, peer['id'], exchange['project_id'],
             exchange['operation_id'], exchange['refs'],
-            known_remote_chats=exchange['chat_inventory'], force_bundle=True)
+            known_remote_chats=exchange['chat_inventory'], force_bundle=True,
+            verified=verified)
         response_exchange = response['exchange']
         response_bundle, response_chats = _payloads(
             response_exchange, response_payload)
@@ -1105,11 +1185,11 @@ class ContentSyncControl:
         rows = []
         for peer in state['peers']:
             projects = set(local)
-            projects.update(row['project_id'] for row in remote
+            projects.update(row['id'] for row in remote
                             if row['peer_id'] == peer['id'])
             local_selected = {row['project_id'] for row in state['project_shares']
                               if row['peer_id'] == peer['id']}
-            remote_selected = {row['project_id'] for row in remote
+            remote_selected = {row['id'] for row in remote
                                if row['peer_id'] == peer['id']}
             for project_id in sorted(projects):
                 reason = None
@@ -1335,6 +1415,6 @@ def reply(handler):
     except SyncBusy:
         return handler.reply(503, {'error': 'Content receiver is busy'})
     except SyncConflict:
-        return handler.reply(409, {'error': 'Content histories diverged'})
+        return handler.reply(409, {'error': 'Content sync requires a conflict decision'})
     except (ValueError, AccessDenied, OSError, sqlite3.Error, subprocess.SubprocessError):
         return handler.reply(422, {'error': 'Content sync request rejected'})

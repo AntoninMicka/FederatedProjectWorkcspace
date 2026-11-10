@@ -183,3 +183,124 @@ test guard that fails if any historical Git validation runs during replay.
 The full suite was not repeated for this ongoing repair slice. Remaining
 application-domain ownership work and ordinary local acceptance are still open;
 this result does not authorize Omnia deployment or authoritative task completion.
+
+## Follow-up: cost of a new receive, not just completed replay
+
+A completed-replay optimization cannot remove the work of a first or incomplete
+receive. An isolated profile of the Git part of the pending main-project request
+found 93 commits and about 6.56 seconds for one complete history validation on
+the local machine. The receive path repeated validation during application,
+and response preparation traversed the same graph twice more.
+
+The [ADR 0081 extension](adr/0081-complete-project-data-sync.md) now allows
+one request-local validated Git graph to serve application and, when exactly
+eligible, its response. It never replaces the first validation, a new request's
+validation, live authorization, writer locks or CAS. A changed operation ID,
+peer/fingerprint, scope, branch set or head prevents response reuse. Fresh chats
+and pools retain their own validation and current-state export.
+
+For a signed receive between two temporary nodes using the same 93-commit Git
+history, measured core timings were:
+
+| Local receive case | Full history passes | Seconds |
+| --- | --- | --- |
+| After removing duplicate application validation, before response reuse | 3 | 20.800 |
+| Eligible response reusing the exact verified incoming graph | 1 | 7.616 |
+| Exact completed replay | 0 | 0.034 |
+
+The temporary nodes used test identities and the Git part only, without the
+production chat payload or a network hop. These numbers do not measure Omnia
+or prove that every divergent receive will fit an HTTP deadline. Different
+local heads/branches/scopes still take the original complete export path.
+
+After the final code/test change, the same four focused test modules listed
+above passed **53 tests, OK, one skipped**. This includes real pinned HTTPS,
+privacy, current chat authority, mismatching export scopes/heads/branches,
+cross-operation refusal of validation reuse, and ref/index/chat/pool recovery.
+The whole suite was not rerun during this ongoing repair slice.
+
+### Authorized deployment and live verification
+
+Authenticated inspection found that Omnia still ran a release without the
+completed-replay optimization. After explicit approval of the prepared archive
+(`be31156fe76d35ac443dc34347c2666e4540fc552d09f0d35fc1dde2d9a367b2`),
+the application was updated and its service restarted. Readback verified the
+exact code and preservation of the service unit, node identity, credentials,
+TLS material and original completed operation record.
+
+The original pending request was matched byte-for-byte against that completed
+receiver record, then replayed once through the native controller. It completed
+in 10.163 seconds and cleared the pending operation without replacing its ID.
+This confirmed the old transfer, not the latest local project snapshot.
+
+One subsequent standard transfer of the newer snapshot still timed out in
+`wait-response` after 60.047 seconds in that phase (83.039 seconds overall).
+Authenticated receiver inspection subsequently found its persisted inbound
+intent but no response, and a failed observation at `receive-publication`:
+315.002 seconds overall, 0.413 seconds in that final phase, `ValidationError`.
+The preceding phases therefore consumed roughly 314.6 seconds; phase timing
+alone does not attribute all of that time to Git validation. Read-only Git and
+journal inspection found one modified tracked roadmap document (one removed
+and one added line), no pending journal rows or active operation, no staged
+sync refs, and the original HEAD. This satisfies the existing refusal condition
+for a dirty destination; the content change is preserved pending human review.
+The operation must not be discarded or automatically retried as a new one.
+The live timeout is **not fixed**, despite successful deployment and
+old-request recovery.
+
+Separately, real catalog projections exposed a candidate-selection error:
+the signed catalog contract uses `id`, while automatic/manual-all sync read
+`project_id`. The local correction uses the existing catalog contract, with
+tests exercising real signed catalog exchange and remote-only selection for
+both same-team and same-company relationships. This correction was made after
+the approved archive was frozen; it is not part of the deployed release.
+
+The five focused modules (the four listed above plus
+`tests.test_federation_catalog`) exercised 61 tests, with one optional Qt skip.
+Three socket tests initially failed because the sandbox prohibited opening
+loopback sockets; all three passed when rerun with that restriction lifted.
+There were no remaining behavioral test failures. The full suite remains
+unrun for this repair slice.
+
+## Local edits in the conflict overview
+
+The follow-up described in [ADR 0043](adr/0043-explicit-federated-conflict-resolution.md)
+adds local uncommitted changes and last peer conflict reports to the shared
+desktop/web conflict overview. It shows a bounded inert text diff, including a
+small change in a roadmap larger than the diff-output budget. It neither
+publishes local edits nor discards them. Unavailable/unsafe previews remain
+visible as unavailable rather than claiming that no conflict exists.
+
+Before historical verification, an authenticated new/incomplete receive now
+rejects an unowned dirty destination with existing HTTP 409. The project journal
+is checked under its nonblocking writer lock; interrupted publication keeps its
+original recovery path. Completed replay still precedes this check. An HTTPS
+test measured about 20 ms for receiver rejection and verifies the sender enters
+`conflict` with its outbound operation retained. This is isolated test evidence,
+not a new live Omnia acceptance or a bound for validating a clean 93-commit graph.
+
+The focused run covered **80 tests, OK, one optional Qt skip**, including conflict
+resolution, federation sync/catalog, diagnostics, pools, full-data recovery and
+the shared web conflict endpoint. After the final diff-budget adjustment,
+**16 conflict tests passed** again, including the large-roadmap case. A separate
+real Qt/WebEngine smoke passed with an isolated native project and offline
+transport, checking local/peer-only visibility, exact diff, inert HTML, blocked
+merge publication, clean-state refresh and failed-read visibility.
+The full suite was not run for this repair.
+
+After explicit approval, archive
+`63091c4951908e728759a3ccfff99c1ae7301260a2786194bfaa50ef45a1b222`
+was installed on Omnia. Readback verified the exact three changed runtime
+modules, active restarted service, unchanged unit/identity/credentials/TLS,
+unchanged main-project HEAD and roadmap bytes, and retained saved requests.
+The authenticated live conflict endpoint returned one local change with the
+roadmap present and its text diff available, without an incoming history ref.
+The desktop process was also verified to start from the active checkout after
+the final runtime change. This confirms code activation and the live backend
+conflict response; it does not claim that the user accepted a resolution or
+that the local roadmap change was published/discarded. The original outbound
+operation remained present in the desktop journal. After the ordinary scheduler
+interval, read-only desktop-journal inspection confirmed `conflict` / `Peer
+reported a content conflict` and the same pending operation ID
+`dc97cb95-dcba-4c5c-a759-f4d2dbcc30b8`. No manual new operation or roadmap
+resolution was introduced to obtain that result.

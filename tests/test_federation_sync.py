@@ -3,6 +3,7 @@
 from pathlib import Path
 import os
 import http.client
+import hashlib
 import json
 import secrets
 import ssl
@@ -17,9 +18,9 @@ from uuid import uuid4
 
 from spikes.administration import Administration, AccessDenied
 from spikes.chat_threads import ChatThreads
-from spikes.federation_accounts import MappingSignatures
+from spikes.federation_accounts import MappingSignatures, canonical
 from spikes.federation_sync import (
-    ContentSyncControl, ContentSyncScheduler, SyncCancelled, SyncReceiver, SyncBusy,
+    ContentSyncControl, ContentSyncScheduler, SyncCancelled, SyncReceiver, SyncBusy, SyncConflict,
     _apply, _build_bundle, _prepare, synchronize,
 )
 from spikes.git_transfer import git_run
@@ -60,8 +61,9 @@ class FederationSyncTests(unittest.TestCase):
         receiver = SyncReceiver(self.nodes[1], self.services[1])
         with patch('spikes.federation_sync._validate_git_bundle', side_effect=AssertionError('history')):
             with patch('spikes.federation_sync._apply', side_effect=AssertionError('publication')):
-                with patch('spikes.federation_sync._prepare', side_effect=AssertionError('new response')):
-                    self.assertEqual(receiver.receive(envelope, payload), expected)
+                with patch('spikes.federation_sync._apply_verified_history', side_effect=AssertionError('publication')):
+                    with patch('spikes.federation_sync._prepare', side_effect=AssertionError('new response')):
+                        self.assertEqual(receiver.receive(envelope, payload), expected)
         self.assertEqual(self.inbound_row(envelope), before)
 
     def test_replay_rejects_changed_bytes_or_signed_envelope_under_same_id(self):
@@ -80,7 +82,7 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual(self.inbound_row(envelope), before)
 
     def test_new_request_validates_history_before_persisting_intent(self):
-        from spikes.federation_sync import _validate_git_bundle
+        from spikes.federation_sync import _verify_bundle
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
             str(uuid4()), [], force_bundle=True)
@@ -88,9 +90,147 @@ class FederationSyncTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'invalid history'):
                 SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
         self.assertIsNone(self.inbound_row(envelope))
-        with patch('spikes.federation_sync._validate_git_bundle', wraps=_validate_git_bundle) as history:
+        with patch('spikes.federation_sync._verify_bundle', wraps=_verify_bundle) as history:
             SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual(history.call_count, 1)
+
+    def test_dirty_destination_refuses_before_history_and_keeps_exact_pending_request(self):
+        self.commit_marker(0, 'Tracked content')
+        self.exchange(0, 1)
+        workspace = Projects(self.nodes[1]).workspace(self.project_id)
+        path = next(p for p in workspace.git.snapshot(workspace.git.head()) if p.endswith('.md'))
+        target = workspace.git.root / path
+        target.write_text('Uncommitted destination edit\n')
+        head = workspace.git.head()
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        from spikes.federation_sync import _database
+        with _database(self.nodes[1]) as db:
+            db.execute('INSERT INTO inbound VALUES (?,?,?,?,NULL,NULL)', (
+                envelope['exchange']['operation_id'],
+                hashlib.sha256(canonical(envelope) + payload).hexdigest(),
+                canonical(envelope).decode('ascii'), payload))
+        saved = self.inbound_row(envelope)
+        with patch('spikes.federation_sync._validate_git_bundle', side_effect=AssertionError('history')):
+            with self.assertRaisesRegex(SyncConflict, 'local changes'):
+                SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual(self.inbound_row(envelope), saved)
+        self.assertEqual(workspace.git.head(), head)
+        self.assertEqual(target.read_text(), 'Uncommitted destination edit\n')
+        # Resolving the local edit makes the SAME operation usable again.
+        target.write_bytes(workspace.git.snapshot(head)[path])
+        response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual(response['exchange']['operation_id'], envelope['exchange']['operation_id'])
+
+    def test_completed_replay_preserves_new_local_edit_without_republication(self):
+        self.commit_marker(0, 'Tracked content')
+        envelope, payload, expected = self.completed_request()
+        workspace = Projects(self.nodes[1]).workspace(self.project_id)
+        path = next(p for p in workspace.git.snapshot(workspace.git.head()) if p.endswith('.md'))
+        target = workspace.git.root / path; target.write_text('New local edit\n')
+        with patch('spikes.federation_sync._validate_git_bundle', side_effect=AssertionError('history')):
+            self.assertEqual(SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload), expected)
+        self.assertEqual(target.read_text(), 'New local edit\n')
+
+    def test_direct_application_still_requires_full_history_validation(self):
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        with patch('spikes.federation_sync._validate_git_bundle', side_effect=ValueError('invalid history')):
+            with self.assertRaisesRegex(ValueError, 'invalid history'):
+                _apply(self.nodes[1], envelope['exchange'], payload, service=self.services[1])
+        self.assertFalse(Projects(self.nodes[1]).list())
+
+    def test_receiver_response_reuses_only_the_exact_verified_git_graph(self):
+        from spikes.federation_sync import validate_history, _payloads
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+            response, returned = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual(history.call_count, 1)
+        self.assertEqual(_payloads(response['exchange'], returned)[0],
+                         _payloads(envelope['exchange'], payload)[0])
+
+    def test_receiver_response_validates_additional_local_branches(self):
+        from spikes.federation_sync import validate_history
+        self.exchange(0, 1)
+        git = Projects(self.nodes[1]).workspace(self.project_id).git
+        git_run(git, 'branch', 'extra-local')
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+            response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual({row['ref'] for row in response['exchange']['refs']},
+                         {'refs/heads/main', 'refs/heads/extra-local'})
+        self.assertGreater(history.call_count, 1)
+
+    def test_verified_inbound_graph_is_not_reused_for_another_operation(self):
+        from spikes.federation_sync import validate_history
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        with patch('spikes.federation_sync._prepare', wraps=_prepare) as prepared:
+            SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        proof = prepared.call_args.kwargs['verified']
+        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+            _prepare(self.services[1], self.node_ids[0], self.project_id,
+                     str(uuid4()), [], force_bundle=True, verified=proof)
         self.assertGreater(history.call_count, 0)
+
+    def test_receiver_response_validates_a_different_local_head(self):
+        from spikes.federation_sync import validate_history
+        self.exchange(0, 1)
+        ahead = self.commit_marker(1, 'Local ahead')
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+            response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual(response['exchange']['refs'], [{'ref': 'refs/heads/main', 'head': ahead}])
+        self.assertGreater(history.call_count, 1)
+
+    def test_receiver_response_validates_a_different_export_scope(self):
+        from spikes.federation_sync import validate_history
+        self.exchange(0, 1)
+        self.actor['memberships'][self.project_id] = 'project-admin'
+        for local, remote in ((0, 1), (1, 0)):
+            self.change(local, action='update-peer', node_id=self.node_ids[remote],
+                        name='Peer', endpoint='https://127.0.0.1:8443',
+                        trust='approved', sharing_level='same-company')
+            self.change(local, action='set-project-share', peer_id=self.node_ids[remote],
+                        project_id=self.project_id, enabled=True,
+                        branch_mode='all-except-hidden' if local == 0 else 'selected-only',
+                        branches=['refs/heads/hidden'] if local == 0 else ['refs/heads/main'],
+                        include_patches=False)
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+            response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertNotEqual(response['exchange']['scope'], envelope['exchange']['scope'])
+        self.assertGreater(history.call_count, 1)
+
+    def test_receiver_rechecks_chat_authority_after_history_validation(self):
+        from spikes.federation_sync import _verify_bundle
+        self.map_users(); self.chat_turn(0)
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        head = Projects(self.nodes[1]).repository(self.project_id).head()
+
+        def validate_then_revoke(*args, **kwargs):
+            result = _verify_bundle(*args, **kwargs)
+            self.change(1, action='update-user', user_id=self.user_ids[1],
+                        active=False, node_role='member', memberships={})
+            return result
+
+        with patch('spikes.federation_sync._verify_bundle', side_effect=validate_then_revoke):
+            with self.assertRaisesRegex(ValueError, 'active project recipient'):
+                SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual(Projects(self.nodes[1]).repository(self.project_id).head(), head)
 
     def test_completed_replay_rechecks_revoked_peer_without_changing_journal(self):
         envelope, payload, _ = self.completed_request()
@@ -640,6 +780,44 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual(control.candidates()[0]['reason'],
                          'not-internal-sharing')
 
+    def test_signed_remote_catalog_drives_pull_candidates_automatic_and_manual_all(self):
+        from spikes.federation_catalog import prepare, receive, CatalogStore
+        envelope, _ = prepare(self.services[0], self.node_ids[1])
+        receive(self.services[1], envelope)
+        projection = CatalogStore(self.nodes[1]).projections()[0]
+        self.assertEqual(projection['id'], self.project_id)
+        self.assertNotIn('project_id', projection)
+        self.assertFalse(Projects(self.nodes[1]).list())
+        control = ContentSyncControl(self.nodes[1], deployment='web')
+        expected = [{'peer_id': self.node_ids[0], 'project_id': self.project_id,
+                     'eligible': True, 'reason': None}]
+        self.assertEqual(control.candidates(), expected)
+        with patch.object(control, 'start', return_value=True) as start:
+            self.assertEqual(control.start_all()['started'], 1)
+        start.assert_called_once_with(self.node_ids[0], self.project_id)
+        with patch.object(control, 'synchronize', return_value={'state': 'idle'}) as run:
+            self.assertEqual(control.run_automatic(), {'enabled': True, 'attempted': 1})
+        run.assert_called_once_with(self.node_ids[0], self.project_id)
+        # A project present both locally and remotely remains one candidate.
+        self.exchange(0, 1)
+        self.assertEqual(control.candidates(), expected)
+
+    def test_same_company_remote_selection_uses_authenticated_catalog_id(self):
+        from spikes.federation_catalog import prepare, receive
+        for local, remote in ((0, 1), (1, 0)):
+            self.change(local, action='update-peer', node_id=self.node_ids[remote],
+                        name='Peer', endpoint='https://127.0.0.1:8443',
+                        trust='approved', sharing_level='same-company')
+        self.actor['memberships'][self.project_id] = 'project-admin'
+        self.change(0, action='set-project-share', peer_id=self.node_ids[1],
+                    project_id=self.project_id, enabled=True, branch_mode='selected-only',
+                    branches=['refs/heads/main'], include_patches=False)
+        envelope, _ = prepare(self.services[0], self.node_ids[1])
+        receive(self.services[1], envelope)
+        control = ContentSyncControl(self.nodes[1], deployment='web')
+        self.assertEqual(control.candidates(), [{'peer_id': self.node_ids[0],
+            'project_id': self.project_id, 'eligible': True, 'reason': None}])
+
     def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):
         started = threading.Event(); finished = threading.Event()
         force_stop = threading.Event(); self.addCleanup(force_stop.set)
@@ -805,6 +983,24 @@ class FederationSyncTests(unittest.TestCase):
         ContentSyncControl(self.nodes[0], deployment='web').run_automatic()
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), changed_after_restart)
+        # Even a metadata-only poll gets a bounded conflict response when the
+        # peer has local edits, rather than validating history and timing out.
+        remote = Projects(self.nodes[1]).workspace(self.project_id)
+        path = next(p for p in remote.git.snapshot(remote.git.head()) if p.endswith('.md'))
+        target = remote.git.root / path
+        target.write_bytes(target.read_bytes() + b'\nUncommitted peer change\n')
+        with patch('spikes.federation_sync._verify_bundle', side_effect=AssertionError('history')):
+            with self.assertRaises(SyncConflict):
+                ContentSyncControl(self.nodes[0], deployment='web').synchronize(
+                    self.node_ids[1], self.project_id)
+        status = ContentSyncControl(self.nodes[0], deployment='web').statuses()[
+            self.node_ids[1] + ':' + self.project_id]
+        self.assertEqual(status['state'], 'conflict')
+        with _database(self.nodes[0]) as db:
+            pending = db.execute('SELECT operation_id FROM outbound WHERE peer_id=? AND project_id=?',
+                                 (self.node_ids[1], self.project_id)).fetchone()
+        self.assertIsNotNone(pending)
+        self.assertIn('Uncommitted peer change', target.read_text())
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1',
                          'Requires real Qt/WebEngine')

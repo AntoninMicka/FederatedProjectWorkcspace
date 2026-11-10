@@ -3,6 +3,7 @@
 #
 """HEAD-bound federation divergence preview and explicit two-parent publication."""
 from contextlib import contextmanager
+from difflib import unified_diff
 import hashlib
 import json
 from pathlib import Path
@@ -17,10 +18,12 @@ from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+from spikes.journal import snapshot
 
 
 MAX_CONFLICT_REFS = 100
 MAX_PATHS = 1000
+MAX_LOCAL_DIFF = 256 * 1024
 COMMIT = r'(?:[0-9a-f]{40}|[0-9a-f]{64})'
 INCOMING = re.compile(
     r'^refs/federation/incoming/'
@@ -125,6 +128,7 @@ class ConflictResolution:
         return row
 
     def list(self, project_id, expected_head):
+        from spikes.federation_sync import project_conflict_statuses
         with self._read(project_id, expected_head) as (ws, branch):
             rows = []
             for item in self._refs(ws.git, branch):
@@ -138,7 +142,58 @@ class ConflictResolution:
                     selected['head']).stdout.rstrip('\n').split('\0', 2)
                 rows.append(dict(selected, date=info[0], author=info[1],
                                  subject=info[2]))
-            return {'head': expected_head, 'conflicts': rows}
+            return {'head': expected_head, 'conflicts': rows,
+                    'local_changes': self._local_changes(ws.git, expected_head),
+                    'sync_conflicts': project_conflict_statuses(self.node_path, project_id)}
+
+    def _local_changes(self, git, head):
+        """Read local edits without adopting, staging or resolving any bytes."""
+        def inventory():
+            names = set()
+            for args in [('diff', '--name-only', '--no-renames', '-z', head),
+                         ('diff', '--cached', '--name-only', '--no-renames', '-z', head),
+                         ('ls-files', '--others', '--exclude-standard', '-z')]:
+                names.update(filter(None, git.run(*args).stdout.split('\0')))
+            return names
+        paths = inventory()
+        require(len(paths) <= MAX_PATHS, 'Too many local changes')
+        if not paths:
+            return []
+        before = git.snapshot(head)
+        current = snapshot(git.root)
+        # Local metadata may introduce stricter privacy than the committed head.
+        # Invalid local metadata must never make content readable over the web.
+        if self.network:
+            entities = validate_snapshot(current)
+            require(all(item['privacy'] != 'local-only' for item in entities.values()),
+                    'Project contains local-only data')
+        rows = []; remaining = MAX_LOCAL_DIFF
+        for path in sorted(paths):
+            old, new = before.get(path), current.get(path)
+            diff = None
+            if path.startswith(('artifacts/', 'registries/')):
+                try:
+                    left = '' if old is None else old.decode('utf-8')
+                    right = '' if new is None else new.decode('utf-8')
+                    if remaining and '\0' not in left + right:
+                        text = ''.join(unified_diff(
+                            left.splitlines(keepends=True), right.splitlines(keepends=True),
+                            fromfile='Uložená verze', tofile='Místní změna'))
+                        size = len(text.encode())
+                        if size <= remaining:
+                            diff = text; remaining -= size
+                except UnicodeError:
+                    pass
+            rows.append({'path': path, 'diff': diff or None,
+                         'status': 'unsupported' if not path.startswith(('artifacts/', 'registries/'))
+                                   else 'staged' if old == new else
+                                   'added' if old is None else
+                                   'deleted' if new is None else 'modified'})
+        # Re-read paths and bytes so a changing worktree is never shown as a
+        # stable comparison. No result here authorizes a subsequent write.
+        require(snapshot(git.root) == current and inventory() == paths,
+                'Místní změny se během čtení změnily. Načtěte přehled znovu.')
+        return rows
 
     def _plan(self, git, project_id, expected_head, branch, incoming_ref,
               incoming_head=None):

@@ -120,3 +120,37 @@ a LXC i následný sync výsledku. Samostatná fyzická mobilní a úplná
 klávesnicová akceptace nebyla doložena a zůstává omezením mimo přijatý desktopový
 scénář. Implementované chování a důkazy eviduje
 [WORK_LOG](../../WORK_LOG.md#f-m5-conflict-resolution-01--historie-a-ruční-řešení-divergence--2026-10-23).
+
+## Doplnění 2026-11-10 — místní změny blokující synchronizaci
+
+Přehled konfliktů rozlišuje commitnutou divergenci, necommitnuté místní změny
+a poslední hlášení konfliktu při synchronizaci s peerem. Místní změna se zobrazí
+i bez incoming refu. Text pod `artifacts/` a `registries/` má omezený unified
+diff proti aktuálnímu HEAD; binární obsah, změny pouze v Git indexu a ostatní
+cesty mají položku s vysvětlením nedostupného textového porovnání. Obsah je
+inertní text. Web znovu ověřuje privacy i podle místního kandidátního snapshotu;
+neplatná metadata nebo `local-only` obsah se nesmějí přes toto porovnání zveřejnit.
+Nedostupný přehled se v UI nevydává za nepřítomnost konfliktů.
+
+Položka necommitnuté změny je read-only porovnání, nikoli druhá cesta publikace.
+Neprovádí stash, reset, commit ani obnovu projektu. Existující merge potvrzení
+zůstává odmítnuté při nečistém projektu; UI tuto překážku také výslovně zobrazuje
+a zablokuje publikaci. Hlášení peeru neobsahuje jeho necommitnutý obsah:
+uživatel jej prohlíží na uzlu, který změnu vlastní.
+
+Příjem synchronizace po ověření podpisu a přesné kontrole uloženého requestu
+nejprve rozpozná dokončený replay. Pro ostatní požadavky zkontroluje registrovaný
+cílový projekt pod neblokujícím writer lockem ještě před ověřením Git historie.
+Nečistý projekt bez rozpracovaného journalového zápisu vrátí stávající HTTP 409;
+odesílatel zachová původní outbound operation ID a zobrazí stav `conflict`.
+Metadata-only poll má stejnou kontrolu, protože i jeho odpověď připravuje Git stav.
+Nejde o změnu formátu federačního protokolu.
+
+Crash hranice ADR 0042/0081 ani publikační recovery výše se nemění. Včasné
+odmítnutí nevytváří nový inbound intent, nepotvrdí přenos a nesmaže existující
+nedokončený request. Rozpracovaná journalová operace má nadále původní
+roll-forward cestu; její vlastní rozpracované bajty se nesmějí zaměnit za cizí
+necommitnutou úpravu. Po vyřešení místní změny lze pokračovat stejným operation
+ID. Dokončený replay vrací původní odpověď i při novější místní úpravě, protože
+nic znovu nepublikuje. Kontrola čistoty při skutečném zápisu zůstává zachovaná
+kvůli změnám vzniklým až po předběžné kontrole.

@@ -5,6 +5,17 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Příjem nové sync operace **adaptuje** původní `_apply`: po první úplné
+validaci používá v témže volání privátní publikační část se stejnými bajty,
+opětovnou kontrolou integrity a živých oprávnění. **Reuse:** receive zámek,
+Workspace/CAS a původní journal/recovery. **Reject:** druhý průchod totožné
+Git historie v jednom příjmu, cache mezi requesty a veřejný přepínač
+pro vypnutí validace. Scope: [ADR 0081](docs/adr/0081-complete-project-data-sync.md).
+Stejné ověřené Git bajty se mohou vrátit původnímu peeru jako odpověď pouze
+v téže operaci a při shodě projektu, identit/fingerprintu, scope a všech
+aktuálních ref/head pod writer zámkem. Jiný stav používá původní exportní
+validaci; chaty/pooly se tímto způsobem necacheují.
+
 Dokončený content-sync replay **adaptuje** stávající inbound journal,
 přesnou shodu požadavku a oddělení validace payloadu od průchodu Git historií.
 **Reuse:** podpisy a původní lokální identita, současný branch scope, mapování
@@ -548,6 +559,13 @@ Bounded řádkové porovnání ve stávajícím UI je pouze prezentační zvýra
 nenahrazuje Git jako autoritu výsledného stromu.
 Soukromá inventura neposkytla ověřenou komponentu se stejným Git, validačním a
 recovery kontraktem. Rozhodnutí: [ADR 0043](docs/adr/0043-explicit-federated-conflict-resolution.md).
+
+Doplnění necommitnutých konfliktů **reuse/adaptuje** tentýž přehled,
+`Git.snapshot`, omezený filesystem snapshot Journalu a existující sync journal.
+Read-only unified diff používá standardní `difflib`; stav peeru je pouze
+projekce posledního hlášení. Nevzniká další conflict store, Git writer ani
+automatický stash/restore. Původní writer lock a recovery zůstávají autoritou
+zápisů; kontrola nečistého cíle pouze předchází nákladnému ověření historie.
 
 `UX-WEB-NAV-01` **reuse/adaptuje sdílený shell `desktop_ui`, validovanou
 projekci `PresentationDocuments` a stávající `Administration`/federační

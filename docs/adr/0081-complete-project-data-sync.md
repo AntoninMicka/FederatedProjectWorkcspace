@@ -117,3 +117,29 @@ Odmítnutý replay původní intent/odpověď nemaže a nepublikuje Git, chat an
 pool. Mezi journalovým lookupem a kontrolou oprávnění se nedrží SQLite
 transakce. Po ztrátě HTTP odpovědi je stále nutné použít stejné operation ID
 a stejné bajty; nevzniká automatický retry ani nový writer.
+
+### Jedno ověření příchozí Git historie v rámci operace
+
+Měření čekajícího balíku v izolovaném lokálním Gitu ukázalo 93 commitů a
+6,56 s pro jeden průchod. Příjem po první úplné validaci opakoval stejný
+průchod v `_apply`, ještě před tvorbou odpovědi. Toto druhé ověření totožného
+Git grafu v témže volání se odstraňuje; nejde o cache mezi operacemi.
+
+Samostatný vstup `_apply` nadále ověřuje celý přenos a teprve
+potom volá privátní publikační část. Receiver může tuto část použít přímo
+pouze po vlastní úplné validaci stejných neměnných payload bajtů a uložení
+intentu, stále pod receive zámkem. Publikační část znovu kontroluje digesty,
+pooly a živá chatová oprávnění; vlastní zápisové/CAS kontroly se nemění.
+Nedokončená operace po pádu při novém volání opět projde úplnou validací.
+Žádná validační autorita se nepřenáší do dalšího requestu nebo procesu.
+
+Stejnou validovanou Git část lze v rámci této operace vrátit původnímu
+odesílateli jako odpověď. Receiver zachytí neměnný kontext s operation ID,
+projektem, oběma uzly, fingerprintem peeru, scope, úplnou sadou ref/head a
+přesnými ověřenými Git bajty. Pod projektovým writer zámkem musí výstupní
+inventura přesně odpovídat tomuto kontextu a aktuální policy. Pak lze vrátit
+tentýž už ověřený objektový graf bez dalších dvou průchodů při exportu.
+Jakýkoli jiný head, další lokální větev, jiný scope, peer nebo operation ID
+ponechá původní úplnou exportní validaci. Chaty a pooly se stále sestavují
+ze současného stavu s původními kontrolami. Kontext není persistentní cache,
+nezapisuje se do journalu a nezavádí nový protokolový parametr.
