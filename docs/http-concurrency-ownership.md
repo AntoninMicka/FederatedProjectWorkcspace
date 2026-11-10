@@ -653,3 +653,44 @@ The final admission-boundary check passed all **11 admission tests**, including
 real Qt, after moving the full-queue rejection ahead of request-body decoding.
 This avoids expensive parsing for an attempt that cannot be admitted. These
 11 tests overlap the 99-test run; they are not an additional distinct total.
+
+## Total deadlines for federated HTTPS transport
+
+Continuation from source `c7deb8d` on the same branch. The export remains stale
+and awaiting review; the user explicitly authorized continuing this repair
+from the available source. No planning state or acceptance is changed.
+
+`DeadlineHTTPSConnection` adapts stdlib HTTP parsing and verified TLS for the
+existing literal IPv4 peers. The existing 60-second content-sync, 15-second
+catalog and 30-second replication budgets now cover TCP connect, TLS handshake,
+upload, HTTP headers and response body together. Every raw response read uses
+the remaining monotonic budget, including chunked responses; trickling bytes
+cannot restart it. Numeric socket connect avoids DNS. There is no watchdog,
+background transport worker, automatic retry or protocol change. Native socket
+file ownership preserves HTTP/1.0 response bodies after connection auto-close;
+responses and connections are explicitly closed on failure.
+
+Crash boundaries and recovery remain those of ADR 0081 and the native
+replication journal: before dispatch no remote result is established; after
+any dispatch a timeout can mean the peer committed but the response was lost.
+It does not authorize deleting pending intent, generating a replacement ID or
+reapplying a completed operation. The sender retains its exact signed envelope,
+bundle and operation ID; a subsequent explicit attempt uses native durable
+replay and receipt validation. Local publication still uses journal/Git CAS.
+TLS CA pinning, hostname verification and existing size/policy checks remain.
+
+This bounds transport I/O, not Git verification, subprocesses, CPU work or the
+whole synchronization job. Provider transports using hostnames and DNS remain
+outside this slice, as do server-side slow request-body deadlines. This is local
+implementation evidence, not Omnia deployment or end-to-end acceptance.
+
+Verification: the targeted HTTP-deadline, content-sync, catalog and replication
+run passed 74 tests (one optional skip). After adding the TLS address mismatch
+case and final durable-replay assertions, all 10 selected deadline/recovery
+tests passed. These runs overlap. Real loopback TLS tests cover slow headers,
+fixed-length/chunked bodies, stalled handshake/upload, CA/SAN refusal and
+HTTP/1.0 body ownership; a deterministic clock checks cumulative connect/TLS
+budgets. The native sync test preserves the exact outbound bytes through
+lost-response timeout and busy admission, then clears the intent only after
+successful receipt and retains one inbound operation. Compilation and
+`git diff --check` passed. The full suite has not run.

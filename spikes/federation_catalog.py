@@ -4,7 +4,6 @@
 from contextlib import closing
 from datetime import datetime, timezone
 import hashlib
-import http.client
 import ipaddress
 import json
 import os
@@ -18,11 +17,14 @@ from urllib.parse import urlsplit
 
 from spikes.administration import Administration, AccessDenied, identifier, label
 from spikes.federation_accounts import canonical
+from spikes.http_deadline import DeadlineHTTPSConnection
 from spikes.metadata import require
 from spikes.network_backend import private_root
 from spikes.project_replication import _signature, _verify
 from spikes.projects import Projects
 
+
+NETWORK_TIMEOUT = 15
 
 PATH = '/v1/federation/catalog'
 CONTENT_TYPE = 'application/vnd.federated-workspace.catalog-v1+json'
@@ -232,8 +234,9 @@ def synchronize(node, peer_id, *, deployment='desktop', ca=None):
     ca = Path(ca) if ca else private_root(node) / (peer_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    connection = http.client.HTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=15)
+    connection = DeadlineHTTPSConnection(
+        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+    response = None
     try:
         raw = canonical(envelope)
         require(len(raw) <= MAX_BODY, 'Project catalog request exceeds limit')
@@ -241,12 +244,15 @@ def synchronize(node, peer_id, *, deployment='desktop', ca=None):
             'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc})
         response = connection.getresponse()
         response_raw = response.read(MAX_BODY + 1)
+        connection.check_deadline()
         require(len(response_raw) <= MAX_BODY,
                 'Project catalog response exceeds limit')
         if response.status != 200:
             raise AccessDenied('Peer rejected project catalog')
         response_envelope = json.loads(response_raw)
     finally:
+        if response is not None:
+            response.close()
         connection.close()
     returned = validate_catalog(_verify(
         response_envelope, peer['fingerprint'], 'catalog')['catalog'])

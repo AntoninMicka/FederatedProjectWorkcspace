@@ -409,7 +409,7 @@ class ProjectReplicationTests(unittest.TestCase):
         with patch('spikes.project_replication.prepare',
                    return_value=(envelope, payload, authority, count)), \
              patch('spikes.project_replication.ssl.create_default_context'), \
-             patch('spikes.project_replication.http.client.HTTPSConnection',
+             patch('spikes.project_replication.DeadlineHTTPSConnection',
                    return_value=connection):
             result = send(self.nodes[0], self.replication_id, operation, base,
                           ca=self.base / 'unused-ca.pem', deployment='web')

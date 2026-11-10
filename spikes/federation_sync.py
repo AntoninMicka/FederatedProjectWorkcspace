@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MPL-2.0
 """Bidirectional, policy-scoped native Git bundle synchronization."""
 import hashlib
-import http.client
 import ipaddress
 import json
 import os
@@ -28,6 +27,7 @@ from spikes.administration import (
 )
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.federation_accounts import MappingSignatures, canonical
+from spikes.http_deadline import DeadlineHTTPSConnection
 from spikes.git_transfer import MAX_BUNDLE, git_run, validate_history
 from spikes.journal import sync_dir
 from spikes.metadata import require
@@ -44,6 +44,8 @@ from spikes.projects import Projects
 from spikes.storage import Git
 from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic
 
+
+NETWORK_TIMEOUT = 60
 
 PATH = '/v1/federation/content-sync'
 CONTENT_TYPE = 'application/vnd.federated-workspace.content-sync-v2'
@@ -1044,8 +1046,9 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
     ca = Path(ca) if ca else private_root(node) / (peer_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    connection = http.client.HTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=60)
+    connection = DeadlineHTTPSConnection(
+        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+    response = None
     try:
         phase('upload')
         connection.request('POST', PATH, body=encode_body(envelope, payload), headers={
@@ -1054,6 +1057,7 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         response = connection.getresponse()
         phase('download')
         body = response.read(MAX_BODY + 1)
+        connection.check_deadline()
         require(len(body) <= MAX_BODY, 'Content sync response exceeds limit')
         if response.status == 409:
             raise SyncConflict('Peer reported a content conflict')
@@ -1063,6 +1067,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
             raise SyncRejected('Peer rejected content sync')
         response_envelope, response_payload = decode_body(body)
     finally:
+        if response is not None:
+            response.close()
         connection.close()
     if cancelled():
         raise SyncCancelled('Content sync cancelled before local publication')

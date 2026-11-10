@@ -82,3 +82,12 @@ is claimed from these isolated checks.
 The provider-domain follow-up is documented in `http-concurrency-ownership.md`.
 Its complete registered-route inventory is enforced at production startup;
 SQLite and elapsed-time deadline rows above remain open.
+
+### Federated transport deadline follow-up
+
+Content-sync, catalog and replication now share one monotonic budget per HTTPS
+exchange (60/15/30 seconds respectively), including connect, TLS, upload,
+headers and body. See `http-concurrency-ownership.md` for recovery boundaries.
+Slow continuous responses no longer extend these three transport waits.
+Provider/hostname DNS, incoming slow bodies and non-network work remain open;
+this does not close the broader elapsed-time inventory.

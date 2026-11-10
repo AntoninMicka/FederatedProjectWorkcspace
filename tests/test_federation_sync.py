@@ -1025,6 +1025,34 @@ class FederationSyncTests(unittest.TestCase):
         self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
                     endpoint=endpoint, trust='approved', sharing_level='same-team')
         trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+        # The receiver durably finishes, but its HTTP response arrives after
+        # the sender deadline. Preserve the exact request for native replay.
+        from spikes.federation_sync import _database
+        received = threading.Event()
+        release = threading.Event()
+        original_receive = SyncReceiver.receive
+        def delayed_receive(receiver, *args, **kwargs):
+            result = original_receive(receiver, *args, **kwargs)
+            received.set()
+            release.wait(5)
+            return result
+        try:
+            with patch.object(SyncReceiver, 'receive', delayed_receive), \
+                    patch('spikes.federation_sync.NETWORK_TIMEOUT', 1.5):
+                with self.assertRaises(TimeoutError):
+                    synchronize(self.nodes[0], self.node_ids[1], self.project_id,
+                                deployment='web')
+                self.assertTrue(received.is_set())
+        finally:
+            release.set()
+        with _database(self.nodes[0]) as db:
+            saved = db.execute('SELECT operation_id,envelope,bundle FROM outbound WHERE peer_id=? AND project_id=?',
+                               (self.node_ids[1], self.project_id)).fetchone()
+        self.assertIsNotNone(saved)
+        with _database(self.nodes[1]) as db:
+            receipt = db.execute('SELECT response_envelope FROM inbound WHERE operation_id=?',
+                                 (saved[0],)).fetchone()
+        self.assertIsNotNone(receipt[0])
         # A transient native writer collision is 503, not permanent rejection.
         # Both sides retain the exact request identity for the next attempt.
         from spikes.federation_sync import _database
@@ -1038,10 +1066,19 @@ class FederationSyncTests(unittest.TestCase):
         status = ContentSyncControl(self.nodes[0], deployment='web').statuses()[
             self.node_ids[1] + ':' + self.project_id]
         self.assertEqual(status['state'], 'busy')
+        with _database(self.nodes[0]) as db:
+            self.assertEqual(tuple(db.execute(
+                'SELECT operation_id,envelope,bundle FROM outbound WHERE peer_id=? AND project_id=?',
+                (self.node_ids[1], self.project_id)).fetchone()), tuple(saved))
         result = synchronize(self.nodes[0], self.node_ids[1], self.project_id,
                              deployment='web')
         self.assertEqual(result['state'], 'idle')
+        with _database(self.nodes[0]) as db:
+            self.assertIsNone(db.execute('SELECT operation_id FROM outbound WHERE operation_id=?',
+                                         (saved[0],)).fetchone())
         with _database(self.nodes[1]) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM inbound WHERE operation_id=?',
+                                        (saved[0],)).fetchone()[0], 1)
             self.assertIsNotNone(db.execute('SELECT response_envelope FROM inbound WHERE operation_id=?',
                 (pending_id,)).fetchone()[0])
         # A lost HTTPS response is replayed byte-for-byte through the actual

@@ -1407,3 +1407,10 @@ stejnou celkovou kapacitou 64 a pětisekundovým pre-dispatch budgetem. Zachová
 body/ID, rozlišuje not-started od unknown a nepřebírá backend recovery. Odmítnuty
 jsou timeout aktivního provideru v admission vrstvě, automatický resend a
 uvolnění aktivního vlastníka pouze podle zrušení calleru.
+
+Federační HTTPS deadline adaptuje stdlib `http.client`, ověřený `ssl` transport
+a nativní socketové `makefile` s časovým rozpočtem při každém raw čtení.
+Existující číselné IPv4 endpointy nepotřebují DNS; původní podpisy, TLS policy,
+journal, receipt a replay zůstávají autoritou. Samostatný HTTP klient, watchdog
+vlákna a automatické opakování byly odmítnuty: nepřidávají potřebnou garanci a
+mohly by oddělit životnost transportu od původní operace.
