@@ -7,10 +7,15 @@ Unknown routes and query variants keep the conservative application domain.
 """
 
 # Each value identifies the exact request field containing the project scope.
-# These handlers use request-local services and existing journal/CAS writers;
+# These handlers use request-local work or immutable startup service bindings
+# and existing journal/CAS writers;
 # they do not replace server.projects or initialize shared server services.
 PROJECT_ROUTES = {
     '/v1/projects/open': None,
+    '/v1/outputs/definitions': None,
+    '/v1/presentations/open': None,
+    '/v1/presentations/save': 'document',
+    '/v1/presentations/export/preview': None,
     '/v1/artifacts/preview': None,
     '/v1/artifacts/history/list': None,
     '/v1/artifacts/history/compare': None,
@@ -262,16 +267,27 @@ IDE_QUEUE_ROUTES = frozenset({
     '/v1/task-queue',
 })
 
-# These service domains acquire admission after authentication/body parsing.
-SERVICE_ROUTES = JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES | IDE_QUEUE_ROUTES
+# Refinement reads can initialize/migrate proposals; decisions/apply share that
+# same durable review lifecycle. Source references own no live project plan.
+REFINEMENT_ROUTES = frozenset({
+    '/v1/roadmap-refinement/list',
+    '/v1/roadmap-refinement/detail',
+    '/v1/roadmap-refinement/reconcile/preview',
+    '/v1/roadmap-refinement/decide',
+    '/v1/roadmap-refinement/decide-all',
+    '/v1/roadmap-refinement/apply',
+})
+REFERENCE_ROUTES = frozenset({'/v1/document-patterns', '/v1/roadmap/graph'})
 
-# Audited non-provider HTTP owners: planning,
-# source import, presentation documents and independent node preferences.
-# Their original application serialization and native writers remain intact.
+# These service domains acquire admission after authentication/body parsing.
+SERVICE_ROUTES = (JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES
+                  | IDE_QUEUE_ROUTES | REFINEMENT_ROUTES | REFERENCE_ROUTES)
+
+# Remaining conservative owners: federation controls, source import and node
+# preferences. Their original serialization and native writers remain intact.
 APPLICATION_ROUTES = frozenset({
     '/v1/application-access',
     '/v1/counter',
-    '/v1/document-patterns',
     '/v1/federation/catalog/reconcile',
     '/v1/federation/content/cancel',
     '/v1/federation/content/reconcile',
@@ -280,16 +296,8 @@ APPLICATION_ROUTES = frozenset({
     '/v1/federation/enroll',
     '/v1/gamepad/settings',
     '/v1/gamepad/status',
-    '/v1/outputs/definitions',
-    '/v1/presentations/export/preview',
-    '/v1/presentations/open',
-    '/v1/presentations/save',
     '/v1/replications/status',
     '/v1/replications/sync',
-    '/v1/roadmap-refinement/apply',
-    '/v1/roadmap-refinement/decide',
-    '/v1/roadmap-refinement/decide-all',
-    '/v1/roadmap/graph',
     '/v1/session',
     '/v1/sources/import',
     '/v1/user-profile',
@@ -304,9 +312,6 @@ ROUTE_LANES = {
     '/v1/node-telemetry/status': 'telemetry',
     '/v1/chat/availability': 'availability',
     '/v1/tasks/run-control': 'availability',
-    '/v1/roadmap-refinement/list': 'review',
-    '/v1/roadmap-refinement/detail': 'review',
-    '/v1/roadmap-refinement/reconcile/preview': 'review',
     # Immutable committed Git snapshots and atomically published registration.
     '/v1/projects': 'catalog',
     # All HTTP owners of the selected deck, public state and session identity.
@@ -324,6 +329,8 @@ ROUTE_LANES = {
     **dict.fromkeys(MONITORING_ROUTES, 'monitoring'),
     **dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources'),
     **dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue'),
+    **dict.fromkeys(REFINEMENT_ROUTES, 'review'),
+    **dict.fromkeys(REFERENCE_ROUTES, 'reference'),
     **dict.fromkeys(APPLICATION_ROUTES, 'application'),
     # Peer protocols bypass JSON dispatch and keep their existing ownership.
     '/v1/federation/probe': 'application',

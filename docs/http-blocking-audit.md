@@ -165,3 +165,19 @@ commit/rollback and before releasing its file owner, including entry/commit
 failures. Native timeouts and persistent/recovery behavior are unchanged.
 This fixes the reproduced leak; remaining SQLite stores still need their own
 audit and no end-to-end performance result is inferred from warning removal.
+
+### Planning/document/reference ownership follow-up
+
+Four presentation/output document routes now share the native per-project HTTP
+owner, including nested document save. All six refinement review/read/decision/
+apply routes share review admission after auth/body parsing. Refinement SQLite
+uses zero HTTP busy wait with original native 5 seconds and close/rollback;
+native deep-scan ownership stays nonblocking. Two stateless source-reference
+operations have their own serialized domain. Presenter selection/control/session
+state stays in its original presentation domain.
+
+Document open can invoke its existing native recovery and is not pure read-only.
+Unrecoverable pending/recovery state now returns 409 without clearing intent.
+Dependency apply retains its frozen IDs/digest and same-ID native receipt
+recovery. This isolates nine more application routes, not all CPU/Git/disk
+elapsed work or the remaining federation/import/preferences/provider owners.

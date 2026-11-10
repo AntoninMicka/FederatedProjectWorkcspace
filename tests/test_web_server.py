@@ -1046,6 +1046,22 @@ class WebTests(unittest.TestCase):
             self.assertEqual(headers['Referrer-Policy'], 'no-referrer')
             called.assert_called_once()
 
+    def test_output_definitions_preserve_external_pending_operation_as_conflict(self):
+        code, data, _ = self.create_project('Pending output definitions')
+        self.assertEqual(code, 200, data); pid = json.loads(data)['id']
+        workspace = Projects(self.root / 'node.json').workspace(pid)
+        head = workspace.git.head(); operation = str(uuid4())
+        marker = json.dumps({'kind': 'external-replication', 'operation_id': operation})
+        with workspace.journal.connect() as db:
+            db.execute('INSERT INTO operations(id,record) VALUES (?,?)', (operation, marker))
+        code, data, _ = self.request(path='/v1/outputs/definitions',
+                                    body=json.dumps({'project_id': pid, 'expected_head': head}))
+        self.assertEqual(code, 409, data)
+        with workspace.journal.connect() as db:
+            self.assertEqual(db.execute('SELECT record,done FROM operations WHERE id=?',
+                                         (operation,)).fetchone(), (marker, 0))
+        self.assertEqual(workspace.git.head(), head)
+
     def test_inherited_feature_routes_have_complete_web_runtime_wiring(self):
         self.assertEqual(self.create_project('Runtime wiring')[0], 200)
         shared = self.server.chat_service.state_dir

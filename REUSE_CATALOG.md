@@ -1467,3 +1467,11 @@ původního SQLite transakčního kontextu. Commit/rollback a pak close proběhn
 uvolněním stávajícího flocku i při chybě inicializace či commitu. Nový writer,
 connection pool, změna schématu nebo timeoutů nejsou pro doložený leak potřebné;
 importní intent a Workspace recovery zůstávají podle ADR 0032/0003.
+
+Planning/document HTTP ownership **adaptuje** původní projektové lanes, review
+store, bounded SQLite/flock a společnou browser route tabulku. Dokumentové
+prezentace používají stejný projektový writer jako artefakty; presenter selection
+zůstává v samostatné procesní doméně. Šest review rout sdílí jeden vlastník,
+stateless katalog/graf zdrojů vlastní referenční linku. Nový plan store, automatické
+review, read-only výjimka pro recovery open a přepínání vybraného decku při save
+byly odmítnuty. Git/journal/CAS, frozen apply intent a receipt recovery se zachovají.

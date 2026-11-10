@@ -8829,6 +8829,8 @@ class DesktopHandler(Handler):
                         request['operation_id'], request['preview_sha256'],
                         request.get('proposal_ids')))
                 return self.send_error(400)
+            except (PendingOperation, RecoveryConflict):
+                return self.reply(409, {'error': 'Projekt vyžaduje obnovu rozpracované operace.'})
             except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/document-patterns' and isinstance(request, dict):
@@ -8969,6 +8971,8 @@ class DesktopHandler(Handler):
                         request['project_id'], request['artifact_id'], request['expected_head'],
                         session_artifact_id=session_id))
                 return self.send_error(400)
+            except (PendingOperation, RecoveryConflict):
+                return self.reply(409, {'error': 'Projekt vyžaduje obnovu rozpracované operace.'})
             except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):

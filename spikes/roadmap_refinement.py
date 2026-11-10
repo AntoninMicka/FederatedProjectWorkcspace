@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Local Ollama proposals for attaching detached roadmap evidence."""
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import difflib
 import hashlib
@@ -10,10 +10,11 @@ import json
 import os
 from pathlib import Path
 import re
-import sqlite3
 import stat
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
+from spikes.request_ownership import bounded_flock
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.backend_contract import ROLES
 from spikes.backend_contract import BackendUnknown
 from spikes.configuration import committed_project, parse_node, read_config
@@ -362,6 +363,7 @@ class RoadmapRefinement:
                 'Refinement state requires owned mode 0700')
         return self.state
 
+    @contextmanager
     def _connect(self):
         path = self._root()/'refinement.sqlite'; existed = path.exists()
         if existed:
@@ -369,28 +371,29 @@ class RoadmapRefinement:
             require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                     and info.st_nlink == 1 and not info.st_mode & 0o077,
                     'Unsafe refinement database')
-        db = sqlite3.connect(path)
-        if not existed:
-            os.chmod(path, 0o600)
-        db.execute('PRAGMA synchronous=FULL')
-        db.execute('CREATE TABLE IF NOT EXISTS proposals('
-                   'id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE NOT NULL,project_id TEXT NOT NULL,'
-                   'expected_head TEXT NOT NULL,document_id TEXT NOT NULL,document_sha256 TEXT NOT NULL,'
-                   'response TEXT NOT NULL,state TEXT NOT NULL,created_at TEXT NOT NULL,receipt TEXT)')
-        db.execute('CREATE TABLE IF NOT EXISTS dependency_applies('
-                   'id TEXT PRIMARY KEY,record TEXT NOT NULL)')
-        columns = {row[1] for row in db.execute('PRAGMA table_info(proposals)')}
-        if 'mode' not in columns:
-            db.execute("ALTER TABLE proposals ADD COLUMN mode TEXT NOT NULL DEFAULT 'detached'")
-        if 'input_json' not in columns:
-            db.execute("ALTER TABLE proposals ADD COLUMN input_json TEXT NOT NULL DEFAULT '{}'")
-        # Older local queues stored a globally unique bare digest. Prefixing it
-        # preserves every durable review while making uniqueness project-local.
-        legacy = db.execute("SELECT 1 FROM proposals WHERE instr(fingerprint, ':')=0 LIMIT 1").fetchone()
-        if legacy:
-            db.execute("UPDATE proposals SET fingerprint=project_id || ':' || fingerprint "
-                       "WHERE instr(fingerprint, ':')=0")
-        db.commit(); return closing(db)
+        with sqlite_connection(path, resource='Roadmap refinement journal') as db:
+            if not existed:
+                os.chmod(path, 0o600)
+            db.execute('PRAGMA synchronous=FULL')
+            db.execute('CREATE TABLE IF NOT EXISTS proposals('
+                       'id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE NOT NULL,project_id TEXT NOT NULL,'
+                       'expected_head TEXT NOT NULL,document_id TEXT NOT NULL,document_sha256 TEXT NOT NULL,'
+                       'response TEXT NOT NULL,state TEXT NOT NULL,created_at TEXT NOT NULL,receipt TEXT)')
+            db.execute('CREATE TABLE IF NOT EXISTS dependency_applies('
+                       'id TEXT PRIMARY KEY,record TEXT NOT NULL)')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(proposals)')}
+            if 'mode' not in columns:
+                db.execute("ALTER TABLE proposals ADD COLUMN mode TEXT NOT NULL DEFAULT 'detached'")
+            if 'input_json' not in columns:
+                db.execute("ALTER TABLE proposals ADD COLUMN input_json TEXT NOT NULL DEFAULT '{}'")
+            # Older local queues stored a globally unique bare digest. Prefixing it
+            # preserves every durable review while making uniqueness project-local.
+            legacy = db.execute("SELECT 1 FROM proposals WHERE instr(fingerprint, ':')=0 LIMIT 1").fetchone()
+            if legacy:
+                db.execute("UPDATE proposals SET fingerprint=project_id || ':' || fingerprint "
+                           "WHERE instr(fingerprint, ':')=0")
+            db.commit()
+            yield db
 
     @contextmanager
     def _deep_lock(self):
@@ -401,7 +404,7 @@ class RoadmapRefinement:
             require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                     and not info.st_mode & 0o077, 'Unsafe deep-check lock')
             try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                bounded_flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, resource='Roadmap refinement scan')
             except BlockingIOError as exc:
                 raise ValueError('Deep-check is already running') from exc
             yield

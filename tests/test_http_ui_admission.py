@@ -308,6 +308,42 @@ global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStrea
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertIn('IDE queue and review ownership OK', result.stdout)
 
+    def test_planning_review_project_documents_and_references_have_separate_owners(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path,options)=>{sent.push(path);return new Response(new ReadableStream({start(c){controllers.set(path,c);}}));};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const pid='11111111-1111-4111-8111-111111111111';
+ const post=(path,body={project_id:pid})=>fetch(path,{method:'POST',body:JSON.stringify(body)});
+ const document=await post('/v1/presentations/open');
+ const save=post('/v1/presentations/save',{document:{project_id:pid}});
+ const view=post('/v1/projects/open');
+ const review=await post('/v1/roadmap-refinement/list');
+ const decision=post('/v1/roadmap-refinement/decide');
+ const reference=await post('/v1/roadmap/graph');
+ const patterns=post('/v1/document-patterns');
+ const presenter=await post('/v1/presentation/status');
+ const application=await post('/v1/counter');
+ for(const path of ['/v1/presentations/save','/v1/projects/open','/v1/roadmap-refinement/decide','/v1/document-patterns'])assert(!sent.includes(path),'Owner bypassed: '+path);
+ const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
+ end('/v1/presentations/open');await document.text();
+ const saved=await save;assert(!sent.includes('/v1/projects/open'));end('/v1/presentations/save');await saved.text();
+ const opened=await view;end('/v1/projects/open');await opened.text();
+ end('/v1/roadmap-refinement/list');await review.text();
+ const decided=await decision;end('/v1/roadmap-refinement/decide');await decided.text();
+ end('/v1/roadmap/graph');await reference.text();
+ const catalog=await patterns;end('/v1/document-patterns');await catalog.text();
+ end('/v1/presentation/status');end('/v1/counter');await Promise.all([presenter.text(),application.text()]);
+ console.log('planning/document/reference ownership OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('planning/document/reference ownership OK', result.stdout)
+
     def test_project_queues_share_nested_scope_and_bound_total_waiters(self):
         script = r'''
 const assert=require('node:assert/strict');

@@ -30,7 +30,8 @@ class Artifacts:
 
     def open(self, project_id):
         ws = self.workspace(project_id)
-        # A native open is an explicit recovery entrypoint; HTTP open stays read-only.
+        # Presentation HTTP readers also use this native recovery entrypoint.
+        # Their project owner must cover opening and any roll-forward work.
         ws.recover()
         with ws.journal.lock(), ws.journal.connect() as db:
             ws._branch()

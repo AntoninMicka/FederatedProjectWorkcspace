@@ -499,3 +499,23 @@ review intent před nativním zápisem, outcome po něm, stejný operation ID a 
 při recovery. Žádný nový writer/formát, automatická akceptace, resend ani reset.
 Status/refresh nejsou čistě read-only a celkový čas exportu více projektů,
 packagingu/probes ani ostatní aplikační domény nejsou tímto auditem uzavřeny.
+
+### Plánování, dokumentové prezentace a zdrojové reference
+
+Čtyři dokumentové routy outputs/presentations používají existující projektový
+vlastník (save podle document.project_id). Šest refinement review/decision/apply
+rout sdílí review linku po autentizaci a JSON. Jejich SQLite a deep-scan file owner
+používají bounded HTTP busy, nativně zůstává 5s SQLite a neblokující scan lock.
+Bootstrap, explicitní transakce a schéma se nemění; spojení se zavírá i při chybě
+před yield. Nejde o nové autoritativní úložiště.
+
+Katalog vzorů a informační zdrojový roadmap graf mají vlastní serializovanou
+referenční linku. Archivní zdrojový graf není autorita aktuálního Workspace plánu.
+Presenter use/status/control/public nadále společně chrání vybraný deck a živý
+stav; document save jej nepřepíná. Browser má shodné FIFO/EOF/project scope.
+
+Native document open může již dříve spouštět recovery, není read-only výjimkou.
+Neobnovitelný pending/recovery konflikt se hlásí 409 a zachová stav. Platí crash
+boundaries ADR 0003/0061: frozen návrhy, HEAD/digest a operation ID, native receipt
+před outcome, žádný reset ani automatická akceptace/retry. Celkové CPU/Git/disk
+rozpočty a zbývající aplikační domény tím nejsou uzavřené.

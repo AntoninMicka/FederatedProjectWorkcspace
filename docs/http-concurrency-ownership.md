@@ -1101,3 +1101,78 @@ The reproduced pre-fix HTTPS fixture emitted exactly two unclosed-database
 warnings from the same allocation site. Compilation and `git diff --check`
 passed. The full repository suite and live Omnia/Google Drive acceptance have
 not run for this change.
+
+## Planning review, project documents and source references
+
+Continuation from `473fe25` on the same branch under the explicit source repair
+authorization. Bridge status remains stale/awaiting review; the canonical
+mapping/revision is unchanged as recorded above. No planning artifact, proposal,
+acceptance or presentation in the real user profile is modified by this work.
+
+Four routes (`outputs/definitions`, `presentations/open`, `presentations/save`,
+`presentations/export/preview`) now use the existing per-project owner. Save
+extracts its UUID from `document.project_id`; the others use the top-level ID.
+This shares admission with artifact editing/open on the same project while
+allowing other projects and unrelated domains to progress. Request-local Git/
+SQLite ownership, exact HEAD and semantic checks remain native. Presentation
+Documents holds a stateless Artifacts adapter; it does not write selected-deck,
+public presenter or session process fields. `presentations/use` and live
+status/control/public remain together in their existing presentation domain.
+Saving a document does not silently replace the selected immutable deck.
+
+All six refinement HTTP routes, including decide/decide-all/apply, now use one
+`review_lane` after authentication/body parsing. This replaces the previous
+split between three review readers and three application-domain mutators.
+Status/detail/preview can initialize or migrate the native proposal store;
+they are not pure-read exemptions. Refinement SQLite uses existing ownership:
+HTTP busy timeout zero, original native 5 seconds, same bootstrap SQL and
+explicit caller transactions/commits. The connection is also closed if bootstrap
+fails before yielding. Deep scan retains its native nonblocking file owner,
+with typed busy only in bounded HTTP context. CLI/TUI and Workspace writers
+remain the same authorities, not a new HTTP writer.
+
+The two bounded, non-persistent reference operations (document-pattern
+catalog/validation/serialization and repository source-roadmap projection/SVG)
+have a separate serialized `reference_lane`. Their implementations construct
+local results/deep copies and do not mutate project, provider or presenter
+state. The source-roadmap endpoint is the existing informational source view;
+its archived source inputs are not used as authority for current Workspace
+planning or activation. JSON/SVG revision and parser/size limits are unchanged.
+
+The shared browser route table retains FIFO/EOF ownership for each domain and
+nested project key. Web account/project-role checks still run at dispatch.
+Admission refusal before dispatch is not-started; later native busy is unknown.
+Presentation document open already called native Artifacts.open/recover before
+this change, so these paths deliberately stay under project ownership and are
+not labeled read-only. That existing roll-forward behavior is retained. External
+pending intents or recovery conflicts that cannot be recovered by this entrypoint
+now return 409 on desktop document/review and web output-definition paths rather
+than abandoning the HTTP connection. Their journal/HEAD are preserved.
+
+Crash boundaries remain ADR 0003 and 0061: a dependency apply intent freezes
+its proposal IDs, expected HEAD and preview digest before native publication.
+Busy does not reset decisions or discard the intent. Repeating its same operation
+ID validates/reuses the native receipt and completes the outcome once; changing
+its IDs/digest remains refused. Document recovery/index rebuild/save continue
+the native journal/CAS/receipt path. No schema, migration policy, new worker,
+provider call, automatic acceptance, persistent cache or second writer is added.
+
+This moves nine more routes out of application admission and unifies three
+already isolated review readers with their mutators. It does not bound all
+refinement/reference CPU/Git/disk work to one total deadline. Other application
+owners (federation controls, imports and node preferences), provider lifecycle,
+slow incoming requests and shutdown remain to be audited. No live Omnia or
+presenter/IDE acceptance is inferred from local fixtures.
+
+Verification: 188 targeted planning/refinement/dependency/TUI, presentation
+storage/session/navigation, document-pattern/source-graph, HTTP ownership,
+web authorization and browser tests passed (10 optional skips). Real Qt/WebEngine
+admission passed all 15 tests without skips; these selections overlap. Tests
+cover nested save ownership, independent projects/presenter/reference/review,
+SQLite contention with unchanged state bytes, native scan policy, frozen apply
+intent after busy with one same-ID commit, and 409/preserved external pending
+state on desktop/web output paths. Existing legacy review, multi-store crash,
+revision/privacy and presentation receipt/recovery checks ran in temporary
+fixtures. After the final scan-owner diagnostic label correction, its focused
+native/HTTP lock test passed. Compilation and `git diff --check` passed. The
+full repository suite and live Omnia acceptance have not run for this change.

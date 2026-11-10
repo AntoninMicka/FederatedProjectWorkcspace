@@ -22,6 +22,8 @@ from spikes.project_creation_actions import ProjectCreationActions
 from spikes.project_deletion import ProjectDeletion
 from spikes.project_deletion_actions import ProjectDeletionActions
 from spikes.projects import Projects
+from spikes.workspace import PendingOperation
+from spikes.journal import RecoveryConflict
 from spikes.administration import Administration, AccessDenied
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
@@ -486,7 +488,8 @@ class WebHandler(DesktopHandler):
                 if result['commit_id'] != request['expected_head']:
                     raise ValueError('Project changed before output projection')
                 return self.reply(200, result)
-            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError,
+                    PendingOperation, RecoveryConflict):
                 return self.reply(409, {'error': 'Definice výstupů nelze načíst z potvrzené verze projektu.'})
         if self.path.startswith('/v1/backend-metrics/'):
             if not self.server.administration.is_admin(self.actor):

@@ -274,6 +274,36 @@ assert.equal(calls[0].body.preview_sha256,DIGEST);});
         self.assertEqual(count, self.git.run('rev-list', '--count', 'HEAD').stdout)
         with self.assertRaises(ValueError): self.service.apply(operation, '0' * 64, [row['proposal_id']])
 
+    def test_http_busy_after_dependency_intent_preserves_review_until_same_id_recovers(self):
+        from spikes.request_ownership import ProjectBusy, bounded_project_requests
+        import fcntl
+        row = self.accept(); ids = [row['proposal_id']]
+        preview = self.service.reconciliation_preview(ids); operation = str(uuid4())
+        workspace = Projects(self.node).workspace(self.project_id)
+        held = []
+        def stop(stage):
+            if stage == 'dependency-intent':
+                handle = (workspace.journal.state / 'writer.lock').open('a+b')
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB); held.append(handle)
+        try:
+            with bounded_project_requests(), self.assertRaises(ProjectBusy):
+                self.service.apply(operation, preview['preview_sha256'], ids, checkpoint=stop)
+        finally:
+            for handle in held: handle.close()
+        self.assertEqual(self.git.head(), self.head)
+        with self.service._connect() as db:
+            intent = json.loads(db.execute('SELECT record FROM dependency_applies WHERE id=?', (operation,)).fetchone()[0])
+        self.assertEqual(intent['proposals'], ids)
+        self.assertEqual(intent['preview_sha256'], preview['preview_sha256'])
+        self.assertNotIn('outcome', intent)
+        with self.assertRaisesRegex(ValueError, 'pending apply'):
+            self.service.decide(row['proposal_id'], 'reset')
+        with bounded_project_requests():
+            receipt = self.service.apply(operation, preview['preview_sha256'], ids)
+            self.assertEqual(receipt, self.service.apply(operation, preview['preview_sha256'], ids))
+        self.assertEqual(receipt['operation_id'], operation)
+        self.assertEqual(self.git.run('rev-list', '--count', self.head+'..HEAD').stdout.strip(), '1')
+
     def test_recovery_after_intent_native_checkpoints_and_outcome(self):
         row = self.accept(); preview = self.service.reconciliation_preview([row['proposal_id']])
         operation = str(uuid4())

@@ -142,6 +142,9 @@ class LocalAPITests(unittest.TestCase):
         routes.update(dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources_lane'))
         from spikes.http_admission_policy import IDE_QUEUE_ROUTES
         routes.update(dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue_lane'))
+        from spikes.http_admission_policy import REFINEMENT_ROUTES, REFERENCE_ROUTES
+        routes.update(dict.fromkeys(REFINEMENT_ROUTES, 'review_lane'))
+        routes.update(dict.fromkeys(REFERENCE_ROUTES, 'reference_lane'))
 
         class LaneHandler(Handler):
             post_paths = set(routes)
