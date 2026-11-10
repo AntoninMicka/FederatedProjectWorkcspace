@@ -987,3 +987,79 @@ journal bytes after collision, and unknown collection intent without automatic
 redispatch. Existing crash/migration, retention, placement/privacy and pool-sync
 checks ran against temporary fixtures. Compilation and `git diff --check`
 passed. The full repository suite and live Omnia acceptance have not run.
+
+## IDE bridge and queue handoff ownership
+
+Continuation from `2ab0f0b` on the existing branch, under the explicit source
+continuation authorization. The bridge export remains stale/connection refused;
+no Workspace planning state, acceptance or real-profile connection is changed.
+
+All twelve exact IDE bridge, task-queue and IDE queue-publication routes now
+share one `ide_queue_lane`, acquired after authentication and JSON parsing.
+They stay mutually serialized because mapping/revocation, packet publication,
+message receipt and prepared review share native bridge/queue state. The same
+route table governs browser FIFO/Web Locks through response EOF. Admission
+refusal before dispatch is not-started; native-owner refusal after dispatch
+remains unknown/same-operation. Query variants/unknown routes retain fallback.
+No worker or queue capacity increase is made.
+
+Ownership audit: request-local IdeBridge/TaskQueue objects and the desktop's
+startup-provided IdeBridge use immutable node/network/origin configuration and
+fresh native connections. Requests do not replace server projects, provider
+services or presentation selection. Bridge records/receipts are in node-local
+SQLite; queue JSON uses its existing project/account flock and atomic
+fsync/rename writer. Project changes remain Workspace journal/Git CAS operations.
+Projects reads the current registration file, so another domain atomically
+replacing registrations does not create a stale cached binding in these APIs.
+Desktop discovery descriptors keep their original atomic publication and
+startup/shutdown policy.
+
+Bridge SQLite reuses bounded ownership (zero HTTP busy timeout, original native
+5 seconds). Row factory, schema initialization and explicit BEGIN IMMEDIATE
+transactions are unchanged. Auth reads therefore report transient contention
+as typed 503, not invalid credentials/repair pairing. The native queue flock
+stays nonblocking; HTTP collision becomes typed busy, while native callers keep
+the original refusal. Locks, files and pending state are never deleted/reset.
+
+Both legacy and connection exchange credentials are revalidated after lane
+acquisition, before the exchange method runs. Revocation/expiry during the
+post-auth wait cannot dispatch an old cached credential. Existing web account,
+project-role, mapping/parent, privacy and exact snapshot checks remain at their
+native boundaries. Credential checks are not replaced by HTTP ownership.
+
+Crash boundaries stay ADR 0060/0062 and ADR 0003: bridge receipt/message commits,
+immutable packet digests, queue revision/HEAD and atomic queue publication remain
+authoritative. A prepared review intent is committed before the native project
+operation, and its outcome afterward. Busy between those stores retains the
+exact request/operation ID; resuming obtains the native receipt, not a second
+commit. Pending human review still blocks new handoff generations. Receiving
+completed/progress is not human acceptance; existing explicitly authorized
+automatic-start policy is unchanged. No new writer, format, auto-review,
+operation-ID replacement, source-ancestry gate or automatic resend is added.
+
+This is one node-wide IDE/handoff domain, not parallel queue mutation by project.
+Status/poll/refresh may initialize stores or resume existing native intents and
+are not pure-read exemptions. Repeated outside-Git probes, packaging, multi-project
+snapshot/role work and whole-operation elapsed time retain existing limits;
+this slice isolates their HTTP ownership, not all execution duration. The
+remaining application domains and broader worker/shutdown work stay open.
+No live IDE activation, Omnia deployment or full acceptance is claimed.
+
+Final verification: 203 targeted IDE bridge/panel/queue, task queue, HTTP/native
+ownership, local API, web authorization and browser-admission tests passed
+(10 optional skips). The separate real Qt/WebEngine admission run passed all
+14 tests without skips and overlaps this selection. New checks cover all twelve
+exact mappings, independent HTTP progress, same-domain refusal before dispatch,
+bridge SQLite busy during credential lookup without lost credentials/state,
+native queue-lock busy without lost selection, credential revocation between
+authentication and admission, FIFO through EOF, and busy after prepared review
+followed by exactly one native commit under the same operation ID. Existing
+pending-human-review, snapshot/queue revision, revocation/privacy, immutable
+packet and multi-store crash/replay tests ran against temporary fixtures.
+Compilation and `git diff --check` passed. The full suite and live IDE/Omnia
+acceptance have not run for this slice.
+
+The broader run also emitted two SQLite ResourceWarnings whose allocation was
+not localized. Four focused web-route tests with allocation tracing passed
+without reproducing them. This is retained as an open native connection-lifecycle
+observation, not attributed to a specific store or claimed fixed by this slice.

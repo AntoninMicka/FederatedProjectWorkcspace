@@ -8554,6 +8554,11 @@ class DesktopHandler(Handler):
 
     def dispatch_ide_bridge(self, request):
         try:
+            # Credentials may have been revoked/expired while waiting for this
+            # domain. Reload the current record before any exchange action.
+            if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
+                if not self.authorized(self.single('Authorization') or ''):
+                    return self.send_error(401)
             service = self.ide_bridge()
             actor = getattr(self, 'actor', None)
             if self.path == '/v1/ide-bridge/connections' and request == {}:

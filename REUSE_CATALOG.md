@@ -1453,3 +1453,11 @@ zůstávají autoritou. Oddělená paměťová RSS cache má vlastní doménu; p
 monitoring jednu společnou doménu a jednorázové vytváření svých lazy služeb.
 Volné read-only zařazení statusu, per-projektový souběh bez auditu, nový writer,
 mazání obsazených journalů a automatický retry unknown operací byly odmítnuty.
+
+IDE/queue HTTP ownership **adaptuje** společnou přesnou route tabulku, browser
+FIFO/Web Locks, SQLite ownership a původní projektový/account queue flock.
+Bridge SQLite, neměnné packety, revize fronty a lidské review intenty zůstávají
+původní autoritou; projektový účinek používá Workspace writer/receipt recovery.
+Credential se znovu ověří po čekání na HTTP vlastníka. Read-only zařazení pollu,
+nový queue writer, automatická akceptace či resend a smazání busy stavů byly
+odmítnuty: status/refresh mohou obnovovat existující nativní operace.

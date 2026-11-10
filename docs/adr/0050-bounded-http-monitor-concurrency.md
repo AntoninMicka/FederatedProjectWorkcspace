@@ -483,3 +483,19 @@ boundaries ADR 0003/0073/0076/0082/0083; nepřibývá writer, formát, scheduler
 automatická aktivace ani retry. Nejde o celkový deadline všech network/CPU/disk
 kroků či dokončený shutdown audit. Podrobnosti a důkazy viz
 [audit vlastnictví](../http-concurrency-ownership.md).
+
+### IDE bridge a queue handoff doména
+
+Dvanáct přesně deklarovaných rout bridge/mapování/review a task/IDE fronty
+používá společnou linku po autentizaci a načtení JSON. Browser má shodné FIFO/
+Web Locks vlastnictví do EOF. Bridge SQLite nečeká v HTTP na busy zámek,
+nativně zachovává 5s timeout; queue flock zůstává neblokující a v HTTP hlásí
+typed busy. Obsazení při credential lookup není odmítnutí přihlášení.
+
+Exchange credential se po získání linky znovu ověří proti aktuálnímu stavu.
+Původní role/privacy, snapshot, queue revision a pending-human-review kontroly
+se zachovávají. Platí crash boundaries ADR 0060/0062 a projektové ADR 0003:
+review intent před nativním zápisem, outcome po něm, stejný operation ID a receipt
+při recovery. Žádný nový writer/formát, automatická akceptace, resend ani reset.
+Status/refresh nejsou čistě read-only a celkový čas exportu více projektů,
+packagingu/probes ani ostatní aplikační domény nejsou tímto auditem uzavřeny.

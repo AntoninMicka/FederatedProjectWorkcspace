@@ -246,11 +246,27 @@ RSS_SOURCE_ROUTES = frozenset({
     '/v1/rss-sources/view',
 })
 
+# Bridge mappings, mailbox/review and queue publication share one owner.
+IDE_QUEUE_ROUTES = frozenset({
+    '/v1/ide-bridge/connection/create',
+    '/v1/ide-bridge/connection/exchange',
+    '/v1/ide-bridge/connection/map',
+    '/v1/ide-bridge/connection/revoke',
+    '/v1/ide-bridge/connections',
+    '/v1/ide-bridge/create',
+    '/v1/ide-bridge/exchange',
+    '/v1/ide-bridge/review',
+    '/v1/ide-bridge/revoke',
+    '/v1/ide-bridge/status',
+    '/v1/ide-queue/publish',
+    '/v1/task-queue',
+})
+
 # These service domains acquire admission after authentication/body parsing.
-SERVICE_ROUTES = JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES
+SERVICE_ROUTES = JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES | IDE_QUEUE_ROUTES
 
 # Audited non-provider HTTP owners: planning,
-# source/IDE transfer, presentation documents and independent node preferences.
+# source import, presentation documents and independent node preferences.
 # Their original application serialization and native writers remain intact.
 APPLICATION_ROUTES = frozenset({
     '/v1/application-access',
@@ -264,17 +280,6 @@ APPLICATION_ROUTES = frozenset({
     '/v1/federation/enroll',
     '/v1/gamepad/settings',
     '/v1/gamepad/status',
-    '/v1/ide-bridge/connection/create',
-    '/v1/ide-bridge/connection/exchange',
-    '/v1/ide-bridge/connection/map',
-    '/v1/ide-bridge/connection/revoke',
-    '/v1/ide-bridge/connections',
-    '/v1/ide-bridge/create',
-    '/v1/ide-bridge/exchange',
-    '/v1/ide-bridge/review',
-    '/v1/ide-bridge/revoke',
-    '/v1/ide-bridge/status',
-    '/v1/ide-queue/publish',
     '/v1/outputs/definitions',
     '/v1/presentations/export/preview',
     '/v1/presentations/open',
@@ -287,7 +292,6 @@ APPLICATION_ROUTES = frozenset({
     '/v1/roadmap/graph',
     '/v1/session',
     '/v1/sources/import',
-    '/v1/task-queue',
     '/v1/user-profile',
 })
 
@@ -319,6 +323,7 @@ ROUTE_LANES = {
     **dict.fromkeys(JULIA_ROUTES, 'julia'),
     **dict.fromkeys(MONITORING_ROUTES, 'monitoring'),
     **dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources'),
+    **dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue'),
     **dict.fromkeys(APPLICATION_ROUTES, 'application'),
     # Peer protocols bypass JSON dispatch and keep their existing ownership.
     '/v1/federation/probe': 'application',

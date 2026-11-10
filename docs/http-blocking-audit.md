@@ -145,3 +145,13 @@ HTTP ownership with native policies preserved. A busy collection after its
 lease is unknown and cannot be automatically replayed. Network/provider stores,
 CPU/disk/Git duration, background shutdown and other application owners remain
 open; status is not reclassified as pure read-only.
+
+### IDE/queue ownership follow-up
+
+Twelve exact bridge/mapping/review and task/IDE queue routes share a dedicated
+serialized domain after authentication/body parsing, with matching browser
+FIFO/EOF ownership. Bridge SQLite and project/account queue-lock contention use
+typed bounded HTTP busy; native policies, queue revisions, packet digests,
+pending-human-review and Workspace recovery remain unchanged. IDE credentials
+are rechecked after admission. Multi-project export/probes/packaging and whole
+operation duration remain open, along with other application domains.

@@ -279,6 +279,35 @@ global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStrea
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertIn('monitoring and public RSS domains OK', result.stdout)
 
+    def test_bridge_queue_and_review_share_fifo_without_holding_other_domains(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStream({start(c){controllers.set(path,c);}}));};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const post=path=>fetch(path,{method:'POST',body:JSON.stringify({project_id:'11111111-1111-4111-8111-111111111111'})});
+ const queue=await post('/v1/task-queue');
+ const exchange=post('/v1/ide-bridge/connection/exchange');
+ const review=post('/v1/ide-bridge/review');
+ const other=[];
+ for(const path of ['/v1/counter','/v1/projects/open','/v1/chat/status','/v1/julia/status','/v1/monitoring/view','/v1/rss-sources/view'])other.push([path,await post(path)]);
+ assert(!sent.includes('/v1/ide-bridge/connection/exchange'));
+ assert(!sent.includes('/v1/ide-bridge/review'));
+ const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
+ end('/v1/task-queue');await queue.text();
+ const exchanged=await exchange;assert(!sent.includes('/v1/ide-bridge/review'));
+ end('/v1/ide-bridge/connection/exchange');await exchanged.text();
+ const reviewed=await review;end('/v1/ide-bridge/review');await reviewed.text();
+ for(const [path,response] of other){end(path);await response.text();}
+ console.log('IDE queue and review ownership OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('IDE queue and review ownership OK', result.stdout)
+
     def test_project_queues_share_nested_scope_and_bound_total_waiters(self):
         script = r'''
 const assert=require('node:assert/strict');

@@ -12,6 +12,7 @@ import subprocess
 import time
 from uuid import uuid4
 
+from spikes.request_ownership import bounded_flock
 from spikes.task_graph import dependency_start_blockers
 from spikes.journal import sync_dir
 from spikes.local_api import private_directory
@@ -130,7 +131,7 @@ class TaskQueue:
             info = os.fstat(fd)
             require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                     and stat.S_IMODE(info.st_mode) == 0o600, 'Unsafe queue lock')
-            try: fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try: bounded_flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, resource='Task queue')
             except BlockingIOError: raise ValueError('Frontu právě mění jiný požadavek; načtěte ji znovu.')
             yield path
         finally:

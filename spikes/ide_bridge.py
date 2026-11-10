@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Node-local IDE mailboxes; only explicit human review invokes the native project writer."""
 import base64
-from contextlib import contextmanager, closing
+from contextlib import contextmanager
 import hashlib
 import hmac
 import io
@@ -23,6 +23,7 @@ from spikes.administration import Administration
 from spikes.artifact_actions import ArtifactActions
 from spikes.metadata import require, uuid
 from spikes.projects import Projects
+from spikes.sqlite_ownership import sqlite_connection
 
 MAX_MESSAGE = 16384
 # Match the IDE file reader's budget and leave room in its 4 MiB HTTP response.
@@ -75,7 +76,7 @@ class IdeBridge:
                     'Unsafe bridge database')
         finally:
             os.close(fd)
-        with closing(sqlite3.connect(path, timeout=5)) as db, db:
+        with sqlite_connection(path, timeout=5, resource='IDE bridge journal') as db:
             db.row_factory = sqlite3.Row
             db.execute('CREATE TABLE IF NOT EXISTS sessions '
                        '(id TEXT PRIMARY KEY, digest TEXT UNIQUE, record TEXT NOT NULL, revoked INTEGER DEFAULT 0)')
