@@ -1577,3 +1577,80 @@ tests passed. Reusing the original HEAD admission method in memory made both
 Compilation and `git diff --check` passed. The full repository suite and
 ordinary live-profile acceptance have not run; no source commit, deployment
 or application restart was performed.
+
+## Task queue status isolation
+
+Continuation from `d69542e` on the same branch after the user reproduced a
+2,205 ms task-queue owner and a connection exchange rejected after 2,010 ms.
+The user confirmed that opening/refreshing the queue triggers it. The bounded
+waiter did not solve this case: the status projection still held the bridge
+domain. The mapped project/repository and saved export revision remain those
+recorded above; a fresh status check still reports stale/connection refused.
+This is a source repair, without changing authoritative planning or acceptance.
+
+Only `action=status` on exact `/v1/task-queue` now uses `task_queue_status`.
+Server and browser derive that action ownership from the same table. Invalid
+field combinations still fail `TaskQueue.execute` validation before native
+work. Every mutation/preview, unknown action and legacy bridge path retains its
+previous domain. The existing single bounded bridge waiter is unchanged;
+no wait/worker/retry limit is raised.
+
+Ownership audit: the status path validates the committed plan through
+`Projects.plan_view`, derives flags using `queue_projection`/`completion_reports`,
+then reads the selected queue under the native project journal and queue flock.
+It never calls `_write`, accepts reports, resumes a prepared review or publishes
+a packet. Receipt lineage is verified, not written. It constructs request-local
+services/results and does not replace shared server configuration. Plan reads
+can initialize/rebuild the index; journal/SQLite/native index ownership still
+applies, so this is not a lock-free read exemption. Native queue/SQLite/project
+contention still produces the original typed busy result.
+
+Concurrent review/receipt publication can make the displayed hints historical
+by response time. They do not authorize acceptance: publication, review and
+working-queue mutations retain their exact live revision, HEAD, credential and
+native receipt checks in the original shared bridge domain. No cached authority
+or second writer is introduced. Crash boundaries remain ADR 0060/0062 and
+ADR 0003: queue fsync/rename, bridge intents/receipts and project journal/Git/index
+recovery do not change. A disconnected/expired dispatched operation retains its
+original unknown/same-operation policy.
+
+HTTP diagnostics now include `action` only for literal known task-queue and
+connection actions on their exact routes. Unknown actions, query variants,
+payloads and credentials are never retained by this addition. This distinguishes
+a slow projection from a real mutation in subsequent busy logs.
+
+TaskQueue also releases its native queue-file/project-journal owners after
+validation, optional atomic write and the final HEAD check, before constructing
+display rows from request-local snapshots. This prevents slow descendants,
+report and move-button rendering from blocking an exchange's native queue
+refresh/publication after HTTP admission has been separated. The write and
+crash/replay boundaries are unchanged. A response still describes its captured
+revision/HEAD; later actions revalidate these values instead of treating display
+hints as current write authority.
+
+The new HTTP regression pauses actual queue status in completion-report
+projection for over 2.2 seconds, then completes a real authenticated exchange,
+UI bridge status and diagnostics before releasing the queue read. Restoring
+the old ownership table only in test-process memory reproduces the exchange
+503. Separate browser EOF tests verify that a retained queue status response
+does not block exchange, while queue mutations still wait for the exchange.
+Existing native queue contention, revocation and prepared-review recovery tests
+remain in the regression selection. Ordinary user-profile acceptance remains
+separate from these source tests.
+
+A second HTTP regression pauses queue-row construction for over 2.2 seconds
+with a selected task. While it remains paused, a real authenticated IDE
+exchange successfully publishes the initial immutable queue packet and the
+native project journal is available. The captured UI response still contains
+the selected task and the project HEAD stays unchanged.
+
+Verification: the broader 218-test local/web HTTP, browser, bridge/panel and
+task/pinned-queue selection passed (10 optional Qt/WebEngine skips). After
+the native-lock scope change and final test correction, all 89 IDE HTTP,
+TaskQueue and pinned-queue tests passed in a clean final run. Both new HTTP
+regressions fail with their respective original ownership implementations
+restored only in test-process memory: not-started HTTP refusal for the shared
+lane, and unknown/project-journal contention for display-time native locking.
+Compilation, documentation link checks and `git diff --check` passed.
+The full repository suite and ordinary live-profile acceptance have not run;
+no source commit, application restart or remote deployment was performed.

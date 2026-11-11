@@ -1628,3 +1628,14 @@ of the waiter. **Reject:** increasing worker counts, unbounded worker waiting,
 parallel bridge writers and automatic replay after dispatch. No external
 component is introduced. Recovery and verification:
 [HTTP ownership](docs/http-concurrency-ownership.md#bounded-ide-http-waiting).
+
+Queue status isolation **adapts** the existing action-specific HTTP/browser
+table and request-local `TaskQueue.execute` projection. Only exact `status`
+uses a separate owner; mutations keep the bridge/review/publication lane.
+Native project/index/journal, queue flock and SQLite remain authoritative.
+Queue/journal owners are released before building display rows from captured
+request-local data, after the existing write and final HEAD checks.
+**Reject:** another wait-budget increase, parallel queue mutations, a cached
+acceptance result or another persistent writer. Diagnostic actions use literal
+allowlists. Audit and recovery:
+[Queue status isolation](docs/http-concurrency-ownership.md#task-queue-status-isolation).

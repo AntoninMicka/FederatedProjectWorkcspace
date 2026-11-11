@@ -18,6 +18,20 @@ from spikes.local_api import Handler, MAX_BODY, private_directory, running_api
 
 
 class LocalAPITests(unittest.TestCase):
+    def test_request_action_diagnostics_keep_only_known_literals_on_exact_routes(self):
+        from types import SimpleNamespace
+        from spikes.local_api import BoundedHTTPServer
+        request = object()
+        server = SimpleNamespace(_worker_condition=threading.Condition(),
+                                 _request_details={request: {}})
+        for path, action in (('/v1/task-queue', 'private-token'),
+                             ('/v1/task-queue', []),
+                             ('/v1/task-queue?private-token', 'status')):
+            BoundedHTTPServer.describe_request_action(server, request, path, {'action': action})
+        self.assertEqual(server._request_details[request], {})
+        BoundedHTTPServer.describe_request_action(server, request, '/v1/task-queue', {'action': 'status'})
+        self.assertEqual(server._request_details[request], {'action': 'status'})
+
     def test_production_route_inventory_requires_classification_for_new_routes(self):
         from spikes.http_admission_policy import validate_route_ownership, request_lane
         from spikes.desktop_management import DesktopManagementHandler
@@ -27,6 +41,9 @@ class LocalAPITests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'ownership audit'):
             validate_route_ownership(WebHandler.post_paths | {'/v1/new-mutation'})
         self.assertEqual(request_lane('/v1/administration', {'action':'list'}), 'node_status_lane')
+        self.assertEqual(request_lane('/v1/task-queue', {'action':'status'}), 'task_queue_status_lane')
+        for action in ('add', 'revalidate', 'repair', 'set-flag', 'unknown', []):
+            self.assertEqual(request_lane('/v1/task-queue', {'action':action}), 'ide_queue_lane')
         for request in ({'action':'create-user'}, {'action':[]}, {}, None):
             self.assertEqual(request_lane('/v1/administration', request), 'provider_lane')
 

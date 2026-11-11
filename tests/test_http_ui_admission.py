@@ -308,6 +308,35 @@ global.fetch=async(path,init)=>{
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertIn('IDE discovery admission OK', result.stdout)
 
+    def test_queue_status_response_does_not_hold_bridge_or_queue_mutations(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path,init)=>{
+ const key=JSON.parse(init.body).action;sent.push(key);
+ return new Response(new ReadableStream({start(c){controllers.set(key,c);}}));
+};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const post=(path,action)=>fetch(path,{method:'POST',body:JSON.stringify({action})});
+ const status=await post('/v1/task-queue','status');
+ const exchange=await post('/v1/ide-bridge/connection/exchange','exchange');
+ const mutation=post('/v1/task-queue','add');
+ await new Promise(r=>setImmediate(r));
+ assert.deepEqual(sent,['status','exchange']);
+ controllers.get('exchange').close();await exchange.text();
+ const added=await mutation;
+ assert.deepEqual(sent,['status','exchange','add']);
+ controllers.get('add').close();await added.text();
+ controllers.get('status').close();await status.text();
+ console.log('queue status isolation OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('queue status isolation OK', result.stdout)
+
     def test_bridge_queue_and_review_share_fifo_without_holding_other_domains(self):
         script = r'''
 const assert=require('node:assert/strict');

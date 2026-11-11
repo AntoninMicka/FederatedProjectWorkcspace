@@ -338,7 +338,9 @@ class TaskQueue:
                 if should_write:
                     raise QueueOutcomeUnknown('Roadmapa se během změny fronty změnila; znovu načtěte stav.')
                 raise ValueError('Roadmapa se změnila; znovu načtěte stav fronty.')
-            return dict(project_id=project_id, revision=state['revision'], expected_head=head,
+        # Only request-local snapshot data is needed to build display rows.
+        # Do not hold the queue-file or project-journal owner during this work.
+        return dict(project_id=project_id, revision=state['revision'], expected_head=head,
                         stale=stale, valid=not stale and not issues, issues=issues,
                         task_ids=state['task_ids'], flag_audit=state['flag_audit'][-20:],
                         editable_flags=sorted(EDITABLE_FLAGS), following=following,

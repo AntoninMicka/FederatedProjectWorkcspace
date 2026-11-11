@@ -155,7 +155,7 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
             # Credential failure also frees ownership for subsequent requests.
             self.assertEqual(self.post(server, '/v1/ide-bridge/status', {'project_id': self.pid})[0], 200)
 
-    def test_queue_bridge_and_review_share_one_independent_http_owner(self):
+    def test_queue_mutation_bridge_and_review_share_one_independent_http_owner(self):
         entered, release = threading.Event(), threading.Event()
         results = []
         original = TaskQueue.execute
@@ -168,7 +168,8 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
             server.ide_bridge_service = self.service
             with patch.object(TaskQueue, 'execute', blocked):
                 worker = threading.Thread(target=lambda: results.append(self.post(
-                    server, '/v1/task-queue', {'project_id': self.pid, 'action': 'status'})))
+                    server, '/v1/task-queue', {'project_id': self.pid, 'action': 'revalidate',
+                        'revision': 0, 'expected_head': self.record['snapshot']['commit_id']})))
                 worker.start()
                 try:
                     self.assertTrue(entered.wait(2))
@@ -227,7 +228,8 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
             with patch.object(TaskQueue, 'execute', blocked), \
                  patch.object(self.service.projects, 'open', side_effect=AssertionError('Full project discovery')):
                 worker = threading.Thread(target=lambda: results.append(self.post(
-                    server, '/v1/task-queue', {'project_id': self.pid, 'action': 'status'})))
+                    server, '/v1/task-queue', {'project_id': self.pid, 'action': 'revalidate',
+                        'revision': 0, 'expected_head': self.record['snapshot']['commit_id']})))
                 worker.start()
                 try:
                     self.assertTrue(entered.wait(2))
@@ -243,6 +245,41 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
                     code, busy, _ = self.post(server, route, request('bind'), token=token)
                     self.assertEqual(code, 503, busy)
                     self.assertEqual(busy['outcome'], 'not-started')
+                finally:
+                    release.set(); worker.join(10)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(results[0][0], 200, results)
+
+    def test_long_queue_status_does_not_own_exchange_or_ui_status(self):
+        entered, release = threading.Event(), threading.Event()
+        results = []
+        from spikes.ide_queue import completion_reports
+        def slow_projection(*args, **kwargs):
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError('Queue projection not released')
+            return completion_reports(*args, **kwargs)
+        token = self.f.created['pairing']['token']
+        request = dict(connection_id=self.record['connection_id'], action='exchange',
+                       request=dict(session_id=self.record['session_id'], messages=[]))
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            server.ide_bridge_service = self.service
+            with patch('spikes.ide_queue.completion_reports', side_effect=slow_projection):
+                worker = threading.Thread(target=lambda: results.append(self.post(server,
+                    '/v1/task-queue', {'project_id': self.pid, 'action': 'status'})))
+                worker.start()
+                try:
+                    self.assertTrue(entered.wait(2))
+                    self.assertFalse(release.wait(2.2))
+                    code, exchange, _ = self.post(server, '/v1/ide-bridge/connection/exchange', request, token=token)
+                    self.assertEqual(code, 200, exchange)
+                    self.assertEqual(exchange['session_id'], self.record['session_id'])
+                    self.assertEqual(self.post(server, '/v1/ide-bridge/status', {'project_id': self.pid})[0], 200)
+                    self.assertEqual(self.post(server, '/v1/diagnostics/status', {})[0], 200)
+                    status_request = next(r for r in server.http_diagnostics()['requests']
+                                          if r['operation'] == '/v1/task-queue')
+                    self.assertEqual(status_request['kind'], 'task_queue_status_lane')
+                    self.assertEqual(status_request['action'], 'status')
                 finally:
                     release.set(); worker.join(10)
                 self.assertFalse(worker.is_alive())
@@ -266,6 +303,46 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
             code, state, _ = self.post(server, '/v1/task-queue', {'project_id': self.pid, 'action': 'status'})
             self.assertEqual(code, 200, state)
             self.assertEqual(state['task_ids'], ['TASK-01'])
+
+    def test_slow_queue_rows_release_native_owners_before_exchange_publication(self):
+        head = self.record['snapshot']['commit_id']
+        self.queue.execute(dict(project_id=self.pid, action='add', task_id='TASK-01',
+                                revision=0, expected_head=head), self.owner)
+        entered, release = threading.Event(), threading.Event()
+        results = []
+        from spikes.task_queue import adjacent_moves
+        def slow_rows(*args, **kwargs):
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError('Queue rows not released')
+            return adjacent_moves(*args, **kwargs)
+        request = dict(connection_id=self.record['connection_id'], action='exchange',
+                       request=dict(session_id=self.record['session_id'], messages=[]))
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            server.ide_bridge_service = self.service
+            with patch('spikes.task_queue.adjacent_moves', side_effect=slow_rows):
+                worker = threading.Thread(target=lambda: results.append(self.post(server,
+                    '/v1/task-queue', {'project_id': self.pid, 'action': 'status'})))
+                worker.start()
+                try:
+                    self.assertTrue(entered.wait(2))
+                    self.assertFalse(release.wait(2.2))
+                    # The exchange refresh publishes the selected queue: this
+                    # needs the real native queue lock, not just HTTP admission.
+                    code, exchange, _ = self.post(server, '/v1/ide-bridge/connection/exchange', request,
+                        token=self.f.created['pairing']['token'])
+                    self.assertEqual(code, 200, exchange)
+                    self.assertTrue(exchange['has_queue'])
+                    self.assertIsNone(exchange['queue_refresh_error'])
+                    workspace = self.projects.workspace(self.pid)
+                    with workspace.journal.lock():
+                        pass
+                finally:
+                    release.set(); worker.join(10)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(results[0][0], 200, results)
+                self.assertEqual(results[0][1]['task_ids'], ['TASK-01'])
+        self.assertEqual(self.projects.repository(self.pid).head(), head)
 
     def test_ide_credential_is_revalidated_after_admission(self):
         original = Handler._in_request_lane

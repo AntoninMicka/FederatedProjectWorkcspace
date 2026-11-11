@@ -21,7 +21,7 @@ import time
 
 from spikes.http_request_budget import RequestReadTimeout, request_reader
 from spikes.backend_availability import BackendAvailability
-from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, STREAM_ROUTES, SERVICE_ROUTES, request_lane
+from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, DIAGNOSTIC_ACTIONS, STREAM_ROUTES, SERVICE_ROUTES, request_lane
 from spikes.request_ownership import BoundedWaitingLane, ProjectLanes, ProjectBusy, bounded_project_requests
 
 from spikes.metadata import parse_json, ValidationError
@@ -148,6 +148,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         with self._worker_condition:
             active = [{'kind': item['kind'], 'stage': item['stage'],
                        'operation': item.get('operation', 'unclassified'),
+                       **({'action': item['action']} if 'action' in item else {}),
                        **({'project_id': item['project_id']} if 'project_id' in item else {}),
                        'elapsed_ms': round((time.monotonic() - item['started']) * 1000)}
                       for item in self._request_details.values()]
@@ -169,6 +170,15 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                     item['operation'] = operation
                 if project_id is not None:
                     item['project_id'] = project_id
+
+    def describe_request_action(self, request, path, body):
+        action = body.get('action') if isinstance(body, dict) else None
+        if not isinstance(action, str) or action not in DIAGNOSTIC_ACTIONS.get(path, ()):
+            return
+        with self._worker_condition:
+            item = self._request_details.get(request)
+            if item is not None:
+                item['action'] = action
 
     def shutdown(self):
         with self._worker_condition:
@@ -357,6 +367,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(503, payload)
 
     def _dispatch_request(self, request):
+        describe_action = getattr(self.server, 'describe_request_action', lambda *args: None)
+        describe_action(self.request, self.path, request)
         if self.path in (STREAM_ROUTES | SERVICE_ROUTES) and isinstance(request, dict):
             from uuid import UUID
             pid = request.get('project_id')

@@ -187,11 +187,23 @@ PROVIDER_ROUTES = frozenset({
 # Every mutation and unknown action conservatively retains the provider owner.
 ACTION_LANES = {
     '/v1/administration': {'list': 'node_status'},
+    # Projection only: native project/index/journal and queue-file locks still
+    # guard reads. Mutations retain the bridge publication/review owner.
+    '/v1/task-queue': {'status': 'task_queue_status'},
     # Catalog discovery and immutable extension packages do not own queue
     # publication/review state. Project/index and SQLite owners still apply.
     '/v1/ide-bridge/connection/exchange': {
         'status': 'ide_status', 'extension-update': 'ide_update',
     },
+}
+
+# Exact routes and literal actions only; never retain arbitrary request data.
+DIAGNOSTIC_ACTIONS = {
+    '/v1/task-queue': frozenset({'status', 'add', 'remove-preview', 'remove',
+        'revalidate', 'repair-preview', 'repair', 'remove-single-preview',
+        'remove-single', 'move', 'set-flag'}),
+    '/v1/ide-bridge/connection/exchange': frozenset({'status', 'extension-update',
+        'map', 'bind', 'exchange', 'panel', 'document', 'queue', 'queue-document'}),
 }
 
 # Julia owns its worker/error maps and durable run journal independently of
