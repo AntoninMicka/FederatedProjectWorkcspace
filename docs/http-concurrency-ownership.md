@@ -1442,3 +1442,19 @@ real TLS, retained replay bytes, HTTP/native ownership, manual queue, SQLite,
 immutable export concurrency and browser busy text. `git diff --check` passed.
 The full suite was not rerun for this diagnostic follow-up. No remote release,
 restart, native recovery mutation or source commit was performed.
+
+
+## Content state manifest, 11 November continuation
+
+`/v1/federation/content-state` uses the bounded `peer_catalog` lane, separately
+from content receive. It authenticates a signed, fresh-nonce request with the
+existing peer authority. Reads use committed Git and read-only chat/pool SQLite
+snapshots without project journals, index creation, scheduler construction or
+cleanup. Manifest construction has a shared 15-second Git budget and bounded
+project/body counts. It does not grant publication authority. The optional
+snapshot receipt and native journal crash boundaries are specified in
+[ADR 0081](adr/0081-complete-project-data-sync.md). Ordinary unchanged rounds do
+not enter content preparation/publication. Actual changed-data validation can
+still compete with UI for CPU and native publication locks; this change does
+not claim to finish UI read isolation or eliminate other catalog/replication
+scheduler traffic.

@@ -25,6 +25,28 @@ class PoolSyncTests(unittest.TestCase):
         s.blocks.save(self.pid,head,self.specs,str(uuid4()))
         self.f.exchange(0,1)
 
+    def test_readonly_fingerprint_tracks_pool_changes_and_expiry_without_cleanup(self):
+        from spikes.sync_fingerprint import collect
+        from spikes.pool_sync import export
+        from unittest.mock import patch
+        before = collect(self.f.services[0], self.f.node_ids[1], self.pid)
+        source = self.services[0]
+        source.configure(self.pid, self.specs[0]['id'], True, confirm=True)
+        source.tick(self.pid)
+        after = collect(self.f.services[0], self.f.node_ids[1], self.pid)
+        self.assertNotEqual(before, after)
+        with source.pools.db() as db:
+            rows_before = db.execute('SELECT * FROM pool_entries').fetchall()
+        with patch('spikes.message_pools.MessagePools.__init__', side_effect=AssertionError('writer')):
+            raw = export(self.f.nodes[0], self.pid, read_only=True)
+            self.assertTrue(raw)
+            expired = MessagePools.export_readonly(self.f.nodes[0], self.pid, clock=lambda: 9999999999)
+            self.assertEqual(expired, [])
+        with source.pools.db() as db:
+            self.assertEqual(db.execute('SELECT * FROM pool_entries').fetchall(), rows_before)
+        self.assertEqual(MessagePools.export_readonly(self.f.nodes[0], self.pid,
+                         clock=source.pools.clock), source.pools.export(self.pid, transferable=True))
+
     def test_signed_bidirectional_pool_sync_converges_redundant_intake_without_grants(self):
         # Receiving definitions never activates either node.
         self.assertIsNone(self.services[1].catalog(self.pid)['blocks'][0]['runtime'])

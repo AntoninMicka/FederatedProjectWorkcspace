@@ -189,7 +189,7 @@ def inventory(payload):
                   key=lambda row: row['thread_id'])
 
 
-def export_project(node, service, peer_id, project_id):
+def export_project(node, service, peer_id, project_id, *, read_only=False):
     local_node_id, mappings = _mapping_rows(service, peer_id, project_id)
     root = chat_root(node)
     if not root.exists() or not mappings:
@@ -199,7 +199,8 @@ def export_project(node, service, peer_id, project_id):
         return [], canonical(value)
     store = ChatThreads(root); rows = []
     mapping = mappings[0]
-    for thread in store.list_project(local_node_id, project_id):
+    for thread in (store.list_project_readonly(local_node_id, project_id) if read_only
+                   else store.list_project(local_node_id, project_id)):
         # A local-only or in-flight thread remains entirely node-local.
         if (any(message['privacy'] == 'local-only'
                 for message in thread['messages'])

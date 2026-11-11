@@ -845,7 +845,8 @@ class FederationSyncTests(unittest.TestCase):
         candidate = {'peer_id': self.node_ids[1],
                      'project_id': self.project_id,
                      'eligible': True, 'reason': None}
-        with patch.object(restarted, 'candidates', return_value=[candidate]), \
+        with patch('spikes.sync_fingerprint.probe', return_value=None), \
+                patch.object(restarted, 'candidates', return_value=[candidate]), \
                 patch.object(restarted, 'synchronize', side_effect=OSError):
             self.assertEqual(restarted.run_automatic(), {
                 'enabled': True, 'attempted': 1})
@@ -894,7 +895,8 @@ class FederationSyncTests(unittest.TestCase):
         with patch.object(control, 'start', return_value=True) as start:
             self.assertEqual(control.start_all()['started'], 1)
         start.assert_called_once_with(self.node_ids[0], self.project_id)
-        with patch.object(control, 'synchronize', return_value={'state': 'idle'}) as run:
+        with patch('spikes.sync_fingerprint.probe', return_value=None), \
+             patch.object(control, 'synchronize', return_value={'state': 'idle'}) as run:
             self.assertEqual(control.run_automatic(), {'enabled': True, 'attempted': 1})
         run.assert_called_once_with(self.node_ids[0], self.project_id)
         # A project present both locally and remotely remains one candidate.

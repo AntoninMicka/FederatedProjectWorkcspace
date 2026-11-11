@@ -9,10 +9,11 @@ from spikes.message_pools import MessagePools, MAX_PAYLOAD, validate_entry
 from spikes.reporting_schema import encoded, PRIVACY
 
 
-def export(node, project_id):
+def export(node, project_id, *, read_only=False):
     node = Path(node).absolute()
     if not (node.parent/('.'+node.name+'.reporting-runs')/'message-pools').exists(): return b''
-    rows = MessagePools(node).export(project_id, transferable=True)
+    rows = (MessagePools.export_readonly(node, project_id) if read_only else
+            MessagePools(node).export(project_id, transferable=True))
     return encoded(rows) if rows else b''
 
 

@@ -210,3 +210,94 @@ Kontroly aktuálního stromu, obálky, obsahu, vztahů, privacy a živých oprá
 zůstávají povinné. Projektová identita se váže na každý odlišný projektový blob,
 nikoli pouze na HEAD. Nejde o nové oprávnění ani persistentní doklad validace.
 Měření kandidáta na Omnii a přesné meze: [ověřování historie](../history-validation-worker.md).
+
+## Doplnění 11. 11. 2026 — změnové otisky před automatickým přenosem
+
+Automatika před přípravou bundle používá jeden podepsaný dotaz
+`/v1/federation/content-state` na peer a kolo. Požadavek obsahuje čerstvé nonce a ID kandidátů;
+odpověď musí mít správný připnutý podpis, oba uzly a stejné nonce. Manifest
+obsahuje ID povolených registrovaných projektů a SHA-256 otisky. Pro výslovně
+dotázané ID bez opačného grantu vrací prázdný exportní stav, bez obsahu
+a bez potvrzení existence. I jednosměrné sdílení tak může přejít do klidu.
+Limit je 256 projektů / 128 KiB a společný 15s Git rozpočet sestavení.
+Nedostupný projekt má explicitní neověřený stav (`null` otisky), bez textu
+výjimky. Automatika ho odloží a pokračuje se zdravými projekty. Oprávnění se znovu kontrolují po sestavení;
+manifest není grant ani autorita pro publikaci. Existující katalog nadále
+objevuje vzdálené projekty, a to i když zatím nejsou lokálně registrované.
+
+Otisk každé strany zahrnuje přesné povolené Git refs, normalizovaný inventář
+přenositelných chatů, hash přenositelných řádků poolu a hash kontextu policy
+včetně administrační Git revize. Local-only a rozpracované chaty, privátní
+pooly, aktivace, runtime úloh a čas posledního přenosu se nezahrnují.
+Expirace poolu se vyhodnotí i při čtení. Čtení nevytváří Workspace journal,
+index, chatovou migraci ani poolový scheduler a neprovádí cleanup. Staré
+chatové schéma vyžaduje nejdřív běžnou migraci; neznámý stav není čistý.
+
+Dirty je odvozeno pro konkrétní peer: aktuální místní i vzdálený otisk musí
+odpovídat vlastnímu potvrzenému otisku a nesmí existovat outbound intent.
+Otisky obou uzlů se neporovnávají navzájem. Při shodě se nepřipravuje bundle,
+chatový payload ani poolový sidecar a nevolá content-sync. Změna vzdáleného
+stavu se ověřuje i při čistém lokálním projektu. Nezavádíme nespolehlivý
+mtime jako autoritu ani druhý writer.
+
+### Přesný ACK a crash boundaries
+
+Původní výměna v2/v3 i její replay zůstávají zachované. Volitelný HTTP header
+`X-FPW-State-Receipt: 1` žádá samostatně podepsaný `state_receipt`, který váže
+operaci, projekt, oba uzly, hash celé původní odpovědi a otisk přesného
+připraveného response snapshotu. Starý klient dostává původní strukturu.
+Nový klient se starým peerem používá původní přenos pouze při explicitním
+404/405/415 na manifest endpointu. Timeout, chybný podpis a ostatní chyby
+neaktivují drahý fallback a nejsou potvrzením čistého stavu.
+
+V původním lokálním sync journalu přibývají tabulky `prepared_states`,
+`response_states` a `confirmed_states`; nejsou přenášeny ani projekcí Git.
+
+- Přesný místní připravený otisk se uloží ve stejné SQLite transakci jako
+  outbound intent. Pád před uložením nic nepotvrzuje; po něm se obnoví
+  původní payload a operation ID. Zúžení oprávnění zachovává původní pravidla
+  zrušení nepovoleného intentu.
+- Přesný response otisk se uloží ve stejné transakci jako dokončená inbound
+  odpověď. Replay nikdy nepočítá nový otisk pro staré bajty. Chybějící
+  historická metadata znamenají chybějící receipt, nikoli odhad čistoty.
+- Potvrzená dvojice se publikuje teprve po ověřeném receipt, úspěšné lokální
+  aplikaci bez konfliktu a přesném ACK místních refs/chatů. Uložení dvojice,
+  dokončení runtime a odstranění outbound intentu tvoří jednu transakci.
+  Pád před ní zachovává intent; po ní je dvojice buď celá, nebo žádná.
+- Místní změna během přenosu se nepotvrzuje: ACK používá uložený připravený
+  otisk, nikoli nově přečtený aktuální stav. Změna vzdáleného projektu po
+  připravené odpovědi se obdobně odhalí příštím manifestem. Po přijetí nových
+  dat může následovat jedno konzervativní potvrzovací kolo.
+
+Při změnovém přenosu se chaty znovu nabídnou i při stejném normalizovaném
+inventáři, aby změna mapování nezůstala skrytá. Git dál využívá původní
+potvrzené refs a nepřenáší znovu nezměněnou historii. Samotná kontrola
+manifestu neodstraňuje souběh skutečně potřebné validace s UI ani všechny
+ostatní schedulery; izolace UI čtení je samostatný zbývající rozsah.
+Nasazení a akceptace na fyzické Omnii nejsou tímto doplněním doloženy.
+
+Pozorování automatiky (`unchanged`, `changed`, `legacy`, `unavailable`) je
+omezené na 128 záznamů v paměti a v UI ukazuje stáří kontroly. Neobsahuje
+payload ani text výjimky. Nedostupná kontrola nesmí UI vydávat starý `idle`
+za aktuálně ověřenou shodu. Pozorování není recovery ani autorita dirty stavu.
+
+I přímé volání přes desktopový peer listener používá `bounded_project_requests`:
+čtení registru je sdílené a neblokující, bez implicitního bootstrapu. Busy při
+sestavení manifestu nebo podepisování uloženého receipt vrací řízené 503.
+
+### Ověření změnových otisků
+
+Zdrojový základ `a0ec8c4` plus lokální diff: 13 nových cílených HTTPS/state
+scénářů prošlo, včetně souběžné změny zdroje, přesného replaye, rollbacku ACK,
+jednosměrného sdílení, obsazeného registru a izolace nedostupného projektu.
+Navazující cílená regrese federace/katalogu/poolů/retry/HTTP: 69 testů OK,
+1 skip. Poolový scénář ověřuje změnu i expiraci bez cleanup zápisu při čtení.
+
+Finální úplná sada `scripts/test_shards.py --shard N --shards 4` ve čtyřech
+izolovaných kopiích: 2 072 testů, OK, 59 skip. Všech 189 top-level modulů bylo
+přiřazeno právě jednou; shoda finálních zdrojů a testovaných kopií byla
+ověřena pomocí SHA-256. Prošla také kompilace dotčených modulů,
+`node --check` administračního JavaScriptu, kontrola lokálních odkazů a
+`git diff --check`. Jde o lokální implementaci a izolované ověření, nikoli
+nasazení či lidskou akceptaci výkonu na Omnii. Po této bráně následoval pouze
+tento dokumentační záznam.

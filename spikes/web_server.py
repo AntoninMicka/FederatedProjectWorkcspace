@@ -136,6 +136,9 @@ class WebHandler(DesktopHandler):
                                                '/v1/notebooklm/confirm'}
 
     def _do_POST(self):
+        from spikes.sync_fingerprint import PATH as STATE_PATH, reply as reply_state
+        if self.path == STATE_PATH:
+            return reply_state(self)
         from spikes.federation_probe import PATH, reply_probe
         if self.path == PATH:
             return reply_probe(self)

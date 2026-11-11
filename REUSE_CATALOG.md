@@ -5,6 +5,15 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Změnové otisky automatické synchronizace **adaptují** podepsané katalogové
+požadavky, TLS pinning, původní sync journal a přesný replay. **Reuse:**
+normalizovaný inventář chatů, poolový portable filtr a read-only Git handle.
+**Reject:** mtime jako autorita, druhý writer/journal, vypnutí sémantické
+validace a potvrzování novějších dat starým ACK. Lokální inventura nedává
+důvod k přenosu externího kódu. Protokol, kompatibilita a crash boundaries:
+[ADR 0081](docs/adr/0081-complete-project-data-sync.md).
+
+
 Příjem nové sync operace **adaptuje** původní `_apply`: po první úplné
 validaci používá v témže volání privátní publikační část se stejnými bajty,
 opětovnou kontrolou integrity a živých oprávnění. **Reuse:** receive zámek,

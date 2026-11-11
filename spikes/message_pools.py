@@ -109,25 +109,34 @@ class MessagePools:
             require(db.execute('SELECT version,node FROM pool_schema').fetchall() ==
                     [(1, self.scheduler.owner[0])], 'Unknown pool schema or owner')
             if not initialize:
-                expected = {'pool_schema': ['version','node'],
-                    'pool_entries': ['id','project','kind','document'],
-                    'block_bindings': ['project','source','document'],
-                    'block_jobs': ['id','project','state','document','result']}
-                require({r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} == set(expected), 'Unknown pool tables')
-                for table, columns in expected.items():
-                    require([r[1] for r in db.execute('PRAGMA table_info('+table+')')] == columns, 'Unknown pool columns')
+                self._validate_tables(db)
             yield db
 
-    def _cleanup(self, db, project_id):
-        rows = [json.loads(r[0]) for r in db.execute(
-            'SELECT document FROM pool_entries WHERE project=?', (project_id,))]
-        now = self.clock()
+    @staticmethod
+    def _validate_tables(db):
+        expected = {'pool_schema': ['version','node'],
+            'pool_entries': ['id','project','kind','document'],
+            'block_bindings': ['project','source','document'],
+            'block_jobs': ['id','project','state','document','result']}
+        require({r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} == set(expected), 'Unknown pool tables')
+        for table, columns in expected.items():
+            require([r[1] for r in db.execute('PRAGMA table_info('+table+')')] == columns, 'Unknown pool columns')
+
+    @staticmethod
+    def _retained(rows, now):
         alive = [r for r in rows if r['kind'] == 'membership' and
                  moment(r['value']['expires_at']).timestamp() > now]
         refs = {r['value']['item_entry'] for r in alive}
         keep = {r['id'] for r in alive} | refs | {r['id'] for r in rows if
             r['kind'] == 'observation' and r['value']['item_entry'] in refs and
             moment(r['value']['expires_at']).timestamp() > now}
+        return [r for r in rows if r['id'] in keep]
+
+    def _cleanup(self, db, project_id):
+        rows = [json.loads(r[0]) for r in db.execute(
+            'SELECT document FROM pool_entries WHERE project=?', (project_id,))]
+        now = self.clock()
+        keep = {r['id'] for r in self._retained(rows, now)}
         db.executemany('DELETE FROM pool_entries WHERE id=?', [(r['id'],) for r in rows if r['id'] not in keep])
         # Frozen runs are also bounded managed copies; never resurrect expired input.
         for id_, raw in db.execute('SELECT id,document FROM block_jobs WHERE project=?', (project_id,)).fetchall():
@@ -174,19 +183,49 @@ class MessagePools:
             self._cleanup(db, project_id)
             rows = [json.loads(r[0]) for r in db.execute(
                 'SELECT document FROM pool_entries WHERE project=? ORDER BY id', (project_id,))]
-        if transferable:
-            # local-only membership can share an item with less restrictive pools:
-            # only independently permitted memberships and their inputs leave.
-            members = [r for r in rows if r['kind'] == 'membership' and r['value']['privacy'] != 'local-only']
-            refs = {r['value']['item_entry'] for r in members}
-            rows = [r for r in rows if r in members or
-                    r['kind'] == 'item' and r['id'] in refs or
-                    r['kind'] == 'observation' and r['value']['item_entry'] in refs]
-            require(all(r['value']['item']['privacy'] != 'local-only' for r in rows if r['kind'] == 'item'),
-                    'Local-only pool item cannot be synchronized')
-        if transferable:
-            require(len(encoded(rows)) <= MAX_PAYLOAD, 'Pool export exceeds transfer limit')
+        return self._transferable(rows) if transferable else rows
+
+    @staticmethod
+    def _transferable(rows):
+        # local-only membership can share an item with less restrictive pools:
+        # only independently permitted memberships and their inputs leave.
+        members = [r for r in rows if r['kind'] == 'membership' and r['value']['privacy'] != 'local-only']
+        refs = {r['value']['item_entry'] for r in members}
+        rows = [r for r in rows if r in members or
+                r['kind'] == 'item' and r['id'] in refs or
+                r['kind'] == 'observation' and r['value']['item_entry'] in refs]
+        require(all(r['value']['item']['privacy'] != 'local-only' for r in rows if r['kind'] == 'item'),
+                'Local-only pool item cannot be synchronized')
+        require(len(encoded(rows)) <= MAX_PAYLOAD, 'Pool export exceeds transfer limit')
         return rows
+
+    @classmethod
+    def export_readonly(cls, node, project_id, *, clock=time.time):
+        """Portable retained rows without scheduler creation, cleanup or write locks."""
+        from contextlib import closing
+        from spikes.configuration import parse_node, read_config
+        import sqlite3
+        node = Path(node).absolute()
+        root = node.parent / ('.' + node.name + '.reporting-runs') / 'message-pools'
+        if not root.exists():
+            return []
+        path = root / 'pools.sqlite'
+        for target, mode, directory in ((root, 0o700, True), (path, 0o600, False)):
+            info = target.lstat()
+            require(target.resolve() == target and info.st_uid == os.getuid()
+                    and stat.S_IMODE(info.st_mode) == mode
+                    and (stat.S_ISDIR(info.st_mode) if directory else
+                         stat.S_ISREG(info.st_mode) and info.st_nlink == 1),
+                    'Unsafe pool state')
+        owner = parse_node(read_config(node), location=node)['id']
+        with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=.1)) as db:
+            db.execute('BEGIN')
+            require(db.execute('SELECT version,node FROM pool_schema').fetchall() == [(1, owner)],
+                    'Unknown pool schema or owner')
+            cls._validate_tables(db)
+            rows = [json.loads(row[0]) for row in db.execute(
+                'SELECT document FROM pool_entries WHERE project=? ORDER BY id', (project_id,))]
+        return cls._transferable(cls._retained(rows, clock()))
 
     def view(self, project_id, pool_id, *, since=None):
         uuid(pool_id)

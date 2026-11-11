@@ -20,7 +20,9 @@ class SyncRetryTests(unittest.TestCase):
             calls.append(project)
             if project == 'slow' and failures[0]:
                 raise SyncBusy(resource='git-budget')
-        with patch('spikes.federation_sync.automatic_retry', retry), \
+        control.service = object()
+        with patch('spikes.sync_fingerprint.probe', return_value=None), \
+             patch('spikes.federation_sync.automatic_retry', retry), \
              patch('spikes.sync_retry.time.monotonic', side_effect=lambda: clock[0]), \
              patch.object(control, 'settings', return_value={'automatic_enabled': True}), \
              patch.object(control, 'candidates', return_value=candidates), \

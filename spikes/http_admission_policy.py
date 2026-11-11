@@ -349,6 +349,7 @@ ROUTE_LANES = {
     # Give each protocol bounded capacity without owning unrelated UI domains.
     '/v1/federation/probe': 'peer_probe',
     '/v1/federation/catalog': 'peer_catalog',
+    '/v1/federation/content-state': 'peer_catalog',
     '/v1/federation/replicate': 'peer_replication',
 }
 
