@@ -423,7 +423,7 @@ class IdeBridge:
             if not Administration.is_admin(actor) and (actor or {}).get('memberships', {}).get(row['id']) not in {'editor', 'project-admin'}:
                 continue
             try:
-                view = self.projects.open(row['id'])
+                view = self.projects.plan_view(row['id'])
             except PendingOperation:
                 # A human must still be able to reach the durable review intent.
                 # This is only a label/HEAD, never an old index projection.

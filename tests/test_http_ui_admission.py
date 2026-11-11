@@ -279,6 +279,35 @@ global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStrea
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertIn('monitoring and public RSS domains OK', result.stdout)
 
+    def test_connection_status_and_update_bypass_browser_queue_owner(self):
+        script = r'''
+const assert=require('node:assert/strict');
+global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
+const sent=[],controllers=new Map();
+global.fetch=async(path,init)=>{
+ const key=JSON.parse(init.body).action;sent.push(key);
+ return new Response(new ReadableStream({start(c){controllers.set(key,c);}}));
+};
+'''+HTTP_UI_ADMISSION_JS+r'''
+(async()=>{
+ const post=(path,action)=>fetch(path,{method:'POST',body:JSON.stringify({action})});
+ const route='/v1/ide-bridge/connection/exchange';
+ const queue=await post('/v1/task-queue','queue');
+ const binding=post(route,'bind');
+ const status=await post(route,'status'),update=await post(route,'extension-update');
+ assert.deepEqual(sent,['queue','status','extension-update']);
+ const end=key=>{controllers.get(key).close();};
+ end('status');await status.text();end('extension-update');await update.text();
+ assert(!sent.includes('bind'));
+ end('queue');await queue.text();
+ const bound=await binding;end('bind');await bound.text();
+ console.log('IDE discovery admission OK');
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
+        result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertIn('IDE discovery admission OK', result.stdout)
+
     def test_bridge_queue_and_review_share_fifo_without_holding_other_domains(self):
         script = r'''
 const assert=require('node:assert/strict');

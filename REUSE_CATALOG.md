@@ -5,6 +5,13 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Oprava souběhu IDE discovery **adaptuje** existující action-based HTTP/browser
+admission a transport rozšíření. **Reuse:** `Projects.plan_view`, nativní
+projektové/SQLite zámky, původní kontrola credentials a přesný pre-dispatch
+retry. **Reject:** druhý writer, zvýšení timeoutů/workerů a automatické
+opakování neurčitého zápisu. Rozsah a recovery:
+[IDE discovery ownership](docs/http-concurrency-ownership.md#ide-connection-discovery-contention).
+
 Aktuální nástroje a čtení při synchronizaci **adaptují** existující Git
 snapshot, `Workspace.attach`, původní journal owner, reporting validátory,
 čistou funkci `pinned`, blokový editor a poolový read-only export. **Reuse:**

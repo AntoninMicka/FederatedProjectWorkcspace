@@ -990,6 +990,9 @@ passed. The full repository suite and live Omnia acceptance have not run.
 
 ## IDE bridge and queue handoff ownership
 
+The later [discovery contention correction](#ide-connection-discovery-contention)
+narrows the shared HTTP owner described in this original audit.
+
 Continuation from `2ab0f0b` on the existing branch, under the explicit source
 continuation authorization. The bridge export remains stale/connection refused;
 no Workspace planning state, acceptance or real-profile connection is changed.
@@ -1458,3 +1461,67 @@ not enter content preparation/publication. Actual changed-data validation can
 still compete with UI for CPU and native publication locks; this change does
 not claim to finish UI read isolation or eliminate other catalog/replication
 scheduler traffic.
+
+## IDE connection discovery contention
+
+The reported ordinary-operation collisions included connection exchanges lasting
+191–377 ms and task-queue operations lasting 708–2762 ms, against the existing
+100 ms HTTP admission wait. The connection route multiplexes discovery, update
+checks and mutations; classifying its entire path as one writer domain prevents
+discovery from progressing during unrelated queue work.
+
+Only `status` and `extension-update` actions on the exact connection exchange
+route now use independent `ide_status` and `ide_update` owners. Each remains
+serialized within its own domain. The browser uses the same action table.
+All other actions, legacy exchanges, mapping, binding, receipt processing,
+review and queue publication retain the original `ide_queue` owner. Malformed
+status/update requests still fail their native exact-field validation; choosing
+an action does not grant another action's authority.
+
+Ownership audit: discovery uses request-local `Projects` handles, committed
+catalog metadata, the existing validated plan projection, and fresh bridge
+SQLite connections. It does not replace shared server services or write queue
+selection, mappings, messages or packets. `plan_view` replaces the full project
+open, avoiding history, artifact lists, local draft and conflict-status work.
+It still validates privacy, index/HEAD and replication policy. Project reads
+can initialize/rebuild the local index under their existing native owner;
+these are not lock-free reads. Pending-operation discovery keeps its previous
+fallback. Mapping use and writes revalidate at their original boundaries.
+Update checks read the extension manifest/package and have no queue side effect.
+Credential/account checks before admission and credential revalidation before
+dispatch are unchanged for both actions.
+
+The extension additionally has one FIFO transport per connection (or legacy
+session) within its process. Sidebar, synchronization and updater calls retain
+ownership through response EOF and the existing exact pre-dispatch retries.
+There are at most 32 retained entries per identity. A queued request expires
+after five seconds without dispatch; a started request keeps the existing HTTP
+timeout and uncertain-outcome behavior. Failure releases the next entry.
+Timed-out entries remain counted until drained, preventing unbounded tombstones.
+This FIFO does not coordinate separate IDE processes/windows; backend owners
+remain authoritative. No new retry or HTTP worker/admission timeout is added.
+
+Crash boundaries and recovery remain ADR 0060/0062: no persistent format or
+writer changes. Before dispatch a queued request has no durable effect; a
+process crash discards this ephemeral queue. After dispatch the original
+receipt, immutable bytes and operation ID govern recovery. Index rebuild stays
+under the project journal/index ownership and is recoverable from HEAD; bridge
+SQLite initialization/transactions retain their native locking. Native busy,
+revocation, pending human review and unknown operation outcomes are not hidden.
+
+Verification covers real HTTP discovery/update during a paused task-queue
+handler, rejection of invalid credentials, continued serialization of binding,
+and browser action admission while a queue response remains open. Node transport
+checks cover EOF ownership, independent connections, bounded capacity, rejection
+recovery and non-dispatch of expired entries. Ordinary live-profile operation,
+multiple IDE processes and Omnia deployment remain separate acceptance steps;
+contention while a native project/SQLite owner is actually held can still fail
+with the existing typed busy outcome.
+
+Results: the 168-test IDE bridge/panel, task-queue, local/web HTTP and browser
+selection passed (10 optional skips). The newly added browser action-admission
+test also passed separately after that selection started. All 10 Node transport
+tests passed with local sockets and Git subprocesses permitted; this overlaps
+the Python transport wrapper and is not an additional unique aggregate.
+Compilation and `git diff --check` passed. The full repository suite and live
+IDE/Omnia acceptance have not run for this correction.

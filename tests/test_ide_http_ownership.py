@@ -84,6 +84,45 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
         with self.service.database() as db:
             self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 5000)
 
+    def test_connection_discovery_and_updater_progress_during_queue_processing(self):
+        entered, release = threading.Event(), threading.Event()
+        original = TaskQueue.execute
+        results = []
+        def blocked(queue, *args, **kwargs):
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError('Queue owner not released')
+            return original(queue, *args, **kwargs)
+        route = '/v1/ide-bridge/connection/exchange'
+        token = self.f.created['pairing']['token']
+        def request(action, **extra):
+            return dict(connection_id=self.record['connection_id'], action=action, **extra)
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            server.ide_bridge_service = self.service
+            with patch.object(TaskQueue, 'execute', blocked), \
+                 patch.object(self.service.projects, 'open', side_effect=AssertionError('Full project discovery')):
+                worker = threading.Thread(target=lambda: results.append(self.post(
+                    server, '/v1/task-queue', {'project_id': self.pid, 'action': 'status'})))
+                worker.start()
+                try:
+                    self.assertTrue(entered.wait(2))
+                    self.assertEqual(self.post(server, route, request('status'), token='invalid')[0], 401)
+                    code, catalog, _ = self.post(server, route, request('status'), token=token)
+                    self.assertEqual(code, 200, catalog)
+                    self.assertIn(self.pid, [p['project_id'] for p in catalog['projects']])
+                    code, update, _ = self.post(server, route,
+                        request('extension-update', download=False), token=token)
+                    self.assertEqual(code, 200, update)
+                    self.assertIn('version', update)
+                    # Binding still shares the publication/review owner.
+                    code, busy, _ = self.post(server, route, request('bind'), token=token)
+                    self.assertEqual(code, 503, busy)
+                    self.assertEqual(busy['outcome'], 'not-started')
+                finally:
+                    release.set(); worker.join(10)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(results[0][0], 200, results)
+
     def test_native_queue_collision_is_http_unknown_and_preserves_selection(self):
         current = self.queue.execute({'project_id': self.pid, 'action': 'status'}, self.owner)
         self.queue.execute({'project_id': self.pid, 'action': 'add', 'task_id': 'TASK-01',
