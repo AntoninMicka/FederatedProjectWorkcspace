@@ -43,14 +43,17 @@ class Artifacts:
             rows = ws._read_locked(db)
             require(rows == sorted((m['id'], m['title']) for m in entities.values()),
                     'Index differs from validated commit')
+            from spikes.artifact_catalog import document_ids
+            visible = document_ids(files, entities)
             docs = []
             for id_, item in entities.items():
+                if id_ not in visible: continue
                 if item['kind'] == 'document' and any(p.startswith(f'artifacts/{id_}/') and p.endswith('.md') for p in files):
                     docs.append(document(files, entities, id_))
             if ws.git.head() != head:
                 raise StaleIndex('Project changed while reading')
             sources = [dict(id=id_, title=item['title']) for id_, item in entities.items()
-                       if item['kind'] == 'source']
+                       if item['kind'] == 'source' and id_ in visible]
             return dict(id=project_id, title=meta['title'], commit_id=head, documents=docs, sources=sources,
                         main_todo_id=main_todo_id(project_id))
 

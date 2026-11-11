@@ -90,7 +90,7 @@ class Projects:
                 rows.append(row)
         return rows
 
-    def workspace(self, project_id, *, blocking=True, deadline=None, for_read=False):
+    def workspace(self, project_id, *, blocking=True, deadline=None, for_read=False, for_snapshot=False):
         binding = next((b for b in self._bindings() if b['project_id'] == project_id), None)
         require(binding is not None, 'Project is not registered')
         root = directory(binding['root'])
@@ -116,6 +116,13 @@ class Projects:
                     self.node_path, deployment='web' if self.network else 'desktop')
                 if service.repo.exists():
                     service.assert_project_writable(project_id)
+        if for_snapshot:
+            workspace = Workspace.attach(root, state, blocking=False, deadline=deadline)
+            def refuse_snapshot_write():
+                raise PermissionError('Committed snapshot reader cannot write')
+            workspace.write_guard = refuse_snapshot_write
+            workspace.snapshot_read_only = True
+            return workspace
         factory = Workspace.open_for_read if for_read else Workspace
         return factory(root, state, blocking=blocking, deadline=deadline,
                        write_guard=write_guard)

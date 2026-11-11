@@ -3768,7 +3768,7 @@ function toggleToolOptions(button,panel,otherButton,otherPanel){
 const sidebarNewTool=document.querySelector('#sidebar-new-tool'),sidebarImportTool=document.querySelector('#sidebar-import-tool');
 const sidebarToolNewOptions=document.querySelector('#sidebar-tool-new-options'),sidebarToolImportOptions=document.querySelector('#sidebar-tool-import-options');
 sidebarNewTool.addEventListener('click',()=>toggleToolOptions(sidebarNewTool,sidebarToolNewOptions,sidebarImportTool,sidebarToolImportOptions));
-sidebarToolNewOptions.addEventListener('click',async event=>{const button=event.target.closest('[data-new-monitoring-block]');if(button&&!button.disabled)await createMonitoringTool(button.dataset.newMonitoringBlock);else if(event.target.closest('#monitoring-new,#monitoring-workflow-new')){sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');}});
+sidebarToolNewOptions.addEventListener('click',async event=>{const button=event.target.closest('[data-new-monitoring-block]');if(button&&!button.disabled)await createMonitoringTool(button.dataset.newMonitoringBlock);});
 sidebarImportTool.addEventListener('click',()=>toggleToolOptions(sidebarImportTool,sidebarToolImportOptions,sidebarNewTool,sidebarToolNewOptions));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!sidebarToolNewOptions.hidden){sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');sidebarNewTool.focus();}});
 document.querySelector('#julia-editor-new').addEventListener('click',()=>{sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');openJuliaEditor(true);});
@@ -8707,7 +8707,14 @@ class DesktopHandler(Handler):
             try:
                 if not isinstance(request,dict) or 'project_id' not in request:return self.send_error(400)
                 action=self.path.rsplit('/',1)[-1];pid=request['project_id']
-                monitoring_snapshot=service._data(pid,network=getattr(self.server.projects,'network',False))
+                network=getattr(self.server.projects,'network',False)
+                if action=='view' and set(request)=={'project_id','mode'} and request['mode']=='blocks':
+                    result=service.current_view(pid,network=network)
+                    result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    result['block_catalog']['can_manage']=result['can_manage']
+                    return self.reply(200,result)
+                monitoring_snapshot=service._data(pid,network=network,
+                    **({'read_only':True} if action in {'blocks','output','pool-view'} else {}))
                 if action=='migration-inventory' and set(request)=={'project_id'}:
                     from spikes.monitoring_migration import MonitoringMigration
                     return self.reply(200,MonitoringMigration(service).inventory(pid))
@@ -8814,6 +8821,11 @@ class DesktopHandler(Handler):
                     result=service.retry(pid,request['run_id'],request['confirm']) if action=='retry' else service.scheduler.cancel(request['run_id'],confirm=request['confirm'])
                 else:return self.send_error(400)
                 return self.reply(200,result)
+            except StaleIndex:
+                reading=action in {'view','blocks','output','pool-view','definitions','rss-status'}
+                return self.reply(503 if reading else 409,
+                    {'error':'Projekt se během operace změnil; obnovte přehled.',
+                     'outcome':'unknown','retry':'read-again' if reading else 'review-operation'})
             except (ValueError,KeyError,OSError,sqlite3.Error,subprocess.SubprocessError,PendingOperation,BackendUnknown,BackendResponseError) as exc:
                 return self.reply(422,{'error':str(exc)})
         if self.path.startswith('/v1/ide-bridge/'):

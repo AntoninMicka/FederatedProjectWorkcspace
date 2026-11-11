@@ -11,13 +11,22 @@ class ToolSidebarTests(unittest.TestCase):
     def test_one_tree_and_creation_menu_reuse_all_existing_editor_ids(self):
         sidebar=HTML.split('id="sidebar-tools"',1)[1].split('id="sidebar-presentations"',1)[0]
         self.assertIn('id="sidebar-tools-tree"',sidebar)
-        for kind in ('julia','source','filter','pool','processing','task','legacy'):
+        for kind in ('julia','source','filter','pool','processing','task'):
             self.assertIn('data-tool-category="'+kind+'"',sidebar)
         for kind in ('source','filter','pool','processing','task','compose'):
             self.assertEqual(sidebar.count('data-new-monitoring-block="'+kind+'"'),1)
-        for id_ in ('julia-editor-new','monitoring-new','monitoring-workflow-new','sidebar-monitoring-new'):
+        for id_ in ('julia-editor-new','sidebar-monitoring-new'):
             self.assertEqual(HTML.count('id="'+id_+'"'),1)
             self.assertIn('id="'+id_+'"',sidebar)
+
+    def test_legacy_watch_variants_are_absent_from_ui(self):
+        from spikes.desktop_ui import JS
+        for id_ in ('monitoring-new','monitoring-workflow-new','monitoring-form',
+                    'monitoring-workflow-form','sidebar-legacy-monitoring-list','monitoring-migration-open'):
+            self.assertNotIn('id="'+id_+'"',HTML)
+        self.assertNotIn('Starší sledování',HTML)
+        self.assertNotIn('editMonitoringWorkflow',JS)
+        self.assertNotIn('showMonitoringWatch',JS)
 
     @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
     def test_new_actions_preserve_leave_permission_and_project_guards(self):

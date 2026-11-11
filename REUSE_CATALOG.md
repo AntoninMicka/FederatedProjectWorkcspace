@@ -5,6 +5,17 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Aktuální nástroje a čtení při synchronizaci **adaptují** existující Git
+snapshot, `Workspace.attach`, původní journal owner, reporting validátory,
+čistou funkci `pinned`, blokový editor a poolový read-only export. **Reuse:**
+nativní writer/CAS/recovery, report editions a existující bounded HTTP pool.
+**Reject:** články jako Podklady, dvojí UI varianty, dlouhá validace pod
+writer zámkem, per-blokové znovuotevírání Workspace a navýšení timeoutů.
+Soukromá inventura nedává důvod přebírat externí implementaci. Rozsah,
+crash boundaries a omezení:
+[monitoring read isolation](docs/current-monitoring-read-isolation.md).
+
+
 Změnové otisky automatické synchronizace **adaptují** podepsané katalogové
 požadavky, TLS pinning, původní sync journal a přesný replay. **Reuse:**
 normalizovaný inventář chatů, poolový portable filtr a read-only Git handle.

@@ -46,7 +46,6 @@ async function loadMonitoringBlocks(){
 }
 function renderMonitoringBlocks(){
  if(!blockCatalog)return;
- document.querySelector('#monitoring-migration-open').disabled=blockReadOnly();
  if(!monitoringView?.error)monitoringStatus.textContent=blockCatalog.blocks.filter(b=>b.value.kind==='task').length+' komplexních úloh · '+blockCatalog.blocks.filter(b=>b.value.kind==='source').length+' zdrojů · '+blockCatalog.blocks.filter(b=>b.value.kind==='pool').length+' poolů';
  renderMonitoringToolTree();
  renderReportOutputs();

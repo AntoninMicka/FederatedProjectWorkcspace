@@ -11,9 +11,11 @@ from spikes.monitoring_ui import JS
 @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
 class MonitoringPollingTests(unittest.TestCase):
     def test_hidden_dirty_overlapping_and_stale_project_refreshes(self):
-        code = JS[JS.index('let monitoringLoadSequence='):JS.index('function renderMonitoring()')]
+        code = ('let monitoringLoadSequence=0,monitoringLoads=0;\n'
+                + JS[JS.index('async function loadMonitoring('):JS.index('function renderMonitoring()')]
+                + JS[JS.index('function refreshVisibleMonitoring('):JS.index('function renderPresentationReportLink(')])
         harness = r'''
-let activeProject={id:'one',head:'old'},monitoringView=null,monitoringDirty=false,monitoringAttempt=null;
+let activeProject={id:'one',head:'old'},monitoringView=null,blockCatalog=null;
 let panelVisible=false,calls=[],blocks=0,rendered=0;
 let blockEdit=null,blockProposal=null,blockComposeRun=null,blockSaving=null;
 const document={hidden:false,querySelector:()=>({getClientRects:()=>panelVisible?[{}]:[]})},monitoringStatus={};
@@ -25,8 +27,7 @@ const check=(value,message)=>{if(!value)throw Error(message);};
 (async()=>{
  await refreshVisibleMonitoring();check(calls.length===0,'Hidden panel polled');
  panelVisible=true;document.hidden=true;await refreshVisibleMonitoring();check(!calls.length,'Hidden tab polled');
- document.hidden=false;monitoringDirty=true;await refreshVisibleMonitoring();check(!calls.length,'Dirty editor polled');
- monitoringDirty=false;monitoringAttempt={};await refreshVisibleMonitoring();check(!calls.length,'Pending write polled');monitoringAttempt=null;
+ document.hidden=false;
  for(const set of [v=>blockEdit=v,v=>blockProposal=v,v=>blockComposeRun=v,v=>blockSaving=v]){
  set({});await refreshVisibleMonitoring();check(!calls.length,'Composable editor overwritten');set(null);
  }
@@ -34,8 +35,8 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  await refreshMonitoringAfterSync({detail:{projectId:'one',status:{state:'busy'}}});
  check(!calls.length,'Unrelated or incomplete sync loaded monitoring');
  const first=refreshMonitoringAfterSync({detail:{projectId:'one',status:{state:'idle'}}}),overlap=refreshVisibleMonitoring();
- check(calls.length===1,'Overlapping refresh duplicated HTTP request');calls[0].resolve({commit_id:'new'});
- await Promise.all([first,overlap]);check(activeProject.head==='new'&&blocks===1&&rendered===1,'Refresh result lost');
+ check(calls.length===1,'Overlapping refresh duplicated HTTP request');calls[0].resolve({commit_id:'new',block_catalog:{commit_id:'new'}});
+ await Promise.all([first,overlap]);check(activeProject.head==='new'&&blockCatalog.commit_id==='new'&&blocks===0&&rendered===1,'Refresh result lost');
  const old=loadMonitoring();activeProject={id:'two',head:'two-old'};const current=loadMonitoring();
  calls[1].resolve({commit_id:'wrong'});await old;check(activeProject.head==='two-old','Old project response published');
  calls[2].resolve({commit_id:'two-new'});await current;check(activeProject.head==='two-new','New project response lost');

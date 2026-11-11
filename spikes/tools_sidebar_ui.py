@@ -6,14 +6,13 @@ CATEGORIES = [('julia','Modely a výpočty','sidebar-tool-list'),
               ('filter','Filtry','sidebar-monitoring-filter-list'),
               ('pool','Pooly zpráv','sidebar-monitoring-pool-list'),
               ('processing','Zpracování zpráv','sidebar-monitoring-processing-list'),
-              ('task','Komplexní úlohy','sidebar-monitoring-list'),
-              ('legacy','Starší sledování','sidebar-legacy-monitoring-list')]
+              ('task','Komplexní úlohy','sidebar-monitoring-list')]
 TREE = '<ul id="sidebar-tools-tree" aria-label="Nástroje podle kategorií">'+''.join(
     '<li><details open data-tool-category="'+kind+'"><summary>'+label+'</summary><ul id="'+id_+'" aria-label="'+label+'"></ul></details></li>'
     for kind,label,id_ in CATEGORIES)+'</ul>'
 NEW_ACTIONS = ''.join('<button type="button" role="menuitem" data-new-monitoring-block="'+kind+'"'+(' id="sidebar-monitoring-new"' if kind=='task' else '')+' disabled>'+label+'</button>'
     for kind,label in [('source','Nový zdroj pro těžbu'),('filter','Nový filtr'),('pool','Nový pool zpráv'),('processing','Nové zpracování zpráv'),('task','Nová komplexní úloha')])
-NEW_ACTIONS += '<button type="button" role="menuitem" data-new-monitoring-block="compose" disabled>Sestavit úlohu pomocí LLM</button><button id="monitoring-workflow-new" type="button" role="menuitem" disabled>Nové starší zadání těžby a zpracování</button><button id="monitoring-new" type="button" role="menuitem" disabled>Nové původní sledování</button>'
+NEW_ACTIONS += '<button type="button" role="menuitem" data-new-monitoring-block="compose" disabled>Sestavit úlohu pomocí LLM</button>'
 CSS='''
 #sidebar-tools{position:relative;overflow:visible}
 #sidebar-tools>.sidebar-tool-options{position:absolute;top:70px;left:0;right:0;width:auto;max-height:min(60vh,420px);overflow-y:auto;z-index:60}
@@ -57,11 +56,6 @@ function renderMonitoringToolTree(){
    list.append(item);
   }
  }
- const legacy=document.querySelector('#sidebar-legacy-monitoring-list');legacy.replaceChildren();
- for(const watch of monitoringView?.watches||[])legacy.append(toolSidebarRow('watch:'+watch.id,watch.name,()=>{monitoringOpen();showMonitoringWatch(watch);},[
-  {label:'Upravit',disabled:!monitoringView.can_manage||activeProject?.readOnly,run:async()=>{if(!await canLeaveWorkspaceEditors())return;monitoringOpen();editMonitoring(watch);}},
-  {label:'Smazat',disabled:!monitoringView.can_manage||activeProject?.readOnly,run:()=>deleteLegacyTool('watch',watch.id,watch.name)}]));
- for(const row of monitoringView?.definitions||[])legacy.append(toolSidebarRow('definition:'+row.watch_id,row.definition.title,()=>{monitoringOpen();showMonitoringDefinition(row);},[{label:'Smazat',disabled:!monitoringView.can_manage||activeProject?.readOnly,run:()=>deleteLegacyTool('definition',row.watch_id,row.definition.title)}]));
  document.querySelector('#julia-editor-new').disabled=!activeProject||Boolean(activeProject.readOnly);
  const readonly=!activeProject||activeProject.readOnly||!monitoringView?.can_manage||!blockCatalog;
  for(const button of document.querySelectorAll('[data-new-monitoring-block]'))button.disabled=Boolean(readonly);
@@ -94,21 +88,5 @@ async function deleteMonitoringTool(row){
   blockSelectedId=null;selectedToolKey=null;await loadMonitoring();
   blockStatus('Položka byla odstraněna z aktuálního katalogu. Historie zůstala zachována.');
  }catch(error){if(activeProject?.id===pid)blockStatus(error.message);}
-}
-let legacyDeleteAttempt=null;
-async function deleteLegacyTool(kind,id,title){
- if(!activeProject||activeProject.readOnly||!monitoringView?.can_manage||!await canLeaveWorkspaceEditors())return;
- const pid=activeProject.id,key=pid+':'+kind+':'+id;monitoringOpen();
- try{
-  if(legacyDeleteAttempt?.key!==key){
-   const preview=await monitoringRequest('legacy-delete-preview',{kind,id});
-   if(activeProject?.id!==pid)return;
-   if(preview.blockers.length){monitoringStatus.textContent='Nelze smazat: '+preview.blockers.join('; ');return;}
-   legacyDeleteAttempt={key,payload:{base_head:preview.base_head,sources:preview.sources,operation_id:crypto.randomUUID(),confirm:true}};
-  }
-  if(!window.confirm('Smazat starší úlohu „'+title+'“ z katalogu a dalšího plánování? Původní definice, historie běhů a vydané zprávy zůstanou zachované.'))return;
-  await monitoringRequest('legacy-delete',legacyDeleteAttempt.payload);legacyDeleteAttempt=null;
-  if(activeProject?.id===pid){selectedToolKey=null;document.querySelector('#monitoring-detail').replaceChildren();await loadMonitoring();monitoringStatus.textContent='Úloha byla vyřazena; historie zůstala zachována.';}
- }catch(error){if(activeProject?.id===pid)monitoringStatus.textContent=error.message;}
 }
 '''

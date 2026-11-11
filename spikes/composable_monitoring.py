@@ -37,9 +37,9 @@ class ComposableMonitoring:
             yield True
         finally: os.close(fd)
 
-    def catalog(self, pid):
-        result = self.blocks.read(pid)
-        with self.pools.db() as db:
+    def catalog(self, pid, *, _snapshot=None):
+        result = self.blocks.read(pid, _snapshot=_snapshot)
+        with self.pools.read_db() as db:
             bindings = {r[0]: json.loads(r[1]) for r in db.execute(
                 'SELECT source,document FROM block_bindings WHERE project=?', (pid,))}
             jobs = [dict(id=r[0], state=r[1], intent=json.loads(r[2]),
@@ -52,7 +52,7 @@ class ComposableMonitoring:
             b['runtime'] = dict(binding) if binding else None
             if b['runtime']: b['runtime'].pop('validators', None)
             if b['value']['kind'] == 'pool':
-                b['message_count'] = len(self.pools.view(pid, b['id']))
+                b['message_count'] = len(self.pools.view(pid, b['id'],read_only=True))
                 b['last_received_sync'] = next((j['intent'].get('received_at') for j in jobs
                     if j['intent'].get('kind') == 'pool-sync' and b['id'] in j['intent'].get('pool_ids', [])), None)
             b['run_count'] = sum(j['intent'].get('block', {}).get('id') == b['id'] for j in jobs)
@@ -150,14 +150,18 @@ class ComposableMonitoring:
     def tick(self, pid, *, checkpoint=lambda stage: None):
         with self.locked() as acquired:
             if not acquired: return
-            catalog = self.blocks.read(pid); by_id = {b['id']: b for b in catalog['blocks']}
-            self.monitoring._writable(pid)
             with self.pools.db() as db:
                 self.pools._cleanup(db, pid)
                 # No other worker owns a dispatch after acquiring the process lock.
                 db.execute("UPDATE block_jobs SET state='unknown' WHERE project=? AND state='dispatching'", (pid,))
                 bindings = [(r[0], json.loads(r[1])) for r in db.execute(
                     'SELECT source,document FROM block_bindings WHERE project=?', (pid,))]
+            # Processing bindings have no intake consent. Due RSS bindings are
+            # reauthorized against current Git before any network effect.
+            if not any(binding['enabled'] and (binding.get('consent') is None or
+                       binding.get('next_due',0)<=self.clock()) for _,binding in bindings): return
+            catalog = self.blocks.read(pid); by_id = {b['id']: b for b in catalog['blocks']}
+            self.monitoring._writable(pid)
             for id_, binding in bindings:
                 approved_binding = deepcopy(binding)
                 source = by_id.get(id_)

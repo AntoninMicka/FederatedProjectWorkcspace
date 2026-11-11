@@ -325,6 +325,8 @@ class Workspace:
         return record
 
     def recover(self, checkpoint=lambda stage: None):
+        if getattr(self, 'snapshot_read_only', False):
+            raise PermissionError('Committed snapshot reader cannot recover writes')
         with self.journal.lock(), self.journal.connect() as db:
             record = self._active(db)
             if record is None:
@@ -363,6 +365,29 @@ class Workspace:
                 raise StaleIndex('Project changed while reading index')
             self.index.rebuild(self.git)
             return query(self.git)
+
+    def snapshot_checkpoint(self, expected_head=None):
+        """Short ownership check; no initialization, recovery or index rebuild."""
+        with self.journal.lock(), self.journal.connect() as db:
+            require(db.execute('SELECT root FROM owner').fetchall() == [(str(self.git.root),)],
+                    'Journal belongs to another project')
+            if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+                raise PendingOperation('Project has an unfinished operation')
+            head = self.git.head()
+            if expected_head is not None and head != expected_head:
+                raise StaleIndex('Project changed while reading committed snapshot')
+            return head
+
+    def committed_snapshot(self, project_id, *, network=False):
+        """Validate immutable Git outside writer ownership, then verify freshness."""
+        head = self.snapshot_checkpoint()
+        committed_project(self.git, head, project_id)
+        files = self.git.snapshot(head)
+        entities = validate_snapshot(files)
+        require(not network or all(m['privacy'] != 'local-only' for m in entities.values()),
+                'Project contains local-only data')
+        self.snapshot_checkpoint(head)
+        return head, files, entities
 
     def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False, plan_only=False, dashboard_only=False):
         """Return one committed project view under the shared writer lock."""
@@ -453,7 +478,8 @@ class Workspace:
                     history.append(dict(commit_id=revision, date=date, author=author, subject=subject))
             if self.git.head() != commit:
                 raise StaleIndex('HEAD changed while opening project; retry')
-            artifact_ids = {path.split('/')[1] for path in files if path.startswith('artifacts/')}
+            from spikes.artifact_catalog import document_ids
+            artifact_ids = document_ids(files, entities)
             result = dict(id=project_id, title=meta['title'],
                         description=meta.get('description', ''), commit_id=commit,
                         main_todo_id=main_todo_id(project_id), main_todo=todo, plan=plan,

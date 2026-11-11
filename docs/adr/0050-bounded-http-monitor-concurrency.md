@@ -596,3 +596,25 @@ HTTP požadavek zůstává synchronní; procesní kapacita se nezaměňuje s pro
 journalem ani s oprávněním publikace. Worker nemůže publikovat, rodič jej při
 timeoutu ukončí včetně Git potomků. Git budget se nenavyšuje.
 Kontrakt, recovery a měření: [ověřování historie](../history-validation-worker.md).
+
+## Čtení aktuálních nástrojů a společný writer (11. 11. 2026)
+
+Doložená kolize `monitoring/view` s příjmem na `project-journal` ukázala další
+sdílené vlastnictví pod HTTP linkami. Aktuální blokový přehled proto používá
+jeden validovaný Git snapshot: krátké checkpointy journal owner/pending/HEAD
+obklopují čtení a reporting validaci mimo projektový writer. Čtecí handle
+neumí publikovat ani obnovovat zápisy, neinicializuje index a nereprezentuje
+starou SQLite projekci jako aktuální Git data. Finální checkpoint odmítne
+změněný HEAD i rozpracovaný zápis; původní CAS/journal recovery se nemění.
+
+Per-blokové znovuotevírání Workspace/pinování nahrazuje čisté vytvoření pinů
+z téhož snapshotu. Aktuální UI neprovádí starý monitoring dashboard ani
+legacy autoscheduling; klidový blokový worker nevstupuje do Git/writeru.
+Read-only poolový katalog neprovádí cleanup. Kontrola obsahových otisků peeru
+má samostatnou bounded linku `peer_state`, oddělenou od příjmu katalogu.
+Kapacita worker poolu a timeouty se nenavyšují.
+
+Přesný rozsah, zachování historických dat, crash boundaries a ověření:
+[aktuální monitoring a čtení](../current-monitoring-read-isolation.md).
+Toto rozhodnutí neprohlašuje všechny zbývající UI/publikační cesty za
+izolované ani nedokládá fyzickou akceptaci Omnie.

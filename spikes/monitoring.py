@@ -109,7 +109,11 @@ class Monitoring:
                     self._composable_runtime = ComposableMonitoring(self)
         return self._composable_runtime
 
-    def _data(self,pid,*,network=False):
+    def _data(self,pid,*,network=False,read_only=False):
+        if read_only:
+            ws=self.projects.workspace(pid,for_snapshot=True)
+            head,files,entities=ws.committed_snapshot(pid,network=network)
+            return ws,head,files,entities,records(files,entities)
         ws=self.projects.workspace(pid,blocking=True);head=ws.git.head()
         files=ws.git.snapshot(head);entities=validate_snapshot(files)
         require(not network or all(m['privacy']!='local-only' for m in entities.values()),'Projekt obsahuje local-only data.')
@@ -606,6 +610,23 @@ class Monitoring:
         except (OSError,ValueError) as exc:
             return dict(nodes=nodes,error='Seznam federovaných uzlů není dostupný: '+str(exc))
 
+    def current_view(self, pid, *, network=False):
+        """One committed snapshot for current tools and report editions."""
+        from spikes.report_outputs import published_outputs
+        from spikes.monitoring_placement import local_node_id
+        reporting = Reporting(self.node)
+        data, files, entities = reporting.read_snapshot(pid, read_only=True)
+        require(not network or all(m['privacy']!='local-only' for m in entities.values()),
+                'Projekt obsahuje local-only data.')
+        head = data['commit_id']
+        catalog = self.composable.catalog(pid, _snapshot=(data, files, entities))
+        result = dict(project_id=pid, commit_id=head, node_id=local_node_id(self.node),
+                      outputs=published_outputs(pid, head, files, entities,
+                                                {r['revision_id']:r for r in data['records']}),
+                      reports=[], block_catalog=catalog, error=self.last_errors.get(pid))
+        self.projects.workspace(pid,for_snapshot=True).snapshot_checkpoint(head)
+        return result
+
     def view(self,pid,*,network=False):
         ws,head,files,entities,rs=self._data(pid,network=network);watches=self.watches(files,entities)
         reports=[]
@@ -652,11 +673,26 @@ class Monitoring:
                     if m.get('file') and not files['artifacts/'+id_+'/'+m['file']].startswith(MARKER.encode())],
             profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self.last_errors.get(pid) or self.last_errors.get('runtime'))
 
+    def tick_blocks(self):
+        """The live scheduler executes only the current composable model."""
+        from spikes.request_ownership import bounded_project_requests
+        if not self.node.exists() or not self.lock.acquire(blocking=False): return
+        try:
+            with bounded_project_requests():
+                for project in self.projects._bindings():
+                    pid=project['project_id']
+                    try:
+                        self.composable.tick(pid)
+                        self.last_errors.pop(pid,None)
+                    except Exception as exc:
+                        self.last_errors[pid]=str(exc)[:500]
+        finally: self.lock.release()
+
     def start(self):
         if self.thread:return
         def loop():
             while not self.stop_event.wait(10):
-                try:self.tick()
+                try:self.tick_blocks()
                 except Exception as exc:self.last_errors['runtime']=str(exc)[:500]
         self.thread=threading.Thread(target=loop,name='workspace-monitoring',daemon=True);self.thread.start()
 

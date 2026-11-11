@@ -42,25 +42,26 @@ class Reporting:
         self.node_path = node_path
         self.artifacts = Artifacts(node_path)
 
+    def read_snapshot(self, project_id, *, read_only=False):
+        if read_only:
+            ws = self.artifacts.projects.workspace(project_id, for_snapshot=True)
+        else:
+            ws = self.artifacts.workspace(project_id)
+            ws.recover()
+        head, files, entities = ws.committed_snapshot(project_id)
+        # Historical pin validation can be expensive; never retain the journal
+        # across it. The final checkpoint rejects both writes and new HEADs.
+        validate_git(ws.git, files, entities)
+        result = records(files, entities)
+        parents = {p['artifact_id'] for record in result.values() for p in record['previous']}
+        ws.snapshot_checkpoint(head)
+        return (dict(project_id=project_id, commit_id=head, records=list(result.values()),
+                     tips=[id_ for id_ in result if id_ not in parents],
+                     deduplication={id_: canonical_events(r) for id_, r in result.items()
+                                    if r['type'] == 'Story' and id_ not in parents}), files, entities)
+
     def read(self, project_id):
-        ws = self.artifacts.workspace(project_id)
-        # Explicit local read is a recovery entrypoint, like Artifacts.open.
-        ws.recover()
-        with ws.journal.lock(), ws.journal.connect() as db:
-            head = ws.git.head()
-            committed_project(ws.git, head, project_id)
-            files = ws.git.snapshot(head)
-            entities = validate_snapshot(files)
-            ws._read_locked(db, expected_head=head)
-            validate_git(ws.git, files, entities)
-            result = records(files, entities)
-            parents = {p['artifact_id'] for record in result.values() for p in record['previous']}
-            if ws.git.head() != head:
-                raise StaleIndex('Project changed while reading reporting records')
-            return dict(project_id=project_id, commit_id=head, records=list(result.values()),
-                        tips=[id_ for id_ in result if id_ not in parents],
-                        deduplication={id_: canonical_events(r) for id_, r in result.items()
-                                       if r['type'] == 'Story' and id_ not in parents})
+        return self.read_snapshot(project_id)[0]
 
     def pin(self, project_id, artifact_id, commit_id=None):
         ws = self.artifacts.workspace(project_id)

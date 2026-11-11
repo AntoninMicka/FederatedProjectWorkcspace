@@ -112,6 +112,20 @@ class MessagePools:
                 self._validate_tables(db)
             yield db
 
+    @contextmanager
+    def read_db(self):
+        info = self.path.lstat()
+        require(self.path.resolve()==self.path and stat.S_ISREG(info.st_mode)
+                and info.st_uid==os.getuid() and info.st_nlink==1
+                and stat.S_IMODE(info.st_mode)==0o600, 'Unsafe pool database')
+        with sqlite_connection(self.path.as_uri()+'?mode=ro',uri=True,timeout=.1,
+                               resource='Message pools') as db:
+            db.execute('BEGIN')
+            require(db.execute('SELECT version,node FROM pool_schema').fetchall()==
+                    [(1,self.scheduler.owner[0])], 'Unknown pool schema or owner')
+            self._validate_tables(db)
+            yield db
+
     @staticmethod
     def _validate_tables(db):
         expected = {'pool_schema': ['version','node'],
@@ -200,7 +214,7 @@ class MessagePools:
         return rows
 
     @classmethod
-    def export_readonly(cls, node, project_id, *, clock=time.time):
+    def export_readonly(cls, node, project_id, *, clock=time.time, transferable=True):
         """Portable retained rows without scheduler creation, cleanup or write locks."""
         from contextlib import closing
         from spikes.configuration import parse_node, read_config
@@ -225,11 +239,13 @@ class MessagePools:
             cls._validate_tables(db)
             rows = [json.loads(row[0]) for row in db.execute(
                 'SELECT document FROM pool_entries WHERE project=? ORDER BY id', (project_id,))]
-        return cls._transferable(cls._retained(rows, clock()))
+        rows = cls._retained(rows, clock())
+        return cls._transferable(rows) if transferable else rows
 
-    def view(self, project_id, pool_id, *, since=None):
+    def view(self, project_id, pool_id, *, since=None, read_only=False):
         uuid(pool_id)
-        rows = self.export(project_id); by_id = {r['id']: r for r in rows}; grouped = {}
+        rows = (self.export_readonly(self.scheduler.node, project_id,clock=self.clock,transferable=False)
+                if read_only else self.export(project_id)); by_id = {r['id']: r for r in rows}; grouped = {}
         for row in rows:
             if row['kind'] != 'membership' or row['value']['pool_id'] != pool_id: continue
             v = row['value']; item = by_id[v['item_entry']]['value']['item']

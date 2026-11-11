@@ -17,6 +17,25 @@ class MonitoringHTTPTests(unittest.TestCase):
     def call(self,action,body,headers=None):
         return self.f.request(path='/v1/monitoring/'+action,body=json.dumps(dict(project_id=self.pid,**body)),headers=headers)
 
+    def test_current_view_returns_one_catalog_without_loading_legacy_view(self):
+        from unittest.mock import patch
+        with patch.object(self.f.server.monitoring,'view',side_effect=AssertionError('legacy view')), \
+             patch.object(self.f.server.monitoring,'_data',side_effect=AssertionError('duplicate snapshot')):
+            code,raw,_=self.call('view',dict(mode='blocks'))
+        self.assertEqual(code,200,raw)
+        view=json.loads(raw)
+        self.assertEqual(view['commit_id'],view['block_catalog']['commit_id'])
+        self.assertEqual(view['can_manage'],view['block_catalog']['can_manage'])
+        self.assertNotIn('watches',view);self.assertNotIn('definitions',view)
+
+    def test_stale_current_view_is_a_retryable_read_response(self):
+        from unittest.mock import patch
+        from spikes.storage import StaleIndex
+        with patch.object(self.f.server.monitoring,'current_view',side_effect=StaleIndex):
+            code,raw,_=self.call('view',dict(mode='blocks'))
+        self.assertEqual(code,503,raw)
+        self.assertEqual(json.loads(raw)['retry'],'read-again')
+
     def test_composable_blocks_pool_and_review_use_authenticated_http(self):
         from tests.test_monitoring_blocks import blocks, response
         from spikes.reporting_schema import encoded

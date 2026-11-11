@@ -123,8 +123,10 @@ class MonitoringBlocks:
         from spikes.reporting import Reporting
         self.reporting = Reporting(node)
 
-    def read(self, project_id):
-        data = self.reporting.read(project_id)
+    def read(self, project_id, *, _snapshot=None):
+        from spikes.reporting import pinned
+        data, files, entities = (_snapshot if _snapshot is not None else
+                                self.reporting.read_snapshot(project_id, read_only=True))
         tips = validate_blocks({r['revision_id']: r for r in data['records']})
         rows = []
         for id_, row in tips.items():
@@ -134,7 +136,7 @@ class MonitoringBlocks:
                 if r['value']['kind'] == 'task' and id_ in dependency_closure(i, tips):
                     tasks.append(i)
             rows.append(dict(id=id_, privacy=row['privacy'], value=deepcopy(row['value']),
-                ref=self.reporting.pin(project_id, row['revision_id'], data['commit_id']),
+                ref=pinned(project_id, data['commit_id'], row['revision_id'], files, entities),
                 used_by=sorted(set(direct+tasks)), tasks=sorted(tasks),
                 resolved_ids=dependency_closure(id_, tips)))
         return dict(project_id=project_id, commit_id=data['commit_id'], blocks=rows)
