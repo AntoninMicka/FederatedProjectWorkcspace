@@ -49,10 +49,7 @@ function renderMonitoringBlocks(){
  document.querySelector('#monitoring-migration-open').disabled=blockReadOnly();
  if(!monitoringView?.error)monitoringStatus.textContent=blockCatalog.blocks.filter(b=>b.value.kind==='task').length+' komplexních úloh · '+blockCatalog.blocks.filter(b=>b.value.kind==='source').length+' zdrojů · '+blockCatalog.blocks.filter(b=>b.value.kind==='pool').length+' poolů';
  renderMonitoringToolTree();
- const reportList=document.querySelector('#sidebar-report-list');reportList.querySelectorAll('[data-composable-report]').forEach(e=>e.remove());
- for(const job of blockCatalog.jobs.filter(j=>j.state==='published'&&j.intent.kind==='processing')){
-  const li=document.createElement('li');li.dataset.composableReport=job.id;li.append(monitoringButton(job.intent.block.value.title,async()=>{if(!await canLeaveMonitoringBlocks())return;monitoringOpen('outputs');blockTab='runs';renderMonitoringBlocks();}));reportList.append(li);
- }
+ renderReportOutputs();
  const tabs=document.querySelector('#monitoring-block-tabs');tabs.replaceChildren();
  for(const [kind,label] of Object.entries(blockLabels)){
   const count=kind==='runs'?blockCatalog.jobs.filter(j=>j.intent.kind!=='intake').length:blockRows().filter(b=>b.value.kind===kind).length;

@@ -67,6 +67,29 @@ class MonitoringHTTPTests(unittest.TestCase):
         self.assertEqual(self.call('legacy-delete',dict(body,confirm=True))[0],200)
         self.assertEqual(len(json.loads(self.call('definitions',{})[1])['definitions']),1)
 
+    def test_concrete_output_content_is_head_bound_and_readable_without_write_permission(self):
+        from tests.test_monitoring_blocks import blocks
+        node=self.f.root/'node.json';specs=blocks(node)
+        head=json.loads(self.call('blocks',{})[1])['commit_id']
+        self.assertEqual(self.call('blocks-save',dict(base_head=head,blocks=specs,operation_id=str(uuid4())))[0],200)
+        code,raw,_=self.call('block-process',dict(block_id=specs[3]['id'],run_id=str(uuid4())))
+        self.assertEqual(code,200,raw);run=json.loads(raw)
+        self.assertEqual(self.call('block-publish',dict(run_id=run['id'],approval_digest=run['result']['approval_digest'],confirm=True))[0],200)
+        view=json.loads(self.call('view',{})[1]);summary=view['outputs'][0]
+        self.assertNotIn('markdown',summary)
+        state=json.loads(self.f.request(path='/v1/administration',body=json.dumps({'action':'list'}))[1])
+        state=json.loads(self.f.request(path='/v1/administration',body=json.dumps(dict(action='create-user',expected_commit=state['commit_id'],name='Output reader',node_role='member')))[1])
+        user=state['users'][-1];key=state['access_key']
+        state=json.loads(self.f.request(path='/v1/administration',body=json.dumps(dict(action='update-user',expected_commit=state['commit_id'],user_id=user['id'],active=True,node_role='member',memberships={self.pid:'reader'})))[1])
+        headers={'Authorization':'Bearer '+key}
+        from unittest.mock import patch
+        with patch.object(self.f.server.monitoring,'_data',wraps=self.f.server.monitoring._data) as reads:
+            code,raw,_=self.call('output',dict(output_id=summary['id'],expected_head=view['commit_id']),headers)
+        self.assertEqual(reads.call_count,1)
+        self.assertEqual(code,200,raw);self.assertIn('markdown',json.loads(raw))
+        self.assertEqual(self.call('output',dict(output_id=summary['id'],expected_head='0'*40),headers)[0],422)
+        self.assertEqual(self.call('output',dict(output_id=summary['id'],expected_head=view['commit_id']),{'Authorization':'Bearer invalid'})[0],401)
+
     def test_one_time_migration_has_readable_preview_and_admin_only_apply(self):
         from tests.test_monitoring_workflow import workflow
         view=json.loads(self.call('view',{})[1])

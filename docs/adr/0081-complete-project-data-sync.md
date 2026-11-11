@@ -182,3 +182,13 @@ Jde o limit fáze, ne celého HTTP requestu či synchronizace; CPU/fsync se běh
 volání preemptivně nepřerušuje. Delší validace vyžaduje budoucí tracked-job návrh,
 ne vynechání kontrol. Důkazy a otevřené hranice viz
 [audit vlastnictví](../http-concurrency-ownership.md).
+
+### Zobrazení přenesených vydání — 11. 11. 2026
+
+Přehled Výstupů čte konkrétní ReportSnapshot/dokument z validovaného Gitu,
+nikoli pouze publikační job místního uzlu. Přijatý dokument proto nevytváří
+kopii vzdáleného journalu ani grant. Nový název a čas sestavení se zmrazí
+v původním kandidátovi/resultu a uloží standardními Git metadaty; Markdown,
+Context Manifest, schválené hashe, privacy a formát přenosu zůstávají zachované.
+Crash recovery používá původní publikační journal, CAS a receipt, bez další
+persistentní vrstvy. Detaily: [konkrétní zprávy](../report-outputs.md).

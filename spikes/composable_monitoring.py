@@ -339,7 +339,9 @@ class ComposableMonitoring:
                     'Create a Czech draft report following this processing definition. Preserve sources, uncertainty and conflicting versions. Do not publish.',
                     expected_head=catalog['commit_id'])
             require(isinstance(body, str) and 0 < len(body.encode()) <= 1024*1024, 'Invalid report draft')
-            result = dict(markdown=body, approval_digest=digest(body.encode()), input_digest=digest(encoded(frozen)))
+            from spikes.report_outputs import output_title
+            built_at=stamp(self.clock())
+            result = dict(output=dict(title=output_title(block['value']['title'],built_at,c['schedule']['timezone']),built_at=built_at),markdown=body, approval_digest=digest(body.encode()), input_digest=digest(encoded(frozen)))
             with self.pools.db() as db:
                 db.execute("UPDATE block_jobs SET state='review',result=? WHERE id=?", (encoded(result), run_id))
             return dict(id=run_id, state='review', result=result)
@@ -454,9 +456,11 @@ class ComposableMonitoring:
         audit = deepcopy(intent)
         audit['pools'] = {pool_id: [dict(key=g['key'], revisions=[dict(revision=r['revision'], item_entry=r['item_entry']) for r in g['revisions']]) for g in groups] for pool_id, groups in intent['pools'].items()}
         audit['searches'] = {id_: digest(encoded(v)) for id_, v in intent['searches'].items()}
+        if result.get('output'):audit.update(built_at=result['output']['built_at'],run_id=run_id)
         body = result['markdown']+'\n\n<!-- Frozen monitoring input references\n'+encoded(audit).decode()+'\n-->\n'
-        ref = self.monitoring._doc(pid, ident(run_id, 'report'), intent['block']['value']['title'], body,
-                                   ident(run_id, 'publish'), intent['block']['privacy'])
+        ref = self.monitoring._doc(pid, ident(run_id, 'report'), result.get('output',{}).get('title',intent['block']['value']['title']), body,
+                                   ident(run_id, 'publish'), intent['block']['privacy'],
+                                   metadata={'tags':['monitoring-output'],'description':'fpw-output-built-at:'+result['output']['built_at']} if result.get('output') else None)
         result['report_ref'] = ref
         with self.pools.db() as db:
             db.execute("UPDATE block_jobs SET state='published',result=? WHERE id=?", (encoded(result), run_id))

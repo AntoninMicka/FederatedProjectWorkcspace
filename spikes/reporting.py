@@ -80,7 +80,7 @@ class Reporting:
 
     def apply(self, request, operation_id, *, confirm=False, checkpoint=lambda stage: None,
               _assistance=None, _validate_only=False, _generation=None, _source_capture=None, _capture_guard=lambda *args:None,
-              _publication_guard=lambda *args:None):
+              _publication_guard=lambda *args:None, _output=None):
         """Store new revisions; request and approval are frozen by transact's digest.
 
         IDs for the revision and Markdown sibling derive from operation_id, so
@@ -97,6 +97,14 @@ class Reporting:
         ws = self.artifacts.workspace(request['project_id'])
         author = ProjectCreation(self.node_path).author_id()
         intent = dict(request, action='manual-reporting-v1', author_id=author, confirmed=confirm)
+        if _output is not None:
+            _output=deepcopy(_output)
+            fields(_output,'title built_at')
+            require(isinstance(_output['title'],str) and 0<len(_output['title'])<=200,'Invalid report output title')
+            from spikes.reporting_schema import moment
+            moment(_output['built_at'])
+            require(len(request['records'])==1 and request['records'][0]['type']=='ReportSnapshot','Output metadata requires one report')
+            intent['output']=deepcopy(_output)
         if _source_capture is not None:intent['source_capture']=deepcopy(_source_capture)
         if _generation is not None:
             intent['generation']=deepcopy(_generation)
@@ -214,7 +222,7 @@ class Reporting:
                     value['generation']['result_sha256'] = digest(markdown)
                     changes[path] = markdown
                     changes[f'artifacts/{md_id}/metadata.json'] = encoded(dict(
-                        schema_version=1, id=md_id, title='Reporting — Markdown', kind='snapshot',
+                        schema_version=1, id=md_id, title=_output['title'] if _output else 'Reporting — Markdown', kind='snapshot',
                         created_at=now, author_id=author, privacy=spec['privacy'], provenance='snapshot', file='report.md'))
                 else:
                     require('markdown' not in spec, 'Markdown belongs to a publication')
@@ -243,10 +251,14 @@ class Reporting:
                 require(id_ not in entities, 'Revision ID already exists')
                 changes[f'artifacts/{id_}/record.json'] = encoded(record)
                 changes[f'artifacts/{id_}/metadata.json'] = encoded(dict(
-                    schema_version=1, id=id_, title=value.get('title', (value['item']['title'] or 'RSS nález')[:180] if spec['type']=='SourceFinding' else spec['type']),
+                    schema_version=1, id=id_, title=_output['title'] if _output and spec['type']=='ReportSnapshot' else value.get('title', (value['item']['title'] or 'RSS nález')[:180] if spec['type']=='SourceFinding' else spec['type']),
                     kind='snapshot' if spec['type'] == 'ReportSnapshot' else 'document', created_at=now,
                     author_id=author, privacy=spec['privacy'],
                     provenance='external' if spec['type']=='SourceFinding' else ('llm-transformed' if assistance else 'user'), file='record.json', tags=[SCHEMA]))
+            if _output is not None:
+                from spikes.report_outputs import BUILT_PREFIX
+                metadata_path=f'artifacts/{operation_uuid(operation_id,"record:0")}/metadata.json'
+                metadata=json.loads(changes[metadata_path]);metadata['description']=BUILT_PREFIX+_output['built_at'];changes[metadata_path]=encoded(metadata)
             return changes, 'Local workspace author', author + '@local.invalid', 'Record manual reporting revisions'
 
         if _validate_only:

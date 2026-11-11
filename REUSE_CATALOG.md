@@ -1554,3 +1554,12 @@ fallback temporarily portals the original content, restoring it before actions.
 **Reject:** overflow-visible lists, z-index-only fixes, cloned action controls,
 a separate menu implementation per feature and orphaned overlays after rerender.
 Verification/reuse details: [Tools menus](docs/tools-sidebar.md#menu-mimo-rámeček-seznamu).
+
+Concrete report editions: **adapt/reuse** validated Git snapshots, existing
+ReportSnapshot/Markdown artifacts, scheduler candidate/result storage, native
+publication receipts, Reporting metadata and shared item menus. Titles freeze
+at assembly; Git-backed summaries and a head-bound lazy reader work without
+copying operational jobs. **Reject:** task shortcuts in place of editions,
+fetching every report body for the list, a second writer/index, re-timestamping
+retries, modifying approved Markdown and guessing missing historical build times.
+Scope/recovery: [Report outputs](docs/report-outputs.md).

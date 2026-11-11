@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.monitoring_ui import HTML as MONITORING_HTML, CSS as MONITORING_CSS, JS as MONITORING_JS
+from spikes.report_outputs_ui import HTML as REPORT_OUTPUT_HTML, CSS as REPORT_OUTPUT_CSS, JS as REPORT_OUTPUT_JS
 from spikes.sidebar_menu_ui import CSS as SIDEBAR_MENU_CSS, JS as SIDEBAR_MENU_JS
 from spikes.tools_sidebar_ui import TREE as TOOL_TREE, NEW_ACTIONS as TOOL_NEW_ACTIONS, CSS as TOOL_TREE_CSS, JS as TOOL_TREE_JS
 from spikes.rss_sources_ui import HTML as SOURCES_HTML, CSS as SOURCES_CSS, JS as SOURCES_JS
@@ -8413,7 +8414,11 @@ HTML = HTML.replace('<ul id="sidebar-tool-list" aria-label="Nástroje projektu">
 HTML = HTML.replace('<button id="julia-editor-new" type="button">Nový Julia model</button>', '<button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button>'+TOOL_NEW_ACTIONS, 1)
 CSS += TOOL_TREE_CSS + SIDEBAR_MENU_CSS
 JS = SIDEBAR_MENU_JS + TOOL_TREE_JS + JS
-HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><h3>Zprávy</h3><ul id="sidebar-report-list"></ul><h3>Prezentace</h3>',1)
+HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><ul id="sidebar-output-tree"><li><details open><summary id="sidebar-report-heading">Zprávy</summary><ul id="sidebar-report-list"></ul></details></li><li><details open><summary>Prezentace</summary>',1)
+HTML = HTML.replace('<ul id="sidebar-presentation-list" aria-label="Prezentace ve výstupech projektu"></ul>', '<ul id="sidebar-presentation-list" aria-label="Prezentace ve výstupech projektu"></ul></details></li></ul>',1)
+HTML = HTML.replace('<main>', '<main>'+REPORT_OUTPUT_HTML,1)
+CSS += REPORT_OUTPUT_CSS
+JS = REPORT_OUTPUT_JS + JS
 HTML = HTML.replace('<button id="presentation-tab"', '<button id="monitoring-tab" role="tab" aria-controls="monitoring-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Sledování a zprávy</button><button id="presentation-tab"',1)
 HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id="outputs-overview-panel"',1)
 CSS += MONITORING_CSS
@@ -8458,7 +8463,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/output','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8701,13 +8706,15 @@ class DesktopHandler(Handler):
             try:
                 if not isinstance(request,dict) or 'project_id' not in request:return self.send_error(400)
                 action=self.path.rsplit('/',1)[-1];pid=request['project_id']
-                service._data(pid,network=getattr(self.server.projects,'network',False))
+                monitoring_snapshot=service._data(pid,network=getattr(self.server.projects,'network',False))
                 if action=='migration-inventory' and set(request)=={'project_id'}:
                     from spikes.monitoring_migration import MonitoringMigration
                     return self.reply(200,MonitoringMigration(service).inventory(pid))
                 if action=='migration-preview' and {'project_id','watch_ids','retention_days','processing_node_id'}<=set(request)<={'project_id','watch_ids','retention_days','processing_node_id','pool_bindings'}:
                     from spikes.monitoring_migration import MonitoringMigration
                     return self.reply(200,MonitoringMigration(service).preview(pid,request['watch_ids'],request['retention_days'],request['processing_node_id'],pool_bindings=request.get('pool_bindings')))
+                if action=='output' and set(request)=={'project_id','output_id','expected_head'}:
+                    return self.reply(200,service.output(pid,request['output_id'],request['expected_head'],_snapshot=monitoring_snapshot))
                 if action=='blocks' and set(request)=={'project_id'}:
                     result=service.composable.catalog(pid)
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)

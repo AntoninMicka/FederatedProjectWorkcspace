@@ -149,11 +149,11 @@ class Monitoring:
         ws=self.projects.workspace(pid,blocking=True);ws.recover()
         return ws.receipt(op)
 
-    def _doc(self,pid,id_,title,body,op,privacy):
+    def _doc(self,pid,id_,title,body,op,privacy,*,metadata=None):
         receipt=self._receipt(pid,op)
         if receipt is None:
             self.artifacts.save(dict(project_id=pid,artifact_id=id_,title=title,body=body,
-                base_head=self.projects.repository(pid).head(),new=True),op,privacy=privacy)
+                base_head=self.projects.repository(pid).head(),new=True,**({'metadata':metadata} if metadata else {})),op,privacy=privacy)
             receipt=self._receipt(pid,op)
         return self.reporting.pin(pid,id_,receipt['commit_id'])
 
@@ -580,6 +580,16 @@ class Monitoring:
                     if row['project_id']==pid:out[cfg['id']].append(dict(run_id=row['run_id'],url=row['preview']['url'],state=row['state'],error=row['error_code']))
         return out
 
+    def output(self,pid,output_id,expected_head,*,_snapshot=None):
+        uuid(output_id)
+        ws,head,files,entities,rs=_snapshot if _snapshot is not None else self._data(pid)
+        require(head==expected_head,'Projekt se změnil; obnovte seznam výstupů.')
+        from spikes.report_outputs import published_outputs
+        outputs=published_outputs(pid,head,files,entities,rs,selected=output_id,include_content=True)
+        require(len(outputs)==1,'Zpráva není v této revizi projektu dostupná.')
+        require(ws.git.head()==head,'Projekt se změnil; obnovte seznam výstupů.')
+        return dict(outputs[0],commit_id=head)
+
     def execution_nodes(self, administration=None):
         """Admin-only desired-placement choices; no network probe or execute grant."""
         if administration is None:
@@ -599,7 +609,8 @@ class Monitoring:
     def view(self,pid,*,network=False):
         ws,head,files,entities,rs=self._data(pid,network=network);watches=self.watches(files,entities)
         reports=[]
-        for job in self.jobs(pid):
+        jobs=self.jobs(pid)
+        for job in jobs:
             task=rs.get(job['task_ref']['artifact_id']);name=task['value']['title'] if task else 'Sledování'
             watch_id=next((c['id'] for c in watches if task and ident(c['id'],'task-entity')==task['entity_id']),None)
             row=dict(id=job['run_id'],watch_id=watch_id,name=name,kind=job['period']['kind'],period=job['period'],state=job['state'],error=job['last_error'],markdown=None,approval_digest=None,report_ref=None,
@@ -626,7 +637,17 @@ class Monitoring:
         definitions=definition_view['definitions']
         rss_status=self.rss_runtime.status(pid)
         require(rss_status['commit_id']==head,'Projekt se během čtení RSS změnil; obnovte přehled.')
-        return dict(project_id=pid,commit_id=head,node_id=definition_view['node_id'],watches=watches,definitions=definitions,rss=rss_status,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
+        from spikes.report_outputs import published_outputs
+        outputs=published_outputs(pid,head,files,entities,rs)
+        for row in reports:
+            job=next((j for j in jobs if j['run_id']==row['id']),None)
+            output=(job or {}).get('candidate') or {}
+            row['output']=output.get('output')
+            if not row['output'] and job and job.get('attempts') and job['attempts'][-1].get('finished_at'):
+                from spikes.report_outputs import output_title
+                built_at=job['attempts'][-1]['finished_at']
+                row['output']=dict(title=output_title(row['name'],built_at,row['period']['timezone']),built_at=built_at)
+        return dict(outputs=outputs,project_id=pid,commit_id=head,node_id=definition_view['node_id'],watches=watches,definitions=definitions,rss=rss_status,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
             inputs=[dict(id=id_,title=m['title'],privacy=m['privacy']) for id_,m in entities.items()
                     if m.get('file') and not files['artifacts/'+id_+'/'+m['file']].startswith(MARKER.encode())],
             profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self.last_errors.get(pid) or self.last_errors.get('runtime'))

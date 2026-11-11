@@ -247,6 +247,7 @@ MONITORING_ROUTES = frozenset({
     '/v1/monitoring/synthesis-run',
     '/v1/monitoring/synthesis-trace',
     '/v1/monitoring/view',
+    '/v1/monitoring/output',
     '/v1/monitoring/workflow-run',
     '/v1/monitoring/workflow-save',
 })

@@ -59,3 +59,10 @@ statické akce i úklid po odstranění řádku. Čtyři další skutečné Qt s
 ověřily původní akce v Nástrojích, starších sledováních a RSS čtečce. Všech
 pět průchodů prošlo; `node --check` a `git diff --check` prošly. Plná sada pro
 tuto lokální vizuální opravu nebyla opakována.
+
+## Výstupy
+
+Stejný seznam s položkovými menu používají také
+[konkrétní vydání zpráv](report-outputs.md). Výběr vydání otevírá jeho text;
+nepřepíná na zdrojovou úlohu ani obecný seznam běhů. Název obsahuje uložené
+datum a čas sestavení.

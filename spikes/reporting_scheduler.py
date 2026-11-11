@@ -385,10 +385,13 @@ class ReportingScheduler:
             require(v['generation']['mode']=='manual' or (_generation is not None and v['generation']==_generation),
                     'Assisted report requires an application-verified generation proof')
             self.reporting.validate(request,run_id,_generation=_generation)
-            run['candidate']=dict(manifest_sha256=digest(encoded(v)),markdown_sha256=digest(spec['markdown'].encode()),
+            from spikes.report_outputs import output_title
+            built_at=self.stamp()
+            heading=next((line[2:].strip() for line in spec['markdown'].splitlines() if line.startswith('# ')),'Zpráva')
+            run['candidate']=dict(output=dict(title=output_title(heading,built_at,run['period']['timezone']),built_at=built_at),manifest_sha256=digest(encoded(v)),markdown_sha256=digest(spec['markdown'].encode()),
                                   cache_ref='sqlite:'+run_id)
             run['state']='review'
-            run['attempts'][-1].update(finished_at=self.stamp(),outcome='succeeded',result_sha256=digest(encoded(request)))
+            run['attempts'][-1].update(finished_at=built_at,outcome='succeeded',result_sha256=digest(encoded(request)))
             db.execute('UPDATE runs SET candidate=? WHERE run_id=?',(encoded(request),run_id));self._save(db,run)
         checkpoint('run-review')
         return dict(run=run,approval_digest=digest(encoded(request)))
@@ -427,7 +430,7 @@ class ReportingScheduler:
         generation=request['records'][0]['value']['generation']
         receipt=self.reporting.apply(request,run_id,confirm=True,checkpoint=checkpoint,
                                      _generation=generation if generation['mode']=='assisted' else None,
-                                     _publication_guard=_publication_guard)
+                                     _publication_guard=_publication_guard,_output=run['candidate'].get('output'))
         checkpoint('workspace-receipt')
         pin=self.reporting.pin(run['project_id'],operation_uuid(run_id,'record:0'),receipt['commit_id'])
         with self.db() as db:

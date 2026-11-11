@@ -128,8 +128,8 @@ try:
    6:"document.querySelector('#sidebar-legacy-monitoring-list button').click()",
    7:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Spustit nyní').click()",
    8:"document.querySelector('#sidebar-report-list button').click()",
-   9:"document.querySelector('#monitoring-detail input[type=checkbox]').click();[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Vydat zprávu').click()",
-   10:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Otevřít navázanou prezentaci').click()",
+   9:"document.querySelector('#report-output-content input[type=checkbox]').click();[...document.querySelectorAll('#report-output-content button')].find(b=>b.textContent==='Vydat zprávu').click()",
+   10:"[...document.querySelectorAll('#report-output-content button')].find(b=>b.textContent==='Otevřít navázanou prezentaci').click()",
    11:"navigateSidebarTab(document.querySelector('#tools-tab'))",
    12:"(()=>{const item=document.querySelector('#sidebar-legacy-monitoring-list [data-tool-key^=\"watch:\"]').closest('li');item.querySelector('summary').click();[...item.querySelectorAll('[role=menuitem]')].find(b=>b.textContent==='Smazat').click()})()"}
   checks={
@@ -141,8 +141,8 @@ try:
    5:"monitoringView?.watches.length===1&&!monitoringDirty&&monitoringForm.hidden",
    6:"[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Spustit nyní')",
    7:"monitoringView?.reports.some(r=>r.state==='review')",
-   8:"document.querySelector('#presentations-tab').getAttribute('aria-selected')==='true'&&document.querySelector('#monitoring-detail pre')?.textContent.includes('Nebyla doložena významná změna.')&&document.querySelector('#monitoring-detail input[type=checkbox]')",
-   9:"monitoringView?.reports.some(r=>r.state==='completed'&&r.presentation_id)&&[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Otevřít navázanou prezentaci')",
+   8:"document.querySelector('#presentations-tab').getAttribute('aria-selected')==='true'&&document.querySelector('#report-output-content pre')?.textContent.includes('Nebyla doložena významná změna.')&&document.querySelector('#report-output-content input[type=checkbox]')",
+   9:"document.querySelector('#sidebar-report-list [aria-current=true]')&&monitoringView?.reports.some(r=>r.state==='completed'&&r.presentation_id)&&[...document.querySelectorAll('#report-output-content button')].some(b=>b.textContent==='Otevřít navázanou prezentaci')",
    10:"presentationEditorDeck&&presentationEditorArtifact===monitoringView.reports[0].presentation_id&&document.querySelector('#presentation-report-link')&&!document.querySelector('#presentation-panel').hidden",
    11:"monitoringView.watches.length===1&&document.querySelector('#tools-tab').getAttribute('aria-selected')==='true'",
    12:"monitoringView.watches.length===0&&monitoringView.reports.some(r=>r.state==='completed'&&r.presentation_id)&&!document.querySelector('#sidebar-legacy-monitoring-list [data-tool-key^=\"watch:\"]')"}

@@ -63,6 +63,7 @@ try:
    18:"(async()=>{await canLeaveWorkspaceEditors();activeProject.readOnly=true;renderMonitoringToolTree();window.readOnlyToolsChecked=true;})()",
    19:"activeProject.readOnly=false;renderMonitoringToolTree();document.querySelector('#sidebar-monitoring-list summary').click();[...document.querySelectorAll('#sidebar-monitoring-list [role=menuitem]')].find(b=>b.textContent==='Smazat').click()",
    20:"document.querySelector('#sidebar-monitoring-filter-list summary').click();[...document.querySelectorAll('#sidebar-monitoring-filter-list [role=menuitem]')].find(b=>b.textContent==='Smazat').click()",
+   21:"(async()=>{await navigateSidebarTab(document.querySelector('#presentations-tab'));document.querySelector('#sidebar-report-list .sidebar-list-main').click()})()",
   }
   checks={
    0:"typeof editMonitoringBlock==='function'",
@@ -86,6 +87,7 @@ try:
    18:"window.readOnlyToolsChecked&&[...document.querySelectorAll('[data-new-monitoring-block]')].every(b=>b.disabled)",
    19:"!blockCatalog.blocks.some(b=>b.id===blockTestIds[4])&&document.querySelectorAll('#sidebar-monitoring-list .sidebar-list-row').length===0",
    20:"!blockCatalog.blocks.some(b=>b.id===blockTestIds[2])&&[...document.querySelectorAll('#sidebar-monitoring-pool-list [role=menuitem]')].some(b=>b.textContent.includes('Smazat · nejprve')&&b.disabled)",
+   21:"!document.querySelector('#report-output-view').hidden&&projectView.hidden&&document.querySelector('#report-output-content pre')?.textContent.includes('Energie dnes')&&document.querySelector('#report-output-title').textContent===blockCatalog.jobs.find(j=>j.state==='published'&&j.intent.kind==='processing').result.output.title",
   }
   def received(value):
    global phase,busy
@@ -94,7 +96,7 @@ try:
    phase+=1
    if phase==14:view.grab().save('/tmp/fpw-tools-tree.png')
    if phase==16:view.grab().save('/tmp/fpw-tools-new-menu.png')
-   if phase==21:print('blocks browser OK',flush=True);app.exit(0);return
+   if phase==22:view.grab().save('/tmp/fpw-report-output.png');print('blocks browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy

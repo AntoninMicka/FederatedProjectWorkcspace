@@ -96,6 +96,21 @@ class PoolSyncTests(unittest.TestCase):
         self.assertTrue(any(r['type']=='MonitoringDeletion' for r in records))
         self.assertEqual(sum(r['type']=='WatchDefinition' for r in records),2)
 
+    def test_published_report_is_visible_from_git_without_receiver_runtime_job(self):
+        source,target=self.services
+        source.configure(self.pid,self.specs[0]['id'],True,confirm=True);source.tick(self.pid)
+        run=str(uuid4());prepared=source.process(self.pid,self.specs[3]['id'],run)
+        issued=source.publish(self.pid,run,prepared['result']['approval_digest'],confirm=True)
+        self.f.exchange(0,1)
+        view=target.monitoring.view(self.pid)
+        report=next(r for r in view['outputs'] if r['id']==issued['report_ref']['artifact_id'])
+        self.assertEqual(report['title'],prepared['result']['output']['title'])
+        self.assertNotIn('markdown',report)
+        self.assertFalse(any(j['intent']['kind']=='processing' for j in target.catalog(self.pid)['jobs']))
+        detail=target.monitoring.output(self.pid,report['id'],view['commit_id'])
+        self.assertIn('Energie dnes',detail['markdown'])
+        self.assertEqual(detail['run_id'],run)
+
     def test_sidecar_tampering_is_rejected_before_application(self):
         s=self.services[0];s.configure(self.pid,self.specs[0]['id'],True,confirm=True);s.tick(self.pid)
         env,payload,*_=_prepare(self.f.services[0],self.f.node_ids[1],self.pid,str(uuid4()),[],force_bundle=True)
