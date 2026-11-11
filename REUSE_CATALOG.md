@@ -1546,3 +1546,11 @@ journals; one signed `MonitoringDeletion` receipt removes current execution and
 catalog eligibility. **Reject:** deleting historical pins, changing remote/local
 runtime outcomes, resurrecting a deleted definition and cascading removal of
 unreviewed dependents. Recovery and compatibility are part of ADR 0082.
+
+Unclipped list menus: **adapt/reuse** `sidebarItemMenu`, static details menus,
+existing handlers and native HTML Popover top layer. A shared event adapter
+positions one menu within the viewport and preserves action ownership; the
+fallback temporarily portals the original content, restoring it before actions.
+**Reject:** overflow-visible lists, z-index-only fixes, cloned action controls,
+a separate menu implementation per feature and orphaned overlays after rerender.
+Verification/reuse details: [Tools menus](docs/tools-sidebar.md#menu-mimo-rámeček-seznamu).

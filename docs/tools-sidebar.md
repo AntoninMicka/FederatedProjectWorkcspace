@@ -41,3 +41,21 @@ Finální cílené ověření tohoto řezu: 60 backendových/integracních test�
 a 4 skutečné Qt scénáře prošly. Celkem 75 testů, 1 skip. Doplněná stale-head
 aserce prošla i samostatně. `node --check` a `git diff --check` prošly. Změny
 zůstávají lokální, bez source commitu, restartu služby nebo vzdáleného nasazení.
+
+## Menu mimo rámeček seznamu
+
+Položková menu sdílejí společné zobrazení také s Podklady, Zdroji, nastavením
+a ostatními seznamy. Posuvný seznam menu neořezává. Otevřené je vždy jen jedno;
+poloha se přizpůsobí okrajům okna a dlouhé menu může mít vlastní posuvník.
+Esc vrátí fokus na spouštěč, šipky přecházejí mezi dostupnými akcemi. Kliknutí
+mimo menu, posun seznamu, resize nebo odstranění řádku menu zavřou.
+
+Zobrazení používá [Popover API a horní vrstvu HTML](https://html.spec.whatwg.org/multipage/popover.html).
+Starší prohlížeč bez API použije dočasné přesunutí původního obsahu do těla
+stránky a vrácení před obsluhou akce; listenery a vlastníci položek se nemění.
+Nový Qt test ověřuje hit-test všech akcí přes hranici posuvného/transformovaného
+kontejneru v obou větvích, rohy viewportu, klávesnici, jedinou otevřenou nabídku,
+statické akce i úklid po odstranění řádku. Čtyři další skutečné Qt scénáře
+ověřily původní akce v Nástrojích, starších sledováních a RSS čtečce. Všech
+pět průchodů prošlo; `node --check` a `git diff --check` prošly. Plná sada pro
+tuto lokální vizuální opravu nebyla opakována.

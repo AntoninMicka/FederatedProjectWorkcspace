@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.monitoring_ui import HTML as MONITORING_HTML, CSS as MONITORING_CSS, JS as MONITORING_JS
+from spikes.sidebar_menu_ui import CSS as SIDEBAR_MENU_CSS, JS as SIDEBAR_MENU_JS
 from spikes.tools_sidebar_ui import TREE as TOOL_TREE, NEW_ACTIONS as TOOL_NEW_ACTIONS, CSS as TOOL_TREE_CSS, JS as TOOL_TREE_JS
 from spikes.rss_sources_ui import HTML as SOURCES_HTML, CSS as SOURCES_CSS, JS as SOURCES_JS
 from spikes.plan_status_ui import PLAN_STATUS_JS, PLAN_STATUS_CSS
@@ -8410,8 +8411,8 @@ HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script
 CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
 HTML = HTML.replace('<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul>', TOOL_TREE, 1)
 HTML = HTML.replace('<button id="julia-editor-new" type="button">Nový Julia model</button>', '<button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button>'+TOOL_NEW_ACTIONS, 1)
-CSS += TOOL_TREE_CSS
-JS = TOOL_TREE_JS + JS
+CSS += TOOL_TREE_CSS + SIDEBAR_MENU_CSS
+JS = SIDEBAR_MENU_JS + TOOL_TREE_JS + JS
 HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><h3>Zprávy</h3><ul id="sidebar-report-list"></ul><h3>Prezentace</h3>',1)
 HTML = HTML.replace('<button id="presentation-tab"', '<button id="monitoring-tab" role="tab" aria-controls="monitoring-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Sledování a zprávy</button><button id="presentation-tab"',1)
 HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id="outputs-overview-panel"',1)
