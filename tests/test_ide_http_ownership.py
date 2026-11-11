@@ -54,6 +54,11 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
         self.fail('IDE request did not enter bounded waiting slot')
 
     def test_slow_catalog_reads_overlap_without_owning_queue_or_diagnostics(self):
+        for max_workers in (2, 4, 6):
+            with self.subTest(max_workers=max_workers):
+                self.check_catalog_reader_budget(max_workers)
+
+    def check_catalog_reader_budget(self, max_workers):
         entered, release = threading.Event(), threading.Event()
         results = []
         route = '/v1/ide-bridge/connection/exchange'
@@ -66,17 +71,18 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
             nonlocal calls
             with guard:
                 calls += 1
-                if calls == 2:
+                if calls == max_workers - 1:
                     entered.set()
             if not release.wait(5):
                 raise AssertionError('Catalog readers not released')
             return original(actor)
-        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects,
+                         max_workers=max_workers) as server:
             server.ide_bridge_service = self.service
             with patch.object(self.service, 'eligible_projects', side_effect=slow_catalog), \
                  patch.object(self.service.projects, 'plan_view', side_effect=AssertionError('Full plan discovery')):
                 workers = [threading.Thread(target=lambda: results.append(self.post(server, route, body, token=token)))
-                           for _ in range(2)]
+                           for _ in range(max_workers - 1)]
                 for worker in workers:
                     worker.start()
                 try:
@@ -93,7 +99,7 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
                     for worker in workers:
                         worker.join(5)
                 self.assertTrue(all(not w.is_alive() for w in workers))
-                self.assertEqual([r[0] for r in results], [200, 200], results)
+                self.assertEqual([r[0] for r in results], [200] * (max_workers - 1), results)
                 self.assertTrue(all(self.pid in [p['project_id'] for p in r[1]['projects']] for r in results))
             # Failure or success must return reader capacity.
             self.assertEqual(self.post(server, route, body, token=token)[0], 200)

@@ -1644,8 +1644,10 @@ IDE catalog readers **reuse/adapt** `Projects.workspace(for_snapshot=True)`,
 `Workspace.committed_snapshot` and the existing journal flock. Short initialized
 snapshot checkpoints now use shared read ownership on that same lock file;
 initialization, recovery, index rebuild and project writes remain exclusive.
-Only audited connection discovery has two bounded HTTP reader slots (one in
-a minimum-size pool), without queued capacity waiters. **Reject:** parallel
+Only audited connection discovery uses the ordinary worker budget minus one
+for HTTP reader capacity, without queued waiters. The remaining ordinary slot
+prevents catalog traffic alone from consuming all general API capacity; the
+diagnostic reservation is separate. **Reject:** parallel
 index rebuild, cached account authority, increased workers/timeouts/retries,
 or a second lock file/writer. Audit:
 [Concurrent catalog reads](docs/http-concurrency-ownership.md#concurrent-ide-catalog-reads).

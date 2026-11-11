@@ -1667,10 +1667,14 @@ The canonical saved export still matches the same project/repository/revision
 recorded above. Its latest status is stale/waiting for review. This explicit
 source repair changes no authoritative task or acceptance state.
 
-Only the existing audited connection `status` owner now has concurrent reader
-capacity: two active requests by default, one with a minimum-size two-worker
-pool. A further request is refused before dispatch instead of parking another
-worker. Existing ordinary/diagnostic worker limits, authentication before
+Only the existing audited connection `status` owner has concurrent reader
+capacity. Its initial fixed limit of two was conservative and had no measured
+basis. Following the user's request for a concrete justification, capacity is
+now derived from the ordinary HTTP worker budget minus one: three readers with
+the default four workers, one with two workers, five with six. Catalog traffic
+alone cannot consume the last ordinary API slot; the separate diagnostic
+reservation is unchanged. A further request is refused before dispatch instead
+of parking another worker. Existing ordinary/diagnostic worker limits, authentication before
 admission, credential revalidation before dispatch and native busy outcomes are
 unchanged. Mutating connection actions and project handoffs still share the
 original bridge owner. Browser FIFO remains conservative; independent native
@@ -1716,3 +1720,16 @@ HTTP admission or exclusive reader flock only in test-process memory reproduces
 the two new concurrency regressions. Compilation, documentation link checks
 and `git diff --check` passed. The full repository suite, ordinary live-profile
 sync, source commit, application restart and remote deployment were not run.
+
+The reader-budget regression now runs with pools of 2, 4 and 6 ordinary workers.
+It starts respectively 1, 3 and 5 real authenticated half-second catalog reads,
+refuses the excess catalog request before dispatch, and completes ordinary
+task-queue status and reserved diagnostics while every admitted reader remains
+paused. Success/error handling releases reader capacity. This checks the
+resource reservation itself, not an arbitrary fixed catalog count. Persistent
+formats, writer locking and crash recovery are unchanged by this adjustment.
+
+After the reader-budget adjustment, all 36 IDE HTTP/local API tests passed,
+including the 2/4/6-worker scenarios. Compilation and `git diff --check` passed.
+Full-suite and ordinary live-profile acceptance remain unverified; no source
+commit, application restart or remote deployment was performed.

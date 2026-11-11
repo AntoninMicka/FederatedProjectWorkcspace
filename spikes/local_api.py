@@ -77,7 +77,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self.ide_queue_lane = BoundedWaitingLane()
         # Discovery only reads committed snapshots and native shared checkpoints.
         # Keep one ordinary worker available even in a minimum-size pool.
-        self.ide_status_lane = ConcurrentReadLane(min(2, max_workers - 1))
+        self.ide_status_lane = ConcurrentReadLane(max_workers - 1)
         self.backend_availability = BackendAvailability()
         self.project_lanes = ProjectLanes()
         self.request_lane_timeout = lane_timeout
