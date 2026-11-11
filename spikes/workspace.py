@@ -368,7 +368,7 @@ class Workspace:
 
     def snapshot_checkpoint(self, expected_head=None):
         """Short ownership check; no initialization, recovery or index rebuild."""
-        with self.journal.lock(), self.journal.connect() as db:
+        with self.journal.lock(shared=True), self.journal.connect() as db:
             require(db.execute('SELECT root FROM owner').fetchall() == [(str(self.git.root),)],
                     'Journal belongs to another project')
             if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():

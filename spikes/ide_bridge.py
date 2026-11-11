@@ -423,7 +423,9 @@ class IdeBridge:
             if not Administration.is_admin(actor) and (actor or {}).get('memberships', {}).get(row['id']) not in {'editor', 'project-admin'}:
                 continue
             try:
-                view = self.projects.plan_view(row['id'])
+                workspace = self.projects.workspace(row['id'], for_snapshot=True,
+                    deadline=time.monotonic() + 30)
+                head, _, _ = workspace.committed_snapshot(row['id'], network=True)
             except PendingOperation:
                 # A human must still be able to reach the durable review intent.
                 # This is only a label/HEAD, never an old index projection.
@@ -433,9 +435,10 @@ class IdeBridge:
                 result.append(dict(project_id=row['id'], title=row['title'],
                     expected_head=self.projects.repository(row['id']).head(), pending_operation=True))
                 continue
-            if view['read_only']:
+            replica = self.projects.replication(row['id'])
+            if replica and replica['role'] == 'read-only-replica':
                 continue
-            result.append(dict(project_id=row['id'], title=row['title'], expected_head=view['commit_id']))
+            result.append(dict(project_id=row['id'], title=row['title'], expected_head=head))
         return result
 
     def connection_mappings(self, connection_id, actor, *, eligible=None):

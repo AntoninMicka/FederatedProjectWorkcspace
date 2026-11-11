@@ -1639,3 +1639,13 @@ request-local data, after the existing write and final HEAD checks.
 acceptance result or another persistent writer. Diagnostic actions use literal
 allowlists. Audit and recovery:
 [Queue status isolation](docs/http-concurrency-ownership.md#task-queue-status-isolation).
+
+IDE catalog readers **reuse/adapt** `Projects.workspace(for_snapshot=True)`,
+`Workspace.committed_snapshot` and the existing journal flock. Short initialized
+snapshot checkpoints now use shared read ownership on that same lock file;
+initialization, recovery, index rebuild and project writes remain exclusive.
+Only audited connection discovery has two bounded HTTP reader slots (one in
+a minimum-size pool), without queued capacity waiters. **Reject:** parallel
+index rebuild, cached account authority, increased workers/timeouts/retries,
+or a second lock file/writer. Audit:
+[Concurrent catalog reads](docs/http-concurrency-ownership.md#concurrent-ide-catalog-reads).

@@ -53,6 +53,112 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
             time.sleep(0.005)
         self.fail('IDE request did not enter bounded waiting slot')
 
+    def test_slow_catalog_reads_overlap_without_owning_queue_or_diagnostics(self):
+        entered, release = threading.Event(), threading.Event()
+        results = []
+        route = '/v1/ide-bridge/connection/exchange'
+        token = self.f.created['pairing']['token']
+        body = dict(connection_id=self.record['connection_id'], action='status')
+        original = self.service.eligible_projects
+        calls = 0
+        guard = threading.Lock()
+        def slow_catalog(actor):
+            nonlocal calls
+            with guard:
+                calls += 1
+                if calls == 2:
+                    entered.set()
+            if not release.wait(5):
+                raise AssertionError('Catalog readers not released')
+            return original(actor)
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            server.ide_bridge_service = self.service
+            with patch.object(self.service, 'eligible_projects', side_effect=slow_catalog), \
+                 patch.object(self.service.projects, 'plan_view', side_effect=AssertionError('Full plan discovery')):
+                workers = [threading.Thread(target=lambda: results.append(self.post(server, route, body, token=token)))
+                           for _ in range(2)]
+                for worker in workers:
+                    worker.start()
+                try:
+                    self.assertTrue(entered.wait(2))
+                    self.assertFalse(release.wait(0.5))
+                    self.assertEqual(self.post(server, route, body, token='invalid')[0], 401)
+                    code, busy, _ = self.post(server, route, body, token=token)
+                    self.assertEqual(code, 503, busy)
+                    self.assertEqual(busy['outcome'], 'not-started')
+                    self.assertEqual(self.post(server, '/v1/task-queue', {'project_id': self.pid, 'action': 'status'})[0], 200)
+                    self.assertEqual(self.post(server, '/v1/diagnostics/status', {})[0], 200)
+                finally:
+                    release.set()
+                    for worker in workers:
+                        worker.join(5)
+                self.assertTrue(all(not w.is_alive() for w in workers))
+                self.assertEqual([r[0] for r in results], [200, 200], results)
+                self.assertTrue(all(self.pid in [p['project_id'] for p in r[1]['projects']] for r in results))
+            # Failure or success must return reader capacity.
+            self.assertEqual(self.post(server, route, body, token=token)[0], 200)
+            with patch.object(self.service, 'eligible_projects', side_effect=ValueError('Catalog unavailable')):
+                self.assertEqual(self.post(server, route, body, token=token)[0], 422)
+            self.assertEqual(self.post(server, route, body, token=token)[0], 200)
+
+    def test_catalog_snapshots_do_not_rebuild_index_and_preserve_pending_hint(self):
+        workspace = self.projects.workspace(self.pid, for_snapshot=True)
+        index = workspace.journal.state / 'index.sqlite'
+        before = index.read_bytes()
+        actor = self.service.connection_actor(self.record)
+        with patch.object(self.service.projects, 'plan_view', side_effect=AssertionError('Catalog used index')):
+            rows = self.service.eligible_projects(actor)
+            self.assertEqual(rows[0]['expected_head'], self.record['snapshot']['commit_id'])
+            with workspace.journal.lock(), workspace.journal.connect() as db:
+                db.execute('INSERT INTO pending(path,before,after) VALUES (?,NULL,NULL)',
+                           ('artifacts/pending-test/content.md',))
+            rows = self.service.eligible_projects(actor)
+            self.assertTrue(rows[0]['pending_operation'])
+            with workspace.journal.connect() as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM pending').fetchone()[0], 1)
+        self.assertEqual(index.read_bytes(), before)
+        self.assertEqual(workspace.git.head(), self.record['snapshot']['commit_id'])
+
+    def test_catalog_committed_snapshot_still_rejects_local_only_content(self):
+        from uuid import uuid4
+        from spikes.artifacts import Artifacts
+        Artifacts(self.node).save(dict(project_id=self.pid, artifact_id=str(uuid4()),
+            base_head=self.record['snapshot']['commit_id'], title='Private', body='Private', new=True),
+            str(uuid4()), privacy='local-only')
+        actor = self.service.connection_actor(self.record)
+        self.assertNotIn(self.pid, [p['project_id'] for p in self.service.eligible_projects(actor)])
+        # Even a previously public catalog row cannot bypass snapshot privacy.
+        with patch.object(self.service.projects, 'catalog', return_value=[
+                dict(id=self.pid, title='Project', available=True)]):
+            with self.assertRaisesRegex(ValueError, 'local-only'):
+                self.service.eligible_projects(actor)
+
+    def test_catalog_rejects_head_change_during_snapshot_validation(self):
+        from spikes.metadata import validate_snapshot
+        from spikes.storage import StaleIndex
+        git = self.projects.repository(self.pid)
+        def advance_head(files):
+            entities = validate_snapshot(files)
+            git.run('commit', '--allow-empty', '-m', 'Concurrent test commit')
+            return entities
+        with patch('spikes.workspace.validate_snapshot', side_effect=advance_head):
+            with self.assertRaises(StaleIndex):
+                self.service.eligible_projects(self.service.connection_actor(self.record))
+
+    def test_catalog_snapshot_checkpoints_share_journal_but_exclude_writer(self):
+        from spikes.request_ownership import ProjectBusy, bounded_project_requests
+        first = self.projects.workspace(self.pid, for_snapshot=True)
+        second = self.projects.workspace(self.pid, for_snapshot=True)
+        with bounded_project_requests():
+            with first.journal.lock(shared=True):
+                self.assertEqual(second.snapshot_checkpoint(), self.record['snapshot']['commit_id'])
+                with self.assertRaises(ProjectBusy):
+                    with second.journal.lock():
+                        self.fail('Writer entered during snapshot checkpoint')
+            with first.journal.lock():
+                with self.assertRaises(ProjectBusy):
+                    second.snapshot_checkpoint()
+
     def test_overlapping_exchanges_and_status_complete_without_retry(self):
         route = '/v1/ide-bridge/connection/exchange'
         token = self.f.created['pairing']['token']

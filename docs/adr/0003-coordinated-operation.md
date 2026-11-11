@@ -43,6 +43,22 @@ Soukromý Git staging index se skládá přes `hash-object` a `update-index` př
 
 Zbývá produkční řízení všech vstupů a bezpečnost cizích Git konfigurací podle BACKLOG V-06, úklid osiřelých dočasných staging souborů/objektů a retence receipts podle V-07. Testovací checkpointy neběží uvnitř Git/SQLite syscalls; nedokládají recovery po násilném přerušení libovolného podprocesu ani po výpadku napájení.
 
+## Upřesnění čtecího vlastnictví, 11. 11. 2026
+
+`Workspace.snapshot_checkpoint` nad již inicializovaným stavem pouze čte owner,
+pending/active záznamy a aktuální HEAD. Používá sdílený `LOCK_SH` na stejném
+`writer.lock`; ostatní držitelé mohou číst současně, žádný `LOCK_EX` zapisovatel
+však nesmí vstoupit. `committed_snapshot` validuje neměnná Git data mimo tento
+krátký zámek a následně znovu ověří HEAD i pending stav.
+
+Inicializace, recovery, projektové zápisy a čtení, které může obnovovat index,
+nadále používají výhradní `LOCK_EX`. Sdílená větev není oprávnění spouštět pod
+ní inicializaci, SQL zápis nebo obnovu indexu. Journal zůstává autoritou pending
+operace, index obnovitelnou projekcí a Git autoritou artefaktů. Crash boundaries
+ani formát trvalých dat se nemění. Souběh čtenářů a vyloučení zapisovatele
+ověřují testy i mezi procesy; HTTP použití popisuje
+[audit katalogu IDE](../http-concurrency-ownership.md#concurrent-ide-catalog-reads).
+
 ## Přenos ověření na cílový uzel
 
 `spikes.target_probe` adaptuje stejné checkpointy pro ruční M0-05 bez přenosu celé testové sady. Vytvoří vlastní dočasný projekt/stav na explicitním filesystemu, provede tři normální zápisy a 12 `os._exit(73)` v samostatných workerech. Storage protokol ani výše uvedené crash boundaries se nemění. Po obnově ověří commit/bajty/index a idempotenci; na konci úspěchu odstraní pouze vlastní adresář, při selhání ponechá diagnostická data. Jde o pád aplikačního procesu mezi checkpointy, nikoli výpadek napájení nebo přerušení uvnitř libovolného Git/SQLite syscallu. Výsledky lokální validace a skutečného cílového běhu se evidují odděleně ve WORK_LOG.

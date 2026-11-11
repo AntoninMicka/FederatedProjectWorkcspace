@@ -90,6 +90,31 @@ class ProjectLanes:
                     del self.entries[project_id]
 
 
+class ConcurrentReadLane:
+    """Bounded reader capacity, without a queue of waiting HTTP workers."""
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.guard = threading.Lock()
+        self.active = 0
+
+    def acquire(self, blocking=True, timeout=-1):
+        with self.guard:
+            if self.active >= self.capacity:
+                return False
+            self.active += 1
+            return True
+
+    def release(self):
+        with self.guard:
+            if not self.active:
+                raise RuntimeError('release idle read lane')
+            self.active -= 1
+
+    def locked(self):
+        with self.guard:
+            return self.active >= self.capacity
+
+
 class BoundedWaitingLane:
     """One owner and one waiting HTTP worker; newcomers cannot pass the waiter."""
     def __init__(self):

@@ -22,7 +22,7 @@ import time
 from spikes.http_request_budget import RequestReadTimeout, request_reader
 from spikes.backend_availability import BackendAvailability
 from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, DIAGNOSTIC_ACTIONS, STREAM_ROUTES, SERVICE_ROUTES, request_lane
-from spikes.request_ownership import BoundedWaitingLane, ProjectLanes, ProjectBusy, bounded_project_requests
+from spikes.request_ownership import BoundedWaitingLane, ConcurrentReadLane, ProjectLanes, ProjectBusy, bounded_project_requests
 
 from spikes.metadata import parse_json, ValidationError
 
@@ -75,6 +75,9 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         # One queued IDE operation absorbs ordinary cross-client overlap.
         # Never let multiple waiting requests consume the entire worker pool.
         self.ide_queue_lane = BoundedWaitingLane()
+        # Discovery only reads committed snapshots and native shared checkpoints.
+        # Keep one ordinary worker available even in a minimum-size pool.
+        self.ide_status_lane = ConcurrentReadLane(min(2, max_workers - 1))
         self.backend_availability = BackendAvailability()
         self.project_lanes = ProjectLanes()
         self.request_lane_timeout = lane_timeout

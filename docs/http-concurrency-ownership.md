@@ -1654,3 +1654,65 @@ lane, and unknown/project-journal contention for display-time native locking.
 Compilation, documentation link checks and `git diff --check` passed.
 The full repository suite and ordinary live-profile acceptance have not run;
 no source commit, application restart or remote deployment was performed.
+
+## Concurrent IDE catalog reads
+
+Continuation from `4559d88` after a native IDE sync produced two connection
+`status` calls: the first processed for 450 ms, the second was refused after
+102 ms by the exclusive `ide_status_lane`. Separating domains alone did not
+make this reader domain concurrent. Its project plan reads additionally owned
+the native journal exclusively, including immutable validation/graph work.
+
+The canonical saved export still matches the same project/repository/revision
+recorded above. Its latest status is stale/waiting for review. This explicit
+source repair changes no authoritative task or acceptance state.
+
+Only the existing audited connection `status` owner now has concurrent reader
+capacity: two active requests by default, one with a minimum-size two-worker
+pool. A further request is refused before dispatch instead of parking another
+worker. Existing ordinary/diagnostic worker limits, authentication before
+admission, credential revalidation before dispatch and native busy outcomes are
+unchanged. Mutating connection actions and project handoffs still share the
+original bridge owner. Browser FIFO remains conservative; independent native
+IDE windows/processes can use the backend reader capacity.
+
+Catalog eligibility now uses the existing `for_snapshot`/`committed_snapshot`
+path instead of building a full plan and rebuilding its index. Registered-root,
+committed project metadata, full snapshot validation/privacy, live editor role,
+replica policy and before/after HEAD/pending checks remain. Discovery returns
+labels and candidate HEADs, not authoritative task/index data; mapping/export
+use still validates its full plan at the original native boundaries. Pending
+operations retain the previous explicit label/HEAD fallback, without recovery.
+
+`snapshot_checkpoint` only queries initialized journal ownership/pending/active
+state and HEAD. Its lock is now `LOCK_SH` on the original `writer.lock`, allowing
+another checkpoint reader while excluding the original `LOCK_EX` writer.
+Immutable snapshot validation occurs outside that short lock; the final check
+rejects a changed HEAD or newly pending operation. Initialization, recovery,
+index rebuild and writing readers retain exclusive ownership. No other caller
+is switched to shared locking. Reporting/monitoring already use this same
+checkpoint primitive and are included in regression verification.
+
+Crash boundaries remain [ADR 0003](adr/0003-coordinated-operation.md) and
+ADR 0060/0062. No schema, receipt, Git/index publication, replay or operation-ID
+policy changes. Reader process exit releases its OS flock and creates no write
+intent; after any native write dispatch the original journal/receipt recovery
+applies. No new persistent cache or alternate writer is introduced.
+
+New tests overlap two real authenticated half-second HTTP status calls, bound
+excess capacity, check unrelated queue/diagnostic progress and release capacity
+after errors. Native tests check shared readers and writer exclusion in-process
+and across processes, preserve the pending hint without index rebuild, reject
+local-only snapshots, and reject an actual HEAD change during validation.
+Ordinary user-profile sync and remote deployment remain separate acceptance.
+
+Verification: all 42 tests in the final journal, Workspace and IDE HTTP
+selection passed, including the corrected privacy fixture and HEAD-change
+regression. Additional bridge/web/local HTTP, project ownership, reporting and
+monitoring cases passed on this implementation; those broader runs initially
+included the privacy fixture corrected in the final selection (8 optional
+Qt/WebEngine cases were skipped in the bridge/web run). Restoring exclusive
+HTTP admission or exclusive reader flock only in test-process memory reproduces
+the two new concurrency regressions. Compilation, documentation link checks
+and `git diff --check` passed. The full repository suite, ordinary live-profile
+sync, source commit, application restart and remote deployment were not run.
