@@ -419,6 +419,13 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
     """Enforce invariants that require comparing two valid project snapshots."""
     base = validate_snapshot(base_files)
     candidate = validate_snapshot(candidate_files)
+    return _validate_transition(base_files, candidate_files, base, candidate,
+                                allow_privacy_relaxation=allow_privacy_relaxation)
+
+
+def _validate_transition(base_files, candidate_files, base, candidate, *,
+                         allow_privacy_relaxation=False):
+    """Internal invariants over snapshots already validated in this operation."""
     from spikes.reporting_schema import immutable_transition
     immutable_transition(base_files, candidate_files, base, candidate)
     from spikes.reference_schema import transition

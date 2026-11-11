@@ -1570,3 +1570,14 @@ copying operational jobs. **Reject:** task shortcuts in place of editions,
 fetching every report body for the list, a second writer/index, re-timestamping
 retries, modifying approved Markdown and guessing missing historical build times.
 Scope/recovery: [Report outputs](docs/report-outputs.md).
+
+History validation isolation: **adapt/reuse** native Git bundle verification,
+semantic snapshot/transition validators, the existing Git deadline, subprocess
+process groups, bounded admission and exact journal replay. Keep a two-entry
+per-call cache of validated snapshots; validate the exported graph once. A
+disposable lower-priority process isolates CPU/GIL; volatile per-target pacing
+slows existing automatic retries without replacing operation authority.
+**Reject:** a persistent validation cache, skipping history/privacy checks, a
+second writer/journal, changing the wire protocol, extending deadlines and
+queueing unbounded validators. Recovery and evidence:
+[History validator](docs/history-validation-worker.md).

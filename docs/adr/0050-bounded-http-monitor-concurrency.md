@@ -586,3 +586,13 @@ pořadí zápisů, crash boundaries ani recovery: journal, přesné uložené ba
 stabilní ID, validace a CAS zůstávají autoritou. Kód prostředku neopravňuje
 k retry, odstranění pending operace nebo přeskočení validace. Přenos s neznámým
 či známým busy důvodem zůstává nedokončený.
+
+## Izolace výpočtu historie (11. 11. 2026)
+
+Oddělená HTTP linka neizolovala CPU/GIL při synchronní validaci celé historie.
+Sémantická validace přesného bundlu proto běží v jednorázovém procesu
+s kapacitou jedna na backend, nižší prioritou a původním absolutním deadlinem.
+HTTP požadavek zůstává synchronní; procesní kapacita se nezaměňuje s projektovým
+journalem ani s oprávněním publikace. Worker nemůže publikovat, rodič jej při
+timeoutu ukončí včetně Git potomků. Git budget se nenavyšuje.
+Kontrakt, recovery a měření: [ověřování historie](../history-validation-worker.md).

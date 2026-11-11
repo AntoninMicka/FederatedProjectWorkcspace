@@ -59,6 +59,9 @@ class NativeAnalysisTests(unittest.TestCase):
         event,assessment,one=self.publish_evidence_week(week,periods[0])
         event,assessment,two=self.publish_evidence_week(week,periods[1],event,assessment,3)
         monthly,result=self.issue(month,self.month)
+        # Each new read after a long sequence of native API operations needs
+        # its own bounded handle, just like a fresh production request.
+        self.f.ws=self.f.service.artifacts.workspace(self.f.project);self.f.git=self.f.ws.git
         record=self.f.record(monthly);pin=record['value']['analysis_ref']
         ledger=json.loads(self.f.git.snapshot(pin['commit_id'])[pin['path']])
         self.assertEqual(ledger['unique_events'],1);self.assertEqual(ledger['events'][0]['claims'][0]['trend'],'progress')
@@ -73,6 +76,7 @@ class NativeAnalysisTests(unittest.TestCase):
             annual_value['inputs'][0]['policy']=dict(window='ending-in-period',approval='issued',missing='allow-incomplete')
             annual_value['report']['analysis']=dict(revision='annual-1',input_level=level,case_studies=[],target=None)
             annual=self.save(annual_value);issued,_=self.issue(annual,year_period)
+            self.f.ws=self.f.service.artifacts.workspace(self.f.project);self.f.git=self.f.ws.git
             annual_ref=self.f.record(issued)['value']['analysis_ref'];analysis=json.loads(self.f.git.snapshot(annual_ref['commit_id'])[annual_ref['path']])
             self.assertEqual(analysis['unique_events'],1);self.assertEqual(analysis['events'][0]['claims'][0]['trend'],'progress')
             self.assertEqual(analysis['input_levels'][0]['kind'],level)

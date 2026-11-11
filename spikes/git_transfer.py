@@ -19,7 +19,7 @@ from spikes.configuration import committed_project
 from spikes.federation_probe import check_peer
 from spikes.journal import sync_dir
 from spikes.lxc_setup import ACTOR
-from spikes.metadata import require, validate_snapshot, validate_transition
+from spikes.metadata import require, validate_snapshot, _validate_transition
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
 from spikes.storage import Git
@@ -45,7 +45,8 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
 
     def snapshot(commit):
         if commit not in snapshots:
-            snapshots[commit] = git.snapshot(commit)
+            files = git.snapshot(commit)
+            snapshots[commit] = files, validate_snapshot(files)
             while len(snapshots) > 2:
                 snapshots.popitem(last=False)
         snapshots.move_to_end(commit)
@@ -61,11 +62,11 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
             require(mode in {'100644', '100755'} and kind == 'blob', 'Symlinks/submodules are not transferable')
             require(path == 'project.json' or path.startswith(('artifacts/', 'registries/')),
                     'Unclassified historical file cannot be transferred: ' + path)
-        candidate = snapshot(commit)
-        entities = validate_snapshot(candidate)
+        candidate, entities = snapshot(commit)
         parents = git_run(git, 'show', '-s', '--format=%P', commit).stdout.split()
         for parent in parents:
-            validate_transition(snapshot(parent), candidate)
+            parent_files, parent_entities = snapshot(parent)
+            _validate_transition(parent_files, candidate, parent_entities, entities)
         for item in entities.values():
             require(item['privacy'] in allowed_privacy,
                     'Transfer grant does not allow ' + item['privacy'] +

@@ -25,16 +25,16 @@ class SyncExportOwnershipTests(unittest.TestCase):
         root = workspace.git.root
         entered, release = threading.Event(), threading.Event()
         result, errors = [], []
-        original = sync.validate_history
+        original = sync.validate_histories
         def blocked(git, *args, **kwargs):
-            if git.root == root and not entered.is_set():
+            if not entered.is_set():
                 entered.set()
                 if not release.wait(5): raise AssertionError('Export validation not released')
             return original(git, *args, **kwargs)
         def export():
             try: result.append(sync._build_bundle(self.nodes[index], self.project_id, {'mode':'all'}))
             except Exception as exc: errors.append(exc)
-        with patch('spikes.federation_sync.validate_history', side_effect=blocked):
+        with patch('spikes.federation_sync.validate_histories', side_effect=blocked):
             worker = threading.Thread(target=export); worker.start()
             try:
                 self.assertTrue(entered.wait(2))

@@ -188,7 +188,7 @@ class FederationSyncTests(unittest.TestCase):
         from spikes.federation_sync import _inventory
         git = Projects(self.nodes[0]).workspace(self.project_id).git
         refs = _inventory(git, {'mode': 'all'})
-        with patch('spikes.federation_sync.validate_history', side_effect=AssertionError('export history')), \
+        with patch('spikes.federation_sync.validate_histories', side_effect=AssertionError('export history')), \
              patch('spikes.federation_sync._validate_git_bundle', side_effect=AssertionError('transfer history')):
             envelope, payload, _, local, _ = _prepare(
                 self.services[0], self.node_ids[1], self.project_id, str(uuid4()), refs,
@@ -205,11 +205,11 @@ class FederationSyncTests(unittest.TestCase):
         git = Projects(self.nodes[0]).workspace(self.project_id).git
         known = _inventory(git, {'mode': 'all'})
         self.commit_marker(0, 'New head')
-        with patch('spikes.federation_sync.validate_history', side_effect=ValueError('validation required')):
+        with patch('spikes.federation_sync.validate_histories', side_effect=ValueError('validation required')):
             with self.assertRaisesRegex(ValueError, 'validation required'):
                 _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'}, peer_known_refs=known)
         known = _inventory(git, {'mode': 'all'});git_run(git, 'branch', 'new-branch')
-        with patch('spikes.federation_sync.validate_history', side_effect=ValueError('validation required')):
+        with patch('spikes.federation_sync.validate_histories', side_effect=ValueError('validation required')):
             with self.assertRaisesRegex(ValueError, 'validation required'):
                 _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'}, peer_known_refs=known)
 
@@ -222,58 +222,75 @@ class FederationSyncTests(unittest.TestCase):
                 _apply(self.nodes[1], envelope['exchange'], payload, service=self.services[1])
         self.assertFalse(Projects(self.nodes[1]).list())
 
-    def test_receiver_response_reuses_only_the_exact_verified_git_graph(self):
-        from spikes.federation_sync import validate_history, _payloads
+    def test_validator_timeout_creates_no_inbound_intent_and_same_request_can_resume(self):
+        from spikes.federation_sync import _database
+        from spikes.git_budget import GitDeadlineExceeded
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
             str(uuid4()), [], force_bundle=True)
-        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+        operation = envelope['exchange']['operation_id']
+        with patch('spikes.federation_sync.validate_histories', side_effect=GitDeadlineExceeded):
+            with self.assertRaises(GitDeadlineExceeded):
+                SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertFalse(Projects(self.nodes[1]).list())
+        with _database(self.nodes[1]) as db:
+            self.assertIsNone(db.execute('SELECT operation_id FROM inbound WHERE operation_id=?',
+                                         (operation,)).fetchone())
+        response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
+        self.assertEqual(response['accepted_source_refs'], envelope['exchange']['refs'])
+
+    def test_receiver_response_reuses_only_the_exact_verified_git_graph(self):
+        from spikes.federation_sync import validate_histories, _payloads
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        with patch('spikes.federation_sync.validate_histories', wraps=validate_histories) as history:
             response, returned = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
         self.assertEqual(history.call_count, 1)
         self.assertEqual(_payloads(response['exchange'], returned)[0],
                          _payloads(envelope['exchange'], payload)[0])
 
     def test_receiver_response_validates_additional_local_branches(self):
-        from spikes.federation_sync import validate_history
+        from spikes.federation_sync import validate_histories
         self.exchange(0, 1)
         git = Projects(self.nodes[1]).workspace(self.project_id).git
         git_run(git, 'branch', 'extra-local')
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
             str(uuid4()), [], force_bundle=True)
-        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+        with patch('spikes.federation_sync.validate_histories', wraps=validate_histories) as history:
             response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
         self.assertEqual({row['ref'] for row in response['exchange']['refs']},
                          {'refs/heads/main', 'refs/heads/extra-local'})
         self.assertGreater(history.call_count, 1)
 
     def test_verified_inbound_graph_is_not_reused_for_another_operation(self):
-        from spikes.federation_sync import validate_history
+        from spikes.federation_sync import validate_histories
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
             str(uuid4()), [], force_bundle=True)
         with patch('spikes.federation_sync._prepare', wraps=_prepare) as prepared:
             SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
         proof = prepared.call_args.kwargs['verified']
-        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+        with patch('spikes.federation_sync.validate_histories', wraps=validate_histories) as history:
             _prepare(self.services[1], self.node_ids[0], self.project_id,
                      str(uuid4()), [], force_bundle=True, verified=proof)
         self.assertGreater(history.call_count, 0)
 
     def test_receiver_response_validates_a_different_local_head(self):
-        from spikes.federation_sync import validate_history
+        from spikes.federation_sync import validate_histories
         self.exchange(0, 1)
         ahead = self.commit_marker(1, 'Local ahead')
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
             str(uuid4()), [], force_bundle=True)
-        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+        with patch('spikes.federation_sync.validate_histories', wraps=validate_histories) as history:
             response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
         self.assertEqual(response['exchange']['refs'], [{'ref': 'refs/heads/main', 'head': ahead}])
         self.assertGreater(history.call_count, 1)
 
     def test_receiver_response_validates_a_different_export_scope(self):
-        from spikes.federation_sync import validate_history
+        from spikes.federation_sync import validate_histories
         self.exchange(0, 1)
         self.actor['memberships'][self.project_id] = 'project-admin'
         for local, remote in ((0, 1), (1, 0)):
@@ -288,7 +305,7 @@ class FederationSyncTests(unittest.TestCase):
         envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
             str(uuid4()), [], force_bundle=True)
-        with patch('spikes.federation_sync.validate_history', wraps=validate_history) as history:
+        with patch('spikes.federation_sync.validate_histories', wraps=validate_histories) as history:
             response, _ = SyncReceiver(self.nodes[1], self.services[1]).receive(envelope, payload)
         self.assertNotEqual(response['exchange']['scope'], envelope['exchange']['scope'])
         self.assertGreater(history.call_count, 1)
@@ -1013,12 +1030,13 @@ class FederationSyncTests(unittest.TestCase):
         clock = [time.monotonic()]
         checked = []
         def validation(*args, **kwargs):
-            result = native_validate(*args, **kwargs)
-            checked.append(args[1])
-            clock[0] += 35
-            return result
+            git, heads, project, privacy = args
+            for head in heads:
+                native_validate(git, head, project, privacy)
+                checked.append(head)
+                clock[0] += 35
         with patch('spikes.git_budget.time.monotonic', side_effect=lambda: clock[0]), \
-             patch('spikes.federation_sync.validate_history', side_effect=validation):
+             patch('spikes.federation_sync.validate_histories', side_effect=validation):
             with self.assertRaises(GitDeadlineExceeded):
                 _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'})
         self.assertEqual(checked, [head, head])

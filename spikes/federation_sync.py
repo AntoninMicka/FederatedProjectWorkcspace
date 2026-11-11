@@ -32,7 +32,9 @@ from spikes.configuration import committed_project, parse_node, read_config
 from spikes.federation_accounts import MappingSignatures, canonical
 from spikes.http_deadline import DeadlineHTTPSConnection
 from spikes.git_budget import GitDeadlineExceeded, git_budget
-from spikes.git_transfer import MAX_BUNDLE, git_run, validate_history
+from spikes.git_transfer import MAX_BUNDLE, git_run
+from spikes.history_validation import validate_histories
+from spikes.sync_retry import automatic_retry
 from spikes.journal import sync_dir
 from spikes.metadata import require
 from spikes.network_backend import private_root
@@ -386,8 +388,6 @@ def _build_bundle(node, project_id, scope, *, verified=None, peer_known_refs=Non
 
     # Git objects named by captured heads are immutable. Do not own a project
     # writer while traversing history, fetching objects or verifying a pack.
-    for row in refs:
-        validate_history(workspace.git, row['head'], project_id, PRIVACY)
     with tempfile.TemporaryDirectory(prefix='sharing-sync-') as directory:
         root = Path(directory)
         (root / 'export.git').mkdir(mode=0o700)
@@ -432,7 +432,7 @@ def _validate_git_bundle(payload, refs, project_id, repo):
         require(actual==refs,'Git bundle refs differ from signed inventory')
         git_run(git,'-c','protocol.file.allow=always','fetch','--no-tags',str(bundle),
                 *[row['ref']+':'+row['ref'] for row in actual])
-        for row in actual:validate_history(git,row['head'],project_id,PRIVACY)
+        validate_histories(git, [row['head'] for row in actual], project_id, PRIVACY)
     finally:
         bundle.unlink(missing_ok=True)
 
@@ -1183,6 +1183,7 @@ class ContentSyncControl:
             sent_state, remote_state = _sync_state(sent), _sync_state(remote)
             result[peer + ':' + project] = {
                 'state': state, 'detail': detail,
+                'automatic_retry_after': automatic_retry.remaining((str(self.node), peer, project)),
                 'diagnostic': sync_diagnostic(self.node, peer, project, direction='outbound'),
                 'chat_summary': {
                     'shared': len(sent_state['chats']),
@@ -1291,13 +1292,17 @@ class ContentSyncControl:
                         # Only the one background manual worker waits here.
                         # No HTTP worker, new envelope or dispatched request.
                         time.sleep(min(.05, remaining))
-                return synchronize(self.node, peer_id, project_id,
-                                   deployment=self.deployment,
-                                   cancelled=cancelled)
+                result = synchronize(self.node, peer_id, project_id,
+                                     deployment=self.deployment, cancelled=cancelled)
+                automatic_retry.succeeded((str(self.node), peer_id, project_id))
+                return result
         except SyncCancelled as exc:
             state = 'cancelled'; detail = str(exc); error = exc
         except SyncConflict as exc:
             state = 'conflict'; detail = str(exc); error = exc
+        except GitDeadlineExceeded as exc:
+            exc.busy_resource = 'git-budget'
+            state = 'busy'; detail = 'History verification timed out; saved operation retained'; error = exc
         except (SyncBusy, ProjectBusy, BlockingIOError) as exc:
             if isinstance(exc, BlockingIOError) and current_phase() == 'wait-lock':
                 exc.busy_resource = 'outbound-capacity'
@@ -1352,9 +1357,14 @@ class ContentSyncControl:
         for candidate in self.candidates():
             if _MANUAL_SYNCS.any_active(self.node): break
             if not candidate['eligible']: continue
+            key = (str(self.node), candidate['peer_id'], candidate['project_id'])
+            if not automatic_retry.ready(key): continue
             attempted += 1
             try:
                 self.synchronize(candidate['peer_id'], candidate['project_id'])
+                automatic_retry.succeeded(key)
+            except (TimeoutError, SyncBusy, ProjectBusy):
+                automatic_retry.failed(key)
             except Exception:
                 pass
         return {'enabled': True, 'attempted': attempted}

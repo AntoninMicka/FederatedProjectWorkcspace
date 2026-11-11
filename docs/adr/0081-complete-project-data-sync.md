@@ -192,3 +192,14 @@ v původním kandidátovi/resultu a uloží standardními Git metadaty; Markdown
 Context Manifest, schválené hashe, privacy a formát přenosu zůstávají zachované.
 Crash recovery používá původní publikační journal, CAS a receipt, bez další
 persistentní vrstvy. Detaily: [konkrétní zprávy](../report-outputs.md).
+
+## Validační proces a odstup pokusů (11. 11. 2026)
+
+Úplná sémantická validace přesného bundlu se provádí před vytvořením inbound
+intentu v odděleném omezeném procesu. Znovu se používají pouze již ověřená
+neměnná metadata v omezené cache téhož volání. Původní journal, podepsané bajty,
+ID operace, kontrola živých oprávnění před publikací, CAS a dokončený replay
+zůstávají autoritou; formát federačního protokolu se nemění. Automatický
+scheduler pouze zpomaluje dosavadní opakování po timeoutu/obsazení; nejde
+o nové oprávnění ani novou persistentní frontu. Podrobné crash boundaries:
+[ověřování historie](../history-validation-worker.md).

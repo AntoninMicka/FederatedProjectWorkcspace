@@ -16,9 +16,12 @@ from spikes.storage import Git
 
 class GitTransferHistoryTests(unittest.TestCase):
     def test_linear_history_reads_each_snapshot_once_per_validation(self):
+        from spikes.metadata import validate_snapshot
         commits = self.git.run('rev-list', self.git.head()).stdout.splitlines()
-        with patch.object(self.git, 'snapshot', wraps=self.git.snapshot) as read:
+        with patch.object(self.git, 'snapshot', wraps=self.git.snapshot) as read, \
+             patch('spikes.git_transfer.validate_snapshot', wraps=validate_snapshot) as validate:
             self.assertEqual(validate_history(self.git, self.git.head(), self.project_id), len(commits))
+        self.assertEqual(validate.call_count, len(commits))
         self.assertEqual([call.args[0] for call in read.call_args_list], commits)
         # A later transfer must read and validate again, not trust an old cache.
         with patch.object(self.git, 'snapshot', wraps=self.git.snapshot) as read:
