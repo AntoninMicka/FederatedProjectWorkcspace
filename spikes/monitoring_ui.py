@@ -91,7 +91,11 @@ async function loadMonitoring(){
  finally{monitoringLoads--;}
 }
 function refreshVisibleMonitoring(){
- if(activeProject&&!document.hidden&&document.querySelector('#monitoring-panel')?.getClientRects().length&&!monitoringDirty&&!monitoringAttempt&&!monitoringLoads)return loadMonitoring();
+ if(activeProject&&!document.hidden&&document.querySelector('#monitoring-panel')?.getClientRects().length&&!monitoringDirty&&!monitoringAttempt&&!blockEdit&&!blockProposal&&!blockComposeRun&&!blockSaving&&!monitoringLoads)return loadMonitoring();
+}
+function refreshMonitoringAfterSync(event){
+ if(activeProject?.id!==event.detail?.projectId||event.detail?.status?.state!=='idle')return;
+ return refreshVisibleMonitoring();
 }
 function renderMonitoring(){
  if(!monitoringView)return;const readonly=activeProject?.readOnly||!monitoringView.can_manage;

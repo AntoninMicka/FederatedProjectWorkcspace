@@ -1514,3 +1514,10 @@ separate inbound/outbound observations and forward only allowlisted resource
 and phase codes. **Reject:** guessing the owner from elapsed time, exposing
 exception text or paths, replacing native recovery, and retrying mutations
 based on diagnostic hints.
+
+Monitoring visibility after sync: **adapt/reuse** the existing completion event,
+visible-panel refresh and signed pool exchange. Verify the receiver's actual
+block catalog and pool contents, not only matching Git heads. **Reject:** copying
+remote block jobs or grants, activating intake on reception, refreshing hidden
+panels, and discarding unsaved block/composition edits. No persistent layer or
+crash boundary changes; native sync recovery remains unchanged.

@@ -15,6 +15,7 @@ class MonitoringPollingTests(unittest.TestCase):
         harness = r'''
 let activeProject={id:'one',head:'old'},monitoringView=null,monitoringDirty=false,monitoringAttempt=null;
 let panelVisible=false,calls=[],blocks=0,rendered=0;
+let blockEdit=null,blockProposal=null,blockComposeRun=null,blockSaving=null;
 const document={hidden:false,querySelector:()=>({getClientRects:()=>panelVisible?[{}]:[]})},monitoringStatus={};
 const monitoringRequest=()=>new Promise((resolve,reject)=>calls.push({resolve,reject}));
 const renderMonitoring=()=>rendered++,loadMonitoringBlocks=async()=>{blocks++;};
@@ -26,7 +27,13 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  panelVisible=true;document.hidden=true;await refreshVisibleMonitoring();check(!calls.length,'Hidden tab polled');
  document.hidden=false;monitoringDirty=true;await refreshVisibleMonitoring();check(!calls.length,'Dirty editor polled');
  monitoringDirty=false;monitoringAttempt={};await refreshVisibleMonitoring();check(!calls.length,'Pending write polled');monitoringAttempt=null;
- const first=refreshVisibleMonitoring(),overlap=refreshVisibleMonitoring();
+ for(const set of [v=>blockEdit=v,v=>blockProposal=v,v=>blockComposeRun=v,v=>blockSaving=v]){
+ set({});await refreshVisibleMonitoring();check(!calls.length,'Composable editor overwritten');set(null);
+ }
+ await refreshMonitoringAfterSync({detail:{projectId:'other',status:{state:'idle'}}});
+ await refreshMonitoringAfterSync({detail:{projectId:'one',status:{state:'busy'}}});
+ check(!calls.length,'Unrelated or incomplete sync loaded monitoring');
+ const first=refreshMonitoringAfterSync({detail:{projectId:'one',status:{state:'idle'}}}),overlap=refreshVisibleMonitoring();
  check(calls.length===1,'Overlapping refresh duplicated HTTP request');calls[0].resolve({commit_id:'new'});
  await Promise.all([first,overlap]);check(activeProject.head==='new'&&blocks===1&&rendered===1,'Refresh result lost');
  const old=loadMonitoring();activeProject={id:'two',head:'two-old'};const current=loadMonitoring();

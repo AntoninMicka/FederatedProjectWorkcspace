@@ -41,6 +41,26 @@ class PoolSyncTests(unittest.TestCase):
         self.f.exchange(0,1)
         self.assertEqual(self.services[1].pools.export(self.pid),b)
 
+    def test_desktop_to_receiver_preserves_filter_task_and_collected_content(self):
+        source, target = self.services
+        # Read the receiver's actual catalog, not only its Git HEAD.
+        rows = {b['id']: b for b in target.catalog(self.pid)['blocks']}
+        for spec in self.specs:
+            self.assertEqual(rows[spec['id']]['value'], spec['value'])
+            self.assertEqual(rows[spec['id']]['privacy'], spec['privacy'])
+            self.assertIsNone(rows[spec['id']]['runtime'])
+        source.configure(self.pid, self.specs[0]['id'], True, confirm=True)
+        source.tick(self.pid)
+        self.f.exchange(0, 1)
+        catalog = target.catalog(self.pid)
+        pool = next(b for b in catalog['blocks'] if b['id'] == self.specs[1]['id'])
+        self.assertEqual(pool['message_count'], 1)
+        self.assertIsNotNone(pool['last_received_sync'])
+        received = target.pools.view(self.pid, pool['id'])
+        self.assertEqual(received[0]['revisions'][0]['item']['content'], 'Energie dnes')
+        self.assertTrue(all(b['runtime'] is None for b in catalog['blocks']))
+        self.assertFalse(any(j['intent']['kind'] == 'processing' for j in catalog['jobs']))
+
     def test_sidecar_tampering_is_rejected_before_application(self):
         s=self.services[0];s.configure(self.pid,self.specs[0]['id'],True,confirm=True);s.tick(self.pid)
         env,payload,*_=_prepare(self.f.services[0],self.f.node_ids[1],self.pid,str(uuid4()),[],force_bundle=True)

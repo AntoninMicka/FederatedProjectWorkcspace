@@ -3270,6 +3270,7 @@ async function loadProjects(selectedId=null){
 
 document.addEventListener('contentsynccompleted',event=>{
  if(activeProject?.id===event.detail?.projectId)loadChat();
+ refreshMonitoringAfterSync(event);
 });
 document.querySelector('#sidebar-register-project').addEventListener('click',()=>{
  document.querySelector('#sidebar-project-import-options').hidden=true;

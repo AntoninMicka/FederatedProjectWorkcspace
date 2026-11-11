@@ -178,3 +178,36 @@ Ověření doplněného převodu ADR 0083:
 Plná sada 1 805 testů výše patří předchozímu commitu `b9c4a1a`, nikoli tomuto
 doplnění. Celá závěrečná brána dávky zůstává na jejím finálním předání.
 Živá uživatelská data tato implementační práce nepřeváděla.
+
+## Co ověřit, když na druhém uzlu chybí data
+
+Definice filtrů, zpracování a komplexních úloh jsou součástí projektového
+Gitu; zprávy v poolech se přenášejí výše popsaným sidecarem. Stav busy nebo
+konflikt nedokládá dokončený přenos. Diagnostický `busy_resource` rozlišuje
+například `node-registry` a `project-journal`; nejde automaticky o obsazený
+filtr nebo o chybějící podporu přenosu.
+
+Po úspěšném ručně sledovaném syncu UI obnoví otevřený přehled sledování
+stejného projektu. Nečte skrytý panel a nepřepisuje rozepsaný blok, návrh
+sestavy ani probíhající uložení. Přechod do přehledu nebo tlačítko
+**Obnovit přehled** načte aktuální data samostatně.
+
+**Výsledky a běhy** zatím zobrazují místní provozní záznamy. Vydané texty
+jsou v projektovém Gitu, ale jejich přijetí nevytvoří místní záznam běhu
+ani kopii vzdáleného journalu. Chybějící položka v tomto přehledu proto
+sama nedokládá, že chybí vydaný dokument. Jednotná projekce přenesených
+vydaných výstupů do tohoto přehledu zůstává nedokončená.
+
+Regrese `tests.test_message_pool_sync` ověřuje přesné definice v katalogu
+příjemce, text vytěžené zprávy v poolu a zachování vypnutého sběru.
+`tests.test_monitoring_polling` ověřuje obnovu po úspěšném syncu, odlišný
+projekt, busy stav, souběžná čtení a ochranu rozepsaných editorů.
+
+Ověření tohoto doplnění: 12 testů přenosu úplných dat/poolů, 5 testů
+rozšířeného pool přenosu a obnovy UI a 28 regresních testů bloků/navigace/UI
+prošlo (celkem 45 provedení, 1 volitelný skip; některé selektory se překrývají).
+Sestavený JavaScript prošel `node --check`; `git diff --check` prošel.
+Plná sada nebyla opakována. Izolované přenosy nejsou akceptací živého
+přenosu desktop → Omnia. Živá read-only diagnostika 11. 11. 2026 stále
+zachytila odmítnutí `node-registry` a `project-journal`; tato UI změna
+jejich příčinu neodstraňuje a nebyla vzdáleně nasazena.
