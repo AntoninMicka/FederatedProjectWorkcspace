@@ -22,7 +22,7 @@ import time
 from spikes.http_request_budget import RequestReadTimeout, request_reader
 from spikes.backend_availability import BackendAvailability
 from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, STREAM_ROUTES, SERVICE_ROUTES, request_lane
-from spikes.request_ownership import ProjectLanes, ProjectBusy, bounded_project_requests
+from spikes.request_ownership import BoundedWaitingLane, ProjectLanes, ProjectBusy, bounded_project_requests
 
 from spikes.metadata import parse_json, ValidationError
 
@@ -72,6 +72,9 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self._worker_slots = threading.BoundedSemaphore(max_workers + int(reserve_ui))
         for name in LANES:
             setattr(self, name + '_lane', threading.Lock())
+        # One queued IDE operation absorbs ordinary cross-client overlap.
+        # Never let multiple waiting requests consume the entire worker pool.
+        self.ide_queue_lane = BoundedWaitingLane()
         self.backend_availability = BackendAvailability()
         self.project_lanes = ProjectLanes()
         self.request_lane_timeout = lane_timeout
@@ -170,9 +173,11 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
     def shutdown(self):
         with self._worker_condition:
             self._admission_open = False
+        self.ide_queue_lane.close()
         return super().shutdown()
 
     def server_close(self):
+        self.ide_queue_lane.close()
         monitoring=getattr(self,'monitoring',None)
         monitoring_clean=monitoring.close() if monitoring else True
         deadline = time.monotonic() + self.shutdown_timeout
@@ -290,10 +295,12 @@ class Handler(BaseHTTPRequestHandler):
         operation_name = self.path if self.path in self.post_paths or self.path in ROUTE_LANES else 'unclassified'
         kind = 'content-sync' if self.path == '/v1/federation/content-sync' else lane_name
         describe(self.request, kind, 'waiting', operation_name)
-        # Allow brief cross-window collisions, but never occupy UI capacity
-        # for the full application-lane timeout behind a long operation.
-        acquired = (lane.acquire(timeout=min(0.1, self.server.request_lane_timeout)) if getattr(self.server, 'post_slots', None)
-                    is not None else lane.acquire(timeout=self.server.request_lane_timeout))
+        # Only the IDE lane has a single waiting slot. Other domains retain
+        # short admission waits so they cannot park the whole HTTP pool.
+        timeout = self.server.request_lane_timeout
+        if getattr(self.server, 'post_slots', None) is not None and lane_name != 'ide_queue_lane':
+            timeout = min(0.1, timeout)
+        acquired = lane.acquire(timeout=timeout)
         if not acquired:
             logging.getLogger(__name__).warning('http_request_busy lane=%s requests=%s',
                 lane_name, (self.server.http_diagnostics()['requests']

@@ -1617,3 +1617,14 @@ identity, envelope, graph/privacy and live-authority checks in their context.
 **Reject:** cross-transfer validation results, treating captured JSON as claims,
 trusting HEAD alone for historical project identity and extending the timeout.
 Target-hardware candidate evidence: [History validator](docs/history-validation-worker.md).
+
+### Bounded IDE HTTP waiting
+
+**Adapt/reuse:** existing `BoundedHTTPServer`, exact IDE route ownership,
+`request_ownership` and the configured HTTP lane budget. Replace only the
+IDE queue's ephemeral lock with one owner plus one waiting slot; retain native
+SQLite, queue flock, journal and receipt recovery. Shutdown cancels admission
+of the waiter. **Reject:** increasing worker counts, unbounded worker waiting,
+parallel bridge writers and automatic replay after dispatch. No external
+component is introduced. Recovery and verification:
+[HTTP ownership](docs/http-concurrency-ownership.md#bounded-ide-http-waiting).

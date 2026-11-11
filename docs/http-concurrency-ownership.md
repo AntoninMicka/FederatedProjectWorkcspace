@@ -1525,3 +1525,55 @@ tests passed with local sockets and Git subprocesses permitted; this overlaps
 the Python transport wrapper and is not an additional unique aggregate.
 Compilation and `git diff --check` passed. The full repository suite and live
 IDE/Omnia acceptance have not run for this correction.
+
+## Bounded IDE HTTP waiting
+
+Continuation from `724b6ce` on `feature/rss-direct-pilot`, explicitly authorized
+after the user supplied further IDE collision logs. The latest saved export
+matches project `c898b941-8eb0-4406-8dad-6e2b96c06d59` and the repository,
+revision `5e9de351ac5e6ec033066a10eba2309fbbaf57cc1a3f9799478c172cd6025a39`,
+but its status is stale with connection refused. This source repair does not
+activate another planned feature or change Workspace acceptance.
+
+Discovery isolation left queue exchanges and UI status competing for a lock
+whose HTTP wait was capped at 100 ms. Logs show ordinary exchanges lasting
+126–457 ms, including exchange versus exchange. The IDE queue owner now has
+one bounded waiting slot. That waiter uses the already configured lane budget
+(two seconds by default), while excess waiters receive typed not-started busy
+without waiting. A newcomer cannot pass an admitted waiter. No worker count,
+native lock timeout, retry or dispatch concurrency is increased. At most two
+HTTP workers are held by this domain, leaving two ordinary workers plus the
+reserved diagnostic worker in the default desktop/web pool. Other HTTP owners,
+including discovery/update, retain their previous admission policy.
+
+This is bounded smoothing for brief overlap, not an asynchronous work queue.
+A long owner can still cause an explicit pre-dispatch timeout. A timed-out
+waiter is removed and never dispatched later. Shutdown/server close marks the
+lane closed and wakes its waiter for not-started refusal; the active operation
+retains the original shutdown/recovery policy. Authentication/body validation
+remain before admission, with credential revalidation after waiting. Native
+contention after dispatch still reports unknown/same-operation as before.
+
+Crash boundaries remain [ADR 0060](adr/0060-local-file-ide-bridge.md) and
+[ADR 0062](adr/0062-pinned-queue-handoff.md): there is no new persistent writer,
+format or cross-store transaction. Process failure before admission loses only
+an unstarted volatile waiter. After dispatch, original operation/message IDs,
+immutable bytes, bridge intents/receipts and Workspace journal/Git/index
+recovery apply. A lost response after dispatch is still an uncertain outcome;
+the waiting mechanism does not add disconnect-triggered cancellation/replay.
+
+New real HTTP tests overlap exchanges/status behind 0.5 s and 1.1 s owners,
+check bounded overflow and available ordinary/diagnostic routes, expire a
+waiter without later dispatch, cancel it at shutdown, and revoke a credential
+during actual waiting before dispatch. Existing SQLite/native queue refusal
+and prepared-review replay tests continue to exercise the persistent boundaries.
+Ordinary user-profile acceptance and remote deployment remain separate.
+
+Verification: the 110-test local/web HTTP, project/IDE ownership and browser
+admission selection passed (10 optional Qt/WebEngine skips). After the final
+deadline guard and its regression were added, all 11 IDE ownership/deadline
+tests passed. Reusing the original HEAD admission method in memory made both
+0.5 s / 1.1 s overlap subtests fail, without changing checkout files.
+Compilation and `git diff --check` passed. The full repository suite and
+ordinary live-profile acceptance have not run; no source commit, deployment
+or application restart was performed.

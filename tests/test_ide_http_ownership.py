@@ -6,6 +6,7 @@ import fcntl
 import json
 import sqlite3
 import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -14,9 +15,22 @@ from spikes.ide_bridge_panel import review as native_review
 from spikes.local_api import Handler, running_api
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
+from spikes.request_ownership import BoundedWaitingLane
 from spikes.task_queue import TaskQueue
 from tests import test_ide_bridge_panel as fixtures
 from tests import test_project_http_ownership as ownership
+
+
+class IDEWaitingDeadlineTests(unittest.TestCase):
+    def test_owner_release_after_deadline_cannot_dispatch_expired_waiter(self):
+        lane = BoundedWaitingLane()
+        self.assertTrue(lane.acquire())
+        # Simulate waking after the deadline with the owner already released.
+        with patch('spikes.request_ownership.time.monotonic', side_effect=[0, 0, 3]), \
+             patch.object(lane.condition, 'wait', side_effect=lambda timeout: lane.release()):
+            self.assertFalse(lane.acquire(timeout=2))
+        self.assertTrue(lane.acquire(blocking=False))
+        lane.release()
 
 
 class IDEHTTPOwnershipTests(unittest.TestCase):
@@ -29,6 +43,117 @@ class IDEHTTPOwnershipTests(unittest.TestCase):
         self.node = self.f.node; self.pid = self.f.project
         self.service = self.f.service; self.projects = Projects(self.node)
         self.queue = TaskQueue(self.node); self.owner = ProjectCreation(self.node).author_id()
+
+    def wait_for_ide_waiter(self, server):
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            with server.ide_queue_lane.condition:
+                if server.ide_queue_lane.waiting:
+                    return
+            time.sleep(0.005)
+        self.fail('IDE request did not enter bounded waiting slot')
+
+    def test_overlapping_exchanges_and_status_complete_without_retry(self):
+        route = '/v1/ide-bridge/connection/exchange'
+        token = self.f.created['pairing']['token']
+        request = dict(connection_id=self.record['connection_id'], action='exchange',
+                       request=dict(session_id=self.record['session_id'], messages=[]))
+        original = self.service.connection_exchange
+        for duration, next_route, next_body in (
+                (0.5, route, request),
+                (1.1, '/v1/ide-bridge/status', {'project_id': self.pid})):
+            with self.subTest(duration=duration):
+                entered, release = threading.Event(), threading.Event()
+                results = []
+                def blocked(parent, body):
+                    if not entered.is_set():
+                        entered.set()
+                        if not release.wait(5):
+                            raise AssertionError('Exchange owner not released')
+                    return original(parent, body)
+                with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+                    server.ide_bridge_service = self.service
+                    with patch.object(self.service, 'connection_exchange', side_effect=blocked):
+                        first = threading.Thread(target=lambda: results.append(self.post(server, route, request, token=token)))
+                        second = threading.Thread(target=lambda: results.append(self.post(server, next_route,
+                            next_body, token=token if next_route == route else None)))
+                        first.start()
+                        try:
+                            self.assertTrue(entered.wait(2))
+                            second.start()
+                            self.wait_for_ide_waiter(server)
+                            # The bounded waiter must survive ordinary >100 ms work.
+                            self.assertFalse(release.wait(duration))
+                            self.assertTrue(second.is_alive())
+                            # Excess requests cannot occupy more waiting workers.
+                            started = time.monotonic()
+                            code, payload, _ = self.post(server, '/v1/ide-bridge/status', {'project_id': self.pid})
+                            self.assertEqual(code, 503, payload)
+                            self.assertEqual(payload['outcome'], 'not-started')
+                            self.assertLess(time.monotonic() - started, 0.5)
+                            self.assertEqual(self.post(server, '/v1/counter', {'action': 'increment'})[0], 200)
+                            self.assertEqual(self.post(server, '/v1/diagnostics/status', {})[0], 200)
+                        finally:
+                            release.set(); first.join(5)
+                            if second.ident is not None:
+                                second.join(5)
+                        self.assertFalse(first.is_alive()); self.assertFalse(second.is_alive())
+                        self.assertEqual([r[0] for r in results], [200, 200], results)
+
+    def test_shutdown_rejects_waiter_without_dispatch(self):
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            server.ide_bridge_service = self.service
+            server.ide_queue_lane.acquire()
+            results = []
+            with patch.object(self.service, 'status', side_effect=AssertionError('Shutdown dispatched waiter')):
+                worker = threading.Thread(target=lambda: results.append(self.post(server,
+                    '/v1/ide-bridge/status', {'project_id': self.pid})))
+                worker.start()
+                try:
+                    self.wait_for_ide_waiter(server)
+                    server.shutdown()
+                    worker.join(2)
+                    self.assertFalse(worker.is_alive())
+                    self.assertEqual(results[0][0], 503, results)
+                    self.assertEqual(results[0][1]['outcome'], 'not-started')
+                finally:
+                    server.ide_queue_lane.release(); worker.join(5)
+
+    def test_wait_timeout_never_dispatches_later_and_releases_waiting_slot(self):
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects,
+                         lane_timeout=0.15) as server:
+            server.ide_bridge_service = self.service
+            server.ide_queue_lane.acquire()
+            try:
+                with patch.object(self.service, 'status', side_effect=AssertionError('Expired dispatch')):
+                    code, payload, _ = self.post(server, '/v1/ide-bridge/status', {'project_id': self.pid})
+                    self.assertEqual(code, 503, payload)
+                    self.assertEqual(payload['outcome'], 'not-started')
+            finally:
+                server.ide_queue_lane.release()
+            self.assertFalse(server.ide_queue_lane.waiting)
+            self.assertEqual(self.post(server, '/v1/ide-bridge/status', {'project_id': self.pid})[0], 200)
+
+    def test_real_wait_revalidates_revoked_connection_before_exchange(self):
+        request = dict(connection_id=self.record['connection_id'], action='exchange',
+                       request=dict(session_id=self.record['session_id'], messages=[]))
+        with running_api('http', handler=DesktopManagementHandler, projects=self.projects) as server:
+            server.ide_bridge_service = self.service
+            server.ide_queue_lane.acquire()
+            results = []
+            with patch.object(self.service, 'connection_exchange', side_effect=AssertionError('Revoked dispatch')):
+                worker = threading.Thread(target=lambda: results.append(self.post(server,
+                    '/v1/ide-bridge/connection/exchange', request, token=self.f.created['pairing']['token'])))
+                worker.start()
+                try:
+                    self.wait_for_ide_waiter(server)
+                    self.service.connection_revoke(None, self.record['connection_id'])
+                finally:
+                    server.ide_queue_lane.release(); worker.join(5)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(results[0][0], 401, results)
+            # Credential failure also frees ownership for subsequent requests.
+            self.assertEqual(self.post(server, '/v1/ide-bridge/status', {'project_id': self.pid})[0], 200)
 
     def test_queue_bridge_and_review_share_one_independent_http_owner(self):
         entered, release = threading.Event(), threading.Event()

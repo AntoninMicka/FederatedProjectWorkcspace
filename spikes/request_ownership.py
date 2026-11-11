@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 import threading
 import fcntl
+import time
 
 
 bounded_project_wait = ContextVar('bounded_project_wait', default=False)
@@ -87,6 +88,55 @@ class ProjectLanes:
                 entry[1] -= 1
                 if not entry[1]:
                     del self.entries[project_id]
+
+
+class BoundedWaitingLane:
+    """One owner and one waiting HTTP worker; newcomers cannot pass the waiter."""
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.active = False
+        self.waiting = False
+        self.closed = False
+
+    def acquire(self, blocking=True, timeout=-1):
+        with self.condition:
+            if self.closed:
+                return False
+            if not self.active and not self.waiting:
+                self.active = True
+                return True
+            if not blocking or self.waiting:
+                return False
+            deadline = None if timeout < 0 else time.monotonic() + timeout
+            self.waiting = True
+            try:
+                while self.active and not self.closed:
+                    remaining = None if deadline is None else deadline - time.monotonic()
+                    if remaining is not None and remaining <= 0:
+                        return False
+                    self.condition.wait(remaining)
+                if self.closed or (deadline is not None and time.monotonic() >= deadline):
+                    return False
+                self.active = True
+                return True
+            finally:
+                self.waiting = False
+
+    def release(self):
+        with self.condition:
+            if not self.active:
+                raise RuntimeError('release unlocked lane')
+            self.active = False
+            self.condition.notify_all()
+
+    def locked(self):
+        with self.condition:
+            return self.active
+
+    def close(self):
+        with self.condition:
+            self.closed = True
+            self.condition.notify_all()
 
 
 @contextmanager
