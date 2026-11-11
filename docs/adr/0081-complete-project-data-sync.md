@@ -203,3 +203,10 @@ zůstávají autoritou; formát federačního protokolu se nemění. Automatick�
 scheduler pouze zpomaluje dosavadní opakování po timeoutu/obsazení; nejde
 o nové oprávnění ani novou persistentní frontu. Podrobné crash boundaries:
 [ověřování historie](../history-validation-worker.md).
+
+Doplnění stejného průchodu: přesné Git bloby a intrinsicky validovaná metadata/
+reportingové záznamy se mohou opakovaně použít v omezené volatilní cache.
+Kontroly aktuálního stromu, obálky, obsahu, vztahů, privacy a živých oprávnění
+zůstávají povinné. Projektová identita se váže na každý odlišný projektový blob,
+nikoli pouze na HEAD. Nejde o nové oprávnění ani persistentní doklad validace.
+Měření kandidáta na Omnii a přesné meze: [ověřování historie](../history-validation-worker.md).

@@ -103,3 +103,59 @@ ale nadále odmítá běžícího; opakování této kontroly prošlo dvanáctkr
 Živá akceptace vyžaduje sjednocené verze uzlů, úspěšný původní přenos a běžné
 otevírání projektů během synchronizace. Lokální testy ani instalace samotná
 tuto akceptaci nenahrazují.
+
+## Doplnění po ověření na Omnii — 11. 11. 2026
+
+První izolace výpočtu sama nestačila: nasazená verze nadále překračovala
+60sekundový rozpočet. Služba přitom nepadala (`NRestarts=0`) a worker skutečně
+běžel s nižší prioritou. Další profil odhalil opakované čtení stejných objektů
+z Git a parsování stejných metadat/záznamů napříč různými commity.
+
+Jeden průchod nyní kromě dvou snapshotů vlastní dvě omezené cache:
+
+- Git bloby podle přesného OID: nejvýše 2048 položek / 16 MiB. Každý strom
+  nadále prochází kontrolou cest, typu, režimu, velikostí a souhrnného limitu;
+  velikost cache hitu musí odpovídat aktuální inventuře. Pořadí souborů se nemění.
+- Intrinsicky validovaná metadata a kanonické reportingové záznamy podle
+  přesných bajtů a typu parseru: dohromady nejvýše 1024 položek / 8 MiB.
+  Obálka proti metadatům, ID/adresář, zdrojové hashe, vztahy, privacy a celý
+  aktuální graf se stále kontrolují v každé revizi. Zachycené zdrojové JSON
+  zůstává neprůhledným zdrojem, i když obsahuje export reportingového záznamu.
+
+Pinned reportingové vstupy sdílejí stejný omezený loader. Jejich projektová
+identita a konkrétní reference se stále ověřují. Identita vlastního
+`project.json` se znovu parsuje při každém novém OID; přítomnost a typ souboru
+se ověřují v každém stromu. Historická změna a pozdější návrat k původnímu
+projektovému souboru tedy nemohou skrýt jinou projektovou identitu.
+Cache nežijí mimo tento průchod, nejsou persistentní a nenesou grant ani
+publikační oprávnění. Vyřazená položka se znovu načte a ověří. Formát dat,
+protokol, journal, CAS, 60sekundový limit a crash boundaries se nemění.
+
+Stejná lokální historie se 139 commity po doplnění blob/metadata cache prošla
+v profilovaném běhu za 4,793 s (předchozí mezikrok 14,615 s); počet Git příkazů
+klesl z 985 na 560. Reportingová cache navíc odstraňuje opakované intrinsické
+parsování týchž záznamů při resolvování referencí.
+
+Před předáním proběhla také zkouška kandidátního kódu přímo na Omnii nad
+**původními uloženými přenosy**, v soukromém dočasném adresáři servisního účtu:
+
+| Historie | Výsledek | Čas validace | CPU rodiče | CPU potomků |
+| --- | --- | ---: | ---: | ---: |
+| Workspace, 139 commitů | valid | 24,913 s | 0,011 s | 22,976 s |
+| Pokus, reporting a monitoring | valid | 9,922 s | 0,015 s | 8,455 s |
+
+Použit byl původní absolutní 60sekundový rozpočet. Kandidát se **neinstaloval**,
+služba se nerestartovala a její PID se nezměnil; zkouška nic nepublikovala do
+projektů ani journalů. Je to doklad rychlosti a platnosti obou konkrétních
+historií na cílovém hardwaru, nikoli potvrzení dokončené síťové synchronizace.
+Živý výsledek vyžaduje aktualizaci běžícího backendu a opakování původní operace.
+
+Finální regrese doplnění: **2058 testů, OK, 59 přeskočených**, ve čtyřech
+izolovaných kopiích; všech 188 top-level modulů bylo v konečné matici zařazeno
+právě jednou. Shardy: 512/520/515/511 testů, všechny s návratovým kódem 0.
+Dotčený shard byl zopakován se stejným připnutým seznamem modulů poté, co test
+úklidu odstranil předpoklad spuštění interpretu do 0,5 s: nyní nejprve počká
+na skutečného potomka a potom injektuje timeout. Nadále ověřuje ukončení celé
+skupiny a opětovnou dostupnost kapacity; dvanáct opakování prošlo. Produkční
+deadline ani kód workeru se kvůli této testovací synchronizaci neměnily.
+`git diff --check` prošel. Změny nebyly touto zkouškou nasazeny do služby.

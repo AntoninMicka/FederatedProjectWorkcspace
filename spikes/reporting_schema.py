@@ -415,7 +415,7 @@ def canonical_events(story):
 
 
 
-def records(files, entities):
+def records(files, entities, *, _record_cache=None):
     result = {}
     for id_, meta in entities.items():
         # Raw sources remain opaque even when the captured filename is
@@ -426,8 +426,9 @@ def records(files, entities):
         tagged = SCHEMA in meta.get('tags', [])
         if not tagged and meta['file'] != 'record.json' and b'fpw-reporting-record-' not in data:
             continue
+        cached = _record_cache.record(data) if _record_cache is not None else None
         try:
-            payload = parse_json(data, maximum=16 * 1024 * 1024)
+            payload = cached if cached is not None else parse_json(data, maximum=16 * 1024 * 1024)
         except ValidationError:
             require(not tagged and b'fpw-reporting-record-' not in data, 'Malformed reporting JSON')
             continue
@@ -437,8 +438,12 @@ def records(files, entities):
         require(meta['file'] == 'record.json', 'Reporting record requires record.json')
         path = f'artifacts/{id_}/record.json'
         if meta['file'] == 'record.json':
-            record = validate_record(parse_json(files[path], maximum=1024 * 1024))
-            require(files[path] == encoded(record), 'Reporting JSON must use canonical serialization')
+            record = cached
+            if record is None:
+                record = validate_record(parse_json(files[path], maximum=1024 * 1024))
+                require(files[path] == encoded(record), 'Reporting JSON must use canonical serialization')
+                if _record_cache is not None:
+                    _record_cache.remember_record(data, record)
             require(record['revision_id'] == id_ and record['recorded_at'] == meta['created_at']
                     and record['recorded_by'] == meta['author_id'] and record['privacy'] == meta['privacy'],
                     'Reporting envelope differs from metadata')
@@ -519,9 +524,9 @@ def records(files, entities):
     return result
 
 
-def immutable_transition(base_files, candidate_files, base_entities, candidate_entities):
-    before = records(base_files, base_entities)
-    after = records(candidate_files, candidate_entities)
+def immutable_transition(base_files, candidate_files, base_entities, candidate_entities, *, _record_cache=None):
+    before = records(base_files, base_entities, _record_cache=_record_cache)
+    after = records(candidate_files, candidate_entities, _record_cache=_record_cache)
     require(not (set(after) - set(before)) & set(base_entities),
             'Reporting revision must use a new artifact ID')
     for id_ in before:
@@ -531,7 +536,8 @@ def immutable_transition(base_files, candidate_files, base_entities, candidate_e
                 'Reporting revisions are immutable; create a successor')
 
 
-def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
+def validate_git(git, files, entities, base_files=None, *, head='HEAD', _snapshot_loader=None,
+                 _record_cache=None):
     """Resolve all local references against exact commits before journal/CAS.
 
     Cross-project refs fail closed in MON-01: their authorization belongs to
@@ -539,7 +545,7 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
     """
     from spikes.configuration import committed_project, parse_project
     from spikes.metadata import validate_snapshot
-    all_records = records(files, entities)
+    all_records = records(files, entities, _record_cache=_record_cache)
     if not all_records:
         return
     if head != 'HEAD':
@@ -563,8 +569,11 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                 require(pinned_commit.returncode==0 and pinned_commit.stdout.strip() == commit,
                         'Reference must pin a commit')
                 committed_project(git, commit, project, check_worktree=False)
-                selected = git.snapshot(commit)
-                cache[commit] = selected, validate_snapshot(selected)
+                if _snapshot_loader is None:
+                    selected = git.snapshot(commit)
+                    cache[commit] = selected, validate_snapshot(selected)
+                else:
+                    cache[commit] = _snapshot_loader(commit)
             selected, metas = cache[commit]
         require(reference['path'] in selected and digest(selected[reference['path']]) == reference['sha256'],
                 'Pinned reporting bytes mismatch')
@@ -572,7 +581,7 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
         require(meta is not None and meta.get('file') == reference['path'].split('/')[-1], 'Invalid content reference')
         payload = None
         if meta['kind'] != 'source' and meta.get('file') == 'record.json':
-            payload = records(selected, metas).get(meta['id'])
+            payload = records(selected, metas, _record_cache=_record_cache).get(meta['id'])
         if expected:
             require(payload is not None and payload['type'] == expected, 'Wrong reporting reference type')
         return meta, payload

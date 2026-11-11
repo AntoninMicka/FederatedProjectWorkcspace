@@ -19,10 +19,11 @@ from spikes.configuration import committed_project
 from spikes.federation_probe import check_peer
 from spikes.journal import sync_dir
 from spikes.lxc_setup import ACTOR
-from spikes.metadata import require, validate_snapshot, _validate_transition
+from spikes.metadata import (require, _validate_snapshot, _validate_transition,
+                             _SnapshotMetadataCache)
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
-from spikes.storage import Git
+from spikes.storage import Git, _GitBlobCache
 
 MAX_BUNDLE = 64 * 1024 * 1024
 
@@ -42,11 +43,14 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
     # immutable snapshots, scoped to this call; never cache authorization or
     # validation results between transfers.
     snapshots = OrderedDict()
+    metadata_cache = _SnapshotMetadataCache()
+    blob_cache = _GitBlobCache()
+    project_blobs = set()
 
     def snapshot(commit):
         if commit not in snapshots:
-            files = git.snapshot(commit)
-            snapshots[commit] = files, validate_snapshot(files)
+            files = git.snapshot(commit, _blob_cache=blob_cache)
+            snapshots[commit] = files, _validate_snapshot(files, metadata_cache=metadata_cache)
             while len(snapshots) > 2:
                 snapshots.popitem(last=False)
         snapshots.move_to_end(commit)
@@ -54,19 +58,26 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
 
     for commit in commits:
         git.check_deadline()
-        committed_project(git, commit, project_id, check_worktree=False)
         entries = git_run(git, 'ls-tree', '-r', '-z', commit).stdout
+        project_blob = None
         for entry in filter(None, entries.split('\0')):
             info, path = entry.split('\t', 1)
             mode, kind, _ = info.split()
             require(mode in {'100644', '100755'} and kind == 'blob', 'Symlinks/submodules are not transferable')
             require(path == 'project.json' or path.startswith(('artifacts/', 'registries/')),
                     'Unclassified historical file cannot be transferred: ' + path)
+            if path == 'project.json':
+                project_blob = info.split()[2]
+        require(project_blob is not None, 'Missing committed project.json')
+        if project_blob not in project_blobs:
+            committed_project(git, commit, project_id, check_worktree=False)
+            project_blobs.add(project_blob)
         candidate, entities = snapshot(commit)
         parents = git_run(git, 'show', '-s', '--format=%P', commit).stdout.split()
         for parent in parents:
             parent_files, parent_entities = snapshot(parent)
-            _validate_transition(parent_files, candidate, parent_entities, entities)
+            _validate_transition(parent_files, candidate, parent_entities, entities,
+                                 _record_cache=metadata_cache)
         for item in entities.values():
             require(item['privacy'] in allowed_privacy,
                     'Transfer grant does not allow ' + item['privacy'] +
@@ -75,7 +86,8 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
         # Validate each historical revision in its own context, including bare
         # repositories whose HEAD is unborn or points at a different branch.
         from spikes.reporting_schema import validate_git
-        validate_git(git, candidate, entities, head=commit)
+        validate_git(git, candidate, entities, head=commit, _snapshot_loader=snapshot,
+                     _record_cache=metadata_cache)
         git.check_deadline()
     return len(commits)
 

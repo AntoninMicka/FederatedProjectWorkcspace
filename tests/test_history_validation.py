@@ -51,18 +51,36 @@ class HistoryValidationTests(unittest.TestCase):
         def launch(command, **kwargs):
             process = native([sys.executable, '-c', code], **kwargs)
             children.append(process)
+            # Synchronize with the actual grandchild instead of assuming an
+            # interpreter can start within 0.5 s on a loaded CI host.
+            from spikes.history_validation import _stop
+            self.addCleanup(_stop, process)
+            deadline = time.monotonic() + 5
+            while not pidfile.exists() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertTrue(pidfile.exists())
+            communicate = process.communicate
+            def timeout_once(*args, **options):
+                if args:  # The request send; cleanup's communicate has no input.
+                    raise subprocess.TimeoutExpired(command, 0)
+                return communicate(**options)
+            process.communicate = timeout_once
             return process
         with patch('spikes.history_validation._popen', side_effect=launch):
             with self.assertRaises(GitDeadlineExceeded):
-                with git_budget(.5):
-                    self.validate()
+                self.validate()
         self.assertIsNotNone(children[0].returncode)
         self.assertTrue(pidfile.exists())
         path = Path('/proc') / pidfile.read_text() / 'stat'
-        try:
-            state = path.read_text().rsplit(')', 1)[1].split()[0]
-        except (FileNotFoundError, ProcessLookupError):
-            state = None  # The kernel may reap it during the /proc read.
+        deadline = time.monotonic() + 1
+        while True:
+            try:
+                state = path.read_text().rsplit(')', 1)[1].split()[0]
+            except (FileNotFoundError, ProcessLookupError):
+                state = None
+            if state in (None, 'Z') or time.monotonic() >= deadline:
+                break
+            time.sleep(.01)
         self.assertIn(state, (None, 'Z'))
         self.validate()
 

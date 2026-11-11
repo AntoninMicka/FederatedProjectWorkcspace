@@ -1581,3 +1581,12 @@ slows existing automatic retries without replacing operation authority.
 second writer/journal, changing the wire protocol, extending deadlines and
 queueing unbounded validators. Recovery and evidence:
 [History validator](docs/history-validation-worker.md).
+
+Immutable history reuse: **adapt/reuse** `Git.snapshot` batch preflight,
+content-addressed blobs, metadata/record validators and the reporting resolver.
+Reuse exact object bytes and only intrinsic validation results within one
+bounded walk (16 MiB blobs, 8 MiB metadata/records); rerun layout, integrity,
+identity, envelope, graph/privacy and live-authority checks in their context.
+**Reject:** cross-transfer validation results, treating captured JSON as claims,
+trusting HEAD alone for historical project identity and extending the timeout.
+Target-hardware candidate evidence: [History validator](docs/history-validation-worker.md).
