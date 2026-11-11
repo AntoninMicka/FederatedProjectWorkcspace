@@ -41,7 +41,14 @@ try:
    4:'document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}))',
    5:'document.querySelector("#source-channel-all").click()',
    6:'window.dispatchEvent(new Event("resize"))',
-   7:'navigateSidebarTab(document.querySelector("#projects-tab"))'}
+   7:'navigateSidebarTab(document.querySelector("#projects-tab"))',
+   8:'navigateSidebarTab(document.querySelector("#sources-sidebar-tab"))',
+   9:'document.querySelector("#sources-new").click()',
+   10:'sourcesEditor.elements.name.value="Added feed";sourcesEditor.elements.url.value="https://example.org/new";sourcesEditor.elements.minutes.value="2";sourcesEditor.requestSubmit()',
+   11:'const selected=document.querySelector("#sources-channel-tabs [aria-current=true]").closest("li");selected.querySelector("summary").click();[...selected.querySelectorAll("[role=menuitem]")].find(b=>b.textContent==="Upravit kanál").click()',
+   12:'sourcesEditor.elements.name.value="Renamed feed";sourcesEditor.elements.minutes.value="3";sourcesEditor.requestSubmit()',
+   13:'document.querySelector("#sources-import").click();const transfer=new DataTransfer();transfer.items.add(new File([`<opml><body><outline text="Imported feed" xmlUrl="https://example.org/import"/></body></opml>`],"feeds.opml",{type:"text/xml"}));document.querySelector("#sources-import-file").files=transfer.files;document.querySelector("#sources-import-file").dispatchEvent(new Event("change"))',
+   14:'document.querySelector("#sources-import-save").click()'}
   checks={
    0:'typeof loadSources==="function"&&typeof navigateSidebarTab==="function"',
    1:'!document.querySelector("#sources-view").hidden&&sourcesView?.channels.length===2&&!activeProject&&document.querySelector("#sources-connector-list").textContent.includes("Nedostupné")&&document.querySelector("#sources-connector-list").textContent.includes("Nepřipojeno")',
@@ -50,7 +57,14 @@ try:
    4:'sourcesChannel==="two"&&document.activeElement.id==="source-channel-two"&&sourcesFeed.querySelectorAll("article").length===1',
    5:'sourcesChannel==="all"&&sourcesFeed.querySelectorAll("article").length===2',
    6:'window.innerWidth<500&&!document.querySelector("#sources-view").hidden&&document.documentElement.scrollWidth<=window.innerWidth+1',
-   7:'document.querySelector("#sources-view").hidden&&!document.querySelector("#project-home").hidden'}
+   7:'document.querySelector("#sources-view").hidden&&!document.querySelector("#project-home").hidden',
+   8:'!document.querySelector("#sources-view").hidden',
+   9:'!sourcesEditor.hidden&&document.querySelector("#sidebar-sources #sources-new svg")!==null&&document.querySelector("#sources-new").getAttribute("aria-label")=="Nový zdroj"',
+   10:'sourcesEditor.hidden&&!sourcesRefresh.disabled&&sourcesView.channels.some(c=>c.name==="Added feed"&&c.poll_seconds===120)',
+   11:'!sourcesEditor.hidden&&sourcesEditor.elements.name.value==="Added feed"',
+   12:'sourcesEditor.hidden&&sourcesView.channels.some(c=>c.name==="Renamed feed"&&c.poll_seconds===180)',
+   13:'sourcesImport?.channels.length===1&&!document.querySelector("#sources-import-save").disabled',
+   14:'sourcesImportReview.hidden&&sourcesView.channels.some(c=>c.name==="Imported feed")'}
   def received(value):
    global phase,busy
    busy=False
@@ -59,7 +73,10 @@ try:
    if phase==6:
     view.grab().save('/tmp/rss-sources-desktop.png');view.resize(390,844)
    if phase==7:view.grab().save('/tmp/rss-sources-mobile.png')
-   if phase==8:print('sources browser OK',flush=True);app.exit(0);return
+   if phase==8:view.resize(1200,800)
+   if phase==11:view.grab().save('/tmp/rss-sources-desktop.png')
+   if phase==12:view.grab().save('/tmp/rss-sources-editor.png')
+   if phase==15:print('sources browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy

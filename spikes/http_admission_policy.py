@@ -250,6 +250,8 @@ MONITORING_ROUTES = frozenset({
 RSS_SOURCE_ROUTES = frozenset({
     '/v1/rss-sources/refresh',
     '/v1/rss-sources/view',
+    '/v1/rss-sources/save',
+    '/v1/rss-sources/import-preview',
 })
 
 # Bridge mappings, mailbox/review and queue publication share one owner.

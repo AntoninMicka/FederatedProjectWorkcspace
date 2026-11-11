@@ -1521,3 +1521,12 @@ block catalog and pool contents, not only matching Git heads. **Reject:** copyin
 remote block jobs or grants, activating intake on reception, refreshing hidden
 panels, and discarding unsaved block/composition edits. No persistent layer or
 crash boundary changes; native sync recovery remains unchanged.
+
+RSS reader subscriptions: **adapt/reuse** `RSSSources`, bounded public HTTPS
+transport, `BoundedTree`, `sidebarItemMenu`, SQLite ownership and the
+`GamepadSettings` atomic node-preference pattern. OPML/JSON import is a bounded
+preview followed by one revision-checked transaction; it never imports a remote
+runtime journal or activates project monitoring. **Reject:** a second project
+writer, generic JSON backup guessing, XML entities, fetching during preview,
+and parallel or hidden reader refresh. Scope/recovery:
+[reader subscriptions](docs/rss-sources-reader.md).

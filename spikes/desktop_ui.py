@@ -2841,6 +2841,7 @@ async function canLeaveArtifactEditor(){
  return resolveEditorLeave('Dokument',saveArtifactEditor,()=>{artifactEditorDirty=false;artifactEditorAttempt=null;artifactEditorItem=null;artifactEditorView.hidden=true;resetTaskFileEditEditor();});
 }
 async function canLeaveWorkspaceEditors(){
+ if(typeof canLeaveSources==='function'&&!canLeaveSources())return false;
  if(typeof canLeaveMonitoring==='function'&&!await canLeaveMonitoring())return false;
  if(editorLeavePending)return false;
  if(!presenterView.hidden&&!await closePresenter())return false;
@@ -8410,7 +8411,7 @@ HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id
 CSS += MONITORING_CSS
 JS = MONITORING_JS + JS
 HTML = HTML.replace('<button id="tools-tab"', '<button id="sources-sidebar-tab" role="tab" aria-label="Zdroje" aria-controls="sidebar-sources" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="1"/><path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14"/></svg><span class="sidebar-tab-label" role="tooltip">Zdroje</span></button><button id="tools-tab"', 1)
-HTML = HTML.replace('<div id="sidebar-projects"', '<div id="sidebar-sources" role="tabpanel" aria-labelledby="sources-sidebar-tab" tabindex="0" hidden><h2>Zdroje</h2><p>Kanály a společný přehled článků.</p></div><div id="sidebar-projects"', 1)
+HTML = HTML.replace('<div id="sidebar-projects"', '<div id="sidebar-sources" role="tabpanel" aria-labelledby="sources-sidebar-tab" tabindex="0" hidden><h2>Zdroje</h2><div class="sources-primary-actions"><button id="sources-new" type="button" aria-label="Nový zdroj" title="Nový zdroj"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="sources-action-label" role="tooltip">Nový zdroj</span></button><button id="sources-import" type="button" aria-label="Importovat odběry" title="Importovat odběry"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg><span class="sources-action-label" role="tooltip">Importovat odběry</span></button></div><p id="sources-count"></p><ul id="sources-channel-tabs" role="tablist" aria-label="Kanály zdrojů" aria-orientation="vertical"></ul></div><div id="sidebar-projects"', 1)
 HTML = HTML.replace('<main>', '<main>'+SOURCES_HTML, 1)
 CSS += SOURCES_CSS
 JS = SOURCES_JS + JS
@@ -8449,7 +8450,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8639,15 +8640,21 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
-        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh'}:
+        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview'}:
             from spikes.rss_sources import sources_for
             if not isinstance(request, dict):return self.send_error(400)
             try:
                 service=sources_for(self.server)
                 if self.path.endswith('/view') and not request:
                     result=service.view()
-                elif self.path.endswith('/refresh') and set(request)=={'channel_id'}:
-                    result=service.refresh(request['channel_id'])
+                elif self.path.endswith('/refresh') and set(request) in ({'channel_id'}, {'channel_id','due_only'}):
+                    if 'due_only' in request and type(request['due_only']) is not bool:return self.send_error(400)
+                    result=service.refresh(request['channel_id'],due_only=request.get('due_only',False))
+                elif self.path.endswith('/save') and set(request)=={'revision','channels'}:
+                    result=service.save(request['revision'],request['channels'])
+                elif self.path.endswith('/import-preview') and set(request)=={'text'}:
+                    from spikes.rss_subscriptions import preview
+                    return self.reply(200,dict(preview(request['text'],service.channels),revision=service.revision))
                 else:return self.send_error(400)
                 result['can_refresh']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
                 return self.reply(200,result)

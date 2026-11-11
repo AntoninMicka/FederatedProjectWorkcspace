@@ -75,7 +75,20 @@ class RSSSourcesHTTPTests(unittest.TestCase):
         self.assertEqual(code, 200, raw)
         self.assertFalse(json.loads(raw)['can_refresh'])
         self.assertEqual(self.call('refresh', {'channel_id': 'all'}, headers)[0], 403)
+        for action,value in [('save',{'revision':0,'channels':[]}),('import-preview',{'text':'[]'})]:
+            self.assertEqual(self.call(action,value,headers)[0],403)
         self.assertEqual(self.call('view', {}, {'Authorization': 'Bearer invalid'})[0], 401)
+
+    def test_admin_edits_and_import_preview_do_not_fetch(self):
+        code,raw,_=self.call('import-preview',{'text':'<opml><body><outline text="Imported" xmlUrl="https://example.org/rss"/></body></opml>'})
+        self.assertEqual(code,200,raw);preview=json.loads(raw)
+        self.assertEqual(len(preview['channels']),1)
+        code,raw,_=self.call('save',{'revision':0,'channels':preview['channels']})
+        self.assertEqual(code,200,raw);saved=json.loads(raw)
+        self.assertEqual(len(saved['channels']),3)
+        self.assertFalse(saved['entries'])
+        self.assertEqual(saved['channels'][-1]['poll_seconds'],900)
+        self.assertEqual(self.call('save',{'revision':0,'channels':[dict(preview['channels'][0],name='Stale') ]})[0],422)
 
     def test_exact_http_request_shape(self):
         for action, value in [('view', {'url': 'https://evil.test'}),

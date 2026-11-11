@@ -17,8 +17,12 @@ _CREATION_LOCK = threading.Lock()
 
 
 class RSSSources:
-    def __init__(self, *, channels=CHANNELS, fetcher=fetch, clock=time.monotonic):
-        self.channels = deepcopy(channels)
+    def __init__(self, *, channels=CHANNELS, fetcher=fetch, clock=time.monotonic, node=None):
+        self.channels = [dict(c, poll_seconds=c.get('poll_seconds',900)) for c in deepcopy(channels)]
+        from spikes.rss_subscriptions import Subscriptions
+        self.store = Subscriptions(node, self.channels) if node is not None else None
+        self.revision = 0
+        if self.store is not None: self.revision, self.channels = self.store.load()
         require(all(channel.get('connector', 'rss-atom') in CONNECTORS for channel in self.channels), 'Unknown source connector')
         self.fetcher, self.clock = fetcher, clock
         self.lock, self.refresh_lock = threading.Lock(), threading.Lock()
@@ -37,6 +41,7 @@ class RSSSources:
                 observation = cached['observation']
                 channels.append(dict(channel, state=cached['state'], error=cached['error'],
                     checked_at=observation['observed_at'] if observation else None,
+                    due=cached['attempted'] is None or self.clock()-cached['attempted'] >= channel['poll_seconds'],
                     counts=observation['counts'] if observation else None))
                 if observation:
                     for record in observation['records']:
@@ -50,10 +55,29 @@ class RSSSources:
                             channel_id=channel['id'], channel_name=channel['name'],
                             observed_at=revision['observed_at'], revisions=len(record['revisions'])))
             entries.sort(key=lambda e: (e['published_at'] or e['observed_at'], e['id']), reverse=True)
-            return deepcopy(dict(channels=channels, entries=entries, items=items, connectors=connector_catalog()))
+            return deepcopy(dict(revision=self.revision, channels=channels, entries=entries, items=items, connectors=connector_catalog()))
 
-    def refresh(self, channel_id):
+    def save(self, revision, edits):
+        from spikes.rss_subscriptions import channel
+        require(isinstance(edits, list) and 1 <= len(edits) <= 1000, 'Vyberte 1 až 1000 kanálů.')
+        edits = [channel(c) for c in edits]
+        require(len({c['id'] for c in edits}) == len(edits), 'Duplicitní ID kanálu.')
+        with bounded_process_lock(self.refresh_lock, resource='RSS refresh'), bounded_process_lock(self.lock, resource='RSS cache'):
+            require(revision == self.revision or all(c in self.channels for c in edits), 'Odběry se změnily; obnovte přehled.')
+            merged = {c['id']: c for c in self.channels}; merged.update({c['id']:c for c in edits})
+            values = list(merged.values())
+            require(len({c['url'] for c in values}) == len(values), 'Tato URL již má vlastní kanál.')
+            new_revision = self.store.save(revision, values) if self.store else self.revision+1
+            for c in edits:
+                old = next((old for old in self.channels if old['id']==c['id']), None)
+                if old is None or old['url'] != c['url']:
+                    self.cache[c['id']] = dict(observation=None,error=None,state='unloaded',attempted=None)
+            self.channels, self.revision = values, new_revision
+        return self.view()
+
+    def refresh(self, channel_id, *, due_only=False):
         require(channel_id == 'all' or channel_id in self.cache, 'Neznámý kanál.')
+        require(channel_id != 'all' or len(self.channels)<=8, 'Více než osm kanálů načítejte jednotlivě.')
         if not self.refresh_lock.acquire(blocking=False):
             if bounded_project_wait.get():
                 raise ProjectBusy('RSS refresh is busy')
@@ -69,6 +93,7 @@ class RSSSources:
                     continue
                 with bounded_process_lock(self.lock, resource='RSS cache'):
                     cached = self.cache[channel['id']]
+                    if due_only and cached['attempted'] is not None and self.clock()-cached['attempted'] < channel['poll_seconds']: continue
                     require(cached['attempted'] is None or self.clock() - cached['attempted'] >= 30,
                             'Další načtení kanálu je možné po 30 sekundách.')
                     cached['attempted'] = self.clock()
@@ -97,5 +122,5 @@ class RSSSources:
 def sources_for(server):
     with bounded_process_lock(_CREATION_LOCK, resource='RSS service initialization'):
         if not hasattr(server, 'rss_sources'):
-            server.rss_sources = RSSSources()
+            server.rss_sources = RSSSources(node=server.projects.node_path)
         return server.rss_sources
