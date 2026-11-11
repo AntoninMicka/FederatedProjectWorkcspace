@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from spikes.desktop_ui import CSS, HTML
 
 
-EDITION = "2026-10-27"
+EDITION = "2026-11-11"
 
 
 def sheet(key, title, selectors=(), forms=(), *, scale=.78, source="Sdílené web/desktop UI", native_html="", notes=True):
@@ -111,6 +111,8 @@ SHEETS = [
     sheet("image", "Generování obrázku", ("#image-panel",), scale=.7),
     sheet("julia", "Výpočty — editor Julia modelu", ("#julia-editor",),
           ("julia-editor",), scale=.55),
+    sheet("rss-sources", "Zdroje — kanály a import odběrů", ("#sources-editor", "#sources-import-review"),
+          ("sources-editor",), scale=.72),
     sheet("monitoring", "Nástroje — sledování a periodické zprávy", ("#monitoring-form", "#monitoring-workflow-form"),
           ("monitoring-form", "monitoring-workflow-form"), scale=.5),
     sheet("monitoring-blocks", "Sledování — samostatné bloky", ("#monitoring-block-editor",),

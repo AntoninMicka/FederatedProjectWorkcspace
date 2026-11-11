@@ -112,4 +112,3 @@ async function deleteLegacyTool(kind,id,title){
  }catch(error){if(activeProject?.id===pid)monitoringStatus.textContent=error.message;}
 }
 '''
-
