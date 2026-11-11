@@ -17,6 +17,7 @@ from uuid import uuid4
 from PySide6.QtCore import QTimer,QUrl
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile
+from PySide6.QtWebEngineWidgets import QWebEngineView
 from tests import test_reporting
 from tests.test_monitoring_blocks import blocks,response
 from spikes.local_api import running_api
@@ -39,7 +40,7 @@ try:
    def javaScriptConfirm(self,url,text):return True
    def javaScriptConsoleMessage(self,level,message,line,source):
     if 'Error' in message:print('JS:',message,line,flush=True)
-  page=Page(profile,app);phase=0;busy=False
+  page=Page(profile,app);view=QWebEngineView();view.setPage(page);view.resize(1280,900);view.show();phase=0;busy=False
   ids=json.dumps([b['id'] for b in specs])
   commands={
    1:'window.blockTestIds='+ids+';window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(async()=>{await navigateMainTab(document.getElementById("monitoring-tab"));window.blocksOpened=true})',
@@ -54,11 +55,19 @@ try:
    10:"[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Zkontrolovat splatné kanály').click()",
    11:"blockTab='processing';renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Sestavit návrh zprávy').click()",
    12:"[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Vydat posouzenou zprávu').click()",
+   13:"document.querySelector('#sidebar-monitoring-filter-list .sidebar-list-main').click()",
+   14:"document.querySelector('#sidebar-monitoring-filter-list summary').click();[...document.querySelectorAll('#sidebar-monitoring-filter-list [role=menuitem]')].find(b=>b.textContent==='Upravit').click()",
+   15:"document.querySelector('#sidebar-new-tool').click()",
+   16:"document.querySelector('[data-new-monitoring-block=filter]').click()",
+   17:"(async()=>{window.createdToolKinds=[];for(const kind of ['source','pool','processing','task','compose']){await createMonitoringTool(kind);createdToolKinds.push(kind==='compose'?!document.querySelector('#monitoring-compose').hidden:blockEdit?.value.kind===kind);}window.toolsCreationDone=true;})()",
+   18:"(async()=>{await canLeaveWorkspaceEditors();activeProject.readOnly=true;renderMonitoringToolTree();window.readOnlyToolsChecked=true;})()",
+   19:"activeProject.readOnly=false;renderMonitoringToolTree();document.querySelector('#sidebar-monitoring-list summary').click();[...document.querySelectorAll('#sidebar-monitoring-list [role=menuitem]')].find(b=>b.textContent==='Smazat').click()",
+   20:"document.querySelector('#sidebar-monitoring-filter-list summary').click();[...document.querySelectorAll('#sidebar-monitoring-filter-list [role=menuitem]')].find(b=>b.textContent==='Smazat').click()",
   }
   checks={
    0:"typeof editMonitoringBlock==='function'",
    1:"window.blocksOpened&&blockCatalog?.blocks.length===6",
-   2:"document.querySelectorAll('#sidebar-monitoring-list [data-composable-task]').length===1&&document.querySelectorAll('#monitoring-block-tabs button').length===6&&document.querySelectorAll('#monitoring-block-content article').length===2",
+   2:"document.querySelectorAll('#sidebar-monitoring-list [data-composable-task]').length===1&&document.querySelectorAll('#sidebar-tools-tree [data-tool-key^=\"block:\"]').length===6&&document.querySelectorAll('#monitoring-block-tabs button').length===6&&document.querySelectorAll('#monitoring-block-content article').length===2",
    3:"!blockEditor.hidden&&blockEditor.elements.source_ids.options.length===2",
    4:"blockEditor.hidden&&blockCatalog.blocks.find(b=>b.id===blockTestIds[2]).value.config.source_ids.length===2",
    5:"!blockEditor.hidden&&blockEditor.elements.processing_ids.selectedOptions.length===1",
@@ -69,13 +78,23 @@ try:
    10:"blockCatalog.blocks.find(b=>b.id===blockTestIds[1]).message_count===1",
    11:"blockTab==='runs'&&document.querySelector('#monitoring-block-content').textContent.includes('Energie dnes')&&blockCatalog.jobs.some(j=>j.state==='review')",
    12:"blockCatalog.jobs.some(j=>j.state==='published')",
+   13:"blockTab==='filter'&&document.querySelectorAll('#monitoring-block-content article').length===1&&document.querySelector('#sidebar-monitoring-filter-list .sidebar-list-main').getAttribute('aria-current')==='true'",
+   14:"!blockEditor.hidden&&blockEdit.id===blockTestIds[2]",
+   15:"!document.querySelector('#sidebar-tool-new-options').hidden&&document.querySelectorAll('#sidebar-tool-new-options [data-new-monitoring-block]').length===6",
+   16:"!blockEditor.hidden&&blockEdit.value.kind==='filter'&&!blockEdit.previous.length&&document.querySelector('#sidebar-tool-new-options').hidden",
+   17:"window.toolsCreationDone&&createdToolKinds.length===5&&createdToolKinds.every(Boolean)",
+   18:"window.readOnlyToolsChecked&&[...document.querySelectorAll('[data-new-monitoring-block]')].every(b=>b.disabled)",
+   19:"!blockCatalog.blocks.some(b=>b.id===blockTestIds[4])&&document.querySelectorAll('#sidebar-monitoring-list .sidebar-list-row').length===0",
+   20:"!blockCatalog.blocks.some(b=>b.id===blockTestIds[2])&&[...document.querySelectorAll('#sidebar-monitoring-pool-list [role=menuitem]')].some(b=>b.textContent.includes('Smazat · nejprve')&&b.disabled)",
   }
   def received(value):
    global phase,busy
    busy=False
    if value!='ready':return
    phase+=1
-   if phase==13:print('blocks browser OK',flush=True);app.exit(0);return
+   if phase==14:view.grab().save('/tmp/fpw-tools-tree.png')
+   if phase==16:view.grab().save('/tmp/fpw-tools-new-menu.png')
+   if phase==21:print('blocks browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy
@@ -87,7 +106,8 @@ try:
    print('timeout phase',phase,flush=True)
    page.runJavaScript("JSON.stringify({status:document.querySelector('#monitoring-block-state')?.textContent,monitoring:monitoringStatus?.textContent,edit:blockEdit,content:document.querySelector('#monitoring-block-content')?.textContent})",lambda x:(print(x,flush=True),app.exit(2)))
   QTimer.singleShot(55000,timeout);result=app.exec()
-  page.deleteLater();profile.deleteLater();raise SystemExit(result)
+  from shiboken6 import delete
+  view.close();delete(view);delete(page);delete(profile);raise SystemExit(result)
 finally:f.doCleanups()
 '''
         result=subprocess.run([sys.executable,'-c',script],cwd=Path(__file__).resolve().parents[1],text=True,capture_output=True,timeout=70)

@@ -61,6 +61,41 @@ class PoolSyncTests(unittest.TestCase):
         self.assertTrue(all(b['runtime'] is None for b in catalog['blocks']))
         self.assertFalse(any(j['intent']['kind'] == 'processing' for j in catalog['jobs']))
 
+    def test_deleted_blocks_sync_without_losing_pool_provenance_or_activating_receiver(self):
+        source,target=self.services
+        source.configure(self.pid,self.specs[0]['id'],True,confirm=True);source.tick(self.pid)
+        for index in (4,2):
+            catalog=source.catalog(self.pid)
+            row=next(b for b in catalog['blocks'] if b['id']==self.specs[index]['id'])
+            block=dict(id=row['id'],previous=[row['ref']],privacy=row['privacy'],value=dict(row['value'],deleted=True))
+            source.remove(self.pid,catalog['commit_id'],block,str(uuid4()),confirm=True)
+        self.f.exchange(0,1)
+        received=target.catalog(self.pid)
+        self.assertNotIn(self.specs[4]['id'],{b['id'] for b in received['blocks']})
+        self.assertNotIn(self.specs[2]['id'],{b['id'] for b in received['blocks']})
+        self.assertEqual(target.pools.view(self.pid,self.specs[1]['id'])[0]['revisions'][0]['item']['content'],'Energie dnes')
+        self.assertTrue(all(b['runtime'] is None for b in received['blocks']))
+        self.f.exchange(0,1)
+        self.assertEqual(len(target.catalog(self.pid)['blocks']),3)
+
+    def test_legacy_deletion_is_signed_and_receiver_keeps_original_definition(self):
+        from spikes.monitoring_definitions import MonitoringDefinitions
+        from spikes.monitoring_deletion import MonitoringDeletion
+        from tests.test_monitoring_workflow import workflow
+        definitions=MonitoringDefinitions(self.f.nodes[0])
+        request=workflow(self.pid,self.services[0].blocks.read(self.pid)['commit_id'])
+        definitions.save_workflow(request,str(uuid4()))
+        deletion=MonitoringDeletion(self.services[0].monitoring)
+        preview=deletion.preview(self.pid,'definition',request['processing']['watch_id'])
+        deletion.remove(self.pid,preview['base_head'],preview['sources'],str(uuid4()),confirm=True)
+        self.f.exchange(0,1)
+        received=MonitoringDefinitions(self.f.nodes[1]).read(self.pid)
+        self.assertEqual([r['watch_id'] for r in received['definitions']],[request['collection']['watch_id']])
+        self.assertTrue(all(r['runtime_state']=='not-connected' for r in received['definitions']))
+        records=self.services[1].blocks.reporting.read(self.pid)['records']
+        self.assertTrue(any(r['type']=='MonitoringDeletion' for r in records))
+        self.assertEqual(sum(r['type']=='WatchDefinition' for r in records),2)
+
     def test_sidecar_tampering_is_rejected_before_application(self):
         s=self.services[0];s.configure(self.pid,self.specs[0]['id'],True,confirm=True);s.tick(self.pid)
         env,payload,*_=_prepare(self.f.services[0],self.f.node_ids[1],self.pid,str(uuid4()),[],force_bundle=True)

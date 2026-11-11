@@ -1530,3 +1530,19 @@ runtime journal or activates project monitoring. **Reject:** a second project
 writer, generic JSON backup guessing, XML entities, fetching during preview,
 and parallel or hidden reader refresh. Scope/recovery:
 [reader subscriptions](docs/rss-sources-reader.md).
+
+Unified tools and deletion: **adapt/reuse** `sidebarItemMenu`, original Julia
+preview/delete, monitoring block editors, composition and leave guards. Reuse
+Reporting revisions, native effect ownership and Workspace journal/CAS for an
+explicit deleted revision, preserving pool provenance and historical inputs.
+**Reject:** copying editors, a second deletion journal, physical removal of
+pinned definitions, implicit cascading deletion and deletion through LLM/save.
+Scope and recovery: [Tools](docs/tools-sidebar.md), [ADR 0082](docs/adr/0082-composable-monitoring-and-message-pools.md).
+
+Legacy task removal: **adapt/reuse** immutable Reporting refs, migration effect
+lock order, its task-specific `_pending` audit, and `retired_ids` execution
+guards. Keep old documents, definition revisions, published reports and native
+journals; one signed `MonitoringDeletion` receipt removes current execution and
+catalog eligibility. **Reject:** deleting historical pins, changing remote/local
+runtime outcomes, resurrecting a deleted definition and cascading removal of
+unreviewed dependents. Recovery and compatibility are part of ADR 0082.

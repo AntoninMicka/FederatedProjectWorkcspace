@@ -75,3 +75,62 @@ federation podpisy/policy. Reject: nový Git writer, přenos provozních databá
 implicitní modelový dispatch z feedu, kopírování sdílených bloků a volba
 výhradního RSS leadera. Soukromá inventura nepřidává potřebnou komponentu;
 žádný externí kód ani nová knihovna se nepřebírá.
+
+## Odstranění definice z aktuálního katalogu — 11. 11. 2026
+
+Konkrétní potřeba: položkové menu Nástrojů má podporovat smazání Julia modelů
+(původní nativní postup) i sdílených bloků sledování. Blok nelze fyzicky vyjmout
+z množiny Reporting revizí: historické běhy a členství zpráv odkazují na jeho
+přesnou revizi. Nová potvrzená revize `MonitoringBlock` proto smí obsahovat
+`deleted: true`. Zachová přesně původní kind/title/config/privacy, má jediného
+připnutého předchůdce a zmizí pouze z aktivní projekce. Z deleted revize nelze
+odvozovat další úpravu ani implicitní obnovení; náhrada má nové ID.
+
+Aktivní závislosti se validují proti aktivním blokům. Používaný blok se tedy
+odmítne atomicky, i kdyby se využití změnilo až po otevření menu. Stejné sémantické
+ověření platí pro příjem a merge. Původní revize zůstávají dostupné pro provenance
+poolů a historie; smazání není purge obsahu ani zrušení dřívějších výstupů.
+Retence poolů se nemění. Nový marker není podporován starší implementací schématu:
+před používáním synchronizovaného smazání musí být aktualizovány všechny zapojené
+uzly. Starší validátor jej odmítne, nikoli tiše ignoruje. Transportní obálka se nemění.
+
+Speciální endpoint vyžaduje správce s právem zápisu a explicitní potvrzení.
+Obecný editor/save ani LLM sestava marker použít nesmějí. Před zápisem se získá
+původní místní effect flock; související prepared/dispatching/unknown běh nebo
+nedokončený převod smazání blokuje. Na ostatních uzlech již běžící intake po
+přijetí změny neprojde dosavadní kontrolou zachovaného HEAD před uložením výsledku.
+
+Crash boundaries se řídí původní Reporting/Workspace transakcí: před commitem
+obnova z journalu, po commitu index z HEAD a idempotentní receipt stejné operace.
+Žádná druhá persistentní vrstva se při smazání nemění. Místní bindingy, provozní
+záznamy a pooly se nemažou; tick vynechá neexistující aktivní definici také po
+restartu a přijetí markeru z druhého uzlu. Ztracená odpověď používá stejné ID,
+base HEAD a přesný připnutý požadavek. Test pokrývá přerušení před ref update,
+jediný commit po recovery, odmítnutí závislosti a podepsaný přenos se zachovanými
+původními zprávami a bez aktivace příjemce.
+
+### Stejná akce pro starší zadání
+
+Původní dokumentové sledování a `WatchDefinition` nemění svůj historický
+formát. Potvrzené odstranění uloží neměnný Reporting záznam `MonitoringDeletion`
+se seznamem přesných `{kind, id, ref}`. Původní dokument i všechny revize zůstávají
+v aktuálním Gitu, takže se neztratí piny, původní zprávy ani prezentace. Validátor
+odmítá neexistující/cizí cíl, opakované vyřazení a úpravy odstraněné definice.
+Aktivní projekce vynechá odstraněné ID; závislé aktivní WatchDefinition nebo
+původní sledování jeho odstranění zablokují i při přímém zápisu mimo UI.
+
+Read-only náhled používá stejný validator jako zápis. Effect zámky se získávají
+ve stejném pořadí jako při převodu: Monitoring → původní RSS worker → nový
+monitoring. Reuse `_pending` z `MonitoringMigration` kontroluje pouze příslušná
+ID a jejich ReportingTask, RSS operace a rozpracované převody. Neznámý nebo
+rozpracovaný účinek se nesmaže ani nevydává za dokončený. Posouzené či dokončené
+historické výstupy se mohou nadále zobrazovat.
+
+Stávající `retired_ids`/`require_not_retired` rozpoznají také záznam odstranění.
+Proto nepovolí starý grant, novou aktivaci, přípravu běhu ani dokončení sběru
+s vyřazenou konfigurací; receipt se synchronizuje jako původní projektová data.
+Nevznikají nové joby ani zápisy do místních grantů či runtime journalu. Crash
+boundaries zůstávají stejné jako u jiných Reporting revizí. Testy přerušují
+zápis před ref update i po něm a opakují přesnou operaci bez dalšího commitu.
+Také tento nový typ vyžaduje aktualizaci všech spolupracujících uzlů před
+používáním; starší implementace jej bezpečně odmítne.

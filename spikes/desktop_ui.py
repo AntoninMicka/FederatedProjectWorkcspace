@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.monitoring_ui import HTML as MONITORING_HTML, CSS as MONITORING_CSS, JS as MONITORING_JS
+from spikes.tools_sidebar_ui import TREE as TOOL_TREE, NEW_ACTIONS as TOOL_NEW_ACTIONS, CSS as TOOL_TREE_CSS, JS as TOOL_TREE_JS
 from spikes.rss_sources_ui import HTML as SOURCES_HTML, CSS as SOURCES_CSS, JS as SOURCES_JS
 from spikes.plan_status_ui import PLAN_STATUS_JS, PLAN_STATUS_CSS
 from spikes.manuals import manual_catalog
@@ -291,8 +292,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Nástroje</h2><div class="sidebar-tool-primary-actions">
 <button id="sidebar-new-tool" type="button" aria-label="Nový nástroj" aria-expanded="false" aria-controls="sidebar-tool-new-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 11v6M9 14h6"/></svg><span class="project-action-label" role="tooltip">Nový nástroj</span></button>
 <button id="sidebar-import-tool" type="button" aria-label="Importovat nástroj" aria-expanded="false" aria-controls="sidebar-tool-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 3v11M8.5 10.5 12 14l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat nástroj</span></button></div>
-<div id="sidebar-tool-new-options" class="sidebar-tool-options" hidden><button id="julia-editor-new" type="button">Nový Julia model</button></div>
-<div id="sidebar-tool-import-options" class="sidebar-tool-options" hidden><button id="julia-import-file-button" type="button">Julia soubor (.jl)</button><button type="button" disabled title="Převod zatím nemá schválený kontrakt">MATLAB (.m) · převod připravován</button></div>
+<div id="sidebar-tool-new-options" class="sidebar-tool-options sidebar-item-menu-items" role="menu" aria-label="Nový nástroj" hidden><button id="julia-editor-new" type="button">Nový Julia model</button></div>
+<div id="sidebar-tool-import-options" class="sidebar-tool-options sidebar-item-menu-items" hidden><button id="julia-import-file-button" type="button">Julia soubor (.jl)</button><button type="button" disabled title="Převod zatím nemá schválený kontrakt">MATLAB (.m) · převod připravován</button></div>
 <input id="julia-import-file" type="file" accept=".jl,text/x-julia" hidden>
 <p id="sidebar-tools-status" role="status">Otevřete projekt.</p>
 <ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul></div>
@@ -3765,7 +3766,9 @@ function toggleToolOptions(button,panel,otherButton,otherPanel){
 const sidebarNewTool=document.querySelector('#sidebar-new-tool'),sidebarImportTool=document.querySelector('#sidebar-import-tool');
 const sidebarToolNewOptions=document.querySelector('#sidebar-tool-new-options'),sidebarToolImportOptions=document.querySelector('#sidebar-tool-import-options');
 sidebarNewTool.addEventListener('click',()=>toggleToolOptions(sidebarNewTool,sidebarToolNewOptions,sidebarImportTool,sidebarToolImportOptions));
+sidebarToolNewOptions.addEventListener('click',async event=>{const button=event.target.closest('[data-new-monitoring-block]');if(button&&!button.disabled)await createMonitoringTool(button.dataset.newMonitoringBlock);else if(event.target.closest('#monitoring-new,#monitoring-workflow-new')){sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');}});
 sidebarImportTool.addEventListener('click',()=>toggleToolOptions(sidebarImportTool,sidebarToolImportOptions,sidebarNewTool,sidebarToolNewOptions));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!sidebarToolNewOptions.hidden){sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');sidebarNewTool.focus();}});
 document.querySelector('#julia-editor-new').addEventListener('click',()=>{sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');openJuliaEditor(true);});
 document.querySelector('#julia-editor-close').addEventListener('click',async event=>{event.preventDefault();await closeJuliaEditorPage();});
 juliaEditor.addEventListener('input',()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;});
@@ -3782,7 +3785,7 @@ async function saveJuliaEditor(navigate=true){
 juliaEditor.addEventListener('submit',async event=>{event.preventDefault();await saveJuliaEditor();});
 function clearJulia(){
  if(juliaPoll){clearTimeout(juliaPoll);juliaPoll=null;}
- juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();juliaModelList.replaceChildren();
+ selectedToolKey=null;juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();juliaModelList.replaceChildren();
  juliaModelDetail.hidden=true;juliaModelDetail.querySelector('dl').replaceChildren();
  juliaDeletePreview=null;juliaDeleteOperation=null;document.querySelector('#julia-delete-confirm').checked=false;document.querySelector('#julia-delete-run').disabled=true;
  document.querySelector('#julia-preview-value').hidden=true;document.querySelector('#julia-preview-value').textContent='';
@@ -3821,12 +3824,13 @@ async function requestJuliaDelete(model){
 }
 function renderJuliaModelList(){
  juliaModelList.replaceChildren();
- for(const model of juliaCatalog){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),path=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent=model.computation.title;path.className='sidebar-item-id';path.textContent=`Julia · ${model.computation.entrypoint.path}`;open.append(title,path);open.addEventListener('click',()=>showJuliaModelDetail(model));
-  const actions=[{label:'Zobrazit',run:()=>showJuliaModelDetail(model)},{label:'Editovat',run:()=>openJuliaEditor(false,model.definition.path),disabled:!model.editable||activeProject?.readOnly},{label:'Spustit',run:()=>prepareJuliaRun(model),disabled:Boolean(activeProject?.readOnly)},{label:'Smazat',run:()=>requestJuliaDelete(model),disabled:!model.editable||activeProject?.readOnly}];
-  row.append(open,sidebarItemMenu(model.computation.title,actions,'sidebar-tool-menu'));juliaModelList.append(row);
+ for(const model of juliaCatalog){
+  const actions=[{label:'Editovat',run:()=>openJuliaEditor(false,model.definition.path),disabled:!model.editable||activeProject?.readOnly},{label:'Spustit',run:()=>prepareJuliaRun(model),disabled:Boolean(activeProject?.readOnly)},{label:'Smazat',run:()=>requestJuliaDelete(model),disabled:!model.editable||activeProject?.readOnly}];
+  const row=toolSidebarRow('julia:'+model.definition.path,model.computation.title,()=>showJuliaModelDetail(model),actions),path=document.createElement('small');
+  path.className='sidebar-item-id';path.textContent=`Julia · ${model.computation.entrypoint.path}`;row.querySelector('.sidebar-list-main').append(path);juliaModelList.append(row);
  }
- if(roadmapReviewRows.length||roadmapReviewError){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),detail=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent='Kontrola roadmapy';detail.className='sidebar-item-id';detail.textContent=roadmapReviewError?'Načtení selhalo · otevřít a obnovit':`${roadmapReviewRows.length} návrhů · node-local`;open.append(title,detail);open.addEventListener('click',openRoadmapReview);row.append(open);juliaModelList.append(row);}
- const total=juliaCatalog.length+(roadmapReviewRows.length||roadmapReviewError?1:0);document.querySelector('#sidebar-tools-status').textContent=roadmapReviewError?'Kontrolu roadmapy se nepodařilo načíst. Otevřete nástroj a zkuste Obnovit seznam.':`Počet nástrojů: ${total}`;
+ if(roadmapReviewRows.length||roadmapReviewError){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),detail=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent='Kontrola roadmapy';detail.className='sidebar-item-id';detail.textContent=roadmapReviewError?'Načtení selhalo · otevřít a obnovit':`${roadmapReviewRows.length} návrhů · node-local`;open.append(title,detail);open.addEventListener('click',openRoadmapReview);row.append(open,sidebarItemMenu('Kontrola roadmapy',[{label:'Zobrazit',run:openRoadmapReview}]));juliaModelList.append(row);}
+ updateToolsCount();document.querySelector('#sidebar-tools-status').textContent=roadmapReviewError?'Kontrolu roadmapy se nepodařilo načíst. Otevřete nástroj a zkuste Obnovit seznam.':`Počet nástrojů: ${document.querySelectorAll('#sidebar-tools-tree .sidebar-list-row').length}`;
  if(typeof renderToolsOverview==='function')renderToolsOverview();
 }
 function roadmapReviewAction(row){return row.proposal.action||row.proposal.decision||row.proposal.outcome||'—';}
@@ -3938,7 +3942,7 @@ async function loadJuliaWorkspace(){
   for(const item of juliaCatalog){const option=document.createElement('option');option.value=item.definition.path;option.textContent=item.computation.title;juliaDefinition.append(option);}
   renderJuliaParameters();renderJuliaModelList();juliaStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} dostupných definic. Připravte read-only náhled.`:'Aktuální revize neobsahuje validovanou Julia definici.';
   juliaToolsStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} validovaných Julia modelů v aktuální revizi.`:'Založte nový model nebo načtěte Julia soubor do editoru.';
-  document.querySelector('#sidebar-tools-status').textContent=`Počet nástrojů: ${juliaCatalog.length}`;
+  updateToolsCount();
   document.querySelector('#julia-preview').disabled=!juliaCatalog.length||activeProject.readOnly;
   const history=await projectRequest('/v1/julia/status',{project_id:project.id});if(activeProject!==project)return;if(history.runs.length)renderJuliaRun(history.runs[0]);
  }catch(error){if(activeProject===project)juliaStatus.textContent=error.message;}
@@ -8404,7 +8408,10 @@ if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
 HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script src="/app.js"></script>')
 CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
-HTML = HTML.replace('<ul id="sidebar-tool-list"', '<h3>Sledování</h3><button id="sidebar-monitoring-new" type="button" disabled>Nová komplexní úloha</button><ul id="sidebar-monitoring-list"></ul><h3>Modely a výpočty</h3><ul id="sidebar-tool-list"',1)
+HTML = HTML.replace('<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul>', TOOL_TREE, 1)
+HTML = HTML.replace('<button id="julia-editor-new" type="button">Nový Julia model</button>', '<button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button>'+TOOL_NEW_ACTIONS, 1)
+CSS += TOOL_TREE_CSS
+JS = TOOL_TREE_JS + JS
 HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><h3>Zprávy</h3><ul id="sidebar-report-list"></ul><h3>Prezentace</h3>',1)
 HTML = HTML.replace('<button id="presentation-tab"', '<button id="monitoring-tab" role="tab" aria-controls="monitoring-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Sledování a zprávy</button><button id="presentation-tab"',1)
 HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id="outputs-overview-panel"',1)
@@ -8450,7 +8457,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8739,6 +8746,14 @@ class DesktopHandler(Handler):
                     result=MonitoringMigration(service).resume(pid,request['operation_id'])
                 elif action=='blocks-save' and set(request)=={'project_id','base_head','blocks','operation_id'}:
                     result=service.composable.blocks.save(pid,request['base_head'],request['blocks'],request['operation_id'])
+                elif action=='legacy-delete-preview' and set(request)=={'project_id','kind','id'}:
+                    from spikes.monitoring_deletion import MonitoringDeletion
+                    return self.reply(200,MonitoringDeletion(service).preview(pid,request['kind'],request['id']))
+                elif action=='legacy-delete' and set(request)=={'project_id','base_head','sources','operation_id','confirm'}:
+                    from spikes.monitoring_deletion import MonitoringDeletion
+                    result=MonitoringDeletion(service).remove(pid,request['base_head'],request['sources'],request['operation_id'],confirm=request['confirm'])
+                elif action=='block-delete' and set(request)=={'project_id','base_head','block','operation_id','confirm'}:
+                    result=service.composable.remove(pid,request['base_head'],request['block'],request['operation_id'],confirm=request['confirm'])
                 elif action=='block-configure' and set(request)=={'project_id','block_id','enabled','confirm'}:
                     result=service.composable.configure(pid,request['block_id'],request['enabled'],confirm=request['confirm'])
                 elif action=='block-tick' and set(request)=={'project_id'}:

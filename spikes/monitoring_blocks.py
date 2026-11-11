@@ -27,7 +27,8 @@ def dependencies(value):
 
 
 def validate_block(value):
-    fields(value, 'schema kind title config')
+    fields(value, 'schema kind title config'+(' deleted' if 'deleted' in value else ''))
+    if 'deleted' in value: require(value['deleted'] is True, 'Invalid monitoring deletion marker')
     require(value['schema'] == 'fpw-reporting-block-v1' and value['kind'] in KINDS,
             'Unknown monitoring block')
     text(value['title']); require(len(value['title']) <= 150, 'Block title exceeds limit')
@@ -81,8 +82,15 @@ def validate_blocks(records):
     tips = {r['entity_id']: r for r in rows if r['revision_id'] not in parents}
     for row in rows:
         for p in row['previous']:
+            require(not records[p['artifact_id']]['value'].get('deleted'), 'Deleted monitoring block cannot be edited or restored implicitly')
             require(records[p['artifact_id']]['value']['kind'] == row['value']['kind'],
                     'Monitoring block cannot change kind')
+        if row['value'].get('deleted'):
+            require(len(row['previous']) == 1, 'Deletion requires one exact predecessor')
+            before = records[row['previous'][0]['artifact_id']]
+            require({k:v for k,v in row['value'].items() if k!='deleted'} == before['value']
+                    and row['privacy'] == before['privacy'], 'Deletion must preserve the original definition')
+    tips = {id_: row for id_, row in tips.items() if not row['value'].get('deleted')}
     for row in tips.values():
         v = validate_block(row['value'])
         for id_, kind in dependencies(v):
@@ -131,12 +139,13 @@ class MonitoringBlocks:
                 resolved_ids=dependency_closure(id_, tips)))
         return dict(project_id=project_id, commit_id=data['commit_id'], blocks=rows)
 
-    def save(self, project_id, base_head, blocks, operation_id, *, checkpoint=lambda stage: None):
+    def save(self, project_id, base_head, blocks, operation_id, *, checkpoint=lambda stage: None, _delete=False):
         require(isinstance(blocks, list) and 1 <= len(blocks) <= 32, 'Expected 1..32 block edits')
         specs = []
         for b in blocks:
             fields(b, 'id previous privacy value'); uuid(b['id']); validate_block(b['value'])
+            require(_delete or not b['value'].get('deleted'), 'Use the confirmed block deletion action')
             specs.append(dict(type='MonitoringBlock', entity_id=b['id'], previous=b['previous'],
                               privacy=b['privacy'], value=deepcopy(b['value'])))
         return self.reporting.apply(dict(project_id=project_id, base_head=base_head, records=specs),
-                                    operation_id, checkpoint=checkpoint)
+                                    operation_id, confirm=_delete, checkpoint=checkpoint)

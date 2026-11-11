@@ -56,6 +56,8 @@ def _retired(repo_path,head):
         if row.get('type')=='MonitoringMigration':
             validate_migration(row['value'])
             ids.update(s['id'] for s in row['value']['sources'])
+    from spikes.monitoring_deletion import deleted_for_head
+    ids.update(deleted_for_head(repo_path,head))
     return frozenset(ids)
 
 
@@ -66,7 +68,7 @@ def retired_ids(node,pid):
 
 
 def require_not_retired(node,pid,watch_id):
-    require(watch_id not in retired_ids(node,pid), 'Sledování bylo převedeno na nové bloky; starý provoz je vypnutý.')
+    require(watch_id not in retired_ids(node,pid), 'Sledování bylo převedeno nebo odstraněno; starý provoz je vypnutý.')
 
 
 class MonitoringMigration:

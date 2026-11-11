@@ -4,7 +4,8 @@
 # Sledování ze samostatných bloků
 
 V projektu otevřete **Nástroje → Sledování a zprávy**. Nová hlavní část má
-šest samostatných přehledů. Starší definice a jejich historie zůstávají
+šest samostatných přehledů. Levý společný strom a centrální menu založení
+popisují [Nástroje](tools-sidebar.md). Starší definice a jejich historie zůstávají
 v rozbalovací části **Starší sledování a dvoufázový editor**. Samotné založení nových bloků starý sběr nepřevádí. K přechodu použijte
 níže popsaný jednorázový převod s náhledem; ten po uložení zneplatní starý provoz.
 

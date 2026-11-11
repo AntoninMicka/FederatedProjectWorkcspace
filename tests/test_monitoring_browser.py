@@ -34,6 +34,7 @@ try:
   server.chat_service=ChatService(f.node,server.projects)
   profile=QWebEngineProfile(app)
   class Page(QWebEnginePage):
+   def javaScriptConfirm(self,url,text):return True
    def javaScriptConsoleMessage(self,level,message,line,source):
     if 'Error' in message:print('JS:',message,line,flush=True)
   page=Page(profile,app);phase=0;busy=False
@@ -43,7 +44,9 @@ try:
    3:"(()=>{const f=monitoringWorkflowForm.elements;f.title.value='Browser těžba';f.goal.value='Sledovat změny';f.start.value='2026-10-05';f.collection_node.value="+json.dumps(peer)+";f.processing_node.value=monitoringView.node_id;f.terms.value='Synthetic capture permission';f.retention.value='Synthetic test retention';f.keywords.value='first';f.regex.value='first';f.access_confirm.checked=true;f.trigger.value='scheduled';monitoringWorkflowForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringWorkflowForm.requestSubmit()})()",
    4:"[...document.querySelectorAll('#monitoring-definitions button')].find(b=>b.textContent==='Browser těžba').click()",
    5:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Upravit zadání').click()",
-   6:"monitoringWorkflowForm.elements.trigger.value='manual';monitoringWorkflowForm.elements.access_confirm.checked=true;monitoringWorkflowForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringWorkflowForm.requestSubmit()"}
+   6:"monitoringWorkflowForm.elements.trigger.value='manual';monitoringWorkflowForm.elements.access_confirm.checked=true;monitoringWorkflowForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringWorkflowForm.requestSubmit()",
+   7:"(()=>{const row=monitoringView.definitions.find(r=>r.definition.inputs.some(i=>i.kind==='watch'));const item=[...document.querySelectorAll('#sidebar-legacy-monitoring-list .sidebar-list-main')].find(b=>b.dataset.toolKey==='definition:'+row.watch_id).closest('li');item.querySelector('summary').click();[...item.querySelectorAll('[role=menuitem]')].find(b=>b.textContent==='Smazat').click()})()",
+   8:"(()=>{const row=monitoringView.definitions[0];const item=[...document.querySelectorAll('#sidebar-legacy-monitoring-list .sidebar-list-main')].find(b=>b.dataset.toolKey==='definition:'+row.watch_id).closest('li');item.querySelector('summary').click();[...item.querySelectorAll('[role=menuitem]')].find(b=>b.textContent==='Smazat').click()})()"}
   checks={
    0:"typeof editMonitoringWorkflow==='function'",
    1:"window.workflowProjectOpened&&monitoringView?.project_id===activeProject?.id&&monitoringView?.execution_nodes?.nodes.length===2",
@@ -51,13 +54,15 @@ try:
    3:"monitoringView?.definitions.length===2&&monitoringWorkflowForm.hidden&&!monitoringDirty&&monitoringView.definitions.some(r=>r.definition.placement.node_id==="+json.dumps(peer)+")&&monitoringView.definitions.some(r=>r.definition.schedule.trigger==='scheduled')",
    4:"document.querySelector('#monitoring-detail').textContent.includes('Zadání patří jinému uzlu')",
    5:"!monitoringWorkflowForm.hidden&&monitoringWorkflowForm.elements.collection_node.value==="+json.dumps(peer)+"&&monitoringWorkflowForm.elements.trigger.value==='scheduled'&&monitoringWorkflowForm.elements.keywords.value==='first'",
-   6:"monitoringWorkflowForm.hidden&&!monitoringDirty&&monitoringView.definitions.length===2&&monitoringView.definitions.some(r=>r.definition.schedule.trigger==='manual')"}
+   6:"monitoringWorkflowForm.hidden&&!monitoringDirty&&monitoringView.definitions.length===2&&monitoringView.definitions.some(r=>r.definition.schedule.trigger==='manual')",
+   7:"monitoringView.definitions.length===1",
+   8:"monitoringView.definitions.length===0&&document.querySelectorAll('#sidebar-legacy-monitoring-list .sidebar-list-row').length===0"}
   def received(value):
    global phase,busy
    busy=False
    if value!='ready':return
    phase+=1
-   if phase==7:print('workflow browser OK',flush=True);app.exit(0);return
+   if phase==9:print('workflow browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy
@@ -110,6 +115,7 @@ try:
   server.chat_service=ChatService(f.node,server.projects)
   profile=QWebEngineProfile(app)
   class Page(QWebEnginePage):
+   def javaScriptConfirm(self,url,text):return True
    def javaScriptConsoleMessage(self,level,message,line,source):
     if 'Error' in message:print('JS:',message,line,flush=True)
   page=Page(profile,app);phase=0;busy=False
@@ -119,11 +125,13 @@ try:
    3:"document.querySelector('#monitoring-detail input').value='Other';[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Vyhodnotit ukázku').click()",
    4:"document.querySelector('#monitoring-new').click()",
    5:"monitoringForm.elements.name.value='Browser test';monitoringForm.elements.goal.value='Sledovat ověřené změny';monitoringForm.elements.start.value='2026-03-23';monitoringForm.elements.presentation.checked=true;monitoringForm.dispatchEvent(new Event('input',{bubbles:true}));monitoringForm.requestSubmit()",
-   6:"document.querySelector('#sidebar-monitoring-list button').click()",
+   6:"document.querySelector('#sidebar-legacy-monitoring-list button').click()",
    7:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Spustit nyní').click()",
    8:"document.querySelector('#sidebar-report-list button').click()",
    9:"document.querySelector('#monitoring-detail input[type=checkbox]').click();[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Vydat zprávu').click()",
-   10:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Otevřít navázanou prezentaci').click()"}
+   10:"[...document.querySelectorAll('#monitoring-detail button')].find(b=>b.textContent==='Otevřít navázanou prezentaci').click()",
+   11:"navigateSidebarTab(document.querySelector('#tools-tab'))",
+   12:"(()=>{const item=document.querySelector('#sidebar-legacy-monitoring-list [data-tool-key^=\"watch:\"]').closest('li');item.querySelector('summary').click();[...item.querySelectorAll('[role=menuitem]')].find(b=>b.textContent==='Smazat').click()})()"}
   checks={
    0:"typeof loadMonitoring==='function'",
    1:"activeProject&&monitoringView&&monitoringView.project_id===activeProject.id&&document.querySelector('#monitoring-rss-list').textContent.includes('kontrola každých 15 min')",
@@ -135,13 +143,15 @@ try:
    7:"monitoringView?.reports.some(r=>r.state==='review')",
    8:"document.querySelector('#presentations-tab').getAttribute('aria-selected')==='true'&&document.querySelector('#monitoring-detail pre')?.textContent.includes('Nebyla doložena významná změna.')&&document.querySelector('#monitoring-detail input[type=checkbox]')",
    9:"monitoringView?.reports.some(r=>r.state==='completed'&&r.presentation_id)&&[...document.querySelectorAll('#monitoring-detail button')].some(b=>b.textContent==='Otevřít navázanou prezentaci')",
-   10:"presentationEditorDeck&&presentationEditorArtifact===monitoringView.reports[0].presentation_id&&document.querySelector('#presentation-report-link')&&!document.querySelector('#presentation-panel').hidden"}
+   10:"presentationEditorDeck&&presentationEditorArtifact===monitoringView.reports[0].presentation_id&&document.querySelector('#presentation-report-link')&&!document.querySelector('#presentation-panel').hidden",
+   11:"monitoringView.watches.length===1&&document.querySelector('#tools-tab').getAttribute('aria-selected')==='true'",
+   12:"monitoringView.watches.length===0&&monitoringView.reports.some(r=>r.state==='completed'&&r.presentation_id)&&!document.querySelector('#sidebar-legacy-monitoring-list [data-tool-key^=\"watch:\"]')"}
   def received(value):
    global phase,busy
    busy=False
    if value!='ready':return
    phase+=1
-   if phase==11:print('monitoring browser OK',flush=True);app.exit(0);return
+   if phase==13:print('monitoring browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy

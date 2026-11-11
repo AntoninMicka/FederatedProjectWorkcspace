@@ -137,6 +137,9 @@ def validate_graph(records):
     watches = {key: row for key, row in records.items() if row['type'] == 'WatchDefinition'}
     parents = {pin['artifact_id'] for row in watches.values() for pin in row['previous']}
     tips = {row['entity_id']: row for key, row in watches.items() if key not in parents}
+    from spikes.monitoring_deletion import deleted_sources
+    deleted={s['id'] for s in deleted_sources(records) if s['kind']=='definition'}
+    tips={id_:r for id_,r in tips.items() if id_ not in deleted}
     edges = {}
     for identity, row in tips.items():
         targets = []

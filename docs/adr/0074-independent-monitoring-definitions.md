@@ -85,3 +85,12 @@ jiného sledování, federované umístění, nové formuláře a migrace mají 
 navazující úkoly. RSS sekce Zdroje zatím zůstává samostatným ručním readerem.
 Původní rozhraní a worker MON-05 nejsou prohlášeny za opravené nebo akceptované.
 Použití modelového API a ověření: [Samostatná sledování](../independent-monitoring.md).
+
+## Potvrzené vyřazení staršího zadání
+
+[ADR 0082](0082-composable-monitoring-and-message-pools.md#stejná-akce-pro-starší-zadání)
+doplňuje neměnný `MonitoringDeletion` receipt. WatchDefinition a její původní
+revize se neodstraňují; vyřadí se pouze z aktivního katalogu a eligibility pro
+nový běh. Aktivní downstream musí být nejprve odpojen nebo samostatně odstraněn.
+Reporting piny, historické běhy, zprávy a prezentace zůstávají čitelné. Nový typ
+musí před přenosem znát všechny zapojené uzly.

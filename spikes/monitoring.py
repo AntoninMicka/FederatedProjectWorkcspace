@@ -124,8 +124,11 @@ class Monitoring:
         return digest(encoded({k:v for k,v in cfg.items() if k!='active'}))
 
     def watches(self,files,entities):
+        from spikes.monitoring_deletion import deleted_from_files
+        deleted=deleted_from_files(files)
         out=[]
         for id_,m in entities.items():
+            if id_ in deleted:continue
             if m.get('file') and m['kind']=='document' and m['provenance']=='user':
                 raw=files.get('artifacts/'+id_+'/'+m['file'],b'')
                 if raw.startswith(MARKER.encode()):

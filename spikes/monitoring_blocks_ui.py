@@ -31,7 +31,7 @@ CSS='''
 '''
 JS=r'''
 const blockLabels={source:'Zdroje',filter:'Filtry',pool:'Pooly zpráv',processing:'Zpracování zpráv',task:'Komplexní úlohy',runs:'Výsledky a běhy'};
-let blockLoadSequence=0,blockEditHead=null,blockCatalog=null,blockTab='task',blockEdit=null,blockProposal=null,blockSaving=null,blockParent=null,blockComposeRun=null;
+let blockSelectedId=null,blockLoadSequence=0,blockEditHead=null,blockCatalog=null,blockTab='task',blockEdit=null,blockProposal=null,blockSaving=null,blockParent=null,blockComposeRun=null;
 const blockEditor=document.querySelector('#monitoring-block-editor'),blockFields=document.querySelector('#monitoring-block-fields');
 function blockText(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
 function blockStatus(text){document.querySelector('#monitoring-block-state').textContent=text;}
@@ -48,12 +48,7 @@ function renderMonitoringBlocks(){
  if(!blockCatalog)return;
  document.querySelector('#monitoring-migration-open').disabled=blockReadOnly();
  if(!monitoringView?.error)monitoringStatus.textContent=blockCatalog.blocks.filter(b=>b.value.kind==='task').length+' komplexních úloh · '+blockCatalog.blocks.filter(b=>b.value.kind==='source').length+' zdrojů · '+blockCatalog.blocks.filter(b=>b.value.kind==='pool').length+' poolů';
- const taskList=document.querySelector('#sidebar-monitoring-list');
- taskList.querySelectorAll('[data-composable-task]').forEach(e=>e.remove());
- for(const row of blockCatalog.blocks.filter(b=>b.value.kind==='task')){
-  const li=document.createElement('li');li.dataset.composableTask=row.id;
-  li.append(monitoringButton(row.value.title,async()=>{if(!await canLeaveMonitoringBlocks())return;monitoringOpen();blockTab='task';renderMonitoringBlocks();const target=document.querySelector('[data-monitoring-block-id="'+row.id+'"]');if(target){target.tabIndex=-1;target.focus({preventScroll:true});}}));taskList.append(li);
- }
+ renderMonitoringToolTree();
  const reportList=document.querySelector('#sidebar-report-list');reportList.querySelectorAll('[data-composable-report]').forEach(e=>e.remove());
  for(const job of blockCatalog.jobs.filter(j=>j.state==='published'&&j.intent.kind==='processing')){
   const li=document.createElement('li');li.dataset.composableReport=job.id;li.append(monitoringButton(job.intent.block.value.title,async()=>{if(!await canLeaveMonitoringBlocks())return;monitoringOpen('outputs');blockTab='runs';renderMonitoringBlocks();}));reportList.append(li);
@@ -61,14 +56,10 @@ function renderMonitoringBlocks(){
  const tabs=document.querySelector('#monitoring-block-tabs');tabs.replaceChildren();
  for(const [kind,label] of Object.entries(blockLabels)){
   const count=kind==='runs'?blockCatalog.jobs.filter(j=>j.intent.kind!=='intake').length:blockRows().filter(b=>b.value.kind===kind).length;
-  const b=monitoringButton(label+' ('+count+')',async()=>{if(!await canLeaveMonitoringBlocks())return;blockTab=kind;renderMonitoringBlocks();});
+  const b=monitoringButton(label+' ('+count+')',async()=>{if(!await canLeaveMonitoringBlocks())return;blockTab=kind;blockSelectedId=null;renderMonitoringBlocks();});
   b.setAttribute('aria-pressed',String(kind===blockTab));tabs.append(b);
  }
  const toolbar=document.querySelector('#monitoring-block-toolbar');toolbar.replaceChildren();
- if(blockTab!=='runs')toolbar.append(monitoringButton('Vytvořit nový blok',()=>editMonitoringBlock(blockTab),blockReadOnly()));
- if(blockTab==='task')toolbar.append(monitoringButton('Sestavit pomocí LLM',()=>{
-  document.querySelector('#monitoring-compose').hidden=false;document.querySelector('#monitoring-compose textarea').focus();
- },blockReadOnly()));
  toolbar.append(monitoringButton('Obnovit přehled',()=>loadMonitoringBlocks()));
  const content=document.querySelector('#monitoring-block-content');content.replaceChildren();
  if(blockTab==='runs'){
@@ -89,7 +80,7 @@ function renderMonitoringBlocks(){
   }
   return;
  }
- const rows=blockRows().filter(b=>b.value.kind===blockTab);
+ const rows=blockRows().filter(b=>b.value.kind===blockTab&&(!blockSelectedId||b.id===blockSelectedId));
  if(!rows.length)content.append(blockText('p','Zatím žádné položky. Vytvořte blok nebo jej přidejte při sestavování úlohy.'));
  for(const row of rows){
   const readonly=blockReadOnly()||row.migration_pending;const article=document.createElement('article'),c=row.value.config;article.dataset.monitoringBlockId=row.id;article.append(blockText('h3',row.value.title));if(row.migration_pending)article.append(blockText('p','Čeká na dokončení přerušeného převodu.'));

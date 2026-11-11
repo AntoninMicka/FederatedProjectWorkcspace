@@ -19,6 +19,7 @@ PRIVACY = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 DIMENSIONS = ('maturity', 'relevance', 'novelty', 'impact', 'confidence')
 PERIODS = {'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
 TYPES = {
+    'MonitoringDeletion': ('monitoring-deletion', 'sources'),
     'MonitoringMigration': ('migration', 'sources block_ids finding_refs retention_days processing_node_id preview_sha256'),
     'MonitoringBlock': ('block', 'kind title config'),
     'SourceFinding': ('finding', 'definition_ref input_id item aliases entry_sha256 stage selection change_reason raw_ref'),
@@ -237,6 +238,7 @@ def validate_record(record):
         require(v['synthesis']['complete']==(not v['synthesis']['missing']),'Synthesis completeness differs from gaps')
     if kind=='ReportSnapshot' and isinstance(v,dict) and 'analysis_ref' in v:
         require('synthesis' in v,'Analysis requires frozen synthesis inputs');ref(v['analysis_ref']);names+=' analysis_ref'
+    if kind=='MonitoringBlock' and isinstance(v,dict) and 'deleted' in v:names+=' deleted'
     fields(v, 'schema ' + names)
     require(v['schema'] == 'fpw-reporting-' + suffix + '-v1', 'Unknown reporting value version')
     for key in ('title', 'goal', 'summary', 'correction_reason', 'declared_author'):
@@ -248,7 +250,10 @@ def validate_record(record):
     for key in ('categories', 'entities', 'geographies', 'tags', 'limitations'):
         if key in v:
             sequence(v[key], text)
-    if kind == 'MonitoringMigration':
+    if kind == 'MonitoringDeletion':
+        from spikes.monitoring_deletion import validate_deletion
+        validate_deletion(v)
+    elif kind == 'MonitoringMigration':
         from spikes.monitoring_migration import validate_migration
         validate_migration(v)
     elif kind == 'MonitoringBlock':
@@ -486,6 +491,8 @@ def records(files, entities):
                     require(id_ not in active, 'Cyclic reporting revisions')
                     active.add(id_); stack.append((id_, True))
                     stack.extend((p['artifact_id'], False) for p in result[id_]['previous'])
+    from spikes.monitoring_deletion import validate_deletions
+    validate_deletions(result,files,entities)
     from spikes.monitoring_definition_schema import validate_graph
     validate_graph(result)
     from spikes.monitoring_blocks import validate_blocks

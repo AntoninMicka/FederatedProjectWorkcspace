@@ -59,6 +59,27 @@ class ComposableMonitoring:
         result.update(node_id=local_node_id(self.node), jobs=jobs)
         return result
 
+    def remove(self, pid, base_head, block, operation_id, *, confirm, checkpoint=lambda stage: None):
+        require(confirm is True, 'Confirm removal from the active catalog; history is retained')
+        require(isinstance(block,dict) and block.get('value',{}).get('deleted') is True, 'Expected exact deletion revision')
+        self.monitoring._writable(pid)
+        self._require_migration_complete(pid,block['id'])
+        with self.locked() as acquired:
+            require(acquired, 'A monitoring effect is already running on this node')
+            with self.pools.db() as db:
+                pending = [json.loads(r[0]) for r in db.execute(
+                    "SELECT document FROM block_jobs WHERE project=? AND state IN ('prepared','dispatching','unknown')", (pid,))]
+            for intent in pending:
+                ids = {intent.get('source_id'),intent.get('block',{}).get('id')}
+                ids.update(intent.get('block',{}).get('resolved_ids',[]))
+                for row in intent.get('filters',[]):
+                    ids.add(row['id']);ids.add(row['value']['config']['pool_id'])
+                require(block['id'] not in ids, 'Resolve the unfinished or unknown monitoring operation before deletion')
+            # The journal/CAS writer validates active dependency closure atomically.
+            # Native bindings/pool contents stay local and unchanged; tick ignores
+            # a deleted definition, including after restart or remote reception.
+            return self.blocks.save(pid,base_head,[block],operation_id,checkpoint=checkpoint,_delete=True)
+
     def _require_migration_complete(self,pid,block_id):
         with self.pools.db() as db:
             jobs=[json.loads(r[0]) for r in db.execute("SELECT document FROM block_jobs WHERE project=? AND state!='completed'",(pid,))]
@@ -382,6 +403,7 @@ class ComposableMonitoring:
         for i, b in enumerate(blocks):
             fields(b, 'id previous privacy value'); uuid(b['id']); validate_block(b['value'])
             require(b['privacy'] in PRIVACY, 'Invalid proposed privacy')
+            require(not b['value'].get('deleted'), 'Composition cannot delete monitoring blocks')
             old = next((r for r in catalog['blocks'] if r['id'] == b['id']), None)
             require(b['previous'] == ([old['ref']] if old else []), 'Proposal predecessor differs from catalog')
             require(not old or old['privacy'] == b['privacy'], 'Proposal changes immutable privacy')

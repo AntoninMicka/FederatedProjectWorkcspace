@@ -36,6 +36,37 @@ class MonitoringHTTPTests(unittest.TestCase):
         self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw)['state'],'completed')
         self.assertEqual(self.call('blocks',{}, {'Authorization':'Bearer invalid'})[0],401)
 
+    def test_confirmed_block_deletion_uses_native_writer_and_refuses_reader(self):
+        from tests.test_monitoring_blocks import blocks
+        node=self.f.root/'node.json'
+        code,raw,_=self.call('blocks',{});self.assertEqual(code,200,raw)
+        specs=blocks(node)
+        code,raw,_=self.call('blocks-save',dict(base_head=json.loads(raw)['commit_id'],blocks=specs,operation_id=str(uuid4())))
+        self.assertEqual(code,200,raw)
+        catalog=json.loads(self.call('blocks',{})[1]);row=next(b for b in catalog['blocks'] if b['id']==specs[4]['id'])
+        request=dict(base_head=catalog['commit_id'],block=dict(id=row['id'],previous=[row['ref']],privacy=row['privacy'],value=dict(row['value'],deleted=True)),operation_id=str(uuid4()),confirm=False)
+        self.assertEqual(self.call('block-delete',request)[0],422)
+        state=json.loads(self.f.request(path='/v1/administration',body=json.dumps({'action':'list'}))[1])
+        state=json.loads(self.f.request(path='/v1/administration',body=json.dumps(dict(action='create-user',expected_commit=state['commit_id'],name='Deletion reader',node_role='member')))[1])
+        self.assertEqual(self.call('block-delete',dict(request,confirm=True),{'Authorization':'Bearer '+state['access_key']})[0],403)
+        code,raw,_=self.call('block-delete',dict(request,confirm=True));self.assertEqual(code,200,raw)
+        self.assertNotIn(row['id'],{b['id'] for b in json.loads(self.call('blocks',{})[1])['blocks']})
+        self.assertEqual(self.call('block-delete',dict(request,confirm=True))[0],200)
+
+    def test_legacy_deletion_preview_confirmation_and_replay(self):
+        from tests.test_monitoring_workflow import workflow
+        head=json.loads(self.call('view',{})[1])['commit_id']
+        request=workflow(self.pid,head);request.pop('project_id');request['operation_id']=str(uuid4())
+        self.assertEqual(self.call('workflow-save',request)[0],200)
+        code,raw,_=self.call('legacy-delete-preview',dict(kind='definition',id=request['processing']['watch_id']))
+        self.assertEqual(code,200,raw);preview=json.loads(raw);self.assertFalse(preview['blockers'])
+        body=dict(base_head=preview['base_head'],sources=preview['sources'],operation_id=str(uuid4()),confirm=False)
+        self.assertEqual(self.call('legacy-delete',body)[0],422)
+        self.assertEqual(self.call('legacy-delete',dict(body,confirm=True),{'Authorization':'Bearer invalid'})[0],401)
+        self.assertEqual(self.call('legacy-delete',dict(body,confirm=True))[0],200)
+        self.assertEqual(self.call('legacy-delete',dict(body,confirm=True))[0],200)
+        self.assertEqual(len(json.loads(self.call('definitions',{})[1])['definitions']),1)
+
     def test_one_time_migration_has_readable_preview_and_admin_only_apply(self):
         from tests.test_monitoring_workflow import workflow
         view=json.loads(self.call('view',{})[1])
@@ -144,6 +175,7 @@ class MonitoringHTTPTests(unittest.TestCase):
         code,raw,_=self.call('definitions',{},headers);self.assertEqual(code,200,raw)
         self.assertFalse(json.loads(raw)['can_manage'])
         self.assertEqual(self.call('definition-save',request,headers)[0],403)
+        self.assertEqual(self.call('legacy-delete',dict(base_head=view['commit_id'],sources=[],operation_id=str(uuid4()),confirm=True),headers)[0],403)
         self.assertEqual(self.call('rss-status',{},headers)[0],200)
         from tests.test_monitoring_filters import pipeline,source
         head=json.loads(self.call('definitions',{},headers)[1])['commit_id']
