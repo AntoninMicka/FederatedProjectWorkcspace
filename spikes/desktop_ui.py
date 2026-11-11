@@ -5260,6 +5260,7 @@ async function loadConflictPreview(){
   projectConflictPreview=result;projectConflictDrafts=new Map();projectConflictOperation=null;
   for(const item of result.files)projectConflictDrafts.set(item.path,{choice:item.conflict?null:'auto',text:item.result,deleted:!item.result_exists});
   projectConflictConfirm.checked=false;projectConflictWorkspace.hidden=false;updateConflictCompletion();projectConflictStatus.textContent=projectLocalChanges.length?'Místní změny blokují publikaci merge. Obě porovnání můžete prohlížet; změny zůstávají zachované.':'Vyberte soubor ze seznamu. Návrh je pouze v prohlížeči; Git ani projekt nebyly změněny.';
+  if(result.merge_bases?.length>1)projectConflictStatus.textContent+=' Historie má více společných předků; Git sestavil návrh ze všech.';
  }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
 }
 function chooseConflict(choice){
@@ -9768,6 +9769,10 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})
             if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
                 return self.reply(422, {'error': 'Akci dokumentu nelze provést. Ověřte aktuální verzi, metadata, vztahy a recovery stav projektu.'})
+            if self.path.startswith('/v1/projects/conflicts/'):
+                return self.reply(422, {'error':
+                    'Řešitel konfliktů nemůže bezpečně zpracovat tuto historii nebo lokální stav. '
+                    'Konfliktní verze zůstaly zachované.', 'diagnostic': 'conflict-resolution-invalid'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})

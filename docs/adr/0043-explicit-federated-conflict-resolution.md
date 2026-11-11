@@ -28,6 +28,39 @@ ručně upravit nebo zvolit naši, protější, obě či smazanou variantu. Bin�
 jinak nepodporovaný soubor dovolí jen celo-souborovou volbu. Přejmenování se v
 první verzi rozloží na vlastněné cesty, ale UI je označí jako `rename/update`.
 
+## Více společných předků (11. 11. 2026)
+
+Po protisměrných merge commitech má reálný federovaný projekt dva nejlepší
+společné předky (criss-cross historie). Původní požadavek na právě jednoho
+blokoval již seznam konfliktů, přestože Git data byla platná. Toto omezení
+se nahrazuje podporou 1 až 32 společných předků. Pro více předků sestavuje
+`git merge-tree --write-tree` návrh ze všech předků svým nativním algoritmem;
+aplikace mu nesmí vnutit jediný `--merge-base`.
+
+Inventura cest zahrnuje rozdíly obou konců vůči všem předkům. Pole `base`
+zachovává deterministický reprezentativní commit pro interní inventuru,
+nikoli autoritu automatického výsledku. U více předků obsahuje náhled
+`merge_bases`; jejich seřazený seznam je součástí schvalovaného digestu.
+UI nadále nabízí lokální/výsledný/vzdálený text a vysvětlí použití více předků.
+Jednopředkové náhledy a potvrzovací kontrakt se nemění.
+
+Crash boundaries a recovery zůstávají původní: výpočet zapisuje pouze do
+dočasného object store, bez změny refs, pracovního stromu či journalu projektu.
+Až explicitní potvrzení použije původní Workspace transakci se dvěma rodiči,
+sémantickou validací a indexem. Přerušení po ref update se dokončí ze stejného
+journalu; opakování nesmí vytvořit další commit. Regresní criss-cross test
+ověřuje nezměněný stav po náhledu, skutečně konfliktní kandidát, oba rodiče,
+obnovu po ref update a aktualizovanou projekci indexu.
+
+Ověření opravy: 21 cílených testů řešitele, merge scénářů a sdíleného UI
+prošlo; samostatný Qt/WebEngine conflict smoke rovněž prošel. JavaScript
+prošel `node --check`, diff prošel `git diff --check`. Izolovaný planner nad
+skutečnou dvoupředkovou historií sestavil návrh jedné změněné cesty bez
+textového konfliktu a beze změny HEAD, refs či pracovního stromu. Tato
+diagnostika neprováděla publikaci ani nenahrazuje živé potvrzení v aplikaci.
+Plná sada po této opravě nebyla opakována; dřívější výsledek celé sady se
+vztahuje k předchozí revizi.
+
 ## Reuse a UI spike
 
 - **Reuse/adapt:** `Git`, `Workspace`/Journal/Index, snapshot a relationship

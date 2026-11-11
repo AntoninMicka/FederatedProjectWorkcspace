@@ -122,6 +122,37 @@ class ConflictResolutionTests(unittest.TestCase):
         with self.assertRaises((ValidationError, StaleIndex)):
             self.service.preview(self.project, self.start, self.ref)
 
+    def test_criss_cross_preview_and_ref_update_recovery_preserve_both_histories(self):
+        ancestors = [self.local, self.peer]
+        ours = self.git.run('commit-tree', self.local + '^{tree}',
+                            '-p', self.local, '-p', self.peer, '-m', 'First merge').stdout.strip()
+        theirs = self.git.run('commit-tree', self.peer + '^{tree}',
+                              '-p', self.peer, '-p', self.local, '-m', 'Other merge').stdout.strip()
+        self.git.run('update-ref', 'refs/heads/main', ours, self.local)
+        self.git.run('read-tree', '--reset', '-u', ours)
+        self.git.run('update-ref', self.ref, theirs, self.peer)
+        self.local, self.peer = ours, theirs
+        before = self.state()
+        listed = self.service.list(self.project, ours)
+        self.assertEqual(listed['conflicts'][0]['merge_bases'], sorted(ancestors))
+        view = self.preview()
+        self.assertEqual(view['merge_bases'], sorted(ancestors))
+        self.assertTrue(next(row for row in view['files'] if row['path'] == self.path)['conflict'])
+        self.assertEqual(self.state(), before)
+        request, operation = self.request(view), str(uuid4())
+        def crash(stage):
+            if stage == 'ref-updated':
+                raise RuntimeError('criss-cross crash')
+        with self.assertRaisesRegex(RuntimeError, 'criss-cross crash'):
+            self.service.confirm(request, operation, checkpoint=crash)
+        published = self.git.head()
+        receipt = self.service.confirm(request, operation)
+        self.assertEqual(receipt['commit_id'], published)
+        self.assertEqual(self.git.run('show', '-s', '--format=%P', published).stdout.split(),
+                         [ours, theirs])
+        self.assertEqual(self.service.list(self.project, published)['conflicts'], [])
+        self.assertEqual(self.ws.index.read_projection(self.git)['commit_id'], published)
+
     def test_local_change_is_listed_without_an_incoming_ref_and_preserved(self):
         self.git.run('update-ref', '-d', self.ref, self.peer)
         target = self.root / self.path

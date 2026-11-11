@@ -575,6 +575,13 @@ nenahrazuje Git jako autoritu výsledného stromu.
 Soukromá inventura neposkytla ověřenou komponentu se stejným Git, validačním a
 recovery kontraktem. Rozhodnutí: [ADR 0043](docs/adr/0043-explicit-federated-conflict-resolution.md).
 
+Criss-cross divergence **adapt/reuse** the same native `git merge-base --all`
+and `git merge-tree --write-tree`, isolated object store, preview digest and
+Workspace transaction/recovery. Inventory all common ancestors; let Git combine
+them instead of forcing one ancestor. **Reject:** selecting one merge base for
+the automatic result, rewriting live history, deleting incoming refs, a custom
+recursive merge algorithm and publishing without explicit confirmation.
+
 Doplnění necommitnutých konfliktů **reuse/adaptuje** tentýž přehled,
 `Git.snapshot`, omezený filesystem snapshot Journalu a existující sync journal.
 Read-only unified diff používá standardní `difflib`; stav peeru je pouze

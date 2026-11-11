@@ -120,8 +120,15 @@ class ConflictResolution:
                 'Incoming history can be fast-forwarded')
         bases = git.run('merge-base', '--all', expected_head,
                         row['head']).stdout.splitlines()
-        require(len(bases) == 1, 'Expected one merge base')
-        _commit(bases[0]); row['base'] = bases[0]
+        require(0 < len(bases) <= 32, 'Expected between one and 32 merge bases')
+        for base in bases:
+            _commit(base)
+        # The representative is only a stable inventory/display anchor. For
+        # criss-cross histories Git must recursively combine ALL merge bases.
+        bases = sorted(bases)
+        row['base'] = bases[0]
+        if len(bases) > 1:
+            row['merge_bases'] = bases
         if project_id is not None:
             row['authority'] = content_authority(
                 self.administration, row['peer_id'], project_id, branch)
@@ -209,7 +216,9 @@ class ConflictResolution:
         ours_files = git.snapshot(expected_head)
         theirs_files = git.snapshot(theirs)
         changed, renames = set(), {}
-        for left, right in ((base, expected_head), (base, theirs)):
+        bases = selected.get('merge_bases', [base])
+        for left, right in ((ancestor, tip) for ancestor in bases
+                            for tip in (expected_head, theirs)):
             names = set(filter(None, git.run(
                 'diff', '--name-only', '-z', '--no-renames', left,
                 right).stdout.split('\0')))
@@ -237,7 +246,8 @@ class ConflictResolution:
             (objects / 'pack').mkdir(); (objects / 'info').mkdir()
             env = {'GIT_OBJECT_DIRECTORY': str(objects),
                    'GIT_ALTERNATE_OBJECT_DIRECTORIES': str(git.root / '.git' / 'objects')}
-            result = git.run('merge-tree', '--write-tree', '--merge-base', base,
+            base_args = ['--merge-base', base] if len(bases) == 1 else []
+            result = git.run('merge-tree', '--write-tree', *base_args,
                              '--name-only', '--no-messages', expected_head, theirs,
                              check=False, env_extra=env)
             lines = result.stdout.splitlines()
@@ -287,6 +297,8 @@ class ConflictResolution:
                         incoming_ref=incoming_ref, incoming_head=theirs,
                         base=base, authority=selected['authority'],
                         paths=digest_rows)
+        if len(bases) > 1:
+            identity['merge_bases'] = bases
         return dict(identity, preview_sha256=hashlib.sha256(_canonical(identity)).hexdigest(),
                     files=paths), dict(base=base_files, ours=ours_files,
                                       theirs=theirs_files,
