@@ -20,8 +20,9 @@ import threading
 import time
 
 from spikes.http_request_budget import RequestReadTimeout, request_reader
+from spikes.http_ingress import HeaderAdmission
 from spikes.backend_availability import BackendAvailability
-from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, ACTION_LANES, DIAGNOSTIC_ACTIONS, STREAM_ROUTES, SERVICE_ROUTES, request_lane
+from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, PROJECT_READ_ROUTES, RESERVED_ROUTES, ACTION_LANES, DIAGNOSTIC_ACTIONS, STREAM_ROUTES, SERVICE_ROUTES, request_lane
 from spikes.request_ownership import BoundedWaitingLane, ConcurrentReadLane, ProjectLanes, ProjectBusy, bounded_project_requests
 
 from spikes.metadata import parse_json, ValidationError
@@ -70,6 +71,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self.worker_limit = max_workers + int(reserve_ui)
         self.post_slots = threading.BoundedSemaphore(max_workers) if reserve_ui else None
         self._worker_slots = threading.BoundedSemaphore(max_workers + int(reserve_ui))
+        self._ordinary_worker_slots = threading.BoundedSemaphore(max_workers)
         for name in LANES:
             setattr(self, name + '_lane', threading.Lock())
         # One queued IDE operation absorbs ordinary cross-client overlap.
@@ -78,6 +80,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         # Discovery only reads committed snapshots and native shared checkpoints.
         # Keep one ordinary worker available even in a minimum-size pool.
         self.ide_status_lane = ConcurrentReadLane(max_workers - 1)
+        self.project_read_lane = ConcurrentReadLane(max_workers - 1)
         self.backend_availability = BackendAvailability()
         self.project_lanes = ProjectLanes()
         self.request_lane_timeout = lane_timeout
@@ -89,40 +92,57 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self._admission_rejections = 0
         self._admission_open = True
         super().__init__(server_address, handler)
+        self.header_admission = HeaderAdmission(self._dispatch_ready_request, self._reject_request,
+            seconds=getattr(handler, 'request_read_seconds', 60),
+            static_paths=getattr(handler, 'assets', {}))
 
     def process_request(self, request, client_address):
         with self._worker_condition:
             if not self._admission_open:
                 self.shutdown_request(request)
                 return
+        self.header_admission.add(request, client_address)
+
+    def _reject_request(self, request, *, code=503):
+        with self._worker_condition:
+            self._admission_rejections += 1
+        payload = b'{"error":"server busy"}' if code == 503 else b'{"error":"request rejected"}'
+        try:
+            request.settimeout(.1)
+            request.sendall(('HTTP/1.0 '+str(code)+' Request Rejected\r\n').encode() +
+                b'Content-Type: application/json\r\nContent-Length: '+str(len(payload)).encode()+
+                b'\r\nCache-Control: no-store\r\nRetry-After: 1\r\nConnection: close\r\n\r\n'+payload)
+        except OSError:
+            pass
+        self.shutdown_request(request)
+
+    def _dispatch_ready_request(self, request, client_address, reserved):
+        with self._worker_condition:
+            if not self._admission_open:
+                self.shutdown_request(request)
+                return
+        ordinary = not reserved
+        if ordinary and not self._ordinary_worker_slots.acquire(blocking=False):
+            return self._reject_request(request)
         if not self._worker_slots.acquire(blocking=False):
+            if ordinary:
+                self._ordinary_worker_slots.release()
             logging.getLogger(__name__).warning(
                 'http_admission_rejected reason=worker_limit requests=%s',
                 self.http_diagnostics()['requests'])
-            with self._worker_condition:
-                self._admission_rejections += 1
             # No handler, authentication or dispatch ran. Give fetch a bounded
             # HTTP failure rather than an unexplained closed connection.
-            payload = b'{"error":"server busy"}'
-            try:
-                request.settimeout(0.1)
-                request.sendall(b'HTTP/1.0 503 Service Unavailable\r\n'
-                    b'Content-Type: application/json\r\n'
-                    b'Content-Length: ' + str(len(payload)).encode() + b'\r\n'
-                    b'Cache-Control: no-store\r\nRetry-After: 1\r\n'
-                    b'Connection: close\r\n\r\n' + payload)
-            except OSError:
-                pass
-            self.shutdown_request(request)
-            return
+            return self._reject_request(request)
         with self._worker_condition:
             if not self._admission_open:
                 self._worker_slots.release()
+                if ordinary:
+                    self._ordinary_worker_slots.release()
                 self.shutdown_request(request)
                 return
             self._active_requests.add(request)
             self._request_details[request] = {'kind': 'headers', 'stage': 'reading',
-                                              'started': time.monotonic()}
+                                              'started': time.monotonic(), 'ordinary': ordinary}
         try:
             super().process_request(request, client_address)
         except BaseException:
@@ -131,6 +151,8 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 self._request_details.pop(request, None)
                 self._worker_condition.notify_all()
             self._worker_slots.release()
+            if ordinary:
+                self._ordinary_worker_slots.release()
             raise
 
     def process_request_thread(self, request, client_address):
@@ -139,9 +161,11 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         finally:
             with self._worker_condition:
                 self._active_requests.discard(request)
-                self._request_details.pop(request, None)
+                item = self._request_details.pop(request, {})
                 self._worker_condition.notify_all()
             self._worker_slots.release()
+            if item.get('ordinary'):
+                self._ordinary_worker_slots.release()
 
     def active_worker_count(self):
         with self._worker_condition:
@@ -157,6 +181,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                       for item in self._request_details.values()]
             rejected = self._admission_rejections
         return {'active_workers': self.active_worker_count(),
+                'pending_headers': self.header_admission.count(),
                 'worker_limit': self.worker_limit,
                 'admission_rejections': rejected,
                 'requests': active,
@@ -187,10 +212,12 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         with self._worker_condition:
             self._admission_open = False
         self.ide_queue_lane.close()
+        self.header_admission.close()
         return super().shutdown()
 
     def server_close(self):
         self.ide_queue_lane.close()
+        ingress_clean = self.header_admission.close()
         monitoring=getattr(self,'monitoring',None)
         monitoring_clean=monitoring.close() if monitoring else True
         deadline = time.monotonic() + self.shutdown_timeout
@@ -201,7 +228,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 timeout=self.shutdown_timeout)
             active = tuple(self._active_requests)
         probe_clean = self.backend_availability.close(deadline - time.monotonic())
-        self.shutdown_clean = clean and probe_clean and monitoring_clean
+        self.shutdown_clean = clean and probe_clean and monitoring_clean and ingress_clean
         if not clean:
             for request in active:
                 try:
@@ -225,7 +252,8 @@ class Handler(BaseHTTPRequestHandler):
         self.request.settimeout(1)
         super().setup()
         self.rfile.close()
-        self.rfile = request_reader(self.request, self.request_read_seconds)
+        elapsed = time.monotonic() - getattr(self.request, 'header_started', time.monotonic())
+        self.rfile = request_reader(self.request, max(.001, self.request_read_seconds-elapsed))
 
     def log_message(self, *args):
         pass  # Do not log request URLs, headers, tokens or payloads.
@@ -329,8 +357,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         slots = getattr(self.server, 'post_slots', None)
-        reserved_diagnostic = self.path == '/v1/diagnostics/status'
-        if reserved_diagnostic:
+        if self.path in RESERVED_ROUTES:
             slots = None
         if slots is not None and not slots.acquire(blocking=False):
             logging.getLogger(__name__).warning('http_request_busy reason=ui_worker_reserved')
@@ -398,6 +425,10 @@ class Handler(BaseHTTPRequestHandler):
         if lanes is None:
             return self.dispatch(request)
         describe = getattr(self.server, 'describe_request', lambda *args: None)
+        if self.path in PROJECT_READ_ROUTES:
+            describe(self.request, 'project_read_lane', 'waiting', self.path, project_id)
+            return self._in_request_lane(lambda: self.dispatch(request),
+                lane_name='project_read_lane', typed_busy=True)
         describe(self.request, 'project', 'waiting', self.path, project_id)
         with lanes.acquire(project_id, min(0.1, self.server.request_lane_timeout)):
             describe(self.request, 'project', 'processing', self.path, project_id)
@@ -429,6 +460,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error(400)
         if len(length) > len(str(self.max_body)) or not 0 < int(length) <= self.max_body:
             return self.send_error(413)
+        describe = getattr(self.server, 'describe_request', lambda *args: None)
+        describe(self.request, 'request-body', 'reading', self.path)
         try:
             body = self.rfile.read(int(length))
             if len(body) != int(length):

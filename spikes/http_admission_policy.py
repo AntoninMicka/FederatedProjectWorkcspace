@@ -42,7 +42,17 @@ PROJECT_ROUTES = {
     '/v1/artifacts/git/commit': 'preview',
 }
 
-# Provider configuration, lifecycle and dependent services retain one owner.
+# Request-local views, with native snapshot/HEAD/pending validation. Mutating
+# previews and all saves retain the original per-project HTTP writer owner.
+PROJECT_READ_ROUTES = frozenset({
+    '/v1/projects/open', '/v1/outputs/definitions', '/v1/presentations/open',
+    '/v1/presentations/export/preview', '/v1/artifacts/preview',
+    '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+    '/v1/projects/conflicts/list', '/v1/projects/conflicts/preview',
+    '/v1/projects/conflicts/local-preview', '/v1/artifacts/editor/open',
+})
+
+# Provider inventory; execution, status and control overrides follow below.
 # Exact audited paths: no prefix classification occurs at request time.
 PROVIDER_ROUTES = frozenset({
     '/v1/administration',
@@ -183,6 +193,24 @@ PROVIDER_ROUTES = frozenset({
     '/v1/workflows/status',
 })
 
+# Long dispatch remains bounded/ordered, without owning status or control.
+# Native run IDs, claim/CAS, configuration guards and privacy remain authority.
+PROVIDER_EXECUTION_ROUTES = frozenset({
+    '/v1/chat/send', '/v1/chat/send-stream', '/v1/chat/test', '/v1/chat/models',
+    '/v1/external/send', '/v1/external/send-stream', '/v1/external/models',
+    '/v1/tasks/route', '/v1/tasks/route-stream',
+    '/v1/workflows/creator/dispatch', '/v1/workflows/opponent/dispatch',
+    '/v1/tasks/search/confirm', '/v1/tasks/public-source/confirm',
+    '/v1/tasks/external/confirm', '/v1/external/confirm',
+})
+PROVIDER_STATUS_ROUTES = frozenset({
+    '/v1/chat/status', '/v1/chat/snapshot', '/v1/chat/output', '/v1/tasks/list',
+})
+PROVIDER_CONTROL_ROUTES = frozenset({
+    '/v1/tasks/cancel', '/v1/external/cancel', '/v1/tasks/external/cancel',
+    '/v1/autonomy/cancel', '/v1/autonomy/pause', '/v1/autonomy/pause-all',
+})
+
 # Listing administration has its own persistent registry/sync-store owners.
 # Every mutation and unknown action conservatively retains the provider owner.
 ACTION_LANES = {
@@ -268,6 +296,18 @@ MONITORING_ROUTES = frozenset({
     '/v1/monitoring/workflow-run',
     '/v1/monitoring/workflow-save',
 })
+MONITORING_EXECUTION_ROUTES = frozenset({
+    '/v1/monitoring/run', '/v1/monitoring/synthesis-run', '/v1/monitoring/workflow-run',
+    '/v1/monitoring/block-process', '/v1/monitoring/block-task-run',
+    '/v1/monitoring/block-compose', '/v1/monitoring/block-publish',
+    '/v1/monitoring/block-tick', '/v1/monitoring/rss-tick', '/v1/monitoring/publish',
+    '/v1/monitoring/migration-preview', '/v1/monitoring/migration-apply',
+    '/v1/monitoring/migration-resume',
+})
+MONITORING_CONTROL_ROUTES = frozenset({
+    '/v1/monitoring/cancel', '/v1/monitoring/migration-cancel',
+    '/v1/monitoring/block-release',
+})
 RSS_SOURCE_ROUTES = frozenset({
     '/v1/rss-sources/refresh',
     '/v1/rss-sources/view',
@@ -321,10 +361,16 @@ FEDERATION_TRANSFER_LANES = {
 }
 
 # These service domains acquire admission after authentication/body parsing.
-SERVICE_ROUTES = (JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES
+SERVICE_ROUTES = (PROVIDER_ROUTES | JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES
                   | IDE_QUEUE_ROUTES | REFINEMENT_ROUTES | REFERENCE_ROUTES
                   | NODE_PREFERENCE_ROUTES | FEDERATION_CONTROL_ROUTES
                   | frozenset(FEDERATION_TRANSFER_LANES))
+
+# Admission priority only; authentication/role/native ownership still apply.
+RESERVED_ROUTES = (PROVIDER_CONTROL_ROUTES | MONITORING_CONTROL_ROUTES | frozenset({
+    '/v1/diagnostics/status', '/v1/tasks/run-control', '/v1/julia/cancel',
+    '/v1/federation/content/cancel',
+}))
 
 # Unknown paths retain conservative admission. Every declared JSON route now
 # has an audited domain; this does not remove native serialization or recovery.
@@ -362,6 +408,12 @@ ROUTE_LANES = {
     **dict.fromkeys(FEDERATION_CONTROL_ROUTES, 'federation_control'),
     **FEDERATION_TRANSFER_LANES,
     **dict.fromkeys(APPLICATION_ROUTES, 'application'),
+    **dict.fromkeys(PROJECT_READ_ROUTES, 'project_read'),
+    **dict.fromkeys(PROVIDER_EXECUTION_ROUTES, 'provider_execution'),
+    **dict.fromkeys(PROVIDER_STATUS_ROUTES, 'provider_status'),
+    **dict.fromkeys(PROVIDER_CONTROL_ROUTES, 'provider_control'),
+    **dict.fromkeys(MONITORING_EXECUTION_ROUTES, 'monitoring_execution'),
+    **dict.fromkeys(MONITORING_CONTROL_ROUTES, 'monitoring_control'),
     # Peer protocols validate their own authentication/body before native writes.
     # Give each protocol bounded capacity without owning unrelated UI domains.
     '/v1/federation/probe': 'peer_probe',

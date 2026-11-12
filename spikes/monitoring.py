@@ -225,7 +225,7 @@ class Monitoring:
         return dict(result,watch_id=cfg['id'])
 
     def jobs(self,pid):
-        with self.scheduler.db() as db:
+        with self.scheduler.db(read_only=True) as db:
             return [json.loads(r[0]) for r in db.execute('SELECT document FROM runs') if json.loads(r[0])['project_id']==pid]
 
     @staticmethod
@@ -443,7 +443,7 @@ class Monitoring:
         job=next((r for r in self.jobs(pid) if r['task_ref']==task and r['period']==period
                   and (r['baseline_snapshot']==correction if correction else not self.scheduler.is_correction(r['run_id']))),None)
         if job and job['state']=='collecting':
-            with self.scheduler.db() as db:
+            with self.scheduler.db(read_only=True) as db:
                 until=db.execute('SELECT lease_until FROM runs WHERE run_id=?',(job['run_id'],)).fetchone()[0]
             if until<=self.clock():
                 try:self.scheduler.claim(job['run_id'],str(uuid4()))

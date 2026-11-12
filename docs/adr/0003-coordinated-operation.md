@@ -59,6 +59,15 @@ ani formát trvalých dat se nemění. Souběh čtenářů a vyloučení zapisov
 ověřují testy i mezi procesy; HTTP použití popisuje
 [audit katalogu IDE](../http-concurrency-ownership.md#concurrent-ide-catalog-reads).
 
+## Doplnění P1: plná projektová čtení
+
+Také `read_project` validuje neměnný commit mimo výhradní zámek a na konci
+znovu kontroluje HEAD, větev a pending stav. Inicializovaný index lze číst
+pod SH. Stale či chybějící index vyžaduje uvolnění SH, získání EX a opakování
+kontrol před obnovou; nikdy nejde o SQL zápis pod SH ani povýšení na místě.
+Bootstrap a migrace zůstávají výhradní. Recovery protokol se nemění.
+Podrobnosti: [náprava P1](../concurrency-p1-remediation.md).
+
 ## Přenos ověření na cílový uzel
 
 `spikes.target_probe` adaptuje stejné checkpointy pro ruční M0-05 bez přenosu celé testové sady. Vytvoří vlastní dočasný projekt/stav na explicitním filesystemu, provede tři normální zápisy a 12 `os._exit(73)` v samostatných workerech. Storage protokol ani výše uvedené crash boundaries se nemění. Po obnově ověří commit/bajty/index a idempotenci; na konci úspěchu odstraní pouze vlastní adresář, při selhání ponechá diagnostická data. Jde o pád aplikačního procesu mezi checkpointy, nikoli výpadek napájení nebo přerušení uvnitř libovolného Git/SQLite syscallu. Výsledky lokální validace a skutečného cílového běhu se evidují odděleně ve WORK_LOG.

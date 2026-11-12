@@ -5,6 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # HTTP concurrency: ownership and recovery audit
 
+The later [A01–A06 P1 remediation](concurrency-p1-remediation.md) supersedes
+the corresponding ownership descriptions below; historical evidence remains.
+
 Local continuation of [the 9 November handoff](../HANDOFF_HTTP_CONCURRENCY.txt).
 Source baseline: `a36b68c7d36afd9d16cc6a141d5bc3b6e39256d6`,
 `feature/rss-direct-pilot`. The two changes described as uncommitted in that

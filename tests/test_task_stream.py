@@ -134,7 +134,7 @@ class StreamTaskTests(unittest.TestCase):
             with self.assertRaises(UnknownRun):service.task_route(request,on_delta=lambda _:None,on_status=lambda _:None,control=control)
         self.assertEqual(head,self.git.head())
 
-    def test_http_stream_keeps_settings_available_serializes_mutations_and_can_stop(self):
+    def test_http_stream_keeps_status_and_control_available_during_runtime_reset(self):
         entered=threading.Event()
         def blocked(binding,raw,delta,status,control):
             entered.set()
@@ -156,7 +156,8 @@ class StreamTaskTests(unittest.TestCase):
             thread.start()
             try:
                 self.assertTrue(entered.wait(2))
-                self.assertTrue(server.provider_lane.locked())
+                self.assertTrue(server.provider_execution_lane.locked())
+                self.assertFalse(server.provider_lane.locked())
                 self.assertFalse(server.application_lane.locked())
                 for path,body in [('/v1/counter',{'action':'increment'}),
                                   ('/v1/user-profile',{'action':'load'}),
@@ -164,12 +165,15 @@ class StreamTaskTests(unittest.TestCase):
                     response=driver.request(server,path=path,body=json.dumps(body).encode())
                     self.assertIn(b' 200 ',response.split(b'\r\n',1)[0],response)
                     self.assertTrue(thread.is_alive())
-                for path,body in [('/v1/chat/status',{}),
-                                  ('/v1/backend-catalog/reset',{'backend_id':'ollama','confirmed':True}),
-                                  ('/v1/administration',{'action':'create-user','name':'Concurrent',
-                                    'node_role':'member','expected_commit':before['commit_id']})]:
-                    response=driver.request(server,path=path,body=json.dumps(body).encode())
-                    self.assertIn(b' 503 ',response.split(b'\r\n',1)[0],response)
+                response=driver.request(server,path='/v1/chat/status',body=b'{}')
+                self.assertIn(b' 200 ',response.split(b'\r\n',1)[0],response)
+                response=driver.request(server,path='/v1/backend-catalog/reset',body=json.dumps(
+                    {'backend_id':'ollama','confirmed':True}).encode())
+                self.assertIn(b' 200 ',response.split(b'\r\n',1)[0],response)
+                response=driver.request(server,path='/v1/administration',body=json.dumps(
+                    {'action':'create-user','name':'Concurrent','node_role':'member',
+                     'expected_commit':before['commit_id']}).encode())
+                self.assertIn(b' 403 ',response.split(b'\r\n',1)[0],response)
                 after=server.administration.request(actor,{'action':'list'})
                 self.assertEqual(after['commit_id'],before['commit_id'])
                 response=driver.request(server,path='/v1/tasks/run-control',body=json.dumps(dict(project_id=ENTITY,run_id=request['run_id'],action='stop')).encode())

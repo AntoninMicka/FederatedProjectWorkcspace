@@ -117,6 +117,7 @@ def secret(path):
 
 
 class WebHandler(DesktopHandler):
+    assets = ASSETS
     reserve_ui_worker = True
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     google_drive_callback_path = '/oauth/google-drive/callback'
@@ -704,7 +705,7 @@ class WebServer(BoundedHTTPServer):
             if not self.application_access.allows(peer):
                 raise OSError('Client outside configured application access policy')
             connection.settimeout(2)
-            return self.tls.wrap_socket(connection, server_side=True), address
+            return self.tls.wrap_socket(connection, server_side=True, do_handshake_on_connect=False), address
         except (OSError, ValueError):
             connection.close()
             raise OSError('Connection rejected') from None

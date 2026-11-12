@@ -1651,3 +1651,14 @@ diagnostic reservation is separate. **Reject:** parallel
 index rebuild, cached account authority, increased workers/timeouts/retries,
 or a second lock file/writer. Audit:
 [Concurrent catalog reads](docs/http-concurrency-ownership.md#concurrent-ide-catalog-reads).
+
+P1 remediation A01–A06 **reuse/adapt** the existing HTTP route inventory,
+native binding/manifest guards, scheduler leases, Workspace snapshot/index
+checks, journal locks and Julia operation receipts. SQLite readers adapt the
+existing `MessagePools.read_db` read-only pattern and retain their own schema
+validation without writer bootstrap. A bounded selector
+prefix adapter feeds the existing HTTP parser; shared filesystem execution
+slots point to the original Julia journal. **Reject:** a second writer/job
+authority, automatic unknown-outcome replay, more application workers or
+longer wait budgets. No external implementation is imported. Boundaries and
+recovery: [P1 remediation](docs/concurrency-p1-remediation.md).

@@ -76,18 +76,21 @@ class WebTests(unittest.TestCase):
             with self.subTest(slow_path=slow_path):
                 entered, release = threading.Event(), threading.Event()
                 results = []
-                original = WebHandler._do_POST
+                # Peer protocols enter directly in _do_POST; JSON services
+                # acquire their owner after body validation, before dispatch.
+                entry = '_do_POST' if slow_path.endswith('content-sync') else 'dispatch'
+                original = getattr(WebHandler, entry)
 
-                def gated(handler):
+                def gated(handler, *args):
                     if handler.path != slow_path:
-                        return original(handler)
+                        return original(handler, *args)
                     entered.set()
                     if not release.wait(5):
                         return handler.reply(504, {'error': 'test timeout'})
                     time.sleep(duration)
                     return handler.reply(200, {'done': True})
 
-                with patch.object(WebHandler, '_do_POST', gated):
+                with patch.object(WebHandler, entry, gated):
                     worker = threading.Thread(target=lambda: results.append(
                         self.request(path=slow_path)))
                     worker.start()

@@ -16,6 +16,7 @@ BUSY_RESOURCES = frozenset({
     'project-index', 'sync-journal', 'node-registry', 'node-operations',
     'project-admission', 'process-owner', 'native-owner', 'sqlite',
     'snapshot-changed', 'pending-publication', 'git-budget', 'history-validation',
+    'execution-capacity',
 })
 _RESOURCE_LABELS = {
     'Project journal': 'project-journal', 'Project index': 'project-index',

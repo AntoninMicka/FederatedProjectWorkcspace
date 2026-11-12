@@ -134,10 +134,10 @@ class LocalAPITests(unittest.TestCase):
     def test_merged_readonly_routes_keep_independent_lanes(self):
         routes = {
             '/v1/counter': 'node_preferences_lane',
-            '/v1/chat/send-stream': 'provider_lane',
-            '/v1/tasks/route-stream': 'provider_lane',
-            '/v1/external/send-stream': 'provider_lane',
-            '/v1/chat/status': 'provider_lane',
+            '/v1/chat/send-stream': 'provider_execution_lane',
+            '/v1/tasks/route-stream': 'provider_execution_lane',
+            '/v1/external/send-stream': 'provider_execution_lane',
+            '/v1/chat/status': 'provider_status_lane',
             '/v1/administration': 'provider_lane',
             '/v1/node-telemetry/status': 'telemetry_lane',
             '/v1/chat/availability': 'availability_lane',
@@ -156,6 +156,9 @@ class LocalAPITests(unittest.TestCase):
         routes.update(dict.fromkeys(JULIA_ROUTES, 'julia_lane'))
         from spikes.http_admission_policy import MONITORING_ROUTES, RSS_SOURCE_ROUTES
         routes.update(dict.fromkeys(MONITORING_ROUTES, 'monitoring_lane'))
+        from spikes.http_admission_policy import MONITORING_EXECUTION_ROUTES, MONITORING_CONTROL_ROUTES
+        routes.update(dict.fromkeys(MONITORING_EXECUTION_ROUTES, 'monitoring_execution_lane'))
+        routes.update(dict.fromkeys(MONITORING_CONTROL_ROUTES, 'monitoring_control_lane'))
         routes.update(dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources_lane'))
         from spikes.http_admission_policy import IDE_QUEUE_ROUTES
         routes.update(dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue_lane'))

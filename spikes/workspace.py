@@ -81,13 +81,17 @@ class Workspace:
             return cls(root, state, blocking=blocking, deadline=deadline,
                        write_guard=write_guard)
         workspace = cls.attach(root, state, blocking=blocking, deadline=deadline)
-        with workspace.journal.lock(), workspace.journal.connect() as db:
+        with workspace.journal.lock(shared=True), workspace.journal.connect() as db:
             owners = db.execute('SELECT root FROM owner').fetchall()
             require(owners == [(str(workspace.journal.root),)],
                     'Journal belongs to another project or is not initialized')
             index_path = workspace.journal.state / 'index.sqlite'
-            workspace.index = (Index.attach(index_path) if index_path.exists()
-                               else Index(index_path))
+            workspace.index = Index.attach(index_path) if index_path.exists() else None
+        if workspace.index is None:
+            with workspace.journal.lock(), workspace.journal.connect() as db:
+                if workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+                    raise PendingOperation('Project has an unfinished operation')
+                workspace.index = Index.attach(index_path) if index_path.exists() else Index(index_path)
         workspace.write_guard = write_guard
         return workspace
 
@@ -339,20 +343,35 @@ class Workspace:
 
     def read(self):
         """Only expose a validated HEAD projection with no unfinished operation."""
-        with self.journal.lock(), self.journal.connect() as db:
-            return self._read_locked(db)
+        return self._read_current_index(self.index.read)
 
     def read_projection(self):
         """Expose committed metadata/relations under the same pending and writer boundary."""
-        with self.journal.lock(), self.journal.connect() as db:
-            return self._read_locked(db, self.index.read_projection)
+        return self._read_current_index(self.index.read_projection)
 
     def read_relations(self, entity_id, *, direction='outgoing', relation_type=None):
         from spikes.metadata import uuid as validate_uuid
         validate_uuid(entity_id)
+        return self._read_current_index(lambda git: self.index.read_relations(
+            git, entity_id, direction=direction, relation_type=relation_type))
+
+    def _read_current_index(self, query, *, expected_head=None):
+        """Pure read first; release SH before a revalidated exclusive repair."""
+        def check(db):
+            if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+                raise PendingOperation('Project has an unfinished operation')
+            if expected_head is not None and self.git.head() != expected_head:
+                raise StaleIndex('Project changed while reading index')
+        with self.journal.lock(shared=True), self.journal.connect() as db:
+            check(db)
+            try:
+                return query(self.git)
+            except StaleIndex:
+                pass
+        # No lock upgrade: another writer may have published/repaired in between.
         with self.journal.lock(), self.journal.connect() as db:
-            return self._read_locked(db, lambda git: self.index.read_relations(
-                git, entity_id, direction=direction, relation_type=relation_type))
+            check(db)
+            return self._read_locked(db, query, expected_head=expected_head)
 
     def _read_locked(self, db, query=None, *, expected_head=None):
         if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
@@ -390,106 +409,114 @@ class Workspace:
         return head, files, entities
 
     def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False, plan_only=False, dashboard_only=False):
-        """Return one committed project view under the shared writer lock."""
-        with self.journal.lock(), self.journal.connect() as db:
-            if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
-                raise PendingOperation('Project has an unfinished operation')
-            branch = self._branch()
-            commit = self.git.head()
-            require(not self.git.run('ls-files', '-u').stdout, 'Unresolved merge')
-            if expected_head is not None and commit != expected_head:
-                raise StaleIndex('Project changed; reopen preview')
-            meta = committed_project(self.git, commit, project_id)
-            cache_key = None
-            if (artifact_id is None and not plan_only and not dashboard_only
-                    and not any((self.git.root / '.git' / name).exists()
-                                for name in ('shallow', 'info/grafts'))
-                    and not self.git.run('for-each-ref', '--count=1', '--format=%(refname)',
-                                         'refs/replace/').stdout):
-                cache_key = (str(self.git.root), str(self.journal.state), project_id, commit, network)
-                cached = _project_view_get(cache_key)
-                if cached is not None:
-                    current = self._read_locked(db, self.index.read_projection, expected_head=commit)
-                    require(current == json.loads(cached[1]), 'Index differs from validated commit')
-                    if self.git.head() != commit:
-                        raise StaleIndex('HEAD changed while opening cached project; retry')
-                    result = json.loads(cached[0])
-                    result['conflict_summary'] = self._project_conflict_hint(commit, branch)
-                    return result
-            files = self.git.snapshot(commit)
-            entities = validate_snapshot(files)
-            if network:
-                require(all(item['privacy'] != 'local-only' for item in entities.values()),
-                        'Project contains local-only data')
-            view = self._read_locked(db, self.index.read_projection, expected_head=commit)
-            if view['commit_id'] != commit:
-                raise StaleIndex('Project changed while rebuilding index')
-            require(view == projection(files, entities, commit),
-                    'Index differs from validated commit')
-            rows = [(id_, item['metadata']['title'], item['metadata']['kind'])
-                    for id_, item in view['entities'].items()]
-            if artifact_id is not None:
-                prefix = f'artifacts/{artifact_id}/'
-                entries = {p: raw for p, raw in files.items() if p.startswith(prefix)}
-                require(entries and artifact_id in entities, 'Artifact is not in this project')
-                metadata = entities[artifact_id]
-                sidecar = prefix + 'metadata.json' in entries
-                path = prefix + metadata['file'] if sidecar else next(iter(entries))
+        """Build immutable views outside writer ownership, then verify freshness."""
+        branch = self._branch()
+        result = self._read_project_snapshot(project_id, artifact_id=artifact_id,
+            expected_head=expected_head, network=network, plan_only=plan_only,
+            dashboard_only=dashboard_only)
+        self.snapshot_checkpoint(result['commit_id'])
+        if self._branch() != branch:
+            raise StaleIndex('Branch changed while reading project')
+        return result
+
+    def _read_project_snapshot(self, project_id, *, artifact_id=None, expected_head=None, network=False, plan_only=False, dashboard_only=False):
+        """Build from a fixed commit; index ownership is confined to its access."""
+        branch = self._branch()
+        commit = self.snapshot_checkpoint(expected_head)
+        require(not self.git.run('ls-files', '-u').stdout, 'Unresolved merge')
+        if expected_head is not None and commit != expected_head:
+            raise StaleIndex('Project changed; reopen preview')
+        meta = committed_project(self.git, commit, project_id)
+        cache_key = None
+        if (artifact_id is None and not plan_only and not dashboard_only
+                and not any((self.git.root / '.git' / name).exists()
+                            for name in ('shallow', 'info/grafts'))
+                and not self.git.run('for-each-ref', '--count=1', '--format=%(refname)',
+                                     'refs/replace/').stdout):
+            cache_key = (str(self.git.root), str(self.journal.state), project_id, commit, network)
+            cached = _project_view_get(cache_key)
+            if cached is not None:
+                current = self._read_current_index(self.index.read_projection, expected_head=commit)
+                require(current == json.loads(cached[1]), 'Index differs from validated commit')
                 if self.git.head() != commit:
-                    raise StaleIndex('Project changed while reading preview')
-                return dict(id=artifact_id, commit_id=commit, metadata=metadata,
-                            path=path, raw=entries[path], sidecar=sidecar)
-            if dashboard_only:
-                todo = main_todo_view(files, entities, project_id)
-                if self.git.head() != commit:
-                    raise StaleIndex('HEAD changed while reading dashboard; retry')
-                return dict(id=project_id, title=meta['title'], commit_id=commit,
-                            main_todo_id=main_todo_id(project_id), main_todo=todo)
-            plan = project_task_graph(files, entities, project_id, commit)
-            if plan_only:
-                if self.git.head() != commit:
-                    raise StaleIndex('HEAD changed while reading plan; retry')
-                return dict(id=project_id, title=meta['title'], commit_id=commit,
-                            main_todo_id=main_todo_id(project_id), plan=plan)
-            todo = main_todo_view(files, entities, project_id)
-            revisions = self.git.run('rev-list', '--topo-order',
-                                     f'--max-count={MAX_PROJECT_HISTORY + 1}', commit).stdout.splitlines()
-            history = []
-            selected = revisions[:MAX_PROJECT_HISTORY]
-            for revision in selected:
-                require(len(revision) in {40, 64} and all(c in '0123456789abcdef' for c in revision),
-                        'Invalid commit ID')
-            if selected:
-                checked = self.git.run('cat-file', '--batch-check',
-                    input=''.join(revision + '\n' for revision in selected)).stdout.splitlines()
-                require(len(checked) == len(selected), 'Incomplete commit metadata inventory')
-                for revision, row in zip(selected, checked):
-                    parts = row.split()
-                    require(len(parts) == 3 and parts[:2] == [revision, 'commit']
-                            and parts[2].isdecimal() and int(parts[2]) <= MAX_METADATA,
-                            'Commit metadata exceeds 64 KiB or differs from inventory')
-                fields = self.git.run('log', '--no-walk=unsorted', '-z',
-                    '--format=%H%x00%aI%x00%an%x00%s', *selected).stdout.split('\0')
-                require(fields[-1] == '' and len(fields) == 4 * len(selected) + 1,
-                        'Invalid commit metadata output')
-                for index, revision in enumerate(selected):
-                    actual, date, author, subject = fields[4 * index:4 * index + 4]
-                    require(actual == revision, 'Commit history order changed')
-                    history.append(dict(commit_id=revision, date=date, author=author, subject=subject))
+                    raise StaleIndex('HEAD changed while opening cached project; retry')
+                result = json.loads(cached[0])
+                result['conflict_summary'] = self._project_conflict_hint(commit, branch)
+                return result
+        files = self.git.snapshot(commit)
+        entities = validate_snapshot(files)
+        if network:
+            require(all(item['privacy'] != 'local-only' for item in entities.values()),
+                    'Project contains local-only data')
+        view = self._read_current_index(self.index.read_projection, expected_head=commit)
+        if view['commit_id'] != commit:
+            raise StaleIndex('Project changed while rebuilding index')
+        require(view == projection(files, entities, commit),
+                'Index differs from validated commit')
+        rows = [(id_, item['metadata']['title'], item['metadata']['kind'])
+                for id_, item in view['entities'].items()]
+        if artifact_id is not None:
+            prefix = f'artifacts/{artifact_id}/'
+            entries = {p: raw for p, raw in files.items() if p.startswith(prefix)}
+            require(entries and artifact_id in entities, 'Artifact is not in this project')
+            metadata = entities[artifact_id]
+            sidecar = prefix + 'metadata.json' in entries
+            path = prefix + metadata['file'] if sidecar else next(iter(entries))
             if self.git.head() != commit:
-                raise StaleIndex('HEAD changed while opening project; retry')
-            from spikes.artifact_catalog import document_ids
-            artifact_ids = document_ids(files, entities)
-            result = dict(id=project_id, title=meta['title'],
-                        description=meta.get('description', ''), commit_id=commit,
-                        main_todo_id=main_todo_id(project_id), main_todo=todo, plan=plan,
-                        history=dict(entries=history, truncated=len(revisions) > MAX_PROJECT_HISTORY),
-                        artifacts=[dict(id=id_, title=title, kind=kind)
-                                   for id_, title, kind in rows if id_ in artifact_ids])
-            if cache_key is not None:
-                _project_view_put(cache_key, result, view)
-            result['conflict_summary'] = self._project_conflict_hint(commit, branch)
-            return result
+                raise StaleIndex('Project changed while reading preview')
+            return dict(id=artifact_id, commit_id=commit, metadata=metadata,
+                        path=path, raw=entries[path], sidecar=sidecar)
+        if dashboard_only:
+            todo = main_todo_view(files, entities, project_id)
+            if self.git.head() != commit:
+                raise StaleIndex('HEAD changed while reading dashboard; retry')
+            return dict(id=project_id, title=meta['title'], commit_id=commit,
+                        main_todo_id=main_todo_id(project_id), main_todo=todo)
+        plan = project_task_graph(files, entities, project_id, commit)
+        if plan_only:
+            if self.git.head() != commit:
+                raise StaleIndex('HEAD changed while reading plan; retry')
+            return dict(id=project_id, title=meta['title'], commit_id=commit,
+                        main_todo_id=main_todo_id(project_id), plan=plan)
+        todo = main_todo_view(files, entities, project_id)
+        revisions = self.git.run('rev-list', '--topo-order',
+                                 f'--max-count={MAX_PROJECT_HISTORY + 1}', commit).stdout.splitlines()
+        history = []
+        selected = revisions[:MAX_PROJECT_HISTORY]
+        for revision in selected:
+            require(len(revision) in {40, 64} and all(c in '0123456789abcdef' for c in revision),
+                    'Invalid commit ID')
+        if selected:
+            checked = self.git.run('cat-file', '--batch-check',
+                input=''.join(revision + '\n' for revision in selected)).stdout.splitlines()
+            require(len(checked) == len(selected), 'Incomplete commit metadata inventory')
+            for revision, row in zip(selected, checked):
+                parts = row.split()
+                require(len(parts) == 3 and parts[:2] == [revision, 'commit']
+                        and parts[2].isdecimal() and int(parts[2]) <= MAX_METADATA,
+                        'Commit metadata exceeds 64 KiB or differs from inventory')
+            fields = self.git.run('log', '--no-walk=unsorted', '-z',
+                '--format=%H%x00%aI%x00%an%x00%s', *selected).stdout.split('\0')
+            require(fields[-1] == '' and len(fields) == 4 * len(selected) + 1,
+                    'Invalid commit metadata output')
+            for index, revision in enumerate(selected):
+                actual, date, author, subject = fields[4 * index:4 * index + 4]
+                require(actual == revision, 'Commit history order changed')
+                history.append(dict(commit_id=revision, date=date, author=author, subject=subject))
+        if self.git.head() != commit:
+            raise StaleIndex('HEAD changed while opening project; retry')
+        from spikes.artifact_catalog import document_ids
+        artifact_ids = document_ids(files, entities)
+        result = dict(id=project_id, title=meta['title'],
+                    description=meta.get('description', ''), commit_id=commit,
+                    main_todo_id=main_todo_id(project_id), main_todo=todo, plan=plan,
+                    history=dict(entries=history, truncated=len(revisions) > MAX_PROJECT_HISTORY),
+                    artifacts=[dict(id=id_, title=title, kind=kind)
+                               for id_, title, kind in rows if id_ in artifact_ids])
+        if cache_key is not None:
+            _project_view_put(cache_key, result, view)
+        result['conflict_summary'] = self._project_conflict_hint(commit, branch)
+        return result
 
     def _project_conflict_hint(self, head, branch):
         """Cheap live hint, never a replacement for the full conflict preview."""

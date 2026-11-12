@@ -5,6 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # Audit souběhu, čtení a kapacit — 11. 11. 2026
 
+Historický nález nad výchozím zdrojem. Následné změny A01–A06 a jejich
+omezení eviduje [náprava P1](concurrency-p1-remediation.md).
+
 ## Výsledek a rozsah
 
 **Dosavadní úpravy neodstranily systémový problém dostupnosti.** Výhradní HTTP

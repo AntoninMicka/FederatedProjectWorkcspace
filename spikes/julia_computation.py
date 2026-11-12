@@ -4,6 +4,7 @@
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import base64
+import fcntl
 import hashlib
 import json
 import os
@@ -22,6 +23,7 @@ import tomllib
 from spikes.metadata import (MAX_FILE, MAX_METADATA, parse_json, require, safe_path,
                              timestamp, uuid, validate_snapshot)
 from spikes.sqlite_ownership import sqlite_connection
+from spikes.request_ownership import ProjectBusy
 from spikes.output_execution import MaterializationCache, canonical, digest
 
 
@@ -304,15 +306,19 @@ class JuliaRunStore:
         self.path = self.root / 'julia-runs.sqlite'
 
     @contextmanager
-    def connect(self):
-        fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    def connect(self, *, read_only=False):
+        fd = os.open(self.path, (os.O_RDONLY if read_only else os.O_RDWR | os.O_CREAT) | os.O_NOFOLLOW, 0o600)
         info = os.fstat(fd); os.close(fd)
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                 and info.st_nlink == 1 and not info.st_mode & 0o077,
                 'Unsafe Julia run journal')
-        with sqlite_connection(self.path, resource='Julia run journal', timeout=30) as db:
-            db.execute('PRAGMA synchronous=FULL'); db.execute('BEGIN IMMEDIATE')
-            db.execute('''CREATE TABLE IF NOT EXISTS runs(
+        path = self.path.as_uri()+'?mode=ro' if read_only else self.path
+        with sqlite_connection(path, uri=read_only, resource='Julia run journal', timeout=30) as db:
+            if read_only:
+                db.execute('PRAGMA query_only=ON'); db.execute('BEGIN')
+            else:
+                db.execute('PRAGMA synchronous=FULL'); db.execute('BEGIN IMMEDIATE')
+                db.execute('''CREATE TABLE IF NOT EXISTS runs(
                 operation_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
                 project_id TEXT NOT NULL, project_commit TEXT NOT NULL,
                 computation_id TEXT NOT NULL, request_sha256 TEXT NOT NULL,
@@ -325,7 +331,8 @@ class JuliaRunStore:
                 'computation_id', 'request_sha256', 'request_json', 'preview_json',
                 'approval_digest', 'state', 'error', 'receipt_json', 'created_at',
                 'updated_at'], 'Unsupported Julia run journal schema')
-            db.commit()
+            if not read_only:
+                db.commit()
             yield db
 
     @staticmethod
@@ -379,7 +386,8 @@ class JuliaRunStore:
 
     def get(self, operation_id, node_id, user_id):
         uuid(operation_id); uuid(node_id); uuid(user_id)
-        with self.connect() as db:
+        require(os.path.lexists(self.path), 'Julia run is unavailable to this owner')
+        with self.connect(read_only=True) as db:
             row = db.execute('SELECT node_id,user_id,project_id,project_commit,'
                 'computation_id,request_sha256,request_json,preview_json,approval_digest,'
                 'state,error,receipt_json,created_at,updated_at FROM runs WHERE operation_id=?',
@@ -407,7 +415,9 @@ class JuliaRunStore:
         """Return bounded owner-scoped records without weakening get validation."""
         uuid(project_id); uuid(node_id); uuid(user_id)
         require(type(limit) is int and 1 <= limit <= 100, 'Invalid Julia run list limit')
-        with self.connect() as db:
+        if not os.path.lexists(self.path):
+            return []
+        with self.connect(read_only=True) as db:
             rows = db.execute(
                 'SELECT operation_id FROM runs WHERE project_id=? AND node_id=? AND user_id=? '
                 'ORDER BY updated_at DESC, operation_id LIMIT ?',
@@ -504,6 +514,63 @@ def _limits(policy):
         resource.setrlimit(resource.RLIMIT_FSIZE, (file_size, file_size))
         resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
     return apply
+
+
+def claim_execution_slot(executor, operation_id, capacity=1):
+    """Cross-instance/process capacity; no durable run state is changed here."""
+    uuid(operation_id)
+    require(type(capacity) is int and capacity > 0, 'Invalid Julia worker capacity')
+    root = executor.state_dir
+    require(root.resolve() == root, 'Unsafe Julia admission directory')
+    for slot in range(capacity):
+        fd = os.open(root / ('execution-' + str(slot) + '.lock'),
+                     os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            info = os.fstat(fd)
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                    and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600,
+                    'Unsafe Julia execution lock')
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                continue
+            # A dead parent releases flock, but an unknown/orphaned native
+            # run still owns its capacity until its original reconciliation.
+            with executor.store.connect(read_only=True) as db:
+                active = {row[0] for row in db.execute(
+                    "SELECT operation_id FROM runs WHERE state IN ('dispatching','cancel_requested','unknown')")}
+            hints = set()
+            for known in range(capacity):
+                path = root / ('execution-' + str(known) + '.lock')
+                try:
+                    hint_fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                except FileNotFoundError:
+                    continue
+                try:
+                    info = os.fstat(hint_fd)
+                    require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                            and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600,
+                            'Unsafe Julia execution lock')
+                    hint = os.read(hint_fd, 64).decode('ascii')
+                    if hint:
+                        uuid(hint); hints.add(hint)
+                finally:
+                    os.close(hint_fd)
+            os.lseek(fd, 0, os.SEEK_SET)
+            previous = os.read(fd, 64).decode('ascii')
+            if active - hints or previous in active:
+                os.close(fd)
+                continue
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.write(fd, operation_id.encode('ascii'))
+            os.ftruncate(fd, 36); os.fsync(fd)
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+    raise ProjectBusy('Julia execution capacity is occupied', outcome='not-started',
+                      resource='execution-capacity')
 
 
 class JuliaExecutor:
@@ -704,6 +771,20 @@ class JuliaExecutor:
                 'completed_at': now()}
 
     def execute(self, operation_id, node_id, user_id, approval_digest,
+                checkpoint=lambda stage: None, *, capacity_slot=None):
+        record = self.store.get(operation_id, node_id, user_id)
+        require(record['state'] == 'prepared', 'Julia run is not prepared')
+        require(approval_digest == record['approval_digest'], 'Julia confirmation differs from preview')
+        own_slot = capacity_slot is None
+        slot = claim_execution_slot(self, operation_id) if own_slot else capacity_slot
+        try:
+            return self._execute(operation_id, node_id, user_id, approval_digest,
+                                 checkpoint=checkpoint)
+        finally:
+            if own_slot:
+                os.close(slot)
+
+    def _execute(self, operation_id, node_id, user_id, approval_digest,
                 checkpoint=lambda stage: None):
         record = self.store.get(operation_id, node_id, user_id)
         require(record['state'] == 'prepared', 'Julia run is not prepared')

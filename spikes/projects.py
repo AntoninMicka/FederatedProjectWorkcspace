@@ -149,7 +149,7 @@ class Projects:
         if not self.network:
             from spikes.plan_draft import read_plan_draft
             try:
-                with workspace.journal.lock():
+                with workspace.journal.lock(shared=True):
                     draft=read_plan_draft(workspace,project_id,result['commit_id'])
                 if draft:result['plan_draft']=draft[0]
             except TimeoutError:

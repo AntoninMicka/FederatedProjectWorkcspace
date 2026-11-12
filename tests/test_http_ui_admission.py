@@ -197,18 +197,18 @@ global.fetch=async(path,options)=>{const body=JSON.parse(options.body),key=path+
 (async()=>{
  const post=(path,body={})=>fetch(path,{method:'POST',body:JSON.stringify(body)});
  const stream=await post('/v1/chat/send-stream');
- const mutation=post('/v1/administration',{action:'create-user'});
- const recovery=post('/v1/chat/status');
+ const mutation=await post('/v1/administration',{action:'create-user'});
+ const recovery=await post('/v1/chat/status');
  const settings=await post('/v1/administration',{action:'list'});
  const independent=await post('/v1/user-profile',{action:'load'});
  const control=await post('/v1/tasks/run-control',{action:'stop'});
- assert(!sent.includes('/v1/administration:create-user'),'Mutation bypassed active stream');
- assert(!sent.includes('/v1/chat/status:'),'Recovery bypassed active stream');
+ assert(sent.includes('/v1/administration:create-user'),'Configuration held behind active stream');
+ assert(sent.includes('/v1/chat/status:'),'Status held behind active stream');
  for(const key of ['/v1/administration:list','/v1/user-profile:load','/v1/tasks/run-control:stop'])assert(sent.includes(key),'Independent request held behind stream: '+key);
  const end=key=>{const c=controllers.get(key);c.enqueue(new TextEncoder().encode('{}'));c.close();};
  end('/v1/chat/send-stream:');await stream.text();
- const changed=await mutation;assert(!sent.includes('/v1/chat/status:'));end('/v1/administration:create-user');await changed.text();
- const recovered=await recovery;end('/v1/chat/status:');await recovered.text();
+ end('/v1/administration:create-user');await mutation.text();
+ end('/v1/chat/status:');await recovery.text();
  end('/v1/administration:list');end('/v1/user-profile:load');end('/v1/tasks/run-control:stop');
  await Promise.all([settings.text(),independent.text(),control.text()]);console.log('provider ordering OK');
 })().catch(e=>{console.error(e);process.exitCode=1;});
@@ -256,17 +256,17 @@ global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStrea
 (async()=>{
  const post=path=>fetch(path,{method:'POST',body:JSON.stringify({project_id:'11111111-1111-4111-8111-111111111111'})});
  const monitoring=await post('/v1/monitoring/block-process');
- const status=post('/v1/monitoring/view');
+ const status=await post('/v1/monitoring/view');
  const publish=post('/v1/monitoring/block-publish');
  const rss=await post('/v1/rss-sources/refresh');
  const rssView=post('/v1/rss-sources/view');
  const others=[];
  for(const path of ['/v1/counter','/v1/projects/open','/v1/chat/status','/v1/julia/status'])others.push([path,await post(path)]);
- for(const path of ['/v1/monitoring/view','/v1/monitoring/block-publish','/v1/rss-sources/view'])assert(!sent.includes(path),'Owner bypassed: '+path);
+ assert(sent.includes('/v1/monitoring/view'));
+ for(const path of ['/v1/monitoring/block-publish','/v1/rss-sources/view'])assert(!sent.includes(path),'Owner bypassed: '+path);
  const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
  end('/v1/monitoring/block-process');await monitoring.text();
- const viewed=await status;assert(!sent.includes('/v1/monitoring/block-publish'));
- end('/v1/monitoring/view');await viewed.text();
+ end('/v1/monitoring/view');await status.text();
  const published=await publish;end('/v1/monitoring/block-publish');await published.text();
  assert(!sent.includes('/v1/rss-sources/view'));
  end('/v1/rss-sources/refresh');await rss.text();
@@ -385,10 +385,11 @@ global.fetch=async(path,options)=>{sent.push(path);return new Response(new Reada
  const patterns=post('/v1/document-patterns');
  const presenter=await post('/v1/presentation/status');
  const application=await post('/v1/counter');
- for(const path of ['/v1/presentations/save','/v1/projects/open','/v1/roadmap-refinement/decide','/v1/document-patterns'])assert(!sent.includes(path),'Owner bypassed: '+path);
+ assert(sent.includes('/v1/presentations/save'));
+ for(const path of ['/v1/projects/open','/v1/roadmap-refinement/decide','/v1/document-patterns'])assert(!sent.includes(path),'Owner bypassed: '+path);
  const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
  end('/v1/presentations/open');await document.text();
- const saved=await save;assert(!sent.includes('/v1/projects/open'));end('/v1/presentations/save');await saved.text();
+ const saved=await save;end('/v1/presentations/save');await saved.text();
  const opened=await view;end('/v1/projects/open');await opened.text();
  end('/v1/roadmap-refinement/list');await review.text();
  const decided=await decision;end('/v1/roadmap-refinement/decide');await decided.text();
@@ -421,7 +422,7 @@ global.fetch=async(path,options)=>{sent.push(path);return new Response(new Reada
  const open=post('/v1/projects/open');
  await new Promise(resolve=>setTimeout(resolve,0));
  assert(!sent.includes('/v1/federation/content/settings'));
- assert(!sent.includes('/v1/projects/open'));
+ assert(sent.includes('/v1/projects/open'));
  const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
  end('/v1/federation/content/cancel');await cancel.text();
  const configured=await settings;end('/v1/federation/content/settings');await configured.text();
@@ -449,8 +450,8 @@ global.fetch=async(path,options)=>{sent.push([path,JSON.parse(options.body)]);re
  const save=await post('/v1/artifacts/editor/save',{document:{project_id:a}});
  const waiting=post('/v1/projects/open',{project_id:a});
  const other=await post('/v1/projects/open',{project_id:b});
- assert.equal(sent.length,2,'Independent project was serialized or same-project read bypassed its writer');
- assert.equal(sent[1][1].project_id,b);
+ assert.equal(sent.length,3,'Independent read was held behind another project or writer');
+ assert.equal(sent[2][1].project_id,b);
  controllers[0].enqueue(new TextEncoder().encode('{}'));controllers[0].close();await save.text();
  const opened=await waiting;assert.equal(sent.length,3);
  for(const c of controllers.slice(1)){c.enqueue(new TextEncoder().encode('{}'));c.close();}

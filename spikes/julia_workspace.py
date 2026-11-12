@@ -14,7 +14,7 @@ import tomllib
 from uuid import uuid4
 
 from spikes.configuration import parse_node, read_config
-from spikes.julia_computation import JuliaExecutor, validate_computation
+from spikes.julia_computation import JuliaExecutor, validate_computation, claim_execution_slot
 from spikes.metadata import (MAX_FILE, MAX_METADATA, parse_json, require, safe_path, uuid,
                              validate_snapshot)
 from spikes.output_execution import canonical, digest
@@ -77,11 +77,14 @@ def _private_json(path):
 class JuliaWorkspaceService:
     """No new persistence: project Git + Julia journal + Workspace remain authorities."""
 
-    def __init__(self, node_path, projects, *, runtime_root=None, executor_factory=None):
+    def __init__(self, node_path, projects, *, runtime_root=None, executor_factory=None,
+                 max_workers=1):
         self.node_path = Path(node_path).absolute()
         self.projects = projects
         self.runtime_root = Path(runtime_root or default_runtime_root()).absolute()
         self.executor_factory = executor_factory
+        require(type(max_workers) is int and max_workers > 0, 'Invalid Julia worker capacity')
+        self.max_workers = max_workers
         self._workers = {}
         self._errors = {}
         self._lock = threading.Lock()
@@ -414,6 +417,9 @@ class JuliaWorkspaceService:
                 'runs': [self.status(project_id, row['operation_id'], user_id=user_id)
                          for row in executor.store.list(project_id, node_id, actor_id)]}
 
+    def _execution_slot(self, executor, operation_id):
+        return claim_execution_slot(executor, operation_id, self.max_workers)
+
     def execute(self, request, *, user_id=None):
         require(isinstance(request, dict) and set(request) == {
             'operation_id', 'project_id', 'approval_digest'},
@@ -428,12 +434,13 @@ class JuliaWorkspaceService:
         with bounded_process_lock(self._lock, resource='Julia worker state'):
             worker = self._workers.get(key)
             require(worker is None or not worker.is_alive(), 'Julia run is already dispatching')
+            slot = self._execution_slot(executor, request['operation_id'])
             self._errors.pop(key, None)
 
             def run():
                 try:
                     executor.execute(request['operation_id'], node_id, actor_id,
-                                     request['approval_digest'])
+                                     request['approval_digest'], capacity_slot=slot)
                 except (ValueError, OSError, RuntimeError, TimeoutError,
                         InterruptedError, subprocess.SubprocessError) as exc:
                     # Pre-dispatch rejection intentionally leaves the durable preview
@@ -442,12 +449,21 @@ class JuliaWorkspaceService:
                     with bounded_process_lock(self._lock, resource='Julia worker state'):
                         self._errors[key] = (str(exc) or exc.__class__.__name__)[:4096]
                 finally:
-                    with bounded_process_lock(self._lock, resource='Julia worker state'):
-                        self._workers.pop(key, None)
+                    try:
+                        with bounded_process_lock(self._lock, resource='Julia worker state'):
+                            self._workers.pop(key, None)
+                    finally:
+                        os.close(slot)
 
             worker = threading.Thread(target=run, name='julia-' + request['operation_id'][:8],
                                       daemon=True)
-            self._workers[key] = worker; worker.start()
+            self._workers[key] = worker
+            try:
+                worker.start()
+            except BaseException:
+                self._workers.pop(key, None)
+                os.close(slot)
+                raise
         return {'operation_id': request['operation_id'], 'accepted': True,
                 'state': 'dispatching'}
 

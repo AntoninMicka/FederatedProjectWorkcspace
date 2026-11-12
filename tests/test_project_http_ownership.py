@@ -123,12 +123,12 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
             finally:
                 server.provider_lane.release(); server.application_lane.release()
 
-    def test_blocked_project_does_not_block_another_project_or_node_route(self):
+    def test_slow_project_read_allows_same_and_other_project_reads(self):
         entered, release = threading.Event(), threading.Event()
         original = Projects.open
         results = []
         def opening(projects, pid):
-            if pid == self.ids[0]:
+            if pid == self.ids[0] and not entered.is_set():
                 entered.set()
                 if not release.wait(4):
                     raise AssertionError('Test owner was not released')
@@ -144,9 +144,7 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
                         {'project_id': self.ids[0]}, token='invalid')[0], 401)
                     status, payload, headers = self.post(server, '/v1/projects/open',
                         {'project_id': self.ids[0]})
-                    self.assertEqual(status, 503)
-                    self.assertEqual(payload['outcome'], 'not-started')
-                    self.assertEqual(headers['Retry-After'], '1')
+                    self.assertEqual(status, 200, payload)
                     status, payload, _ = self.post(server, '/v1/projects/open',
                         {'project_id': self.ids[1]})
                     self.assertEqual(status, 200, payload)
