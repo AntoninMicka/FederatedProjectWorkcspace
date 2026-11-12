@@ -146,6 +146,9 @@ class WebHandler(DesktopHandler):
         from spikes.federation_catalog import PATH as CATALOG_PATH, reply as reply_catalog
         if self.path == CATALOG_PATH:
             return reply_catalog(self)
+        from spikes.rss_subscription_sync import PATH as RSS_SYNC_PATH,reply as reply_rss
+        if self.path == RSS_SYNC_PATH:
+            return reply_rss(self)
         from spikes.project_replication import PATH as REPLICATION_PATH, reply
         if self.path == REPLICATION_PATH:
             return reply(self)
@@ -235,7 +238,7 @@ class WebHandler(DesktopHandler):
                 'active_http_workers': self.server.active_worker_count(),
                 'http': self.server.http_diagnostics(),
                 'sync': observations(self.server.node)})
-        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview'}:
+        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview', '/v1/rss-sources/sync-settings', '/v1/rss-sources/sync', '/v1/rss-sources/sync-resolve'}:
             if not self.path.endswith('/view') and not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
             return super().dispatch(request)

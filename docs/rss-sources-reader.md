@@ -33,7 +33,9 @@ síťový GET. Nový odběr má periodu 15 minut, kterou lze změnit editorem.
 Čtečka je samostatná uzlová funkce, nikoli projektový monitoring. Odběry
 se ukládají v sousedním souboru `node.rss-subscriptions.sqlite3` odvozeném
 od cesty konfigurace uzlu. Nepřenášejí se jako definice projektových filtrů,
-poolů nebo komplexních úloh. Cache článků zůstává paměťová a po restartu se
+poolů nebo komplexních úloh. Samostatnou synchronizaci odběrů mezi uzly
+popisuje [ADR 0084](adr/0084-rss-reader-subscription-sync.md).
+Cache článků zůstává paměťová a po restartu se
 znovu načte. Zápis/import/načítání ve webu vyžadují správce uzlu; člen smí
 číst přehled bez aktivace síťových požadavků.
 
@@ -50,6 +52,24 @@ Paměťová konfigurace se mění až po úspěšném zápisu; po pádu procesu 
 z DB. Neexistuje navazující Git commit, projektový index ani druhý journal,
 který by vyžadoval společnou recovery. Test simuluje přerušení před commitem,
 restart, stale revizi a přesné opakování.
+
+## Synchronizace odběrů
+
+Ve čtečce rozbalte **Synchronizace odběrů mezi uzly**. Na obou uzlech
+povolte příslušný schválený peer. Přenášejí se názvy, URL a periody,
+nikoli články nebo projektová aktivace sběru. Nastavení je pouze pro správce;
+projektový přístup sám neuděluje sdílení uzlových odběrů.
+
+Původní scheduler kontroluje vybrané peers přibližně jednou za minutu.
+**Synchronizovat nyní** spustí plný podepsaný přenos. Podpora musí být na obou
+uzlech; starší verze vrátí chybu, projektový sync pokračuje svým protokolem.
+Na druhém uzlu se definice objeví i bez restartu čtečky. Nezávislé přírůstky
+se spojí a stejné URL nezdvojí. Souběžné rozdílné úpravy zůstanou v sekci
+konfliktů, kde zvolíte konkrétní hodnotu. Starý editor ani starý návrh řešení
+nesmí přepsat nově přijatou změnu. Cache se nepřenáší a import sám nestahuje články.
+
+Historie definic včetně odstraněných URL zůstává kvůli kauzalitě uchovaná;
+tento přenos nezajišťuje její fyzické odstranění. Omezení a recovery jsou v ADR.
 
 ## Omezení zátěže a ověření
 
@@ -68,8 +88,28 @@ Skutečný `tests.test_rss_sources_browser` ověřuje desktop/mobil, inertní
 obsah feedu, klávesnici, přidání, menu → editor, uložení periody a OPML import.
 Plná sada ani nasazení na Omnii nejsou tímto ověřením doložené.
 
-Výsledek cíleného ověření: 52 testů OK, 4 volitelné skipy. Samostatný Qt
+Původní ověření čtečky před doplněním synchronizace: 52 testů OK,
+4 volitelné skipy. Samostatný Qt
 průchod byl skutečně spuštěn a prošel; desktop i mobil byly vizuálně
 zkontrolovány. Sestavený JavaScript prošel `node --check` a finální diff
 prošel `git diff --check`. Změna zůstává v pracovním checkoutu bez commitu
 nebo vzdáleného nasazení.
+
+## Ověření synchronizace, 12. 11. 2026
+
+Cílená regrese devíti modulů: **71 testů OK, 3 volitelné skipy**, 17,327 s.
+Moduly: `test_rss_subscription_sync`, `test_rss_subscriptions`,
+`test_rss_sources`, `test_rss_sources_refresh`, `test_federation_catalog`,
+`test_http_ui_admission`, `test_startup_admission`,
+`test_project_http_ownership`, `test_federation_http_ownership`.
+Obsahuje skutečný HTTPS přenos, odmítnutí jiné CA, oprávnění a podpisy,
+replay, procesní pády před/po commitu a čtení během blokovaného přenosu.
+
+Samostatně `M0_DESKTOP_TEST=1`: **2 Qt/WebEngine testy OK**, 10,378 s,
+`test_rss_subscription_sync_browser` a `test_rss_sources_browser`.
+Ověřily původní čtečku i nové zapnutí sdílení, podepsaný přenos a volbu
+konfliktní hodnoty přes skutečné GUI. Testy používají izolované uzly;
+nejde o fyzickou akceptaci desktop/Omnia. Sestavený JavaScript prošel
+`node --check`, Python syntaktickou kontrolou, dokumentační odkazy a diff
+kontrolou. Plná sada se neopakovala; zbývá před finálním předáním celé dávky.
+Živé preference, důvěra uzlů ani služby se při této práci neměnily.

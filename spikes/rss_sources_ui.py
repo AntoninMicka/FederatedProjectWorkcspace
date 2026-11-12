@@ -8,7 +8,7 @@ HTML = '''<div id="sources-view" hidden>
 <label>Název<input name="name" required maxlength="300"></label>
 <label>URL kanálu<input name="url" type="url" required placeholder="https://…"></label>
 <label>Perioda obnovy v minutách<input name="minutes" type="number" min="1" max="10080" value="15" required></label>
-<p>Automatická obnova běží při otevřené čtečce. Odběr se uloží na tomto uzlu; projektovou těžbu neaktivuje.</p>
+<p>Automatická obnova běží při otevřené čtečce. Odběr lze sdílet s vybranými uzly; projektovou těžbu neaktivuje.</p>
 <button type="submit">Uložit zdroj</button><button id="sources-editor-cancel" type="button">Zrušit</button></form>
 <section id="sources-import-review" hidden><h2>Import odběrů</h2>
 <p>OPML (.opml/.xml) nebo JSON seznam odběrů. Import nestahuje články. Výchozí perioda je 15 minut.</p>
@@ -16,6 +16,9 @@ HTML = '''<div id="sources-view" hidden>
 <div id="sources-import-items"></div><button id="sources-import-save" type="button" disabled>Importovat vybrané</button>
 <button id="sources-import-cancel" type="button">Zrušit</button></section>
 <p id="sources-status" role="status" aria-live="polite">Kanály zatím nebyly načteny.</p>
+<details id="sources-reader-sync" hidden><summary>Synchronizace odběrů mezi uzly</summary>
+<p>Na obou vybraných uzlech povolte sdílení. Přenášejí se názvy, URL a intervaly; cache článků a projektová aktivace sběru zůstávají místní. Automatická kontrola probíhá přibližně jednou za minutu.</p>
+<div id="sources-reader-sync-peers"></div><div id="sources-reader-sync-conflicts"></div></details>
 <div id="sources-feed" role="tabpanel" aria-label="Články z vybraných kanálů" tabindex="0"></div>
 <details id="sources-connectors"><summary>Typy zdrojů a dostupnost</summary><ul id="sources-connector-list"></ul></details>
 </div>'''
@@ -40,6 +43,9 @@ CSS = '''
 .source-entry a{color:#176b60;text-decoration:none}.source-entry a:hover{text-decoration:underline}
 .source-entry-meta{font-size:13px;color:#526678}.source-entry-meta time{margin-left:12px}
 #sources-status{white-space:pre-line;color:#526678;line-height:1.6}
+#sources-reader-sync{overflow-wrap:anywhere}
+#sources-reader-sync-peers p{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#sources-reader-sync-conflicts button{margin:4px 8px 4px 0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 '''
 JS = r'''
 let sourcesView=null,sourcesChannel='all',sourcesBusy=false,sourcesSequence=0,sourcesEditing=null,sourcesSaving=false,sourcesDirty=false,sourcesPending=null,sourcesImport=null;
@@ -48,6 +54,7 @@ const sourcesTabs=document.getElementById('sources-channel-tabs'),sourcesFeed=do
 const sourcesStatus=document.getElementById('sources-status'),sourcesRefresh=document.getElementById('sources-refresh');
 function renderSources(){
  if(!sourcesView)return;
+ renderReaderSync();
  if(!['all',...sourcesView.channels.map(c=>c.id)].includes(sourcesChannel))sourcesChannel='all';
  document.getElementById('sources-heading').textContent=sourcesChannel==='all'?'Zdroje':sourcesView.channels.find(c=>c.id===sourcesChannel).name;
  document.getElementById('sources-count').textContent='Počet kanálů: '+sourcesView.channels.length;
@@ -89,10 +96,44 @@ function renderSources(){
  sourcesRefresh.disabled=sourcesBusy||!sourcesView.can_refresh;
  sourcesRefresh.textContent=sourcesBusy?'Načítám…':sourcesChannel==='all'?'Načíst kanály':'Načíst kanál';
 }
+async function readerSyncAction(path,request){
+ if(!canLeaveSources()||!sourcesView?.can_refresh)return;
+ sourcesSequence++;sourcesBusy=false;sourcesSaving=true;
+ try{sourcesView=await projectRequest('/v1/rss-sources/'+path,request,60000);renderSources();sourcesStatus.textContent='Nastavení odběrů bylo aktualizováno.';}
+ catch(error){try{sourcesView=await projectRequest('/v1/rss-sources/view',{});renderSources();}catch(reloadError){}sourcesStatus.textContent=error.message;}
+ finally{sourcesSaving=false;}
+}
+function renderReaderSync(){
+ const section=document.getElementById('sources-reader-sync'),sync=sourcesView?.reader_sync;
+ section.hidden=!sourcesView?.can_refresh||!sync;if(section.hidden)return;
+ const peers=document.getElementById('sources-reader-sync-peers');peers.replaceChildren();
+ const known=new Map((sync.available_peers||[]).map(p=>[p.id,{...p,available:true}]));
+ for(const p of sync.peers)if(!known.has(p.id))known.set(p.id,{id:p.id,name:'Uzel již není schválený',available:false});
+ if(!known.size)peers.textContent='Nejsou dostupné schválené uzly pro sdílení.';
+ for(const p of known.values()){
+  const saved=sync.peers.find(s=>s.id===p.id),row=document.createElement('p'),label=document.createElement('label'),check=document.createElement('input');
+  check.type='checkbox';check.checked=!!saved?.enabled;check.disabled=!p.available&&!saved?.enabled;
+  check.addEventListener('change',()=>readerSyncAction('sync-settings',{peer_id:p.id,enabled:check.checked,expected_enabled:!!saved?.enabled}));
+  label.append(check,document.createTextNode(' Sdílet odběry s '+p.name));row.append(label);
+  const status=document.createElement('span');status.textContent=' · '+({idle:'Připraveno',pending:'Čeká na plný přenos',conflict:'Konflikt',error:'Chyba přenosu'})[saved?.state||'idle'];row.append(status);
+  const button=document.createElement('button');button.type='button';button.textContent='Synchronizovat nyní';button.disabled=!p.available||!saved?.enabled;
+  button.addEventListener('click',()=>readerSyncAction('sync',{peer_id:p.id}));row.append(button);peers.append(row);
+ }
+ const conflicts=document.getElementById('sources-reader-sync-conflicts');conflicts.replaceChildren();
+ for(const conflict of sync.conflicts){
+  const group=document.createElement('section'),title=document.createElement('h3');title.textContent='Rozdílné úpravy: '+conflict.url;group.append(title);
+  for(const v of conflict.versions){
+   const button=document.createElement('button');button.type='button';button.textContent=v.value?'Použít: '+v.value.name+' · '+v.value.poll_seconds/60+' min':'Potvrdit odstranění odběru';
+   button.addEventListener('click',()=>readerSyncAction('sync-resolve',{url:conflict.url,chosen:v.id,revision:sourcesView.revision,tips:conflict.versions.map(v=>v.id)}));group.append(button);
+  }
+  conflicts.append(group);
+ }
+}
 async function loadSources(refresh=false,dueOnly=false){
  const sequence=++sourcesSequence;
  if(refresh){sourcesBusy=true;sourcesRefresh.disabled=true;sourcesRefresh.textContent='Načítám…';}
  try{
+  if(dueOnly){const latest=await projectRequest('/v1/rss-sources/view',{},60000);if(sequence!==sourcesSequence)return;sourcesView=latest;renderSources();}
   const channels=refresh?(sourcesChannel==='all'?(sourcesView?.channels||[]).filter(c=>!dueOnly||c.due).map(c=>c.id):[sourcesChannel]):[null];
   for(const id of dueOnly?channels.slice(0,1):channels){
    if(refresh&&(document.hidden||document.getElementById('sources-view').hidden))break;
@@ -168,7 +209,7 @@ document.getElementById('sources-import-save').addEventListener('click',async()=
  await saveSources(channels);
 });
 function refreshDueSources(){
- if(!document.hidden&&!document.getElementById('sources-view').hidden&&!sourcesBusy&&!sourcesDirty&&sourcesEditor.hidden&&sourcesImportReview.hidden&&sourcesView?.can_refresh)return loadSources(true,true);
+ if(!document.hidden&&!document.getElementById('sources-view').hidden&&!sourcesBusy&&!sourcesSaving&&!sourcesDirty&&sourcesEditor.hidden&&sourcesImportReview.hidden&&sourcesView?.can_refresh)return loadSources(true,true);
 }
 setInterval(refreshDueSources,30000);
 '''

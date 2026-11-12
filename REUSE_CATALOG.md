@@ -1604,6 +1604,16 @@ writer, generic JSON backup guessing, XML entities, fetching during preview,
 and parallel or hidden reader refresh. Scope/recovery:
 [reader subscriptions](docs/rss-sources-reader.md).
 
+RSS reader peer sharing: **adapt/reuse** the existing subscriptions SQLite
+transaction, channel validator, RSS cache locks, Ed25519 envelopes, current
+peer registry/CA, deadline HTTPS connection and catalog scheduler. Causal
+revisions and the channel projection commit in the same existing DB; no
+project writer or second sync database is added. **Reject:** implicit permission
+from project sharing, copying SQLite/cache/credentials, last-writer-wins on
+concurrent edits, reviving deleted feeds on replay, hidden article fetching,
+and blocking reader views during the network wait. Scope/recovery:
+[ADR 0084](docs/adr/0084-rss-reader-subscription-sync.md).
+
 Unified tools and deletion: **adapt/reuse** `sidebarItemMenu`, original Julia
 preview/delete, monitoring block editors, composition and leave guards. Reuse
 Reporting revisions, native effect ownership and Workspace journal/CAS for an

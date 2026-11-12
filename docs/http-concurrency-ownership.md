@@ -1736,3 +1736,16 @@ After the reader-budget adjustment, all 36 IDE HTTP/local API tests passed,
 including the 2/4/6-worker scenarios. Compilation and `git diff --check` passed.
 Full-suite and ordinary live-profile acceptance remain unverified; no source
 commit, application restart or remote deployment was performed.
+
+## RSS reader subscription sharing, 12 November 2026
+
+The explicit `/v1/rss-sources/sync` network action uses the existing
+`catalog_transfer` lane. It holds no reader-cache lock during HTTPS;
+subscription history/projection writes own the existing SQLite transaction.
+The final live reader view reconciles its cache through native RSS locks.
+Settings and conflict choices retain `rss_sources` admission and SQLite CAS;
+the signed inbound peer endpoint uses `peer_catalog` admission, current peer
+authorization and the same transactional writer. No new lane or lock primitive
+is introduced. A paused manual-transfer test verifies that an authenticated
+reader view still completes before the transfer is released. Scope/recovery:
+[ADR 0084](adr/0084-rss-reader-subscription-sync.md).

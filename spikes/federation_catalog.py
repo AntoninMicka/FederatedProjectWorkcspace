@@ -335,6 +335,8 @@ class CatalogScheduler:
         while not self.stopping.is_set():
             try:
                 self.control.run_automatic()
+                from spikes.rss_subscription_sync import run_automatic
+                run_automatic(self.control.node,deployment=self.control.deployment)
                 delay = self.interval
             except Exception:
                 # Node registry reads share the node writer lock with project

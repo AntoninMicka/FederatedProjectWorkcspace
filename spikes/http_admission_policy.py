@@ -309,6 +309,7 @@ MONITORING_CONTROL_ROUTES = frozenset({
     '/v1/monitoring/block-release',
 })
 RSS_SOURCE_ROUTES = frozenset({
+    '/v1/rss-sources/sync-settings', '/v1/rss-sources/sync', '/v1/rss-sources/sync-resolve',
     '/v1/rss-sources/refresh',
     '/v1/rss-sources/view',
     '/v1/rss-sources/save',
@@ -401,6 +402,8 @@ ROUTE_LANES = {
     **dict.fromkeys(JULIA_ROUTES, 'julia'),
     **dict.fromkeys(MONITORING_ROUTES, 'monitoring'),
     **dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources'),
+    # Network wait owns no reader cache; definitions use the native SQLite CAS.
+    '/v1/rss-sources/sync': 'catalog_transfer',
     **dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue'),
     **dict.fromkeys(REFINEMENT_ROUTES, 'review'),
     **dict.fromkeys(REFERENCE_ROUTES, 'reference'),
@@ -418,6 +421,7 @@ ROUTE_LANES = {
     # Give each protocol bounded capacity without owning unrelated UI domains.
     '/v1/federation/probe': 'peer_probe',
     '/v1/federation/catalog': 'peer_catalog',
+    '/v1/federation/rss-subscriptions': 'peer_catalog',
     '/v1/federation/content-state': 'peer_state',
     '/v1/federation/replicate': 'peer_replication',
 }

@@ -8465,7 +8465,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/output','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/rss-sources/sync-settings','/v1/rss-sources/sync','/v1/rss-sources/sync-resolve','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/output','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8655,12 +8655,30 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
-        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview'}:
+        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview', '/v1/rss-sources/sync-settings', '/v1/rss-sources/sync', '/v1/rss-sources/sync-resolve'}:
             from spikes.rss_sources import sources_for
             if not isinstance(request, dict):return self.send_error(400)
             try:
                 service=sources_for(self.server)
-                if self.path.endswith('/view') and not request:
+                from spikes import rss_subscription_state as rss_state
+                node=self.server.projects.node_path
+                if self.path.endswith(('/sync-settings','/sync','/sync-resolve')):
+                    if hasattr(self,'actor') and not self.server.administration.is_admin(self.actor):return self.send_error(403)
+                    if self.path.endswith('/sync-settings') and set(request)=={'peer_id','enabled','expected_enabled'}:
+                        if type(request['enabled']) is not bool or type(request['expected_enabled']) is not bool:return self.send_error(400)
+                        if request['enabled']:
+                            from spikes.federation_catalog import _authority
+                            _,peer,_,_=_authority(self.server.administration,request['peer_id'])
+                            if peer['sharing_level'] not in {'same-team','same-company'}:return self.send_error(403)
+                        rss_state.configure(node,request['peer_id'],request['enabled'],expected_enabled=request['expected_enabled'])
+                    elif self.path.endswith('/sync') and set(request)=={'peer_id'}:
+                        from spikes.rss_subscription_sync import synchronize
+                        synchronize(node,request['peer_id'],deployment='web' if hasattr(self,'actor') else 'desktop',full=True)
+                    elif self.path.endswith('/sync-resolve') and set(request)=={'url','chosen','revision','tips'}:
+                        rss_state.resolve(node,request['url'],request['chosen'],request['revision'],request['tips'])
+                    else:return self.send_error(400)
+                    result=service.view()
+                elif self.path.endswith('/view') and not request:
                     result=service.view()
                 elif self.path.endswith('/refresh') and set(request) in ({'channel_id'}, {'channel_id','due_only'}):
                     if 'due_only' in request and type(request['due_only']) is not bool:return self.send_error(400)
@@ -8672,8 +8690,15 @@ class DesktopHandler(Handler):
                     return self.reply(200,dict(preview(request['text'],service.channels),revision=service.revision))
                 else:return self.send_error(400)
                 result['can_refresh']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                if result['can_refresh']:
+                    result['reader_sync']=rss_state.view(node)
+                    result['reader_sync']['available_peers']=[]
+                    if hasattr(self.server,'administration'):
+                        actor=getattr(self,'actor',{'id':None,'node_role':'federation-admin','memberships':{}})
+                        peers=self.server.administration.request(actor,{'action':'list'})['peers']
+                        result['reader_sync']['available_peers']=[dict(id=p['id'],name=p['name']) for p in peers if p['trust']=='approved' and p['sharing_level'] in {'same-team','same-company'}]
                 return self.reply(200,result)
-            except (ValueError, TypeError, KeyError) as exc:
+            except (ValueError, TypeError, KeyError, OSError, sqlite3.Error) as exc:
                 return self.reply(422,{'error':str(exc)})
         if self.path.startswith('/v1/artifacts/git/'):
             if not isinstance(request,dict):return self.send_error(400)

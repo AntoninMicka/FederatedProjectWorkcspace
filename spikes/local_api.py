@@ -266,8 +266,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def reply(self, code, payload):
         project_view = code == 200 and self.path == '/v1/projects/open'
+        compact = project_view or code == 200 and self.path == '/v1/federation/rss-subscriptions'
         data = (json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode()
-                if project_view else json.dumps(payload).encode())
+                if compact else json.dumps(payload).encode())
         compressed = False
         if project_view and len(data) >= 1024 and _accepts_project_gzip(self.headers):
             packed = gzip.compress(data, compresslevel=1, mtime=0)

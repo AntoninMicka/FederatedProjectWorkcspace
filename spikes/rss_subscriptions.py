@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""Node-local reader subscriptions; atomic preferences, never project artifacts."""
+"""Reader subscriptions; atomic node preferences, never project artifacts."""
 import json
 import os
 from pathlib import Path
@@ -58,6 +58,7 @@ def preview(text, existing):
 
 class Subscriptions:
     def __init__(self, node, defaults):
+        self.node = Path(node).absolute()
         self.path = Path(node).absolute().with_suffix('.rss-subscriptions.sqlite3')
         self.defaults = defaults
 
@@ -88,6 +89,8 @@ class Subscriptions:
             # Exact resubmission after a lost response is harmless.
             if row and json.loads(row[1]) == channels: return current
             require(current == revision, 'Odběry se změnily; obnovte přehled a zkontrolujte úpravu.')
+            from spikes.rss_subscription_state import record_local
+            record_local(db, self.node, json.loads(row[1]) if row else self.defaults, channels)
             db.execute('INSERT OR REPLACE INTO subscriptions VALUES(1,?,?)', (current+1, json.dumps(channels,ensure_ascii=False)))
             checkpoint()
         sync_dir(self.path.parent)

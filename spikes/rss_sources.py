@@ -33,8 +33,18 @@ class RSSSources:
             if kind!='rss-atom':
                 self.cache[channel['id']].update(state='unavailable',error=CONNECTORS[kind]().describe()['availability']['reason'])
 
+    def _reload_locked(self):
+        if self.store is None:return
+        revision,channels=self.store.load()
+        if revision==self.revision:return
+        old={c['id']:c for c in self.channels}
+        self.cache={c['id']:(self.cache[c['id']] if c['id'] in old and old[c['id']]['url']==c['url'] else
+                    dict(observation=None,error=None,state='unloaded',attempted=None)) for c in channels}
+        self.channels,self.revision=channels,revision
+
     def view(self):
         with bounded_process_lock(self.lock, resource='RSS cache'):
+            self._reload_locked()
             channels, entries, items = [], [], []
             for channel in self.channels:
                 cached = self.cache[channel['id']]
@@ -63,6 +73,7 @@ class RSSSources:
         edits = [channel(c) for c in edits]
         require(len({c['id'] for c in edits}) == len(edits), 'Duplicitní ID kanálu.')
         with bounded_process_lock(self.refresh_lock, resource='RSS refresh'), bounded_process_lock(self.lock, resource='RSS cache'):
+            self._reload_locked()
             require(revision == self.revision or all(c in self.channels for c in edits), 'Odběry se změnily; obnovte přehled.')
             merged = {c['id']: c for c in self.channels}; merged.update({c['id']:c for c in edits})
             values = list(merged.values())
@@ -76,6 +87,7 @@ class RSSSources:
         return self.view()
 
     def refresh(self, channel_id, *, due_only=False):
+        with bounded_process_lock(self.lock,resource='RSS cache'):self._reload_locked()
         require(channel_id == 'all' or channel_id in self.cache, 'Neznámý kanál.')
         require(channel_id != 'all' or len(self.channels)<=8, 'Více než osm kanálů načítejte jednotlivě.')
         if not self.refresh_lock.acquire(blocking=False):

@@ -75,7 +75,10 @@ class RSSSourcesHTTPTests(unittest.TestCase):
         self.assertEqual(code, 200, raw)
         self.assertFalse(json.loads(raw)['can_refresh'])
         self.assertEqual(self.call('refresh', {'channel_id': 'all'}, headers)[0], 403)
-        for action,value in [('save',{'revision':0,'channels':[]}),('import-preview',{'text':'[]'})]:
+        for action,value in [('save',{'revision':0,'channels':[]}),('import-preview',{'text':'[]'}),
+                             ('sync-settings',{'peer_id':'00000000-0000-0000-0000-000000000001','enabled':True}),
+                             ('sync',{'peer_id':'00000000-0000-0000-0000-000000000001'}),
+                             ('sync-resolve',{'url':'https://example.org/rss','chosen':'x','revision':0,'tips':[]})]:
             self.assertEqual(self.call(action,value,headers)[0],403)
         self.assertEqual(self.call('view', {}, {'Authorization': 'Bearer invalid'})[0], 401)
 

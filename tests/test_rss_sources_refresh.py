@@ -12,7 +12,7 @@ class ReaderRefreshTests(unittest.TestCase):
         script=r'''
 const assert=require('node:assert/strict');
 let sourcesView={can_refresh:true,channels:[{id:'one',due:false},{id:'two',due:true},{id:'three',due:true}]};
-let sourcesBusy=false,sourcesDirty=false,sourcesChannel='all',sourcesSequence=0;
+let sourcesBusy=false,sourcesDirty=false,sourcesSaving=false,sourcesChannel='all',sourcesSequence=0;
 const sourcesEditor={hidden:true},sourcesImportReview={hidden:true},sourcesRefresh={},sourcesStatus={};
 const panel={hidden:false},document={hidden:false,getElementById:()=>panel};
 let calls=[],leave=false;
@@ -25,7 +25,8 @@ function renderSources(){}
  panel.hidden=false;sourcesDirty=true;await refreshDueSources();assert.equal(calls.length,0);
  sourcesDirty=false;sourcesEditor.hidden=false;await refreshDueSources();assert.equal(calls.length,0);
  sourcesEditor.hidden=true;sourcesBusy=true;await refreshDueSources();assert.equal(calls.length,0);
- sourcesBusy=false;await refreshDueSources();assert.deepEqual(calls,[{channel_id:'two',due_only:true}]);
+ sourcesBusy=false;sourcesSaving=true;await refreshDueSources();assert.equal(calls.length,0);
+ sourcesSaving=false;await refreshDueSources();assert.deepEqual(calls,[{},{channel_id:'two',due_only:true}]);
  calls=[];leave=true;await loadSources(true);assert.equal(calls.length,1);assert.equal(calls[0].channel_id,'one');
  assert.equal(sourcesBusy,false);
 })().catch(e=>{console.error(e);process.exitCode=1;});
