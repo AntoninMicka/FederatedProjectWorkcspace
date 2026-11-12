@@ -4,7 +4,7 @@
 from spikes.monitoring_blocks_ui import HTML as BLOCKS_HTML, CSS as BLOCKS_CSS, JS as BLOCKS_JS
 
 HTML = ('<div id="monitoring-panel" role="tabpanel" aria-labelledby="monitoring-tab" hidden>'
-        '<header><h2>Nástroje</h2><p>Zdroje → filtry → pooly → zpracování → komplexní úlohy.</p></header>'
+        '<header><h2 id="monitoring-page-title">Nástroje</h2><p id="monitoring-page-description">Zdroje → filtry → pooly → zpracování → komplexní úlohy.</p></header>'
         '<p id="monitoring-status" role="status" aria-live="polite"></p>' + BLOCKS_HTML + '</div>')
 CSS='''
 .monitoring-grid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(300px,2fr);gap:1rem}
@@ -25,7 +25,7 @@ function monitoringButton(label,action,disabled=false){const b=document.createEl
 async function monitoringRequest(action,payload={}){if(!activeProject)throw Error('Otevřete projekt.');return projectRequest('/v1/monitoring/'+action,{project_id:activeProject.id,...payload},120000);}
 function clearMonitoring(){
  monitoringLoadSequence++;blockLoadSequence++;blockCatalog=null;blockSelectedId=null;blockEdit=null;blockProposal=null;blockParent=null;blockSaving=null;blockComposeRun=null;monitoringView=null;
- blockEditor.hidden=true;document.querySelector('#monitoring-block-content').replaceChildren();document.querySelector('#monitoring-compose').hidden=true;document.querySelector('#monitoring-composition-review').hidden=true;
+ hideMonitoringEntityEditors();document.querySelector('#monitoring-block-content').replaceChildren();document.querySelector('#monitoring-compose').hidden=true;document.querySelector('#monitoring-composition-review').hidden=true;
  renderMonitoringToolTree();document.querySelector('#sidebar-report-list')?.replaceChildren();
 }
 async function canLeaveMonitoring(){return canLeaveMonitoringBlocks();}
@@ -41,7 +41,22 @@ function refreshVisibleMonitoring(){
  if(activeProject&&!document.hidden&&document.querySelector('#monitoring-panel')?.getClientRects().length&&!blockEdit&&!blockProposal&&!blockComposeRun&&!blockSaving&&!monitoringLoads)return loadMonitoring();
 }
 function refreshMonitoringAfterSync(event){if(activeProject?.id===event.detail?.projectId&&event.detail?.status?.state==='idle')return refreshVisibleMonitoring();}
-function renderPresentationReportLink(){document.querySelector('#presentation-report-link')?.remove();}
+async function renderPresentationReportLink(){
+ document.querySelector('#presentation-report-link')?.remove();
+ const pid=activeProject?.id,aid=presentationEditorArtifact;
+ const source=presentationEditorView?.documents?.find(d=>d.id===aid)?.report_source;
+ if(!pid||!source)return;
+ if(monitoringView?.project_id!==pid||monitoringView.commit_id!==activeProject.head)await loadMonitoring();
+ if(activeProject?.id!==pid||presentationEditorArtifact!==aid)return;
+ document.querySelector('#presentation-report-link')?.remove();
+ const panel=document.createElement('aside');panel.id='presentation-report-link';
+ const output=monitoringView?.project_id===pid?monitoringView.outputs?.find(r=>r.id===source.artifact_id):null;
+ const link=output?.presentations?.find(p=>p.artifact_id===aid);
+ panel.append(blockText('p',link?.potentially_stale?'Zdrojová zpráva má novější nebo změněnou revizi. Tato prezentace zůstává původní.':output?'Prezentace odvozená z vydané zprávy.':'Zdrojové vydání není v aktuálním přehledu dostupné.'));
+ panel.append(blockText('p','Zdrojová revize: '+source.commit_id.slice(0,12)+' · '+source.sha256.slice(0,12)));
+ if(output)panel.append(monitoringButton(link?.potentially_stale?'Otevřít aktuální zdrojovou zprávu':'Otevřít zdrojovou zprávu',()=>activeProject?.id===pid&&presentationEditorArtifact===aid?openReportOutput({...output,source:'git'}):undefined));
+ document.querySelector('#presentation-panel').prepend(panel);
+}
 function showMonitoringReport(report,target=document.querySelector('#report-output-content')){
  if(!report)return;target.replaceChildren();const body=document.createElement('pre');body.textContent=report.markdown||'Obsah zprávy není dostupný.';target.append(body);
 }

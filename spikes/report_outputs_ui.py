@@ -61,6 +61,21 @@ async function openReportOutput(output){
   if(activeProject?.id!==pid||sequence!==reportOutputSequence||view.hidden)return;
   status.textContent=output.source==='git'?'Vydaná zpráva':report.state==='review'?'Návrh zprávy — čeká na posouzení.':'Nevydaný návrh';
   actions.append(monitoringButton('Export Markdown',()=>exportReportMarkdown(output.title,report.markdown)));
+  if(output.source==='git'){
+   const decks=report.presentations||[];
+   for(const deck of decks){
+    actions.append(monitoringButton((deck.potentially_stale?'Otevřít starší prezentaci: ':'Otevřít prezentaci: ')+deck.title,()=>activeProject?.id===pid?openPresentationEditor(deck.artifact_id):undefined));
+    if(deck.potentially_stale)actions.append(blockText('p','Prezentace vychází z dřívější revize zprávy; její obsah nebyl přepsán.'));
+   }
+   if(!decks.some(d=>!d.potentially_stale))actions.append(monitoringButton('Vytvořit prezentaci ze zprávy',async()=>{
+    if(activeProject?.id!==pid)return;
+    if(!window.confirm('Vytvořit prezentaci z přesně tohoto vydání zprávy bez dalšího výzkumu?'))return;
+    if(activeProject?.id!==pid)return;
+    const result=await monitoringRequest('presentation',{output_id:output.id,expected_head:report.commit_id,confirm:true});
+    if(activeProject?.id!==pid)return;await loadMonitoring();if(activeProject?.id!==pid)return;
+    presentationEditorView=null;await openPresentationEditor(result.artifact_id);
+   },activeProject.readOnly||!monitoringView.can_manage));
+  }
   const local=output.source==='legacy-draft'?output.report:monitoringView?.reports?.find(r=>r.report_ref?.artifact_id===output.id);
   if(local){showMonitoringReport({...local,name:output.title,markdown:report.markdown},content);return;}
   const pre=document.createElement('pre');pre.textContent=report.markdown;content.append(pre);

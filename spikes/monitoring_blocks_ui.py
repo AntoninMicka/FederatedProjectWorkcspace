@@ -1,15 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""Separate reusable block catalogs and a form-based complex-task composer."""
+"""Entity-specific catalogs/editors and table aggregation of shared tools."""
+from spikes.monitoring_entity_editors_ui import HTML as ENTITY_EDITORS
+from spikes.monitoring_catalogs_ui import JS as CATALOG_JS
 HTML='''
 <section id="monitoring-blocks" aria-label="Stavební bloky sledování">
-<p>Zdroje → filtry → pooly → zpracování. Komplexní úlohy skládají společné bloky.</p>
-<nav id="monitoring-block-tabs" aria-label="Části sledování"></nav>
 <div id="monitoring-block-toolbar"></div><p id="monitoring-block-state" role="status"></p>
 <div id="monitoring-block-content"></div>
-<form id="monitoring-block-editor" hidden><h3 id="monitoring-block-editor-title"></h3>
-<div id="monitoring-block-fields"></div>
-<button type="submit">Uložit blok</button><button id="monitoring-block-cancel" type="button">Zrušit</button></form>
+'''+ENTITY_EDITORS+'''
 <form id="monitoring-compose" hidden><h3>Sestavit komplexní úlohu pomocí LLM</h3>
 <label>Co má úloha sledovat a jaký výstup očekáváte?<textarea name="goal" required maxlength="8000" rows="5"></textarea></label>
 <p>Model dostane popis a katalog bloků s kontrolou soukromí. Návrh před uložením můžete upravit.</p>
@@ -21,18 +19,23 @@ HTML='''
 </section>
 '''
 CSS='''
-#monitoring-block-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
-#monitoring-block-tabs button{background:#eaf0f4;color:#23394b;border:1px solid #c7d4dc}
-#monitoring-block-tabs button[aria-pressed=true]{background:#176b60;color:white;box-shadow:inset 0 -3px 0 #0b403a}
 #monitoring-block-toolbar{display:flex;gap:.5rem;flex-wrap:wrap}
 #monitoring-block-content article{padding:1rem;border:1px solid #c7d4dc;border-radius:.5rem;margin:1rem 0}
-#monitoring-block-fields fieldset{margin:1rem 0}#monitoring-block-fields select[multiple]{min-height:7rem}
+[data-monitoring-entity-fields] fieldset{margin:1rem 0}[data-monitoring-entity-fields] select[multiple]{min-height:7rem}
+.monitoring-catalog-table{width:100%;border-collapse:collapse;margin:1rem 0}
+.monitoring-catalog-table th,.monitoring-catalog-table td{padding:.6rem;text-align:left;border-bottom:1px solid #c7d4dc;vertical-align:top;overflow-wrap:anywhere}
+.monitoring-catalog-table th{white-space:nowrap;overflow-wrap:normal}
+[data-monitoring-catalog] .monitoring-catalog-table{min-width:760px}
+.monitoring-table-scroll{overflow-x:auto}.monitoring-task-aggregate>section{margin:1.5rem 0}
+[data-monitoring-editor-page]{padding:1rem;border-left:4px solid #176b60}
 #monitoring-block-content pre{white-space:pre-wrap;overflow-wrap:anywhere}
 '''
 JS=r'''
 const blockLabels={source:'Zdroje',filter:'Filtry',pool:'Pooly zpráv',processing:'Zpracování zpráv',task:'Komplexní úlohy',runs:'Výsledky a běhy'};
 let blockSelectedId=null,blockLoadSequence=0,blockEditHead=null,blockCatalog=null,blockTab='task',blockEdit=null,blockProposal=null,blockSaving=null,blockParent=null,blockComposeRun=null;
-const blockEditor=document.querySelector('#monitoring-block-editor'),blockFields=document.querySelector('#monitoring-block-fields');
+const monitoringEntityEditors=[...document.querySelectorAll('[data-monitoring-entity-editor]')];
+let blockEditor=monitoringEntityEditors[0],blockFields=blockEditor.querySelector('[data-monitoring-entity-fields]');
+function hideMonitoringEntityEditors(){for(const form of monitoringEntityEditors){form.hidden=true;form.closest('[data-monitoring-editor-page]').hidden=true;}}
 function blockText(tag,text){const e=document.createElement(tag);e.textContent=text;return e;}
 function blockStatus(text){document.querySelector('#monitoring-block-state').textContent=text;}
 function blockRows(){return [...(blockCatalog?.blocks||[]).filter(b=>!blockProposal?.proposal.blocks.some(p=>p.id===b.id)),...(blockProposal?.proposal.blocks||[]).map(b=>({...b,ref:b.previous[0]||null,used_by:[],tasks:[]}))];}
@@ -46,22 +49,23 @@ async function loadMonitoringBlocks(){
 }
 function renderMonitoringBlocks(){
  if(!blockCatalog)return;
+ if(!blockEdit)hideMonitoringEntityEditors();
  if(!monitoringView?.error)monitoringStatus.textContent=blockCatalog.blocks.filter(b=>b.value.kind==='task').length+' komplexních úloh · '+blockCatalog.blocks.filter(b=>b.value.kind==='source').length+' zdrojů · '+blockCatalog.blocks.filter(b=>b.value.kind==='pool').length+' poolů';
  renderMonitoringToolTree();
  renderReportOutputs();
- const tabs=document.querySelector('#monitoring-block-tabs');tabs.replaceChildren();
- for(const [kind,label] of Object.entries(blockLabels)){
-  const count=kind==='runs'?blockCatalog.jobs.filter(j=>j.intent.kind!=='intake').length:blockRows().filter(b=>b.value.kind===kind).length;
-  const b=monitoringButton(label+' ('+count+')',async()=>{if(!await canLeaveMonitoringBlocks())return;blockTab=kind;blockSelectedId=null;renderMonitoringBlocks();});
-  b.setAttribute('aria-pressed',String(kind===blockTab));tabs.append(b);
- }
+ const descriptions={source:'Kanály, přístup a nezávislé kontroly zdrojů.',filter:'Pravidla výběru zpráv a jejich cílové pooly.',pool:'Uložené zprávy, jejich původ, sdílení a uchování.',processing:'Vstupy, zadání zprávy, rozvrh a vykonávající uzel.',task:'Sestavy tabulek sdílených zdrojů, filtrů, poolů a úloh.',runs:'Výsledky a provozní stav tohoto uzlu.'};
+ document.querySelector('#monitoring-page-title').textContent=blockLabels[blockTab];
+ document.querySelector('#monitoring-page-description').textContent=descriptions[blockTab];
  const toolbar=document.querySelector('#monitoring-block-toolbar');toolbar.replaceChildren();
  toolbar.append(monitoringButton('Obnovit přehled',()=>loadMonitoringBlocks()));
+ if(blockTab!=='runs')toolbar.append(monitoringButton('Historie běhů',async()=>{if(!await canLeaveMonitoringBlocks())return;blockTab='runs';blockSelectedId=null;renderMonitoringBlocks();}));
  const content=document.querySelector('#monitoring-block-content');content.replaceChildren();
+ if(blockEdit?.value.kind==='task'){renderMonitoringTaskAggregate(content,blockEdit,true);return;}
  if(blockTab==='runs'){
   for(const j of blockCatalog.jobs){
    const article=document.createElement('article');article.append(blockText('h3',j.intent.block?.value.title||j.intent.kind));
    article.append(blockText('p','Stav: '+j.state));if(j.result?.error)article.append(blockText('p',j.result.error));
+   if(j.intent.kind==='intake')article.append(blockText('p',monitoringIntakeOutcome(j)));
    if(j.result?.children)for(const c of j.result.children)article.append(blockText('p',blockName(c.block_id)+' · '+c.state));
    if(j.result?.markdown)article.append(blockText('pre',j.result.markdown));
    if(j.state==='review'&&j.intent.kind==='processing')article.append(monitoringButton('Vydat posouzenou zprávu',async()=>{
@@ -77,10 +81,13 @@ function renderMonitoringBlocks(){
   return;
  }
  const rows=blockRows().filter(b=>b.value.kind===blockTab&&(!blockSelectedId||b.id===blockSelectedId));
+ if(blockTab==='task'){for(const row of rows)renderMonitoringTaskAggregate(content,row);if(!rows.length)content.append(blockText('p','Zatím žádné sestavy nástrojů.'));return;}
+ content.dataset.monitoringWorkspace=blockTab;
+ content.append(monitoringCatalogTable(blockTab,rows));
+ if(!blockSelectedId)return;
  if(!rows.length)content.append(blockText('p','Zatím žádné položky. Vytvořte blok nebo jej přidejte při sestavování úlohy.'));
  for(const row of rows){
   const readonly=blockReadOnly()||row.migration_pending;const article=document.createElement('article'),c=row.value.config;article.dataset.monitoringBlockId=row.id;article.append(blockText('h3',row.value.title));if(row.migration_pending)article.append(blockText('p','Čeká na dokončení přerušeného převodu.'));
-  if(row.value.kind==='task')article.append(blockText('p','Spuštění úlohy: '+(row.run_count||0)));
   const usage=row.used_by||[];article.append(monitoringButton(usage.length?'Využití: '+usage.length+' bloků · '+(row.tasks||[]).length+' úloh':'Zatím nepoužito',()=>{
    const list=document.createElement('ul');for(const id of usage)list.append(blockText('li',blockName(id)));article.append(list);
   }));
@@ -115,22 +122,15 @@ function renderMonitoringBlocks(){
    }));
   }else if(blockTab==='processing'){
    article.append(blockText('p',c.pool_ids.map(blockName).join(', ')+(c.search_ids.length?' + hledání: '+c.search_ids.map(blockName).join(', '):'')+' → '+c.instructions));
-   article.append(blockText('p',c.schedule.kind==='manual'?'Na vyžádání':'Denně v '+c.schedule.time+' ('+c.schedule.timezone+')'));
+   const schedules={manual:'Na vyžádání',daily:'Denně',weekly:'Týdně od pondělí',monthly:'Měsíčně od 1. dne',quarterly:'Čtvrtletně od 1. dne',annual:'Ročně od 1. ledna'};
+   article.append(blockText('p',c.schedule.kind==='manual'?schedules.manual:schedules[c.schedule.kind]+' v '+c.schedule.time+' ('+c.schedule.timezone+')'));
    article.append(monitoringButton('Sestavit návrh zprávy',async()=>{
     if((c.mode==='llm'||c.search_ids.length)&&!window.confirm('Spustit zpracování včetně nastaveného modelu nebo webového hledání?'))return;
     await monitoringRequest('block-process',{block_id:row.id,run_id:crypto.randomUUID()});blockTab='runs';await loadMonitoringBlocks();
    },readonly||c.node_id!==blockCatalog.node_id));
-   if(c.schedule.kind==='daily')article.append(monitoringButton(row.runtime?.enabled?'Pozastavit denní zpracování':'Zapnout denní zpracování',async()=>{
+   if(c.schedule.kind!=='manual')article.append(monitoringButton(row.runtime?.enabled?'Pozastavit pravidelné zpracování':'Zapnout pravidelné zpracování',async()=>{
     await monitoringRequest('block-configure',{block_id:row.id,enabled:!row.runtime?.enabled,confirm:true});await loadMonitoringBlocks();
    },readonly||c.node_id!==blockCatalog.node_id));
-  }else{
-   article.append(blockText('p',c.instructions));
-   for(const kind of ['source','filter','pool','processing']){const ids=blockRows().filter(b=>b.value.kind===kind&&(row.resolved_ids||c[kind+'_ids']).includes(b.id)).map(b=>b.id);article.append(blockText('p',blockLabels[kind]+': '+ids.map(blockName).join(', ')));}
-   article.append(monitoringButton('Sestavit zprávy úlohy',async()=>{
-    if(!window.confirm('Spustit zpracování této úlohy včetně jejích modelů a hledání?'))return;
-    await monitoringRequest('block-task-run',{block_id:row.id,run_id:crypto.randomUUID()});
-    blockTab='runs';await loadMonitoringBlocks();
-   },readonly));
   }
   content.append(article);
  }
@@ -157,7 +157,10 @@ async function editMonitoringBlock(kind,row=null,restore=null){
  if(blockSaving){blockStatus('Nejdříve dokončete původní pokus o uložení nebo zrušte editor.');return;}
  if(blockEdit&&!restore&&!await canLeaveMonitoringBlocks())return;
  blockEdit=restore||{id:row?.id||crypto.randomUUID(),previous:row?.ref?[row.ref]:[],privacy:row?.privacy||'project',value:structuredClone(row?.value||{schema:'fpw-reporting-block-v1',kind,title:'',config:blockDefaults(kind)})};
- blockEditHead=blockCatalog.commit_id;blockFields.replaceChildren();document.querySelector('#monitoring-block-editor-title').textContent=blockLabels[kind]+' — '+(row?'úprava':'nový blok');
+ blockEditHead=blockCatalog.commit_id;hideMonitoringEntityEditors();
+ if(kind==='task'){if(!blockEdit.value.config.instructions)blockEdit.value.config.instructions='Sestava sdílených nástrojů.';blockTab='task';blockSelectedId=blockEdit.id;renderMonitoringBlocks();blockStatus('');return;}
+ blockTab=kind;blockSelectedId=row?.id||null;renderMonitoringBlocks();
+ blockEditor=document.querySelector('#monitoring-'+kind+'-editor');blockFields=blockEditor.querySelector('[data-monitoring-entity-fields]');blockFields.replaceChildren();
  const v=blockEdit.value,c=v.config;
  blockField('title','Název','text',v.title);const privacy=blockField('privacy','Soukromí','select',blockEdit.privacy,[{id:'public',title:'Veřejné'},{id:'project',title:'Projekt'},{id:'confidential',title:'Důvěrné'},{id:'local-only',title:'Pouze lokálně'}]);privacy.disabled=blockEdit.previous.length>0;
  if(kind==='source'){
@@ -180,23 +183,17 @@ async function editMonitoringBlock(kind,row=null,restore=null){
  }else if(kind==='processing'){
   blockField('pool_ids','Vstupní pooly','multi',c.pool_ids,blockOptions('pool'));blockField('search_ids','Hledání při sestavení zprávy','multi',c.search_ids,blockOptions('source',c=>c.connector==='web-search'));
   blockField('instructions','Zadání zprávy','textarea',c.instructions);blockField('mode','Zpracování','select',c.mode,[{id:'deterministic',title:'Přehled bez LLM'},{id:'llm',title:'Pomocí nastaveného LLM'}]);
-  blockField('lookback_days','Zprávy za posledních dní','number',c.lookback_days);blockField('schedule_kind','Spouštění','select',c.schedule.kind,[{id:'manual',title:'Na vyžádání'},{id:'daily',title:'Denně'}]);
-  blockField('time','Čas denního zpracování','time',c.schedule.time);blockField('timezone','Časová zóna','text',c.schedule.timezone);
+  blockField('lookback_days','Zprávy za posledních dní','number',c.lookback_days);blockField('schedule_kind','Spouštění','select',c.schedule.kind,[{id:'manual',title:'Na vyžádání'},{id:'daily',title:'Denně'},{id:'weekly',title:'Týdně od pondělí'},{id:'monthly',title:'Měsíčně od 1. dne'},{id:'quarterly',title:'Čtvrtletně od 1. dne'},{id:'annual',title:'Ročně od 1. ledna'}]);
+  blockField('time','Čas pravidelného zpracování','time',c.schedule.time);blockField('timezone','Časová zóna','text',c.schedule.timezone);
   const nodes=monitoringView?.execution_nodes?.nodes||[{id:blockCatalog.node_id,name:'Tento uzel'}];
   blockField('node_id','Uzel pro zpracování','select',c.node_id,nodes.map(n=>({id:n.id,title:n.name})));
- }else{
-  blockField('instructions','Záměr komplexní úlohy','textarea',c.instructions);
-  for(const k of ['source','filter','pool','processing']){
-   blockField(k+'_ids',blockLabels[k]+' — použít existující','multi',c[k+'_ids'],blockOptions(k));
-   blockFields.append(monitoringButton('Vytvořit nové: '+blockLabels[k],async()=>{
-    blockParent=readMonitoringBlock();blockEdit=null;await editMonitoringBlock(k);
-   }));
-  }
  }
- blockEditor.hidden=false;blockEditor.elements.title.focus();blockStatus('');
+ blockEditor.closest('[data-monitoring-editor-page]').hidden=false;blockEditor.hidden=false;blockEditor.elements.title.focus();blockStatus('');
 }
 function readMonitoringBlock(){
- const b=structuredClone(blockEdit),f=blockEditor.elements,c=b.value.config,get=n=>f[n].value,sel=n=>[...f[n].selectedOptions].map(o=>o.value);
+ const b=structuredClone(blockEdit),c=b.value.config;
+ if(b.value.kind==='task')return closeMonitoringTaskDependencies(b);
+ const f=blockEditor.elements,get=n=>f[n].value,sel=n=>[...f[n].selectedOptions].map(o=>o.value);
  b.value.title=get('title');b.privacy=get('privacy');const kind=b.value.kind;
  if(kind==='source')Object.assign(c,{connector:get('connector'),locator:get('locator'),poll_seconds:get('connector')==='web-search'?null:Number(get('poll_minutes'))*60,terms:get('terms'),retention:get('retention')});
  else if(kind==='pool')c.retention_days=Number(get('retention_days'));
@@ -206,38 +203,43 @@ function readMonitoringBlock(){
   if(get('regex'))steps.push({id:'regex',kind:'regex',fields:['title','content'],pattern:get('regex'),flags:['IGNORECASE'],match:'search',negate:false});
   steps.push({id:'dedup',kind:'dedup',field:'content_sha256'});c.pipeline={schema:'fpw-monitoring-pipeline-v1',revision:crypto.randomUUID(),steps};
  }else if(kind==='processing')Object.assign(c,{pool_ids:sel('pool_ids'),search_ids:sel('search_ids'),instructions:get('instructions'),mode:get('mode'),lookback_days:Number(get('lookback_days')),node_id:get('node_id'),schedule:{kind:get('schedule_kind'),time:get('time'),timezone:get('timezone')}});
- else{
-  c.instructions=get('instructions');for(const k of ['source','filter','pool','processing'])c[k+'_ids']=sel(k+'_ids');
+ return b;
+}
+function closeMonitoringTaskDependencies(b){
+ const c=b.value.config;
   // Include dependencies of selected shared blocks without copying their definitions.
   const rows=blockRows(),chosen=new Set(Object.values(c).filter(Array.isArray).flat());
+  for(const id of chosen)if(!rows.some(r=>r.id===id))throw Error('Nedostupná položka sestavy: '+id);
   for(let repeat=0;repeat<4;repeat++)for(const r of rows.filter(r=>chosen.has(r.id))){const x=r.value.config;
    for(const d of [...(x.source_ids||[]),...(x.pool_ids||[]),...(x.search_ids||[]),...(x.pool_id?[x.pool_id]:[])])chosen.add(d);}
   for(const k of ['source','filter','pool','processing'])c[k+'_ids']=rows.filter(r=>r.value.kind===k&&chosen.has(r.id)).map(r=>r.id);
- }
  return b;
 }
 async function canLeaveMonitoringBlocks(){
  if(!blockEdit&&!blockProposal&&!blockComposeRun)return true;
  if(!window.confirm('Zahodit rozpracovanou úpravu bloku nebo návrh sestavy?'))return false;
- blockEdit=null;blockProposal=null;blockComposeRun=null;blockParent=null;blockSaving=null;blockEditor.hidden=true;
+ blockEdit=null;blockProposal=null;blockComposeRun=null;blockParent=null;blockSaving=null;hideMonitoringEntityEditors();
  document.querySelector('#monitoring-composition-review').hidden=true;return true;
 }
-blockEditor.addEventListener('submit',async e=>{
- e.preventDefault();if(!blockEditor.reportValidity())return;const pid=activeProject.id;
+async function saveMonitoringBlock(b){
+ const pid=activeProject.id;
  try{
-  const b=readMonitoringBlock();
   if(blockProposal){const index=blockProposal.proposal.blocks.findIndex(p=>p.id===b.id);if(index>=0)blockProposal.proposal.blocks[index]=b;else blockProposal.proposal.blocks.push(b);}
   else{
    if(!blockSaving)blockSaving={base_head:blockEditHead,blocks:[b],operation_id:crypto.randomUUID()};
-   for(const field of blockEditor.querySelectorAll('input,select,textarea'))field.disabled=true;
+   const controls=b.value.kind==='task'?document.querySelector('.monitoring-task-aggregate'):blockEditor;
+   for(const field of controls.querySelectorAll('input,select,textarea'))field.disabled=true;
    await monitoringRequest('blocks-save',blockSaving);if(activeProject?.id!==pid)return;blockSaving=null;
   }
-  blockEdit=null;blockEditor.hidden=true;await loadMonitoringBlocks();
-  if(blockParent){const parent=blockParent;blockParent=null;parent.value.config[b.value.kind+'_ids'].push(b.id);await editMonitoringBlock('task',null,parent);}
-  else if(blockProposal)renderBlockProposal();else renderMonitoringBlocks();
+  blockEdit=null;hideMonitoringEntityEditors();await loadMonitoringBlocks();
+  if(blockParent){const parent=blockParent;blockParent=null;const key=b.value.kind+'_ids';parent.value.config[key]=[...new Set([...parent.value.config[key],b.id])];await editMonitoringBlock('task',null,parent);}
+  else if(blockProposal){renderMonitoringBlocks();renderBlockProposal();}else renderMonitoringBlocks();
  }catch(err){blockStatus(err.message);}
-});
-document.querySelector('#monitoring-block-cancel').addEventListener('click',async()=>{if(await canLeaveMonitoringBlocks())renderMonitoringBlocks();});
+}
+for(const form of monitoringEntityEditors){
+ form.addEventListener('submit',async e=>{e.preventDefault();if(form!==blockEditor||!form.reportValidity())return;await saveMonitoringBlock(readMonitoringBlock());});
+ form.querySelector('[data-monitoring-entity-cancel]').addEventListener('click',async()=>{if(await canLeaveMonitoringBlocks())renderMonitoringBlocks();});
+}
 document.querySelector('#monitoring-compose').addEventListener('submit',async e=>{
  e.preventDefault();const pid=activeProject.id,form=e.currentTarget;
  try{if(!blockComposeRun)blockComposeRun={run_id:crypto.randomUUID(),goal:form.elements.goal.value,confirm:true};
@@ -257,9 +259,11 @@ function renderBlockProposal(){
 }
 document.querySelector('#monitoring-composition-save').addEventListener('click',async()=>{
  try{if(!blockSaving)blockSaving={base_head:blockProposal.base_head,blocks:blockProposal.proposal.blocks,operation_id:crypto.randomUUID()};
-  await monitoringRequest('blocks-save',blockSaving);blockSaving=null;blockProposal=null;blockEdit=null;blockEditor.hidden=true;
+  await monitoringRequest('blocks-save',blockSaving);blockSaving=null;blockProposal=null;blockEdit=null;hideMonitoringEntityEditors();
   document.querySelector('#monitoring-composition-review').hidden=true;await loadMonitoringBlocks();blockStatus('Sestava uložená. Sběr a plánované zpracování aktivujte samostatně.');
  }catch(e){blockStatus(e.message);}
 });
 document.querySelector('#monitoring-composition-cancel').addEventListener('click',async()=>{if(await canLeaveMonitoringBlocks())renderMonitoringBlocks();});
 '''
+
+JS += CATALOG_JS

@@ -4126,6 +4126,7 @@ document.querySelector('#presentation-print-confirm').addEventListener('change',
 document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
  presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
+ if(typeof renderPresentationReportLink==='function')renderPresentationReportLink();
 }
 function renderOutputsOverview(preferred=null){
  outputsOverviewList.replaceChildren();
@@ -4190,9 +4191,9 @@ async function openPresentationEditor(preferred=null){
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;selectSidebarTab(document.querySelector('#presentations-tab'));
  selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!await canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
  if(presentationEditorDeck)document.querySelector('#presentation-deck-title').focus();
- if(typeof renderPresentationReportLink==='function')renderPresentationReportLink();
 }
 async function createPresentationDocument(confirmDiscard=true){
+ document.querySelector('#presentation-report-link')?.remove();
  if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
 presentationEditorDocuments.addEventListener('change',async()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(await canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
@@ -8712,6 +8713,8 @@ class DesktopHandler(Handler):
                     result=service.current_view(pid,network=network)
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
                     result['block_catalog']['can_manage']=result['can_manage']
+                    if result['can_manage']:
+                        result['execution_nodes']=service.execution_nodes(getattr(self.server,'administration',None))
                     return self.reply(200,result)
                 monitoring_snapshot=service._data(pid,network=network,
                     **({'read_only':True} if action in {'blocks','output','pool-view'} else {}))
@@ -8815,6 +8818,8 @@ class DesktopHandler(Handler):
                     result=service.correct(pid,request['run_id'])
                 elif action=='presentation' and set(request)=={'project_id','run_id'}:
                     result=service.presentation(pid,request['run_id'])
+                elif action=='presentation' and set(request)=={'project_id','output_id','expected_head','confirm'}:
+                    result=service.output_presentation(pid,request['output_id'],request['expected_head'],confirm=request['confirm'],_snapshot=monitoring_snapshot)
                 elif action in {'retry','cancel'} and set(request)=={'project_id','run_id','confirm'}:
                     job=service.scheduler.get(request['run_id'])
                     if job['project_id']!=pid:return self.send_error(403)

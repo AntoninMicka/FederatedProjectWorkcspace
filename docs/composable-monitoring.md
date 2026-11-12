@@ -3,11 +3,13 @@
 
 # Sledování ze samostatných bloků
 
-V projektu otevřete **Nástroje → Sledování a zprávy**. Nová hlavní část má
-šest samostatných přehledů. Levý společný strom a centrální menu založení
-popisují [Nástroje](tools-sidebar.md). Starší definice a jejich historie zůstávají
-v rozbalovací části **Starší sledování a dvoufázový editor**. Samotné založení nových bloků starý sběr nepřevádí. K přechodu použijte
-níže popsaný jednorázový převod s náhledem; ten po uložení zneplatní starý provoz.
+V projektu vyberte konkrétní kategorii v levé liště **Nástroje**.
+Filtry, pooly a zpracování mají [samostatná GUI](monitoring-entity-workspaces.md);
+komplexní úloha je agregát jejich tabulek, bez vlastního editoru bloku.
+Společný strom a menu založení popisují [Nástroje](tools-sidebar.md).
+Starší editory ani migrační panel se již nezobrazují; jejich historická data
+a explicitní servisní API zůstávají zachována. Založení bloků stará data
+nepřevádí ani neaktivuje.
 
 | Přehled | Obsah |
 | --- | --- |
@@ -15,7 +17,7 @@ níže popsaný jednorázový převod s náhledem; ten po uložení zneplatní s
 | Filtry | Výběr více kanálů, pravidla a cílový pool. Více filtrů může přispívat do stejného poolu. |
 | Pooly zpráv | Počet zpráv, jejich obsahové verze, pozorující uzly, důvody výběru a poslední potvrzený příjem synchronizace. |
 | Zpracování zpráv | Více vstupních poolů, volitelná webová hledání, zadání, způsob a místní či konkrétní vzdálený uzel. |
-| Komplexní úlohy | Sestava sdílených bloků; výběr existujících, vytvoření nových přímo z editoru a návrh pomocí LLM. |
+| Komplexní úlohy | Agregát tabulek sdílených bloků; výběr existujících, založení položky jejím vlastním formulářem a návrh pomocí LLM. |
 | Výsledky a běhy | Návrhy a vydané zprávy, běhy celé úlohy i jednotlivých zpracování, chyby a unknown příjem. |
 
 U každého bloku je klikací využití. U úlohy se započítají i nepřímé vazby,
@@ -47,10 +49,18 @@ RSS má vlastní interval a nevolá LLM. Zpracování může běžet ručně neb
 jednou denně ve zvoleném místním čase a časové zóně. Denní slot má stabilní
 identitu; restart jej nespustí podruhé. Po výpadku se provede nejvýše aktuální
 splatný slot, nevyrábí se zpětně řada zmeškaných vydání. Webové hledání nemá vlastní periodický sběr; spouští se až jako vstup
-konkrétního sestavení zprávy, případně také při aktivovaném denním zpracování.
+konkrétního sestavení zprávy, případně při aktivovaném
+[kalendářním zpracování](monitoring-processing-calendar.md).
 Uložení rozvrhu jej neaktivuje; aktivace zpracování je samostatná místní akce.
 
-## Jednorázový převod starších sledování
+## Historický panel převodu a zachované servisní API
+
+Následující popis zachovává původní migrační kontrakt a názvy tehdejšího
+panelu. Panel byl následně odstraněn podle
+[aktuálního rozdělení](current-monitoring-read-isolation.md).
+Operace preview/apply/resume/cancel zůstávají explicitním servisním API,
+které používá původní writer a recovery. Nový browser scénář ověřuje API
+a výsledek v aktuálním katalogu, nikoli existenci starých ovládacích prvků.
 
 V hlavní části je **Jednorázový převod starších sledování → Vybrat sledování
 k převodu**. Před ostrým převodem aktualizujte všechny vykonávající uzly,

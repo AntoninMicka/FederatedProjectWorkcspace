@@ -33,7 +33,7 @@ class PlanningHTTPOwnershipTests(unittest.TestCase):
         self.documents = PresentationDocuments(self.node)
         self.heads = [self.projects.repository(pid).head() for pid in self.ids]
 
-    def test_document_open_owns_project_without_owning_presenter_or_application(self):
+    def test_slow_document_read_allows_same_project_view_presenter_and_application(self):
         entered, release = threading.Event(), threading.Event()
         results = []; original = self.documents.open
         def blocked(pid):
@@ -50,8 +50,7 @@ class PlanningHTTPOwnershipTests(unittest.TestCase):
                 try:
                     self.assertTrue(entered.wait(2))
                     code, payload, _ = self.post(server, '/v1/projects/open', {'project_id': self.ids[0]})
-                    self.assertEqual(code, 503, payload)
-                    self.assertEqual(payload['outcome'], 'not-started')
+                    self.assertEqual(code, 200, payload)
                     server.application_lane.acquire(); server.presentation_lane.acquire()
                     try:
                         self.assertEqual(self.post(server, '/v1/outputs/definitions',

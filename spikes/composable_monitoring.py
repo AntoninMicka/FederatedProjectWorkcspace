@@ -3,7 +3,7 @@
 """Independent blocks, redundant local RSS intake and reviewed report drafts."""
 from contextlib import contextmanager
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import fcntl
 import json
 import os
@@ -18,6 +18,26 @@ from spikes.monitoring_placement import local_node_id
 from spikes.reporting_schema import PRIVACY, digest, encoded, fields, moment
 from spikes.rss_reader import fetch_response, checked_validators, RSSUnavailable
 from spikes.source_connectors import RSSConnector, SourceContext
+
+
+def processing_slot(schedule, instant):
+    """Current calendar boundary; no backlog replay or elapsed-seconds calendar."""
+    kind = schedule['kind']
+    if kind == 'manual':
+        return None
+    local = datetime.fromtimestamp(instant, ZoneInfo(schedule['timezone']))
+    day = local.date()
+    if kind == 'weekly':
+        day -= timedelta(days=day.weekday())
+    elif kind == 'monthly':
+        day = day.replace(day=1)
+    elif kind == 'quarterly':
+        day = day.replace(month=((day.month-1)//3)*3+1, day=1)
+    elif kind == 'annual':
+        day = day.replace(month=1, day=1)
+    if (local.date(), local.strftime('%H:%M')) < (day, schedule['time']):
+        return None
+    return day.isoformat()
 
 
 class ComposableMonitoring:
@@ -51,6 +71,9 @@ class ComposableMonitoring:
             binding = bindings.get(b['id'])
             b['runtime'] = dict(binding) if binding else None
             if b['runtime']: b['runtime'].pop('validators', None)
+            if b['value']['kind']=='source':
+                latest=next((j for j in jobs if j['intent'].get('kind')=='intake' and j['intent'].get('source_id')==b['id']),None)
+                b['latest_intake']={key:latest[key] for key in ('id','state','result')} if latest else None
             if b['value']['kind'] == 'pool':
                 b['message_count'] = len(self.pools.view(pid, b['id'],read_only=True))
                 b['last_received_sync'] = next((j['intent'].get('received_at') for j in jobs
@@ -171,13 +194,11 @@ class ComposableMonitoring:
                     self._binding(pid, id_, binding, expected=approved_binding); continue
                 c = source['value']['config']
                 if source['value']['kind'] == 'processing':
-                    local = datetime.fromtimestamp(self.clock(), ZoneInfo(c['schedule']['timezone']))
-                    if (c['schedule']['kind'] == 'daily' and local.strftime('%H:%M') >= c['schedule']['time'] and
-                            binding.get('last_slot') != local.date().isoformat()):
+                    slot = processing_slot(c['schedule'], self.clock())
+                    if slot is not None and binding.get('last_slot') != slot:
                         from spikes.monitoring import ident
-                        slot = local.date().isoformat()
                         try:
-                            result = self._process(pid, id_, ident(id_, 'daily:'+slot), scheduled=True)
+                            result = self._process(pid, id_, ident(id_, c['schedule']['kind']+':'+slot), scheduled=True)
                             binding.update(last_slot=slot, error=None if result['state'] != 'unknown' else 'Processing outcome is unknown')
                         except Exception as exc:
                             binding.update(last_slot=slot, error=str(exc)[:500])
@@ -207,7 +228,7 @@ class ComposableMonitoring:
                     require(response['status'] in {200, 304}, 'Unexpected RSS response')
                     validators = checked_validators(response['validators'])
                     require(response['status'] != 304 or binding['validators'], 'Unexpected initial RSS 304')
-                    now = stamp(self.clock()); rows = []
+                    now = stamp(self.clock()); rows = []; items = None
                     if response['status'] == 200:
                         context = SourceContext(id_, c['locator'], now, source['privacy'], c['retention'], channel=source['value']['title'])
                         items = RSSConnector().normalize(dict(raw=response['raw'], url=c['locator']), context)['items']
@@ -218,9 +239,13 @@ class ComposableMonitoring:
                     with self.pools.db() as db:
                         current = db.execute('SELECT document FROM block_bindings WHERE project=? AND source=?', (pid,id_)).fetchone()
                         require(current and json.loads(current[0]) == approved_binding, 'Local intake consent changed during HTTP')
+                        selected_ids=[r['id'] for r in rows if r['kind']=='item']
+                        existing_count=(db.execute('SELECT COUNT(*) FROM pool_entries WHERE project=? AND id IN ('+
+                            ','.join('?' for _ in selected_ids)+')',(pid,*selected_ids)).fetchone()[0] if selected_ids else 0)
                         self.pools._merge(db, pid, rows, checkpoint=checkpoint)
                         db.execute("UPDATE block_jobs SET state='completed',result=? WHERE id=?",
-                                   (encoded(dict(status=response['status'], accepted=len(rows))), job_id))
+                                   (encoded(dict(status=response['status'], accepted=len(rows),filter_count=len(filters),input_items=len(items) if items is not None else None,
+                                                 selected_items=len(selected_ids) if items is not None else None,new_items=len(selected_ids)-existing_count)), job_id))
                         db.execute('UPDATE block_bindings SET document=? WHERE project=? AND source=?', (encoded(binding), pid, id_))
                     checkpoint('intake-committed')
                 except Exception as exc:

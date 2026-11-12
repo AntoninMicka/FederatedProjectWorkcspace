@@ -594,6 +594,45 @@ class Monitoring:
         require(ws.git.head()==head,'Projekt se změnil; obnovte seznam výstupů.')
         return dict(outputs[0],commit_id=head)
 
+    def output_presentation(self,pid,output_id,expected_head,*,confirm,checkpoint=lambda stage:None,_snapshot=None):
+        """One reviewed, idempotent projection of an exact issued output; no model."""
+        from spikes.report_outputs import PRESENTATION_SOURCE, presentation_source, derived_presentations
+        from spikes.reporting_schema import hex_id
+        require(confirm is True,'Potvrďte vytvoření prezentace z vydané zprávy.')
+        uuid(output_id);hex_id(expected_head,True);self._writable(pid)
+        op=ident(output_id,'presentation:'+expected_head);aid=ident(output_id,'deck:'+expected_head)
+        old=self._receipt(pid,op)
+        if old:
+            ws=self.projects.workspace(pid,blocking=True)
+            files=ws.git.snapshot(old['commit_id']);entities=validate_snapshot(files)
+            source=presentation_source(entities.get(aid,{}))
+            require(source and source['project_id']==pid and source['artifact_id']==output_id
+                    and source['commit_id']==expected_head,'Presentation operation belongs to another intent')
+            return dict(artifact_id=aid,commit_id=old['commit_id'],report_ref=source)
+        data=self._data(pid) if _snapshot is None else _snapshot
+        ws,head,files,entities,rs=data
+        output=self.output(pid,output_id,expected_head,_snapshot=data)
+        pin=output['report_ref']
+        for existing in derived_presentations(pid,files,entities,rs):
+            if existing['source_ref']['artifact_id']==output_id and existing['source_ref']['sha256']==pin['sha256']:
+                return dict(artifact_id=existing['artifact_id'],commit_id=head,report_ref=existing['source_ref'])
+        title=('Prezentace — '+output['title'])[:200]
+        deck=new_deck();deck['title']=title
+        sections=[s for s in output['markdown'].split('\n## ') if s.strip()][:10]
+        require(sections,'Vydaná zpráva nemá obsah pro prezentaci.')
+        slides=[]
+        for i,section in enumerate(sections):
+            slide=new_slide();slide['id']=ident(aid,'slide:'+str(i));parts=section.strip().splitlines()
+            slide['title']=parts[0].lstrip('# ')[:200] or title
+            slide['bullets']=[line.strip()[:800] for line in parts[1:] if line.strip()][:12]
+            slide['notes']='Zdrojová zpráva: '+pin['artifact_id']+' @ '+pin['commit_id']+'\n'+pin['sha256']
+            slide['next']=ident(aid,'slide:'+str(i+1)) if i+1<len(sections) else None;slides.append(slide)
+        deck['slides']=slides
+        result=self.artifacts.save(dict(project_id=pid,artifact_id=aid,title=title,body=encode_deck(deck),new=True,base_head=head,
+            metadata=dict(tags=['monitoring-derived-presentation'],description=PRESENTATION_SOURCE+encoded(pin).decode().strip())),
+            op,privacy=entities[output_id]['privacy'],checkpoint=checkpoint)
+        return dict(artifact_id=aid,commit_id=result['commit_id'],report_ref=pin)
+
     def execution_nodes(self, administration=None):
         """Admin-only desired-placement choices; no network probe or execute grant."""
         if administration is None:

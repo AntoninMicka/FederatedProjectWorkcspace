@@ -25,6 +25,68 @@ class PoolSyncTests(unittest.TestCase):
         s.blocks.save(self.pid,head,self.specs,str(uuid4()))
         self.f.exchange(0,1)
 
+    def test_collector_to_assigned_model_and_published_output_roundtrip(self):
+        """Native signed sync, real model journal, controlled external transport."""
+        from spikes.ollama_backend import OllamaBinding, OllamaBindings, OllamaAdapter
+        desktop, collector = self.services
+        processing = next(b for b in desktop.blocks.read(self.pid)['blocks']
+                          if b['id'] == self.specs[3]['id'])
+        spec = deepcopy(self.specs[3]); spec['previous'] = [processing['ref']]
+        spec['value']['config']['mode'] = 'llm'
+        desktop.blocks.save(self.pid, desktop.blocks.read(self.pid)['commit_id'], [spec], str(uuid4()))
+        self.f.exchange(0, 1)
+        calls = []
+        root = self.f.nodes[0].parent / ('.' + self.f.nodes[0].name + '.chat')
+        root.mkdir(mode=0o700, exist_ok=True)
+        binding = OllamaBinding.parse(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='v1', adapter='ollama', boundary='same-node',
+            endpoint='http://127.0.0.1:11434', model='synthetic', target_id='local-process'))
+        OllamaBindings(root).save(binding)
+        def model(binding, request):
+            calls.append(request)
+            return dict(model=binding.model, response='# Posouzený návrh\nEnergie dnes', done=True)
+        desktop.monitoring.adapter_factory = lambda runs: OllamaAdapter(runs,
+            transport=model, runtime_probe=lambda b: dict(status='unknown'))
+        collector.monitoring.adapter_factory = lambda *a: self.fail('Model fell back to collector')
+        collector.configure(self.pid, self.specs[0]['id'], True, confirm=True)
+        collector.tick(self.pid)
+        self.assertEqual(calls, [])
+        with self.assertRaisesRegex(ValidationError, 'another node'):
+            collector.process(self.pid, spec['id'], str(uuid4()))
+        self.f.exchange(1, 0)
+        self.assertIsNone(next(b for b in desktop.catalog(self.pid)['blocks']
+                              if b['id'] == self.specs[0]['id'])['runtime'])
+        run_id = str(uuid4())
+        draft = desktop.process(self.pid, spec['id'], run_id)
+        self.assertEqual(draft['state'], 'review'); self.assertEqual(len(calls), 1)
+        self.assertEqual(desktop.process(self.pid, spec['id'], run_id), draft)
+        self.assertEqual(len(calls), 1)
+        job = next(j for j in desktop.catalog(self.pid)['jobs'] if j['id'] == run_id)
+        frozen = job['intent']['pools'][self.specs[1]['id']][0]
+        self.assertEqual(frozen['revisions'][0]['item']['content'], 'Energie dnes')
+        self.assertEqual(frozen['observations'][0]['node_id'], self.f.node_ids[1])
+        self.assertEqual(collector.monitoring.current_view(self.pid)['outputs'], [])
+        issued = desktop.publish(self.pid, run_id, draft['result']['approval_digest'], confirm=True)
+        presentation = desktop.monitoring.output_presentation(self.pid, issued['report_ref']['artifact_id'],
+            desktop.monitoring.projects.repository(self.pid).head(), confirm=True)
+        self.f.exchange(0, 1)
+        received = collector.monitoring.current_view(self.pid)
+        self.assertEqual(len(received['outputs']), 1)
+        output = received['outputs'][0]
+        self.assertEqual(output['id'], issued['report_ref']['artifact_id'])
+        self.assertEqual(output['run_id'], run_id)
+        self.assertEqual(output['title'], draft['result']['output']['title'])
+        self.assertEqual(output['presentations'][0]['artifact_id'], presentation['artifact_id'])
+        self.assertEqual(output['presentations'][0]['source_ref'], presentation['report_ref'])
+        self.assertFalse(output['presentations'][0]['potentially_stale'])
+        detail = collector.monitoring.output(self.pid, output['id'], received['commit_id'])
+        self.assertEqual(detail['markdown'], draft['result']['markdown'])
+        self.assertFalse(any(j['intent']['kind'] == 'processing'
+                             for j in received['block_catalog']['jobs']))
+        self.f.exchange(0, 1)
+        self.assertEqual(collector.monitoring.current_view(self.pid)['outputs'], received['outputs'])
+        self.assertEqual(len(calls), 1)
+
     def test_readonly_fingerprint_tracks_pool_changes_and_expiry_without_cleanup(self):
         from spikes.sync_fingerprint import collect
         from spikes.pool_sync import export

@@ -9,7 +9,7 @@ import unittest
 
 class MigrationBrowserTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
-    def test_review_convert_and_reopen_archived_definition_in_real_browser(self):
+    def test_service_conversion_preserves_current_catalog_without_legacy_panel(self):
         script=r'''
 import json
 from uuid import uuid4
@@ -40,49 +40,59 @@ try:
   class Page(QWebEnginePage):
    def javaScriptConsoleMessage(self,level,message,line,source):
     if 'Error' in message:print('JS:',message,line,flush=True)
-  page=Page(profile,app);phase=0;busy=False
-  commands={
-   1:'window.migrationOriginalNode='+json.dumps(remote)+';window.nativeFetch=fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.project)+').then(async()=>{await navigateMainTab(document.getElementById("monitoring-tab"));window.migrationOpened=true})',
-   2:"monitoringOpen();document.querySelector('#monitoring-migration-open').click()",
-   3:"monitoringMigrationForm.requestSubmit()",
-   4:"monitoringMigrationForm.elements.retention_days.value='31';monitoringMigrationForm.elements.retention_days.dispatchEvent(new Event('input',{bubbles:true}))",
-   5:"monitoringMigrationForm.elements.retention_days.value='30';monitoringMigrationForm.requestSubmit()",
-   6:"[...document.querySelectorAll('#monitoring-migration-preview button')].find(b=>b.textContent==='Převést podle tohoto náhledu').click()",
-   7:"showMonitoringDefinition(monitoringView.definitions[0])",
-   8:"document.querySelector('#monitoring-migration-open').click()",
-   9:"editMonitoringBlock('processing',blockCatalog.blocks.find(b=>b.value.kind==='processing'))",
-  }
-  checks={
-   0:"typeof openMonitoringMigration==='function'",
-   1:"window.migrationOpened&&monitoringView?.definitions.length===2&&blockCatalog?.blocks.length===0",
-   2:"!monitoringMigrationForm.hidden&&monitoringMigrationForm.querySelectorAll('input[name=watch_ids]:checked').length===2",
-   3:"monitoringMigrationPlan?.blocks.length===5&&monitoringMigrationPlan.findings.length===1&&!document.querySelector('#monitoring-migration-preview').hidden",
-   4:"monitoringMigrationPlan===null&&document.querySelector('#monitoring-migration-preview').hidden",
-   5:"monitoringMigrationPlan?.retention_days===30&&monitoringMigrationPlan.issues.length===0",
-   6:"monitoringMigrationForm.hidden&&blockCatalog?.blocks.length===5&&blockCatalog.blocks.some(b=>b.message_count===1)&&monitoringView.definitions.every(b=>b.converted)&&monitoringView.rss.bindings.every(b=>!b.enabled)",
-   7:"document.querySelector('#monitoring-detail').textContent.includes('bylo převedeno')&&![...document.querySelector('#monitoring-detail').querySelectorAll('button')].some(b=>/Zapnout|Zpracovat uložené|Upravit zadání/.test(b.textContent))",
-   8:"!monitoringMigrationForm.hidden&&monitoringMigrationForm.querySelectorAll('input[name=watch_ids]:disabled').length===2&&blockCatalog.blocks.length===5",
-   9:"!blockEditor.hidden&&blockEditor.elements.node_id.value===window.migrationOriginalNode",
-  }
+  page=Page(profile,app);started=False;busy=False
+  script=r"""
+window.migrationSmoke={done:false};
+(async()=>{
+ const check=(ok,message)=>{if(!ok)throw Error(message);};
+ const native=window.fetch;window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'Bearer '+__TOKEN__};return native(url,opts);};
+ await openRegisteredProject(__PID__);
+ await navigateSidebarTab(document.getElementById('tools-tab'));await loadMonitoring();
+ check(!document.getElementById('monitoring-migration-open'),'retired panel restored');
+ check(blockCatalog.blocks.length===0,'unexpected initial blocks');
+ const post=async(action,body)=>{const response=await fetch('/v1/monitoring/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id:__PID__,...body})});const value=await response.json();return {response,value};};
+ const options={watch_ids:__IDS__,retention_days:30,processing_node_id:__NODE__};
+ let result=await post('migration-preview',options);check(result.response.ok,JSON.stringify(result.value));
+ const preview=result.value;check(preview.blocks.length===5&&preview.findings.length===1&&preview.issues.length===0,'incomplete preview');
+ const apply={...options,preview_sha256:preview.preview_sha256,operation_id:__OP__,confirm:true};
+ result=await post('migration-apply',{...apply,retention_days:31});check(result.response.status===422,'changed preview accepted: '+result.response.status+' '+JSON.stringify(result.value));
+ await loadMonitoring();check(blockCatalog.blocks.length===0,'rejected preview wrote blocks');
+ result=await post('migration-apply',apply);check(result.response.ok,JSON.stringify(result.value));
+ await loadMonitoring();const committed=monitoringView.commit_id;
+ check(blockCatalog.blocks.length===5&&blockCatalog.blocks.some(b=>b.message_count===1),'conversion catalog incomplete');
+ check(blockCatalog.blocks.every(b=>b.runtime===null),'conversion activated a source');
+ result=await post('migration-apply',apply);check(result.response.ok,'same operation did not replay');
+ await loadMonitoring();check(monitoringView.commit_id===committed&&blockCatalog.blocks.length===5,'conversion duplicated');
+ result=await post('migration-inventory',{});check(result.response.ok&&result.value.items.length===2&&result.value.items.every(b=>b.converted),'legacy retirement missing');
+ editMonitoringBlock('processing',blockCatalog.blocks.find(b=>b.value.kind==='processing'));
+ check(!blockEditor.hidden&&blockEditor.elements.node_id.value===__NODE__,'executor assignment lost');
+ window.migrationSmoke={done:true,ok:true};
+})().catch(error=>{window.migrationSmoke={done:true,error:error.stack||String(error)};});
+"""
+  for key,value in [('__TOKEN__',server.token),('__PID__',f.project),('__NODE__',remote),('__IDS__',sorted(s['watch_id'] for s in saved['stages'].values())),('__OP__',str(uuid4()))]:
+   script=script.replace(key,json.dumps(value))
   def received(value):
-   global phase,busy
+   global started,busy
    busy=False
-   if value!='ready':return
-   phase+=1
-   if phase==10:print('migration browser OK',flush=True);app.exit(0);return
-   print('phase',phase,flush=True);page.runJavaScript(commands[phase])
+   if not started:
+    if value:started=True;page.runJavaScript(script)
+    return
+   value=json.loads(value) if isinstance(value,str) else None
+   if value and value.get('done'):
+    if value.get('ok'):print('migration browser OK',flush=True);app.exit(0)
+    else:print(value,flush=True);app.exit(1)
   def poll():
    global busy
    if busy:return
-   busy=True;page.runJavaScript('('+checks[phase]+')?"ready":"waiting"',received)
+   busy=True;page.runJavaScript('typeof openRegisteredProject==="function"' if not started else 'JSON.stringify(window.migrationSmoke)',received)
   timer=QTimer();timer.timeout.connect(poll);timer.start(150);page.setUrl(QUrl(server.origin+'/'))
-  def timeout():
-   print('timeout phase',phase,flush=True)
-   page.runJavaScript("JSON.stringify({status:document.querySelector('#monitoring-block-state')?.textContent,detail:document.querySelector('#monitoring-detail')?.textContent})",lambda x:(print(x,flush=True),app.exit(2)))
-  QTimer.singleShot(55000,timeout);result=app.exec()
+  QTimer.singleShot(55000,lambda:(print('migration timeout',flush=True),app.exit(2)));result=app.exec()
   page.deleteLater();profile.deleteLater();raise SystemExit(result)
 finally:f.doCleanups()
 '''
-        result=subprocess.run([sys.executable,'-c',script],cwd=Path(__file__).resolve().parents[1],text=True,capture_output=True,timeout=70)
+        try:
+            result=subprocess.run([sys.executable,'-u','-c',script],cwd=Path(__file__).resolve().parents[1],text=True,capture_output=True,timeout=70)
+        except subprocess.TimeoutExpired as exc:
+            self.fail('Browser timeout: '+str(exc.stdout)+' '+str(exc.stderr))
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('migration browser OK',result.stdout)

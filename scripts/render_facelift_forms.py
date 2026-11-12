@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from spikes.desktop_ui import CSS, HTML
 
 
-EDITION = "2026-11-11"
+EDITION = "2026-11-12"
 
 
 def sheet(key, title, selectors=(), forms=(), *, scale=.78, source="Sdílené web/desktop UI", native_html="", notes=True):
@@ -113,15 +113,39 @@ SHEETS = [
           ("julia-editor",), scale=.55),
     sheet("rss-sources", "Zdroje — kanály a import odběrů", ("#sources-editor", "#sources-import-review"),
           ("sources-editor",), scale=.72),
-    sheet("monitoring-blocks", "Sledování — samostatné bloky", ("#monitoring-block-editor",),
-          ("monitoring-block-editor",), scale=.72, native_html=native_form(
-              "Dynamický editor zdroje, filtru, poolu, zpracování nebo komplexní úlohy.",
-              [("Název", "text", "Energetika"), ("Soukromí", "select", ["Projekt", "Důvěrné", "Pouze lokálně"]),
-               ("Vstupní kanály", "select", ["ČT24", "Druhý kanál"]),
-               ("Cílový pool", "select", ["Energetika"]),
-               ("Pravidla výběru", "textarea", "Výrazy, regex a deduplikace")],
-              ["Použít existující", "Vytvořit nový blok", "Uložit blok"],
-              notice="Pole se mění podle typu bloku. Úlohy sdílejí definice pomocí jejich identity.")),
+    sheet("monitoring-source", "Sledování — zdroje", ("#monitoring-source-editor",),
+          ("monitoring-source-editor",), scale=.72, native_html=native_form(
+              "Samostatné zadání zdroje pro těžbu.",
+              [("Název", "text", "ČT24"), ("Typ", "select", ["RSS / Atom", "Webové hledání"]),
+               ("Adresa / dotaz", "text", "https://example.org/rss"),
+               ("Interval", "text", "15 minut"), ("Podmínky", "textarea", "Přístup a uchování")],
+              ["Uložit zdroj", "Zrušit"])),
+    sheet("monitoring-filter", "Sledování — filtry", ("#monitoring-filter-editor",),
+          ("monitoring-filter-editor",), scale=.72, native_html=native_form(
+              "Pravidla výběru a cílový pool.",
+              [("Název", "text", "Energetika"), ("Kanály", "select", ["ČT24", "Druhý kanál"]),
+               ("Cílový pool", "select", ["Energetika"]), ("Výrazy", "textarea", "energie"),
+               ("Regex", "text", "energi.*")], ["Uložit filtr", "Zrušit"])),
+    sheet("monitoring-pool", "Sledování — pooly zpráv", ("#monitoring-pool-editor",),
+          ("monitoring-pool-editor",), scale=.78, native_html=native_form(
+              "Samostatná sdílená kolekce zpráv.",
+              [("Název", "text", "Energetika"), ("Soukromí", "select", ["Projekt", "Důvěrné"]),
+               ("Uchování", "text", "30 dní")], ["Uložit pool", "Zrušit"])),
+    sheet("monitoring-processing", "Sledování — úlohy zpracování", ("#monitoring-processing-editor",),
+          ("monitoring-processing-editor",), scale=.66, native_html=native_form(
+              "Vstupy, zadání, rozvrh a vykonavatel.",
+              [("Název", "text", "Týdenní přehled"), ("Vstupní pooly", "select", ["Energetika"]),
+               ("Zadání", "textarea", "Shrnout zprávy, uvést zdroje a omezení."),
+               ("Rozvrh", "select", ["Ruční", "Denní", "Týdenní", "Měsíční", "Čtvrtletní", "Roční"]),
+               ("Čas / zóna", "text", "07:00 Europe/Prague"), ("Uzel", "select", ["Tento uzel", "Schválený peer"])],
+              ["Uložit úlohu", "Zrušit"])),
+    sheet("monitoring-aggregate", "Sledování — tabulkový agregát komplexní úlohy", (), (),
+          scale=.78, native_html='<p>Sestava sdílených položek; bez vlastního editoru bloku.</p>'
+          '<table><thead><tr><th>Tabulka</th><th>Vybraná položka</th><th>Akce</th></tr></thead>'
+          '<tbody><tr><td>Zdroje</td><td>ČT24</td><td>Otevřít zdroj</td></tr>'
+          '<tr><td>Filtry</td><td>Energetika</td><td>Otevřít filtr</td></tr>'
+          '<tr><td>Pooly</td><td>Energetika</td><td>Otevřít pool</td></tr>'
+          '<tr><td>Úlohy</td><td>Týdenní přehled</td><td>Otevřít úlohu</td></tr></tbody></table>'),
     sheet("monitoring-compose", "Sledování — sestavení úlohy pomocí LLM", ("#monitoring-compose", "#monitoring-composition-review"),
           ("monitoring-compose",), scale=.78),
     sheet("presentation", "Editor prezentace", ("#presentation-panel",), scale=.48, notes=False),

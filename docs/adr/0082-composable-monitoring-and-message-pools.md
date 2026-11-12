@@ -38,6 +38,18 @@ Zpracování neodebírá zprávy z poolu ostatním uživatelům.
 
 ## Crash boundaries a recovery před implementací
 
+Rozšíření 12. 11. 2026: původní blokový scheduler podporuje také týdenní,
+měsíční, čtvrtletní a roční hranice vedle ručního a denního režimu.
+Používá původní intent/journal a identitu běhu, bez nového scheduleru nebo
+automatické aktivace; [kalendář a recovery](../monitoring-processing-calendar.md).
+Tato volba rozvrhu sama neimplementuje řetězení vydaných zpráv.
+
+Upřesnění GUI stejným uživatelem: filtry, pooly a úlohy mají samostatné
+obrazovky a editory. Komplexní úloha je pouze agregát jejich tabulek,
+bez vlastního editoru bloku; metadata a vazby sestavy stále zapisuje původní
+`MonitoringBlocks.save`. Definice se nekopírují a nevzniká druhý writer.
+[Rozdělení GUI](../monitoring-entity-workspaces.md) zachovává stejné crash boundaries.
+
 - Definice: reuse Reporting.apply / Workspace.transact podle ADR 0068.
   Všechny nové bloky sestavy se uloží jedním commitem. Před commitem journal,
   po commitu receipt a rebuild projektového indexu. Žádný nový Git writer.

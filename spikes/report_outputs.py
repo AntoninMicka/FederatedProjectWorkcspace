@@ -8,6 +8,40 @@ from spikes.reporting_schema import digest
 
 BUILT_PREFIX='fpw-output-built-at:'
 AUDIT_MARKER='\n\n<!-- Frozen monitoring input references\n'
+PRESENTATION_SOURCE='fpw-report-presentation-v1:'
+
+
+def presentation_source(metadata):
+    """Read provenance only; metadata never authorizes a write or external effect."""
+    from spikes.reporting_schema import ref
+    from spikes.metadata import parse_json
+    description=metadata.get('description','')
+    if (not isinstance(description,str) or 'monitoring-derived-presentation' not in metadata.get('tags',[])
+            or not description.startswith(PRESENTATION_SOURCE)):return None
+    try:
+        source=parse_json(description[len(PRESENTATION_SOURCE):].encode());ref(source)
+        return source
+    except (ValueError,KeyError,TypeError):return None
+
+
+def derived_presentations(pid,files,entities,records):
+    from spikes.presentation_documents import decode_deck
+    superseded={p['artifact_id'] for r in records.values() if r['type']=='ReportSnapshot' for p in r['previous']}
+    result=[]
+    for id_,meta in entities.items():
+        source=presentation_source(meta)
+        if source is None or source['project_id']!=pid or not meta.get('file'):continue
+        path='artifacts/'+id_+'/'+meta['file']
+        try:decode_deck(files[path].decode())
+        except (ValueError,KeyError,TypeError,UnicodeDecodeError):continue
+        current=entities.get(source['artifact_id'],{})
+        current_path='artifacts/'+source['artifact_id']+'/'+current.get('file','')
+        available=current_path in files
+        stale=(not available or digest(files[current_path])!=source['sha256']
+               or source['artifact_id'] in superseded)
+        result.append(dict(artifact_id=id_,title=meta['title'],source_ref=source,
+                           source_available=available,potentially_stale=stale))
+    return sorted(result,key=lambda r:r['artifact_id'])
 
 
 def safe_built_at(value):
@@ -71,4 +105,7 @@ def published_outputs(pid,head,files,entities,records,*,selected=None,include_co
         title=meta['title'] if built_at else output_title(meta['title'],meta['created_at'])+' (vydáno)'
         result.append(dict(id=id_,artifact_id=id_,title=title,built_at=built_at,issued_at=meta['created_at'],
             kind='block-report',run_id=run_id,state='completed',**({'markdown':body} if include_content else {}),report_ref=pinned(pid,head,id_,files,entities)))
+    presentations=derived_presentations(pid,files,entities,records)
+    for output in result:
+        output['presentations']=[p for p in presentations if p['source_ref']['artifact_id']==output['id']]
     return sorted(result,key=lambda r:(r['built_at'] or r['issued_at'],r['id']),reverse=True)

@@ -1275,6 +1275,29 @@ writer nevznikají. Signed agreement, autentizovaný dispatch, import a fyzický
 PoC zbývají; journal sám není execution oprávnění:
 [ADR 0080](docs/adr/0080-monitoring-execution-placement.md).
 
+MON-08 closure verification **reuse/adapt** native signed project/pool sync,
+the existing model Context Manifest/run journal and published-output snapshot
+projection. Calendar processing extends the original block scheduler and its
+stable operation IDs with ZoneInfo boundaries; no second writer, job authority
+or model fallback is introduced. The X connector review retains the common
+source contract as the candidate, without copying external code or enabling a
+provider. See [calendar](docs/monitoring-processing-calendar.md) and
+[X review](docs/x-connector-review.md).
+
+The explicit 12 November GUI correction **reuse/adapts** native block catalogs,
+usage/dependency closure, sidebar navigation and the original save/CAS/receipt
+path. Entity forms have separate DOM owners; complex tasks aggregate the
+entity tables and store references. **Reject:** copying shared definitions,
+a separate complex-task entity editor or another persistence owner. Recovery:
+[entity workspaces](docs/monitoring-entity-workspaces.md).
+
+Concrete report presentations **reuse/adapt** `published_outputs`, PinnedRef,
+the existing deck encoder and `Artifacts.save` CAS/journal/receipt. One Git
+transaction stores deck and source metadata; native signed sync carries both.
+**Reject:** new research/model dispatch, copying an operational journal, a
+second writer or overwriting an older derived deck after source correction.
+Recovery and evidence: [report presentations](docs/report-output-presentations.md).
+
 MON-08-09, první UI řez, **reuse/adaptuje** nezávislé WatchDefinition,
 Reporting.apply atomic batch/receipts/graph validation, schválený Administration
 peer inventář, RSS binding/filter pipeline a explicitní WatchSynthesis.

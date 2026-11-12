@@ -123,6 +123,38 @@ class BlockTests(unittest.TestCase):
         self.assertEqual(self.service.pools.export(self.f.project),[])
         self.assertNotIn(b'Energie dnes', b''.join(self.f.git.snapshot(self.f.git.head()).values()))
 
+    def test_intake_counts_distinguish_no_match_repeat_empty_and_unchanged(self):
+        instant=[1794160000]
+        self.service.clock=self.service.pools.clock=lambda:instant[0]
+        updated=deepcopy(self.specs[2])
+        saved=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==updated['id'])
+        updated['previous']=[saved['ref']]
+        updated['value']['config']['pipeline']['steps']=[dict(id='terms',kind='keywords',fields=['content'],all=['missing'],any=[],none=[],case_sensitive=False)]
+        self.service.blocks.save(self.f.project,self.f.git.head(),[updated],str(uuid4()))
+        self.activate()
+        def collect():
+            self.service.tick(self.f.project)
+            source=next(b for b in self.service.catalog(self.f.project)['blocks'] if b['id']==self.specs[0]['id'])
+            self.assertEqual(source['latest_intake']['state'],'completed')
+            return source['latest_intake']['result']
+        first=collect();self.assertEqual((first['input_items'],first['selected_items'],first['new_items']),(1,0,0))
+        self.assertEqual(self.service.pools.export(self.f.project),[])
+        saved=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==updated['id'])
+        updated['previous']=[saved['ref']];updated['value']['config']=deepcopy(self.specs[2]['value']['config'])
+        self.service.blocks.save(self.f.project,self.f.git.head(),[updated],str(uuid4()));self.activate()
+        instant[0]+=901
+        first=collect();self.assertEqual((first['input_items'],first['selected_items'],first['new_items']),(1,1,1))
+        instant[0]+=901
+        repeated=collect();self.assertEqual((repeated['input_items'],repeated['selected_items'],repeated['new_items']),(1,1,0))
+        self.service.fetcher=lambda *a,**k:dict(status=200,raw=b'<rss version="2.0"><channel><title>Empty</title></channel></rss>',validators={'if-none-match':'"empty"'})
+        instant[0]+=901
+        empty=collect();self.assertEqual((empty['input_items'],empty['selected_items'],empty['new_items']),(0,0,0))
+        self.assertEqual(len(self.service.pools.view(self.f.project,self.specs[1]['id'])),1)
+        self.service.fetcher=lambda *a,**k:dict(status=304,raw=b'',validators={'if-none-match':'"empty"'})
+        instant[0]+=901
+        unchanged=collect();self.assertEqual(unchanged['status'],304)
+        self.assertIsNone(unchanged['input_items']);self.assertIsNone(unchanged['selected_items']);self.assertEqual(unchanged['new_items'],0)
+
     def test_search_is_never_periodic_and_unconfigured_search_fails_visibly(self):
         source=block('source','Hledání',dict(connector='web-search',locator='energetika',poll_seconds=None,terms='Test',retention='30 days'))
         self.service.blocks.save(self.f.project,self.f.git.head(),[source],str(uuid4()))
@@ -282,6 +314,37 @@ s.tick(sys.argv[2],checkpoint=stop)
         self.service.tick(self.f.project);self.service.tick(self.f.project)
         jobs=[j for j in self.service.catalog(self.f.project)['jobs'] if j['intent']['kind']=='processing']
         self.assertEqual(len(jobs),1);self.assertEqual(jobs[0]['state'],'review')
+
+    def test_weekly_processing_restarts_without_duplicate_and_requires_new_revision_consent(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        instant = [datetime(2026, 11, 9, 8, tzinfo=ZoneInfo('Europe/Prague')).timestamp()]
+        self.service.clock = self.monitoring.clock = lambda: instant[0]
+        self.service = ComposableMonitoring(self.monitoring, fetcher=lambda *a, **k: response())
+        self.activate()
+        saved = next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==self.specs[3]['id'])
+        spec = deepcopy(self.specs[3]); spec['previous'] = [saved['ref']]
+        spec['value']['config']['schedule'].update(kind='weekly', time='07:00')
+        self.service.blocks.save(self.f.project, self.f.git.head(), [spec], str(uuid4()))
+        # Collection has its own schedule. Establish inputs before enabling
+        # processing; binding UUID order must not decide the frozen first run.
+        self.service.tick(self.f.project)
+        self.assertEqual(len(self.service.pools.view(self.f.project, self.specs[1]['id'])), 1)
+        self.service.configure(self.f.project, spec['id'], True, confirm=True)
+        self.service.tick(self.f.project)
+        restarted = ComposableMonitoring(self.monitoring, fetcher=lambda *a, **k: response())
+        restarted.tick(self.f.project)
+        jobs = lambda: [j for j in restarted.catalog(self.f.project)['jobs'] if j['intent']['kind']=='processing']
+        self.assertEqual(len(jobs()), 1)
+        instant[0] += 7*86400
+        restarted.tick(self.f.project)
+        self.assertEqual(len(jobs()), 2, [(b['value']['kind'], b['runtime']) for b in restarted.catalog(self.f.project)['blocks'] if b['runtime']])
+        latest = next(b for b in restarted.blocks.read(self.f.project)['blocks'] if b['id']==spec['id'])
+        spec['previous'] = [latest['ref']]; spec['value']['config']['schedule']['kind'] = 'monthly'
+        restarted.blocks.save(self.f.project, self.f.git.head(), [spec], str(uuid4()))
+        restarted.tick(self.f.project)
+        self.assertEqual(len(jobs()), 2)
+        self.assertIn('Definition changed', next(b for b in restarted.catalog(self.f.project)['blocks'] if b['id']==spec['id'])['runtime']['error'])
 
     def test_shared_filter_edit_resolves_new_channel_in_tasks_without_rewriting_them(self):
         catalog=self.service.blocks.read(self.f.project);saved=next(b for b in catalog['blocks'] if b['id']==self.specs[2]['id'])

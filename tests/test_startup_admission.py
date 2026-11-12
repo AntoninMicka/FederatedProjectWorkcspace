@@ -64,14 +64,13 @@ class DashboardProjectionTests(unittest.TestCase):
         self.assertEqual(self.service.projects.dashboard_view(self.id)['main_todo']['items'][0]['title'], 'Updated')
         self.assertEqual(self.git.run('rev-list', '--count', before+'..HEAD').stdout.strip(), '1')
 
-    def test_dashboard_http_retains_project_ownership_and_authentication(self):
+    def test_dashboard_read_keeps_authentication_without_http_writer_owner(self):
         with running_api('http', handler=DesktopManagementHandler, projects=self.service.projects) as server:
             body = {'project_id': self.id, 'scope': 'dashboard'}
             with server.project_lanes.acquire(self.id, .1):
                 self.assertEqual(self.post(server, '/v1/projects/open', body, token='bad')[0], 401)
                 code, result, _ = self.post(server, '/v1/projects/open', body)
-                self.assertEqual(code, 503, result)
-                self.assertEqual(result['outcome'], 'not-started')
+                self.assertEqual(code, 200, result)
             code, result, _ = self.post(server, '/v1/projects/open', body)
             self.assertEqual(code, 200, result)
             self.assertIn('main_todo', result)

@@ -10,10 +10,28 @@ from spikes.monitoring_ui import JS
 
 @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
 class MonitoringPollingTests(unittest.TestCase):
+    def test_intake_outcomes_never_turn_unknown_error_or_missing_counts_into_empty_success(self):
+        from tests.test_workspace_navigation import function
+        script="const assert=require('node:assert/strict');\n"+function('monitoringIntakeOutcome')+r'''
+const result=(state,data)=>monitoringIntakeOutcome({state,result:data});
+assert(result('unknown',{input_items:0}).includes('Neznámý výsledek'));
+assert(result('failed',{input_items:0,error:'offline'}).includes('Chyba: offline'));
+assert(result('dispatching',null).includes('Probíhá'));
+assert(result('completed',{accepted:0}).includes('starší záznam bez počtů'));
+assert(result('completed',{status:304,input_items:null}).includes('nezměnil'));
+assert(result('completed',{status:200,input_items:0,selected_items:0,new_items:0}).includes('neobsahoval položky'));
+assert(result('completed',{status:200,input_items:4,filter_count:0,selected_items:0,new_items:0}).includes('nemá připojený filtr'));
+assert(result('completed',{status:200,input_items:4,selected_items:0,new_items:0}).includes('Žádná shoda'));
+assert(result('completed',{status:200,input_items:4,selected_items:2,new_items:0}).includes('Bez nových revizí'));
+assert(result('completed',{status:200,input_items:4,selected_items:2,new_items:2}).includes('Nové revize: 2'));
+'''
+        result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
     def test_hidden_dirty_overlapping_and_stale_project_refreshes(self):
         code = ('let monitoringLoadSequence=0,monitoringLoads=0;\n'
                 + JS[JS.index('async function loadMonitoring('):JS.index('function renderMonitoring()')]
-                + JS[JS.index('function refreshVisibleMonitoring('):JS.index('function renderPresentationReportLink(')])
+                + JS[JS.index('function refreshVisibleMonitoring('):JS.index('async function renderPresentationReportLink(')])
         harness = r'''
 let activeProject={id:'one',head:'old'},monitoringView=null,blockCatalog=null;
 let panelVisible=false,calls=[],blocks=0,rendered=0;

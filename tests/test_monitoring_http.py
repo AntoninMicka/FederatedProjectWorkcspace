@@ -26,6 +26,7 @@ class MonitoringHTTPTests(unittest.TestCase):
         view=json.loads(raw)
         self.assertEqual(view['commit_id'],view['block_catalog']['commit_id'])
         self.assertEqual(view['can_manage'],view['block_catalog']['can_manage'])
+        self.assertTrue(any(n['id']==view['node_id'] and n['local'] for n in view['execution_nodes']['nodes']))
         self.assertNotIn('watches',view);self.assertNotIn('definitions',view)
 
     def test_stale_current_view_is_a_retryable_read_response(self):
@@ -102,12 +103,22 @@ class MonitoringHTTPTests(unittest.TestCase):
         state=json.loads(self.f.request(path='/v1/administration',body=json.dumps(dict(action='update-user',expected_commit=state['commit_id'],user_id=user['id'],active=True,node_role='member',memberships={self.pid:'reader'})))[1])
         headers={'Authorization':'Bearer '+key}
         from unittest.mock import patch
+        with patch.object(self.f.server.monitoring,'execution_nodes',side_effect=AssertionError('reader node inventory')):
+            code,raw,_=self.call('view',dict(mode='blocks'),headers)
+        self.assertEqual(code,200,raw);self.assertNotIn('execution_nodes',json.loads(raw))
         with patch.object(self.f.server.monitoring,'_data',wraps=self.f.server.monitoring._data) as reads:
             code,raw,_=self.call('output',dict(output_id=summary['id'],expected_head=view['commit_id']),headers)
         self.assertEqual(reads.call_count,1)
         self.assertEqual(code,200,raw);self.assertIn('markdown',json.loads(raw))
         self.assertEqual(self.call('output',dict(output_id=summary['id'],expected_head='0'*40),headers)[0],422)
         self.assertEqual(self.call('output',dict(output_id=summary['id'],expected_head=view['commit_id']),{'Authorization':'Bearer invalid'})[0],401)
+        presentation=dict(output_id=summary['id'],expected_head=view['commit_id'],confirm=True)
+        self.assertEqual(self.call('presentation',presentation,headers)[0],403)
+        self.assertEqual(self.call('presentation',dict(presentation,confirm=False))[0],422)
+        code,raw,_=self.call('presentation',presentation)
+        self.assertEqual(code,200,raw);created=json.loads(raw)
+        code,raw,_=self.call('presentation',presentation)
+        self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw),created)
 
     def test_one_time_migration_has_readable_preview_and_admin_only_apply(self):
         from tests.test_monitoring_workflow import workflow

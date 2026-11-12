@@ -64,7 +64,8 @@ def validate_block(value):
         require(type(c['lookback_days']) is int and 1 <= c['lookback_days'] <= 3650,
                 'Invalid processing window')
         fields(c['schedule'], 'kind time timezone'); ZoneInfo(c['schedule']['timezone'])
-        require(c['schedule']['kind'] in {'manual', 'daily'}, 'Unknown processing schedule')
+        require(c['schedule']['kind'] in {'manual', 'daily', 'weekly', 'monthly', 'quarterly', 'annual'},
+                'Unknown processing schedule')
         require(isinstance(c['schedule']['time'], str) and
                 time.fromisoformat(c['schedule']['time']).strftime('%H:%M') == c['schedule']['time'],
                 'Choose HH:MM processing time')
