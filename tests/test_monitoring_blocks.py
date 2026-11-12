@@ -238,16 +238,83 @@ class BlockTests(unittest.TestCase):
             state,raw=db.execute('SELECT state,document FROM block_jobs WHERE id=?',(job_id,)).fetchone()
         self.assertEqual(state,'unknown');self.assertEqual(json.loads(raw)['source_id'],self.specs[0]['id'])
 
-    def test_filter_change_requires_new_local_consent(self):
-        self.activate();catalog=self.service.blocks.read(self.f.project)
+    def test_filter_change_keeps_schedule_and_reloads_unchanged_feed_without_reactivation(self):
+        instant=[1794160000];calls=[]
+        self.service.clock=self.service.pools.clock=lambda:instant[0]
+        def fetch(url, *, validators):
+            calls.append(dict(validators))
+            return (dict(status=304,raw=None,validators=validators) if validators else response())
+        self.service.fetcher=fetch
+        self.activate();self.service.tick(self.f.project)
+        catalog=self.service.blocks.read(self.f.project)
         row=next(b for b in catalog['blocks'] if b['id']==self.specs[2]['id'])
-        edited=deepcopy(self.specs[2]);edited['previous']=[row['ref']];edited['value']['title']='New filter revision'
+        edited=deepcopy(self.specs[2]);edited['previous']=[row['ref']]
+        edited['value']['config']['pipeline']['steps']=[dict(id='terms',kind='keywords',fields=['content'],all=['missing'],any=[],none=[],case_sensitive=False)]
         self.service.blocks.save(self.f.project,self.f.git.head(),[edited],str(uuid4()))
-        self.service.fetcher=lambda *a,**kw:self.fail('Changed filter must not run without new consent')
+        # Existing bindings and even the previous version's block reason recover
+        # on their own at the next scheduled poll, without a configuration write.
+        with self.service.pools.db() as db:
+            raw=db.execute('SELECT document FROM block_bindings WHERE project=? AND source=?',(self.f.project,self.specs[0]['id'])).fetchone()[0]
+            binding=json.loads(raw);binding['error']='Filters or pools changed; confirm local intake activation again'
+            db.execute('UPDATE block_bindings SET document=? WHERE project=? AND source=?',(encoded(binding),self.f.project,self.specs[0]['id']))
+        restarted=ComposableMonitoring(self.monitoring,fetcher=fetch)
+        restarted.clock=restarted.pools.clock=lambda:instant[0]
+        restarted.tick(self.f.project);self.assertEqual(len(calls),1)
+        instant[0]+=901;restarted.tick(self.f.project)
+        self.assertEqual(calls,[{},{}])
+        source=next(b for b in restarted.catalog(self.f.project)['blocks'] if b['id']==self.specs[0]['id'])
+        self.assertIsNone(source['runtime']['error'])
+        self.assertEqual(source['latest_intake']['result']['input_items'],1)
+        self.assertEqual(source['latest_intake']['result']['selected_items'],0)
+        job=next(j for j in restarted.catalog(self.f.project)['jobs'] if j['id']==source['latest_intake']['id'])
+        self.assertNotEqual(job['intent']['filters'][0]['ref'],row['ref'])
+        instant[0]+=901;restarted.tick(self.f.project)
+        self.assertEqual(calls[-1],{'if-none-match':'"v1"'})
+
+    def test_standalone_source_polls_without_filter_and_uses_added_filter_at_next_poll(self):
+        instant=[1794160000];calls=[]
+        self.service.clock=self.service.pools.clock=lambda:instant[0]
+        source=deepcopy(self.specs[0]);source['id']=str(uuid4())
+        self.service.blocks.save(self.f.project,self.f.git.head(),[source],str(uuid4()))
+        def fetch(url, *, validators):
+            calls.append(dict(validators));return response()
+        self.service.fetcher=fetch
+        self.service.configure(self.f.project,source['id'],True,confirm=True)
         self.service.tick(self.f.project)
+        row=next(b for b in self.service.catalog(self.f.project)['blocks'] if b['id']==source['id'])
+        self.assertEqual(row['latest_intake']['state'],'completed')
+        self.assertEqual(row['latest_intake']['result']['input_items'],1)
+        self.assertEqual(row['latest_intake']['result']['filter_count'],0)
         self.assertEqual(self.service.pools.export(self.f.project),[])
-        source=next(b for b in self.service.catalog(self.f.project)['blocks'] if b['id']==self.specs[0]['id'])
-        self.assertIn('confirm',source['runtime']['error'])
+        instant[0]+=901;self.service.tick(self.f.project)
+        self.assertEqual(len(calls),2)
+        filter_=deepcopy(self.specs[2]);filter_['id']=str(uuid4())
+        filter_['value']['config']['source_ids']=[source['id']]
+        self.service.blocks.save(self.f.project,self.f.git.head(),[filter_],str(uuid4()))
+        self.service.tick(self.f.project);self.assertEqual(len(calls),2)
+        instant[0]+=901;self.service.tick(self.f.project)
+        self.assertEqual(calls[-1],{})
+        view=self.service.pools.view(self.f.project,self.specs[1]['id'])
+        self.assertEqual(len(view),1)
+        saved=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==filter_['id'])
+        removed=deepcopy(filter_);removed['previous']=[saved['ref']];removed['value']['deleted']=True
+        self.service.remove(self.f.project,self.f.git.head(),removed,str(uuid4()),confirm=True)
+        instant[0]+=901;self.service.tick(self.f.project)
+        row=next(b for b in self.service.catalog(self.f.project)['blocks'] if b['id']==source['id'])
+        self.assertEqual(row['latest_intake']['state'],'completed')
+        self.assertEqual(row['latest_intake']['result']['filter_count'],0)
+        self.assertEqual(len(calls),4)
+
+    def test_source_revision_change_still_requires_source_activation(self):
+        self.activate()
+        row=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==self.specs[0]['id'])
+        edited=deepcopy(self.specs[0]);edited['previous']=[row['ref']]
+        edited['value']['config']['locator']='https://example.org/other'
+        self.service.blocks.save(self.f.project,self.f.git.head(),[edited],str(uuid4()))
+        self.service.fetcher=lambda *a,**kw:self.fail('Unapproved source revision must not fetch')
+        self.service.tick(self.f.project)
+        source=next(b for b in self.service.catalog(self.f.project)['blocks'] if b['id']==edited['id'])
+        self.assertIn('activate',source['runtime']['error'])
 
     def test_multiple_sources_filters_pools_and_processing_share_blocks(self):
         catalog=self.service.blocks.read(self.f.project)

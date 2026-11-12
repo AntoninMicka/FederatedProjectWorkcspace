@@ -1579,6 +1579,13 @@ remote block jobs or grants, activating intake on reception, refreshing hidden
 panels, and discarding unsaved block/composition edits. No persistent layer or
 crash boundary changes; native sync recovery remains unchanged.
 
+Independent channel polling: **adapt/reuse** `ComposableMonitoring.tick`, its
+source-revision activation, HTTP validators, frozen filter references and the
+existing FULL intake/pool transaction. Selection changes invalidate cached HTTP
+validators at the next due poll instead of blocking source intake. **Reject:**
+requiring filter/pool reapproval to poll an unchanged source, persisting rejected
+feed text, a second scheduler or journal migration. Recovery remains ADR 0082.
+
 RSS reader subscriptions: **adapt/reuse** `RSSSources`, bounded public HTTPS
 transport, `BoundedTree`, `sidebarItemMenu`, SQLite ownership and the
 `GamepadSettings` atomic node-preference pattern. OPML/JSON import is a bounded

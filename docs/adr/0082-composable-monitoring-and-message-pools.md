@@ -27,6 +27,15 @@ RSS sbírají redundantně všechny místně aktivované oprávněné uzly. Nov�
 nepoužívá výhradního vlastníka ani koordinátora. Nahrazuje výhradní umístění
 RSS z ADR 0080 pro nové bloky; starší WatchDefinition se automaticky nemigrují.
 Umístění LLM zpracování ani pravidla publikace se tím neuvolňují.
+Upřesnění uživatele 12. 11. 2026: kanál řídí vlastní rozvrh a načítá se i bez
+filtru. Aktuální filtry se použijí při příjmu; jejich změna ani změna cílového
+poolu nesmí vyžadovat novou aktivaci kanálu. Při změně této výběrové konfigurace
+se na příštím splatném příjmu nepoužijí staré HTTP validátory. Původní pole
+bindingu `consent` zůstává kompatibilním otiskem pro invalidaci těchto validátorů,
+nikoli povolením filtrů. Aktivace revize samotného zdroje zůstává oddělená.
+Crash boundaries se nemění: nový otisk, validátory, výsledek pollu a poolové
+položky se potvrdí původní společnou FULL transakcí. Pád před ní zachovává
+unknown a původní obnovu; synchronizace stále neaktivuje sběr na příjemci.
 Jednorázový, výslovně posouzený převod starších zadání nově popisuje
 [ADR 0083](0083-one-time-monitoring-migration.md); čtení ani sync převod samy nespouštějí.
 

@@ -93,6 +93,19 @@ Do závěrečné regrese patří i aktualizace dvou starých očekávání po P1
 samotná HTTP writer admission již neblokuje čisté čtení dashboardu/dokumentu.
 Autentizace a původní serializace skutečných zápisů zůstávají testované.
 
+### Následná oprava nezávislého načítání kanálu
+
+Podle upřesnění uživatele 12. 11. byly odstraněny blokace příjmu po změně
+filtru/poolu. Aktivovaný kanál načítá vlastní interval i bez filtrů;
+změna výběru vynutí celé tělo při příští splatné kontrole, ne novou aktivaci.
+Zdrojová aktivace, privacy, unknown recovery a původní transakce zůstávají.
+`python3 -m unittest tests.test_monitoring_blocks tests.test_message_pool_sync -v`:
+**36 testů OK**. Zahrnují restart dříve blokovaného kanálu, nové filtry nad
+nezměněným ETag, přidání/odebrání filtru, příjem bez filtrů, pády a signed sync.
+Celá sada 2 120 testů výše předchází této opravě a nedokládá její úplnou
+regresi; plná závěrečná brána se zopakuje před finálním předáním dávky.
+Oprava nebyla nasazena na Omnii a nenahrazuje diagnostiku živého sběru/syncu.
+
 ## Fyzické ověření a delivery
 
 Read-only pokus na uloženém SSH cíli skončil odmítnutím autentizace. Trust,

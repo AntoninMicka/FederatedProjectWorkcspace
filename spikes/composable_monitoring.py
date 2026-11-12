@@ -136,6 +136,8 @@ class ComposableMonitoring:
 
     @staticmethod
     def _intake_consent(source, by_id):
+        # Legacy field name: this fingerprints selection for HTTP cache
+        # invalidation, never authorizes or blocks the source's own schedule.
         filters = [b for b in by_id.values() if b['value']['kind'] == 'filter' and
                    source['id'] in b['value']['config']['source_ids']]
         refs = [source['ref']['artifact_id']]
@@ -204,10 +206,12 @@ class ComposableMonitoring:
                             binding.update(last_slot=slot, error=str(exc)[:500])
                         self._binding(pid, id_, binding, expected=approved_binding)
                     continue
-                if binding.get('consent') != self._intake_consent(source, by_id):
-                    binding['error'] = 'Filters or pools changed; confirm local intake activation again'
-                    self._binding(pid, id_, binding, expected=approved_binding); continue
                 if binding['next_due'] > self.clock(): continue
+                selection = self._intake_consent(source, by_id)
+                if binding.get('consent') != selection:
+                    # Changed filters must see the full feed on the next due
+                    # poll, even when its content/ETag has not changed.
+                    binding['validators'] = {}
                 filters = [b for b in by_id.values() if b['value']['kind'] == 'filter' and id_ in b['value']['config']['source_ids']]
                 require(source['privacy'] != 'local-only', 'RSS privacy prohibits network access')
                 with self.pools.db() as db:
@@ -235,7 +239,8 @@ class ComposableMonitoring:
                         rows = self._selected(pid, source, items, filters, by_id, now)
                     # Definition edit during HTTP must not silently approve different rules.
                     require(self.blocks.read(pid)['commit_id'] == catalog['commit_id'], 'Definitions changed during intake')
-                    binding.update(validators=validators, next_due=self.clock()+c['poll_seconds'], last_success=now, error=None)
+                    binding.update(validators=validators, consent=selection,
+                                   next_due=self.clock()+c['poll_seconds'], last_success=now, error=None)
                     with self.pools.db() as db:
                         current = db.execute('SELECT document FROM block_bindings WHERE project=? AND source=?', (pid,id_)).fetchone()
                         require(current and json.loads(current[0]) == approved_binding, 'Local intake consent changed during HTTP')

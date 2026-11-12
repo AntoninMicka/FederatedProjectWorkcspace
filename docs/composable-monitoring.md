@@ -39,8 +39,13 @@ pozdější změna společného bloku jej nepřepisuje.
    se dohledávají přes jejich ID; úprava společného filtru nevyžaduje ručně
    přepisovat seznam kanálů všech navazujících úloh.
 5. Sběr zapněte na každém zapojeném uzlu. Neexistuje výhradní těžař ani
-   volba RSS leadera. Místní souhlas se váže na revize zdroje, filtrů a poolů;
-   po jejich změně je potřeba potvrdit aktuální konfiguraci znovu.
+   volba RSS leadera. Aktivovaný kanál se načítá podle svého intervalu i bez
+   filtru; aktuální filtry se použijí při načtení. Jejich změna, přidání ani
+   odebrání sběr nezastaví a nevyžaduje novou aktivaci kanálu. Při příští
+   splatné kontrole se po změně filtrů/poolů vyžádá celé tělo kanálu, aby
+   HTTP 304 nepřeskočilo nová pravidla. Bez filtrů se eviduje výsledek kontroly
+   a počet vstupů, obsah se do poolu neukládá. Místní aktivace zůstává vázaná
+   na revizi samotného zdroje; změnu jeho adresy či podmínek je třeba potvrdit.
 6. Spusťte zpracování nebo celou úlohu. Běh úlohy připraví návrhy svých
    místních zpracování; u jiného uzlu ukáže waiting-executor. Nový vzdálený
    dispatch protokol se tím nezavádí. Jednotlivé návrhy můžete posoudit a vydat.
