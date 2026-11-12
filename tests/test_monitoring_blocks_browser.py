@@ -37,6 +37,10 @@ try:
   server.presentation_documents=PresentationDocuments(f.node)
   specs=blocks(f.node);second=deepcopy(specs[0]);second['id']=str(uuid4());second['value']['title']='Druhý kanál';second['value']['config']['locator']='https://example.org/second'
   server.monitoring.composable.blocks.save(f.project,f.git.head(),specs+[second],str(uuid4()))
+  from spikes import monitoring_design_samples
+  monitoring_design_samples.read_article=lambda url:dict(text='Ukázkový plný text',raw_sha256='a'*64)
+  designed=deepcopy(specs[2]);designed['id']=str(uuid4());designed['value']['title']='Filtr podle ukázek'
+  server.monitoring.composable._model=lambda *a,**kw:json.dumps(dict(blocks=[designed],explanation='Návrh ověřeného kanálu.'))
   profile=QWebEngineProfile(app)
   class Page(QWebEnginePage):
    def javaScriptConfirm(self,url,text):return True
@@ -75,6 +79,9 @@ try:
    28:"[...document.querySelectorAll('#report-output-actions button')].find(b=>b.textContent.startsWith('Otevřít prezentaci:')).click()",
    29:"monitoringOpen();editMonitoringBlock('processing',blockCatalog.blocks.find(b=>b.id===blockTestIds[3]))",
    30:"blockEditor.elements.schedule_kind.value='weekly';blockEditor.requestSubmit()",
+   31:"blockTab='filter';renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-toolbar button')].find(b=>b.textContent==='Navrhnout filtr pomocí LLM').click()",
+   32:"(()=>{const f=document.querySelector('#monitoring-compose');f.elements.goal.value='Vybrat zprávy o energetice';for(const o of f.elements.sample_sources.options)o.selected=o.value===blockTestIds[0];f.requestSubmit()})()",
+   33:"document.querySelector('#monitoring-composition-save').click()",
   }
   checks={
    0:"typeof editMonitoringBlock==='function'",
@@ -108,6 +115,9 @@ try:
    28:"!document.querySelector('#presentation-panel').hidden&&presentationEditorArtifact===window.reportPresentationId",
    29:"!blockEditor.hidden&&['manual','daily','weekly','monthly','quarterly','annual'].every(kind=>[...blockEditor.elements.schedule_kind.options].some(o=>o.value===kind))",
    30:"blockEditor.hidden&&blockCatalog.blocks.find(b=>b.id===blockTestIds[3]).value.config.schedule.kind==='weekly'",
+   31:"!document.querySelector('#monitoring-compose').hidden&&blockDesignKind==='filter'&&document.querySelector('#monitoring-compose').elements.sample_sources.options.length===2",
+   32:"!!blockProposal&&blockProposal.calibration[0].results[0].decision==='selected'&&document.querySelector('#monitoring-composition-blocks').textContent.includes('Vybráno')&&document.querySelector('#monitoring-composition-blocks').textContent.includes('Ověřený kanál:')&&document.querySelector('#monitoring-composition-blocks').textContent.includes('Použít existující: Energetika')&&document.querySelector('#monitoring-block-state').textContent.includes('Návrh je připravený')",
+   33:"!blockProposal&&blockCatalog.blocks.some(b=>b.value.title==='Filtr podle ukázek')",
   }
   def received(value):
    global phase,busy
@@ -119,7 +129,8 @@ try:
    if phase==20:view.grab().save('/tmp/fpw-tools-new-menu.png')
    if phase==27:view.grab().save('/tmp/fpw-report-presentation.png')
    if phase==29:view.grab().save('/tmp/fpw-report-output.png')
-   if phase==31:print('blocks browser OK',flush=True);app.exit(0);return
+   if phase==33:view.grab().save('/tmp/fpw-monitoring-design-review.png')
+   if phase==34:print('blocks browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy

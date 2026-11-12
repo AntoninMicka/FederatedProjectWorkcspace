@@ -27,6 +27,10 @@ pozdější změna společného bloku jej nepřepisuje.
 
 ## Doporučený postup
 
+Návrhy filtrů a sestav pomocí LLM lze nově
+[ověřit na skutečných ukázkách vybraných kanálů](monitoring-design-calibration.md).
+Review ukáže výsledky původního filtrovacího enginu a neověřené vstupy.
+
 1. Založte pool a RSS kanály; u kanálu vyplňte podmínky přístupu a uchování.
 2. Vytvořte filtr, vyberte kanály a cílový pool. Jednoduchý editor nabízí
    výrazy a regex; bez nich přijímá všechny položky po deduplikaci. Pokročilé

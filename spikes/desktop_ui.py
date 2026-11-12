@@ -8783,8 +8783,10 @@ class DesktopHandler(Handler):
                     result=service.composable.run_task(pid,request['block_id'],request['run_id'])
                 elif action=='block-process' and set(request)=={'project_id','block_id','run_id'}:
                     result=service.composable.process(pid,request['block_id'],request['run_id'])
-                elif action=='block-compose' and set(request)=={'project_id','run_id','goal','confirm'}:
-                    result=service.composable.compose(pid,request['run_id'],request['goal'],confirm=request['confirm'])
+                elif action=='block-compose' and set(request) in ({'project_id','run_id','goal','confirm'},
+                        {'project_id','run_id','goal','confirm','source_ids','proposal_kind'}):
+                    result=service.composable.compose(pid,request['run_id'],request['goal'],confirm=request['confirm'],
+                        source_ids=request.get('source_ids',()),proposal_kind=request.get('proposal_kind','task'))
                 elif action=='block-publish' and set(request)=={'project_id','run_id','approval_digest','confirm'}:
                     result=service.composable.publish(pid,request['run_id'],request['approval_digest'],confirm=request['confirm'])
                 elif action=='workflow-save'  and set(request)=={'project_id','operation_id','base_head','privacy','collection','processing'}:

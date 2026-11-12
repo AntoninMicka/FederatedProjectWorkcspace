@@ -100,7 +100,7 @@ def parse_feed(raw, feed_url):
             link, original_id = text(item, 'link'), text(item, 'guid')
             author = text(item, 'author') or text(item, '{http://purl.org/dc/elements/1.1/}creator')
             date = text(item, 'pubDate')
-            content = text(item, 'description')
+            content = text(item, '{http://purl.org/rss/1.0/modules/content/}encoded') or text(item, 'description')
         if link:
             link = urljoin(feed_url, link)
             parsed = urlsplit(link)
@@ -108,6 +108,11 @@ def parse_feed(raw, feed_url):
                     not parsed.username and not parsed.password, 'Unsafe item link')
         entry = dict(original_id=original_id, url=link, title=text(item, prefix + 'title'),
                      author=author, published_at=publication(date), published_raw=date, content=content)
+        categories = ([c.get('term') for c in item.findall(ATOM+'category')] if prefix else
+                      [c.text for c in item.findall('category')])
+        categories = list(dict.fromkeys(c.strip() for c in categories if c and c.strip()))
+        require(len(categories) <= 64 and all(len(c) <= 512 for c in categories), 'Feed categories exceed limit')
+        if categories: entry['categories'] = categories
         require(original_id or link, 'Item needs a source identifier or link')
         # Content is inert external data; neither links nor embedded HTML are executed.
         entry['content_sha256'] = digest(entry)

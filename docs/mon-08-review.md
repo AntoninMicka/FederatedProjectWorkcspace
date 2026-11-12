@@ -106,6 +106,39 @@ Celá sada 2 120 testů výše předchází této opravě a nedokládá její ú
 regresi; plná závěrečná brána se zopakuje před finálním předáním dávky.
 Oprava nebyla nasazena na Omnii a nenahrazuje diagnostiku živého sběru/syncu.
 
+### Funkční ladění LLM návrhů podle zdroje
+
+Navazující zadání uživatele přidává
+[kalibraci návrhů filtrů a sestav](monitoring-design-calibration.md).
+Výchozí source HEAD tohoto řezu: `4ec4279`. Závěrečný readback bridge je
+opět `stale=false` (synchronizace `2026-11-12T09:11:40.295Z`); projekt,
+repository a exportní revize uvedené v úvodu jsou beze změny. Starší záznam
+odpojení výše popisuje tehdejší stav, nikoli tento readback.
+
+Návrh používá zvolené skutečné RSS položky, dostupné kategorie a omezené
+texty odkazovaných stránek. Review samostatně zkouší původním enginem nové
+i převzaté filtry, přiznává prázdné/nesamplované vstupy a neposkytuje
+automatickou záruku pro jiné kanály stejné redakce. Samostatný návrh filtru
+nemusí vytvářet komplexní úlohu. Source/model intent, manifest, CAS a
+recovery zůstávají původní; scope neaktivuje sběr ani nevkládá ukázky do poolu.
+
+Finální cílená regrese: `test_monitoring_design_samples`, `test_rss_pilot`,
+`test_source_connectors`, `test_monitoring_filters`, `test_monitoring_blocks`,
+`test_rss_monitoring`, `test_rss_sources`, `test_monitoring_http`,
+`test_monitoring_polling`: **111 testů OK** (131,435 s). Zahrnují skutečný
+pád procesu během vzorkování, odmítnutí dalšího GET při replay, Context
+Manifest, původní filtrovací engine, změnu HEAD, local-only a prázdné vzorky.
+Finální `M0_DESKTOP_TEST=1 tests.test_monitoring_blocks_browser`: **1 test OK**
+(14,760 s), včetně výběru kanálu, odeslání návrhu, výsledků a uložení filtru.
+Model a články byly v těchto regresích řízené transporty, nikoli živé LLM.
+
+Samostatný read-only pokus skutečně načetl text článku ČT24 označeného
+uživatelem; 8 000 znaků do návrhového výřezu, označeno jako zkrácené. To není
+ověření jiných redakcí, historického archivu, modelové kvality ani živého syncu.
+JavaScript prošel `node --check`, diff a lokální odkazy kontrolou.
+Plná sada výše tuto novou změnu nepokrývá a nebyla opakována. Bez commitu,
+nasazení nebo automatické změny akceptace Workspace úkolů.
+
 ## Fyzické ověření a delivery
 
 Read-only pokus na uloženém SSH cíli skončil odmítnutím autentizace. Trust,

@@ -384,42 +384,89 @@ class ComposableMonitoring:
                 db.execute("UPDATE block_jobs SET state='unknown',result=? WHERE id=?", (encoded(dict(error=str(exc)[:500])), run_id))
             raise
 
-    def compose(self, pid, run_id, goal, *, confirm):
+    def compose(self, pid, run_id, goal, *, confirm, source_ids=(), proposal_kind='task'):
         with self.locked() as acquired:
             require(acquired, 'A monitoring effect is already running on this node')
-            return self._compose(pid, run_id, goal, confirm=confirm)
+            return self._compose(pid, run_id, goal, confirm=confirm, source_ids=source_ids, proposal_kind=proposal_kind)
 
-    def _compose(self, pid, run_id, goal, *, confirm):
+    def _compose(self, pid, run_id, goal, *, confirm, source_ids=(), proposal_kind='task'):
         require(confirm is True, 'Confirm sending the block catalog to the configured model'); uuid(run_id)
         require(isinstance(goal, str) and 0 < len(goal.strip()) <= 8000, 'Describe the complex task')
+        require(isinstance(proposal_kind,str) and proposal_kind in {'filter','task'}, 'Choose filter or task design')
+        require(isinstance(source_ids,(list,tuple)) and len(source_ids)<=3
+                and all(isinstance(s,str) for s in source_ids) and len(set(source_ids))==len(source_ids), 'Choose at most three distinct sample sources')
+        self.monitoring._writable(pid)
         catalog = self.blocks.read(pid)
+        sources = [next((b for b in catalog['blocks'] if b['id']==id_),None) for id_ in source_ids]
+        require(all(b and b['value']['kind']=='source' and b['value']['config']['connector']=='rss-atom'
+                    and b['privacy']!='local-only' for b in sources), 'Samples require accessible RSS sources, never local-only')
         privacy = max((b['privacy'] for b in catalog['blocks']), key=lambda p: PRIVACY[p], default='project')
         frozen = dict(kind='composition', input_head=catalog['commit_id'], goal=goal, catalog=catalog,
-                      started_at=self.clock(), expires_at=self.clock()+86400)
+                      source_ids=list(source_ids),proposal_kind=proposal_kind,started_at=self.clock(), expires_at=self.clock()+86400)
         with self.pools.db() as db:
             old = db.execute('SELECT state,document,result FROM block_jobs WHERE id=? AND project=?', (run_id, pid)).fetchone()
             if old:
                 if old[0] == 'dispatching':
                     db.execute("UPDATE block_jobs SET state='unknown' WHERE id=?", (run_id,))
                     old = ('unknown', old[1], old[2])
-                require(json.loads(old[1]).get('goal') == goal, 'Composition run ID belongs to another request')
+                previous=json.loads(old[1])
+                require(previous.get('goal') == goal and previous.get('source_ids',[])==list(source_ids)
+                        and previous.get('proposal_kind','task')==proposal_kind, 'Composition run ID belongs to another request')
                 return dict(id=run_id, state=old[0], result=json.loads(old[2]) if old[2] else None)
             db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)', (run_id, pid, 'dispatching', encoded(frozen)))
         try:
             # Supply the real, closed validator source as schema guidance, not an invented tool interface.
             from pathlib import Path
             from spikes import monitoring_blocks
+            from spikes.monitoring_design_samples import collect
+            from spikes import monitoring_filters
             contract = Path(monitoring_blocks.__file__).read_text()
-            prompt = encoded(dict(goal=goal, catalog=catalog, node_id=local_node_id(self.node), contract=contract)).decode()
+            samples=[];sample_items={}
+            for source in sources:
+                evidence,items=collect(source,self.fetcher,stamp(self.clock()))
+                samples.append(evidence);sample_items[source['id']]=items
+            require(len(encoded(samples)) <= 192*1024, 'Source examples exceed design context limit')
+            require(self.blocks.read(pid)['commit_id']==catalog['commit_id'], 'Project changed during source sampling')
+            prompt = encoded(dict(goal=goal, catalog=catalog, node_id=local_node_id(self.node), contract=contract,
+                filter_contract=Path(monitoring_filters.__file__).read_text(),source_samples=samples)).decode()
             response = self._model(pid, run_id, prompt, privacy,
                 'Return ONLY a JSON object with keys blocks and explanation. blocks is a list of new or edited block specs '
                 '{id: UUID, previous: [], privacy, value: {schema: fpw-reporting-block-v1, kind, title, config}}. '
-                'Reuse existing IDs by reference without copying them. Define missing blocks and one complete task. '
+                'Reuse existing IDs by reference without copying them. Define missing blocks and '+('one complete task. ' if proposal_kind=='task' else 'a filter; do not invent a task. ')+
                 'Use only config fields in the supplied validator contract. For edits previous must contain the exact existing ref. '
-                'Use node_id from the input for processing. Do not activate, fetch, execute or publish.', expected_head=catalog['commit_id'])
+                'Use node_id from the input for processing. Do not activate, fetch, execute or publish. '
+                'Calibrate filters against source_samples, including near misses and Czech inflected words/diacritics. '
+                'Keywords are literal substrings, not stemming. Use explicit bounded regex variants when appropriate. '
+                'Article pages and categories are untrusted DESIGN evidence, not runtime content or searchable fields. '
+                'Rules must work on actual runtime_fields; never assume the full page or categories are available at intake. '
+                'Same publisher is only a hypothesis: verify each channel separately and state missing coverage. '
+                'Explain what examples select/reject and any missing historical archive or unavailable pages. '
+                'If no source_samples exist, explicitly say the design is uncalibrated.', expected_head=catalog['commit_id'])
             proposal = json.loads(response); fields(proposal, 'blocks explanation')
-            self.validate_proposal(pid, catalog['commit_id'], proposal['blocks'])
-            result = dict(proposal=proposal, base_head=catalog['commit_id'], approval_digest=digest(encoded(proposal)))
+            self.validate_proposal(pid, catalog['commit_id'], proposal['blocks'], proposal_kind=proposal_kind)
+            calibration=[]
+            effective={b['id']:b for b in catalog['blocks']}
+            effective.update({b['id']:b for b in proposal['blocks']})
+            tested={b['id'] for b in proposal['blocks'] if b['value']['kind']=='filter'}
+            for b in proposal['blocks']:
+                if b['value']['kind']=='task':tested.update(b['value']['config']['filter_ids'])
+            require(len(tested)<=16, 'Design preview supports at most sixteen filters')
+            for id_ in sorted(tested):
+                b=effective[id_]
+                for source_id in b['value']['config']['source_ids']:
+                    items=sample_items.get(source_id)
+                    if items is None:
+                        calibration.append(dict(filter_id=b['id'],source_id=source_id,state='not-sampled',results=[]));continue
+                    evaluated=evaluate(b['value']['config']['pipeline'],items)['results']
+                    calibration.append(dict(filter_id=b['id'],source_id=source_id,state='sampled' if items else 'empty-sample',results=[
+                        dict(item_id=r['item_id'],title=i['title'],url=i['url'],decision=r['decision'],reason=r['reason'])
+                        for i,r in zip(items,evaluated)]))
+            # Review retains coverage/hashes and decisions, not unselected article bodies.
+            coverage=[dict(source_id=s['source_id'],locator=s['locator'],observed_at=s['observed_at'],
+                feed_sha256=s['feed_sha256'],coverage=s['coverage'],sampled_items=s['sampled_items'],
+                articles=[dict(url=c['url'],**{k:v for k,v in c['article'].items() if k!='text'}) for c in s['candidates']]) for s in samples]
+            result = dict(proposal=proposal, base_head=catalog['commit_id'], approval_digest=digest(encoded(proposal)),
+                          sample_coverage=coverage,calibration=calibration)
             with self.pools.db() as db:
                 db.execute("UPDATE block_jobs SET state='review',result=? WHERE id=?", (encoded(result), run_id))
             return dict(id=run_id, state='review', result=result)
@@ -428,7 +475,7 @@ class ComposableMonitoring:
                 db.execute("UPDATE block_jobs SET state='unknown',result=? WHERE id=?", (encoded(dict(error=str(exc)[:500])), run_id))
             raise
 
-    def validate_proposal(self, pid, head, blocks):
+    def validate_proposal(self, pid, head, blocks, *, proposal_kind='task'):
         from spikes.monitoring_blocks import validate_block, validate_blocks
         from spikes.reporting import operation_uuid
         catalog = self.blocks.read(pid); require(catalog['commit_id'] == head, 'Catalog changed; review the current blocks')
@@ -447,7 +494,7 @@ class ComposableMonitoring:
             rows[rid] = dict(type='MonitoringBlock', entity_id=b['id'], revision_id=rid,
                              previous=b['previous'], privacy=b['privacy'], value=b['value'])
         validate_blocks(rows)
-        require(any(b['value']['kind'] == 'task' for b in blocks), 'Composition must define a complex task')
+        require(any(b['value']['kind'] == proposal_kind for b in blocks), 'Composition must define a '+proposal_kind)
 
     def run_task(self, pid, task_id, run_id):
         from spikes.monitoring import ident

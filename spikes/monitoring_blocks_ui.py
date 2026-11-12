@@ -9,8 +9,9 @@ HTML='''
 <div id="monitoring-block-content"></div>
 '''+ENTITY_EDITORS+'''
 <form id="monitoring-compose" hidden><h3>Sestavit komplexní úlohu pomocí LLM</h3>
-<label>Co má úloha sledovat a jaký výstup očekáváte?<textarea name="goal" required maxlength="8000" rows="5"></textarea></label>
-<p>Model dostane popis a katalog bloků s kontrolou soukromí. Návrh před uložením můžete upravit.</p>
+<label><span id="monitoring-design-goal-label">Co má úloha sledovat a jaký výstup očekáváte?</span><textarea name="goal" required maxlength="8000" rows="5"></textarea></label>
+<label>Kanály pro ověření návrhu (nejvýše 3)<select name="sample_sources" multiple required></select></label>
+<p>Načteme aktuálně dostupné RSS položky a nejvýše dva odkazované články z každého zvoleného kanálu. Model dostane ukázky a katalog s kontrolou soukromí. Nejde o úplný historický archiv. Návrh i skutečné výsledky filtru posoudíte před uložením; sběr se nezapne.</p>
 <button type="submit">Navrhnout sestavu</button></form>
 <section id="monitoring-composition-review" hidden><h3>Návrh sestavy k posouzení</h3>
 <p id="monitoring-composition-explanation"></p><ul id="monitoring-composition-blocks"></ul>
@@ -33,6 +34,7 @@ CSS='''
 JS=r'''
 const blockLabels={source:'Zdroje',filter:'Filtry',pool:'Pooly zpráv',processing:'Zpracování zpráv',task:'Komplexní úlohy',runs:'Výsledky a běhy'};
 let blockSelectedId=null,blockLoadSequence=0,blockEditHead=null,blockCatalog=null,blockTab='task',blockEdit=null,blockProposal=null,blockSaving=null,blockParent=null,blockComposeRun=null;
+let blockDesignKind='task';
 const monitoringEntityEditors=[...document.querySelectorAll('[data-monitoring-entity-editor]')];
 let blockEditor=monitoringEntityEditors[0],blockFields=blockEditor.querySelector('[data-monitoring-entity-fields]');
 function hideMonitoringEntityEditors(){for(const form of monitoringEntityEditors){form.hidden=true;form.closest('[data-monitoring-editor-page]').hidden=true;}}
@@ -58,6 +60,7 @@ function renderMonitoringBlocks(){
  document.querySelector('#monitoring-page-description').textContent=descriptions[blockTab];
  const toolbar=document.querySelector('#monitoring-block-toolbar');toolbar.replaceChildren();
  toolbar.append(monitoringButton('Obnovit přehled',()=>loadMonitoringBlocks()));
+ if(blockTab==='filter'||blockTab==='task')toolbar.append(monitoringButton(blockTab==='filter'?'Navrhnout filtr pomocí LLM':'Navrhnout sestavu pomocí LLM',async()=>{if(!await canLeaveMonitoringBlocks())return;openMonitoringDesign(blockTab);},blockReadOnly()));
  if(blockTab!=='runs')toolbar.append(monitoringButton('Historie běhů',async()=>{if(!await canLeaveMonitoringBlocks())return;blockTab='runs';blockSelectedId=null;renderMonitoringBlocks();}));
  const content=document.querySelector('#monitoring-block-content');content.replaceChildren();
  if(blockEdit?.value.kind==='task'){renderMonitoringTaskAggregate(content,blockEdit,true);return;}
@@ -216,9 +219,11 @@ function closeMonitoringTaskDependencies(b){
  return b;
 }
 async function canLeaveMonitoringBlocks(){
- if(!blockEdit&&!blockProposal&&!blockComposeRun)return true;
+ const designForm=document.querySelector('#monitoring-compose'),designDraft=!designForm.hidden&&(designForm.elements.goal.value.trim()||designForm.elements.sample_sources.selectedOptions.length);
+ if(!blockEdit&&!blockProposal&&!blockComposeRun&&!designDraft)return true;
  if(!window.confirm('Zahodit rozpracovanou úpravu bloku nebo návrh sestavy?'))return false;
  blockEdit=null;blockProposal=null;blockComposeRun=null;blockParent=null;blockSaving=null;hideMonitoringEntityEditors();
+ designForm.hidden=true;designForm.reset();
  document.querySelector('#monitoring-composition-review').hidden=true;return true;
 }
 async function saveMonitoringBlock(b){
@@ -240,27 +245,51 @@ for(const form of monitoringEntityEditors){
  form.addEventListener('submit',async e=>{e.preventDefault();if(form!==blockEditor||!form.reportValidity())return;await saveMonitoringBlock(readMonitoringBlock());});
  form.querySelector('[data-monitoring-entity-cancel]').addEventListener('click',async()=>{if(await canLeaveMonitoringBlocks())renderMonitoringBlocks();});
 }
+function openMonitoringDesign(kind){
+ blockDesignKind=kind;const form=document.querySelector('#monitoring-compose');
+ form.querySelector('h3').textContent=kind==='filter'?'Navrhnout filtr podle ukázek zdroje':'Sestavit komplexní úlohu podle ukázek zdrojů';
+ document.querySelector('#monitoring-design-goal-label').textContent=kind==='filter'?'Které zprávy má filtr vybrat a které vyřadit?':'Co má úloha sledovat a jaký výstup očekáváte?';
+ form.querySelector('button').textContent=kind==='filter'?'Navrhnout filtr':'Navrhnout sestavu';
+ form.elements.sample_sources.replaceChildren();
+ for(const b of blockCatalog.blocks.filter(b=>b.value.kind==='source'&&b.value.config.connector==='rss-atom'&&b.privacy!=='local-only')){
+  const option=new Option(b.value.title,b.id);form.elements.sample_sources.append(option);
+ }
+ form.hidden=false;form.elements.goal.focus();
+}
 document.querySelector('#monitoring-compose').addEventListener('submit',async e=>{
  e.preventDefault();const pid=activeProject.id,form=e.currentTarget;
- try{if(!blockComposeRun)blockComposeRun={run_id:crypto.randomUUID(),goal:form.elements.goal.value,confirm:true};
-  form.querySelector('button').disabled=true;blockStatus('Model navrhuje sestavu…');
+ try{if(!blockComposeRun){const source_ids=[...form.elements.sample_sources.selectedOptions].map(o=>o.value);if(!source_ids.length||source_ids.length>3)throw Error('Vyberte jeden až tři kanály pro ověření návrhu.');blockComposeRun={run_id:crypto.randomUUID(),goal:form.elements.goal.value,confirm:true,source_ids,proposal_kind:blockDesignKind};}
+  form.querySelector('button').disabled=true;blockStatus('Načítám ukázky zdrojů a připravuji návrh…');
   const result=await monitoringRequest('block-compose',blockComposeRun);if(activeProject?.id!==pid)return;
   if(result.state!=='review')throw Error('Stav návrhu: '+result.state+' · '+(result.result?.error||''));
-  blockProposal=result.result;blockComposeRun=null;form.hidden=true;renderBlockProposal();
+  blockProposal=result.result;blockComposeRun=null;form.hidden=true;renderBlockProposal();blockStatus('Návrh je připravený. Posuďte pravidla a výsledky nad ukázkami.');
  }catch(err){blockStatus(err.message);}finally{form.querySelector('button').disabled=false;}
 });
 function renderBlockProposal(){
  document.querySelector('#monitoring-composition-review').hidden=false;
+ document.querySelector('#monitoring-composition-review h3').textContent=blockDesignKind==='filter'?'Návrh filtru k posouzení':'Návrh sestavy k posouzení';
+ document.querySelector('#monitoring-composition-save').textContent=blockDesignKind==='filter'?'Uložit posouzený filtr':'Uložit posouzenou sestavu';
  document.querySelector('#monitoring-composition-explanation').textContent=blockProposal.proposal.explanation;
  const list=document.querySelector('#monitoring-composition-blocks');list.replaceChildren();
+ if(!blockProposal.sample_coverage?.length)list.append(blockText('li','Návrh nebyl ověřen na ukázkách zdroje.'));
  for(const b of blockProposal.proposal.blocks){const li=document.createElement('li');li.append(blockText('span',(b.previous.length?'Upravit: ':'Nový blok: ')+b.value.title+' · '+blockLabels[b.value.kind]));li.append(monitoringButton('Upravit návrh',()=>editMonitoringBlock(b.value.kind,{...b,ref:b.previous[0]||null})));list.append(li);}
- const reused=new Set();for(const b of blockProposal.proposal.blocks){const c=b.value.config;for(const key of ['source_ids','pool_ids','search_ids','filter_ids','processing_ids'])for(const id of c[key]||[])if(!blockProposal.proposal.blocks.some(p=>p.id===id))reused.add(id);}
+ const reused=new Set();for(const b of blockProposal.proposal.blocks){const c=b.value.config;for(const id of [...['source_ids','pool_ids','search_ids','filter_ids','processing_ids'].flatMap(key=>c[key]||[]),...(c.pool_id?[c.pool_id]:[])])if(!blockProposal.proposal.blocks.some(p=>p.id===id))reused.add(id);}
  for(const id of reused)list.append(blockText('li','Použít existující: '+blockName(id)));
+ for(const sample of blockProposal.sample_coverage||[]){
+  list.append(blockText('li','Ověřený kanál: '+sample.locator+' · '+sample.sampled_items+' RSS položek · '+new Date(sample.observed_at).toLocaleString()+' · pouze dostupné okno kanálu'));
+  for(const a of sample.articles.filter(a=>a.state!=='not-sampled'))list.append(blockText('li',a.url+' · '+(a.state==='available'?'text stránky dostupný'+(a.truncated?' (zkrácený)':''):'text stránky nedostupný / nepovolený')));
+ }
+ for(const check of blockProposal.calibration||[]){
+  list.append(blockText('li','Zkouška filtru: '+(blockProposal.proposal.blocks.find(b=>b.id===check.filter_id)?.value.title||check.filter_id)+' · '+blockName(check.source_id)));
+  if(check.state==='not-sampled')list.append(blockText('li','Tento kanál nebyl ověřen na ukázkách.'));
+  if(check.state==='empty-sample')list.append(blockText('li','Kanál neposkytl žádné ukázky; účinnost filtru není ověřena.'));
+  for(const r of check.results)list.append(blockText('li',({selected:'Vybráno',discarded:'Vyřazeno',waiting:'Čeká na další posouzení',error:'Chyba'})[r.decision]+' · '+(r.title||r.url)+' · '+r.reason));
+ }
 }
 document.querySelector('#monitoring-composition-save').addEventListener('click',async()=>{
  try{if(!blockSaving)blockSaving={base_head:blockProposal.base_head,blocks:blockProposal.proposal.blocks,operation_id:crypto.randomUUID()};
   await monitoringRequest('blocks-save',blockSaving);blockSaving=null;blockProposal=null;blockEdit=null;hideMonitoringEntityEditors();
-  document.querySelector('#monitoring-composition-review').hidden=true;await loadMonitoringBlocks();blockStatus('Sestava uložená. Sběr a plánované zpracování aktivujte samostatně.');
+  document.querySelector('#monitoring-composition-review').hidden=true;await loadMonitoringBlocks();blockStatus((blockDesignKind==='filter'?'Filtr uložený.':'Sestava uložená.')+' Sběr a plánované zpracování aktivujte samostatně.');
  }catch(e){blockStatus(e.message);}
 });
 document.querySelector('#monitoring-composition-cancel').addEventListener('click',async()=>{if(await canLeaveMonitoringBlocks())renderMonitoringBlocks();});

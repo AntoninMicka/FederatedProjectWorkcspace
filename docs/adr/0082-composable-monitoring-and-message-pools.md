@@ -47,6 +47,15 @@ Zpracování neodebírá zprávy z poolu ostatním uživatelům.
 
 ## Crash boundaries a recovery před implementací
 
+Funkční upřesnění uživatele 12. 11. 2026: LLM návrh filtru nebo sestavy má
+vycházet ze skutečných ukázek zvolených zdrojů, včetně jazykových tvarů a
+dostupných polí. Shodná redakce neopravňuje předpokládat shodný jiný kanál.
+[Kalibrace návrhu](../monitoring-design-calibration.md) používá původní
+composition intent/manifest a čistý filter preview, s výslovně spuštěným,
+omezeným čtením RSS a odkazovaných stránek. Nepřidává crawler, poolový zápis,
+automatickou aktivaci ani nový writer; procesní pád při vzorkování zachová
+unknown nad původním job ID.
+
 Rozšíření 12. 11. 2026: původní blokový scheduler podporuje také týdenní,
 měsíční, čtvrtletní a roční hranice vedle ručního a denního režimu.
 Používá původní intent/journal a identitu běhu, bez nového scheduleru nebo

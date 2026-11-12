@@ -69,7 +69,7 @@ async function createMonitoringTool(kind){
  sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');
  monitoringOpen();blockSelectedId=null;
  if(kind==='compose'){
-  blockTab='task';renderMonitoringBlocks();document.querySelector('#monitoring-compose').hidden=false;document.querySelector('#monitoring-compose textarea').focus();
+  blockTab='task';renderMonitoringBlocks();openMonitoringDesign('task');
  }else{blockTab=kind;renderMonitoringBlocks();await editMonitoringBlock(kind);}
  closeMobileSidebar();closeCompactSidebarMenu();
 }
