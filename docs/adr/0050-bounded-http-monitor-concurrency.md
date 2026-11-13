@@ -121,8 +121,12 @@ Shutdown postupuje v tomto pořadí:
 2. zastaví accept loop, ale ponechá již přidělené workery, klientské sockety a
    doménové autority platné;
 3. bounded čeká na workery. Produkční horní mez je
-   225 sekund, odvozená z maximálního providerového timeoutu 180 sekund,
-   runtime probe 10 sekund a SQLite busy timeoutu 30 sekund s rezervou;
+   225 sekund, původně odvozená z providerového timeoutu 180 sekund,
+   runtime probe 10 sekund a SQLite busy timeoutu 30 sekund s rezervou.
+   Textové providery nyní dovolují timeout vazby až 900 sekund a stream až
+   1800 sekund (ADR 0065). Grace je záměrně ponechaná: shutdown nečeká na
+   dlouhé externí běhy, ty přeruší jako crash a journal `dispatching` je po
+   restartu vydá jako `unknown` bez opakování;
 4. teprve po dokončení workerů uzavře server a vyčistí token či dočasný Unix
    runtime. Při vypršení grace uzavře aktivní klientské sockety a proces se
    ukončí jako crash, nikoli jako úspěšně vyřízený request; persistentní

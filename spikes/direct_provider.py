@@ -10,7 +10,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
-from spikes.provider_deadline import budget_connection
+from spikes.provider_deadline import MAX_PROVIDER_TIMEOUT, provider_connection
 import http.client
 import json
 import os
@@ -31,7 +31,7 @@ from spikes.model_catalog import (collect_discovery_pages, ModelDiscoveryStore,
 from spikes.ollama_backend import BACKENDS, BackendRuns, OllamaAdapter
 
 
-MAX_TIMEOUT = 900
+MAX_TIMEOUT = MAX_PROVIDER_TIMEOUT
 MAX_RESPONSE = 16 * 1024 * 1024
 MAX_MODEL_RESPONSE = 2 * 1024 * 1024
 DISCOVERY_TIMEOUT = 30
@@ -556,9 +556,10 @@ class DirectAdapter:
             db.commit()
 
 
-def _connection(spec, timeout):
-    return budget_connection(http.client.HTTPSConnection(spec.host, 443, timeout=timeout,
-                                       context=ssl.create_default_context()), timeout)
+def _connection(spec, timeout, *, stream=False):
+    return provider_connection(http.client.HTTPSConnection(spec.host, 443, timeout=timeout,
+                                         context=ssl.create_default_context()), timeout,
+                               stream=stream)
 
 
 def _check_status(response, spec):
@@ -623,7 +624,7 @@ def read_sse(lines, on_event, *, limit=MAX_RESPONSE):
 
 
 def _http_stream_transport(binding, request, secret, on_delta):
-    spec = binding.spec; connection = _connection(spec, binding.timeout_seconds)
+    spec = binding.spec; connection = _connection(spec, binding.timeout_seconds, stream=True)
     try:
         connection.request('POST', spec.generate_path(binding.model, True), body=request,
                            headers={**spec.auth_headers(secret),

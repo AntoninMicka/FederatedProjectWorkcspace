@@ -26,6 +26,7 @@ from spikes.local_change_resolution import LocalChangeResolution
 from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown, external_response_failure
+from spikes.provider_deadline import EXTERNAL_CLIENT_TIMEOUT_MS
 from spikes.metadata import MAX_FILE, ValidationError
 from spikes.presentation_visual import SLIDE_JS
 from spikes.presentation_documents import public_content
@@ -637,8 +638,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="model-catalog-export" type="button">Načíst pro kontrolu</button>
 <button id="model-catalog-import" type="button">Importovat validovaný JSON</button>
 </details></section>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
 <p><a class="provider-link" href="https://platform.openai.com/api-keys">Vytvořit nebo spravovat klíč u OpenAI ↗</a></p>
 <button type="submit">Uložit externí backend</button></form>
@@ -653,8 +654,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Model <input name="model" readonly required></label>
 <label>Protokol <input name="protocol_label" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://www.atlascloud.ai/dashboard/api-keys">Vytvořit nebo spravovat klíč u AtlasCloud ↗</a></p>
 <button type="submit">Uložit AtlasCloud backend</button>
 <button id="atlascloud-remove" type="button" hidden>Odstranit AtlasCloud binding a klíč</button></form>
@@ -666,8 +667,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
 <label>Model <input name="model" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://platform.claude.com/settings/keys">Vytvořit nebo spravovat klíč u Claude ↗</a></p>
 <button type="submit">Uložit Claude backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Claude binding a klíč</button></form>
@@ -679,8 +680,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
 <label>Model <input name="model" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://aistudio.google.com/apikey">Vytvořit nebo spravovat klíč u Gemini ↗</a></p>
 <button type="submit">Uložit Gemini backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Gemini binding a klíč</button></form>
@@ -692,8 +693,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
 <label>Model <input name="model" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://console.x.ai/team/default/api-keys">Vytvořit nebo spravovat klíč u Grok ↗</a></p>
 <button type="submit">Uložit Grok backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Grok binding a klíč</button></form>
@@ -7604,14 +7605,14 @@ document.querySelector('#external-confirm').addEventListener('click',async event
  try{if(pendingExternalPreview.task){
     const projection=await projectRequest('/v1/tasks/external/confirm',{
      task_id:pendingExternalPreview.taskId,approval_id:preview.approval_id,
-     preview_sha256:preview.preview_sha256,approved:true,privacy:preview.privacy},210000);
+     preview_sha256:preview.preview_sha256,approved:true,privacy:preview.privacy},EXTERNAL_CLIENT_TIMEOUT_MS);
     // Raw provider results stay in the panel, never in the kept task projection.
     const {search_results:searchResults,...kept}=projection;
     replaceTaskProjection(kept);renderProviderSearchResults(searchResults,kept.thread_id);
    }else{
     const result=await projectRequest('/v1/external/confirm',
      {approval_id:preview.approval_id,preview_sha256:preview.preview_sha256,
-      approved:true,privacy:preview.privacy},210000);
+      approved:true,privacy:preview.privacy},EXTERNAL_CLIENT_TIMEOUT_MS);
     activeThread=result.thread;renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);draft.value='';
     renderProviderSearchResults(result.search_results,result.thread.thread_id);
    }
@@ -7684,7 +7685,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    await externalStreamRequest(pendingChatRequest,delta=>{receivedDeltas+=1;
     if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
     liveProgress.set(`${providerLabel} generuje odpověď…`);chatStream.textContent+=delta;keepChatStreamVisible();}) :
-   await projectRequest('/v1/external/send',pendingChatRequest,210000);
+   await projectRequest('/v1/external/send',pendingChatRequest,EXTERNAL_CLIENT_TIMEOUT_MS);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
     {enabled:providerStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
@@ -8457,6 +8458,7 @@ document.querySelector('#federation-tab').hidden=false;
 """
 from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 JS = HTTP_UI_ADMISSION_JS + JS
+JS = f'const EXTERNAL_CLIENT_TIMEOUT_MS={EXTERNAL_CLIENT_TIMEOUT_MS};\n' + JS
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
 PUBLIC_JS = HTTP_UI_ADMISSION_JS + SLIDE_JS + '''
 const screen=document.querySelector('#screen');

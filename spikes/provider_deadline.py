@@ -9,6 +9,17 @@ import sys
 
 from spikes.http_deadline import _Deadline, _Socket
 
+# Upper bound of a text provider binding's ``timeout_seconds``. Without streaming it
+# is the absolute budget of the whole request; with streaming it bounds inactivity
+# (connect, first byte and every gap between reads) while data keep arriving.
+MAX_PROVIDER_TIMEOUT = 900
+# Absolute cap of one streamed provider response. A stream that keeps trickling
+# data still ends here, so one run cannot hold a worker indefinitely.
+STREAM_TOTAL_SECONDS = 1800
+# Local UI waits for a non-streamed external call slightly longer than the backend
+# may, so the backend's own deadline, not the browser, decides the outcome.
+EXTERNAL_CLIENT_TIMEOUT_MS = (MAX_PROVIDER_TIMEOUT + 30) * 1000
+
 # The resolver is the only child work. Killing it on expiry leaves no resolver
 # thread consuming a worker forever. Only hostname/port, never credentials or
 # request content, cross this boundary. Numeric endpoints avoid the child.
@@ -112,3 +123,11 @@ def budget_connection(connection, seconds, *, deadline=None, total_seconds=None)
     connection._create_connection = create
     connection.connect, connection.getresponse, connection.close = connect, getresponse, close
     return connection
+
+
+def provider_connection(connection, timeout_seconds, *, stream=False):
+    """Apply a binding's timeout: absolute without streaming, inactivity with it."""
+    if stream:
+        return budget_connection(connection, timeout_seconds,
+                                 total_seconds=max(timeout_seconds, STREAM_TOTAL_SECONDS))
+    return budget_connection(connection, timeout_seconds)

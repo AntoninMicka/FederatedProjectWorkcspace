@@ -68,7 +68,10 @@ class ExternalResponseFailureTests(unittest.TestCase):
         class Response:
             status = 200
             def readline(self, _limit): return next(lines, b'')
+            def close(self): pass
         class Connection:
+            sock = None
+            def connect(self): pass
             closed = False
             def __init__(self, *_args, **_kwargs): pass
             def request(self, *_args, **_kwargs): pass
