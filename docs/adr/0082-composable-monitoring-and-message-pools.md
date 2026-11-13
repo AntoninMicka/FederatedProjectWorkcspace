@@ -32,12 +32,24 @@ filtru. Aktuální filtry se použijí při příjmu; jejich změna ani změna c
 poolu nesmí vyžadovat novou aktivaci kanálu. Při změně této výběrové konfigurace
 se na příštím splatném příjmu nepoužijí staré HTTP validátory. Původní pole
 bindingu `consent` zůstává kompatibilním otiskem pro invalidaci těchto validátorů,
-nikoli povolením filtrů. Aktivace revize samotného zdroje zůstává oddělená.
+nikoli povolením filtrů.
 Crash boundaries se nemění: nový otisk, validátory, výsledek pollu a poolové
 položky se potvrdí původní společnou FULL transakcí. Pád před ní zachovává
 unknown a původní obnovu; synchronizace stále neaktivuje sběr na příjemci.
 Jednorázový, výslovně posouzený převod starších zadání nově popisuje
 [ADR 0083](0083-one-time-monitoring-migration.md); čtení ani sync převod samy nespouštějí.
+
+Upřesnění uživatele 13. 11. 2026: místní aktivace zdroje i zpracování platí
+pro stabilní ID bloku, nikoli konkrétní revizi. Nové uložení nebo přijetí
+revize nesmí již povolený blok samovolně zastavit. Nahrazuje to původní
+požadavek opětovné aktivace po změně revize, který zablokoval denní zprávu
+i při obsahově totožném uložení. Scheduler použije aktuální validovanou definici;
+binding si její revizi poznamená původním CAS zápisem. Ruční pozastavení,
+kontrola umístění zpracování, privacy, oprávnění a odstranění zůstávají účinné.
+Nový blok ani dosud nepovolený blok na příjemci se synchronizací neaktivuje.
+Crash boundaries zůstávají původní: před potvrzením bindingu lze znovu přečíst
+aktuální definici; durable intent a stabilní ID běhu brání novému dispatch
+při nejistém výsledku. Nevzniká migrace, druhý writer ani nový journal.
 
 Identita položky vychází z connector + stabilní source ID + původní ID/URL.
 Obsahová revize neobsahuje node ID ani časy načtení. Pozorování uzlů a

@@ -19,8 +19,12 @@ Denní rozvrh zachovává původní ID. Podzimní opakování hodiny má jediný
 slot; při jarním přeskočení času může tick proběhnout po dosažení nejbližšího
 pozdějšího místního času. Nejde o násobky 24 hodin nebo 30 dnů.
 
-Uložení nepovoluje místní běh. Změněná revize vyžaduje nové explicitní místní
-zapnutí; jiný uzel ji nesmí automaticky převzít. Starší uzly nové enum hodnoty
+První místní zapnutí je explicitní a platí pro stabilní ID bloku. Uložení nové
+revize ani synchronizace již povolený blok nepozastaví; další perioda použije
+aktuální definici. Ruční pozastavení zůstává účinné. Uložení ani synchronizace
+nezapnou dosud nepovolený blok na příjemci; zpracování se smí provést pouze na
+určeném uzlu. Již obsloužená perioda se kvůli nové revizi neopakuje.
+Starší uzly nové enum hodnoty
 odmítnou, proto je před přenosem těchto definic nutné aktualizovat oba uzly.
 
 Reuse/adapt: původní bloková definice, ZoneInfo, effect flock, frozen intent,

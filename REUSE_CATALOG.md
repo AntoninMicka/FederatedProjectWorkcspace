@@ -1580,11 +1580,15 @@ panels, and discarding unsaved block/composition edits. No persistent layer or
 crash boundary changes; native sync recovery remains unchanged.
 
 Independent channel polling: **adapt/reuse** `ComposableMonitoring.tick`, its
-source-revision activation, HTTP validators, frozen filter references and the
+stable-block local activation, HTTP validators, frozen filter references and the
 existing FULL intake/pool transaction. Selection changes invalidate cached HTTP
 validators at the next due poll instead of blocking source intake. **Reject:**
 requiring filter/pool reapproval to poll an unchanged source, persisting rejected
 feed text, a second scheduler or journal migration. Recovery remains ADR 0082.
+Activation follows the stable source/processing ID across definition revisions;
+reuse binding CAS and calendar run IDs to preserve pauses and prevent duplicate
+dispatch. Reject revision-only reactivation gates and activation of new blocks
+on sync reception (user clarification, 13 November 2026).
 
 Source-calibrated monitoring design: **adapt/reuse** the existing composition
 intent/manifest/model journal, bounded RSS reader, public-source DNS/TLS/robots

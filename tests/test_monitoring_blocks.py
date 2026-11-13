@@ -305,16 +305,21 @@ class BlockTests(unittest.TestCase):
         self.assertEqual(row['latest_intake']['result']['filter_count'],0)
         self.assertEqual(len(calls),4)
 
-    def test_source_revision_change_still_requires_source_activation(self):
+    def test_source_revision_change_preserves_activation_and_invalidates_http_cache(self):
         self.activate()
+        self.service.tick(self.f.project)
         row=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==self.specs[0]['id'])
         edited=deepcopy(self.specs[0]);edited['previous']=[row['ref']]
         edited['value']['config']['locator']='https://example.org/other'
         self.service.blocks.save(self.f.project,self.f.git.head(),[edited],str(uuid4()))
-        self.service.fetcher=lambda *a,**kw:self.fail('Unapproved source revision must not fetch')
+        calls=[]
+        self.service.fetcher=lambda url,**kw:(calls.append((url,kw)) or response())
+        self.monitoring.clock=self.service.clock=lambda:1794160000+901
         self.service.tick(self.f.project)
         source=next(b for b in self.service.catalog(self.f.project)['blocks'] if b['id']==edited['id'])
-        self.assertIn('activate',source['runtime']['error'])
+        self.assertEqual(calls,[('https://example.org/other',{'validators':{}})])
+        self.assertTrue(source['runtime']['enabled'])
+        self.assertIsNone(source['runtime']['error'])
 
     def test_multiple_sources_filters_pools_and_processing_share_blocks(self):
         catalog=self.service.blocks.read(self.f.project)
@@ -382,7 +387,7 @@ s.tick(sys.argv[2],checkpoint=stop)
         jobs=[j for j in self.service.catalog(self.f.project)['jobs'] if j['intent']['kind']=='processing']
         self.assertEqual(len(jobs),1);self.assertEqual(jobs[0]['state'],'review')
 
-    def test_weekly_processing_restarts_without_duplicate_and_requires_new_revision_consent(self):
+    def test_weekly_processing_restarts_without_duplicate_and_preserves_activation_across_edits(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
         instant = [datetime(2026, 11, 9, 8, tzinfo=ZoneInfo('Europe/Prague')).timestamp()]
@@ -410,8 +415,52 @@ s.tick(sys.argv[2],checkpoint=stop)
         spec['previous'] = [latest['ref']]; spec['value']['config']['schedule']['kind'] = 'monthly'
         restarted.blocks.save(self.f.project, self.f.git.head(), [spec], str(uuid4()))
         restarted.tick(self.f.project)
-        self.assertEqual(len(jobs()), 2)
-        self.assertIn('Definition changed', next(b for b in restarted.catalog(self.f.project)['blocks'] if b['id']==spec['id'])['runtime']['error'])
+        self.assertEqual(len(jobs()), 3)
+        runtime=next(b for b in restarted.catalog(self.f.project)['blocks'] if b['id']==spec['id'])['runtime']
+        self.assertTrue(runtime['enabled']);self.assertIsNone(runtime['error'])
+        restarted.tick(self.f.project)
+        self.assertEqual(len(jobs()),3)
+
+    def test_identical_processing_save_recovers_stale_revision_error_without_reactivation(self):
+        saved=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==self.specs[3]['id'])
+        spec=deepcopy(self.specs[3]);spec['previous']=[saved['ref']]
+        spec['value']['config']['schedule'].update(kind='daily',time='00:00')
+        self.service.blocks.save(self.f.project,self.f.git.head(),[spec],str(uuid4()))
+        self.service.configure(self.f.project,spec['id'],True,confirm=True)
+        saved=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==spec['id'])
+        spec['previous']=[saved['ref']]
+        self.service.blocks.save(self.f.project,self.f.git.head(),[spec],str(uuid4()))
+        with self.service.pools.db() as db:
+            row=db.execute('SELECT document FROM block_bindings WHERE project=? AND source=?',(self.f.project,spec['id'])).fetchone()
+            binding=json.loads(row[0]);binding['error']='Definition changed; activate the current revision locally'
+            db.execute('UPDATE block_bindings SET document=? WHERE project=? AND source=?',(encoded(binding),self.f.project,spec['id']))
+        restarted=ComposableMonitoring(self.monitoring,fetcher=lambda *a,**kw:response())
+        restarted.tick(self.f.project);restarted.tick(self.f.project)
+        catalog=restarted.catalog(self.f.project)
+        jobs=[j for j in catalog['jobs'] if j['intent']['kind']=='processing']
+        self.assertEqual(len(jobs),1);self.assertEqual(jobs[0]['state'],'review')
+        runtime=next(b for b in catalog['blocks'] if b['id']==spec['id'])['runtime']
+        self.assertTrue(runtime['enabled']);self.assertIsNone(runtime['error'])
+        # Editing after the slot completed must not dispatch that slot again.
+        saved=next(b for b in restarted.blocks.read(self.f.project)['blocks'] if b['id']==spec['id'])
+        spec['previous']=[saved['ref']];spec['value']['config']['instructions']='Updated instructions'
+        restarted.blocks.save(self.f.project,self.f.git.head(),[spec],str(uuid4()))
+        restarted.tick(self.f.project)
+        self.assertEqual(len([j for j in restarted.catalog(self.f.project)['jobs'] if j['intent']['kind']=='processing']),1)
+
+    def test_definition_edits_do_not_activate_paused_or_never_enabled_processing(self):
+        saved=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==self.specs[3]['id'])
+        self.service.configure(self.f.project,saved['id'],False,confirm=True)
+        paused=deepcopy(self.specs[3]);paused['previous']=[saved['ref']]
+        paused['value']['config']['schedule'].update(kind='daily',time='00:00')
+        new=deepcopy(paused);new.update(id=str(uuid4()),previous=[])
+        self.service.blocks.save(self.f.project,self.f.git.head(),[paused,new],str(uuid4()))
+        restarted=ComposableMonitoring(self.monitoring,fetcher=lambda *a,**kw:response())
+        restarted.tick(self.f.project)
+        catalog=restarted.catalog(self.f.project)
+        self.assertEqual([j for j in catalog['jobs'] if j['intent']['kind']=='processing'],[])
+        self.assertFalse(next(b for b in catalog['blocks'] if b['id']==paused['id'])['runtime']['enabled'])
+        self.assertIsNone(next(b for b in catalog['blocks'] if b['id']==new['id'])['runtime'])
 
     def test_shared_filter_edit_resolves_new_channel_in_tasks_without_rewriting_them(self):
         catalog=self.service.blocks.read(self.f.project);saved=next(b for b in catalog['blocks'] if b['id']==self.specs[2]['id'])

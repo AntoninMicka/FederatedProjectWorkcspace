@@ -192,8 +192,11 @@ class ComposableMonitoring:
                 source = by_id.get(id_)
                 if not binding['enabled'] or not source: continue
                 if binding['revision'] != source['ref']['artifact_id']:
-                    binding['error'] = 'Definition changed; activate the current revision locally'
-                    self._binding(pid, id_, binding, expected=approved_binding); continue
+                    # Local activation follows the stable block ID across edits
+                    # and sync. Revision records the definition last observed.
+                    binding['revision'] = source['ref']['artifact_id']
+                    if binding.get('error') == 'Definition changed; activate the current revision locally':
+                        binding['error'] = None
                 c = source['value']['config']
                 if source['value']['kind'] == 'processing':
                     slot = processing_slot(c['schedule'], self.clock())
@@ -204,6 +207,7 @@ class ComposableMonitoring:
                             binding.update(last_slot=slot, error=None if result['state'] != 'unknown' else 'Processing outcome is unknown')
                         except Exception as exc:
                             binding.update(last_slot=slot, error=str(exc)[:500])
+                    if binding != approved_binding:
                         self._binding(pid, id_, binding, expected=approved_binding)
                     continue
                 if binding['next_due'] > self.clock(): continue
