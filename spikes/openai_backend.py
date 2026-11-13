@@ -503,8 +503,14 @@ class OpenAIAdapter:
     def _response(value, binding):
         require(isinstance(value, dict) and set(value) >= {'id', 'status', 'model', 'output'},
                 'Invalid OpenAI response')
-        require(value['status'] == 'completed' and value['model'] == binding.model,
-                'OpenAI response did not complete with the requested model')
+        require(value['model'] == binding.model,
+                'OpenAI response model differs from the requested model')
+        if value['status'] != 'completed':
+            details = value.get('incomplete_details')
+            limited = (isinstance(details, dict)
+                       and details.get('reason') == 'max_output_tokens')
+            raise ValueError('OpenAI response exceeded max_output_tokens' if limited
+                             else 'OpenAI response did not complete')
         output = value['output']
         require(isinstance(output, list) and bool(output),
                 'OpenAI response has no output items')
@@ -602,7 +608,7 @@ class OpenAIAdapter:
                         delta = event.get('delta')
                         require(isinstance(delta, str), 'Invalid OpenAI text delta')
                         deltas.append(delta); on_delta(delta)
-                    elif event['type'] == 'response.completed':
+                    elif event['type'] in {'response.completed', 'response.incomplete'}:
                         require(completed is None and isinstance(event.get('response'), dict),
                                 'Invalid OpenAI completed event')
                         completed = event['response']

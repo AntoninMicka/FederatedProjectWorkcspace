@@ -1091,7 +1091,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Zobrazit odeslaný request', JS)
         self.assertIn('Ollama nevrátila platný návrh externího volání',
                       Path('spikes/desktop_ui.py').read_text())
-        self.assertIn('Externí LLM odpověď nebylo možné bezpečně přijmout',
+        self.assertIn('external_response_failure(exc)',
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn("'/v1/tasks/'", Path('spikes/desktop_ui.py').read_text())
         self.assertIn('error.status=response.status', JS)

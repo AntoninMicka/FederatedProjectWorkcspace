@@ -23,6 +23,31 @@ class BackendResponseError(RuntimeError):
     pass
 
 
+def external_response_failure(error):
+    """Safe public diagnostics: never return arbitrary provider exception text."""
+    reason = str(error)
+    known = {
+        'Claude response was truncated by max_tokens': ('output-limit',
+            'Odpověď dosáhla limitu výstupních tokenů a není úplná. '
+            'Zvyšte maximum výstupních tokenů v nastavení backendu nebo zmenšete zadání.'),
+        'OpenAI response exceeded max_output_tokens': ('output-limit',
+            'Odpověď dosáhla limitu výstupních tokenů a není úplná. '
+            'Zvyšte maximum výstupních tokenů v nastavení backendu nebo zmenšete zadání.'),
+        'OpenAI response did not complete': ('incomplete-response',
+            'Provider označil odpověď jako nedokončenou.'),
+        'OpenAI response model differs from the requested model': ('model-mismatch',
+            'Model v odpovědi neodpovídá požadovanému modelu.'),
+        'Claude response model differs from the bound model': ('model-mismatch',
+            'Model v odpovědi neodpovídá požadovanému modelu.'),
+        'Claude response stopped at model_context_window_exceeded': ('context-limit',
+            'Odpověď byla ukončena kvůli vyčerpání kontextového okna.'),
+    }
+    code, message = known.get(reason, ('invalid-response',
+        'Externí LLM odpověď nebylo možné bezpečně přijmout.'))
+    return {'error': message + ' Běh nebyl automaticky opakován.',
+            'diagnostic': code, 'outcome': 'failed', 'retry': 'new-run'}
+
+
 def _text(value, label):
     require(isinstance(value, str) and value.strip() == value and bool(value)
             and not any(char in value for char in '\0\r\n'), f'Invalid {label}')

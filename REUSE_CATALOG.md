@@ -1711,3 +1711,13 @@ slots point to the original Julia journal. **Reject:** a second writer/job
 authority, automatic unknown-outcome replay, more application workers or
 longer wait budgets. No external implementation is imported. Boundaries and
 recovery: [P1 remediation](docs/concurrency-p1-remediation.md).
+
+### External response diagnostics and rejected stream text
+
+**Reuse/adapt:** existing backend run journals, fail-closed response validators,
+NDJSON terminal errors and the chat stream surface. Public diagnostics use an
+allowlist rather than exposing arbitrary provider exception text. Rejected text
+is displayed as an untrusted, downloadable UI notice, separate from accepted
+chat history and edit proposals. No persistent writer or recovery boundary is
+added. **Reject:** accepting truncated responses, automatic paid retries and
+silently increasing configured token budgets.

@@ -25,7 +25,7 @@ from spikes.conflict_resolution import ConflictResolution
 from spikes.local_change_resolution import LocalChangeResolution
 from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
-from spikes.backend_contract import BackendResponseError, BackendUnknown
+from spikes.backend_contract import BackendResponseError, BackendUnknown, external_response_failure
 from spikes.metadata import MAX_FILE, ValidationError
 from spikes.presentation_visual import SLIDE_JS
 from spikes.presentation_documents import public_content
@@ -5674,6 +5674,21 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=
 async function externalStreamRequest(request,onDelta){
  return streamRequest('/v1/external/send-stream',request,onDelta);
 }
+function preserveRejectedExternalStream(){
+ if(!chatStream.textContent)return;
+ const text=chatStream.textContent,notice=document.createElement('div');
+ notice.className='chat-message assistant';notice.dataset.incomplete='true';
+ const label=document.createElement('strong');
+ label.textContent='Neúplná / nepřijatá odpověď — není součástí historie ani podkladem pro automatické změny.';
+ const body=document.createElement('pre');body.style.whiteSpace='pre-wrap';body.textContent=text;
+ const download=document.createElement('button');download.type='button';download.textContent='Stáhnout přijatý text';
+ download.addEventListener('click',()=>{
+  const url=URL.createObjectURL(new Blob([label.textContent+String.fromCharCode(10,10)+text],{type:'text/plain;charset=utf-8'}));
+  const link=document.createElement('a');link.href=url;link.download='neuplna-odpoved.txt';
+  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ });
+ notice.append(label,body,download);chatMessages.append(notice);
+}
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
  const offers=Array.isArray(catalog?.offers)?catalog.offers:[];
@@ -7676,6 +7691,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=providerStreaming ?
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
+   preserveRejectedExternalStream();
    appendChatOperationNotice(error);
    const staleSelection=await refreshStaleRunSelection(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
@@ -9328,8 +9344,10 @@ class DesktopHandler(Handler):
                     emit({'type': 'result', 'result': result})
                 except BackendUnknown:
                     emit_error(409, 'Výsledek externího běhu není známý; požadavek automaticky neopakujte.')
-                except BackendResponseError:
-                    emit_error(502, 'Externí LLM odpověď nebylo možné bezpečně přijmout.')
+                except BackendResponseError as exc:
+                    try: emit({'type': 'error', 'status': 502,
+                               **external_response_failure(exc)})
+                    except OSError: pass
                 except (ValueError, OSError, sqlite3.Error):
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
                 return
@@ -9716,17 +9734,15 @@ class DesktopHandler(Handler):
                                    'Lokální LLM požadavek selhal.'),
                                    'diagnostic': exc.code, 'outcome': 'failed',
                                    'retry': 'new-run'})
-        except OpenAIResponseError:
+        except OpenAIResponseError as exc:
             if self.path == '/v1/external/models':
                 return self.reply(502, {'error': 'Seznam modelů externího provideru nelze načíst. '
                                        'Uložené nastavení nebylo změněno.'})
-            return self.reply(502, {'error': 'Externí LLM odpověď nebylo možné bezpečně přijmout. '
-                                   'Běh byl ukončen bez automatického opakování.'})
-        except BackendResponseError:
-            message = ('Externí LLM odpověď nebylo možné bezpečně přijmout. '
-                       'Běh byl ukončen bez automatického opakování.'
-                       if self.path.startswith('/v1/external/') else
-                       'Obrazový backend nevrátil bezpečně použitelný PNG výsledek. '
+            return self.reply(502, external_response_failure(exc))
+        except BackendResponseError as exc:
+            if self.path.startswith(('/v1/external/', '/v1/tasks/')):
+                return self.reply(502, external_response_failure(exc))
+            message = ('Obrazový backend nevrátil bezpečně použitelný PNG výsledek. '
                        'Běh byl ukončen bez automatického opakování.')
             return self.reply(502, {'error': message})
         except PendingOperation:
