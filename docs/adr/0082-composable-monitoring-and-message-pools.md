@@ -176,3 +176,14 @@ boundaries zůstávají stejné jako u jiných Reporting revizí. Testy přeruš
 zápis před ref update i po něm a opakují přesnou operaci bez dalšího commitu.
 Také tento nový typ vyžaduje aktualizaci všech spolupracujících uzlů před
 používáním; starší implementace jej bezpečně odmítne.
+
+## Pozdní vstupy a hodinová ochrana — 14. 11. 2026
+
+Doložená potřeba: plánované sestavení může předběhnout RSS nebo příjem poolů
+z jiného uzlu. Nové návrhy proto mají trvalý hodinový interval od skutečného
+dokončení první verze, backendovou blokaci vydání a jediné závěrečné
+přegenerování při změně obsahových vstupů. RSS a modelové zpracování používají
+samostatné pracovní větve, protože dosavadní společný effect flock odkládal
+sběr po dobu modelového volání. Autorita dat, journaly, privacy a Git writer
+se nemění. Přesné hranice období, kompatibilita, neúplnost zdrojů a crash
+boundaries jsou v [kontraktu ochrany zpráv](../report-protection.md).

@@ -64,7 +64,7 @@ try:
    13:"blockTab='source';blockSelectedId=blockTestIds[0];renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Zapnout sběr na tomto uzlu').click()",
    14:"[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Zkontrolovat splatné kanály').click()",
    15:"blockTab='processing';blockSelectedId=blockTestIds[3];renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Sestavit návrh zprávy').click()",
-   16:"[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Vydat posouzenou zprávu').click()",
+   16:"(async()=>{await loadMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Vydat posouzenou zprávu').click();})()",
    17:"document.querySelector('#sidebar-monitoring-filter-list .sidebar-list-main').click()",
    18:"document.querySelector('#sidebar-monitoring-filter-list summary').click();[...document.querySelectorAll('#sidebar-monitoring-filter-list [role=menuitem]')].find(b=>b.textContent==='Upravit').click()",
    19:"document.querySelector('#sidebar-new-tool').click()",
@@ -99,7 +99,7 @@ try:
    12:"!blockEdit&&blockCatalog.blocks.find(b=>b.id===blockTestIds[4]).value.config.pool_ids.length===1&&blockCatalog.blocks.some(b=>b.id===window.extraPoolId&&!b.used_by.includes(blockTestIds[4]))",
    13:"blockCatalog.blocks.find(b=>b.id===blockTestIds[0]).runtime?.enabled===true",
    14:"blockCatalog.blocks.find(b=>b.id===blockTestIds[1]).message_count===1&&document.querySelector('[data-monitoring-catalog=source]').textContent.includes('Nové revize: 1')",
-   15:"blockTab==='runs'&&document.querySelector('#monitoring-block-content').textContent.includes('Energie dnes')&&blockCatalog.jobs.some(j=>j.state==='review')",
+   15:"[...document.querySelectorAll('#monitoring-block-content button')].some(b=>b.textContent==='Vydat posouzenou zprávu'&&b.disabled)&&document.querySelector('#monitoring-block-content').textContent.includes('Ochranné období')&&blockTab==='runs'&&document.querySelector('#monitoring-block-content').textContent.includes('Energie dnes')&&blockCatalog.jobs.some(j=>j.state==='review')",
    16:"blockCatalog.jobs.some(j=>j.state==='published')",
    17:"blockTab==='filter'&&document.querySelectorAll('#monitoring-block-content article').length===1&&document.querySelector('#sidebar-monitoring-filter-list .sidebar-list-main').getAttribute('aria-current')==='true'",
    18:"!blockEditor.hidden&&blockEdit.id===blockTestIds[2]",
@@ -124,6 +124,10 @@ try:
    busy=False
    if value!='ready':return
    phase+=1
+   if phase==16:
+    runtime=server.monitoring.composable;instant=runtime.clock()+3600
+    runtime.clock=runtime.pools.clock=lambda:instant
+    runtime.tick(f.project,lane='processing')
    if phase==6:view.grab().save('/tmp/fpw-task-aggregate.png')
    if phase==18:view.grab().save('/tmp/fpw-tools-tree.png')
    if phase==20:view.grab().save('/tmp/fpw-tools-new-menu.png')

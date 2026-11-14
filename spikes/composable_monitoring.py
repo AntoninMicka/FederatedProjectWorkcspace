@@ -48,8 +48,18 @@ class ComposableMonitoring:
         self.fetcher = fetcher; self.searcher = searcher
 
     @contextmanager
-    def locked(self):
-        fd = os.open(self.pools.root/'worker.lock', os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW, 0o600)
+    def locked(self, lane=None):
+        # Maintenance takes both lanes in a fixed order. Network/model calls
+        # hold only their lane; SQLite transactions remain short and serialized.
+        if lane is None:
+            with self.locked('intake') as intake:
+                if not intake:
+                    yield False; return
+                with self.locked('processing') as processing:
+                    yield processing
+            return
+        require(lane in {'intake', 'processing'}, 'Unknown monitoring lane')
+        fd = os.open(self.pools.root/('worker.lock' if lane == 'processing' else 'intake-worker.lock'), os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW, 0o600)
         try:
             try: fcntl.flock(fd, fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError:
@@ -172,15 +182,24 @@ class ComposableMonitoring:
                 for row in (record, observation, member): rows[row['id']] = row
         return list(rows.values())
 
-    def tick(self, pid, *, checkpoint=lambda stage: None):
-        with self.locked() as acquired:
+    def tick(self, pid, *, checkpoint=lambda stage: None, lane=None):
+        for selected in (('intake', 'processing') if lane is None else (lane,)):
+            self._tick(pid, checkpoint=checkpoint, lane=selected)
+
+    def _tick(self, pid, *, checkpoint, lane):
+        with self.locked(lane) as acquired:
             if not acquired: return
             with self.pools.db() as db:
                 self.pools._cleanup(db, pid)
                 # No other worker owns a dispatch after acquiring the process lock.
-                db.execute("UPDATE block_jobs SET state='unknown' WHERE project=? AND state='dispatching'", (pid,))
+                db.execute("UPDATE block_jobs SET state='unknown' WHERE project=? AND state='dispatching' "
+                           "AND (json_extract(document,'$.kind')='intake')=?", (pid, lane == 'intake'))
                 bindings = [(r[0], json.loads(r[1])) for r in db.execute(
                     'SELECT source,document FROM block_bindings WHERE project=?', (pid,))]
+            bindings = [(id_, b) for id_, b in bindings
+                        if (b.get('consent') is not None) == (lane == 'intake')]
+            if lane == 'processing':
+                self._finish_protected(pid, checkpoint=checkpoint)
             # Processing bindings have no intake consent. Due RSS bindings are
             # reauthorized against current Git before any network effect.
             if not any(binding['enabled'] and (binding.get('consent') is None or
@@ -191,6 +210,7 @@ class ComposableMonitoring:
                 approved_binding = deepcopy(binding)
                 source = by_id.get(id_)
                 if not binding['enabled'] or not source: continue
+                if (source['value']['kind'] == 'source') != (lane == 'intake'): continue
                 if binding['revision'] != source['ref']['artifact_id']:
                     # Local activation follows the stable block ID across edits
                     # and sync. Revision records the definition last observed.
@@ -329,21 +349,97 @@ class ComposableMonitoring:
             preview=dict(query=source['value']['config']['locator'], privacy=privacy), binding=binding)
         return SearXNGAdapter(runs).dispatch(search_id, binding, preview_sha256=prepared['preview_sha256'])
 
+    def _period_inputs(self, pid, block, anchor):
+        c = block['value']['config']; since = anchor-c['lookback_days']*86400
+        inputs = {}; rows = self.pools.export(pid)
+        for pool_id in c['pool_ids']:
+            groups = self.pools.view(pid, pool_id, _rows=rows)
+            selected = []
+            for group in groups:
+                group = deepcopy(group)
+                # Known publication dates define the fixed reporting window.
+                # Undated items use first observation, including late arrivals
+                # during protection; an observation alone is never new content.
+                group['revisions'] = [r for r in group['revisions'] if
+                    (since <= moment(r['item']['published_at']).timestamp() <= anchor
+                     if r['item']['published_at'] else
+                     moment(r['item']['discovered_at'] or min(m['selected_at'] for m in group['contributions'] if m['item_entry']==r['item_entry'])).timestamp() >= since)]
+                refs = {r['item_entry'] for r in group['revisions']}
+                if not refs: continue
+                group['contributions'] = [m for m in group['contributions'] if m['item_entry'] in refs]
+                group['observations'] = [o for o in group['observations'] if o['item_entry'] in refs]
+                selected.append(group)
+            inputs[pool_id] = selected
+        return inputs
+
+    @staticmethod
+    def _content_refs(inputs):
+        return sorted((pool_id, r['item_entry']) for pool_id, groups in inputs.items()
+                      for g in groups for r in g['revisions'])
+
+    def _finish_protected(self, pid, *, checkpoint=lambda stage: None):
+        from spikes.monitoring import ident
+        with self.pools.db() as db:
+            jobs = db.execute("SELECT id,document,result FROM block_jobs WHERE project=? AND state='review'", (pid,)).fetchall()
+        for run_id, raw, output in jobs:
+            intent, result = json.loads(raw), json.loads(output)
+            protection = result.get('protection')
+            if not protection or protection['finalized']: continue
+            if protection.get('error'): continue  # explicit review after uncertain model effect
+            try:
+                inputs = self._period_inputs(pid, intent['block'], intent['period_end'])
+                changed = self._content_refs(inputs) != self._content_refs(intent['pools'])
+                protection['changed'] = changed
+                if self.clock() >= protection['until']:
+                    if changed:
+                        child_id = ident(run_id, 'protection-final')
+                        child = self._process(pid, intent['block']['id'], child_id,
+                                              original=intent, checkpoint=checkpoint)
+                        require(child['state'] == 'review', 'Protection regeneration has unknown outcome')
+                        with self.pools.db() as db:
+                            child_intent = json.loads(db.execute('SELECT document FROM block_jobs WHERE id=?', (child_id,)).fetchone()[0])
+                        # Keep the original period and deadline, but publish the
+                        # exact final inputs. The first draft stays in history.
+                        initial = dict(markdown=result['markdown'], output=result['output'],
+                                       input_refs=self._content_refs(intent['pools']),
+                                       input_digest=result['input_digest'], approval_digest=result['approval_digest'])
+                        result = deepcopy(child['result']); result.pop('replacement', None)
+                        result['initial_draft'] = initial
+                        result['protection'] = protection
+                        intent['pools'] = child_intent['pools']; intent['searches'] = child_intent['searches']
+                        intent['input_head'] = child_intent['input_head']
+                        if 'manifest' in child_intent: intent['manifest'] = child_intent['manifest']
+                        intent['expires_at'] = min(intent['expires_at'], child_intent['expires_at'])
+                        protection['regenerated_run_id'] = child_id
+                        result['input_digest'] = digest(encoded(intent))
+                    protection['finalized'] = True
+                    checkpoint('protection-finalized')
+            except Exception as exc:
+                protection['finalized'] = False
+                protection['error'] = str(exc)[:500]
+            with self.pools.db() as db:
+                db.execute("UPDATE block_jobs SET document=?,result=? WHERE id=? AND state='review'",
+                           (encoded(intent), encoded(result), run_id))
+
     def process(self, pid, processing_id, run_id, *, scheduled=False):
-        with self.locked() as acquired:
+        with self.locked('processing') as acquired:
             require(acquired, 'A monitoring effect is already running on this node')
             return self._process(pid, processing_id, run_id, scheduled=scheduled)
 
-    def _process(self, pid, processing_id, run_id, *, scheduled=False):
+    def _process(self, pid, processing_id, run_id, *, scheduled=False, original=None, checkpoint=lambda stage: None):
         self._require_migration_complete(pid,processing_id)
         uuid(run_id); self.monitoring._writable(pid)
         catalog = self.blocks.read(pid); by_id = {b['id']: b for b in catalog['blocks']}
         block = by_id.get(processing_id)
         require(block and block['value']['kind'] == 'processing', 'Choose a processing block')
         c = block['value']['config']; require(c['node_id'] == local_node_id(self.node), 'Processing belongs to another node')
-        inputs = {i: self.pools.view(pid, i, since=self.clock()-c['lookback_days']*86400) for i in c['pool_ids']}
+        if original is not None:
+            require(block['ref'] == original['block']['ref'], 'Processing definition changed during protection')
+        anchor = original.get('period_end', original['started_at']) if original else self.clock()
+        inputs = self._period_inputs(pid, block, anchor)
         frozen = dict(project_id=pid, block=block, input_head=catalog['commit_id'], pools=inputs, searches={}, kind='processing',
-                      started_at=self.clock(), expires_at=min([moment(m['expires_at']).timestamp() for groups in inputs.values() for g in groups for m in g['contributions']] or [self.clock()+86400]))
+                      period_end=anchor, started_at=self.clock(), expires_at=min([moment(m['expires_at']).timestamp() for groups in inputs.values() for g in groups for m in g['contributions']] or [self.clock()+86400]))
+        if original is not None: frozen['regeneration_of'] = digest(encoded(original))
         with self.pools.db() as db:
             old = db.execute('SELECT state,document,result FROM block_jobs WHERE id=?', (run_id,)).fetchone()
             if old:
@@ -351,9 +447,11 @@ class ComposableMonitoring:
                     db.execute("UPDATE block_jobs SET state='unknown' WHERE id=?", (run_id,))
                     old = ('unknown', old[1], old[2])
                 require(json.loads(old[1]).get('project_id') == pid and json.loads(old[1]).get('block', {}).get('id') == processing_id and
-                        json.loads(old[1]).get('block', {}).get('ref') == block['ref'], 'Run ID belongs to another intent')
+                        json.loads(old[1]).get('block', {}).get('ref') == block['ref'] and
+                        json.loads(old[1]).get('regeneration_of') == frozen.get('regeneration_of'), 'Run ID belongs to another intent')
                 return dict(id=run_id, state=old[0], result=json.loads(old[2]) if old[2] else None)
             db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)', (run_id, pid, 'dispatching', encoded(frozen)))
+        checkpoint('processing-dispatching')
         try:
             for id_ in c['search_ids']: frozen['searches'][id_] = self._search(pid, by_id[id_], run_id, block['privacy'])
             body = '# '+block['value']['title']+'\n\n'+c['instructions']+'\n\n'
@@ -379,9 +477,15 @@ class ComposableMonitoring:
             require(isinstance(body, str) and 0 < len(body.encode()) <= 1024*1024, 'Invalid report draft')
             from spikes.report_outputs import output_title
             built_at=stamp(self.clock())
-            result = dict(output=dict(title=output_title(block['value']['title'],built_at,c['schedule']['timezone']),built_at=built_at),markdown=body, approval_digest=digest(body.encode()), input_digest=digest(encoded(frozen)))
+            result = dict(output=dict(title=output_title(block['value']['title'],built_at,c['schedule']['timezone']),built_at=built_at),markdown=body, approval_digest=digest(encoded([body, self._content_refs(inputs)])), input_digest=digest(encoded(frozen)))
+            if original is None:
+                result['protection'] = dict(until=self.clock()+3600, finalized=False, changed=False)
+            else:
+                result['replacement'] = True
+            checkpoint('processing-result')
             with self.pools.db() as db:
                 db.execute("UPDATE block_jobs SET state='review',result=? WHERE id=?", (encoded(result), run_id))
+            checkpoint('processing-committed')
             return dict(id=run_id, state='review', result=result)
         except Exception as exc:
             with self.pools.db() as db:
@@ -389,7 +493,7 @@ class ComposableMonitoring:
             raise
 
     def compose(self, pid, run_id, goal, *, confirm, source_ids=(), proposal_kind='task'):
-        with self.locked() as acquired:
+        with self.locked('processing') as acquired:
             require(acquired, 'A monitoring effect is already running on this node')
             return self._compose(pid, run_id, goal, confirm=confirm, source_ids=source_ids, proposal_kind=proposal_kind)
 
@@ -503,7 +607,7 @@ class ComposableMonitoring:
     def run_task(self, pid, task_id, run_id):
         from spikes.monitoring import ident
         uuid(run_id); self.monitoring._writable(pid)
-        with self.locked() as acquired:
+        with self.locked('processing') as acquired:
             require(acquired, 'A monitoring effect is already running on this node')
             catalog = self.blocks.read(pid)
             by_id = {b['id']: b for b in catalog['blocks']}
@@ -530,6 +634,11 @@ class ComposableMonitoring:
             return result
 
     def publish(self, pid, run_id, approval_digest, *, confirm):
+        with self.locked('processing') as acquired:
+            require(acquired, 'A monitoring effect is already running on this node')
+            return self._publish(pid, run_id, approval_digest, confirm=confirm)
+
+    def _publish(self, pid, run_id, approval_digest, *, confirm):
         require(confirm is True, 'Confirm publishing the exact report draft')
         from spikes.monitoring import ident
         with self.pools.db() as db:
@@ -537,6 +646,8 @@ class ComposableMonitoring:
         require(row and row[0] in {'review', 'published'}, 'Report draft is unavailable')
         intent, result = json.loads(row[1]), json.loads(row[2])
         require(intent['kind'] == 'processing' and result['approval_digest'] == approval_digest, 'Draft approval differs')
+        require(not result.get('replacement'), 'Publish the original report run after finalization')
+        require(result.get('protection', {}).get('finalized', True), 'Report protection has not finished')
         require(intent['expires_at'] > self.clock(), 'Report input retention expired')
         audit = deepcopy(intent)
         audit['pools'] = {pool_id: [dict(key=g['key'], revisions=[dict(revision=r['revision'], item_entry=r['item_entry']) for r in g['revisions']]) for g in groups] for pool_id, groups in intent['pools'].items()}

@@ -11,7 +11,9 @@ Týden začíná v pondělí, měsíc prvním dnem, čtvrtletí v lednu/dubnu/č
 První tick po hranici aktuální periody a nastaveném čase smí připravit jeden
 návrh. Při návratu offline uzlu se nezpracovává neomezený backlog; obslouží
 se aktuální perioda. Vstupy určuje samostatné pole „Zprávy za posledních dní“
-a při spuštění se zmrazí. Volba měsíční periody sama nepřepíná vstupy z poolu
+a při spuštění se zmrazí. Nové návrhy mají
+[hodinové ochranné období](report-protection.md) od skutečného sestavení;
+pozdní vstupy mohou vyvolat jedno závěrečné přegenerování. Volba měsíční periody sama nepřepíná vstupy z poolu
 na vydané týdenní zprávy a nenahrazuje analytickou syntézu WatchSynthesis.
 
 Opakovaný tick a restart používají stejné ID `ident(block_id, kind+':'+slot)`.

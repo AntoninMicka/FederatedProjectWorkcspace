@@ -52,7 +52,8 @@ Review ukáže výsledky původního filtrovacího enginu a neověřené vstupy.
    na revizi samotného zdroje; změnu jeho adresy či podmínek je třeba potvrdit.
 6. Spusťte zpracování nebo celou úlohu. Běh úlohy připraví návrhy svých
    místních zpracování; u jiného uzlu ukáže waiting-executor. Nový vzdálený
-   dispatch protokol se tím nezavádí. Jednotlivé návrhy můžete posoudit a vydat.
+   dispatch protokol se tím nezavádí. Jednotlivé návrhy lze vydat po dokončení
+   [hodinového ochranného období](report-protection.md).
 
 RSS má vlastní interval a nevolá LLM. Zpracování může běžet ručně nebo
 jednou denně ve zvoleném místním čase a časové zóně. Denní slot má stabilní

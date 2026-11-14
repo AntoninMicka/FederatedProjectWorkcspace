@@ -121,8 +121,12 @@ class CurrentMonitoringReadTests(unittest.TestCase):
     def test_normal_start_never_runs_legacy_scheduler(self):
         f=block_fixture.BlockTests('test_shared_blocks_usage_and_atomic_validation');f.setUp();self.addCleanup(f.doCleanups)
         with patch('spikes.monitoring.threading.Thread') as thread:
-            f.monitoring.start();loop=thread.call_args.kwargs['target']
-            with patch.object(f.monitoring.stop_event,'wait',side_effect=[False,True]), \
-                 patch.object(f.monitoring,'tick',side_effect=AssertionError('legacy tick')), \
-                 patch.object(f.monitoring,'tick_blocks') as tick:
-                loop();tick.assert_called_once_with()
+            f.monitoring.start()
+            self.assertEqual(thread.call_count,2)
+            self.assertEqual({c.kwargs['args'][0] for c in thread.call_args_list},{'intake','processing'})
+            for call in thread.call_args_list:
+                with patch.object(f.monitoring.stop_event,'wait',side_effect=[False,True]), \
+                     patch.object(f.monitoring,'tick',side_effect=AssertionError('legacy tick')), \
+                     patch.object(f.monitoring,'tick_blocks') as tick:
+                    call.kwargs['target'](*call.kwargs['args'])
+                    tick.assert_called_once_with(lane=call.kwargs['args'][0])

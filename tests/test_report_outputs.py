@@ -31,6 +31,7 @@ class ReportOutputTests(unittest.TestCase):
         f.setUp();self.addCleanup(f.doCleanups)
         f.activate();f.service.tick(f.f.project);run=str(uuid4())
         draft=f.service.process(f.f.project,f.specs[3]['id'],run)
+        f.finish_protection()
         issued=f.service.publish(f.f.project,run,draft['result']['approval_digest'],confirm=True)
         return f,issued['report_ref']['artifact_id']
 
@@ -95,6 +96,7 @@ Monitoring(sys.argv[1],Projects(sys.argv[1])).output_presentation(sys.argv[2],sy
         prepared=f.service.process(f.f.project,f.specs[3]['id'],run)
         expected=prepared['result']['output']['title']
         self.assertIn('2026-',expected);self.assertRegex(expected,r'\d{2}:\d{2}:\d{2}')
+        f.finish_protection()
         issued=f.service.publish(f.f.project,run,prepared['result']['approval_digest'],confirm=True)
         view=f.monitoring.view(f.f.project);self.assertEqual(len(view['outputs']),1)
         summary=view['outputs'][0];self.assertEqual(summary['title'],expected);self.assertNotIn('markdown',summary)

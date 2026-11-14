@@ -82,6 +82,7 @@ class Monitoring:
         self.collector=collector or SourceCollector(node,clock=clock)
         self.adapter_factory=adapter_factory;self.last_errors={};self.lock=threading.Lock()
         self.stop_event=threading.Event();self.thread=None
+        self.intake_thread=None;self.intake_lock=threading.Lock()
 
     @property
     def scheduler(self):
@@ -662,7 +663,7 @@ class Monitoring:
         result = dict(project_id=pid, commit_id=head, node_id=local_node_id(self.node),
                       outputs=published_outputs(pid, head, files, entities,
                                                 {r['revision_id']:r for r in data['records']}),
-                      reports=[], block_catalog=catalog, error=self.last_errors.get(pid))
+                      reports=[], block_catalog=catalog, error=self._runtime_error(pid))
         self.projects.workspace(pid,for_snapshot=True).snapshot_checkpoint(head)
         return result
 
@@ -710,32 +711,41 @@ class Monitoring:
         return dict(outputs=outputs,project_id=pid,commit_id=head,node_id=definition_view['node_id'],watches=watches,definitions=definitions,rss=rss_status,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
             inputs=[dict(id=id_,title=m['title'],privacy=m['privacy']) for id_,m in entities.items()
                     if m.get('file') and not files['artifacts/'+id_+'/'+m['file']].startswith(MARKER.encode())],
-            profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self.last_errors.get(pid) or self.last_errors.get('runtime'))
+            profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self._runtime_error(pid))
 
-    def tick_blocks(self):
+    def _runtime_error(self, pid):
+        return next((self.last_errors.get(key) for key in
+                     (pid,(pid,'intake'),(pid,'processing'),'runtime',('runtime','intake'),('runtime','processing'))
+                     if self.last_errors.get(key)),None)
+
+    def tick_blocks(self, *, lane=None):
         """The live scheduler executes only the current composable model."""
         from spikes.request_ownership import bounded_project_requests
-        if not self.node.exists() or not self.lock.acquire(blocking=False): return
+        lock = self.intake_lock if lane == 'intake' else self.lock
+        if not self.node.exists() or not lock.acquire(blocking=False): return
         try:
             with bounded_project_requests():
                 for project in self.projects._bindings():
                     pid=project['project_id']
                     try:
-                        self.composable.tick(pid)
-                        self.last_errors.pop(pid,None)
+                        self.composable.tick(pid, lane=lane)
+                        self.last_errors.pop((pid,lane),None)
                     except Exception as exc:
-                        self.last_errors[pid]=str(exc)[:500]
-        finally: self.lock.release()
+                        self.last_errors[(pid,lane)]=str(exc)[:500]
+        finally: lock.release()
 
     def start(self):
         if self.thread:return
-        def loop():
+        def loop(lane):
             while not self.stop_event.wait(10):
-                try:self.tick_blocks()
-                except Exception as exc:self.last_errors['runtime']=str(exc)[:500]
-        self.thread=threading.Thread(target=loop,name='workspace-monitoring',daemon=True);self.thread.start()
+                try:self.tick_blocks(lane=lane)
+                except Exception as exc:self.last_errors[('runtime',lane)]=str(exc)[:500]
+        self.thread=threading.Thread(target=loop,args=('processing',),name='workspace-monitoring',daemon=True)
+        self.intake_thread=threading.Thread(target=loop,args=('intake',),name='workspace-rss-intake',daemon=True)
+        self.thread.start();self.intake_thread.start()
 
     def close(self):
         self.stop_event.set()
         if self.thread:self.thread.join(timeout=1)
-        return not self.thread or not self.thread.is_alive()
+        if self.intake_thread:self.intake_thread.join(timeout=1)
+        return all(not thread or not thread.is_alive() for thread in (self.thread,self.intake_thread))

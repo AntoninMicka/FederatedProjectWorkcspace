@@ -94,6 +94,12 @@ class MonitoringHTTPTests(unittest.TestCase):
         self.assertEqual(self.call('blocks-save',dict(base_head=head,blocks=specs,operation_id=str(uuid4())))[0],200)
         code,raw,_=self.call('block-process',dict(block_id=specs[3]['id'],run_id=str(uuid4())))
         self.assertEqual(code,200,raw);run=json.loads(raw)
+        publication=dict(run_id=run['id'],approval_digest=run['result']['approval_digest'],confirm=True)
+        self.assertEqual(self.call('block-publish',publication)[0],422)
+        runtime=self.f.server.monitoring.composable
+        instant=runtime.clock()+3600
+        runtime.clock=runtime.pools.clock=lambda:instant
+        runtime.tick(self.pid,lane='processing')
         self.assertEqual(self.call('block-publish',dict(run_id=run['id'],approval_digest=run['result']['approval_digest'],confirm=True))[0],200)
         view=json.loads(self.call('view',{})[1]);summary=view['outputs'][0]
         self.assertNotIn('markdown',summary)

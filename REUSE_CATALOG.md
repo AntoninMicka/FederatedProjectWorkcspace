@@ -1725,3 +1725,11 @@ is displayed as an untrusted, downloadable UI notice, separate from accepted
 chat history and edit proposals. No persistent writer or recovery boundary is
 added. **Reject:** accepting truncated responses, automatic paid retries and
 silently increasing configured token budgets.
+
+Ochrana zpráv před pozdními vstupy **reuse/adaptuje** `block_jobs`,
+obsahové reference message pools, původní ContextBuilder/modelový journal,
+periodová ID a Workspace publication receipts. Odděluje effect flock sběru
+a zpracování, zachovává krátké serializované SQLite transakce. **Reject:**
+další runtime DB/writer, opakované generování při každém článku a automatický
+retry nejistého modelového volání. Scope/recovery:
+[ochranné období zpráv](docs/report-protection.md).

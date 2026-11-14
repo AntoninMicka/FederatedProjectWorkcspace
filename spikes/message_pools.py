@@ -242,9 +242,9 @@ class MessagePools:
         rows = cls._retained(rows, clock())
         return cls._transferable(rows) if transferable else rows
 
-    def view(self, project_id, pool_id, *, since=None, read_only=False):
+    def view(self, project_id, pool_id, *, since=None, read_only=False, _rows=None):
         uuid(pool_id)
-        rows = (self.export_readonly(self.scheduler.node, project_id,clock=self.clock,transferable=False)
+        rows = _rows if _rows is not None else (self.export_readonly(self.scheduler.node, project_id,clock=self.clock,transferable=False)
                 if read_only else self.export(project_id)); by_id = {r['id']: r for r in rows}; grouped = {}
         for row in rows:
             if row['kind'] != 'membership' or row['value']['pool_id'] != pool_id: continue

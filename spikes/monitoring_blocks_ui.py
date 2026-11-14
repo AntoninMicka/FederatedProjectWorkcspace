@@ -70,11 +70,15 @@ function renderMonitoringBlocks(){
    article.append(blockText('p','Stav: '+j.state));if(j.result?.error)article.append(blockText('p',j.result.error));
    if(j.intent.kind==='intake')article.append(blockText('p',monitoringIntakeOutcome(j)));
    if(j.result?.children)for(const c of j.result.children)article.append(blockText('p',blockName(c.block_id)+' · '+c.state));
+   if(j.result?.protection&&!j.result.protection.finalized){
+    article.append(blockText('p','Ochranné období do '+new Date(j.result.protection.until*1000).toLocaleString()+(j.result.protection.changed?' · Přibyly nezahrnuté vstupy.':' · Čeká se na dodatečné vstupy.')));
+    if(j.result.protection.error)article.append(blockText('p','Dokončení ochrany selhalo: '+j.result.protection.error));
+   }
    if(j.result?.markdown)article.append(blockText('pre',j.result.markdown));
-   if(j.state==='review'&&j.intent.kind==='processing')article.append(monitoringButton('Vydat posouzenou zprávu',async()=>{
+   if(j.state==='review'&&j.intent.kind==='processing'&&!j.result?.replacement)article.append(monitoringButton('Vydat posouzenou zprávu',async()=>{
     if(!window.confirm('Vydat přesně tento návrh zprávy do projektu?'))return;
     await monitoringRequest('block-publish',{run_id:j.id,approval_digest:j.result.approval_digest,confirm:true});await loadMonitoringBlocks();
-   },blockReadOnly()));
+   },blockReadOnly()||!!(j.result?.protection&&!j.result.protection.finalized)));
    if(j.state==='unknown'&&j.intent.kind==='intake')article.append(monitoringButton('Uzavřít neznámý příjem a povolit další kontrolu',async()=>{
     if(!window.confirm('Původní výsledek zůstane neznámý. Povolit další kontrolu zdroje?'))return;
     await monitoringRequest('block-release',{job_id:j.id,confirm:true});await loadMonitoringBlocks();

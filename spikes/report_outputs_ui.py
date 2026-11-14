@@ -31,7 +31,7 @@ function reportOutputRows(){
   rows.push({id:'legacy:'+report.id,title:report.output?.title||report.name+' · čas sestavení není uložen',built_at:report.output?.built_at,state:report.state,source:'legacy-draft',report,markdown:report.markdown});
  }
  for(const job of blockCatalog?.jobs||[]){
-  if(job.intent.kind!=='processing'||job.state!=='review'||!job.result?.markdown||rows.some(r=>r.run_id===job.id))continue;
+  if(job.result?.replacement||job.intent.kind!=='processing'||job.state!=='review'||!job.result?.markdown||rows.some(r=>r.run_id===job.id))continue;
   rows.push({id:'block:'+job.id,title:job.result.output?.title||job.intent.block.value.title+' · čas sestavení není uložen',built_at:job.result.output?.built_at,state:'review',source:'block-draft',job,markdown:job.result.markdown});
  }
  return rows.sort((a,b)=>String(b.built_at||b.issued_at||'').localeCompare(String(a.built_at||a.issued_at||''))||a.id.localeCompare(b.id));
@@ -44,7 +44,7 @@ function renderReportOutputs(){
   row.className='sidebar-list-row';row.dataset.reportOutput=output.id;
   if(output.source==='git'&&output.kind==='block-report')row.dataset.composableReport=output.id;
   button.type='button';button.className='sidebar-list-main';button.setAttribute('aria-current',String(output.id===selectedReportOutput));
-  title.textContent=output.title;state.className='sidebar-item-id';state.textContent=output.state==='review'?'Návrh k posouzení':output.source==='git'?'Vydaná zpráva':'Nevydaný návrh';state.textContent+=' · '+output.id.replace(/^(legacy|block):/,'').slice(0,8);button.append(title,state);
+  title.textContent=output.title;state.className='sidebar-item-id';state.textContent=output.state==='review'?'Návrh k posouzení':output.source==='git'?'Vydaná zpráva':'Nevydaný návrh';if(output.job?.result.protection&&!output.job.result.protection.finalized)state.textContent='Ochranné období';state.textContent+=' · '+output.id.replace(/^(legacy|block):/,'').slice(0,8);button.append(title,state);
   button.addEventListener('click',()=>openReportOutput(output));
   row.append(button,sidebarItemMenu(output.title,[{label:'Zobrazit zprávu',run:()=>openReportOutput(output)},
    {label:'Export Markdown',run:async()=>{const report=output.source==='git'?await monitoringRequest('output',{output_id:output.id,expected_head:monitoringView.commit_id}):output;exportReportMarkdown(output.title,report.markdown);}}]));
@@ -79,11 +79,16 @@ async function openReportOutput(output){
   const local=output.source==='legacy-draft'?output.report:monitoringView?.reports?.find(r=>r.report_ref?.artifact_id===output.id);
   if(local){showMonitoringReport({...local,name:output.title,markdown:report.markdown},content);return;}
   const pre=document.createElement('pre');pre.textContent=report.markdown;content.append(pre);
+  if(output.job?.result.protection&&!output.job.result.protection.finalized){
+   const guard=output.job.result.protection;
+   actions.append(blockText('p','Ochranné období do '+new Date(guard.until*1000).toLocaleString()+(guard.changed?' · Přibyly nezahrnuté vstupy.':'')));
+   if(guard.error)actions.append(blockText('p','Dokončení ochrany selhalo: '+guard.error));
+  }
   if(output.source==='block-draft')actions.append(monitoringButton('Vydat posouzenou zprávu',async()=>{
    if(!window.confirm('Vydat přesně tento návrh zprávy do projektu?'))return;
    const result=await monitoringRequest('block-publish',{run_id:output.job.id,approval_digest:output.job.result.approval_digest,confirm:true});
    if(activeProject?.id!==pid)return;await loadMonitoring();if(activeProject?.id!==pid)return;const issued=reportOutputRows().find(r=>r.id===result.report_ref.artifact_id);if(issued)await openReportOutput(issued);
-  },activeProject.readOnly||!monitoringView.can_manage));
+  },activeProject.readOnly||!monitoringView.can_manage||!!(output.job?.result.protection&&!output.job.result.protection.finalized)));
  }catch(error){if(activeProject?.id===pid&&sequence===reportOutputSequence)status.textContent=error.message;}
 }
 '''

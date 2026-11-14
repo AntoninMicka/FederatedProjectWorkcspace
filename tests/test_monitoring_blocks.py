@@ -70,6 +70,11 @@ class BlockTests(unittest.TestCase):
     def activate(self):
         self.service.configure(self.f.project, self.specs[0]['id'], True, confirm=True)
 
+    def finish_protection(self):
+        instant = self.service.clock()+3600
+        self.monitoring.clock = self.service.clock = self.service.pools.clock = lambda: instant
+        self.service.tick(self.f.project, lane='processing')
+
     def test_pool_capture_does_not_write_feed_to_git_and_restart_preserves_inputs(self):
         self.activate(); head = self.f.git.head(); self.service.tick(self.f.project)
         self.assertEqual(head, self.f.git.head())
@@ -219,6 +224,9 @@ class BlockTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError,'approval'):
             self.service.publish(self.f.project,run_id,'0'*64,confirm=True)
         self.assertEqual(head,self.f.git.head())
+        with self.assertRaisesRegex(ValidationError,'protection'):
+            self.service.publish(self.f.project,run_id,result['result']['approval_digest'],confirm=True)
+        self.finish_protection()
         published=self.service.publish(self.f.project,run_id,result['result']['approval_digest'],confirm=True)
         head=self.f.git.head()
         self.assertEqual(published,self.service.publish(self.f.project,run_id,result['result']['approval_digest'],confirm=True))
