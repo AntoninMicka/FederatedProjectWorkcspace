@@ -97,7 +97,7 @@ class ComposableMonitoring:
             if b['value']['kind'] == 'pool':
                 b['message_count'] = len(self.pools.view(pid, b['id'],read_only=True))
                 b['last_received_sync'] = next((j['intent'].get('received_at') for j in jobs
-                    if j['intent'].get('kind') == 'pool-sync' and b['id'] in j['intent'].get('pool_ids', [])), None)
+                    if j['state']=='completed' and j['intent'].get('kind') == 'pool-sync' and b['id'] in j['intent'].get('pool_ids', [])), None)
             b['run_count'] = sum(j['intent'].get('block', {}).get('id') == b['id'] for j in jobs)
         result.update(node_id=local_node_id(self.node), jobs=jobs)
         return result
@@ -197,28 +197,31 @@ class ComposableMonitoring:
     def _attempt(self,pid,processing_id,run_id,**kwargs):
         try:return self._process(pid,processing_id,run_id,**kwargs)
         except Exception as exc:
-            # A readable failure is a result. The private journal remains the
-            # authority for uncertain provider effects and never crosses nodes.
-            catalog=self.blocks.read(pid)
-            block=next((b for b in catalog['blocks'] if b['id']==processing_id),None)
-            if block is None:raise
-            from spikes.report_outputs import output_title
-            with self.pools.db() as db:
-                old=db.execute('SELECT state,document,result FROM block_jobs WHERE id=? AND project=?',(run_id,pid)).fetchone()
-                intent=json.loads(old[1]) if old else dict(project_id=pid,kind='processing',block=block,pools={},searches={},
-                    started_at=self.clock(),period_end=self.clock(),expires_at=self.clock()+30*86400,executor_node_id=local_node_id(self.node))
-                if kwargs.get('original') and not old:
-                    original=kwargs['original'];intent['period_end']=original.get('period_end',original['started_at'])
-                    intent['pools']=deepcopy(original.get('pools',{}))
-                if kwargs.get('reprocess_of'):intent.setdefault('reprocess_of',kwargs['reprocess_of'])
-                state=old[0] if old and old[0]=='unknown' else 'failed'
-                result=json.loads(old[2]) if old and old[2] else {}
-                result.update(error=shared.safe_error(exc),output=dict(title=output_title(block['value']['title'],stamp(self.clock()),block['value']['config']['schedule']['timezone']),built_at=stamp(self.clock())),
-                    protection=dict(until=self.clock(),finalized=True,changed=False))
-                if intent.get('regeneration_of'):result['replacement']=True
-                db.execute('INSERT OR REPLACE INTO block_jobs VALUES(?,?,?,?,?)',(run_id,pid,state,encoded(intent),encoded(result)))
-                shared.share_outcome(db,pid,run_id,intent,result,state,local_node_id(self.node))
+            self._record_failure(pid,processing_id,run_id,exc,**kwargs)
             raise
+
+    def _record_failure(self,pid,processing_id,run_id,exc,**kwargs):
+        # A readable failure is a result. The private journal remains the
+        # authority for uncertain provider effects and never crosses nodes.
+        catalog=self.blocks.read(pid)
+        block=next((b for b in catalog['blocks'] if b['id']==processing_id),None)
+        if block is None:raise exc
+        from spikes.report_outputs import output_title
+        with self.pools.db() as db:
+            old=db.execute('SELECT state,document,result FROM block_jobs WHERE id=? AND project=?',(run_id,pid)).fetchone()
+            intent=json.loads(old[1]) if old else dict(project_id=pid,kind='processing',block=block,pools={},searches={},
+                started_at=self.clock(),period_end=self.clock(),expires_at=self.clock()+30*86400,executor_node_id=local_node_id(self.node))
+            if kwargs.get('original') and not old:
+                original=kwargs['original'];intent['period_end']=original.get('period_end',original['started_at'])
+                intent['pools']=deepcopy(original.get('pools',{}))
+            if kwargs.get('reprocess_of'):intent.setdefault('reprocess_of',kwargs['reprocess_of'])
+            state=old[0] if old and old[0]=='unknown' else 'failed'
+            result=json.loads(old[2]) if old and old[2] else {}
+            result.update(error=shared.safe_error(exc),output=dict(title=output_title(block['value']['title'],stamp(self.clock()),block['value']['config']['schedule']['timezone']),built_at=stamp(self.clock())),
+                protection=dict(until=self.clock(),finalized=True,changed=False))
+            if intent.get('regeneration_of'):result['replacement']=True
+            db.execute('INSERT OR REPLACE INTO block_jobs VALUES(?,?,?,?,?)',(run_id,pid,state,encoded(intent),encoded(result)))
+            shared.share_outcome(db,pid,run_id,intent,result,state,local_node_id(self.node))
 
     @staticmethod
     def _intake_consent(source, by_id):
@@ -431,6 +434,8 @@ class ComposableMonitoring:
     def _period_inputs(self, pid, block, anchor):
         c = block['value']['config']; since = anchor-c['lookback_days']*86400
         inputs = {}; rows = self.pools.export(pid)
+        from spikes.pool_input_guard import require_available
+        require_available(self.pools,pid,c['pool_ids'],rows,since=since,until=anchor)
         for pool_id in c['pool_ids']:
             groups = self.pools.view(pid, pool_id, _rows=rows)
             selected = []
@@ -575,6 +580,22 @@ class ComposableMonitoring:
                 before['config'].pop('node_id');current['config'].pop('node_id')
                 same=before==current and original['block']['privacy']==block['privacy']
             require(same, 'Processing definition differs from the original report')
+        with self.pools.db() as db:
+            old = db.execute('SELECT state,document,result FROM block_jobs WHERE id=?', (run_id,)).fetchone()
+            if old:
+                if old[0] == 'dispatching':
+                    db.execute("UPDATE block_jobs SET state='unknown' WHERE id=?", (run_id,))
+                    old = ('unknown', old[1], old[2])
+                require(json.loads(old[1]).get('project_id') == pid and json.loads(old[1]).get('block', {}).get('id') == processing_id and
+                        self._same_revision(json.loads(old[1]).get('block', {}).get('ref',{}), block['ref']) and
+                        json.loads(old[1]).get('regeneration_of') == (digest(encoded(original)) if original is not None and reprocess_of is None else None) and
+                        json.loads(old[1]).get('reprocess_of') == reprocess_of, 'Run ID belongs to another intent')
+                return dict(id=run_id, state=old[0], result=json.loads(old[2]) if old[2] else None)
+            known=next((j for j in shared.outcome_jobs(shared.read_rows(db,pid)) if j['id']==run_id),None)
+            if known:
+                require(known['intent']['block']['id']==processing_id and
+                        known['intent'].get('reprocess_of')==reprocess_of,'Run ID belongs to another intent')
+                return dict(id=run_id,state=known['state'],result=known['result'])
         anchor = original.get('period_end', original['started_at']) if original else self.clock()
         inputs = self._period_inputs(pid, block, anchor)
         frozen = dict(project_id=pid, block=block, input_head=catalog['commit_id'], pools=inputs, searches={}, kind='processing',
@@ -584,21 +605,6 @@ class ComposableMonitoring:
             frozen['unavailable_input_refs'] = sorted(set(self._content_refs(original['pools']))-set(self._content_refs(inputs)))
         elif original is not None: frozen['regeneration_of'] = digest(encoded(original))
         with self.pools.db() as db:
-            old = db.execute('SELECT state,document,result FROM block_jobs WHERE id=?', (run_id,)).fetchone()
-            if old:
-                if old[0] == 'dispatching':
-                    db.execute("UPDATE block_jobs SET state='unknown' WHERE id=?", (run_id,))
-                    old = ('unknown', old[1], old[2])
-                require(json.loads(old[1]).get('project_id') == pid and json.loads(old[1]).get('block', {}).get('id') == processing_id and
-                        self._same_revision(json.loads(old[1]).get('block', {}).get('ref',{}), block['ref']) and
-                        json.loads(old[1]).get('regeneration_of') == frozen.get('regeneration_of') and
-                        json.loads(old[1]).get('reprocess_of') == frozen.get('reprocess_of'), 'Run ID belongs to another intent')
-                return dict(id=run_id, state=old[0], result=json.loads(old[2]) if old[2] else None)
-            known=next((j for j in shared.outcome_jobs(shared.read_rows(db,pid)) if j['id']==run_id),None)
-            if known:
-                require(known['intent']['block']['id']==processing_id and
-                        known['intent'].get('reprocess_of')==reprocess_of,'Run ID belongs to another intent')
-                return dict(id=run_id,state=known['state'],result=known['result'])
             db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)', (run_id, pid, 'dispatching', encoded(frozen)))
         checkpoint('processing-dispatching')
         try:
@@ -812,6 +818,16 @@ class ComposableMonitoring:
             require(self.monitoring.reporting.pin(pid,published['artifact_id'],published['commit_id'])==published,
                     'Published report is not available in this project')
             return result
+        from spikes.pool_input_guard import require_available,IncompletePoolTransfer
+        anchor=intent.get('period_end',intent['started_at'])
+        try:
+            require_available(self.pools,pid,intent['block']['value']['config']['pool_ids'],self.pools.export(pid),
+                since=anchor-intent['block']['value']['config']['lookback_days']*86400,until=anchor,
+                covered=self._content_refs(intent['pools']))
+        except IncompletePoolTransfer as exc:
+            self._record_failure(pid,intent['block']['id'],ident(run_id,'publication-inputs:'+digest(str(exc).encode())),
+                                 exc,original=intent,reprocess_of=run_id)
+            raise
         audit = deepcopy(intent)
         audit['pools'] = {pool_id: [dict(key=g['key'], revisions=[dict(revision=r['revision'], item_entry=r['item_entry']) for r in g['revisions']]) for g in groups] for pool_id, groups in intent['pools'].items()}
         audit['searches'] = {id_: digest(encoded(v)) for id_, v in intent['searches'].items()}

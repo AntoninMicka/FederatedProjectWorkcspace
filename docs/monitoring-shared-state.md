@@ -91,3 +91,28 @@ komplexní předávání rozpracovaných běhů nejsou součástí tohoto řezu.
 Uživatel prakticky potvrdil běžný redundantní provoz; řízený fyzický test
 výpadku není podmínkou zde schváleného zúženého rozsahu. Cílené testy používají
 dva izolované uzly se skutečným podepsaným přenosem a řízeným modelem.
+
+Známý nedokončený přenos vstupů (MON-08-08) se nesmí vydávat za prázdné
+kompletní období. Před aplikací podepsaného pool sidecaru se uloží místní
+manifest očekávaných vazeb, časů a retence, bez textů článků. Zpracování,
+dokončení ochrany a nové vydání kontrolují pouze chybějící položky použitých
+poolů v příslušném období. Jiný projekt/pool, expirovaná položka ani kopie
+již získaná redundantním sběrem práci neblokují. Při vydání se započtou i
+reference vstupů již zpracovaných původním uzlem ve sdíleném návrhu.
+
+Před uložením manifestu je recovery autoritou původní autentizovaný inbound
+intent; čte se pouze jeho omezený sidecar, bez replay a bez inicializace
+journalu. To pokrývá také přenosy přerušené před aktualizací programu.
+Po uložení manifestu zůstává stav prepared až do společného commitu importu
+a potvrzení completed v databázi poolů. Pád uvnitř transakce vrátí obojí;
+pád po commitu neblokuje již dostupná data. Stejný manifest se ukládá také
+při aplikaci odpovědi na odchozí synchronizaci. Původní signed exchange replay
+zůstává jedinou obnovou přenosu; nepřidává se další transport ani databáze.
+
+Neúplný vstup před zpracováním vytvoří sdílený chybový výsledek bez volání
+modelu. V ochranném intervalu brání finalizaci; při pokusu o nové vydání
+vznikne samostatný chybový výsledek a původní návrh se zachová. Po dokončení
+přenosu lze použít místní ruční zpracování. Opakované čtení již uloženého běhu
+ani již vydaný artefakt se novou chybou přenosu nemění.
+Tato kontrola prokazuje dostupnost známých očekávaných vstupů; nemůže zjistit
+zprávy uzlu, který se dosud vůbec nespojil.

@@ -710,6 +710,12 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
     if not payload:
         return False
     bundle_payload, chats = _verify_incoming_payload(exchange, payload, service)
+    pools = _pool_payload(exchange,payload)
+    if pools:
+        authorize()
+        from spikes.pool_sync import prepare
+        prepare(node,exchange['project_id'],pools,operation_id=exchange['operation_id'],
+                source_node_id=exchange['source_node_id'],checkpoint=checkpoint)
     conflict = False
     if bundle_payload:
         if _binding(node, exchange['project_id']) is None:

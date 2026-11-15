@@ -209,3 +209,10 @@ zachovávají pozastavení do výslovného vyřešení. Vzdálený dispatch a ko
 předávání zůstávají odložené; panel dostupnosti ani povinný fyzický výpadkový
 PoC se v tomto zúženém rozsahu nevyžadují. Přesná validace, kompatibilita,
 retence a crash boundaries: [sdílený stav](../monitoring-shared-state.md).
+
+Doplnění MON-08-08: známý nedokončený přenos má místní referenční manifest.
+Import položek a dokončení receipt jsou jedna transakce; před ní obnovu stále
+řídí původní signed exchange intent. Chybějící relevantní vstupy blokují nové
+zpracování, finalizaci ochrany a vydání; nesouvisející přenosy je neblokují.
+Podrobnosti recovery a omezení jsou v
+[popisu sdíleného stavu](../monitoring-shared-state.md).

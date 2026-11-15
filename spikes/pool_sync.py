@@ -29,9 +29,35 @@ def validate(raw, project_id):
     return rows
 
 
+def prepare(node,project_id,raw,*,operation_id,source_node_id=None,checkpoint=lambda stage:None):
+    """Durable reference-only projection; original sync intent owns replay."""
+    if operation_id is None:return
+    from spikes.pool_input_guard import manifest
+    from spikes.monitoring import ident
+    from spikes.message_pools import stamp
+    from spikes.reporting_schema import digest,moment
+    rows=validate(raw,project_id);expected=manifest(rows);store=MessagePools(node)
+    key=ident(operation_id,'pool-received');payload_hash=digest(raw)
+    with store.db() as db:
+        old=db.execute('SELECT state,document FROM block_jobs WHERE id=? AND project=?',(key,project_id)).fetchone()
+        prior=json.loads(old[1]) if old else None
+        if prior and prior.get('payload_sha256'):
+            require(prior['payload_sha256']==payload_hash and prior.get('source_node_id')==source_node_id,
+                    'Pool receipt ID belongs to another payload')
+            return
+        intent=dict(kind='pool-sync',operation_id=operation_id,source_node_id=source_node_id,
+            payload_sha256=payload_hash,expected=expected,
+            received_at=(prior or {}).get('received_at',stamp(store.clock())),
+            pool_ids=sorted({r['pool_id'] for r in expected}),
+            expires_at=max([store.clock()+30*86400]+[moment(r['expires_at']).timestamp() for r in expected]))
+        db.execute('INSERT OR REPLACE INTO block_jobs VALUES(?,?,?,?,NULL)',(key,project_id,'prepared',encoded(intent)))
+    checkpoint('pool-receive-prepared')
+
+
 def apply(node, project_id, raw, *, checkpoint=lambda stage: None, operation_id=None, source_node_id=None):
     from spikes.reporting import Reporting
     rows = validate(raw, project_id)
+    prepare(node,project_id,raw,operation_id=operation_id,source_node_id=source_node_id,checkpoint=checkpoint)
     data = Reporting(node).read(project_id)
     records = {r['revision_id']: r for r in data['records']}
     blocks = {r['entity_id']: r for r in records.values() if r['type'] == 'MonitoringBlock'}
@@ -72,13 +98,12 @@ def apply(node, project_id, raw, *, checkpoint=lambda stage: None, operation_id=
             require(item['source_id'] in filter_['value']['config']['source_ids'], 'Pool filter did not use this source')
             require(PRIVACY[pool['privacy']] >= PRIVACY[item['privacy']], 'Pool sync lowers privacy')
     pool_store = MessagePools(node)
-    pool_store.merge(project_id, rows, checkpoint=checkpoint)
-    if operation_id is not None:
-        from spikes.monitoring import ident
-        from spikes.message_pools import stamp
-        intent = dict(kind='pool-sync', source_node_id=source_node_id, received_at=stamp(pool_store.clock()),
-            pool_ids=sorted({r['value']['pool_id'] for r in rows if r['kind']=='membership'}),
-            expires_at=pool_store.clock()+30*86400)
-        with pool_store.db() as db:
-            db.execute('INSERT OR IGNORE INTO block_jobs VALUES(?,?,?,?,NULL)',
-                (ident(operation_id,'pool-received'), project_id,'completed',encoded(intent)))
+    with pool_store.db() as db:
+        pool_store._merge(db,project_id,rows,checkpoint=checkpoint)
+        if operation_id is not None:
+            from spikes.monitoring import ident
+            changed=db.execute("UPDATE block_jobs SET state='completed' WHERE id=? AND project=?",
+                               (ident(operation_id,'pool-received'),project_id))
+            require(changed.rowcount==1,'Pool receipt is unavailable')
+        checkpoint('pool-receive-confirmed')
+    checkpoint('pool-committed')

@@ -1748,3 +1748,9 @@ Přidávají validované logické druhy activation/report-outcome. **Reject:**
 kopie provozních databází, přenos credentials/leases/manifestů, časové
 last-wins přepisování pauzy, nový transport a automatické převzetí běhu.
 Scope/recovery: [sdílený stav monitoringu](docs/monitoring-shared-state.md).
+
+MON-08-08 kontrola neúplných vstupů **reuse/adaptuje** autentizovaný native
+sync intent, pool sidecar, místní `block_jobs` receipt a sdílené chybové výsledky.
+`pool_input_guard.py` přidává pouze manifest referencí a kontrolu relevantního
+období; žádný nový transport, databáze ani kopírování worker journalu.
+Import a potvrzení receipt používají jednu existující pool transakci.
