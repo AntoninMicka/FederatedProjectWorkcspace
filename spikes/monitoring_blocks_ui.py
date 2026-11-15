@@ -77,7 +77,10 @@ function renderMonitoringBlocks(){
    const article=document.createElement('article');article.append(blockText('h3',j.intent.block?.value.title||j.intent.kind));
    article.append(blockText('p','Stav: '+j.state));if(j.result?.error)article.append(blockText('p',j.result.error));
    if(j.intent.kind==='processing')article.append(blockText('p','Vykonavatel: '+(j.intent.executor_node_id||j.intent.block?.value.config.node_id||'nezjištěn')+(j.shared?' · sdílený výsledek':'')));
-   if(j.intent.kind==='intake')article.append(blockText('p',monitoringIntakeOutcome(j)));
+   if(j.intent.kind==='intake'){
+    article.append(blockText('p',monitoringIntakeOutcome(j)));
+    for(const summary of j.result?.selection_summary||[])article.append(blockText('p',blockName(summary.filter_id)+' · '+({selected:'Vybráno',discarded:'Vyřazeno',waiting:'Čeká',error:'Chyba'})[summary.decision]+' '+summary.count+' · '+summary.reason));
+   }
    if(j.result?.children)for(const c of j.result.children)article.append(blockText('p',blockName(c.block_id)+' · '+c.state));
    if(j.result?.protection&&!j.result.protection.finalized){
     article.append(blockText('p','Ochranné období do '+new Date(j.result.protection.until*1000).toLocaleString()+(j.result.protection.changed?' · Přibyly nezahrnuté vstupy.':' · Čeká se na dodatečné vstupy.')));
@@ -115,6 +118,7 @@ function renderMonitoringBlocks(){
    if(c.connector==='rss-atom'){
     article.append(blockText('p','Tento uzel: '+(row.runtime?.enabled?'sběr zapnutý':'sběr vypnutý')+' · poslední úspěch: '+(row.runtime?.last_success||'zatím žádný')+' · příští kontrola: '+(row.runtime?new Date(row.runtime.next_due*1000).toLocaleString():'nenastavena')));
     if(row.runtime?.error)article.append(blockText('p',row.runtime.error));
+    for(const reason of row.latest_intake?.result?.selection_summary||[])article.append(blockText('p',blockName(reason.filter_id)+' · '+({selected:'Vybráno',discarded:'Vyřazeno',waiting:'Čeká',error:'Chyba'})[reason.decision]+' '+reason.count+' · '+reason.reason));
     article.append(monitoringButton(row.runtime?.enabled?'Pozastavit sběr':'Zapnout sběr',async()=>{
      await monitoringRequest('block-configure',{block_id:row.id,enabled:!row.runtime?.enabled,confirm:true});await loadMonitoringBlocks();
     },readonly));
@@ -132,6 +136,10 @@ function renderMonitoringBlocks(){
      const item=document.createElement('article');
      for(const rev of group.revisions){item.append(blockText('h4',rev.item.title||'Bez názvu'));item.append(blockText('p',rev.item.content||''));
       if(rev.item.url){const a=blockText('a',rev.item.url);a.href=rev.item.url;a.target='_blank';a.rel='noopener noreferrer';item.append(a);}}
+     for(const contribution of group.contributions)item.append(blockText('p','Výběr: '+blockName(contribution.filter_id)+' · '+contribution.reason));
+     for(const rev of group.revisions){const status=result.processing_status?.items.find(i=>i.item_entry===rev.item_entry);
+      item.append(blockText('p',status?.waiting_for.length?'Čeká na: '+status.waiting_for.map(blockName).join(', '):status?.included?'Zahrnuto v návrhu nebo vydané zprávě':status?.outside_window_for.length?'Mimo aktuální časové okno připojených zpracování':'Bez připojeného zpracování'));
+     }
      item.append(blockText('p','Vybraly filtry: '+[...new Set(group.contributions.map(c=>blockName(c.filter_id)))].join(', ')));
      item.append(blockText('p','Pozorovaly uzly: '+[...new Set(group.observations.map(o=>o.node_id||'Neznámý původní uzel'))].join(', ')+(group.concurrent_versions?' · více obsahových verzí':'')));
      list.append(item);
@@ -139,6 +147,8 @@ function renderMonitoringBlocks(){
    }));
   }else if(blockTab==='processing'){
    article.append(blockText('p','Rozvrh: '+monitoringProcessingPlan(row)));
+   article.append(blockText('p','Příští zpracování: '+(row.next_processing_at?new Date(row.next_processing_at*1000).toLocaleString():'Ruční / neaktivní')+(row.schedule_is_local?'':' · termín podle konfigurace; vzdálený běh se potvrzuje jeho výsledkem')));
+   article.append(blockText('p','Poslední vydání: '+(row.last_issued_at?new Date(row.last_issued_at).toLocaleString():'Žádné uložené vydání')+' · další vydání až po ochraně a ručním posouzení.'));
    article.append(blockText('p','Poslední zpracování: '+monitoringProcessingTime(row)+' · '+monitoringProcessingOutcome(row)));
    article.append(blockText('p','Vykonavatel posledního běhu: '+monitoringProcessingExecutor(row)));
    article.append(blockText('p',c.pool_ids.map(blockName).join(', ')+(c.search_ids.length?' + hledání: '+c.search_ids.map(blockName).join(', '):'')+' → '+c.instructions));

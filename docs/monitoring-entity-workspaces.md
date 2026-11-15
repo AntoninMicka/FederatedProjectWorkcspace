@@ -78,3 +78,7 @@ připojení existujícího poolu bez duplicity.
 Pokračuje skutečným sběrem syntetického RSS, návrhem, vydáním zprávy,
 read-only stavem a uložením týdenního rozvrhu. Jde o izolovaný profil,
 nikoli ruční akceptaci používaného desktopu nebo vzdálené nasazení.
+
+Přesné vstupy a jejich dostupnost, možné zastarání zprávy, čekání podle
+jednotlivých spotřebitelů, souhrny výběru a časový/tokový přehled popisuje
+[evidence vstupů](monitoring-input-evidence.md).

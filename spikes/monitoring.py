@@ -590,8 +590,16 @@ class Monitoring:
         ws,head,files,entities,rs=_snapshot if _snapshot is not None else self._data(pid)
         require(head==expected_head,'Projekt se změnil; obnovte seznam výstupů.')
         from spikes.report_outputs import published_outputs
-        outputs=published_outputs(pid,head,files,entities,rs,selected=output_id,include_content=True)
+        outputs=published_outputs(pid,head,files,entities,rs,selected=output_id,include_content=True,include_intent=True)
         require(len(outputs)==1,'Zpráva není v této revizi projektu dostupná.')
+        intent=outputs[0].pop('reprocess_intent',None)
+        if intent:
+            from spikes.monitoring_evidence import Evidence
+            from spikes.message_pools import MessagePools
+            from spikes.monitoring_blocks import MonitoringBlocks
+            blocks=MonitoringBlocks(self.node).read(pid,_snapshot=(dict(commit_id=head,records=list(rs.values())),files,entities))['blocks']
+            rows=MessagePools.export_readonly(self.node,pid,clock=self.clock,transferable=False)
+            outputs[0]['input_evidence']=Evidence(None,pid,blocks,rows,[],clock=self.clock).report(intent,outputs[0].get('built_at'))
         require(ws.git.head()==head,'Projekt se změnil; obnovte seznam výstupů.')
         return dict(outputs[0],commit_id=head)
 

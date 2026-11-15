@@ -8774,7 +8774,7 @@ class DesktopHandler(Handler):
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
                     return self.reply(200,result)
                 if action=='pool-view' and set(request)=={'project_id','pool_id'}:
-                    return self.reply(200,dict(messages=service.composable.pools.view(pid,request['pool_id'])))
+                    return self.reply(200,service.composable.pool_view(pid,request['pool_id']))
                 if action=='rss-status' and set(request)=={'project_id'}:
                     return self.reply(200,service.rss_runtime.status(pid))
                 if action in {'synthesis-trace','synthesis-freshness'} and set(request)=={'project_id','report_ref'}:

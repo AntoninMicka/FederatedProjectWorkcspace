@@ -69,7 +69,8 @@ class ComposableMonitoring:
         finally: os.close(fd)
 
     def catalog(self, pid, *, _snapshot=None):
-        result = self.blocks.read(pid, _snapshot=_snapshot)
+        snapshot=_snapshot if _snapshot is not None else self.blocks.reporting.read_snapshot(pid,read_only=True)
+        result = self.blocks.read(pid, _snapshot=snapshot)
         with self.pools.read_db() as db:
             bindings = {r[0]: json.loads(r[1]) for r in db.execute(
                 'SELECT source,document FROM block_bindings WHERE project=?', (pid,))}
@@ -77,10 +78,24 @@ class ComposableMonitoring:
                          result=json.loads(r[3]) if r[3] else None) for r in db.execute(
                 'SELECT id,state,document,result FROM block_jobs WHERE project=? ORDER BY rowid DESC LIMIT 100', (pid,))]
             shared_rows=shared.read_rows(db,pid)
+            successful=[dict(block=dict(id=block),pools=json.loads(raw)) for block,raw in db.execute(
+                "SELECT json_extract(document,'$.block.id'),json_extract(document,'$.pools') FROM block_jobs "
+                "WHERE project=? AND state IN ('review','published') AND json_extract(document,'$.kind')='processing'",(pid,))]
         by_job={j['id']:j for j in jobs}
         for job in shared.outcome_jobs(shared_rows):
             if job['id'] not in by_job or job['state']=='published' and by_job[job['id']]['state']!='published':by_job[job['id']]=job
         jobs=sorted(by_job.values(),key=shared.job_time,reverse=True)[:100]
+        from spikes.monitoring_evidence import Evidence,next_processing
+        from spikes.report_outputs import published_outputs
+        data,files,entities=snapshot
+        published=published_outputs(pid,data['commit_id'],files,entities,{r['revision_id']:r for r in data['records']},include_intent=True)
+        successful.extend(j['intent'] for j in shared.outcome_jobs(shared_rows) if j['state'] in {'review','published'})
+        successful.extend(o['reprocess_intent'] for o in published if o.get('reprocess_intent'))
+        pool_rows=self.pools.export_readonly(self.node,pid,clock=self.clock,transferable=False)
+        evidence=Evidence(self.pools,pid,result['blocks'],pool_rows,successful)
+        for job in jobs:
+            if job['intent'].get('kind')=='processing':
+                job['input_evidence']=evidence.report(job['intent'],(job.get('result') or {}).get('output',{}).get('built_at'))
         pending={b['id'] for j in jobs if j['intent'].get('kind')=='migration' and j['state']!='completed' for b in j['intent'].get('plan',{}).get('blocks',[])}
         for b in result['blocks']:
             b['migration_pending']=b['id'] in pending
@@ -94,13 +109,29 @@ class ComposableMonitoring:
             if b['value']['kind']=='source':
                 latest=next((j for j in jobs if j['intent'].get('kind')=='intake' and j['intent'].get('source_id')==b['id']),None)
                 b['latest_intake']={key:latest[key] for key in ('id','state','result')} if latest else None
+            if b['value']['kind']=='processing':
+                c=b['value']['config'];last_slot=(binding or {}).get('last_slot')
+                slot=processing_slot(c['schedule'],self.clock())
+                if slot:
+                    from spikes.monitoring import ident
+                    if ident(b['id'],c['schedule']['kind']+':'+slot) in by_job:last_slot=slot
+                b['next_processing_at']=next_processing(c['schedule'],self.clock(),last_slot) if binding and binding.get('enabled') else None
+                b['schedule_is_local']=c['node_id']==local_node_id(self.node)
+                b['last_issued_at']=max((o['issued_at'] for o in published if o.get('reprocess_intent',{}).get('block',{}).get('id')==b['id']),default=None)
             if b['value']['kind'] == 'pool':
-                b['message_count'] = len(self.pools.view(pid, b['id'],read_only=True))
+                b['processing_status']=evidence.pool(b['id'])
+                b['message_count'] = len(evidence.views.get(b['id'],[]))
                 b['last_received_sync'] = next((j['intent'].get('received_at') for j in jobs
                     if j['state']=='completed' and j['intent'].get('kind') == 'pool-sync' and b['id'] in j['intent'].get('pool_ids', [])), None)
             b['run_count'] = sum(j['intent'].get('block', {}).get('id') == b['id'] for j in jobs)
         result.update(node_id=local_node_id(self.node), jobs=jobs)
         return result
+
+    def pool_view(self,pid,pool_id):
+        catalog=self.catalog(pid)
+        block=next((b for b in catalog['blocks'] if b['id']==pool_id and b['value']['kind']=='pool'),None)
+        require(block,'Choose an available pool')
+        return dict(messages=self.pools.view(pid,pool_id,read_only=True),processing_status=block['processing_status'])
 
     def remove(self, pid, base_head, block, operation_id, *, confirm, checkpoint=lambda stage: None):
         require(confirm is True, 'Confirm removal from the active catalog; history is retained')
@@ -234,12 +265,17 @@ class ComposableMonitoring:
             refs.extend([b['ref']['artifact_id'], by_id[b['value']['config']['pool_id']]['ref']['artifact_id']])
         return digest(encoded(sorted(refs)))
 
-    def _selected(self, pid, source, items, filters, by_id, observed):
+    def _selected(self, pid, source, items, filters, by_id, observed, summaries=None):
         rows = {}; node_id = local_node_id(self.node)
         existing = self.pools.export(pid)
         for filter_ in filters:
             c = filter_['value']['config']; pool = by_id[c['pool_id']]
             results = evaluate(c['pipeline'], items)['results']
+            if summaries is not None:
+                counts={}
+                for result in results:
+                    key=(result['decision'],result['reason']);counts[key]=counts.get(key,0)+1
+                summaries.extend(dict(filter_id=filter_['id'],decision=k[0],reason=k[1],count=count) for k,count in counts.items())
             errors = [r for r in results if r['decision'] not in {'selected', 'discarded'}]
             require(not errors, 'Filter failed or awaits explicit processing: '+str(errors[:1]))
             expires = stamp(self.clock()+pool['value']['config']['retention_days']*86400)
@@ -338,11 +374,11 @@ class ComposableMonitoring:
                     require(response['status'] in {200, 304}, 'Unexpected RSS response')
                     validators = checked_validators(response['validators'])
                     require(response['status'] != 304 or binding['validators'], 'Unexpected initial RSS 304')
-                    now = stamp(self.clock()); rows = []; items = None
+                    now = stamp(self.clock()); rows = []; items = None; summaries=[]
                     if response['status'] == 200:
                         context = SourceContext(id_, c['locator'], now, source['privacy'], c['retention'], channel=source['value']['title'])
                         items = RSSConnector().normalize(dict(raw=response['raw'], url=c['locator']), context)['items']
-                        rows = self._selected(pid, source, items, filters, by_id, now)
+                        rows = self._selected(pid, source, items, filters, by_id, now,summaries)
                     # Definition edit during HTTP must not silently approve different rules.
                     require(self.blocks.read(pid)['commit_id'] == catalog['commit_id'], 'Definitions changed during intake')
                     binding.update(validators=validators, consent=selection,
@@ -356,7 +392,7 @@ class ComposableMonitoring:
                         self.pools._merge(db, pid, rows, checkpoint=checkpoint)
                         db.execute("UPDATE block_jobs SET state='completed',result=? WHERE id=?",
                                    (encoded(dict(status=response['status'], accepted=len(rows),filter_count=len(filters),input_items=len(items) if items is not None else None,
-                                                 selected_items=len(selected_ids) if items is not None else None,new_items=len(selected_ids)-existing_count)), job_id))
+                                                 selected_items=len(selected_ids) if items is not None else None,new_items=len(selected_ids)-existing_count,selection_summary=summaries)), job_id))
                         db.execute('UPDATE block_bindings SET document=? WHERE project=? AND source=?', (encoded(binding), pid, id_))
                     checkpoint('intake-committed')
                 except Exception as exc:
@@ -830,7 +866,7 @@ class ComposableMonitoring:
                                  exc,original=intent,reprocess_of=run_id)
             raise
         audit = deepcopy(intent)
-        audit['pools'] = {pool_id: [dict(key=g['key'], revisions=[dict(revision=r['revision'], item_entry=r['item_entry']) for r in g['revisions']]) for g in groups] for pool_id, groups in intent['pools'].items()}
+        audit['pools'] = {pool_id: [dict(key=g['key'], revisions=[dict(revision=r['revision'], item_entry=r['item_entry'],source_id=r.get('item',{}).get('source_id')) for r in g['revisions']],contributions=[{k:m[k] for k in ('filter_id','filter_revision','item_entry','selected_at') if k in m} for m in g.get('contributions',[])]) for g in groups] for pool_id, groups in intent['pools'].items()}
         audit['searches'] = {id_: digest(encoded(v)) for id_, v in intent['searches'].items()}
         if result.get('protection'): audit['protection_until'] = result['protection']['until']
         if result.get('output'):audit.update(built_at=result['output']['built_at'],run_id=run_id)

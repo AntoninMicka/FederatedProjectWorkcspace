@@ -5,6 +5,7 @@ HTML='''<div id="report-output-view" hidden>
 <header><h1 id="report-output-title">Zpráva</h1></header>
 <p id="report-output-status" role="status" aria-live="polite"></p>
 <div id="report-output-actions" class="form-actions"></div>
+<section id="report-output-inputs" aria-label="Použité vstupy zprávy"></section>
 <section id="report-output-content" aria-label="Obsah zprávy"></section>
 </div>'''
 CSS='''
@@ -19,6 +20,27 @@ CSS='''
 #sidebar-output-tree .sidebar-list-main:hover{background:#274154}
 '''
 JS=r'''
+function renderReportInputEvidence(evidence){
+ const container=document.querySelector('#report-output-inputs');container.replaceChildren();
+ if(!evidence){container.append(blockText('p','Přesné vstupy nejsou pro tento starší výstup dostupné.'));return;}
+ container.append(blockText('h2','Přesné použité vstupy'));
+ container.append(blockText('p',evidence.coverage));
+ if(evidence.processing_ref)container.append(blockText('p','Připnutá definice zpracování: '+evidence.processing_ref.artifact_id+' · commit '+evidence.processing_ref.commit_id));
+ if(evidence.input_head)container.append(blockText('p','Vstupní revize projektu: '+evidence.input_head));
+ for(const [id,hash] of Object.entries(evidence.searches||{}))container.append(blockText('p','Hledání: '+blockName(id)+' · SHA-256 '+hash));
+ if(evidence.potentially_stale)container.append(blockText('p','Možné zastarání: je dostupná dodatečná obsahová verze použitého vstupu. Původní zpráva zůstává zachována.'));
+ const scroll=document.createElement('div');scroll.className='monitoring-table-scroll';
+ const table=document.createElement('table');table.className='monitoring-catalog-table';
+ const header=document.createElement('tr');for(const name of ['Pool','Zdroj / položka','Přesná verze','Dostupnost']){const th=blockText('th',name);th.scope='col';header.append(th);}
+ const head=document.createElement('thead');head.append(header);table.append(head);
+ const body=document.createElement('tbody');
+ for(const input of evidence.inputs){const row=document.createElement('tr');
+  for(const text of [input.pool_title,(input.source_id?blockName(input.source_id)+' · ':'')+(input.title||'Obsah již není místně dostupný'),input.revision+' · '+input.item_entry+(input.filter_revisions.length?' · filtry: '+input.filter_revisions.join(', '):''),input.available?'Dostupná'+(input.additional_versions.length?' · další obsahová verze':''):'Nedostupná / po retenci'])row.append(blockText('td',text));
+  body.append(row);
+ }
+ table.append(body);scroll.append(table);container.append(scroll);
+ if(!evidence.inputs.length)container.append(blockText('p','Žádné použité položky poolů; případné webové hledání zůstává v původní evidenci běhu.'));
+}
 let selectedReportOutput=null,reportOutputSequence=0;
 const reportReprocessRequests=new Map(),reportReprocessBusy=new Set();
 function reportReprocessDeadline(job){
@@ -87,11 +109,12 @@ async function openReportOutput(output){
  const project=activeProject;if(!project||!await canLeaveWorkspaceEditors()||activeProject!==project)return;
  const pid=project.id,sequence=++reportOutputSequence,view=document.querySelector('#report-output-view'),content=document.querySelector('#report-output-content'),actions=document.querySelector('#report-output-actions'),status=document.querySelector('#report-output-status');
  selectedReportOutput=output.id;renderReportOutputs();selectSidebarTab(document.querySelector('#presentations-tab'));showWorkspacePage(view);
- document.querySelector('#report-output-title').textContent=output.title;content.replaceChildren();actions.replaceChildren();status.textContent='Načítám konkrétní zprávu…';
+ document.querySelector('#report-output-title').textContent=output.title;content.replaceChildren();actions.replaceChildren();status.textContent='Načítám konkrétní zprávu…';document.querySelector('#report-output-inputs').replaceChildren();
  try{
   const report=output.source==='git'?await monitoringRequest('output',{output_id:output.id,expected_head:monitoringView.commit_id}):output;
   if(activeProject?.id!==pid||sequence!==reportOutputSequence||view.hidden)return;
   status.textContent=output.source==='git'?'Vydaná zpráva':output.source==='block-draft'?monitoringProcessingJobOutcome(output.job):report.state==='review'?'Návrh zprávy — čeká na posouzení.':'Nevydaný návrh';
+  renderReportInputEvidence(report.input_evidence||output.job?.input_evidence);
   actions.append(monitoringButton('Export Markdown',()=>exportReportMarkdown(output.title,report.markdown)));
   if(output.source==='block-draft'||output.kind==='block-report')actions.append(reportReprocessButton(output.job?.id||report.run_id,output.job?reportReprocessDeadline(output.job):report.reprocess_until,activeProject.readOnly||!monitoringView.can_manage));
   if(output.source==='git'){

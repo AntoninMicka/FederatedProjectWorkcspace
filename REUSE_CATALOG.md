@@ -1766,3 +1766,11 @@ místních a sdílených běhů i jejich chyb a ochranného intervalu. Jedno UI
 vysvětlení slouží tabulce, detailu bloku a konkrétní zprávě. Odděluje
 aktivaci rozvrhu, plánovaný uzel a skutečného vykonavatele; nepřidává nový
 monitor dostupnosti, persistentní stav ani synchronizační pole.
+
+MON-08-09 evidence vstupů **reuse/adaptuje** immutable audit vydání,
+Reporting snapshot, retained pool references, sdílené výsledky a původní
+kalendář. `monitoring_evidence.py` přidává pouze čtecí projekci. Souhrny
+rozhodnutí se ukládají v původní transakci sběru bez odmítnutých textů;
+nová vydání zachovávají doplňkové reference provenience. **Reject:** druhý
+processing ledger, obnovení expirovaných textů a automatické přegenerování
+při otevření zprávy. Viz [evidence a obnova](docs/monitoring-input-evidence.md).

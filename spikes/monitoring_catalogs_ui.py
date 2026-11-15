@@ -55,13 +55,13 @@ function monitoringProcessingExecutor(row){
  return id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes?.find(n=>n.id===id)?.name||'Jiný uzel');
 }
 function monitoringCatalogColumns(kind){
- if(kind==='source')return [['Kanál / hledání',r=>r.value.config.locator],['Kontrola zdroje',r=>r.value.config.connector==='rss-atom'?r.value.config.poll_seconds/60+' min':'Na vyžádání'],['Sdílená aktivace',r=>r.runtime?.error|| (r.runtime?.enabled?'Zapnutý':'Vypnutý')],['Poslední výsledek',r=>r.value.config.connector==='rss-atom'?monitoringIntakeOutcome(r.latest_intake):'Hledání pouze při zpracování']];
+ if(kind==='source')return [['Kanál / hledání',r=>r.value.config.locator],['Kontrola zdroje',r=>r.value.config.connector==='rss-atom'?r.value.config.poll_seconds/60+' min':'Na vyžádání'],['Sdílená aktivace',r=>r.runtime?.error|| (r.runtime?.enabled?'Zapnutý':'Vypnutý')],['Poslední sběr',r=>r.runtime?.last_success||'Není uložen'],['Příští sběr',r=>r.value.config.connector==='rss-atom'&&r.runtime?.enabled?new Date(r.runtime.next_due*1000).toLocaleString():'Neaktivní / na vyžádání'],['Poslední výsledek',r=>r.value.config.connector==='rss-atom'?monitoringIntakeOutcome(r.latest_intake):'Hledání pouze při zpracování']];
  if(kind==='filter')return [['Vstupní zdroje',r=>r.value.config.source_ids.map(blockName).join(', ')],['Pravidla',r=>r.value.config.pipeline.steps.map(s=>s.kind).join(' → ')],['Cílový pool',r=>blockName(r.value.config.pool_id)]];
- if(kind==='pool')return [['Zprávy',r=>String(r.message_count??0)],['Uchování',r=>r.value.config.retention_days+' dní'],['Příjem synchronizace',r=>r.last_received_sync||'Zatím nepotvrzen']];
+ if(kind==='pool')return [['Zprávy',r=>String(r.message_count??0)],['Čekající verze',r=>r.processing_status?.consumer_ids.length?String(r.processing_status.pending_count):'Bez připojeného zpracování'],['Uchování',r=>r.value.config.retention_days+' dní'],['Příjem synchronizace',r=>r.last_received_sync||'Zatím nepotvrzen']];
  return [['Vstupní pooly',r=>r.value.config.pool_ids.map(blockName).join(', ')],['Rozvrh',r=>{
   const c=r.value.config.schedule,label=({manual:'Na vyžádání',daily:'Denně',weekly:'Týdně',monthly:'Měsíčně',quarterly:'Čtvrtletně',annual:'Ročně'})[c.kind];
   return c.kind==='manual'?label:label+' v '+c.time+' ('+c.timezone+')';
- }],['Plánovaný uzel',r=>r.value.config.node_id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes?.find(n=>n.id===r.value.config.node_id)?.name||'Jiný uzel')],['Aktivace rozvrhu',monitoringProcessingPlan],['Poslední zpracování',monitoringProcessingTime],['Skutečný vykonavatel',monitoringProcessingExecutor],['Výsledek',monitoringProcessingOutcome]];
+ }],['Plánovaný uzel',r=>r.value.config.node_id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes?.find(n=>n.id===r.value.config.node_id)?.name||'Jiný uzel')],['Aktivace rozvrhu',monitoringProcessingPlan],['Poslední zpracování',monitoringProcessingTime],['Příští zpracování',r=>r.next_processing_at?new Date(r.next_processing_at*1000).toLocaleString():'Ruční / neaktivní'],['Poslední vydání',r=>r.last_issued_at?new Date(r.last_issued_at).toLocaleString():'Žádné uložené vydání'],['Skutečný vykonavatel',monitoringProcessingExecutor],['Výsledek',monitoringProcessingOutcome]];
 }
 
 function monitoringCatalogTable(kind,rows,{task=null}={}){
@@ -148,6 +148,25 @@ async function retryMonitoringAggregate(){
  }
 }
 
+function renderMonitoringFlow(container,task){
+ const details=document.createElement('details');details.dataset.monitoringFlow='';details.append(blockText('summary','Tok dat a závislosti'));
+ const rows=blockRows(),ids=new Set(task.resolved_ids||Object.values(task.value.config).filter(Array.isArray).flat());
+ const table=document.createElement('table');table.className='monitoring-catalog-table';
+ const head=document.createElement('tr');for(const text of ['Z části','Do části'])head.append(blockText('th',text));table.append(head);
+ // Pool producers are visible even when shared outside the task membership.
+ for(const filter of rows.filter(b=>b.value.kind==='filter'&&ids.has(b.value.config.pool_id))){ids.add(filter.id);for(const id of filter.value.config.source_ids)ids.add(id);}
+ const edges=[];
+ for(const row of rows.filter(b=>ids.has(b.id))){const c=row.value.config;
+  if(row.value.kind==='filter'){for(const id of c.source_ids)edges.push([id,row.id]);edges.push([row.id,c.pool_id]);}
+  if(row.value.kind==='processing')for(const id of [...c.pool_ids,...c.search_ids])edges.push([id,row.id]);
+ }
+ const visiting=new Set(),done=new Set();
+ function cycle(id){if(visiting.has(id))return true;if(done.has(id))return false;visiting.add(id);for(const [,to] of edges.filter(e=>e[0]===id))if(cycle(to))return true;visiting.delete(id);done.add(id);return false;}
+ if([...ids].some(cycle))details.append(blockText('p','Propojení obsahuje cyklus; sestavu před spuštěním opravte.'));
+ for(const [from,to] of edges){const tr=document.createElement('tr');tr.append(blockText('td',blockName(from)),blockText('td',blockName(to)));table.append(tr);}
+ if(!edges.length)details.append(blockText('p','Sestava zatím nemá propojené části.'));
+ const scroll=document.createElement('div');scroll.className='monitoring-table-scroll';scroll.append(table);details.append(scroll);container.append(details);
+}
 function renderMonitoringTaskAggregate(container,row){
  const section=document.createElement('section');section.className='monitoring-task-aggregate';section.dataset.monitoringTask=row.id;
  section.append(blockText('h3',row.value.title));
@@ -159,6 +178,7 @@ function renderMonitoringTaskAggregate(container,row){
  if(!row.value.config.processing_ids.length)section.append(blockText('p','Před spuštěním přidejte zpracování zpráv.'));
  const resolved=new Set(row.resolved_ids||Object.values(row.value.config).filter(Array.isArray).flat());
  for(const kind of ['source','filter','pool','processing'])section.append(monitoringCatalogTable(kind,blockRows().filter(b=>b.value.kind===kind&&resolved.has(b.id)),{task:row}));
+ renderMonitoringFlow(section,row);
  container.append(section);
 }
 '''

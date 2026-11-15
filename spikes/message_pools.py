@@ -252,7 +252,14 @@ class MessagePools:
     def view(self, project_id, pool_id, *, since=None, read_only=False, _rows=None):
         uuid(pool_id)
         rows = _rows if _rows is not None else (self.export_readonly(self.scheduler.node, project_id,clock=self.clock,transferable=False)
-                if read_only else self.export(project_id)); by_id = {r['id']: r for r in rows}; grouped = {}
+                if read_only else self.export(project_id))
+        return self.view_rows(project_id,pool_id,rows,since=since)
+
+    @staticmethod
+    def view_rows(project_id,pool_id,rows,*,since=None):
+        """Project already retained rows without initializing a pool store."""
+        uuid(pool_id)
+        by_id = {r['id']:r for r in rows};grouped={}
         for row in rows:
             if row['kind'] != 'membership' or row['value']['pool_id'] != pool_id: continue
             v = row['value']; item = by_id[v['item_entry']]['value']['item']
