@@ -41,6 +41,7 @@ const sidebarToolNewOptions={hidden:false},sidebarNewTool={setAttribute(){}};
 function monitoringOpen(){opened.push('open');}function renderMonitoringBlocks(){}
 async function editMonitoringBlock(kind){opened.push(kind);}
 const compose={hidden:true,focus(){opened.push('focus');}};
+function openMonitoringDesign(kind){assert.equal(kind,'task');compose.hidden=false;compose.focus();}
 const document={querySelector:()=>compose};
 function closeMobileSidebar(){}function closeCompactSidebarMenu(){}
 '''+function('createMonitoringTool')+r'''

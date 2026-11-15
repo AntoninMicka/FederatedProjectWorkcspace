@@ -41,6 +41,20 @@ transakci jako pool a dokončení příjmu. Nevzniká uložená kopie odmítnut�
 Starší záznam bez počtů ani absence výsledku v omezeném přehledu nejsou
 vydávány za úspěšnou kontrolu s nulovým nálezem.
 
+Tabulka zpracování odděluje aktivaci rozvrhu od výsledku posledního dostupného
+běhu. Zapnutý rozvrh nezakrývá chybu, unknown ani neúplné vstupy. Výsledek
+rozlišuje probíhající zpracování, ochranné období, chybu při jeho dokončení,
+návrh k posouzení a vydanou zprávu. Stejné vysvětlení používá detail zprávy,
+vždy pro konkrétní otevřený běh, nikoliv novější výsledek stejného bloku.
+
+Plánovaný uzel je oddělený od skutečného vykonavatele posledního běhu;
+ruční běh může proběhnout na jiném uzlu. Čas pochází z výsledku, případně
+ze začátku běhu. Bez uloženého výsledku se zobrazuje nedostupnost evidence.
+Přehled využívá omezený stávající katalog běhů; není úplným archivem ani
+kontrolou dosažitelnosti vzdáleného uzlu. Zobrazení nic nezapisuje a nemění
+rozvrh, aktivaci ani zpracování. Rozpoznání neúplných vstupů používá stávající
+hlášení doménové kontroly přenosu, bez změny synchronizačního formátu.
+
 ## Vlastnictví a obnova
 
 Reuse/adapt: původní katalog a výpočet využití, `MonitoringBlocks.save`,

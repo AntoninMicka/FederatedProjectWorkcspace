@@ -91,7 +91,7 @@ async function openReportOutput(output){
  try{
   const report=output.source==='git'?await monitoringRequest('output',{output_id:output.id,expected_head:monitoringView.commit_id}):output;
   if(activeProject?.id!==pid||sequence!==reportOutputSequence||view.hidden)return;
-  status.textContent=output.source==='git'?'Vydaná zpráva':report.state==='review'?'Návrh zprávy — čeká na posouzení.':'Nevydaný návrh';
+  status.textContent=output.source==='git'?'Vydaná zpráva':output.source==='block-draft'?monitoringProcessingJobOutcome(output.job):report.state==='review'?'Návrh zprávy — čeká na posouzení.':'Nevydaný návrh';
   actions.append(monitoringButton('Export Markdown',()=>exportReportMarkdown(output.title,report.markdown)));
   if(output.source==='block-draft'||output.kind==='block-report')actions.append(reportReprocessButton(output.job?.id||report.run_id,output.job?reportReprocessDeadline(output.job):report.reprocess_until,activeProject.readOnly||!monitoringView.can_manage));
   if(output.source==='git'){

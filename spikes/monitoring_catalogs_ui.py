@@ -16,11 +16,52 @@ function monitoringIntakeOutcome(job){
  if(result.new_items===0)return 'Bez nových revizí · vybráno: '+result.selected_items;
  return 'Nové revize: '+result.new_items+' · vybráno: '+result.selected_items+' z '+result.input_items;
 }
+function monitoringLatestProcessing(row){
+ return (blockCatalog?.jobs||[]).find(j=>j.intent.kind==='processing'&&j.intent.block?.id===row.id&&!j.intent.regeneration_of&&!j.result?.replacement)||null;
+}
+function monitoringProcessingFailure(error){
+ return String(error||'').startsWith('Neúplný přenos vstupních dat:')?'Neúplné vstupy: '+error:'Chyba: '+(error||'Zpracování selhalo');
+}
+function monitoringProcessingOutcome(row){
+ return monitoringProcessingJobOutcome(monitoringLatestProcessing(row));
+}
+function monitoringProcessingJobOutcome(job){
+ if(!job)return 'Výsledek není v přehledu k dispozici';
+ if(job.state==='unknown')return 'Unknown · výsledek není známý: '+(job.result?.error||'vyžaduje posouzení');
+ if(job.state==='failed')return monitoringProcessingFailure(job.result?.error);
+ if(job.state==='published')return 'Zpráva vydána';
+ if(job.state==='review'){
+  const guard=job.result?.protection;
+  if(guard?.error)return monitoringProcessingFailure(guard.error);
+  if(guard&&!guard.finalized)return 'Ochranné období do '+new Date(guard.until*1000).toLocaleString()+(guard.changed?' · přibyly nezahrnuté vstupy':'');
+  return 'Návrh čeká na posouzení a vydání';
+ }
+ return ({prepared:'Čeká na zpracování',dispatching:'Probíhá zpracování',cancelled:'Zpracování zrušeno'})[job.state]||'Stav výsledku není známý';
+}
+function monitoringProcessingPlan(row){
+ if(row.migration_pending)return 'Čeká na dokončení převodu';
+ if(row.runtime?.error)return row.runtime.error;
+ if(row.value.config.schedule.kind==='manual')return 'Pouze ruční spuštění';
+ return row.runtime?.enabled?'Pravidelný běh zapnutý':'Pravidelný běh není aktivovaný';
+}
+function monitoringProcessingTime(row){
+ const job=monitoringLatestProcessing(row);if(!job)return 'V přehledu není uložen';
+ const at=job.result?.output?.built_at||(Number.isFinite(job.intent.started_at)?job.intent.started_at*1000:null);
+ return at?new Date(at).toLocaleString():'Čas není uložen';
+}
+function monitoringProcessingExecutor(row){
+ const job=monitoringLatestProcessing(row),id=job?.intent.executor_node_id;
+ if(!id)return 'Nezjištěn';
+ return id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes?.find(n=>n.id===id)?.name||'Jiný uzel');
+}
 function monitoringCatalogColumns(kind){
  if(kind==='source')return [['Kanál / hledání',r=>r.value.config.locator],['Kontrola zdroje',r=>r.value.config.connector==='rss-atom'?r.value.config.poll_seconds/60+' min':'Na vyžádání'],['Sdílená aktivace',r=>r.runtime?.error|| (r.runtime?.enabled?'Zapnutý':'Vypnutý')],['Poslední výsledek',r=>r.value.config.connector==='rss-atom'?monitoringIntakeOutcome(r.latest_intake):'Hledání pouze při zpracování']];
  if(kind==='filter')return [['Vstupní zdroje',r=>r.value.config.source_ids.map(blockName).join(', ')],['Pravidla',r=>r.value.config.pipeline.steps.map(s=>s.kind).join(' → ')],['Cílový pool',r=>blockName(r.value.config.pool_id)]];
  if(kind==='pool')return [['Zprávy',r=>String(r.message_count??0)],['Uchování',r=>r.value.config.retention_days+' dní'],['Příjem synchronizace',r=>r.last_received_sync||'Zatím nepotvrzen']];
- return [['Vstupní pooly',r=>r.value.config.pool_ids.map(blockName).join(', ')],['Rozvrh',r=>({manual:'Na vyžádání',daily:'Denně',weekly:'Týdně',monthly:'Měsíčně',quarterly:'Čtvrtletně',annual:'Ročně'})[r.value.config.schedule.kind]],['Vykonavatel',r=>r.value.config.node_id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes.find(n=>n.id===r.value.config.node_id)?.name||'Jiný uzel')],['Stav',r=>r.runtime?.error|| (r.runtime?.enabled?'Pravidelný běh zapnutý':'Ruční / vypnutý')]];
+ return [['Vstupní pooly',r=>r.value.config.pool_ids.map(blockName).join(', ')],['Rozvrh',r=>{
+  const c=r.value.config.schedule,label=({manual:'Na vyžádání',daily:'Denně',weekly:'Týdně',monthly:'Měsíčně',quarterly:'Čtvrtletně',annual:'Ročně'})[c.kind];
+  return c.kind==='manual'?label:label+' v '+c.time+' ('+c.timezone+')';
+ }],['Plánovaný uzel',r=>r.value.config.node_id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes?.find(n=>n.id===r.value.config.node_id)?.name||'Jiný uzel')],['Aktivace rozvrhu',monitoringProcessingPlan],['Poslední zpracování',monitoringProcessingTime],['Skutečný vykonavatel',monitoringProcessingExecutor],['Výsledek',monitoringProcessingOutcome]];
 }
 
 function monitoringCatalogTable(kind,rows,{task=null}={}){

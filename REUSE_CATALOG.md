@@ -1760,3 +1760,9 @@ editory částí, dependency closure a Reporting/Workspace CAS s receipts.
 Komplexní úloha připojuje existující ID akcemi nad tabulkami, bez vlastního
 editoru; žádné kopírování definic ani nový writer. Dva zápisy při vytvoření
 a připojení popisuje [obnova GUI](docs/monitoring-entity-workspaces.md).
+
+MON-08-09 stav zpracování **reuse/adaptuje** stávající omezený katalog
+místních a sdílených běhů i jejich chyb a ochranného intervalu. Jedno UI
+vysvětlení slouží tabulce, detailu bloku a konkrétní zprávě. Odděluje
+aktivaci rozvrhu, plánovaný uzel a skutečného vykonavatele; nepřidává nový
+monitor dostupnosti, persistentní stav ani synchronizační pole.

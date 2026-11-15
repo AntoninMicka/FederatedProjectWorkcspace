@@ -138,6 +138,9 @@ function renderMonitoringBlocks(){
     }article.append(list);
    }));
   }else if(blockTab==='processing'){
+   article.append(blockText('p','Rozvrh: '+monitoringProcessingPlan(row)));
+   article.append(blockText('p','Poslední zpracování: '+monitoringProcessingTime(row)+' · '+monitoringProcessingOutcome(row)));
+   article.append(blockText('p','Vykonavatel posledního běhu: '+monitoringProcessingExecutor(row)));
    article.append(blockText('p',c.pool_ids.map(blockName).join(', ')+(c.search_ids.length?' + hledání: '+c.search_ids.map(blockName).join(', '):'')+' → '+c.instructions));
    const schedules={manual:'Na vyžádání',daily:'Denně',weekly:'Týdně od pondělí',monthly:'Měsíčně od 1. dne',quarterly:'Čtvrtletně od 1. dne',annual:'Ročně od 1. ledna'};
    article.append(blockText('p',c.schedule.kind==='manual'?schedules.manual:schedules[c.schedule.kind]+' v '+c.schedule.time+' ('+c.schedule.timezone+')'));
