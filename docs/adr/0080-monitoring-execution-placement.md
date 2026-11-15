@@ -268,3 +268,14 @@ queue/cluster framework, automatická volba koordinátora a retry unknown jinde.
 Přesné kontrakty/probes jsou návrhy, nikoli implementované endpointy.
 Příklady: [návrhový kontrakt](../monitoring-placement-design-v1.json).
 Fyzické scénáře a důkazy: [PoC runbook](../monitoring-placement-poc.md).
+
+## Zúžení MON-08-07 pro nové bloky — 15. 11. 2026
+
+Uživatel schválil sdílené zapnutí/pozastavení, přenos návrhů i chybových
+výsledků a ruční spouštění vždy místně. Pro nové bloky to nahrazuje původní
+výhradně místní aktivace. Plánované přiřazení zůstává konkrétní; panel
+dostupnosti/schopností a komplexní předávání se nyní nevyžadují. Původní
+rozšířený execution agreement a fyzická fault matrix výše jsou odložený
+návrh, nikoliv podmínka uzavření aktuálního zúženého MON-08-07. Autority
+a recovery pro nový řez určuje [sdílený stav](../monitoring-shared-state.md)
+a odpovídající doplnění ADR 0082.

@@ -52,10 +52,10 @@ class PoolSyncTests(unittest.TestCase):
         collector.tick(self.pid)
         self.assertEqual(calls, [])
         with self.assertRaisesRegex(ValidationError, 'another node'):
-            collector.process(self.pid, spec['id'], str(uuid4()))
+            collector._process(self.pid, spec['id'], str(uuid4()),scheduled=True)
         self.f.exchange(1, 0)
-        self.assertIsNone(next(b for b in desktop.catalog(self.pid)['blocks']
-                              if b['id'] == self.specs[0]['id'])['runtime'])
+        self.assertTrue(next(b for b in desktop.catalog(self.pid)['blocks']
+                              if b['id'] == self.specs[0]['id'])['runtime']['enabled'])
         run_id = str(uuid4())
         draft = desktop.process(self.pid, spec['id'], run_id)
         self.assertEqual(draft['state'], 'review'); self.assertEqual(len(calls), 1)
@@ -66,6 +66,9 @@ class PoolSyncTests(unittest.TestCase):
         self.assertEqual(frozen['revisions'][0]['item']['content'], 'Energie dnes')
         self.assertEqual(frozen['observations'][0]['node_id'], self.f.node_ids[1])
         self.assertEqual(collector.monitoring.current_view(self.pid)['outputs'], [])
+        instant=draft['result']['protection']['until']
+        desktop.clock=desktop.pools.clock=desktop.monitoring.clock=lambda:instant
+        desktop.tick(self.pid,lane='processing')
         issued = desktop.publish(self.pid, run_id, draft['result']['approval_digest'], confirm=True)
         presentation = desktop.monitoring.output_presentation(self.pid, issued['report_ref']['artifact_id'],
             desktop.monitoring.projects.repository(self.pid).head(), confirm=True)
@@ -81,8 +84,9 @@ class PoolSyncTests(unittest.TestCase):
         self.assertFalse(output['presentations'][0]['potentially_stale'])
         detail = collector.monitoring.output(self.pid, output['id'], received['commit_id'])
         self.assertEqual(detail['markdown'], draft['result']['markdown'])
-        self.assertFalse(any(j['intent']['kind'] == 'processing'
-                             for j in received['block_catalog']['jobs']))
+        self.assertTrue(any(j['id']==run_id and j.get('shared') for j in received['block_catalog']['jobs']))
+        with collector.pools.read_db() as db:
+            self.assertIsNone(db.execute('SELECT id FROM block_jobs WHERE id=?',(run_id,)).fetchone())
         self.f.exchange(0, 1)
         self.assertEqual(collector.monitoring.current_view(self.pid)['outputs'], received['outputs'])
         self.assertEqual(len(calls), 1)
@@ -103,7 +107,7 @@ class PoolSyncTests(unittest.TestCase):
             raw = export(self.f.nodes[0], self.pid, read_only=True)
             self.assertTrue(raw)
             expired = MessagePools.export_readonly(self.f.nodes[0], self.pid, clock=lambda: 9999999999)
-            self.assertEqual(expired, [])
+            self.assertTrue(expired);self.assertTrue(all(r['kind']=='activation' for r in expired))
         with source.pools.db() as db:
             self.assertEqual(db.execute('SELECT * FROM pool_entries').fetchall(), rows_before)
         self.assertEqual(MessagePools.export_readonly(self.f.nodes[0], self.pid,
@@ -142,7 +146,8 @@ class PoolSyncTests(unittest.TestCase):
         self.assertIsNotNone(pool['last_received_sync'])
         received = target.pools.view(self.pid, pool['id'])
         self.assertEqual(received[0]['revisions'][0]['item']['content'], 'Energie dnes')
-        self.assertTrue(all(b['runtime'] is None for b in catalog['blocks']))
+        self.assertTrue(next(b for b in catalog['blocks'] if b['id']==self.specs[0]['id'])['runtime']['enabled'])
+        self.assertTrue(all(b['runtime'] is None for b in catalog['blocks'] if b['id']!=self.specs[0]['id']))
         self.assertFalse(any(j['intent']['kind'] == 'processing' for j in catalog['jobs']))
 
     def test_deleted_blocks_sync_without_losing_pool_provenance_or_activating_receiver(self):
@@ -158,7 +163,7 @@ class PoolSyncTests(unittest.TestCase):
         self.assertNotIn(self.specs[4]['id'],{b['id'] for b in received['blocks']})
         self.assertNotIn(self.specs[2]['id'],{b['id'] for b in received['blocks']})
         self.assertEqual(target.pools.view(self.pid,self.specs[1]['id'])[0]['revisions'][0]['item']['content'],'Energie dnes')
-        self.assertTrue(all(b['runtime'] is None for b in received['blocks']))
+        self.assertTrue(next(b for b in received['blocks'] if b['id']==self.specs[0]['id'])['runtime']['enabled'])
         self.f.exchange(0,1)
         self.assertEqual(len(target.catalog(self.pid)['blocks']),3)
 
@@ -184,13 +189,16 @@ class PoolSyncTests(unittest.TestCase):
         source,target=self.services
         source.configure(self.pid,self.specs[0]['id'],True,confirm=True);source.tick(self.pid)
         run=str(uuid4());prepared=source.process(self.pid,self.specs[3]['id'],run)
+        instant=prepared['result']['protection']['until'];source.clock=source.pools.clock=source.monitoring.clock=lambda:instant
+        source.tick(self.pid,lane='processing')
         issued=source.publish(self.pid,run,prepared['result']['approval_digest'],confirm=True)
         self.f.exchange(0,1)
         view=target.monitoring.view(self.pid)
         report=next(r for r in view['outputs'] if r['id']==issued['report_ref']['artifact_id'])
         self.assertEqual(report['title'],prepared['result']['output']['title'])
         self.assertNotIn('markdown',report)
-        self.assertFalse(any(j['intent']['kind']=='processing' for j in target.catalog(self.pid)['jobs']))
+        self.assertTrue(any(j['id']==run and j.get('shared') for j in target.catalog(self.pid)['jobs']))
+        with target.pools.read_db() as db:self.assertIsNone(db.execute('SELECT id FROM block_jobs WHERE id=?',(run,)).fetchone())
         detail=target.monitoring.output(self.pid,report['id'],view['commit_id'])
         self.assertIn('Energie dnes',detail['markdown'])
         self.assertEqual(detail['run_id'],run)

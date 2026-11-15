@@ -40,3 +40,12 @@ Ověření: `tests.test_processing_calendar` a příslušné testy
 restart, následující týden a změnu revize bez nového souhlasu. Skutečný
 Qt/WebEngine scénář `tests.test_monitoring_blocks_browser` kontroluje nabídku
 všech period a uložení týdenního rozvrhu formulářem.
+
+## Sdílená aktivace — upřesnění 15. 11. 2026
+
+Původní pravidlo výhradně místní aktivace výše nahrazuje
+[sdílený stav](monitoring-shared-state.md). Zapnutí i pozastavení lze provést
+z kteréhokoliv oprávněného uzlu a přenášejí se jako explicitní rozhodnutí.
+Samotná nová definice bez rozhodnutí zůstává neaktivní. Plánované běhy stále
+respektují konkrétního vykonavatele a lokální sloty; ruční běhy jsou vždy
+místní. Přenášejí se dokončené výsledky a chyby, nikoliv provozní journaly.

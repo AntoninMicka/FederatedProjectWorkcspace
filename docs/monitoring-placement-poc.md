@@ -3,6 +3,11 @@
 
 # MON-08-07 — plán fyzického PoC Omnia ↔ desktop
 
+Aktuální MON-08-07 byl uživatelem 15. 11. 2026 zúžen podle
+[sdíleného stavu](monitoring-shared-state.md). Níže zůstává historický návrh
+rozšířeného execution protokolu a jeho fyzického PoC. Komplexní předávání
+a povinná fyzická fault matrix nejsou podmínkou současného zúženého úkolu.
+
 Stav: **interní journal implementován, vzdálený runtime a fyzický PoC neprovedeny**. Autority a recovery popisuje
 [ADR 0080](adr/0080-monitoring-execution-placement.md). Dokument ani JSON
 příklady neaktivují worker, grant, přiřazení nebo nový endpoint.

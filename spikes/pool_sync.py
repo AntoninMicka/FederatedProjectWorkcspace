@@ -23,7 +23,7 @@ def validate(raw, project_id):
     require(isinstance(rows, list) and len(rows) <= 20000, 'Invalid pool payload')
     for row in rows:
         validate_entry(row, project_id)
-        privacy = row['value'].get('privacy') if row['kind'] == 'membership' else row['value'].get('item', {}).get('privacy')
+        privacy = row['value'].get('privacy') if row['kind'] in {'membership','activation','report-outcome'} else row['value'].get('item', {}).get('privacy')
         require(privacy != 'local-only', 'Pool sync contains local-only data')
     require(len({r['id'] for r in rows}) == len(rows), 'Duplicate pool sync entry')
     return rows
@@ -36,8 +36,30 @@ def apply(node, project_id, raw, *, checkpoint=lambda stage: None, operation_id=
     records = {r['revision_id']: r for r in data['records']}
     blocks = {r['entity_id']: r for r in records.values() if r['type'] == 'MonitoringBlock'}
     items = {r['id']: r['value']['item'] for r in rows if r['kind'] == 'item'}
+    checked_pins={}
     for row in rows:
         v = row['value']
+        if row['kind'] in {'activation','report-outcome'}:
+            pin=v['block_ref'];definition=records.get(pin['artifact_id'])
+            require(definition and definition['type']=='MonitoringBlock' and definition['entity_id']==v['block_id'],
+                    'Shared monitoring definition is unavailable')
+            require(PRIVACY[v['privacy']]>=PRIVACY[definition['privacy']] and pin['project_id']==project_id,
+                    'Shared monitoring privacy or project differs')
+            from spikes.reporting import Reporting as _Reporting
+            # Pin validation checks the historical bytes and cross-project access.
+            key=(pin['artifact_id'],pin['commit_id'])
+            if key not in checked_pins:checked_pins[key]=_Reporting(node).pin(project_id,*key)
+            actual=checked_pins[key]
+            require(actual==pin,'Shared monitoring pin differs')
+            if row['kind']=='activation':
+                require(definition['value']['kind'] in {'source','processing'},'Invalid activation target')
+                require(definition['value']['kind']!='source' or definition['value']['config']['connector']=='rss-atom','Only RSS sources permit periodic intake')
+            else:
+                require(definition['value']==v['intent']['block']['value'],'Shared report definition differs')
+                if v['state']=='published':
+                    published=v['result']['report_ref'];key=(published['artifact_id'],published['commit_id'])
+                    if key not in checked_pins:checked_pins[key]=_Reporting(node).pin(project_id,*key)
+                    require(checked_pins[key]==published,'Published outcome artifact is unavailable or differs')
         if row['kind'] == 'membership':
             pool = blocks.get(v['pool_id']); filter_ = records.get(v['filter_revision'])
             require(pool and pool['value']['kind'] == 'pool' and filter_ and

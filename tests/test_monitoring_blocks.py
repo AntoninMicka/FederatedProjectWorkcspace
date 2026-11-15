@@ -67,6 +67,9 @@ class BlockTests(unittest.TestCase):
             self.service.blocks.save(self.f.project, head, invalid, str(uuid4()))
         self.assertEqual(head, self.f.git.head())
 
+    def data_entries(self):
+        return [r for r in self.service.pools.export(self.f.project) if r['kind'] in {'item','membership','observation'}]
+
     def activate(self):
         self.service.configure(self.f.project, self.specs[0]['id'], True, confirm=True)
 
@@ -125,7 +128,7 @@ class BlockTests(unittest.TestCase):
         updated['value']['config']['pipeline']['steps']=[dict(id='terms',kind='keywords',fields=['content'],all=['missing'],any=[],none=[],case_sensitive=False)]
         self.service.blocks.save(self.f.project,self.f.git.head(),[updated],str(uuid4()))
         self.activate(); self.service.tick(self.f.project)
-        self.assertEqual(self.service.pools.export(self.f.project),[])
+        self.assertEqual(self.data_entries(),[])
         self.assertNotIn(b'Energie dnes', b''.join(self.f.git.snapshot(self.f.git.head()).values()))
 
     def test_intake_counts_distinguish_no_match_repeat_empty_and_unchanged(self):
@@ -143,7 +146,7 @@ class BlockTests(unittest.TestCase):
             self.assertEqual(source['latest_intake']['state'],'completed')
             return source['latest_intake']['result']
         first=collect();self.assertEqual((first['input_items'],first['selected_items'],first['new_items']),(1,0,0))
-        self.assertEqual(self.service.pools.export(self.f.project),[])
+        self.assertEqual(self.data_entries(),[])
         saved=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==updated['id'])
         updated['previous']=[saved['ref']];updated['value']['config']=deepcopy(self.specs[2]['value']['config'])
         self.service.blocks.save(self.f.project,self.f.git.head(),[updated],str(uuid4()));self.activate()
@@ -235,9 +238,9 @@ class BlockTests(unittest.TestCase):
     def test_expired_membership_cannot_resurrect_and_unknown_intake_stays_blocked(self):
         self.activate();self.service.tick(self.f.project);rows=self.service.pools.export(self.f.project)
         self.service.pools.clock=lambda:1794160000+31*86400
-        self.assertEqual(self.service.pools.export(self.f.project),[])
+        self.assertEqual(self.data_entries(),[])
         self.service.pools.merge(self.f.project,rows)
-        self.assertEqual(self.service.pools.export(self.f.project),[])
+        self.assertEqual(self.data_entries(),[])
         with self.service.pools.db() as db:
             job_id=str(uuid4());intent=dict(kind='intake',source_id=self.specs[0]['id'],expires_at=1)
             db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)',(job_id,self.f.project,'unknown',encoded(intent)))
@@ -293,7 +296,7 @@ class BlockTests(unittest.TestCase):
         self.assertEqual(row['latest_intake']['state'],'completed')
         self.assertEqual(row['latest_intake']['result']['input_items'],1)
         self.assertEqual(row['latest_intake']['result']['filter_count'],0)
-        self.assertEqual(self.service.pools.export(self.f.project),[])
+        self.assertEqual(self.data_entries(),[])
         instant[0]+=901;self.service.tick(self.f.project)
         self.assertEqual(len(calls),2)
         filter_=deepcopy(self.specs[2]);filter_['id']=str(uuid4())
@@ -487,7 +490,7 @@ s.tick(sys.argv[2],checkpoint=stop)
             return response()
         self.service.fetcher=fetch;self.service.tick(self.f.project)
         source=next(b for b in self.service.catalog(self.f.project)['blocks'] if b['id']==self.specs[0]['id'])
-        self.assertFalse(source['runtime']['enabled']);self.assertEqual(self.service.pools.export(self.f.project),[])
+        self.assertFalse(source['runtime']['enabled']);self.assertEqual(self.data_entries(),[])
 
     def test_repeated_observation_does_not_extend_existing_selection_retention(self):
         self.activate();self.service.tick(self.f.project)

@@ -10,6 +10,7 @@ import os
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from spikes import monitoring_shared as shared
 from spikes.message_pools import MessagePools, entry, revision, stamp
 from spikes.metadata import require, uuid
 from spikes.monitoring_blocks import MonitoringBlocks, dependencies
@@ -75,10 +76,19 @@ class ComposableMonitoring:
             jobs = [dict(id=r[0], state=r[1], intent=json.loads(r[2]),
                          result=json.loads(r[3]) if r[3] else None) for r in db.execute(
                 'SELECT id,state,document,result FROM block_jobs WHERE project=? ORDER BY rowid DESC LIMIT 100', (pid,))]
+            shared_rows=shared.read_rows(db,pid)
+        by_job={j['id']:j for j in jobs}
+        for job in shared.outcome_jobs(shared_rows):
+            if job['id'] not in by_job or job['state']=='published' and by_job[job['id']]['state']!='published':by_job[job['id']]=job
+        jobs=sorted(by_job.values(),key=shared.job_time,reverse=True)[:100]
         pending={b['id'] for j in jobs if j['intent'].get('kind')=='migration' and j['state']!='completed' for b in j['intent'].get('plan',{}).get('blocks',[])}
         for b in result['blocks']:
             b['migration_pending']=b['id'] in pending
             binding = bindings.get(b['id'])
+            state=shared.activation(shared_rows,b['id'])
+            if state:
+                consent=self._intake_consent(b,{r['id']:r for r in result['blocks']}) if b['value']['kind']=='source' else None
+                binding=shared.binding(b,binding,state,self.clock(),consent)
             b['runtime'] = dict(binding) if binding else None
             if b['runtime']: b['runtime'].pop('validators', None)
             if b['value']['kind']=='source':
@@ -119,8 +129,8 @@ class ComposableMonitoring:
         require(not any(j.get('kind')=='migration' and any(b['id']==block_id for b in j.get('plan',{}).get('blocks',[])) for j in jobs),
                 'Nejdříve dokončete přerušený převod sledování.')
 
-    def configure(self, pid, source_id, enabled, *, confirm):
-        require(confirm is True and type(enabled) is bool, 'Confirm local intake activation')
+    def configure(self, pid, source_id, enabled, *, confirm, checkpoint=lambda stage: None):
+        require(confirm is True and type(enabled) is bool, 'Confirm shared monitoring activation')
         self.monitoring._writable(pid)
         if enabled:self._require_migration_complete(pid,source_id)
         source = next((b for b in self.blocks.read(pid)['blocks'] if b['id'] == source_id), None)
@@ -130,8 +140,6 @@ class ComposableMonitoring:
         if kind == 'source':
             require(value['config']['connector'] == 'rss-atom' and source['privacy'] != 'local-only',
                     'Only RSS sources permit periodic intake')
-        else:
-            require(value['config']['node_id'] == local_node_id(self.node), 'Processing belongs to another node')
         catalog = self.blocks.read(pid)
         by_id = {b['id']: b for b in catalog['blocks']}
         consent = self._intake_consent(source, by_id) if kind == 'source' else None
@@ -140,9 +148,77 @@ class ComposableMonitoring:
             b = json.loads(old[0]) if old else dict(next_due=self.clock(), validators={}, last_success=None, error=None)
             if b.get('revision') != source['ref']['artifact_id']:
                 b.update(next_due=self.clock(), validators={})
-            b.update(enabled=enabled, revision=source['ref']['artifact_id'], consent=consent)
+            state=shared.set_activation(db,pid,source,enabled,local_node_id(self.node))
+            b=shared.binding(source,b,state,self.clock(),consent)
             db.execute('INSERT OR REPLACE INTO block_bindings VALUES(?,?,?)', (pid, source_id, encoded(b)))
+            checkpoint('activation-stored')
         return {k: v for k, v in b.items() if k != 'validators'}
+
+    def _reconcile_activation(self,pid):
+        with self.pools.read_db() as db:
+            rows=shared.read_rows(db,pid)
+            bindings={r[0]:json.loads(r[1]) for r in db.execute('SELECT source,document FROM block_bindings WHERE project=?',(pid,))}
+        ids={r['value']['block_id'] for r in rows if r['kind']=='activation'}|set(bindings)
+        pending=[id_ for id_ in ids if (shared.activation(rows,id_) or {}).get('activation_heads')!=bindings.get(id_,{}).get('activation_heads')]
+        pending += [id_ for id_ in bindings if shared.activation(rows,id_) is None]
+        if not pending:return
+        if any(shared.activation(rows,id_) is None for id_ in bindings):
+            self.monitoring._writable(pid)
+        catalog=self.blocks.read(pid);by_id={b['id']:b for b in catalog['blocks']}
+        with self.pools.db() as db:
+            for id_ in set(pending):
+                b=by_id.get(id_)
+                if not b or b['value']['kind'] not in {'source','processing'}:continue
+                old=db.execute('SELECT document FROM block_bindings WHERE project=? AND source=?',(pid,id_)).fetchone()
+                prior=json.loads(old[0]) if old else None
+                state=shared.activation(shared.read_rows(db,pid),id_)
+                if state is None and prior is not None:
+                    state=shared.set_activation(db,pid,b,prior['enabled'],local_node_id(self.node))
+                if state is None:continue
+                consent=self._intake_consent(b,by_id) if b['value']['kind']=='source' else None
+                value=shared.binding(b,prior,state,self.clock(),consent)
+                db.execute('INSERT OR REPLACE INTO block_bindings VALUES(?,?,?)',(pid,id_,encoded(value)))
+
+    def _flush_outcomes(self,db,pid):
+        by_run={}
+        for row in shared.read_rows(db,pid):
+            if row['kind']=='report-outcome':by_run.setdefault(row['value']['run_id'],[]).append(row)
+        for run_id,state,raw,result in db.execute("SELECT id,state,document,result FROM block_jobs WHERE project=? AND state IN ('review','published','unknown','failed')",(pid,)).fetchall():
+            intent=json.loads(raw)
+            if intent.get('kind')!='processing' or 'block' not in intent or intent.get('expired'):continue
+            result=json.loads(result) if result else dict(error='Zpracování bylo přerušeno; výsledek není známý.')
+            if state in {'failed','unknown'} and not result.get('output'):
+                from spikes.report_outputs import output_title
+                result.update(output=dict(title=output_title(intent['block']['value']['title'],stamp(self.clock()),intent['block']['value']['config']['schedule']['timezone']),built_at=stamp(self.clock())),
+                    protection=dict(until=self.clock(),finalized=True,changed=False))
+                db.execute('UPDATE block_jobs SET result=? WHERE id=?',(encoded(result),run_id))
+            shared.share_outcome(db,pid,run_id,intent,result,state,local_node_id(self.node),_rows=by_run.setdefault(run_id,[]))
+
+    def _attempt(self,pid,processing_id,run_id,**kwargs):
+        try:return self._process(pid,processing_id,run_id,**kwargs)
+        except Exception as exc:
+            # A readable failure is a result. The private journal remains the
+            # authority for uncertain provider effects and never crosses nodes.
+            catalog=self.blocks.read(pid)
+            block=next((b for b in catalog['blocks'] if b['id']==processing_id),None)
+            if block is None:raise
+            from spikes.report_outputs import output_title
+            with self.pools.db() as db:
+                old=db.execute('SELECT state,document,result FROM block_jobs WHERE id=? AND project=?',(run_id,pid)).fetchone()
+                intent=json.loads(old[1]) if old else dict(project_id=pid,kind='processing',block=block,pools={},searches={},
+                    started_at=self.clock(),period_end=self.clock(),expires_at=self.clock()+30*86400,executor_node_id=local_node_id(self.node))
+                if kwargs.get('original') and not old:
+                    original=kwargs['original'];intent['period_end']=original.get('period_end',original['started_at'])
+                    intent['pools']=deepcopy(original.get('pools',{}))
+                if kwargs.get('reprocess_of'):intent.setdefault('reprocess_of',kwargs['reprocess_of'])
+                state=old[0] if old and old[0]=='unknown' else 'failed'
+                result=json.loads(old[2]) if old and old[2] else {}
+                result.update(error=shared.safe_error(exc),output=dict(title=output_title(block['value']['title'],stamp(self.clock()),block['value']['config']['schedule']['timezone']),built_at=stamp(self.clock())),
+                    protection=dict(until=self.clock(),finalized=True,changed=False))
+                if intent.get('regeneration_of'):result['replacement']=True
+                db.execute('INSERT OR REPLACE INTO block_jobs VALUES(?,?,?,?,?)',(run_id,pid,state,encoded(intent),encoded(result)))
+                shared.share_outcome(db,pid,run_id,intent,result,state,local_node_id(self.node))
+            raise
 
     @staticmethod
     def _intake_consent(source, by_id):
@@ -189,11 +265,13 @@ class ComposableMonitoring:
     def _tick(self, pid, *, checkpoint, lane):
         with self.locked(lane) as acquired:
             if not acquired: return
+            self._reconcile_activation(pid)
             with self.pools.db() as db:
                 self.pools._cleanup(db, pid)
                 # No other worker owns a dispatch after acquiring the process lock.
                 db.execute("UPDATE block_jobs SET state='unknown' WHERE project=? AND state='dispatching' "
                            "AND (json_extract(document,'$.kind')='intake')=?", (pid, lane == 'intake'))
+                if lane=='processing':self._flush_outcomes(db,pid)
                 bindings = [(r[0], json.loads(r[1])) for r in db.execute(
                     'SELECT source,document FROM block_bindings WHERE project=?', (pid,))]
             bindings = [(id_, b) for id_, b in bindings
@@ -219,11 +297,12 @@ class ComposableMonitoring:
                         binding['error'] = None
                 c = source['value']['config']
                 if source['value']['kind'] == 'processing':
+                    if c['node_id'] != local_node_id(self.node):continue
                     slot = processing_slot(c['schedule'], self.clock())
                     if slot is not None and binding.get('last_slot') != slot:
                         from spikes.monitoring import ident
                         try:
-                            result = self._process(pid, id_, ident(id_, c['schedule']['kind']+':'+slot), scheduled=True)
+                            result = self._attempt(pid, id_, ident(id_, c['schedule']['kind']+':'+slot), scheduled=True)
                             binding.update(last_slot=slot, error=None if result['state'] != 'unknown' else 'Processing outcome is unknown')
                         except Exception as exc:
                             binding.update(last_slot=slot, error=str(exc)[:500])
@@ -393,7 +472,7 @@ class ComposableMonitoring:
                 if self.clock() >= protection['until']:
                     if changed:
                         child_id = ident(run_id, 'protection-final')
-                        child = self._process(pid, intent['block']['id'], child_id,
+                        child = self._attempt(pid, intent['block']['id'], child_id,
                                               original=intent, checkpoint=checkpoint)
                         require(child['state'] == 'review', 'Protection regeneration has unknown outcome')
                         with self.pools.db() as db:
@@ -420,6 +499,7 @@ class ComposableMonitoring:
             with self.pools.db() as db:
                 db.execute("UPDATE block_jobs SET document=?,result=? WHERE id=? AND state='review'",
                            (encoded(intent), encoded(result), run_id))
+                shared.share_outcome(db,pid,run_id,intent,result,'review',local_node_id(self.node))
 
     @staticmethod
     def _same_revision(left, right):
@@ -431,11 +511,14 @@ class ComposableMonitoring:
         with self.pools.read_db() as db:
             row = db.execute('SELECT state,document,result FROM block_jobs WHERE id=? AND project=?',
                              (source_run_id,pid)).fetchone()
+            if row is None:
+                job=next((j for j in shared.outcome_jobs(shared.read_rows(db,pid)) if j['id']==source_run_id),None)
+                if job:row=(job['state'],encoded(job['intent']),encoded(job['result']))
         if row:
             intent = json.loads(row[1]); result = json.loads(row[2]) if row[2] else {}
-            require(row[0] in {'review','published'} and intent.get('kind') == 'processing'
+            require(row[0] in {'review','published','failed','unknown'} and intent.get('kind') == 'processing'
                     and not result.get('replacement'), 'Choose an original report draft or edition')
-            until = result.get('protection',{}).get('until')
+            until = 0 if row[0] in {'failed','unknown'} else result.get('protection',{}).get('until')
             if until is None:
                 until = moment(result['output']['built_at']).timestamp()+3600
             return intent, until
@@ -468,13 +551,14 @@ class ComposableMonitoring:
                     return dict(id=run_id,state=state,result=json.loads(old[2]) if old[2] else None)
             original, until = self._reprocess_source(pid,source_run_id)
             require(self.clock() >= until, 'Report protection has not ended')
-            return self._process(pid,original['block']['id'],run_id,original=original,
+            return self._attempt(pid,original['block']['id'],run_id,original=original,
                                  reprocess_of=source_run_id,protection_until=until,checkpoint=checkpoint)
 
     def process(self, pid, processing_id, run_id, *, scheduled=False):
+        self.monitoring._writable(pid)
         with self.locked('processing') as acquired:
             require(acquired, 'A monitoring effect is already running on this node')
-            return self._process(pid, processing_id, run_id, scheduled=scheduled)
+            return self._attempt(pid, processing_id, run_id, scheduled=scheduled)
 
     def _process(self, pid, processing_id, run_id, *, scheduled=False, original=None, reprocess_of=None, protection_until=None, checkpoint=lambda stage: None):
         self._require_migration_complete(pid,processing_id)
@@ -482,13 +566,19 @@ class ComposableMonitoring:
         catalog = self.blocks.read(pid); by_id = {b['id']: b for b in catalog['blocks']}
         block = by_id.get(processing_id)
         require(block and block['value']['kind'] == 'processing', 'Choose a processing block')
-        c = block['value']['config']; require(c['node_id'] == local_node_id(self.node), 'Processing belongs to another node')
+        c = block['value']['config']
+        require(not scheduled or c['node_id'] == local_node_id(self.node), 'Processing belongs to another node')
         if original is not None:
-            require(self._same_revision(block['ref'], original['block']['ref']), 'Processing definition differs from the original report')
+            same=self._same_revision(block['ref'],original['block']['ref'])
+            if reprocess_of is not None and not same:
+                before=deepcopy(original['block']['value']);current=deepcopy(block['value'])
+                before['config'].pop('node_id');current['config'].pop('node_id')
+                same=before==current and original['block']['privacy']==block['privacy']
+            require(same, 'Processing definition differs from the original report')
         anchor = original.get('period_end', original['started_at']) if original else self.clock()
         inputs = self._period_inputs(pid, block, anchor)
         frozen = dict(project_id=pid, block=block, input_head=catalog['commit_id'], pools=inputs, searches={}, kind='processing',
-                      period_end=anchor, started_at=self.clock(), expires_at=min([moment(m['expires_at']).timestamp() for groups in inputs.values() for g in groups for m in g['contributions']] or [self.clock()+86400]))
+                      executor_node_id=local_node_id(self.node),period_end=anchor, started_at=self.clock(), expires_at=min([moment(m['expires_at']).timestamp() for groups in inputs.values() for g in groups for m in g['contributions']] or [self.clock()+86400]))
         if reprocess_of is not None:
             frozen['reprocess_of'] = reprocess_of
             frozen['unavailable_input_refs'] = sorted(set(self._content_refs(original['pools']))-set(self._content_refs(inputs)))
@@ -504,6 +594,11 @@ class ComposableMonitoring:
                         json.loads(old[1]).get('regeneration_of') == frozen.get('regeneration_of') and
                         json.loads(old[1]).get('reprocess_of') == frozen.get('reprocess_of'), 'Run ID belongs to another intent')
                 return dict(id=run_id, state=old[0], result=json.loads(old[2]) if old[2] else None)
+            known=next((j for j in shared.outcome_jobs(shared.read_rows(db,pid)) if j['id']==run_id),None)
+            if known:
+                require(known['intent']['block']['id']==processing_id and
+                        known['intent'].get('reprocess_of')==reprocess_of,'Run ID belongs to another intent')
+                return dict(id=run_id,state=known['state'],result=known['result'])
             db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)', (run_id, pid, 'dispatching', encoded(frozen)))
         checkpoint('processing-dispatching')
         try:
@@ -545,6 +640,7 @@ class ComposableMonitoring:
             checkpoint('processing-result')
             with self.pools.db() as db:
                 db.execute("UPDATE block_jobs SET state='review',result=? WHERE id=?", (encoded(result), run_id))
+                shared.share_outcome(db,pid,run_id,frozen,result,'review',local_node_id(self.node))
             checkpoint('processing-committed')
             return dict(id=run_id, state='review', result=result)
         except Exception as exc:
@@ -684,9 +780,7 @@ class ComposableMonitoring:
                     db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)', (run_id,pid,'prepared',encoded(intent)))
             children = []
             for processing_id in task['value']['config']['processing_ids']:
-                if by_id[processing_id]['value']['config']['node_id'] != local_node_id(self.node):
-                    children.append(dict(block_id=processing_id, state='waiting-executor')); continue
-                child = self._process(pid, processing_id, ident(run_id, processing_id))
+                child = self._attempt(pid, processing_id, ident(run_id, processing_id))
                 children.append(dict(block_id=processing_id, run_id=child['id'], state=child['state']))
             result = dict(id=run_id, children=children, state='completed' if all(c['state']=='review' for c in children) else 'waiting')
             with self.pools.db() as db:
@@ -694,6 +788,7 @@ class ComposableMonitoring:
             return result
 
     def publish(self, pid, run_id, approval_digest, *, confirm):
+        self.monitoring._writable(pid)
         with self.locked('processing') as acquired:
             require(acquired, 'A monitoring effect is already running on this node')
             return self._publish(pid, run_id, approval_digest, confirm=confirm)
@@ -703,12 +798,20 @@ class ComposableMonitoring:
         from spikes.monitoring import ident
         with self.pools.db() as db:
             row = db.execute('SELECT state,document,result FROM block_jobs WHERE id=? AND project=?', (run_id, pid)).fetchone()
+            job=next((j for j in shared.outcome_jobs(shared.read_rows(db,pid)) if j['id']==run_id),None)
+            if job and (row is None or job['state']=='published' and row[0]!='published'):
+                row=(job['state'],encoded(job['intent']),encoded(job['result']))
         require(row and row[0] in {'review', 'published'}, 'Report draft is unavailable')
         intent, result = json.loads(row[1]), json.loads(row[2])
         require(intent['kind'] == 'processing' and result['approval_digest'] == approval_digest, 'Draft approval differs')
         require(not result.get('replacement'), 'Publish the original report run after finalization')
         require(result.get('protection', {}).get('finalized', True), 'Report protection has not finished')
         require(intent['expires_at'] > self.clock(), 'Report input retention expired')
+        if row[0]=='published' and result.get('report_ref'):
+            published=result['report_ref']
+            require(self.monitoring.reporting.pin(pid,published['artifact_id'],published['commit_id'])==published,
+                    'Published report is not available in this project')
+            return result
         audit = deepcopy(intent)
         audit['pools'] = {pool_id: [dict(key=g['key'], revisions=[dict(revision=r['revision'], item_entry=r['item_entry']) for r in g['revisions']]) for g in groups] for pool_id, groups in intent['pools'].items()}
         audit['searches'] = {id_: digest(encoded(v)) for id_, v in intent['searches'].items()}
@@ -721,4 +824,5 @@ class ComposableMonitoring:
         result['report_ref'] = ref
         with self.pools.db() as db:
             db.execute("UPDATE block_jobs SET state='published',result=? WHERE id=?", (encoded(result), run_id))
+            shared.share_outcome(db,pid,run_id,intent,result,'published',local_node_id(self.node))
         return result

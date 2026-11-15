@@ -42,17 +42,19 @@ Review ukáže výsledky původního filtrovacího enginu a neověřené vstupy.
    Po uložení nového bloku se vrátíte do rozpracované sestavy. Závislosti
    se dohledávají přes jejich ID; úprava společného filtru nevyžaduje ručně
    přepisovat seznam kanálů všech navazujících úloh.
-5. Sběr zapněte na každém zapojeném uzlu. Neexistuje výhradní těžař ani
+5. Sběr zapněte na kterémkoliv oprávněném uzlu; aktivace i pozastavení se
+   přenesou běžnou synchronizací projektu. Neexistuje výhradní těžař ani
    volba RSS leadera. Aktivovaný kanál se načítá podle svého intervalu i bez
    filtru; aktuální filtry se použijí při načtení. Jejich změna, přidání ani
    odebrání sběr nezastaví a nevyžaduje novou aktivaci kanálu. Při příští
    splatné kontrole se po změně filtrů/poolů vyžádá celé tělo kanálu, aby
    HTTP 304 nepřeskočilo nová pravidla. Bez filtrů se eviduje výsledek kontroly
-   a počet vstupů, obsah se do poolu neukládá. Místní aktivace zůstává vázaná
-   na revizi samotného zdroje; změnu jeho adresy či podmínek je třeba potvrdit.
+   a počet vstupů, obsah se do poolu neukládá. Aktivace platí pro stabilní
+   ID kanálu; změny definice ji samy neruší a HTTP validátory se při změně
+   zdroje nebo výběrových pravidel zneplatní.
 6. Spusťte zpracování nebo celou úlohu. Běh úlohy připraví návrhy svých
-   místních zpracování; u jiného uzlu ukáže waiting-executor. Nový vzdálený
-   dispatch protokol se tím nezavádí. Jednotlivé návrhy lze vydat po dokončení
+   zpracování na místním uzlu, i když je pro plánované běhy určen jiný uzel.
+   Ruční spuštění používá místní model a oprávnění. Jednotlivé návrhy lze vydat po dokončení
    [hodinového ochranného období](report-protection.md).
 
 RSS má vlastní interval a nevolá LLM. Zpracování může běžet ručně nebo
@@ -61,7 +63,9 @@ identitu; restart jej nespustí podruhé. Po výpadku se provede nejvýše aktu�
 splatný slot, nevyrábí se zpětně řada zmeškaných vydání. Webové hledání nemá vlastní periodický sběr; spouští se až jako vstup
 konkrétního sestavení zprávy, případně při aktivovaném
 [kalendářním zpracování](monitoring-processing-calendar.md).
-Uložení rozvrhu jej neaktivuje; aktivace zpracování je samostatná místní akce.
+Uložení rozvrhu jej neaktivuje; aktivace zpracování je samostatná sdílená akce.
+Přenos aktivace, návrhů i chybových výsledků popisuje
+[sdílený stav monitoringu](monitoring-shared-state.md).
 
 ## Historický panel převodu a zachované servisní API
 
@@ -139,8 +143,9 @@ exchange verze 3. Je podporován úplný **same-team / all** projektový scope.
 Vybrané větve same-company pooly nepřenášejí. Oba uzly musí mít tuto verzi
 implementace; starší příjemce nový formát odmítne. Původní přenos bez poolů
 zůstává exchange v2. Při nevyřešené divergenci projektových definic zůstane
-pool přenos čekat na vyřešení Git konfliktu. Příjem nemění lokální granty
-ani rozpracované běhy.
+pool přenos čekat na vyřešení Git konfliktu. Příjem sdílené aktivace mění zapnutí/pozastavení bloku podle
+[aktuálního kontraktu](monitoring-shared-state.md). Provozní granty starých
+WatchDefinition ani soukromé rozpracované journaly se nepřenášejí.
 
 Stejná položka z více uzlů má jednu obsahovou revizi a více pozorování.
 Stejné URL v poolu seskupuje příspěvky více filtrů; rozdílné obsahy se

@@ -197,3 +197,15 @@ stejný blokový processor, journal, RBAC a publication recovery. Git audit
 umožní určit původní období i po retenci místního běhu, ale neobnovuje
 expirované vstupní texty. Přesný lifecycle a crash boundaries popisuje
 [ruční opětovné zpracování](../report-protection.md#ruční-opětovné-zpracování).
+
+## Sdílená aktivace a výsledky — 15. 11. 2026
+
+Výslovné upřesnění uživatele nahrazuje původní výhradně místní aktivaci:
+zapnutí i pozastavení se přenášejí. Existující podepsaná logická kolekce
+rozšiřuje druhy activation/report-outcome; soukromé worker journaly, sloty
+a credentials zůstávají místní. Ruční běh je vždy místní, plánovaný drží
+určeného vykonavatele. Přenáší se návrh i chybový výsledek. Konflikty aktivace
+zachovávají pozastavení do výslovného vyřešení. Vzdálený dispatch a komplexní
+předávání zůstávají odložené; panel dostupnosti ani povinný fyzický výpadkový
+PoC se v tomto zúženém rozsahu nevyžadují. Přesná validace, kompatibilita,
+retence a crash boundaries: [sdílený stav](../monitoring-shared-state.md).

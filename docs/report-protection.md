@@ -56,8 +56,12 @@ poolů se z publikované zprávy neobnovují. Chybějící původní vstupy se e
 jako reference a nový návrh výslovně upozorní na neúplnou reprodukci. Nevydaný
 návrh po skončení jeho retence nelze obnovit bez zachované provenance.
 Definice zpracování musí stále odpovídat původní obsahové revizi; nesouvisející
-nový projektový commit ji nezneplatňuje. Změna definice, odstranění bloku nebo
-jiný vykonávající uzel se odmítnou s konkrétním důvodem.
+nový projektový commit ji nezneplatňuje. Změna definice nebo odstranění bloku
+se odmítnou s konkrétním důvodem. Samotná změna plánovaného uzlu ručnímu
+opakování nebrání; zadání, vstupy a metodika musí zůstat stejné. Ruční opakování vždy běží
+na uzlu, kde je uživatel spustí, s jeho místním modelovým nastavením; původní
+plánované přiřazení se nemění. Přenos výsledků včetně chyb popisuje
+[sdílený stav](monitoring-shared-state.md).
 
 Crash boundaries z ADR 0082 se nemění: API `block-reprocess` přijímá původní
 `source_run_id`, nové `run_id` a explicitní `confirm`. Intent se uloží před

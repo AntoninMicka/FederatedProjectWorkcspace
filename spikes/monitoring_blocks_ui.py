@@ -68,6 +68,7 @@ function renderMonitoringBlocks(){
   for(const j of blockCatalog.jobs){
    const article=document.createElement('article');article.append(blockText('h3',j.intent.block?.value.title||j.intent.kind));
    article.append(blockText('p','Stav: '+j.state));if(j.result?.error)article.append(blockText('p',j.result.error));
+   if(j.intent.kind==='processing')article.append(blockText('p','Vykonavatel: '+(j.intent.executor_node_id||j.intent.block?.value.config.node_id||'nezjištěn')+(j.shared?' · sdílený výsledek':'')));
    if(j.intent.kind==='intake')article.append(blockText('p',monitoringIntakeOutcome(j)));
    if(j.result?.children)for(const c of j.result.children)article.append(blockText('p',blockName(c.block_id)+' · '+c.state));
    if(j.result?.protection&&!j.result.protection.finalized){
@@ -75,7 +76,7 @@ function renderMonitoringBlocks(){
     if(j.result.protection.error)article.append(blockText('p','Dokončení ochrany selhalo: '+j.result.protection.error));
    }
    if(j.result?.markdown)article.append(blockText('pre',j.result.markdown));
-   if(['review','published'].includes(j.state)&&j.intent.kind==='processing'&&!j.result?.replacement)article.append(reportReprocessButton(j.id,reportReprocessDeadline(j),blockReadOnly()));
+   if(['review','published','failed','unknown'].includes(j.state)&&j.intent.kind==='processing'&&!j.result?.replacement)article.append(reportReprocessButton(j.id,reportReprocessDeadline(j),blockReadOnly()));
    if(j.state==='review'&&j.intent.kind==='processing'&&!j.result?.replacement)article.append(monitoringButton('Vydat posouzenou zprávu',async()=>{
     if(!window.confirm('Vydat přesně tento návrh zprávy do projektu?'))return;
     await monitoringRequest('block-publish',{run_id:j.id,approval_digest:j.result.approval_digest,confirm:true});await loadMonitoringBlocks();
@@ -106,7 +107,7 @@ function renderMonitoringBlocks(){
    if(c.connector==='rss-atom'){
     article.append(blockText('p','Tento uzel: '+(row.runtime?.enabled?'sběr zapnutý':'sběr vypnutý')+' · poslední úspěch: '+(row.runtime?.last_success||'zatím žádný')+' · příští kontrola: '+(row.runtime?new Date(row.runtime.next_due*1000).toLocaleString():'nenastavena')));
     if(row.runtime?.error)article.append(blockText('p',row.runtime.error));
-    article.append(monitoringButton(row.runtime?.enabled?'Pozastavit zdejší sběr':'Zapnout sběr na tomto uzlu',async()=>{
+    article.append(monitoringButton(row.runtime?.enabled?'Pozastavit sběr':'Zapnout sběr',async()=>{
      await monitoringRequest('block-configure',{block_id:row.id,enabled:!row.runtime?.enabled,confirm:true});await loadMonitoringBlocks();
     },readonly));
     if(row.runtime?.error)article.append(monitoringButton('Potvrdit aktuální konfiguraci sběru',async()=>{await monitoringRequest('block-configure',{block_id:row.id,enabled:true,confirm:true});await loadMonitoringBlocks();},readonly));
@@ -133,12 +134,12 @@ function renderMonitoringBlocks(){
    const schedules={manual:'Na vyžádání',daily:'Denně',weekly:'Týdně od pondělí',monthly:'Měsíčně od 1. dne',quarterly:'Čtvrtletně od 1. dne',annual:'Ročně od 1. ledna'};
    article.append(blockText('p',c.schedule.kind==='manual'?schedules.manual:schedules[c.schedule.kind]+' v '+c.schedule.time+' ('+c.schedule.timezone+')'));
    article.append(monitoringButton('Sestavit návrh zprávy',async()=>{
-    if((c.mode==='llm'||c.search_ids.length)&&!window.confirm('Spustit zpracování včetně nastaveného modelu nebo webového hledání?'))return;
+    if((c.mode==='llm'||c.search_ids.length)&&!window.confirm('Spustit zpracování na tomto uzlu včetně místního modelu nebo webového hledání?'))return;
     await monitoringRequest('block-process',{block_id:row.id,run_id:crypto.randomUUID()});blockTab='runs';await loadMonitoringBlocks();
-   },readonly||c.node_id!==blockCatalog.node_id));
+   },readonly));
    if(c.schedule.kind!=='manual')article.append(monitoringButton(row.runtime?.enabled?'Pozastavit pravidelné zpracování':'Zapnout pravidelné zpracování',async()=>{
     await monitoringRequest('block-configure',{block_id:row.id,enabled:!row.runtime?.enabled,confirm:true});await loadMonitoringBlocks();
-   },readonly||c.node_id!==blockCatalog.node_id));
+   },readonly));
   }
   content.append(article);
  }

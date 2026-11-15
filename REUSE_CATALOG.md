@@ -1740,3 +1740,11 @@ HTTP/RBAC execution lane a původní publication writer. Zachovává periodu,
 obsahovou identitu definice a samostatná vydání; **reject** přepis původního
 výstupu, obnovení expirovaného textu z reportu a automatický retry unknown.
 Scope/recovery: [ruční zpracování](docs/report-protection.md#ruční-opětovné-zpracování).
+
+Sdílená aktivace a výsledky MON-08-07 **reuse/adaptují** existující pool
+set-union, FULL SQLite transakce, signed native exchange, synchronizační
+fingerprint, blokový processor, ContextBuilder a Workspace receipts.
+Přidávají validované logické druhy activation/report-outcome. **Reject:**
+kopie provozních databází, přenos credentials/leases/manifestů, časové
+last-wins přepisování pauzy, nový transport a automatické převzetí běhu.
+Scope/recovery: [sdílený stav monitoringu](docs/monitoring-shared-state.md).

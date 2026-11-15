@@ -57,6 +57,9 @@ def validate_entry(row, project_id):
         hex_id(v['item_entry']); moment(v['observed_at']); moment(v['expires_at'])
         if v['node_id'] is not None: uuid(v['node_id'])
         if v['raw_sha256'] is not None: hex_id(v['raw_sha256'])
+    elif kind in {'activation','report-outcome'}:
+        from spikes.monitoring_shared import validate
+        validate(row)
     else:
         require(False, 'Unknown pool entry kind')
     require(row == entry(project_id, kind, v), 'Pool entry digest mismatch')
@@ -144,6 +147,8 @@ class MessagePools:
         keep = {r['id'] for r in alive} | refs | {r['id'] for r in rows if
             r['kind'] == 'observation' and r['value']['item_entry'] in refs and
             moment(r['value']['expires_at']).timestamp() > now}
+        keep.update(r['id'] for r in rows if r['kind']=='activation' or
+                    r['kind']=='report-outcome' and moment(r['value']['expires_at']).timestamp()>now)
         return [r for r in rows if r['id'] in keep]
 
     def _cleanup(self, db, project_id):
@@ -171,6 +176,8 @@ class MessagePools:
         known = {r[0]: json.loads(r[1]) for r in db.execute(
             'SELECT id,document FROM pool_entries WHERE project=?', (project_id,))}
         all_ = dict(known, **{r['id']: r for r in rows})
+        from spikes.monitoring_shared import validate_links
+        validate_links(all_)
         for row in rows:
             v = row['value']
             if row['kind'] in {'membership', 'observation'}:
@@ -205,7 +212,7 @@ class MessagePools:
         # only independently permitted memberships and their inputs leave.
         members = [r for r in rows if r['kind'] == 'membership' and r['value']['privacy'] != 'local-only']
         refs = {r['value']['item_entry'] for r in members}
-        rows = [r for r in rows if r in members or
+        rows = [r for r in rows if r['kind'] in {'activation','report-outcome'} and r['value']['privacy']!='local-only' or r in members or
                 r['kind'] == 'item' and r['id'] in refs or
                 r['kind'] == 'observation' and r['value']['item_entry'] in refs]
         require(all(r['value']['item']['privacy'] != 'local-only' for r in rows if r['kind'] == 'item'),

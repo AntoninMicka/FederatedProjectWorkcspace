@@ -61,7 +61,7 @@ try:
    10:"document.querySelector('[data-aggregate-member=\"'+blockTestIds[1]+'\"]').click()",
    11:"document.querySelector('[data-aggregate-member=\"'+window.extraPoolId+'\"]').click()",
    12:"[...document.querySelectorAll('.monitoring-task-aggregate button')].find(b=>b.textContent==='Uložit složení').click()",
-   13:"blockTab='source';blockSelectedId=blockTestIds[0];renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Zapnout sběr na tomto uzlu').click()",
+   13:"blockTab='source';blockSelectedId=blockTestIds[0];renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Zapnout sběr').click()",
    14:"[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Zkontrolovat splatné kanály').click()",
    15:"blockTab='processing';blockSelectedId=blockTestIds[3];renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Sestavit návrh zprávy').click()",
    16:"(async()=>{await loadMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Vydat posouzenou zprávu').click();})()",
