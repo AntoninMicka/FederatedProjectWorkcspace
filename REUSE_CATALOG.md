@@ -1733,3 +1733,10 @@ a zpracování, zachovává krátké serializované SQLite transakce. **Reject:*
 další runtime DB/writer, opakované generování při každém článku a automatický
 retry nejistého modelového volání. Scope/recovery:
 [ochranné období zpráv](docs/report-protection.md).
+
+Ruční opětovné zpracování zprávy **reuse/adaptuje** blokový processor,
+`block_jobs`, Git audit publikovaných zpráv, stávající modelový journal,
+HTTP/RBAC execution lane a původní publication writer. Zachovává periodu,
+obsahovou identitu definice a samostatná vydání; **reject** přepis původního
+výstupu, obnovení expirovaného textu z reportu a automatický retry unknown.
+Scope/recovery: [ruční zpracování](docs/report-protection.md#ruční-opětovné-zpracování).

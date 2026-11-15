@@ -36,6 +36,39 @@ připnuté definice během ochrany ponechá zprávu blokovanou s konkrétním d�
 Nejisté modelové volání se samo neopakuje; je nutné lidské posouzení a případně
 nový explicitní běh. Existující aktivace a periodové ID zůstávají zachované.
 
+## Ruční opětovné zpracování
+
+V historii běhů i v detailu návrhu nebo vydané blokové zprávy je tlačítko
+**Zpracovat znovu**. Je dostupné po konci původního ochranného intervalu,
+i když automatická závěrečná kontrola selhala nebo dosud neproběhla.
+U starších zpráv bez uloženého termínu se použije hodina od uloženého času
+sestavení. Kontrolu provádí i backend; samotné povolení tlačítka nestačí.
+
+Potvrzená akce znovu zpracuje původní časové okno z aktuálně dostupných poolů
+a případně nového webového hledání. Vznikne samostatný návrh s novým ID a vazbou
+`reprocess_of` na původní běh. Další ochranná hodina se nezavádí; návrh musí
+uživatel samostatně posoudit a vydat. Akci lze opakovat i později a bez nových
+vstupů. Nový běh nemění kalendářní slot, aktivaci ani obsah původního návrhu
+nebo vydání. Původní zpráva i její případná prezentace zůstanou zachované.
+
+U vydané zprávy stačí Git audit i po vyčištění místního běhu. Zaniklé texty
+poolů se z publikované zprávy neobnovují. Chybějící původní vstupy se evidují
+jako reference a nový návrh výslovně upozorní na neúplnou reprodukci. Nevydaný
+návrh po skončení jeho retence nelze obnovit bez zachované provenance.
+Definice zpracování musí stále odpovídat původní obsahové revizi; nesouvisející
+nový projektový commit ji nezneplatňuje. Změna definice, odstranění bloku nebo
+jiný vykonávající uzel se odmítnou s konkrétním důvodem.
+
+Crash boundaries z ADR 0082 se nemění: API `block-reprocess` přijímá původní
+`source_run_id`, nové `run_id` a explicitní `confirm`. Intent se uloží před
+modelem, pod stejným ID se vrací stejný výsledek. Přerušený dispatch přejde do
+unknown bez automatického opakování; opakování HTTP odpovědi ani reload běhů
+nesmí resetovat tento stav. Nový výslovně potvrzený požadavek s jiným ID je
+samostatný běh, původní unknown zůstává v historii. UI během požadavku blokuje
+opakovaný klik a při nejisté odpovědi drží stejné ID pro další pokus v otevřené
+relaci. Výsledek a konec již uplynulé ochrany se uloží jednou transakcí.
+Vydání používá původní Workspace journal a nové deterministické publication ID.
+
 ## Sběr na pozadí a recovery
 
 RSS má samostatný pracovní thread a effect flock nezávislý na modelovém

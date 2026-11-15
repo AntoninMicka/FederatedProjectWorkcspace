@@ -3,6 +3,7 @@
 """Report names and read-only output projection of an already validated Git head."""
 from datetime import datetime, timezone
 import json
+import math
 from zoneinfo import ZoneInfo
 from spikes.reporting_schema import digest
 
@@ -58,7 +59,7 @@ def output_title(name,built_at,zone='UTC'):
     return name.strip()[:150]+' · '+stamp.strftime('%Y-%m-%d %H:%M:%S %Z')
 
 
-def published_outputs(pid,head,files,entities,records,*,selected=None,include_content=False):
+def published_outputs(pid,head,files,entities,records,*,selected=None,include_content=False,include_intent=False):
     from spikes.reporting import pinned
     result=[]
     for row in records.values():
@@ -103,8 +104,14 @@ def published_outputs(pid,head,files,entities,records,*,selected=None,include_co
         description=meta.get('description','')
         built_at=(safe_built_at(description[len(BUILT_PREFIX):]) if description.startswith(BUILT_PREFIX) else None) or safe_built_at(audit.get('built_at'))
         title=meta['title'] if built_at else output_title(meta['title'],meta['created_at'])+' (vydáno)'
+        until = audit.get('protection_until')
+        if until is None and built_at:
+            until = datetime.fromisoformat(built_at.replace('Z','+00:00')).timestamp()+3600
+        if type(until) not in {int,float} or not math.isfinite(until) or until < 0: until = None
         result.append(dict(id=id_,artifact_id=id_,title=title,built_at=built_at,issued_at=meta['created_at'],
-            kind='block-report',run_id=run_id,state='completed',**({'markdown':body} if include_content else {}),report_ref=pinned(pid,head,id_,files,entities)))
+            kind='block-report',run_id=run_id,state='completed',reprocess_until=until if audit else None,
+            **({'reprocess_intent':audit} if include_intent else {}),
+            **({'markdown':body} if include_content else {}),report_ref=pinned(pid,head,id_,files,entities)))
     presentations=derived_presentations(pid,files,entities,records)
     for output in result:
         output['presentations']=[p for p in presentations if p['source_ref']['artifact_id']==output['id']]

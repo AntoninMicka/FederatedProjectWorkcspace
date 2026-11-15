@@ -75,6 +75,7 @@ function renderMonitoringBlocks(){
     if(j.result.protection.error)article.append(blockText('p','Dokončení ochrany selhalo: '+j.result.protection.error));
    }
    if(j.result?.markdown)article.append(blockText('pre',j.result.markdown));
+   if(['review','published'].includes(j.state)&&j.intent.kind==='processing'&&!j.result?.replacement)article.append(reportReprocessButton(j.id,reportReprocessDeadline(j),blockReadOnly()));
    if(j.state==='review'&&j.intent.kind==='processing'&&!j.result?.replacement)article.append(monitoringButton('Vydat posouzenou zprávu',async()=>{
     if(!window.confirm('Vydat přesně tento návrh zprávy do projektu?'))return;
     await monitoringRequest('block-publish',{run_id:j.id,approval_digest:j.result.approval_digest,confirm:true});await loadMonitoringBlocks();

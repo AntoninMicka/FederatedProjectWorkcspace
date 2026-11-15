@@ -20,6 +20,37 @@ CSS='''
 '''
 JS=r'''
 let selectedReportOutput=null,reportOutputSequence=0;
+const reportReprocessRequests=new Map(),reportReprocessBusy=new Set();
+function reportReprocessDeadline(job){
+ return job.result?.protection?.until??(job.result?.output?.built_at?Date.parse(job.result.output.built_at)/1000+3600:null);
+}
+function reportReprocessButton(sourceRunId,until,readonly){
+ const pid=activeProject.id,key=pid+':'+sourceRunId;
+ const button=monitoringButton('Zpracovat znovu',async()=>{
+  if(activeProject?.id!==pid||reportReprocessBusy.has(key))return;
+  if(!window.confirm('Zpracovat znovu původní období z aktuálně dostupných vstupů? Vznikne nový návrh; model a hledání se mohou spustit znovu.'))return;
+  if(activeProject?.id!==pid)return;
+  if(!reportReprocessRequests.has(key))reportReprocessRequests.set(key,{source_run_id:sourceRunId,run_id:crypto.randomUUID(),confirm:true});
+  reportReprocessBusy.add(key);button.disabled=true;
+  const status=document.querySelector('#report-output-view')?.hidden?monitoringStatus:document.querySelector('#report-output-status');
+  status.textContent='Zpracovávám nový návrh zprávy…';
+  try{
+   const result=await monitoringRequest('block-reprocess',reportReprocessRequests.get(key));
+   reportReprocessRequests.delete(key);
+   if(activeProject?.id!==pid)return;
+   await loadMonitoring();if(activeProject?.id!==pid)return;
+   const output=reportOutputRows().find(r=>r.id==='block:'+result.id);
+   if(output)await openReportOutput(output);else status.textContent='Stav nového zpracování: '+result.state;
+  }catch(error){
+   if(activeProject?.id===pid)status.textContent=error.message;
+   throw error;
+  }finally{
+   reportReprocessBusy.delete(key);
+   button.disabled=readonly||!Number.isFinite(until)||Date.now()/1000<until;
+  }
+ },readonly||!sourceRunId||!Number.isFinite(until)||Date.now()/1000<until||reportReprocessBusy.has(key));
+ return button;
+}
 function exportReportMarkdown(title,markdown){
  const a=document.createElement('a'),url=URL.createObjectURL(new Blob([markdown],{type:'text/markdown;charset=utf-8'}));
  a.href=url;a.download=title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,180)+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -61,6 +92,7 @@ async function openReportOutput(output){
   if(activeProject?.id!==pid||sequence!==reportOutputSequence||view.hidden)return;
   status.textContent=output.source==='git'?'Vydaná zpráva':report.state==='review'?'Návrh zprávy — čeká na posouzení.':'Nevydaný návrh';
   actions.append(monitoringButton('Export Markdown',()=>exportReportMarkdown(output.title,report.markdown)));
+  if(output.source==='block-draft'||output.kind==='block-report')actions.append(reportReprocessButton(output.job?.id||report.run_id,output.job?reportReprocessDeadline(output.job):report.reprocess_until,activeProject.readOnly||!monitoringView.can_manage));
   if(output.source==='git'){
    const decks=report.presentations||[];
    for(const deck of decks){

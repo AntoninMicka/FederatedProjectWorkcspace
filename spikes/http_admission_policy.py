@@ -257,7 +257,7 @@ JULIA_ROUTES = frozenset({
 MONITORING_ROUTES = frozenset({
     '/v1/monitoring/block-compose',
     '/v1/monitoring/block-configure',
-    '/v1/monitoring/block-process',
+    '/v1/monitoring/block-process', '/v1/monitoring/block-reprocess',
     '/v1/monitoring/block-publish',
     '/v1/monitoring/block-release',
     '/v1/monitoring/block-task-run',
@@ -298,7 +298,7 @@ MONITORING_ROUTES = frozenset({
 })
 MONITORING_EXECUTION_ROUTES = frozenset({
     '/v1/monitoring/run', '/v1/monitoring/synthesis-run', '/v1/monitoring/workflow-run',
-    '/v1/monitoring/block-process', '/v1/monitoring/block-task-run',
+    '/v1/monitoring/block-process', '/v1/monitoring/block-reprocess', '/v1/monitoring/block-task-run',
     '/v1/monitoring/block-compose', '/v1/monitoring/block-publish',
     '/v1/monitoring/block-tick', '/v1/monitoring/rss-tick', '/v1/monitoring/publish',
     '/v1/monitoring/migration-preview', '/v1/monitoring/migration-apply',

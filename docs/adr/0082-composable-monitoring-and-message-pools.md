@@ -187,3 +187,13 @@ samostatné pracovní větve, protože dosavadní společný effect flock odklá
 sběr po dobu modelového volání. Autorita dat, journaly, privacy a Git writer
 se nemění. Přesné hranice období, kompatibilita, neúplnost zdrojů a crash
 boundaries jsou v [kontraktu ochrany zpráv](../report-protection.md).
+
+### Ruční opakování po ochraně — 15. 11. 2026
+
+Uživatel požaduje možnost kdykoliv po skončení ochrany výslovně zopakovat
+zpracování. Nová akce vytváří samostatný návrh nad původním obdobím a aktuálně
+dostupnými vstupy; ochranu neprodlužuje a původní vydání nepřepisuje. Používá
+stejný blokový processor, journal, RBAC a publication recovery. Git audit
+umožní určit původní období i po retenci místního běhu, ale neobnovuje
+expirované vstupní texty. Přesný lifecycle a crash boundaries popisuje
+[ruční opětovné zpracování](../report-protection.md#ruční-opětovné-zpracování).

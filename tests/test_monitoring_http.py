@@ -119,12 +119,32 @@ class MonitoringHTTPTests(unittest.TestCase):
         self.assertEqual(self.call('output',dict(output_id=summary['id'],expected_head='0'*40),headers)[0],422)
         self.assertEqual(self.call('output',dict(output_id=summary['id'],expected_head=view['commit_id']),{'Authorization':'Bearer invalid'})[0],401)
         presentation=dict(output_id=summary['id'],expected_head=view['commit_id'],confirm=True)
+        self.assertEqual(self.call('block-reprocess',dict(source_run_id=run['id'],run_id=str(uuid4()),confirm=True),headers)[0],403)
         self.assertEqual(self.call('presentation',presentation,headers)[0],403)
         self.assertEqual(self.call('presentation',dict(presentation,confirm=False))[0],422)
         code,raw,_=self.call('presentation',presentation)
         self.assertEqual(code,200,raw);created=json.loads(raw)
         code,raw,_=self.call('presentation',presentation)
         self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw),created)
+
+    def test_manual_reprocessing_requires_elapsed_protection_and_replays_same_request(self):
+        from tests.test_monitoring_blocks import blocks
+        specs=blocks(self.f.root/'node.json')
+        head=json.loads(self.call('blocks',{})[1])['commit_id']
+        self.assertEqual(self.call('blocks-save',dict(base_head=head,blocks=specs,operation_id=str(uuid4())))[0],200)
+        code,raw,_=self.call('block-process',dict(block_id=specs[3]['id'],run_id=str(uuid4())))
+        self.assertEqual(code,200,raw);first=json.loads(raw)
+        request=dict(source_run_id=first['id'],run_id=str(uuid4()),confirm=True)
+        self.assertEqual(self.call('block-reprocess',request)[0],422)
+        runtime=self.f.server.monitoring.composable
+        instant=first['result']['protection']['until'];runtime.clock=runtime.pools.clock=lambda:instant
+        self.assertEqual(self.call('block-reprocess',dict(request,confirm=False))[0],422)
+        code,raw,_=self.call('block-reprocess',request)
+        self.assertEqual(code,200,raw);new=json.loads(raw)
+        self.assertEqual(new['state'],'review');self.assertTrue(new['result']['protection']['finalized'])
+        code,raw,_=self.call('block-reprocess',request)
+        self.assertEqual(code,200,raw);self.assertEqual(json.loads(raw),new)
+        self.assertEqual(self.call('block-publish',dict(run_id=new['id'],approval_digest=new['result']['approval_digest'],confirm=True))[0],200)
 
     def test_one_time_migration_has_readable_preview_and_admin_only_apply(self):
         from tests.test_monitoring_workflow import workflow

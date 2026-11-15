@@ -421,12 +421,62 @@ class ComposableMonitoring:
                 db.execute("UPDATE block_jobs SET document=?,result=? WHERE id=? AND state='review'",
                            (encoded(intent), encoded(result), run_id))
 
+    @staticmethod
+    def _same_revision(left, right):
+        # Immutable definition identity survives unrelated project commits.
+        return all(left.get(k) == right.get(k) for k in ('project_id','artifact_id','path','sha256'))
+
+    def _reprocess_source(self, pid, source_run_id):
+        from spikes.monitoring import ident
+        with self.pools.read_db() as db:
+            row = db.execute('SELECT state,document,result FROM block_jobs WHERE id=? AND project=?',
+                             (source_run_id,pid)).fetchone()
+        if row:
+            intent = json.loads(row[1]); result = json.loads(row[2]) if row[2] else {}
+            require(row[0] in {'review','published'} and intent.get('kind') == 'processing'
+                    and not result.get('replacement'), 'Choose an original report draft or edition')
+            until = result.get('protection',{}).get('until')
+            if until is None:
+                until = moment(result['output']['built_at']).timestamp()+3600
+            return intent, until
+        # Published provenance survives local runtime retention. Read only the
+        # validated committed edition, never resurrect its expired cached text.
+        from spikes.report_outputs import published_outputs
+        data, files, entities = self.monitoring.reporting.read_snapshot(pid,read_only=True)
+        outputs = published_outputs(pid,data['commit_id'],files,entities,
+            {r['revision_id']:r for r in data['records']},
+            selected=ident(source_run_id,'report'),include_intent=True)
+        require(len(outputs) == 1 and outputs[0].get('run_id') == source_run_id
+                and outputs[0].get('reprocess_until') is not None, 'Original report is unavailable')
+        return outputs[0]['reprocess_intent'], outputs[0]['reprocess_until']
+
+    def reprocess(self, pid, source_run_id, run_id, *, confirm, checkpoint=lambda stage: None):
+        require(confirm is True, 'Confirm reprocessing this report with current inputs')
+        uuid(source_run_id); uuid(run_id)
+        require(source_run_id != run_id, 'Reprocessing needs a new run ID')
+        self.monitoring._writable(pid)
+        with self.locked('processing') as acquired:
+            require(acquired, 'A monitoring effect is already running on this node')
+            with self.pools.db() as db:
+                old = db.execute('SELECT state,document,result FROM block_jobs WHERE id=?', (run_id,)).fetchone()
+                if old:
+                    intent = json.loads(old[1])
+                    require(intent.get('project_id') == pid and intent.get('reprocess_of') == source_run_id,
+                            'Run ID belongs to another intent')
+                    state = 'unknown' if old[0] == 'dispatching' else old[0]
+                    if state != old[0]: db.execute('UPDATE block_jobs SET state=? WHERE id=?',(state,run_id))
+                    return dict(id=run_id,state=state,result=json.loads(old[2]) if old[2] else None)
+            original, until = self._reprocess_source(pid,source_run_id)
+            require(self.clock() >= until, 'Report protection has not ended')
+            return self._process(pid,original['block']['id'],run_id,original=original,
+                                 reprocess_of=source_run_id,protection_until=until,checkpoint=checkpoint)
+
     def process(self, pid, processing_id, run_id, *, scheduled=False):
         with self.locked('processing') as acquired:
             require(acquired, 'A monitoring effect is already running on this node')
             return self._process(pid, processing_id, run_id, scheduled=scheduled)
 
-    def _process(self, pid, processing_id, run_id, *, scheduled=False, original=None, checkpoint=lambda stage: None):
+    def _process(self, pid, processing_id, run_id, *, scheduled=False, original=None, reprocess_of=None, protection_until=None, checkpoint=lambda stage: None):
         self._require_migration_complete(pid,processing_id)
         uuid(run_id); self.monitoring._writable(pid)
         catalog = self.blocks.read(pid); by_id = {b['id']: b for b in catalog['blocks']}
@@ -434,12 +484,15 @@ class ComposableMonitoring:
         require(block and block['value']['kind'] == 'processing', 'Choose a processing block')
         c = block['value']['config']; require(c['node_id'] == local_node_id(self.node), 'Processing belongs to another node')
         if original is not None:
-            require(block['ref'] == original['block']['ref'], 'Processing definition changed during protection')
+            require(self._same_revision(block['ref'], original['block']['ref']), 'Processing definition differs from the original report')
         anchor = original.get('period_end', original['started_at']) if original else self.clock()
         inputs = self._period_inputs(pid, block, anchor)
         frozen = dict(project_id=pid, block=block, input_head=catalog['commit_id'], pools=inputs, searches={}, kind='processing',
                       period_end=anchor, started_at=self.clock(), expires_at=min([moment(m['expires_at']).timestamp() for groups in inputs.values() for g in groups for m in g['contributions']] or [self.clock()+86400]))
-        if original is not None: frozen['regeneration_of'] = digest(encoded(original))
+        if reprocess_of is not None:
+            frozen['reprocess_of'] = reprocess_of
+            frozen['unavailable_input_refs'] = sorted(set(self._content_refs(original['pools']))-set(self._content_refs(inputs)))
+        elif original is not None: frozen['regeneration_of'] = digest(encoded(original))
         with self.pools.db() as db:
             old = db.execute('SELECT state,document,result FROM block_jobs WHERE id=?', (run_id,)).fetchone()
             if old:
@@ -447,14 +500,17 @@ class ComposableMonitoring:
                     db.execute("UPDATE block_jobs SET state='unknown' WHERE id=?", (run_id,))
                     old = ('unknown', old[1], old[2])
                 require(json.loads(old[1]).get('project_id') == pid and json.loads(old[1]).get('block', {}).get('id') == processing_id and
-                        json.loads(old[1]).get('block', {}).get('ref') == block['ref'] and
-                        json.loads(old[1]).get('regeneration_of') == frozen.get('regeneration_of'), 'Run ID belongs to another intent')
+                        self._same_revision(json.loads(old[1]).get('block', {}).get('ref',{}), block['ref']) and
+                        json.loads(old[1]).get('regeneration_of') == frozen.get('regeneration_of') and
+                        json.loads(old[1]).get('reprocess_of') == frozen.get('reprocess_of'), 'Run ID belongs to another intent')
                 return dict(id=run_id, state=old[0], result=json.loads(old[2]) if old[2] else None)
             db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)', (run_id, pid, 'dispatching', encoded(frozen)))
         checkpoint('processing-dispatching')
         try:
             for id_ in c['search_ids']: frozen['searches'][id_] = self._search(pid, by_id[id_], run_id, block['privacy'])
             body = '# '+block['value']['title']+'\n\n'+c['instructions']+'\n\n'
+            if frozen.get('unavailable_input_refs'):
+                body += 'Část původních vstupů již není dostupná; nové zpracování není úplnou reprodukcí původní zprávy.\n\n'
             for pool_id, groups in inputs.items():
                 body += '## '+by_id[pool_id]['value']['title']+'\n'
                 for group in groups:
@@ -474,11 +530,15 @@ class ComposableMonitoring:
                 body = self._model(pid, run_id, body, block['privacy'],
                     'Create a Czech draft report following this processing definition. Preserve sources, uncertainty and conflicting versions. Do not publish.',
                     expected_head=catalog['commit_id'])
+            if frozen.get('unavailable_input_refs') and c['mode'] == 'llm':
+                body = 'Část původních vstupů již není dostupná; nové zpracování není úplnou reprodukcí původní zprávy.\n\n'+body
             require(isinstance(body, str) and 0 < len(body.encode()) <= 1024*1024, 'Invalid report draft')
             from spikes.report_outputs import output_title
             built_at=stamp(self.clock())
             result = dict(output=dict(title=output_title(block['value']['title'],built_at,c['schedule']['timezone']),built_at=built_at),markdown=body, approval_digest=digest(encoded([body, self._content_refs(inputs)])), input_digest=digest(encoded(frozen)))
-            if original is None:
+            if reprocess_of is not None:
+                result['protection'] = dict(until=protection_until, finalized=True, changed=False)
+            elif original is None:
                 result['protection'] = dict(until=self.clock()+3600, finalized=False, changed=False)
             else:
                 result['replacement'] = True
@@ -652,6 +712,7 @@ class ComposableMonitoring:
         audit = deepcopy(intent)
         audit['pools'] = {pool_id: [dict(key=g['key'], revisions=[dict(revision=r['revision'], item_entry=r['item_entry']) for r in g['revisions']]) for g in groups] for pool_id, groups in intent['pools'].items()}
         audit['searches'] = {id_: digest(encoded(v)) for id_, v in intent['searches'].items()}
+        if result.get('protection'): audit['protection_until'] = result['protection']['until']
         if result.get('output'):audit.update(built_at=result['output']['built_at'],run_id=run_id)
         body = result['markdown']+'\n\n<!-- Frozen monitoring input references\n'+encoded(audit).decode()+'\n-->\n'
         ref = self.monitoring._doc(pid, ident(run_id, 'report'), result.get('output',{}).get('title',intent['block']['value']['title']), body,
