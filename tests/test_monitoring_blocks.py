@@ -67,6 +67,22 @@ class BlockTests(unittest.TestCase):
             self.service.blocks.save(self.f.project, head, invalid, str(uuid4()))
         self.assertEqual(head, self.f.git.head())
 
+    def test_empty_aggregate_can_be_saved_but_not_run_until_processing_is_added(self):
+        task=deepcopy(self.specs[4]);task['id']=str(uuid4())
+        for kind in ('source','filter','pool','processing'):task['value']['config'][kind+'_ids']=[]
+        pid=self.f.project
+        self.service.blocks.save(pid,self.f.git.head(),[task],str(uuid4()))
+        before=self.f.git.head()
+        with self.assertRaisesRegex(ValidationError,'Přidejte zpracování'):
+            self.service.run_task(pid,task['id'],str(uuid4()))
+        self.assertEqual(before,self.f.git.head())
+        with self.service.pools.read_db() as db:
+            self.assertFalse(db.execute("SELECT id FROM block_jobs WHERE json_extract(document,'$.kind')='task'").fetchall())
+        row=next(b for b in self.service.blocks.read(pid)['blocks'] if b['id']==task['id'])
+        task['previous']=[row['ref']];task['value']['config']['processing_ids']=[self.specs[3]['id']]
+        self.service.blocks.save(pid,self.f.git.head(),[task],str(uuid4()))
+        self.assertEqual(self.service.run_task(pid,task['id'],str(uuid4()))['state'],'completed')
+
     def data_entries(self):
         return [r for r in self.service.pools.export(self.f.project) if r['kind'] in {'item','membership','observation'}]
 

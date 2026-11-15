@@ -72,7 +72,7 @@ def validate_block(value):
     else:
         fields(c, 'source_ids filter_ids pool_ids processing_ids instructions')
         for k in KINDS[:-1]: ids(c[k+'_ids'])
-        text(c['instructions']); require(c['processing_ids'], 'Choose at least one processing block')
+        text(c['instructions'])  # An aggregate can be assembled incrementally.
     require(len(encoded(value)) <= 32*1024, 'Monitoring block exceeds limit')
     return value
 

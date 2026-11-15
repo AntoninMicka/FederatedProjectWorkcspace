@@ -50,7 +50,7 @@ function renderMonitoringToolTree(){
   const list=document.querySelector(kind==='task'?'#sidebar-monitoring-list':'#sidebar-monitoring-'+kind+'-list');list.replaceChildren();
   for(const row of blockCatalog?.blocks.filter(b=>b.value.kind===kind)||[]){
    const item=toolSidebarRow('block:'+row.id,row.value.title,()=>openMonitoringTool(row),[
-    {label:kind==='task'?'Upravit složení':'Upravit',disabled:blockReadOnly(),run:()=>openMonitoringTool(row,true)},
+    ...(kind==='task'?[]:[{label:'Upravit',disabled:blockReadOnly(),run:()=>openMonitoringTool(row,true)}]),
     {label:row.migration_pending?'Smazat · dokončete převod':row.used_by?.length?'Smazat · nejprve odpojte využití':'Smazat',disabled:blockReadOnly()||Boolean(row.used_by?.length)||Boolean(row.migration_pending),run:()=>deleteMonitoringTool(row)}]);
    if(kind==='task')item.dataset.composableTask=row.id;
    list.append(item);

@@ -775,6 +775,7 @@ class ComposableMonitoring:
             by_id = {b['id']: b for b in catalog['blocks']}
             task = by_id.get(task_id)
             require(task and task['value']['kind'] == 'task', 'Choose a complex task')
+            require(task['value']['config']['processing_ids'], 'Přidejte zpracování zpráv před spuštěním sestavy')
             intent = dict(kind='task', block=task, started_at=self.clock(), expires_at=self.clock()+86400)
             with self.pools.db() as db:
                 previous = db.execute('SELECT document,state,result FROM block_jobs WHERE id=? AND project=?', (run_id,pid)).fetchone()

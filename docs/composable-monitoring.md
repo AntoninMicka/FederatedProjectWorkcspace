@@ -38,8 +38,8 @@ Review ukáže výsledky původního filtrovacího enginu a neověřené vstupy.
    nepřepisuje. Konektory a izolovaný regex mají původní bezpečnostní limity.
 3. Založte zpracování nad jedním či více pooly. Pro hledání nejdřív přidejte
    zdroj typu Webové hledání a následně jej vyberte ve zpracování.
-4. V komplexní úloze vyberte existující bloky nebo použijte **Vytvořit nové**.
-   Po uložení nového bloku se vrátíte do rozpracované sestavy. Závislosti
+4. V komplexní úloze použijte nad příslušnou tabulkou **Přidat existující**
+   nebo **Vytvořit nové**. Po uložení nového bloku se připojí do sestavy. Závislosti
    se dohledávají přes jejich ID; úprava společného filtru nevyžaduje ručně
    přepisovat seznam kanálů všech navazujících úloh.
 5. Sběr zapněte na kterémkoliv oprávněném uzlu; aktivace i pozastavení se

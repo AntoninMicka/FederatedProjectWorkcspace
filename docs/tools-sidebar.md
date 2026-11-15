@@ -15,8 +15,8 @@ historie a explicitní servisní/recovery API zůstávají zachované.
 
 Ikona **Nový nástroj** otevírá společné menu: nový Julia model, zdroj pro těžbu,
 filtr, pool, zpracování, komplexní úloha a sestavení pomocí LLM.
-Duplicitní obecná tlačítka založení v pravé části jsou odstraněna. Inline založení
-závislosti uvnitř rozpracované sestavy zůstává zachováno. Import Julia souboru
+Nad každou tabulkou monitoringu jsou lokální akce Vytvořit nové a Přidat
+existující. Komplexní úloha zobrazuje agregát bez vlastního režimu úprav. Import Julia souboru
 zůstává pod vedlejší importní ikonou. Esc zavře nové menu a vrátí fokus na ikonu.
 
 Smazání aktuálních bloků vyžaduje potvrzení. Menu vysvětlí blokaci při využití

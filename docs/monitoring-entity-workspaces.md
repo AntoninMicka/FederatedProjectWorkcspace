@@ -18,14 +18,18 @@ přepínač kategorií a jediný přepínaný formulář jsou odstraněny.
 | Úlohy zpracování | Vstupy, rozvrh, vykonavatel a stav; zadání, modelový režim a místo běhu. |
 
 Komplexní úloha nemá formulář typu `task`. Agreguje výše uvedené tabulky.
-Při úpravě složení obsahují zaškrtávání již existujících položek; společná
-metadata sestavy jsou jediný záhlavní řádek. Definice se do sestavy nekopírují.
-„Upravit“ otevře vlastní obrazovku položky. Založení položky z agregátu
-použije její vlastní formulář a vrátí uživatele k rozpracovanému složení.
+Nad každou tabulkou jsou akce **Vytvořit nové** a **Přidat existující**.
+Výběr existující položky připojí sdílenou definici bez kopírování; změna složení
+se uloží ihned. Není zde režim úpravy sestavy, záhlavní formulář ani checkboxy.
+Nová prázdná sestava vyžaduje pouze název; uložit ji lze před připojením
+zpracování. Spuštění prázdné sestavy odmítne také backend. „Upravit“ u řádku otevře vlastní
+obrazovku položky. Založení z agregátu použije její vlastní formulář a po
+uložení ji připojí do sestavy. V samostatném katalogu výběr existující položky
+otevře její detail; katalog již obsahuje všechny položky daného typu.
 Samotné uložení nic nespouští ani neaktivuje.
 
 Odpojení odstraní vazbu sestavy, ne sdílený blok. Pokud položku vyžaduje
-jiné zvolené propojení, zůstane zaškrtnutá s vysvětlením; nejprve je nutné
+jiné zvolené propojení, nelze ji odebrat a zobrazí se vysvětlení; nejprve je nutné
 odpojit závislého spotřebitele. Neznámé ID se odmítne. Provozní stav zůstává
 dostupný přes historii, vydané zprávy ve Výstupech.
 
@@ -44,15 +48,19 @@ Reporting/Workspace CAS, journal a receipts podle
 [ADR 0082](adr/0082-composable-monitoring-and-message-pools.md).
 GUI drží pouze rozpracovaný návrh. Pokus o uložení zachovává payload,
 base HEAD a operation ID; nevytváří automatický nový pokus po unknown.
-Opustit rozepsanou sestavu či editor vyžaduje původní guard.
+Rozepsaný editor chrání původní guard. Nejasné uložení sestavy lze zopakovat
+explicitní akcí se stejným požadavkem.
 Read-only a native RBAC se nemění. Pád před commitem obnovuje původní
 journal, po commitu se dohledá původní receipt. Nová persistentní vrstva
-ani writer nevznikají.
+ani writer nevznikají. Vytvoření položky a její připojení jsou dva zápisy:
+pád mezi nimi zachová položku v katalogu; uživatel ji připojí přes Přidat
+existující. Chyba připojení nesmí smazat již uloženou položku.
 
 `tests.test_monitoring_blocks_browser` v reálném Qt/WebEngine kontroluje
 oddělené formuláře, nepřítomnost task editoru, čtyři tabulky agregátu,
-pool vytvořený samostatným formulářem, ochranu rozepsané sestavy,
-odmítnutí odpojení nutného vstupu a odpojení poolu bez smazání.
+akce nad každou tabulkou, pool vytvořený samostatným formulářem,
+odmítnutí odpojení nutného vstupu, odpojení poolu bez smazání a opětovné
+připojení existujícího poolu bez duplicity.
 Pokračuje skutečným sběrem syntetického RSS, návrhem, vydáním zprávy,
 read-only stavem a uložením týdenního rozvrhu. Jde o izolovaný profil,
 nikoli ruční akceptaci používaného desktopu nebo vzdálené nasazení.
