@@ -3,12 +3,17 @@
 
 # X/Twitter — připravená implementace PoC, neověřeno
 
-MON-08-11, 16. 11. 2026. Uživatel výslovně vyžádal implementaci **bez
-testování**. Nebyly spuštěny testy, aplikace, API smoke, placený request ani
-aktivace. Není to PoC validated ani připravenost pro produkci. Implementace
-je oddělená ve větvi `feature/x-twitter-poc`, závislé na zdrojovém základu
-`d7254be`; lokální develop tento kontrakt konektorů ještě neobsahoval.
-Před PR je nutné začlenit závislost a samostatně dohodnout ověření.
+MON-08-11, 16. 11. 2026. První implementace vznikla na výslovnou žádost
+uživatele **bez testování**. V tomto kroku nebyly spuštěny testy, aplikace,
+API smoke, placený request ani aktivace. Závěrečná regrese následně ověřuje
+integraci HTTP, katalogu a formulářů; skutečný X účet, placené API a funkční
+rozsah konektoru zůstávají neověřené. Není to PoC validated ani připravenost
+pro produkci.
+
+Implementace vznikla ve větvi `feature/x-twitter-poc` nad závislostí
+`d7254be`. Celý tento základ je součástí připravovaného předání proti
+`develop`, nikoliv samostatně otestovaný X konektor. Aktuální akceptaci,
+rozsah větve a výsledky závěrečné regrese shrnuje [review MON-08](mon-08-review.md).
 
 ## Rozhraní podle veřejné dokumentace
 
@@ -117,7 +122,25 @@ PoC neprokazuje úplné odstranění obsahu ve všech spravovaných kopiích.
 
 ## Stav ověření
 
-Podle výslovného pokynu uživatele nebyly spuštěny unit/integration/browser
-ani živé API testy. Statická kontrola diffu nenahrazuje runtime ověření.
-MON-08-11 zůstává otevřený; bez ověření účtu, budgetu, chybových a recovery
-cest nelze výsledek označit jako PoC validated nebo doporučit PR.
+Původní předání na pokyn uživatele obsahovalo jen statickou kontrolu diffu,
+bez unit/integration/browser a živých API testů. Následný požadavek na
+kompletní regresi ověřil integraci popsanou níže. Uživatel přijal připravený
+PoC rozsah; autoritativní stav a přesné výsledky jsou v
+[review MON-08](mon-08-review.md). Bez samostatného ověření účtu, budgetu,
+chybových a recovery cest X nelze konektor označit jako PoC validated
+nebo produkčně připravený. Připravený PR tento neověřený rozsah přiznává.
+
+## Integrace HTTP před předáním PR — 16. 11. 2026
+
+Úplná regrese odhalila chybějící klasifikaci pěti nových HTTP cest, kvůli
+níž audit odmítal start webového serveru. Správa místního nastavení, purge
+a uzavření unknown mají společného serializovaného vlastníka `x_sources`;
+view není čisté čtení. Request-local XService drží původní bounded SQLite,
+credential a pool vlastníky, nevyměňuje sdílené serverové služby. Placený
+`block-x-collect` patří do existujícího `monitoring_execution`. Obě mapování
+používá server i browser; neznámé cesty nadále odmítá inventurní kontrola.
+
+Oprava přebírá HTTP admission policy a existující test startu TLS serveru
+a nezávislosti linek. Nepřidává persistentní vrstvu ani nemění crash
+boundaries výše. Ověření této integrace není testem skutečného X účtu,
+placeného API ani zbývajícího funkčního rozsahu konektoru.

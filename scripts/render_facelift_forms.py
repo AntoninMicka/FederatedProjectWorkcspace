@@ -113,6 +113,12 @@ SHEETS = [
           ("julia-editor",), scale=.55),
     sheet("rss-sources", "Zdroje — kanály a import odběrů", ("#sources-editor", "#sources-import-review"),
           ("sources-editor",), scale=.72),
+    sheet("x-settings", "Zdroje — X/Twitter: místní nastavení (PoC)",
+          ("#x-settings-form",), ("x-settings-form",), scale=.72),
+    sheet("x-subscription", "Zdroje — X/Twitter: místní odběr (PoC)",
+          ("#x-subscription-form",), ("x-subscription-form",), scale=.72),
+    sheet("x-forget", "Zdroje — X/Twitter: odstranění surových dat (PoC)",
+          ("#x-forget-form",), ("x-forget-form",), scale=.9),
     sheet("monitoring-source", "Sledování — zdroje", ("#monitoring-source-editor",),
           ("monitoring-source-editor",), scale=.72, native_html=native_form(
               "Samostatné zadání zdroje pro těžbu.",

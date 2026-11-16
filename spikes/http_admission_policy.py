@@ -257,6 +257,7 @@ JULIA_ROUTES = frozenset({
 MONITORING_ROUTES = frozenset({
     '/v1/monitoring/block-compose',
     '/v1/monitoring/block-configure',
+    '/v1/monitoring/block-x-collect',
     '/v1/monitoring/block-process', '/v1/monitoring/block-reprocess',
     '/v1/monitoring/block-publish',
     '/v1/monitoring/block-release',
@@ -297,6 +298,7 @@ MONITORING_ROUTES = frozenset({
     '/v1/monitoring/workflow-save',
 })
 MONITORING_EXECUTION_ROUTES = frozenset({
+    '/v1/monitoring/block-x-collect',
     '/v1/monitoring/run', '/v1/monitoring/synthesis-run', '/v1/monitoring/workflow-run',
     '/v1/monitoring/block-process', '/v1/monitoring/block-reprocess', '/v1/monitoring/block-task-run',
     '/v1/monitoring/block-compose', '/v1/monitoring/block-publish',
@@ -314,6 +316,15 @@ RSS_SOURCE_ROUTES = frozenset({
     '/v1/rss-sources/view',
     '/v1/rss-sources/save',
     '/v1/rss-sources/import-preview',
+})
+
+# Node-local X configuration, cleanup and unknown-close share a serialized owner.
+# Even view can purge retained state. Request-local XService instances use the
+# native bounded SQLite writer and credential/pool owners; none of these routes
+# performs a paid network read. Collection keeps the monitoring execution lane.
+X_SOURCE_ROUTES = frozenset({
+    '/v1/x-sources/view', '/v1/x-sources/save',
+    '/v1/x-sources/close', '/v1/x-sources/forget',
 })
 
 # Bridge mappings, mailbox/review and queue publication share one owner.
@@ -362,7 +373,7 @@ FEDERATION_TRANSFER_LANES = {
 }
 
 # These service domains acquire admission after authentication/body parsing.
-SERVICE_ROUTES = (PROVIDER_ROUTES | JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES
+SERVICE_ROUTES = (PROVIDER_ROUTES | JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES | X_SOURCE_ROUTES
                   | IDE_QUEUE_ROUTES | REFINEMENT_ROUTES | REFERENCE_ROUTES
                   | NODE_PREFERENCE_ROUTES | FEDERATION_CONTROL_ROUTES
                   | frozenset(FEDERATION_TRANSFER_LANES))
@@ -402,6 +413,7 @@ ROUTE_LANES = {
     **dict.fromkeys(JULIA_ROUTES, 'julia'),
     **dict.fromkeys(MONITORING_ROUTES, 'monitoring'),
     **dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources'),
+    **dict.fromkeys(X_SOURCE_ROUTES, 'x_sources'),
     # Network wait owns no reader cache; definitions use the native SQLite CAS.
     '/v1/rss-sources/sync': 'catalog_transfer',
     **dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue'),

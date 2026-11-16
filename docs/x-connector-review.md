@@ -67,4 +67,6 @@ trvalé operation ID a lokální odstranění surových kopií. Obecný
 `platform-channel` zůstává unavailable. Veřejné pricing a reference endpointů
 byly znovu přečteny 16. 11. 2026; konkrétní API účet nebyl použit.
 Původní návrh automatického intervalu v tomto prvním neověřeném řezu
-nahrazuje pouze explicitní ruční spuštění. Není to ověření ani uzavření úkolu.
+nahrazuje pouze explicitní ruční spuštění. Tento implementační krok sám
+nebyl ověřením ani uzavřením úkolu. Následnou lidskou akceptaci a integrační
+regresi shrnuje [review MON-08](mon-08-review.md); živé X API zůstává neověřené.

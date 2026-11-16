@@ -154,12 +154,15 @@ class LocalAPITests(unittest.TestCase):
 
         from spikes.http_admission_policy import JULIA_ROUTES
         routes.update(dict.fromkeys(JULIA_ROUTES, 'julia_lane'))
-        from spikes.http_admission_policy import MONITORING_ROUTES, RSS_SOURCE_ROUTES
+        from spikes.http_admission_policy import MONITORING_ROUTES, RSS_SOURCE_ROUTES, X_SOURCE_ROUTES
         routes.update(dict.fromkeys(MONITORING_ROUTES, 'monitoring_lane'))
         from spikes.http_admission_policy import MONITORING_EXECUTION_ROUTES, MONITORING_CONTROL_ROUTES
         routes.update(dict.fromkeys(MONITORING_EXECUTION_ROUTES, 'monitoring_execution_lane'))
         routes.update(dict.fromkeys(MONITORING_CONTROL_ROUTES, 'monitoring_control_lane'))
         routes.update(dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources_lane'))
+        routes.update(dict.fromkeys(X_SOURCE_ROUTES, 'x_sources_lane'))
+        # Reader sync waits on the peer without owning the local cache lane.
+        routes['/v1/rss-sources/sync'] = 'catalog_transfer_lane'
         from spikes.http_admission_policy import IDE_QUEUE_ROUTES
         routes.update(dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue_lane'))
         from spikes.http_admission_policy import REFINEMENT_ROUTES, REFERENCE_ROUTES

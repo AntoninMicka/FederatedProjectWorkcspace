@@ -88,6 +88,7 @@ page.loadFinished.connect(loaded);page.setHtml(HTML)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100)
 QTimer.singleShot(15000,lambda:app.exit(3));code=app.exec();view.close();delete(view);delete(page);delete(profile);raise SystemExit(code)
 '''.replace('page.setHtml(HTML)','page.setHtml('+repr(html)+')')
-        result=subprocess.run([sys.executable,'-c',script],cwd=Path(__file__).resolve().parents[1],capture_output=True,text=True,timeout=25)
+        # Pass the growing UI fixture through stdin instead of the OS argv limit.
+        result=subprocess.run([sys.executable,'-'],input=script,cwd=Path(__file__).resolve().parents[1],capture_output=True,text=True,timeout=25)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('menu clipping checks OK',result.stdout)

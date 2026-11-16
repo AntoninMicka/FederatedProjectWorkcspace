@@ -1,7 +1,108 @@
 <!-- SPDX-FileCopyrightText: 2026 Antonín Mička -->
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 
-# MON-08 — podklady k dokončení a review, 12. 11. 2026
+# MON-08 — akceptace a závěrečné review, 16. 11. 2026
+
+## Aktuální lidská akceptace — 16. 11. 2026
+
+Tato aktualizace nahrazuje závěry o otevřených úkolech v historickém auditu
+níže; zachovává jeho tehdejší důkazy a omezení. Aktuální plán zůstává pouze
+ve Workspace, tento dokument je podkladem review implementace.
+
+Nativní readback projektu `c898b941-8eb0-4406-8dad-6e2b96c06d59` na HEAD
+`69750667c388ef99009ba35feccab0a61be0261d` vrátil platný plán (`ready`),
+MON-08 i MON-08-01..12 jako `completed`. Uživatel přijal UI, generování,
+řetězení a následně opravu neúplných období. Migraci výslovně nepožaduje;
+X/Twitter přijal v rozsahu připravené implementace PoC bez ověření API.
+Záznam nemění autoritativní úkoly ani stav MON-05.
+
+Výsledné chování doplňují [řetězení zpráv](monitoring-report-chains.md),
+[ochrana a ruční opakování](report-protection.md),
+[sdílená aktivace a výsledky](monitoring-shared-state.md) a
+[agregované GUI](monitoring-entity-workspaces.md). Chybějící vydání zdroje
+neblokuje syntézu dostupných podkladů; výstup i evidence přiznávají mezery.
+Hodinová ochrana začíná skutečným sestavením, povoluje jediné přegenerování
+na svém konci a do té doby blokuje vydání. Ruční opakování po ochraně
+probíhá místně; návrhy i chyby se přenášejí.
+
+Akceptace není důkazem produkční připravenosti [X PoC](x-connector-poc.md),
+placeného readu, fyzického výpadkového scénáře ani komplexního předávání
+práce mezi uzly. Tyto rozsahy nejsou výsledkem lokálních regresních testů.
+
+### Rozsah větve pro review
+
+Zdrojová větev `feature/x-twitter-poc` obsahuje celý navazující vývoj
+monitoringu, nejen X konektor: proti ověřenému vzdálenému `develop`
+`2b563fb61303516f7bbaa0226e4a394686638423` jde před těmito závěrečnými
+opravami o 82 commitů a 275 souborů. Poslední uložený source HEAD je
+`d0ef4668e4039865be36e7c28730011b26861f67`. Závěrečné lokální opravy
+popsané níže ještě vyžadují commit; toto review není push ani otevřený PR.
+
+- Sběr RSS/Atom, normalizované konektory, filtry a retence, deduplikované
+  pooly, propojené definice a výsledky se samostatnými identitami.
+- Vydané zprávy připnuté podle ID zpracování, kontext modelu, provenience,
+  opravy, upozornění na neúplnost a možné zastarání.
+- Oddělené GUI částí a tabulkový agregát; zprávy, export a návazné prezentace.
+- Sdílená aktivace, přenos návrhů a chyb, redundantní RSS a místní ruční běh.
+- Související opravy omezeného HTTP souběhu, SQLite a Git vlastnictví,
+  validace historie synchronizace, diagnostiky, IDE fronty a LLM timeoutů.
+- Místní X/Twitter PoC s explicitním ručním placeným sběrem; skutečný účet,
+  placené API a produkční provoz zůstávají neověřené.
+
+### Integrační opravy při závěrečném ověření
+
+- Registr HTTP vlastnictví nyní klasifikuje všech pět X cest. Chybějící
+  záznamy před opravou blokovaly start webového serveru. Správa místního X
+  stavu má serializovanou linku; placený sběr existující monitoring execution.
+  Podrobnosti a zachované recovery jsou v [X PoC](x-connector-poc.md#integrace-http-před-předáním-pr--16-11-2026).
+- Test nezávislosti HTTP linek respektuje existující přesun RSS sync do
+  `catalog_transfer`; nově zkouší také izolaci místní správy X.
+- Test katalogu konektorů nyní zahrnuje `x-twitter`, jeho provider cursor
+  a nenakonfigurovaný stav bez implicitního placeného readu.
+- Tiskový export formulářů zahrnuje také tři nové X formuláře; inventura
+  tak opět pokrývá všechny aktuální formuláře sdíleného UI.
+- Izolované UI testy výstupů mají doplněný DOM panel evidence a jeho
+  renderovací závislost, aby dál ověřovaly připnuté vytvoření prezentace
+  a rozlišení nevydaného návrhu po rozšíření detailu zprávy.
+- Grafický test menu předává velkou UI fixture přes stdin. Předchozí
+  `python -c` překročil limit délky jednoho argumentu; kontrolované chování
+  menu ani aplikační kód se tím nemění.
+
+### Závěrečné lokální ověření
+
+Po poslední relevantní změně kódu a testů:
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+**2 230 testů, OK (skipped=60), 1 542,083 s**, návratový kód 0.
+Provedeno na Linuxu s Pythonem 3.14.4. Přeskočené případy zahrnují opt-in
+Qt/WebEngine, privátní vstupní vzorek, nativní libgit2, izolaci namespaces,
+ARM64 Julia runtime, Debian runtime, živé Ollama a volitelný QR decoder;
+nejde o jejich úspěšné ověření. CI běh na Pythonu 3.11 zde nebyl spuštěn.
+
+Navíc finální cílený grafický běh s `M0_DESKTOP_TEST=1`: **5 testů OK,
+31,582 s** — `test_monitoring_blocks_browser`, `test_report_reprocess_browser`,
+`test_rss_subscription_sync_browser`, `test_rss_sources_browser` a
+`test_sidebar_menu_browser`. Ověřují skutečný Qt/WebEngine nad izolovanými
+projekty a řízenými transporty, nikoliv fyzické uzly nebo živý model.
+
+`node --check extensions/workspace-bridge/bridge.js`, lokální odkazy review
+a `git diff --check` prošly. Inventura CI sharding skriptu zahrnuje všech
+205 top-level modulů právě jednou ve čtyřech shardech; nejde o nové spuštění
+shardů. Samostatný build/lint není nakonfigurovaný.
+
+Opravy X HTTP registrace a formulářového exportu a úpravy testovacích
+fixtures jsou v lokálním diffu nad `d0ef466`. Testy nezpůsobily aktivaci X,
+placené volání ani nasazení na živé uzly. Vzdálený `develop` při závěrečné
+kontrole stále odpovídal `2b563fb61303516f7bbaa0226e4a394686638423`.
+Připraveno k uživatelskému review a následnému commitu/push/PR; tyto kroky
+nebyly v tomto předání provedeny.
+
+## Historický audit — 12. 11. 2026
+
+Následující záznamy zachovávají tehdejší stav. Aktuální akceptace je výše.
 
 Audit důkazů a mezer, nikoli druhý plán či potvrzení dokončení.
 Autoritou je Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,

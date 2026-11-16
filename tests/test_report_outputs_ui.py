@@ -13,13 +13,13 @@ class ReportOutputsUITests(unittest.TestCase):
 const assert=require('node:assert/strict');
 let activeProject={id:'project',readOnly:false},selectedReportOutput=null,reportOutputSequence=0,presentationEditorView={};
 let monitoringView={project_id:'project',commit_id:'shown-head',reports:[],can_manage:true};
-const fields={'#report-output-view':{hidden:false},'#report-output-content':{},'#report-output-actions':{},'#report-output-status':{},'#report-output-title':{}};
+const fields={'#report-output-view':{hidden:false},'#report-output-content':{},'#report-output-actions':{},'#report-output-status':{},'#report-output-title':{},'#report-output-inputs':{replaceChildren(){}}};
 for(const item of Object.values(fields)){item.children=[];item.replaceChildren=function(){this.children=[];};item.append=function(...values){this.children.push(...values);};}
 const document={querySelector:key=>fields[key]||{},createElement:()=>({})};
 const window={confirm:()=>true},requests=[],opened=[];
 async function canLeaveWorkspaceEditors(){return true;}function renderReportOutputs(){}function selectSidebarTab(){}function showWorkspacePage(){}
 function monitoringButton(label,run,disabled=false){return {label,run,disabled};}
-function exportReportMarkdown(){}function showMonitoringReport(){}
+function exportReportMarkdown(){}function showMonitoringReport(){}function renderReportInputEvidence(){}
 async function loadMonitoring(){monitoringView.commit_id='published-head';}
 async function openPresentationEditor(id){opened.push(id);}
 async function monitoringRequest(action,body){requests.push({action,body});return action==='output'?{markdown:'# Approved report',commit_id:'shown-head',presentations:[]}:{artifact_id:'deck'};}
@@ -58,12 +58,12 @@ assert(!rows.some(r=>r.id==='task'||r.id==='block:done'));
         script=r"""
 const assert=require('node:assert/strict');
 let activeProject={id:'project'},selectedReportOutput=null,reportOutputSequence=0,monitoringView={reports:[]};
-const fields={'#report-output-view':{hidden:false},'#report-output-content':{replaceChildren(){},append(){}},'#report-output-actions':{replaceChildren(){},append(){}},'#report-output-status':{},'#report-output-title':{}};
+const fields={'#report-output-view':{hidden:false},'#report-output-content':{replaceChildren(){},append(){}},'#report-output-actions':{replaceChildren(){},append(){}},'#report-output-status':{},'#report-output-title':{},'#report-output-inputs':{replaceChildren(){}}};
 const document={querySelector:id=>fields[id]||{}};
 async function canLeaveWorkspaceEditors(){return true;}
 function renderReportOutputs(){}function selectSidebarTab(){}function showWorkspacePage(){}
 function monitoringButton(){return {};}
-function showMonitoringReport(){}function exportReportMarkdown(){}
+function showMonitoringReport(){}function exportReportMarkdown(){}function renderReportInputEvidence(){}
 async function monitoringRequest(){throw Error('Draft was incorrectly fetched through another resource');}
 """+function('openReportOutput')+r"""
 (async()=>{

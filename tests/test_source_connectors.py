@@ -95,14 +95,17 @@ class ConnectorContractTests(unittest.TestCase):
 
     def test_catalog_declares_availability_permissions_and_node_local_credentials(self):
         catalog = {row['id']:row for row in connector_catalog()}
-        self.assertEqual(set(catalog), {'rss-atom','static-text','web-search','platform-channel','workspace-output'})
+        self.assertEqual(set(catalog), {'rss-atom','static-text','web-search','platform-channel','workspace-output','x-twitter'})
         self.assertEqual(catalog['rss-atom']['availability']['state'], 'ready')
         self.assertEqual(catalog['web-search']['availability']['state'], 'not-configured')
         self.assertEqual(catalog['platform-channel']['availability']['state'], 'unavailable')
         self.assertEqual(catalog['workspace-output']['availability']['state'], 'not-configured')
+        self.assertEqual(catalog['x-twitter']['availability']['state'], 'not-configured')
+        self.assertEqual(catalog['x-twitter']['operations'], ['normalize'])
+        continuation_kinds={'rss-atom':'http-validators','x-twitter':'provider-cursor'}
         for row in catalog.values():
             self.assertFalse(row['config_schema']['additionalProperties'])
-            self.assertEqual(row['continuation']['kind'], 'http-validators' if row['id']=='rss-atom' else 'none')
+            self.assertEqual(row['continuation']['kind'], continuation_kinds.get(row['id'],'none'))
             self.assertEqual(row['credential_storage'], 'node-local')
             self.assertNotIn('api-token', row['config_fields'])
             self.assertIn('max_items', row['limits'])
