@@ -39,8 +39,8 @@ def references(intent):
 
 
 class Evidence:
-    def __init__(self, pools, pid, blocks, rows, uses,*,clock=time.time):
-        self.blocks={b['id']:b for b in blocks};self.uses={};self.now=(pools.clock if pools is not None else clock)()
+    def __init__(self, pools, pid, blocks, rows, uses,*,clock=time.time,issued=()):
+        self.blocks={b['id']:b for b in blocks};self.uses={};self.now=(pools.clock if pools is not None else clock)();self.issued=issued
         for intent in uses:
             self.uses.setdefault(intent['block']['id'],set()).update(references(intent))
         self.views={b['id']:MessagePools.view_rows(pid,b['id'],rows)
@@ -88,5 +88,7 @@ class Evidence:
                         item_entry=rev['item_entry'],revision=rev['revision'],title=item.get('title'),url=item.get('url'),
                         source_id=item.get('source_id') or rev.get('source_id'),filter_revisions=sorted({m['filter_revision'] for m in group.get('contributions',[]) if m['item_entry']==rev['item_entry']}),available=retained is not None,additional_versions=additions))
         searches={id_:value if isinstance(value,str) else digest(encoded(value)) for id_,value in intent.get('searches',{}).items()}
-        return dict(inputs=rows,potentially_stale=changed,processing_ref=intent['block'].get('ref'),input_head=intent.get('input_head'),searches=searches,
+        from spikes.monitoring_report_inputs import freshness
+        reports=freshness(intent.get('report_inputs',[]),self.issued)
+        return dict(inputs=rows,reports=reports,potentially_stale=changed or any(r['potentially_stale'] for r in reports),processing_ref=intent['block'].get('ref'),input_head=intent.get('input_head'),searches=searches,
                     coverage='Porovnání s místně dostupnými položkami; chybějící nebo expirované vstupy nelze plně ověřit.')

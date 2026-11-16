@@ -82,3 +82,7 @@ nikoli ruční akceptaci používaného desktopu nebo vzdálené nasazení.
 Přesné vstupy a jejich dostupnost, možné zastarání zprávy, čekání podle
 jednotlivých spotřebitelů, souhrny výběru a časový/tokový přehled popisuje
 [evidence vstupů](monitoring-input-evidence.md).
+
+Zpracování může jako další vstupy používat
+[vydané zprávy jiných úloh přes stabilní ID](monitoring-report-chains.md).
+Výběr zdrojů je podle názvů; konkrétní vydání a jejich piny se zmrazí při běhu.

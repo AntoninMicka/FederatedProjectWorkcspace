@@ -28,6 +28,8 @@ assert.match(monitoringProcessingPlan(row),/zapnutý/);
 assert.match(monitoringProcessingOutcome(row),/Chyba: Model není dostupný/);
 blockCatalog.jobs=[job('failed',{error:'Neúplný přenos vstupních dat: pool test'})];
 assert.match(monitoringProcessingOutcome(row),/^Neúplné vstupy:/);
+blockCatalog.jobs=[job('failed',{error:'Neúplné období zdrojové úlohy source: chybí vydání pro 2026-11-01'})];
+assert.match(monitoringProcessingOutcome(row),/^Neúplné vstupy:/);
 blockCatalog.jobs=[job('unknown',{error:'Přerušený dispatch'})];
 assert.match(monitoringProcessingOutcome(row),/Unknown.*Přerušený dispatch/);
 blockCatalog.jobs=[job('review',{protection:{finalized:false,until:1794163600,error:'Neúplný přenos vstupních dat: pool test'}})];

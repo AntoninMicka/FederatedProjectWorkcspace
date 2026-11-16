@@ -151,7 +151,7 @@ function renderMonitoringBlocks(){
    article.append(blockText('p','Poslední vydání: '+(row.last_issued_at?new Date(row.last_issued_at).toLocaleString():'Žádné uložené vydání')+' · další vydání až po ochraně a ručním posouzení.'));
    article.append(blockText('p','Poslední zpracování: '+monitoringProcessingTime(row)+' · '+monitoringProcessingOutcome(row)));
    article.append(blockText('p','Vykonavatel posledního běhu: '+monitoringProcessingExecutor(row)));
-   article.append(blockText('p',c.pool_ids.map(blockName).join(', ')+(c.search_ids.length?' + hledání: '+c.search_ids.map(blockName).join(', '):'')+' → '+c.instructions));
+   article.append(blockText('p',[...c.pool_ids,...(c.report_task_ids||[])].map(blockName).join(', ')+(c.search_ids.length?' + hledání: '+c.search_ids.map(blockName).join(', '):'')+' → '+c.instructions));
    const schedules={manual:'Na vyžádání',daily:'Denně',weekly:'Týdně od pondělí',monthly:'Měsíčně od 1. dne',quarterly:'Čtvrtletně od 1. dne',annual:'Ročně od 1. ledna'};
    article.append(blockText('p',c.schedule.kind==='manual'?schedules.manual:schedules[c.schedule.kind]+' v '+c.schedule.time+' ('+c.schedule.timezone+')'));
    article.append(monitoringButton('Sestavit návrh zprávy',async()=>{
@@ -168,7 +168,7 @@ function renderMonitoringBlocks(){
 function blockField(name,label,type,value,options=[]){
  const wrap=document.createElement('label');wrap.append(document.createTextNode(label));
  const input=document.createElement(type==='textarea'?'textarea':type==='select'||type==='multi'?'select':'input');
- input.name=name;input.required=!['keywords','regex','search_ids','source_ids','filter_ids','pool_ids'].includes(name);
+ input.name=name;input.required=!['keywords','regex','search_ids','source_ids','filter_ids','pool_ids','report_task_ids'].includes(name);
  if(type==='select'||type==='multi'){
   input.multiple=type==='multi';for(const o of options){const opt=document.createElement('option');opt.value=o.id;opt.textContent=o.title;opt.selected=type==='multi'?(value||[]).includes(o.id):value===o.id;input.append(opt);}
   if(type==='select'&&value&&!options.some(o=>o.id===value)){const missing=document.createElement('option');missing.value=value;missing.textContent='Původní volba mimo místní seznam · '+value;missing.selected=true;input.append(missing);}
@@ -218,6 +218,8 @@ async function editMonitoringBlock(kind,row=null,restore=null){
 
  }else if(kind==='processing'){
   blockField('pool_ids','Vstupní pooly','multi',c.pool_ids,blockOptions('pool'));blockField('search_ids','Hledání při sestavení zprávy','multi',c.search_ids,blockOptions('source',c=>c.connector==='web-search'));
+  blockField('report_task_ids','Vydané zprávy zdrojových úloh','multi',c.report_task_ids||[],blockRows().filter(b=>b.value.kind==='processing'&&b.id!==blockEdit.id&&!b.resolved_ids?.includes(blockEdit.id)).map(b=>({id:b.id,title:b.value.title})));
+  blockFields.append(blockText('p','Použijí se pouze vydané zprávy vybraných úloh za požadované období; konkrétní vydání se připnou při zpracování.'));
   blockField('instructions','Zadání zprávy','textarea',c.instructions);blockField('mode','Zpracování','select',c.mode,[{id:'deterministic',title:'Přehled bez LLM'},{id:'llm',title:'Pomocí nastaveného LLM'}]);
   blockField('lookback_days','Zprávy za posledních dní','number',c.lookback_days);blockField('schedule_kind','Spouštění','select',c.schedule.kind,[{id:'manual',title:'Na vyžádání'},{id:'daily',title:'Denně'},{id:'weekly',title:'Týdně od pondělí'},{id:'monthly',title:'Měsíčně od 1. dne'},{id:'quarterly',title:'Čtvrtletně od 1. dne'},{id:'annual',title:'Ročně od 1. ledna'}]);
   blockField('time','Čas pravidelného zpracování','time',c.schedule.time);blockField('timezone','Časová zóna','text',c.schedule.timezone);
@@ -238,7 +240,7 @@ function readMonitoringBlock(){
   if(words.length)steps.push({id:'keywords',kind:'keywords',fields:['title','content'],all:[],any:words,none:[],case_sensitive:false});
   if(get('regex'))steps.push({id:'regex',kind:'regex',fields:['title','content'],pattern:get('regex'),flags:['IGNORECASE'],match:'search',negate:false});
   steps.push({id:'dedup',kind:'dedup',field:'content_sha256'});c.pipeline={schema:'fpw-monitoring-pipeline-v1',revision:crypto.randomUUID(),steps};
- }else if(kind==='processing')Object.assign(c,{pool_ids:sel('pool_ids'),search_ids:sel('search_ids'),instructions:get('instructions'),mode:get('mode'),lookback_days:Number(get('lookback_days')),node_id:get('node_id'),schedule:{kind:get('schedule_kind'),time:get('time'),timezone:get('timezone')}});
+ }else if(kind==='processing')Object.assign(c,{report_task_ids:sel('report_task_ids'),pool_ids:sel('pool_ids'),search_ids:sel('search_ids'),instructions:get('instructions'),mode:get('mode'),lookback_days:Number(get('lookback_days')),node_id:get('node_id'),schedule:{kind:get('schedule_kind'),time:get('time'),timezone:get('timezone')}});
  return b;
 }
 function closeMonitoringTaskDependencies(b){
@@ -246,8 +248,8 @@ function closeMonitoringTaskDependencies(b){
   // Include dependencies of selected shared blocks without copying their definitions.
   const rows=blockRows(),chosen=new Set(Object.values(c).filter(Array.isArray).flat());
   for(const id of chosen)if(!rows.some(r=>r.id===id))throw Error('Nedostupná položka sestavy: '+id);
-  for(let repeat=0;repeat<4;repeat++)for(const r of rows.filter(r=>chosen.has(r.id))){const x=r.value.config;
-   for(const d of [...(x.source_ids||[]),...(x.pool_ids||[]),...(x.search_ids||[]),...(x.pool_id?[x.pool_id]:[])])chosen.add(d);}
+  for(let repeat=0;repeat<rows.length;repeat++)for(const r of rows.filter(r=>chosen.has(r.id))){const x=r.value.config;
+   for(const d of [...(x.source_ids||[]),...(x.pool_ids||[]),...(x.search_ids||[]),...(x.report_task_ids||[]),...(x.pool_id?[x.pool_id]:[])])chosen.add(d);}
   for(const k of ['source','filter','pool','processing'])c[k+'_ids']=rows.filter(r=>r.value.kind===k&&chosen.has(r.id)).map(r=>r.id);
  return b;
 }

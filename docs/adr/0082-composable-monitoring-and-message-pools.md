@@ -216,3 +216,11 @@ Import položek a dokončení receipt jsou jedna transakce; před ní obnovu st�
 zpracování, finalizaci ochrany a vydání; nesouvisející přenosy je neblokují.
 Podrobnosti recovery a omezení jsou v
 [popisu sdíleného stavu](../monitoring-shared-state.md).
+
+Doplnění řetězení zpráv (2026-11-16): úloha zpracování může odkazovat na
+stabilní ID dalších úloh; běh zmrazí pouze vydané vstupy jako přesné Git
+piny. Zachovává původní worker a writer. Opravy se propagují jako označení
+možného zastarání přes uložené reference. Kontext modelu a synchronizace
+ověřují skutečné artefakty, tvůrčí ID a privacy. Kontrakt, kompatibilitu
+a zachované crash boundaries popisuje
+[řetězení zpráv](../monitoring-report-chains.md).

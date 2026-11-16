@@ -20,12 +20,15 @@ function monitoringLatestProcessing(row){
  return (blockCatalog?.jobs||[]).find(j=>j.intent.kind==='processing'&&j.intent.block?.id===row.id&&!j.intent.regeneration_of&&!j.result?.replacement)||null;
 }
 function monitoringProcessingFailure(error){
- return String(error||'').startsWith('Neúplný přenos vstupních dat:')?'Neúplné vstupy: '+error:'Chyba: '+(error||'Zpracování selhalo');
+ return ['Neúplný přenos vstupních dat:','Neúplné období zdrojové úlohy ','Chybí vydané vstupní zprávy zdrojové úlohy '].some(prefix=>String(error||'').startsWith(prefix))?'Neúplné vstupy: '+error:'Chyba: '+(error||'Zpracování selhalo');
 }
 function monitoringProcessingOutcome(row){
  return monitoringProcessingJobOutcome(monitoringLatestProcessing(row));
 }
 function monitoringProcessingJobOutcome(job){
+ return monitoringProcessingBaseOutcome(job)+(job?.input_evidence?.potentially_stale?' · možné zastarání vstupů':'');
+}
+function monitoringProcessingBaseOutcome(job){
  if(!job)return 'Výsledek není v přehledu k dispozici';
  if(job.state==='unknown')return 'Unknown · výsledek není známý: '+(job.result?.error||'vyžaduje posouzení');
  if(job.state==='failed')return monitoringProcessingFailure(job.result?.error);
@@ -58,7 +61,7 @@ function monitoringCatalogColumns(kind){
  if(kind==='source')return [['Kanál / hledání',r=>r.value.config.locator],['Kontrola zdroje',r=>r.value.config.connector==='rss-atom'?r.value.config.poll_seconds/60+' min':'Na vyžádání'],['Sdílená aktivace',r=>r.runtime?.error|| (r.runtime?.enabled?'Zapnutý':'Vypnutý')],['Poslední sběr',r=>r.runtime?.last_success||'Není uložen'],['Příští sběr',r=>r.value.config.connector==='rss-atom'&&r.runtime?.enabled?new Date(r.runtime.next_due*1000).toLocaleString():'Neaktivní / na vyžádání'],['Poslední výsledek',r=>r.value.config.connector==='rss-atom'?monitoringIntakeOutcome(r.latest_intake):'Hledání pouze při zpracování']];
  if(kind==='filter')return [['Vstupní zdroje',r=>r.value.config.source_ids.map(blockName).join(', ')],['Pravidla',r=>r.value.config.pipeline.steps.map(s=>s.kind).join(' → ')],['Cílový pool',r=>blockName(r.value.config.pool_id)]];
  if(kind==='pool')return [['Zprávy',r=>String(r.message_count??0)],['Čekající verze',r=>r.processing_status?.consumer_ids.length?String(r.processing_status.pending_count):'Bez připojeného zpracování'],['Uchování',r=>r.value.config.retention_days+' dní'],['Příjem synchronizace',r=>r.last_received_sync||'Zatím nepotvrzen']];
- return [['Vstupní pooly',r=>r.value.config.pool_ids.map(blockName).join(', ')],['Rozvrh',r=>{
+ return [['Vstupy (pooly / zprávy)',r=>[...r.value.config.pool_ids,...(r.value.config.report_task_ids||[])].map(blockName).join(', ')],['Rozvrh',r=>{
   const c=r.value.config.schedule,label=({manual:'Na vyžádání',daily:'Denně',weekly:'Týdně',monthly:'Měsíčně',quarterly:'Čtvrtletně',annual:'Ročně'})[c.kind];
   return c.kind==='manual'?label:label+' v '+c.time+' ('+c.timezone+')';
  }],['Plánovaný uzel',r=>r.value.config.node_id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes?.find(n=>n.id===r.value.config.node_id)?.name||'Jiný uzel')],['Aktivace rozvrhu',monitoringProcessingPlan],['Poslední zpracování',monitoringProcessingTime],['Příští zpracování',r=>r.next_processing_at?new Date(r.next_processing_at*1000).toLocaleString():'Ruční / neaktivní'],['Poslední vydání',r=>r.last_issued_at?new Date(r.last_issued_at).toLocaleString():'Žádné uložené vydání'],['Skutečný vykonavatel',monitoringProcessingExecutor],['Výsledek',monitoringProcessingOutcome]];
@@ -158,7 +161,7 @@ function renderMonitoringFlow(container,task){
  const edges=[];
  for(const row of rows.filter(b=>ids.has(b.id))){const c=row.value.config;
   if(row.value.kind==='filter'){for(const id of c.source_ids)edges.push([id,row.id]);edges.push([row.id,c.pool_id]);}
-  if(row.value.kind==='processing')for(const id of [...c.pool_ids,...c.search_ids])edges.push([id,row.id]);
+  if(row.value.kind==='processing')for(const id of [...c.pool_ids,...c.search_ids,...(c.report_task_ids||[])])edges.push([id,row.id]);
  }
  const visiting=new Set(),done=new Set();
  function cycle(id){if(visiting.has(id))return true;if(done.has(id))return false;visiting.add(id);for(const [,to] of edges.filter(e=>e[0]===id))if(cycle(to))return true;visiting.delete(id);done.add(id);return false;}

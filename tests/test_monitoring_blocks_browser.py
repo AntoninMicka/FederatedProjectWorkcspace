@@ -83,7 +83,14 @@ try:
    31:"blockTab='filter';renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-toolbar button')].find(b=>b.textContent==='Navrhnout filtr pomocí LLM').click()",
    32:"(()=>{const f=document.querySelector('#monitoring-compose');f.elements.goal.value='Vybrat zprávy o energetice';for(const o of f.elements.sample_sources.options)o.selected=o.value===blockTestIds[0];f.requestSubmit()})()",
    33:"document.querySelector('#monitoring-composition-save').click()",
+    34:"monitoringOpen();editMonitoringBlock('processing',blockCatalog.blocks.find(b=>b.id===blockTestIds[3]))",
+   35:"blockEditor.elements.schedule_kind.value='manual';blockEditor.requestSubmit()",
+   36:"editMonitoringBlock('processing')",
+   37:"(()=>{blockEditor.elements.title.value='Měsíční z vydaných zpráv';for(const o of blockEditor.elements.pool_ids.options)o.selected=false;for(const o of blockEditor.elements.report_task_ids.options)o.selected=o.value===blockTestIds[3];blockEditor.elements.lookback_days.value=31;blockEditor.requestSubmit()})()",
+   38:"window.chainTaskId=blockCatalog.blocks.find(b=>b.value.title==='Měsíční z vydaných zpráv').id;blockTab='processing';blockSelectedId=chainTaskId;renderMonitoringBlocks();[...document.querySelectorAll('#monitoring-block-content button')].find(b=>b.textContent==='Sestavit návrh zprávy').click()",
+   39:"openReportOutput(reportOutputRows().find(o=>o.job?.intent.block.id===chainTaskId))",
   }
+
   checks={
    0:"typeof editMonitoringBlock==='function'",
    1:"window.blocksOpened&&blockCatalog?.blocks.length===6",
@@ -119,7 +126,14 @@ try:
    31:"!document.querySelector('#monitoring-compose').hidden&&blockDesignKind==='filter'&&document.querySelector('#monitoring-compose').elements.sample_sources.options.length===2",
    32:"!!blockProposal&&blockProposal.calibration[0].results[0].decision==='selected'&&document.querySelector('#monitoring-composition-blocks').textContent.includes('Vybráno')&&document.querySelector('#monitoring-composition-blocks').textContent.includes('Ověřený kanál:')&&document.querySelector('#monitoring-composition-blocks').textContent.includes('Použít existující: Energetika')&&document.querySelector('#monitoring-block-state').textContent.includes('Návrh je připravený')",
    33:"!blockProposal&&blockCatalog.blocks.some(b=>b.value.title==='Filtr podle ukázek')",
+    34:"!blockEditor.hidden&&blockEditor.id==='monitoring-processing-editor'",
+   35:"blockEditor.hidden&&blockCatalog.blocks.find(b=>b.id===blockTestIds[3]).value.config.schedule.kind==='manual'",
+   36:"!blockEditor.hidden&&blockEditor.elements.report_task_ids.options.length===1&&blockEditor.elements.report_task_ids.options[0].textContent==='Ranní zpráva'",
+   37:"blockEditor.hidden&&blockCatalog.blocks.some(b=>b.value.title==='Měsíční z vydaných zpráv'&&b.value.config.report_task_ids[0]===blockTestIds[3])",
+   38:"blockTab==='runs'&&blockCatalog.jobs.some(j=>j.intent.block?.id===chainTaskId&&j.state==='review'&&j.intent.report_inputs?.length===1)",
+   39:"!document.querySelector('#report-output-view').hidden&&document.querySelectorAll('[data-report-input]').length===1&&document.querySelector('#report-output-inputs').textContent.includes(blockTestIds[3])&&document.querySelector('#report-output-content').textContent.includes('Energie dnes')",
   }
+
   def received(value):
    global phase,busy
    busy=False
@@ -135,7 +149,7 @@ try:
    if phase==27:view.grab().save('/tmp/fpw-report-presentation.png')
    if phase==29:view.grab().save('/tmp/fpw-report-output.png')
    if phase==33:view.grab().save('/tmp/fpw-monitoring-design-review.png')
-   if phase==34:print('blocks browser OK',flush=True);app.exit(0);return
+   if phase==40:view.grab().save('/tmp/fpw-report-chain.png');print('blocks browser OK',flush=True);app.exit(0);return
    print('phase',phase,flush=True);page.runJavaScript(commands[phase])
   def poll():
    global busy

@@ -599,7 +599,7 @@ class Monitoring:
             from spikes.monitoring_blocks import MonitoringBlocks
             blocks=MonitoringBlocks(self.node).read(pid,_snapshot=(dict(commit_id=head,records=list(rs.values())),files,entities))['blocks']
             rows=MessagePools.export_readonly(self.node,pid,clock=self.clock,transferable=False)
-            outputs[0]['input_evidence']=Evidence(None,pid,blocks,rows,[],clock=self.clock).report(intent,outputs[0].get('built_at'))
+            outputs[0]['input_evidence']=Evidence(None,pid,blocks,rows,[],clock=self.clock,issued=published_outputs(pid,head,files,entities,rs)).report(intent,outputs[0].get('built_at'))
         require(ws.git.head()==head,'Projekt se změnil; obnovte seznam výstupů.')
         return dict(outputs[0],commit_id=head)
 

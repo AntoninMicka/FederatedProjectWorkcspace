@@ -1774,3 +1774,11 @@ rozhodnutí se ukládají v původní transakci sběru bez odmítnutých textů;
 nová vydání zachovávají doplňkové reference provenience. **Reject:** druhý
 processing ledger, obnovení expirovaných textů a automatické přegenerování
 při otevření zprávy. Viz [evidence a obnova](docs/monitoring-input-evidence.md).
+
+MON-08-09 řetězení přes ID zpracování **reuse/adaptuje** Reporting/PinnedRef,
+audit vydání, zmrazení vstupů WatchSynthesis, ContextBuilder, kalendář workeru,
+signed pool sidecar a původní journal/receipt recovery. Nový výběr v
+`monitoring_report_inputs.py` používá vydání podle stabilního block ID,
+nikoliv paralelní workflow či kopii databáze. **Reject:** výběr podle názvu,
+automatické nahrazování návrhem, časový vítěz konkurenčních oprav a opakování
+nejistého modelového efektu. Viz [kontrakt a obnova](docs/monitoring-report-chains.md).

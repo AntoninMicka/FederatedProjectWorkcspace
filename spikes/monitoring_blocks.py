@@ -20,7 +20,7 @@ def dependencies(value):
     if kind == 'filter':
         return [(i, 'source') for i in c['source_ids']] + [(c['pool_id'], 'pool')]
     if kind == 'processing':
-        return [(i, 'pool') for i in c['pool_ids']] + [(i, 'source') for i in c['search_ids']]
+        return [(i, 'pool') for i in c['pool_ids']] + [(i, 'source') for i in c['search_ids']] + [(i,'processing') for i in c.get('report_task_ids',[])]
     if kind == 'task':
         return [(i, k) for k in KINDS[:-1] for i in c[k+'_ids']]
     return []
@@ -57,9 +57,10 @@ def validate_block(value):
         require(type(c['retention_days']) is int and 1 <= c['retention_days'] <= 3650,
                 'Pool retention must be 1..3650 days')
     elif kind == 'processing':
-        fields(c, 'pool_ids search_ids instructions mode schedule lookback_days node_id')
+        fields(c, 'pool_ids search_ids instructions mode schedule lookback_days node_id'+(' report_task_ids' if 'report_task_ids' in c else ''))
+        ids(c.get('report_task_ids',[]))
         ids(c['pool_ids']); ids(c['search_ids']); text(c['instructions']); uuid(c['node_id'])
-        require(c['pool_ids'] or c['search_ids'], 'Choose pools or web searches')
+        require(c['pool_ids'] or c['search_ids'] or c.get('report_task_ids'), 'Choose pools, web searches or report tasks')
         require(c['mode'] in {'deterministic', 'llm'}, 'Unknown processing mode')
         require(type(c['lookback_days']) is int and 1 <= c['lookback_days'] <= 3650,
                 'Invalid processing window')
@@ -106,6 +107,14 @@ def validate_blocks(records):
         if v['kind'] == 'processing':
             require(all(tips[i]['value']['config']['connector'] == 'web-search' for i in c['search_ids']),
                     'Processing searches must use web-search sources')
+    visiting=set();done=set()
+    def visit(identity):
+        require(identity not in visiting,'Cycle in monitoring report dependencies')
+        if identity in done:return
+        visiting.add(identity)
+        for upstream in tips[identity]['value']['config'].get('report_task_ids',[]):visit(upstream)
+        visiting.remove(identity);done.add(identity)
+    for identity in tips:visit(identity)
     return tips
 
 

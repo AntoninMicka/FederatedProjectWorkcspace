@@ -8,7 +8,8 @@ položek, přesné obsahové revize a identifikátory položek. Ukazuje připnut
 definici zpracování, vstupní Git revizi a uložené hashe webových hledání.
 Nová vydání zachovávají také source ID a reference použitých filtrů;
 starší nebo sdílený návrh bez těchto údajů je nesmí zpětně odhadnout.
-Nejde o import vydané zprávy jako vstupu jiného zpracování.
+Navazující zpracování používá
+[vydané zprávy přes stabilní ID zdrojové úlohy](monitoring-report-chains.md).
 
 Dostupnost znamená, že je daná verze dosud v místní retenční kolekci.
 Po retenci zůstane přesná reference, ale přehled neobnovuje titulky ani texty

@@ -82,6 +82,8 @@ def apply(node, project_id, raw, *, checkpoint=lambda stage: None, operation_id=
                 require(definition['value']['kind']!='source' or definition['value']['config']['connector']=='rss-atom','Only RSS sources permit periodic intake')
             else:
                 require(definition['value']==v['intent']['block']['value'],'Shared report definition differs')
+                from spikes.monitoring_report_inputs import read_link
+                for link in v['intent'].get('report_inputs',[]):read_link(_Reporting(node),project_id,link,v['privacy'])
                 if v['state']=='published':
                     published=v['result']['report_ref'];key=(published['artifact_id'],published['commit_id'])
                     if key not in checked_pins:checked_pins[key]=_Reporting(node).pin(project_id,*key)
