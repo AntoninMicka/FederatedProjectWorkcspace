@@ -135,7 +135,7 @@ class ReportInputTests(unittest.TestCase):
         self.service.blocks.save(self.f.project,self.f.git.head(),[spec],str(uuid4()))
         self.instant[0]+=7200;source,_=self.issue()
         snapshot=self.service.blocks.reporting.read_snapshot(self.f.project,read_only=True)
-        links,_=select(snapshot,self.f.project,[spec['id']],anchor-86400,anchor,'project')
+        links,_,_=select(snapshot,self.f.project,[spec['id']],anchor-86400,anchor,'project')
         self.assertEqual(links[0]['run_id'],source)
 
     def test_late_correction_regenerates_only_at_protection_end(self):
@@ -152,13 +152,59 @@ class ReportInputTests(unittest.TestCase):
         self.assertEqual(final['intent']['report_inputs'][0]['run_id'],corrected)
         self.assertEqual(final['result']['initial_draft']['report_inputs'],original)
 
-    def test_expected_source_coverage_rejects_missing_periods(self):
+    def test_incomplete_issued_periods_produce_publishable_llm_summary_with_warning(self):
         source,_=self.issue();down=self.downstream()
         spec=deepcopy(self.specs[3]);block=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==spec['id'])
         spec['previous']=[block['ref']];spec['value']['config']['schedule']['kind']='weekly'
         self.service.blocks.save(self.f.project,self.f.git.head(),[spec],str(uuid4()))
-        with self.assertRaisesRegex(ValidationError,'Neúplné období'):
-            self.service.process(self.f.project,down['id'],str(uuid4()))
+        block=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==down['id'])
+        down['previous']=[block['ref']];down['value']['config']['mode']='llm'
+        self.service.blocks.save(self.f.project,self.f.git.head(),[down],str(uuid4()))
+        calls=[]
+        def model(*args,**kwargs):calls.append(args);return 'Shrnutí dostupných vydání.'
+        self.service._model=model
+        draft=self.service.process(self.f.project,down['id'],str(uuid4()))
+        job=self.job(draft['id']);self.assertEqual(draft['state'],'review');self.assertEqual(len(calls),1)
+        gap=job['intent']['report_gaps'][0]
+        self.assertEqual(gap['task_id'],spec['id']);self.assertTrue(gap['periods']);self.assertFalse(gap['missing_all'])
+        self.assertIn('Neúplné pokrytí',calls[0][2]);self.assertIn('Neúplné pokrytí',draft['result']['markdown'])
+        self.assertIn('Shrnutí dostupných vydání.',draft['result']['markdown'])
+        self.instant[0]=draft['result']['protection']['until'];self.service.tick(self.f.project,lane='processing')
+        final=self.job(draft['id']);self.assertTrue(final['result']['protection']['finalized'])
+        self.assertEqual(len(calls),1)
+        published=self.service.publish(self.f.project,draft['id'],final['result']['approval_digest'],confirm=True)
+        output=self.monitoring.output(self.f.project,published['report_ref']['artifact_id'],self.f.git.head())
+        self.assertEqual(output['report_gaps'],job['intent']['report_gaps'])
+        self.assertEqual(output['input_evidence']['report_gaps'],job['intent']['report_gaps'])
+        self.assertIn('Neúplné pokrytí',output['markdown'])
+
+    def test_missing_entire_report_source_does_not_block_available_pool(self):
+        self.service.configure(self.f.project,self.specs[0]['id'],True,confirm=True);self.service.tick(self.f.project,lane='intake')
+        down=self.downstream();block=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==down['id'])
+        down['previous']=[block['ref']];down['value']['config']['pool_ids']=[self.specs[1]['id']]
+        self.service.blocks.save(self.f.project,self.f.git.head(),[down],str(uuid4()))
+        result=self.service.process(self.f.project,down['id'],str(uuid4()))
+        self.assertEqual(result['state'],'review');self.assertIn('Energie dnes',result['result']['markdown'])
+        self.assertTrue(self.job(result['id'])['intent']['report_gaps'][0]['missing_all'])
+
+    def test_late_missing_source_clears_gap_only_at_guard_end(self):
+        self.issue();other=deepcopy(self.specs[3]);other['id']=str(uuid4());other['value']['title']='Druhý denní zdroj'
+        self.service.blocks.save(self.f.project,self.f.git.head(),[other],str(uuid4()))
+        pending=self.service.process(self.f.project,other['id'],str(uuid4()))
+        self.instant[0]=pending['result']['protection']['until'];self.service.tick(self.f.project,lane='processing')
+        down=self.downstream();block=next(b for b in self.service.blocks.read(self.f.project)['blocks'] if b['id']==down['id'])
+        down['previous']=[block['ref']];down['value']['config']['report_task_ids'].append(other['id'])
+        self.service.blocks.save(self.f.project,self.f.git.head(),[down],str(uuid4()))
+        draft=self.service.process(self.f.project,down['id'],str(uuid4()))
+        self.assertTrue(self.job(draft['id'])['intent']['report_gaps'][0]['missing_all'])
+        completed=self.job(pending['id'])['result']
+        self.service.publish(self.f.project,pending['id'],completed['approval_digest'],confirm=True)
+        self.service.tick(self.f.project,lane='processing')
+        middle=self.job(draft['id']);self.assertTrue(middle['result']['protection']['changed']);self.assertIn('report_gaps',middle['intent'])
+        self.instant[0]=draft['result']['protection']['until'];self.service.tick(self.f.project,lane='processing')
+        final=self.job(draft['id']);self.assertTrue(final['result']['protection']['finalized']);self.assertNotIn('report_gaps',final['intent'])
+        self.assertEqual(len(final['intent']['report_inputs']),2);self.assertTrue(final['result']['initial_draft']['report_gaps'])
+        self.assertNotIn('Neúplné pokrytí',final['result']['markdown'])
 
 
 class ReportChainSyncTests(unittest.TestCase):
@@ -176,8 +222,9 @@ class ReportChainSyncTests(unittest.TestCase):
         from spikes.reporting_schema import encoded
         source,target=self.services
         down=deepcopy(self.specs[3]);down['id']=str(uuid4());down['value']['title']='Měsíční zpráva'
-        down['value']['config'].update(pool_ids=[],search_ids=[],report_task_ids=[self.specs[3]['id']],lookback_days=31)
-        source.blocks.save(self.pid,source.blocks.read(self.pid)['commit_id'],[down],str(uuid4()))
+        other=deepcopy(self.specs[3]);other['id']=str(uuid4());other['value']['title']='Chybějící denní zdroj'
+        down['value']['config'].update(pool_ids=[],search_ids=[],report_task_ids=[self.specs[3]['id'],other['id']],lookback_days=31)
+        source.blocks.save(self.pid,source.blocks.read(self.pid)['commit_id'],[down,other],str(uuid4()))
         initial=source.process(self.pid,self.specs[3]['id'],str(uuid4()))
         self.instant[0]=initial['result']['protection']['until'];source.tick(self.pid,lane='processing')
         result=next(j for j in source.catalog(self.pid)['jobs'] if j['id']==initial['id'])['result']
@@ -192,13 +239,18 @@ class ReportChainSyncTests(unittest.TestCase):
         self.f.exchange(1,0)
         shared=next(j for j in source.catalog(self.pid)['jobs'] if j['id']==result['id'])
         self.assertTrue(shared['shared']);self.assertEqual(shared['intent']['report_inputs'],target_job['intent']['report_inputs'])
+        self.assertEqual(shared['intent']['report_gaps'],target_job['intent']['report_gaps'])
         # A logical state row cannot relabel the creator of a valid Git artifact.
         rows=target.pools.export(self.pid,transferable=True)
         event=next(r for r in rows if r['kind']=='report-outcome' and r['value']['run_id']==result['id'])
+        tampered=deepcopy(event['value'])
+        tampered['intent']['report_gaps'][0]['periods']=['2026-01-01']
+        with self.assertRaisesRegex(ValidationError,'approval digest'):
+            pool_sync.apply(self.f.nodes[0],self.pid,encoded([entry(self.pid,'report-outcome',tampered)]))
         value=deepcopy(event['value']);value['intent']['report_inputs'][0]['run_id']=str(uuid4())
         from spikes.monitoring_report_inputs import approval
         pool_refs=sorted((pool,r['item_entry']) for pool,groups in value['intent']['pools'].items() for g in groups for r in g['revisions'])
-        value['result']['approval_digest']=approval(value['result']['markdown'],pool_refs,value['intent']['report_inputs'])
+        value['result']['approval_digest']=approval(value['result']['markdown'],pool_refs,value['intent']['report_inputs'],value['intent'].get('report_gaps',[]))
         forged=entry(self.pid,'report-outcome',value)
         with self.assertRaisesRegex(ValidationError,'creator or edition'):
             pool_sync.apply(self.f.nodes[0],self.pid,encoded([forged]))

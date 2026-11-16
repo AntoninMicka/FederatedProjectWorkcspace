@@ -25,6 +25,7 @@ function renderReportInputEvidence(evidence){
  if(!evidence){container.append(blockText('p','Přesné vstupy nejsou pro tento starší výstup dostupné.'));return;}
  container.append(blockText('h2','Přesné použité vstupy'));
  container.append(blockText('p',evidence.coverage));
+ for(const gap of evidence.report_gaps||[])container.append(blockText('p','Neúplné pokrytí · '+blockName(gap.task_id)+': '+(gap.periods.length?gap.periods.join(', '):'žádné vydání v požadovaném období')));
  if(evidence.processing_ref)container.append(blockText('p','Připnutá definice zpracování: '+evidence.processing_ref.artifact_id+' · commit '+evidence.processing_ref.commit_id));
  if(evidence.input_head)container.append(blockText('p','Vstupní revize projektu: '+evidence.input_head));
  for(const [id,hash] of Object.entries(evidence.searches||{}))container.append(blockText('p','Hledání: '+blockName(id)+' · SHA-256 '+hash));
@@ -107,7 +108,7 @@ function renderReportOutputs(){
   row.className='sidebar-list-row';row.dataset.reportOutput=output.id;
   if(output.source==='git'&&output.kind==='block-report')row.dataset.composableReport=output.id;
   button.type='button';button.className='sidebar-list-main';button.setAttribute('aria-current',String(output.id===selectedReportOutput));
-  title.textContent=output.title;state.className='sidebar-item-id';state.textContent=output.state==='review'?'Návrh k posouzení':output.source==='git'?'Vydaná zpráva':'Nevydaný návrh';if(['failed','unknown'].includes(output.state))state.textContent=output.state==='unknown'?'Výsledek zpracování není známý':'Zpracování selhalo';else if(output.job?.result.protection&&!output.job.result.protection.finalized)state.textContent='Ochranné období';state.textContent+=' · '+output.id.replace(/^(legacy|block):/,'').slice(0,8);if(output.potentially_stale||output.job?.input_evidence?.potentially_stale)state.textContent+=' · možné zastarání';button.append(title,state);
+  title.textContent=output.title;state.className='sidebar-item-id';state.textContent=output.state==='review'?'Návrh k posouzení':output.source==='git'?'Vydaná zpráva':'Nevydaný návrh';if(['failed','unknown'].includes(output.state))state.textContent=output.state==='unknown'?'Výsledek zpracování není známý':'Zpracování selhalo';else if(output.job?.result.protection&&!output.job.result.protection.finalized)state.textContent='Ochranné období';state.textContent+=' · '+output.id.replace(/^(legacy|block):/,'').slice(0,8);if(output.report_gaps?.length||output.job?.intent?.report_gaps?.length)state.textContent+=' · neúplné pokrytí';if(output.potentially_stale||output.job?.input_evidence?.potentially_stale)state.textContent+=' · možné zastarání';button.append(title,state);
   button.addEventListener('click',()=>openReportOutput(output));
   row.append(button,sidebarItemMenu(output.title,[{label:'Zobrazit zprávu',run:()=>openReportOutput(output)},
    {label:'Export Markdown',run:async()=>{const report=output.source==='git'?await monitoringRequest('output',{output_id:output.id,expected_head:monitoringView.commit_id}):output;exportReportMarkdown(output.title,report.markdown);}}]));

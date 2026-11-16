@@ -50,6 +50,14 @@ assert.match(monitoringProcessingJobOutcome(job('dispatching')),/Probíhá/);
 assert.match(monitoringProcessingJobOutcome(job('prepared')),/Čeká na zpracování/);
 """)
 
+    def test_partial_report_remains_reviewable_and_shows_coverage_warning(self):
+        self.run_js(r"""
+const partial=job('review',{protection:{finalized:true}}, {report_gaps:[{task_id:'daily',periods:['2026-11-01'],missing_all:false}]});
+assert.match(monitoringProcessingJobOutcome(partial),/čeká na posouzení.*neúplné pokrytí/);
+partial.state='published';assert.match(monitoringProcessingJobOutcome(partial),/Zpráva vydána.*neúplné pokrytí/);
+assert.doesNotThrow(()=>monitoringProcessingJobOutcome({state:'failed',result:{error:'starší běh'}}));
+""")
+
     def test_visible_run_executor_is_independent_of_scheduled_node(self):
         self.run_js(r"""
 assert.match(monitoringProcessingOutcome(row),/není v přehledu/);

@@ -35,13 +35,14 @@ def validate(row):
         require(v['state'] in {'review','published','failed','unknown'},'Invalid report outcome state')
         intent=v['intent']; result=v['result']
         require(isinstance(intent,dict) and set(intent) <= {'project_id','block','input_head','pools','searches','kind',
-            'period_end','started_at','expires_at','reprocess_of','executor_node_id','unavailable_input_refs','report_inputs'},'Outcome contains operational state')
+            'period_end','started_at','expires_at','reprocess_of','executor_node_id','unavailable_input_refs','report_inputs','report_gaps'},'Outcome contains operational state')
         require({'project_id','block','pools','kind','started_at','expires_at','executor_node_id'} <= set(intent),'Incomplete outcome intent')
         require(intent['project_id']==row['project_id'] and intent['kind']=='processing' and intent['block']['id']==v['block_id']
                 and intent['executor_node_id']==v['node_id'] and intent['block']['ref']==v['block_ref'],'Outcome provenance differs')
         fields(intent['block'],'id privacy value ref')
         require(intent.get('searches',{})=={},'Outcome contains raw search results')
-        from spikes.monitoring_report_inputs import validate_links
+        from spikes.monitoring_report_inputs import validate_links,validate_gaps
+        validate_gaps(intent.get('report_gaps',[]))
         validate_links(intent.get('report_inputs',[]),row['project_id'])
         for key in ('started_at','expires_at','period_end'):
             if key in intent:require(type(intent[key]) in {int,float} and math.isfinite(intent[key]),'Invalid outcome time')
@@ -60,13 +61,16 @@ def validate(row):
         require(set(result) <= {'output','markdown','approval_digest','input_digest','protection','report_ref','replacement','error'},
                 'Outcome result contains operational state')
         if v['state'] in {'review','published'}:
-            require({link['task_id'] for link in intent.get('report_inputs',[])}==set(intent['block']['value']['config'].get('report_task_ids',[])),'Shared report input task coverage differs')
+            tasks=set(intent['block']['value']['config'].get('report_task_ids',[]))
+            linked={link['task_id'] for link in intent.get('report_inputs',[])}
+            missing={gap['task_id'] for gap in intent.get('report_gaps',[]) if gap['missing_all']}
+            require(linked|missing==tasks and not linked&missing and all(gap['task_id'] in tasks for gap in intent.get('report_gaps',[])),'Shared report input task coverage differs')
             require(isinstance(result.get('markdown'),str) and 0<len(result['markdown'].encode())<=1024*1024,'Invalid report outcome text')
             hex_id(result['approval_digest']);hex_id(result['input_digest'])
             refs=sorted((pool,r['item_entry']) for pool,groups in intent['pools'].items() for g in groups for r in g['revisions'])
             from spikes.monitoring_report_inputs import approval
-            valid={approval(result['markdown'],refs,intent.get('report_inputs',[]))}
-            if not intent.get('report_inputs'):valid.add(digest(result['markdown'].encode()))
+            valid={approval(result['markdown'],refs,intent.get('report_inputs',[]),intent.get('report_gaps',[]))}
+            if not intent.get('report_inputs') and not intent.get('report_gaps'):valid.add(digest(result['markdown'].encode()))
             require(result['approval_digest'] in valid,'Shared report approval digest differs')
         if result.get('output') is not None:
             fields(result['output'],'title built_at');moment(result['output']['built_at'])
@@ -154,7 +158,7 @@ def safe_error(message):
 
 def reference_intent(intent):
     value={k:deepcopy(intent[k]) for k in ('project_id','block','input_head','kind','period_end','started_at',
-        'expires_at','reprocess_of','executor_node_id','unavailable_input_refs','report_inputs') if k in intent}
+        'expires_at','reprocess_of','executor_node_id','unavailable_input_refs','report_inputs','report_gaps') if k in intent}
     value['block']={k:value['block'][k] for k in ('id','privacy','value','ref')}
     value['pools']={pool:[dict(key=g['key'],revisions=[dict(revision=r['revision'],item_entry=r['item_entry']) for r in g['revisions']])
         for g in groups] for pool,groups in intent.get('pools',{}).items()}

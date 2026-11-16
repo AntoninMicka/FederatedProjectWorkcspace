@@ -1792,3 +1792,9 @@ zaměnitelné s placeným paginovaným X readem. Proto vzniká vlastní místní
 kód se nekopíroval. **Reject:** scraping/fallback, full archive, automatický
 placený scheduler, user lookup a token v projektových definicích. Scope,
 retenci a crash boundaries popisuje [neověřený PoC](docs/x-connector-poc.md).
+
+Neúplné období řetězených zpráv **reuse/adaptuje** existující výběr vydání,
+zmrazený intent, schvalovací otisk, signed report-outcome, evidenci a ochranu.
+Přidává metadata mezer a aplikační upozornění do částečné syntézy; nový
+writer, úložiště ani automatický modelový retry nevzniká. Neověřené piny
+a konfliktní opravy se nadále odmítají. Viz [kontrakt](docs/monitoring-report-chains.md).

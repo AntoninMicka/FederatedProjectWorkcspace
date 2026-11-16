@@ -543,7 +543,7 @@ class ComposableMonitoring:
 
     def _report_inputs(self,pid,block,anchor,expected_head=None):
         from spikes.monitoring_report_inputs import select
-        if not block['value']['config'].get('report_task_ids'):return [],[]
+        if not block['value']['config'].get('report_task_ids'):return [],[],[]
         snapshot=self.blocks.reporting.read_snapshot(pid,read_only=True)
         require(expected_head is None or snapshot[0]['commit_id']==expected_head,'Project changed during report input selection')
         c=block['value']['config']
@@ -591,8 +591,8 @@ class ComposableMonitoring:
             try:
                 inputs = self._period_inputs(pid, intent['block'], intent['period_end'])
                 from spikes.monitoring_report_inputs import link_keys
-                report_links,_=self._report_inputs(pid,intent['block'],intent['period_end'])
-                changed = self._content_refs(inputs) != self._content_refs(intent['pools']) or link_keys(report_links)!=link_keys(intent.get('report_inputs',[]))
+                report_links,_,report_gaps=self._report_inputs(pid,intent['block'],intent['period_end'])
+                changed = self._content_refs(inputs) != self._content_refs(intent['pools']) or link_keys(report_links)!=link_keys(intent.get('report_inputs',[])) or report_gaps!=intent.get('report_gaps',[])
                 protection['changed'] = changed
                 if self.clock() >= protection['until']:
                     if changed:
@@ -604,14 +604,16 @@ class ComposableMonitoring:
                             child_intent = json.loads(db.execute('SELECT document FROM block_jobs WHERE id=?', (child_id,)).fetchone()[0])
                         # Keep the original period and deadline, but publish the
                         # exact final inputs. The first draft stays in history.
-                        initial = dict(markdown=result['markdown'], output=result['output'],report_inputs=deepcopy(intent.get('report_inputs',[])),
+                        initial = dict(markdown=result['markdown'], output=result['output'],report_inputs=deepcopy(intent.get('report_inputs',[])),report_gaps=deepcopy(intent.get('report_gaps',[])),
                                        input_refs=self._content_refs(intent['pools']),
                                        input_digest=result['input_digest'], approval_digest=result['approval_digest'])
                         result = deepcopy(child['result']); result.pop('replacement', None)
                         result['initial_draft'] = initial
                         result['protection'] = protection
                         intent['pools'] = child_intent['pools']; intent['searches'] = child_intent['searches']
-                        if child_intent.get('report_inputs'):intent['report_inputs']=child_intent['report_inputs']
+                        for key in ('report_inputs','report_gaps'):
+                            if child_intent.get(key):intent[key]=child_intent[key]
+                            else:intent.pop(key,None)
                         intent['input_head'] = child_intent['input_head']
                         if 'manifest' in child_intent: intent['manifest'] = child_intent['manifest']
                         intent['expires_at'] = min(intent['expires_at'], child_intent['expires_at'])
@@ -719,10 +721,12 @@ class ComposableMonitoring:
                 return dict(id=run_id,state=known['state'],result=known['result'])
         anchor = original.get('period_end', original['started_at']) if original else self.clock()
         inputs = self._period_inputs(pid, block, anchor)
-        report_links,report_editions=self._report_inputs(pid,block,anchor,catalog['commit_id'])
+        report_links,report_editions,report_gaps=self._report_inputs(pid,block,anchor,catalog['commit_id'])
+        require(not c.get('report_task_ids') or report_links or any(inputs.values()) or c['search_ids'],'Chybí vydané vstupní zprávy a nejsou dostupné žádné jiné podklady pro syntézu')
         frozen = dict(project_id=pid, block=block, input_head=catalog['commit_id'], pools=inputs, searches={}, kind='processing',
                       executor_node_id=local_node_id(self.node),period_end=anchor, started_at=self.clock(), expires_at=min([moment(m['expires_at']).timestamp() for groups in inputs.values() for g in groups for m in g['contributions']] or [self.clock()+86400]))
         if report_links:frozen['report_inputs']=report_links
+        if report_gaps:frozen['report_gaps']=report_gaps
         if reprocess_of is not None:
             frozen['reprocess_of'] = reprocess_of
             frozen['unavailable_input_refs'] = sorted(set(self._content_refs(original['pools']))-set(self._content_refs(inputs)))
@@ -732,7 +736,9 @@ class ComposableMonitoring:
         checkpoint('processing-dispatching')
         try:
             for id_ in c['search_ids']: frozen['searches'][id_] = self._search(pid, by_id[id_], run_id, block['privacy'])
-            body = '# '+block['value']['title']+'\n\n'+c['instructions']+'\n\n'
+            from spikes.monitoring_report_inputs import coverage_notice
+            notice=coverage_notice(report_gaps,catalog['blocks'])
+            body = '# '+block['value']['title']+'\n\n'+c['instructions']+'\n\n'+notice
             if frozen.get('unavailable_input_refs'):
                 body += 'Část původních vstupů již není dostupná; nové zpracování není úplnou reprodukcí původní zprávy.\n\n'
             for pool_id, groups in inputs.items():
@@ -754,15 +760,16 @@ class ComposableMonitoring:
                 db.execute('UPDATE block_jobs SET document=? WHERE id=?', (encoded(frozen), run_id))
             if c['mode'] == 'llm':
                 body = self._model(pid, run_id, body, block['privacy'],
-                    'Create a Czech draft report following this processing definition. Preserve sources, uncertainty and conflicting versions. Do not publish.',
+                    'Create a Czech draft report following this processing definition. Preserve sources, uncertainty and conflicting versions. Missing issued reports do not justify refusing the available inputs: produce a partial synthesis, state its coverage gaps and never invent missing information. Do not publish.',
                     expected_head=catalog['commit_id'])
+            if report_gaps and c['mode']=='llm':body=notice+body
             if frozen.get('unavailable_input_refs') and c['mode'] == 'llm':
                 body = 'Část původních vstupů již není dostupná; nové zpracování není úplnou reprodukcí původní zprávy.\n\n'+body
             require(isinstance(body, str) and 0 < len(body.encode()) <= 1024*1024, 'Invalid report draft')
             from spikes.report_outputs import output_title
             built_at=stamp(self.clock())
             from spikes.monitoring_report_inputs import approval
-            result = dict(output=dict(title=output_title(block['value']['title'],built_at,c['schedule']['timezone']),built_at=built_at),markdown=body, approval_digest=approval(body,self._content_refs(inputs),report_links), input_digest=digest(encoded(frozen)))
+            result = dict(output=dict(title=output_title(block['value']['title'],built_at,c['schedule']['timezone']),built_at=built_at),markdown=body, approval_digest=approval(body,self._content_refs(inputs),report_links,report_gaps), input_digest=digest(encoded(frozen)))
             if reprocess_of is not None:
                 result['protection'] = dict(until=protection_until, finalized=True, changed=False)
             elif original is None:

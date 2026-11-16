@@ -90,5 +90,5 @@ class Evidence:
         searches={id_:value if isinstance(value,str) else digest(encoded(value)) for id_,value in intent.get('searches',{}).items()}
         from spikes.monitoring_report_inputs import freshness
         reports=freshness(intent.get('report_inputs',[]),self.issued)
-        return dict(inputs=rows,reports=reports,potentially_stale=changed or any(r['potentially_stale'] for r in reports),processing_ref=intent['block'].get('ref'),input_head=intent.get('input_head'),searches=searches,
+        return dict(inputs=rows,reports=reports,report_gaps=intent.get('report_gaps',[]),potentially_stale=changed or any(r['potentially_stale'] for r in reports),processing_ref=intent['block'].get('ref'),input_head=intent.get('input_head'),searches=searches,
                     coverage='Porovnání s místně dostupnými položkami; chybějící nebo expirované vstupy nelze plně ověřit.')

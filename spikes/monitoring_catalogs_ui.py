@@ -27,7 +27,7 @@ function monitoringProcessingOutcome(row){
  return monitoringProcessingJobOutcome(monitoringLatestProcessing(row));
 }
 function monitoringProcessingJobOutcome(job){
- return monitoringProcessingBaseOutcome(job)+(job?.input_evidence?.potentially_stale?' · možné zastarání vstupů':'');
+ return monitoringProcessingBaseOutcome(job)+(job?.intent?.report_gaps?.length?' · neúplné pokrytí':'')+(job?.input_evidence?.potentially_stale?' · možné zastarání vstupů':'');
 }
 function monitoringProcessingBaseOutcome(job){
  if(!job)return 'Výsledek není v přehledu k dispozici';

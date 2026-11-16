@@ -224,3 +224,11 @@ možného zastarání přes uložené reference. Kontext modelu a synchronizace
 ověřují skutečné artefakty, tvůrčí ID a privacy. Kontrakt, kompatibilitu
 a zachované crash boundaries popisuje
 [řetězení zpráv](../monitoring-report-chains.md).
+
+Doplnění neúplného období (2026-11-16): podle upřesnění uživatele absence
+očekávaného vydání neblokuje syntézu z dostupných podkladů. Mezery se zmrazí
+s referencemi, zahrnou do schválení a viditelně označí ve výsledku i UI.
+Doplnění vydání vyvolá regenerování pouze na konci původní ochrany. Jde
+o chybějící vydání, nikoliv neověřenou referenci nebo známý nedokončený
+přenos podle MON-08-08; ty se nadále odmítají. Persistentní vrstvy ani
+crash boundaries se nemění, viz [kontrakt řetězení](../monitoring-report-chains.md).

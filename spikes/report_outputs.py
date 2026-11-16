@@ -109,7 +109,7 @@ def published_outputs(pid,head,files,entities,records,*,selected=None,include_co
             until = datetime.fromisoformat(built_at.replace('Z','+00:00')).timestamp()+3600
         if type(until) not in {int,float} or not math.isfinite(until) or until < 0: until = None
         result.append(dict(id=id_,artifact_id=id_,title=title,built_at=built_at,issued_at=meta['created_at'],
-            kind='block-report',run_id=run_id,processing_id=audit.get('block',{}).get('id'),source_schedule=source_schedule,period_end=audit.get('period_end'),reprocess_of=audit.get('reprocess_of'),report_inputs=audit.get('report_inputs',[]),executor_node_id=audit.get('executor_node_id'),state='completed',reprocess_until=until if audit else None,
+            kind='block-report',run_id=run_id,processing_id=audit.get('block',{}).get('id'),source_schedule=source_schedule,period_end=audit.get('period_end'),reprocess_of=audit.get('reprocess_of'),report_inputs=audit.get('report_inputs',[]),report_gaps=audit.get('report_gaps',[]),executor_node_id=audit.get('executor_node_id'),state='completed',reprocess_until=until if audit else None,
             **({'reprocess_intent':audit} if include_intent else {}),
             **({'markdown':body} if include_content else {}),report_ref=pinned(pid,head,id_,files,entities)))
     if selected is None:

@@ -24,10 +24,17 @@ vrací původní uložený výsledek. Nevyvolává nový sběr ani hledání, po
 navazující zpracování samo výslovně nemá nakonfigurované.
 
 Pro kalendářní zdroj se kontrolují splatné sloty v požadovaném okně podle
-stejného kalendáře jako worker. Chybějící vydání způsobí popsanou chybu,
-ikoliv zdánlivě kompletní syntézu. Pro ruční zdroj nelze odvodit očekávaný
-počet vydání; požaduje se alespoň jedno vydání v okně. Výběr má limit 128
-vstupních vydání. U kalendářního zdroje rozhoduje jeho slot podle připnuté původní definice,
+stejného kalendáře jako worker. Chybějící vydání neblokuje zpracování
+dostupných zpráv ani dalších nakonfigurovaných vstupů. Zmrazené `report_gaps`
+uvádí ID zdroje, chybějící kalendářní období a případnou absenci všech jeho
+vydání. Pro ruční zdroj nelze odvodit očekávaný počet; eviduje se absence
+vydání v okně. Model má vytvořit částečnou syntézu; aplikace do výsledku
+vloží upozornění nezávisle na odpovědi modelu. Mezery jsou součástí
+schvalovacího otisku, evidence, UI i vydaného artefaktu. Pokud neexistuje
+žádné vydání ani jiný dostupný vstup a není nakonfigurováno hledání,
+běh skončí popsanou chybou bez volání modelu.
+
+Výběr má limit 128 vstupních vydání. U kalendářního zdroje rozhoduje jeho slot podle připnuté původní definice,
 u ručního zdroje původní `period_end`. Pozdní sestavení v témže slotu ani
 datum opravy nebo přenosu neposunou zprávu do jiného vstupního období.
 
@@ -39,7 +46,9 @@ ověřuje skutečné historické bajty, tvůrčí úlohu, run ID, privacy a exis
 vydaného artefaktu. Kontextový manifest modelu obsahuje také původní
 projektové artefakty; nejde pouze o odkazy ve volném textu promptu.
 
-Hodinová ochrana porovnává také vstupní vydání. Změna commitu kvůli jiné
+Hodinová ochrana porovnává také vstupní vydání a evidované mezery.
+Dodatečné vydání může mezery odstranit při jediném přegenerování na konci
+ochrany; mezitím se původní návrh nemění. Změna commitu kvůli jiné
 části projektu při stejném artefaktu a hashi nezpůsobí regenerování. Skutečná
 oprava vede nejvýše k regenerování na konci ochrany podle původního kontraktu.
 Po ochraně se výstup označí jako potenciálně zastaralý; automaticky se
@@ -57,7 +66,7 @@ workflow se nezavádějí. Reference vydaných zpráv se přenášejí jako sou�
 logického výsledku, nikoliv kopírováním worker databáze nebo modelového manifestu.
 
 Crash boundaries zůstávají původní: výběr je read-only, před modelem se
-uloží dispatch intent včetně přesných referencí; po nejasném externím efektu
+uloží dispatch intent včetně přesných referencí a mezer; po nejasném externím efektu
 zůstane unknown a nový placený pokus nevznikne automaticky. Výsledek a jeho
 sdílená projekce se potvrzují jednou pool transakcí. Vydání používá původní
 Git journal/receipt recovery; chyba před commitem obnovuje původní operaci,

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Issued-report inputs selected by stable processing ID and frozen as Git pins."""
 from spikes.metadata import require, uuid, validate_snapshot
-from spikes.reporting_schema import PRIVACY, fields, ref, records
+from spikes.reporting_schema import PRIVACY, fields, ref, records, encoded
 from spikes.report_outputs import published_outputs
 
 
@@ -21,9 +21,9 @@ def editions(snapshot,pid):
 
 
 def select(snapshot,pid,task_ids,since,until,privacy):
-    if not task_ids:return [],[]
+    if not task_ids:return [],[],[]
     outputs=editions(snapshot,pid);by_run={o['run_id']:o for o in outputs if o.get('run_id')}
-    links=[];selected=[]
+    links=[];selected=[];gaps=[]
     for task_id in task_ids:
         candidates=[o for o in outputs if o.get('processing_id')==task_id and o.get('run_id')]
         superseded=set()
@@ -36,13 +36,12 @@ def select(snapshot,pid,task_ids,since,until,privacy):
                 require(old.get('processing_id')==task_id,'Correction belongs to another processing task')
                 parent=old.get('reprocess_of')
         eligible=[o for o in candidates if o['run_id'] not in superseded and type(o.get('period_end')) in {int,float} and since<=coverage_time(o)<=until]
-        require(eligible,'Chybí vydané vstupní zprávy zdrojové úlohy '+task_id+' v požadovaném období')
         from spikes.monitoring_blocks import validate_blocks
         from spikes.composable_monitoring import processing_slot
         source=validate_blocks({r['revision_id']:r for r in snapshot[0]['records']})[task_id]
         missing=expected_slots(source['value']['config']['schedule'],since,until)-{
             processing_slot(source['value']['config']['schedule'],o['period_end']) for o in eligible}
-        require(not missing,'Neúplné období zdrojové úlohy '+task_id+': chybí vydání pro '+', '.join(sorted(missing)[:16]))
+        if missing or not eligible:gaps.append(dict(task_id=task_id,periods=sorted(missing),missing_all=not bool(eligible)))
 
         roots={}
         for output in eligible:
@@ -55,7 +54,8 @@ def select(snapshot,pid,task_ids,since,until,privacy):
             require(PRIVACY[privacy]>=PRIVACY[snapshot[2][output['id']]['privacy']],'Report input lowers privacy')
             links.append(dict(task_id=task_id,run_id=output['run_id'],ref=output['report_ref']));selected.append(output)
     validate_links(links,pid)
-    return links,selected
+    validate_gaps(gaps)
+    return links,selected,gaps
 
 
 def read_link(reporting,pid,link,privacy):
@@ -70,8 +70,9 @@ def read_link(reporting,pid,link,privacy):
     return outputs[0]
 
 
-def approval(markdown,pools,links):
+def approval(markdown,pools,links,gaps=()):
     from spikes.reporting_schema import digest,encoded
+    if gaps:return digest(encoded([markdown,pools,links,gaps]))
     return digest(encoded([markdown,pools,links])) if links else digest(encoded([markdown,pools]))
 
 
@@ -125,3 +126,28 @@ def coverage_time(output):
     if slot is None:return output['period_end']
     start=datetime.fromisoformat(slot).replace(tzinfo=ZoneInfo(schedule['timezone'])).timestamp()-0.001
     return next_processing(schedule,start,processing_slot(schedule,start))
+
+
+def validate_gaps(gaps):
+    from datetime import date
+    require(isinstance(gaps,list) and len(gaps)<=128,'Invalid report coverage gaps')
+    seen=set()
+    for gap in gaps:
+        fields(gap,'task_id periods missing_all');uuid(gap['task_id'])
+        require(gap['task_id'] not in seen,'Duplicate report coverage task');seen.add(gap['task_id'])
+        require(type(gap['missing_all']) is bool and isinstance(gap['periods'],list) and len(gap['periods'])<=3651,'Invalid missing report periods')
+        require(gap['missing_all'] or gap['periods'],'Empty coverage gap')
+        require(all(isinstance(period,str) and len(period)==10 and date.fromisoformat(period).isoformat()==period for period in gap['periods']),'Invalid missing report date')
+        require(len(set(gap['periods']))==len(gap['periods']),'Duplicate missing report date')
+    require(len(encoded(gaps))<=256*1024,'Report coverage metadata exceeds limit')
+
+
+def coverage_notice(gaps,blocks):
+    if not gaps:return ''
+    names={b['id']:b['value']['title'] for b in blocks}
+    lines=['## Neúplné pokrytí vstupních zpráv','',
+        'Přehled vychází pouze z dostupných podkladů. Chybějící vydání neznamená, že v daném období nebyly žádné události.','']
+    for gap in gaps:
+        detail=', '.join(gap['periods']) if gap['periods'] else 'v požadovaném období není žádné vydání'
+        lines.append('- '+names.get(gap['task_id'],gap['task_id'])+': '+detail)
+    return '\n'.join(lines)+'\n\n'
