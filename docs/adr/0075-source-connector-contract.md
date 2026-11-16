@@ -78,3 +78,11 @@ deskriptory deklarují `continuation.kind=none`, `persisted=false`.
 Jejich připojení patří MON-08-03, nikoli druhému runtime v tomto řezu.
 
 Použití, přesné limity a ověření: [Zdrojové konektory](../source-connectors.md).
+
+Doplnění 16. 11. 2026: [X/Twitter PoC](../x-connector-poc.md) používá
+samostatné ID `x-twitter`; rezervovaný platformní adaptér nemění dostupnost.
+Ruční read vyžaduje node-local credential/budget journal a explicitní consent.
+Projektové pooly a filtry zůstávají původní. Implementace je dle zadání bez
+testování a bez API dispatch, nikoliv PoC validated. Podrobný kontrakt
+včetně cross-store recovery a mezí odstranění surových dat je v odkazovaném
+podkladu. Nezavádí se automatická placená aktivace ani sync credentials.

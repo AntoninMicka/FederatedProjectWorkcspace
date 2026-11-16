@@ -57,3 +57,14 @@ jeho odmítnutí bez RSS fallbacku ověřuje `tests.test_source_connectors`.
 
 Přechod k PoC vyžaduje výslovný výběr rozhraní, oprávněný přístup a budget.
 Tento návrh není požadavek na nákup kreditů ani povolení účtovaného volání.
+
+## Připravený neověřený řez 16. 11. 2026
+
+Na výslovnou žádost uživatele vznikla
+[implementace PoC bez testování](x-connector-poc.md): samostatný `x-twitter`
+adaptér, místní odběry a budget, ruční placený read do existujících poolů,
+trvalé operation ID a lokální odstranění surových kopií. Obecný
+`platform-channel` zůstává unavailable. Veřejné pricing a reference endpointů
+byly znovu přečteny 16. 11. 2026; konkrétní API účet nebyl použit.
+Původní návrh automatického intervalu v tomto prvním neověřeném řezu
+nahrazuje pouze explicitní ruční spuštění. Není to ověření ani uzavření úkolu.

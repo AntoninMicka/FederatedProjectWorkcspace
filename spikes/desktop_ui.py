@@ -8483,7 +8483,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-reprocess','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/rss-sources/sync-settings','/v1/rss-sources/sync','/v1/rss-sources/sync-resolve','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/output','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/x-sources/view','/v1/x-sources/save','/v1/x-sources/close','/v1/x-sources/forget','/v1/monitoring/block-x-collect','/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-reprocess','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/rss-sources/sync-settings','/v1/rss-sources/sync','/v1/rss-sources/sync-resolve','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/output','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8673,6 +8673,21 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
+        if self.path.startswith('/v1/x-sources/'):
+            if hasattr(self,'actor') and not self.server.administration.is_admin(self.actor):return self.send_error(403)
+            from spikes.x_connector import XService
+            service=XService(self.server.projects.node_path)
+            try:
+                if self.path=='/v1/x-sources/view' and request=={}:result=service.view()
+                elif self.path=='/v1/x-sources/save' and isinstance(request,dict) and set(request)=={'revision','settings','subscriptions','token'}:
+                    result=service.save(request['revision'],request['settings'],request['subscriptions'],token=request['token'])
+                elif self.path=='/v1/x-sources/close' and isinstance(request,dict) and set(request)=={'operation_id','confirm'}:
+                    result=service.close_unknown(request['operation_id'],confirm=request['confirm'])
+                elif self.path=='/v1/x-sources/forget' and isinstance(request,dict) and set(request)=={'post_id','confirm'}:
+                    result=service.forget(request['post_id'],confirm=request['confirm'])
+                else:return self.send_error(400)
+                return self.reply(200,result)
+            except (ValueError,OSError) as exc:return self.reply(400,{'error':str(exc)})
         if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview', '/v1/rss-sources/sync-settings', '/v1/rss-sources/sync', '/v1/rss-sources/sync-resolve'}:
             from spikes.rss_sources import sources_for
             if not isinstance(request, dict):return self.send_error(400)
@@ -8824,6 +8839,8 @@ class DesktopHandler(Handler):
                     service.composable.release_unknown(pid,request['job_id'],confirm=request['confirm']);result={'released':True}
                 elif action=='block-task-run' and set(request)=={'project_id','block_id','run_id'}:
                     result=service.composable.run_task(pid,request['block_id'],request['run_id'])
+                elif action=='block-x-collect' and set(request)=={'project_id','block_id','run_id','confirm'}:
+                    result=service.composable.collect_x(pid,request['block_id'],request['run_id'],confirm=request['confirm'])
                 elif action=='block-process' and set(request)=={'project_id','block_id','run_id'}:
                     result=service.composable.process(pid,request['block_id'],request['run_id'])
                 elif action=='block-reprocess' and set(request)=={'project_id','source_run_id','run_id','confirm'}:

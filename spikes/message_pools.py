@@ -178,6 +178,10 @@ class MessagePools:
         all_ = dict(known, **{r['id']: r for r in rows})
         from spikes.monitoring_shared import validate_links
         validate_links(all_)
+        if any(r['kind']=='item' and r['value']['item']['connector']=='x-twitter' for r in rows):
+            from spikes.x_connector import XService,matches_post
+            blocked=XService(self.scheduler.node).blocked_ids()
+            require(not any(r['kind']=='item' and matches_post(r['value']['item'],blocked) for r in rows),'X input was withdrawn on this node')
         for row in rows:
             v = row['value']
             if row['kind'] in {'membership', 'observation'}:

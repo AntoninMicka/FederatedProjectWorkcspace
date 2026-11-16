@@ -4,6 +4,7 @@
 JS=r'''
 function monitoringIntakeOutcome(job){
  if(!job)return 'Výsledek příjmu není v přehledu k dispozici';
+ if(job.result?.error&&!['completed','unknown'].includes(job.state))return 'Chyba: '+job.result.error;
  if(job.state==='unknown')return 'Neznámý výsledek — vyžaduje posouzení';
  if(job.state==='failed')return 'Chyba: '+(job.result?.error||'Příjem selhal');
  if(job.state!=='completed')return ({prepared:'Připraveno ke sběru',dispatching:'Probíhá příjem',abandoned:'Příjem uzavřen bez ověřeného výsledku',cancelled:'Příjem zrušen'})[job.state]||'Stav příjmu není známý';
@@ -58,7 +59,7 @@ function monitoringProcessingExecutor(row){
  return id===blockCatalog.node_id?'Tento uzel':(monitoringView?.execution_nodes?.nodes?.find(n=>n.id===id)?.name||'Jiný uzel');
 }
 function monitoringCatalogColumns(kind){
- if(kind==='source')return [['Kanál / hledání',r=>r.value.config.locator],['Kontrola zdroje',r=>r.value.config.connector==='rss-atom'?r.value.config.poll_seconds/60+' min':'Na vyžádání'],['Sdílená aktivace',r=>r.runtime?.error|| (r.runtime?.enabled?'Zapnutý':'Vypnutý')],['Poslední sběr',r=>r.runtime?.last_success||'Není uložen'],['Příští sběr',r=>r.value.config.connector==='rss-atom'&&r.runtime?.enabled?new Date(r.runtime.next_due*1000).toLocaleString():'Neaktivní / na vyžádání'],['Poslední výsledek',r=>r.value.config.connector==='rss-atom'?monitoringIntakeOutcome(r.latest_intake):'Hledání pouze při zpracování']];
+ if(kind==='source')return [['Kanál / hledání',r=>r.value.config.locator],['Kontrola zdroje',r=>r.value.config.connector==='rss-atom'?r.value.config.poll_seconds/60+' min':r.value.config.connector==='x-twitter'?'Pouze ručně, placené':'Na vyžádání'],['Sdílená aktivace',r=>r.value.config.connector==='x-twitter'?'Jen místní ruční souhlas':r.runtime?.error|| (r.runtime?.enabled?'Zapnutý':'Vypnutý')],['Poslední sběr',r=>r.runtime?.last_success||'Není uložen'],['Příští sběr',r=>r.value.config.connector==='rss-atom'&&r.runtime?.enabled?new Date(r.runtime.next_due*1000).toLocaleString():'Neaktivní / na vyžádání'],['Poslední výsledek',r=>['rss-atom','x-twitter'].includes(r.value.config.connector)?monitoringIntakeOutcome(r.latest_intake):'Hledání pouze při zpracování']];
  if(kind==='filter')return [['Vstupní zdroje',r=>r.value.config.source_ids.map(blockName).join(', ')],['Pravidla',r=>r.value.config.pipeline.steps.map(s=>s.kind).join(' → ')],['Cílový pool',r=>blockName(r.value.config.pool_id)]];
  if(kind==='pool')return [['Zprávy',r=>String(r.message_count??0)],['Čekající verze',r=>r.processing_status?.consumer_ids.length?String(r.processing_status.pending_count):'Bez připojeného zpracování'],['Uchování',r=>r.value.config.retention_days+' dní'],['Příjem synchronizace',r=>r.last_received_sync||'Zatím nepotvrzen']];
  return [['Vstupy (pooly / zprávy)',r=>[...r.value.config.pool_ids,...(r.value.config.report_task_ids||[])].map(blockName).join(', ')],['Rozvrh',r=>{

@@ -92,7 +92,7 @@ function renderMonitoringBlocks(){
     if(!window.confirm('Vydat přesně tento návrh zprávy do projektu?'))return;
     await monitoringRequest('block-publish',{run_id:j.id,approval_digest:j.result.approval_digest,confirm:true});await loadMonitoringBlocks();
    },blockReadOnly()||!!(j.result?.protection&&!j.result.protection.finalized)));
-   if(j.state==='unknown'&&j.intent.kind==='intake')article.append(monitoringButton('Uzavřít neznámý příjem a povolit další kontrolu',async()=>{
+   if(j.state==='unknown'&&j.intent.kind==='intake'&&j.intent.connector!=='x-twitter')article.append(monitoringButton('Uzavřít neznámý příjem a povolit další kontrolu',async()=>{
     if(!window.confirm('Původní výsledek zůstane neznámý. Povolit další kontrolu zdroje?'))return;
     await monitoringRequest('block-release',{job_id:j.id,confirm:true});await loadMonitoringBlocks();
    },blockReadOnly()));
@@ -113,8 +113,20 @@ function renderMonitoringBlocks(){
   }));
   article.append(monitoringButton('Upravit',()=>editMonitoringBlock(blockTab,row),readonly));
   if(blockTab==='source'){
-   article.append(blockText('p',c.connector==='rss-atom'?c.locator+' · každých '+c.poll_seconds/60+' min · redundantní sběr na zapojených uzlech':'Webové hledání na vyžádání: '+c.locator));
+   article.append(blockText('p',c.connector==='rss-atom'?c.locator+' · každých '+c.poll_seconds/60+' min · redundantní sběr na zapojených uzlech':c.connector==='x-twitter'?'X / Twitter: pouze výslovně potvrzený ruční read na tomto uzlu. Správa odběrů, token a rozpočet jsou v sekci Zdroje → X / Twitter.':'Webové hledání na vyžádání: '+c.locator));
    article.append(blockText('p','Podmínky: '+c.terms+' · uchování: '+c.retention));
+   if(c.connector==='x-twitter'){
+    const read=async runId=>{
+     const state=await projectRequest('/v1/x-sources/view',{}),sub=state.subscriptions.find(s=>s.id===c.locator.split(':')[1]);
+     if(!sub)throw Error('Místní odběr X není nakonfigurován.');
+     if(c.locator!=='x:'+sub.id+':'+sub.fingerprint)throw Error('Odběr X se změnil; nejprve upravte projektový zdroj.');
+     const config=state.settings,price=config.max_results*config.max_pages*config.post_price_micro_usd/1e6;
+     if(!window.confirm('Načíst X: '+sub.kind+' '+sub.value+'? Místní rezervace až '+price.toFixed(6)+' USD. Nejisté volání se automaticky neopakuje.'))return;
+     await monitoringRequest('block-x-collect',{block_id:row.id,run_id:runId,confirm:true});await loadMonitoringBlocks();
+    };
+    article.append(monitoringButton('Načíst X do poolů — placené',()=>read(crypto.randomUUID()),readonly));
+    if(row.latest_intake?.state==='prepared')article.append(monitoringButton('Dokončit původní načtení X',()=>read(row.latest_intake.id),readonly));
+   }
    if(c.connector==='rss-atom'){
     article.append(blockText('p','Tento uzel: '+(row.runtime?.enabled?'sběr zapnutý':'sběr vypnutý')+' · poslední úspěch: '+(row.runtime?.last_success||'zatím žádný')+' · příští kontrola: '+(row.runtime?new Date(row.runtime.next_due*1000).toLocaleString():'nenastavena')));
     if(row.runtime?.error)article.append(blockText('p',row.runtime.error));
@@ -200,12 +212,24 @@ async function editMonitoringBlock(kind,row=null,restore=null){
  const v=blockEdit.value,c=v.config;
  blockField('title','Název','text',v.title);const privacy=blockField('privacy','Soukromí','select',blockEdit.privacy,[{id:'public',title:'Veřejné'},{id:'project',title:'Projekt'},{id:'confidential',title:'Důvěrné'},{id:'local-only',title:'Pouze lokálně'}]);privacy.disabled=blockEdit.previous.length>0;
  if(kind==='source'){
-  blockField('connector','Typ zdroje','select',c.connector,[{id:'rss-atom',title:'RSS / Atom'},{id:'web-search',title:'Webové hledání na vyžádání'}]);
-  blockField('locator','Adresa kanálu / dotaz hledání','text',c.locator);const poll=blockField('poll_minutes','Interval RSS v minutách','number',(c.poll_seconds||900)/60);poll.max='10080';
+  const connector=blockField('connector','Typ zdroje','select',c.connector,[{id:'rss-atom',title:'RSS / Atom'},{id:'web-search',title:'Webové hledání na vyžádání'},{id:'x-twitter',title:'X / Twitter — ruční placený PoC'}]);
+  const locator=blockField('locator','Adresa kanálu / dotaz hledání','text',c.connector==='x-twitter'?'':c.locator);const poll=blockField('poll_minutes','Interval RSS v minutách','number',(c.poll_seconds||900)/60);poll.max='10080';
   blockField('terms','Podmínky přístupu a licence','textarea',c.terms);blockField('retention','Podmínky uchování zdroje','textarea',c.retention);
+  const xSubscription=blockField('x_subscription','Místní odběr X','select',c.connector==='x-twitter'?c.locator.split(':')[1]:'',[]);
+  async function sourceType(){
+   const isX=connector.value==='x-twitter',isRSS=connector.value==='rss-atom';
+   xSubscription.closest('label').hidden=!isX;xSubscription.disabled=!isX;xSubscription.required=isX;
+   locator.closest('label').hidden=isX;locator.required=!isX;poll.closest('label').hidden=!isRSS;poll.required=isRSS;
+   if(isX&&!xSubscription.options.length){
+    try{const state=await projectRequest('/v1/x-sources/view',{});const empty=new Option('Vyberte odběr ze sekce Zdroje → X / Twitter','');xSubscription.append(empty);
+     for(const sub of state.subscriptions){const option=new Option(sub.name+' · '+sub.kind+': '+sub.value,sub.id);option.dataset.fingerprint=sub.fingerprint;option.selected=c.connector==='x-twitter'&&c.locator.split(':')[1]===sub.id;xSubscription.append(option);}
+    }catch(error){blockStatus(error.message+' Nastavte X v sekci Zdroje.');}
+   }
+  }
+  connector.addEventListener('change',()=>sourceType());await sourceType();
  }else if(kind==='pool')blockField('retention_days','Uchování zpráv ve dnech','number',c.retention_days);
  else if(kind==='filter'){
-  blockField('source_ids','Vstupní kanály (lze vybrat více)','multi',c.source_ids,blockOptions('source',c=>c.connector==='rss-atom'));
+  blockField('source_ids','Vstupní kanály (lze vybrat více)','multi',c.source_ids,blockOptions('source',c=>['rss-atom','x-twitter'].includes(c.connector)));
   blockField('pool_id','Cílový pool','select',c.pool_id,blockOptions('pool'));
   const steps=c.pipeline.steps,simple=steps.every(s=>s.kind==='dedup'?s.field==='content_sha256':
    s.kind==='keywords'?s.all.length===0&&s.none.length===0&&!s.case_sensitive&&JSON.stringify(s.fields)===JSON.stringify(['title','content']):
@@ -233,7 +257,7 @@ function readMonitoringBlock(){
  if(b.value.kind==='task')return closeMonitoringTaskDependencies(b);
  const f=blockEditor.elements,get=n=>f[n].value,sel=n=>[...f[n].selectedOptions].map(o=>o.value);
  b.value.title=get('title');b.privacy=get('privacy');const kind=b.value.kind;
- if(kind==='source')Object.assign(c,{connector:get('connector'),locator:get('locator'),poll_seconds:get('connector')==='web-search'?null:Number(get('poll_minutes'))*60,terms:get('terms'),retention:get('retention')});
+ if(kind==='source')Object.assign(c,{connector:get('connector'),locator:get('connector')==='x-twitter'?'x:'+get('x_subscription')+':'+f.x_subscription.selectedOptions[0].dataset.fingerprint:get('locator'),poll_seconds:get('connector')==='web-search'?null:Number(get('poll_minutes'))*60,terms:get('terms'),retention:get('retention')});
  else if(kind==='pool')c.retention_days=Number(get('retention_days'));
  else if(kind==='filter'){
   c.source_ids=sel('source_ids');c.pool_id=get('pool_id');if(!f.keywords)return b;const steps=[],words=get('keywords').split(/\r?\n/).map(v=>v.trim()).filter(Boolean);

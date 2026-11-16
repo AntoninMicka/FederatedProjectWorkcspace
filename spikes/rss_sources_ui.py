@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Shared Sources page with channel tabs and aggregated entries."""
+from spikes.x_sources_ui import HTML as X_HTML,CSS as X_CSS,JS as X_JS
+
 HTML = '''<div id="sources-view" hidden>
 <header class="sources-header"><div><h1 id="sources-heading">Zdroje</h1><p>Nové články z odebíraných kanálů.</p></div>
 <div><button id="sources-edit" type="button" hidden>Upravit kanál</button><button id="sources-refresh" type="button">Načíst kanály</button></div></header>
@@ -22,6 +24,7 @@ HTML = '''<div id="sources-view" hidden>
 <div id="sources-feed" role="tabpanel" aria-label="Články z vybraných kanálů" tabindex="0"></div>
 <details id="sources-connectors"><summary>Typy zdrojů a dostupnost</summary><ul id="sources-connector-list"></ul></details>
 </div>'''
+HTML=HTML[:-6]+X_HTML+HTML[-6:]
 CSS = '''
 #sources-view{max-width:1100px;margin:0 auto;padding:clamp(12px,3vw,32px);width:100%;box-sizing:border-box;overflow:auto}
 .sources-header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
@@ -47,6 +50,7 @@ CSS = '''
 #sources-reader-sync-peers p{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #sources-reader-sync-conflicts button{margin:4px 8px 4px 0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 '''
+CSS+=X_CSS
 JS = r'''
 let sourcesView=null,sourcesChannel='all',sourcesBusy=false,sourcesSequence=0,sourcesEditing=null,sourcesSaving=false,sourcesDirty=false,sourcesPending=null,sourcesImport=null;
 const sourcesEditor=document.getElementById('sources-editor'),sourcesImportReview=document.getElementById('sources-import-review');
@@ -55,6 +59,7 @@ const sourcesStatus=document.getElementById('sources-status'),sourcesRefresh=doc
 function renderSources(){
  if(!sourcesView)return;
  renderReaderSync();
+ document.querySelector('#x-sources').hidden=!sourcesView.can_refresh;
  if(!['all',...sourcesView.channels.map(c=>c.id)].includes(sourcesChannel))sourcesChannel='all';
  document.getElementById('sources-heading').textContent=sourcesChannel==='all'?'Zdroje':sourcesView.channels.find(c=>c.id===sourcesChannel).name;
  document.getElementById('sources-count').textContent='Počet kanálů: '+sourcesView.channels.length;
@@ -151,7 +156,8 @@ sourcesTabs.addEventListener('keydown',event=>{
 });
 
 function canLeaveSources(){
- if(sourcesSaving)return false;
+ if(sourcesSaving||xSourcesBusy)return false;
+ if(xSourcesDirty){if(!window.confirm('Zahodit rozepsané nastavení X?'))return false;xSourcesDirty=false;xSettings.elements.token.value='';xSubscription.hidden=true;}
  if(sourcesDirty||sourcesPending){if(!window.confirm('Zahodit rozpracované změny odběrů?'))return false;closeSourcesEditor();}
  return true;
 }
@@ -213,3 +219,5 @@ function refreshDueSources(){
 }
 setInterval(refreshDueSources,30000);
 '''
+
+JS+=X_JS

@@ -35,7 +35,11 @@ def validate_block(value):
     c = value['config']; kind = value['kind']
     if kind == 'source':
         fields(c, 'connector locator poll_seconds terms retention')
-        require(c['connector'] in {'rss-atom', 'web-search'}, 'Unsupported source connector')
+        require(c['connector'] in {'rss-atom', 'web-search','x-twitter'}, 'Unsupported source connector')
+        if c['connector']=='x-twitter':
+            parts=c['locator'].split(':');require(len(parts)==3 and parts[0]=='x','Choose an X subscription');uuid(parts[1])
+            from spikes.reporting_schema import hex_id
+            hex_id(parts[2])
         for k in ('locator', 'terms', 'retention'):
             text(c[k]); require(len(c[k]) <= 4000, 'Source configuration exceeds limit')
         if c['connector'] == 'rss-atom':
@@ -101,7 +105,7 @@ def validate_blocks(records):
                 require(PRIVACY[row['privacy']] >= PRIVACY[tips[id_]['privacy']], 'Monitoring dependency lowers privacy')
         c = v['config']
         if v['kind'] == 'filter':
-            require(all(tips[i]['value']['config']['connector'] == 'rss-atom' for i in c['source_ids']),
+            require(all(tips[i]['value']['config']['connector'] in {'rss-atom','x-twitter'} for i in c['source_ids']),
                     'Filters require periodic channels, not on-demand search')
             require(PRIVACY[tips[c['pool_id']]['privacy']] >= PRIVACY[row['privacy']], 'Pool lowers filter privacy')
         if v['kind'] == 'processing':

@@ -101,3 +101,13 @@ zobrazení unavailable/not-configured v katalogu, přepínání kanálů,
 inertní titulek a mobilní rozměr. Jde o automatizovaný browser smoke,
 nikoli ruční akceptaci běžného profilu. Plná závěrečná sada dávky MON-08
 zůstává až před jejím finálním předáním.
+
+## Neověřený X/Twitter PoC
+
+`x-twitter` přidává společnou normalizaci a ruční čtení přes node-local
+service s operation ID, tokenem a budgetem. Jde o samostatný adaptér;
+`platform-channel` se automaticky neaktivuje. Správa místních odběrů je
+ve Zdroje → X/Twitter, projektový zdroj vybírá odběr podle názvu a otisku.
+PoC zůstává **bez testů a bez placeného dispatch** podle požadavku uživatele.
+Rozsah, postup, dokumentace API a recovery:
+[X/Twitter PoC](x-connector-poc.md).

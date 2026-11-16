@@ -238,6 +238,9 @@ class WebHandler(DesktopHandler):
                 'active_http_workers': self.server.active_worker_count(),
                 'http': self.server.http_diagnostics(),
                 'sync': observations(self.server.node)})
+        if self.path.startswith('/v1/x-sources/'):
+            if not self.server.administration.is_admin(self.actor):return self.send_error(403)
+            return super().dispatch(request)
         if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview', '/v1/rss-sources/sync-settings', '/v1/rss-sources/sync', '/v1/rss-sources/sync-resolve'}:
             if not self.path.endswith('/view') and not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)

@@ -50,17 +50,20 @@ class ComposableMonitoring:
 
     @contextmanager
     def locked(self, lane=None):
-        # Maintenance takes both lanes in a fixed order. Network/model calls
+        # Maintenance takes all effect lanes in a fixed order. Network/model calls
         # hold only their lane; SQLite transactions remain short and serialized.
         if lane is None:
             with self.locked('intake') as intake:
                 if not intake:
                     yield False; return
-                with self.locked('processing') as processing:
-                    yield processing
+                with self.locked('x-intake') as x_intake:
+                    if not x_intake:
+                        yield False;return
+                    with self.locked('processing') as processing:
+                        yield processing
             return
-        require(lane in {'intake', 'processing'}, 'Unknown monitoring lane')
-        fd = os.open(self.pools.root/('worker.lock' if lane == 'processing' else 'intake-worker.lock'), os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW, 0o600)
+        require(lane in {'intake', 'processing','x-intake'}, 'Unknown monitoring lane')
+        fd = os.open(self.pools.root / {'processing':'worker.lock','intake':'intake-worker.lock','x-intake':'x-intake-worker.lock'}[lane], os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW, 0o600)
         try:
             try: fcntl.flock(fd, fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError:
@@ -200,6 +203,7 @@ class ComposableMonitoring:
             for id_ in set(pending):
                 b=by_id.get(id_)
                 if not b or b['value']['kind'] not in {'source','processing'}:continue
+                if b['value']['kind']=='source' and b['value']['config']['connector']!='rss-atom':continue
                 old=db.execute('SELECT document FROM block_bindings WHERE project=? AND source=?',(pid,id_)).fetchone()
                 prior=json.loads(old[0]) if old else None
                 state=shared.activation(shared.read_rows(db,pid),id_)
@@ -265,7 +269,7 @@ class ComposableMonitoring:
             refs.extend([b['ref']['artifact_id'], by_id[b['value']['config']['pool_id']]['ref']['artifact_id']])
         return digest(encoded(sorted(refs)))
 
-    def _selected(self, pid, source, items, filters, by_id, observed, summaries=None):
+    def _selected(self, pid, source, items, filters, by_id, observed, summaries=None, retention_days=None):
         rows = {}; node_id = local_node_id(self.node)
         existing = self.pools.export(pid)
         for filter_ in filters:
@@ -278,7 +282,7 @@ class ComposableMonitoring:
                 summaries.extend(dict(filter_id=filter_['id'],decision=k[0],reason=k[1],count=count) for k,count in counts.items())
             errors = [r for r in results if r['decision'] not in {'selected', 'discarded'}]
             require(not errors, 'Filter failed or awaits explicit processing: '+str(errors[:1]))
-            expires = stamp(self.clock()+pool['value']['config']['retention_days']*86400)
+            expires = stamp(min(self.clock()+pool['value']['config']['retention_days']*86400,moment(observed).timestamp()+retention_days*86400) if retention_days is not None else self.clock()+pool['value']['config']['retention_days']*86400)
             for item, decision in zip(items, results):
                 if decision['decision'] != 'selected': continue
                 normalized = deepcopy(item)
@@ -297,7 +301,71 @@ class ComposableMonitoring:
                 for row in (record, observation, member): rows[row['id']] = row
         return list(rows.values())
 
+    def collect_x(self,pid,source_id,run_id,*,confirm):
+        from spikes.x_connector import XService
+        from spikes.source_connectors import XConnector
+        uuid(run_id);require(confirm is True,'Confirm this paid X API read');self.monitoring._writable(pid)
+        self._require_migration_complete(pid,source_id)
+        with self.locked('x-intake') as acquired:
+            require(acquired,'A source read is already running on this node')
+            catalog=self.blocks.read(pid);by_id={b['id']:b for b in catalog['blocks']};source=by_id.get(source_id)
+            require(source and source['value']['kind']=='source' and source['value']['config']['connector']=='x-twitter','Choose an X source')
+            require(source['privacy']!='local-only','Local-only source cannot call X API')
+            x=XService(self.node,clock=self.clock)
+            state=x.view()
+            def current_method(intent):
+                current=self.blocks.read(pid);current_by={b['id']:b for b in current['blocks']}
+                filters=[b for b in current['blocks'] if b['value']['kind']=='filter' and source_id in b['value']['config']['source_ids']]
+                require(current_by.get(source_id,{}).get('ref',{}).get('artifact_id')==intent['source_ref']['artifact_id'] and
+                    sorted((b['id'],b['ref']['artifact_id']) for b in filters)==sorted((b['id'],b['ref']['artifact_id']) for b in intent['filters']) and
+                    all(current_by.get(id_,{}).get('ref',{}).get('artifact_id')==ref_['artifact_id'] for id_,ref_ in intent['pool_refs'].items()),
+                    'X source/filter/pool definitions changed; inspect the staged paid read before a new operation')
+            with self.pools.db() as db:
+                row=db.execute('SELECT state,document,result FROM block_jobs WHERE id=?',(run_id,)).fetchone()
+                if row:
+                    intent=json.loads(row[1]);require(intent.get('source_id')==source_id and intent.get('project_id')==pid,'Run ID belongs to another intent')
+                    if row[0]!='completed':current_method(intent)
+                    cached=dict(id=run_id,state=row[0],result=json.loads(row[2]) if row[2] else None)
+                else:
+                    subscription_id=source['value']['config']['locator'].split(':')[1]
+                    subscription=next(({k:v for k,v in s.items() if k!='fingerprint'} for s in state['subscriptions'] if s['id']==subscription_id),None)
+                    require(subscription,'Configure the local X subscription first')
+                    require(state['settings'] and state['settings']['enabled'] and state['settings']['has_token'] and subscription['enabled'],'Enable the local X configuration and subscription before a paid read')
+                    filters=[b for b in by_id.values() if b['value']['kind']=='filter' and source_id in b['value']['config']['source_ids']]
+                    require(filters,'Attach a filter and pool before paying for X inputs')
+                    intent=dict(kind='intake',project_id=pid,connector='x-twitter',source_id=source_id,source_ref=source['ref'],subscription=subscription,
+                        input_head=catalog['commit_id'],started_at=self.clock(),expires_at=self.clock()+86400,filters=filters,pool_refs={b['value']['config']['pool_id']:by_id[b['value']['config']['pool_id']]['ref'] for b in filters},
+                        observed_at=stamp(self.clock()))
+                    db.execute('INSERT INTO block_jobs VALUES(?,?,?,?,NULL)',(run_id,pid,'prepared',encoded(intent)));cached=None
+            if cached and cached['state']=='completed':x.acknowledge(run_id);return cached
+            require(not cached or cached['state']=='prepared','X read failed/unknown; inspect its reservation and use a new explicit run')
+            try:
+                require(self.clock()<intent['expires_at'],'Original X intake intent expired; use a new explicit operation')
+                sub=intent['subscription'];context=SourceContext(source_id,source['value']['config']['locator'],intent['observed_at'],source['privacy'],str(sub['retention_days'])+' days',channel=source['value']['title'])
+                result=XConnector(x,operation_id=run_id,confirm=True).read(dict(subscription_id=sub['id']),context)
+                current_method(intent)
+                summaries=[];rows=self._selected(pid,source,result['items'],intent['filters'],by_id,intent['observed_at'],summaries,sub['retention_days'])
+                receipt=dict(status=200,input_items=len(result['items']),filter_count=len(intent['filters']),selected_items=len({r['id'] for r in rows if r['kind']=='item'}),selection_summary=summaries)
+                with self.pools.db() as db:
+                    self.pools._merge(db,pid,rows)
+                    db.execute("UPDATE block_jobs SET state='completed',result=? WHERE id=?",(encoded(receipt),run_id))
+                x.acknowledge(run_id)
+                return dict(id=run_id,state='completed',result=receipt)
+            except Exception as exc:
+                provider_state=x.operation_state(run_id)
+                local_state='prepared' if provider_state=='completed' else 'unknown' if provider_state in {'prepared','dispatching','unknown'} else 'failed'
+                # A completed sink is recoverable even if cursor acknowledgement failed.
+                with self.pools.db() as db:
+                    db.execute("UPDATE block_jobs SET state=?,result=? WHERE id=? AND state!='completed'",(local_state,encoded(dict(error=shared.safe_error(exc))),run_id))
+                raise
+
     def tick(self, pid, *, checkpoint=lambda stage: None, lane=None):
+        require(lane in {None,'intake','processing'},'Unknown monitoring worker lane')
+        from spikes.x_connector import XService
+        try:XService(self.node,clock=self.clock).purge()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning('X retention cleanup unavailable (%s); RSS operation continues',type(exc).__name__)
         for selected in (('intake', 'processing') if lane is None else (lane,)):
             self._tick(pid, checkpoint=checkpoint, lane=selected)
 
@@ -328,6 +396,7 @@ class ComposableMonitoring:
                 source = by_id.get(id_)
                 if not binding['enabled'] or not source: continue
                 if (source['value']['kind'] == 'source') != (lane == 'intake'): continue
+                if source['value']['kind']=='source' and source['value']['config']['connector']!='rss-atom':continue
                 if binding['revision'] != source['ref']['artifact_id']:
                     # Local activation follows the stable block ID across edits
                     # and sync. Revision records the definition last observed.

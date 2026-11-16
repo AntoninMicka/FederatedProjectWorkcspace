@@ -1782,3 +1782,13 @@ signed pool sidecar a původní journal/receipt recovery. Nový výběr v
 nikoliv paralelní workflow či kopii databáze. **Reject:** výběr podle názvu,
 automatické nahrazování návrhem, časový vítěz konkurenčních oprav a opakování
 nejistého modelového efektu. Viz [kontrakt a obnova](docs/monitoring-report-chains.md).
+
+MON-08-11 X/Twitter PoC **reuse/adaptuje** SourceConnector/SourceContext,
+společné inertní položky, levné filtry, MessagePools, vlastnictví souborů,
+fsync a SQLite ownership wrapper. SearXNG poskytuje vzor explicitního
+no-retry efektu a místní konfigurace; jeho binding/result schema není
+zaměnitelné s placeným paginovaným X readem. Proto vzniká vlastní místní
+účtovací journal, nikoliv paralelní projektová sync databáze. Žádný externí
+kód se nekopíroval. **Reject:** scraping/fallback, full archive, automatický
+placený scheduler, user lookup a token v projektových definicích. Scope,
+retenci a crash boundaries popisuje [neověřený PoC](docs/x-connector-poc.md).

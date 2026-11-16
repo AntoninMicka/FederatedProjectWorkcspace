@@ -218,9 +218,36 @@ class SearchConnector(SourceConnector):
 
 
 class PlatformConnector(SourceConnector):
-    id, name = 'platform-channel', 'Platformní kanály (X / Twitter)'
+    id, name = 'platform-channel', 'Platformní kanály (rezervovaný adaptér)'
     config_fields, credentials, permissions = ('channel',), ('api-token',), ('approved-platform-access',)
     reason = 'Připojení platformního kanálu zatím není dostupné.'
+
+
+class XConnector(SourceConnector):
+    id,name='x-twitter','X / Twitter (PoC, placené API)'
+    config_fields,credentials,permissions=('subscription_id',),('x-api-bearer-token',),('approved-platform-access','explicit-paid-read')
+    state,reason,operations='not-configured','Vyžaduje místní token, odběr a výslovné potvrzení rozpočtu.',('normalize',)
+
+    def __init__(self,service=None,*,operation_id=None,confirm=False):
+        self.service,self.operation_id,self.confirm=service,operation_id,confirm
+
+    def describe(self):
+        value=super().describe();value['continuation']=dict(kind='provider-cursor',persisted=True,owner='node-local-x-api-journal')
+        value['limits'].update(max_pages=5,max_posts_per_page=100)
+        if self.service is not None:
+            value['operations']=['read','normalize'];value['availability']=dict(state='ready',reason='Místní ruční adaptér; oprávnění účtu a budget se kontrolují před dispatch, účet není ověřen.')
+        return value
+
+    def normalize(self,payload,context):
+        from spikes.x_connector import normalize
+        return normalize(payload,context)
+
+    def read(self,config,context,*,continuation=None):
+        fields(config,'subscription_id')
+        require(self.service is not None and self.operation_id is not None,'X read requires a node-local journal and explicit operation ID')
+        require(continuation is None,'X continuation is owned by the local journal')
+        require(context.locator.startswith('x:'+config['subscription_id']+':'),'X subscription differs from source context')
+        return self.service.collect(config['subscription_id'],self.operation_id,context,confirm=self.confirm)
 
 
 class WorkspaceOutputConnector(SourceConnector):
@@ -285,7 +312,7 @@ class WorkspaceOutputConnector(SourceConnector):
 
 
 CONNECTORS = {'rss-atom': RSSConnector, 'static-text': DocumentConnector, 'web-search': SearchConnector,
-              'platform-channel': PlatformConnector, 'workspace-output': WorkspaceOutputConnector}
+              'platform-channel': PlatformConnector, 'x-twitter':XConnector, 'workspace-output': WorkspaceOutputConnector}
 
 
 def connector_catalog():
