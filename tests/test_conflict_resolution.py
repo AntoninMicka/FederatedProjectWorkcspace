@@ -18,6 +18,7 @@ from spikes.metadata import ValidationError, validate_snapshot
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
+from spikes.workspace import PendingOperation
 from tests.fixtures import encoded, metadata
 
 
@@ -120,6 +121,118 @@ class ConflictResolutionTests(unittest.TestCase):
         self.assertEqual(self.state(), before)
         with self.assertRaises((ValidationError, StaleIndex)):
             self.service.preview(self.project, self.start, self.ref)
+
+    def test_criss_cross_preview_and_ref_update_recovery_preserve_both_histories(self):
+        ancestors = [self.local, self.peer]
+        ours = self.git.run('commit-tree', self.local + '^{tree}',
+                            '-p', self.local, '-p', self.peer, '-m', 'First merge').stdout.strip()
+        theirs = self.git.run('commit-tree', self.peer + '^{tree}',
+                              '-p', self.peer, '-p', self.local, '-m', 'Other merge').stdout.strip()
+        self.git.run('update-ref', 'refs/heads/main', ours, self.local)
+        self.git.run('read-tree', '--reset', '-u', ours)
+        self.git.run('update-ref', self.ref, theirs, self.peer)
+        self.local, self.peer = ours, theirs
+        before = self.state()
+        listed = self.service.list(self.project, ours)
+        self.assertEqual(listed['conflicts'][0]['merge_bases'], sorted(ancestors))
+        view = self.preview()
+        self.assertEqual(view['merge_bases'], sorted(ancestors))
+        self.assertTrue(next(row for row in view['files'] if row['path'] == self.path)['conflict'])
+        self.assertEqual(self.state(), before)
+        request, operation = self.request(view), str(uuid4())
+        def crash(stage):
+            if stage == 'ref-updated':
+                raise RuntimeError('criss-cross crash')
+        with self.assertRaisesRegex(RuntimeError, 'criss-cross crash'):
+            self.service.confirm(request, operation, checkpoint=crash)
+        published = self.git.head()
+        receipt = self.service.confirm(request, operation)
+        self.assertEqual(receipt['commit_id'], published)
+        self.assertEqual(self.git.run('show', '-s', '--format=%P', published).stdout.split(),
+                         [ours, theirs])
+        self.assertEqual(self.service.list(self.project, published)['conflicts'], [])
+        self.assertEqual(self.ws.index.read_projection(self.git)['commit_id'], published)
+
+    def test_local_change_is_listed_without_an_incoming_ref_and_preserved(self):
+        self.git.run('update-ref', '-d', self.ref, self.peer)
+        target = self.root / self.path
+        target.write_text('- [SUM] Místní neuložená změna\n')
+        before = self.state()
+        for network in (False, True):
+            view = ConflictResolution(self.node, network=network).list(self.project, self.local)
+            self.assertEqual(view['conflicts'], [])
+            self.assertEqual(len(view['local_changes']), 1)
+            row = view['local_changes'][0]
+            self.assertEqual((row['path'], row['status']), (self.path, 'modified'))
+            self.assertIn('-- [ ] Místní změna', row['diff'])
+            self.assertIn('+- [SUM] Místní neuložená změna', row['diff'])
+        self.assertEqual(self.state(), before)
+        target.write_bytes(self.git.snapshot(self.local)[self.path])
+        self.assertEqual(self.service.list(self.project, self.local)['local_changes'], [])
+
+    def test_local_and_history_conflicts_coexist_but_merge_cannot_overwrite_local_edits(self):
+        preview = self.preview()
+        (self.root / self.path).write_text('Keep this local edit\n')
+        before = self.state()
+        view = self.service.list(self.project, self.local)
+        self.assertEqual(len(view['conflicts']), 1)
+        self.assertEqual(len(view['local_changes']), 1)
+        with self.assertRaises((ValidationError, PendingOperation)):
+            self.service.confirm(self.request(preview), str(uuid4()))
+        self.assertEqual(self.state(), before)
+
+    def test_staged_only_and_untracked_changes_remain_visible(self):
+        target = self.root / self.path
+        target.write_text('Staged content\n'); self.git.run('add', '--', self.path)
+        target.write_bytes(self.git.snapshot(self.local)[self.path])
+        (self.root / 'untracked.txt').write_text('Private unsupported content')
+        before = self.state()
+        rows = {r['path']: r for r in self.service.list(self.project, self.local)['local_changes']}
+        self.assertEqual(rows[self.path]['status'], 'staged')
+        self.assertIsNone(rows[self.path]['diff'])
+        self.assertEqual(rows['untracked.txt']['status'], 'unsupported')
+        self.assertIsNone(rows['untracked.txt']['diff'])
+        self.assertEqual(self.state(), before)
+
+    def test_local_diff_limits_binary_and_web_privacy_are_fail_closed(self):
+        target = self.root / self.path
+        for value in (b'\x00binary', b'x' * (256 * 1024 + 1)):
+            target.write_bytes(value)
+            view = self.service.list(self.project, self.local)
+            self.assertIsNone(view['local_changes'][0]['diff'])
+        target.write_bytes(self.git.snapshot(self.local)[self.path])
+        sidecar = self.root / f'artifacts/{self.artifact}/metadata.json'
+        meta = json.loads(sidecar.read_text()); meta['privacy'] = 'local-only'
+        sidecar.write_text(json.dumps(meta))
+        with self.assertRaisesRegex(ValidationError, 'local-only'):
+            ConflictResolution(self.node, network=True).list(self.project, self.local)
+        self.assertTrue(self.service.list(self.project, self.local)['local_changes'])
+
+    def test_large_roadmap_with_small_edit_has_a_bounded_visible_diff(self):
+        target = self.root / self.path
+        body = ''.join(f'- [ ] [TASK-{n:05}] Roadmap item {n}\n' for n in range(8000))
+        target.write_text(body)
+        self.local = self.git.commit('Large roadmap')
+        target.write_text(body.replace('[TASK-07999]', '[SUM-07999]'))
+        # The input is larger than the output budget, like the live roadmap.
+        self.assertGreater(len(body.encode()), 256 * 1024)
+        row = self.service.list(self.project, self.local)['local_changes'][0]
+        self.assertIn('+', row['diff'])
+        self.assertIn('[SUM-07999]', row['diff'])
+        self.assertLess(len(row['diff'].encode()), 256 * 1024)
+
+    def test_peer_reported_conflict_is_visible_without_local_divergence(self):
+        from spikes.federation_sync import _database
+        self.git.run('update-ref', '-d', self.ref, self.peer)
+        with _database(self.node) as db:
+            db.execute('INSERT INTO runtime VALUES (?,?,?,?,?,?)', (
+                self.peer_id, self.project, 'conflict', 'Peer reported a content conflict', '[]', '[]'))
+            db.execute('INSERT INTO runtime VALUES (?,?,?,?,?,?)', (
+                str(uuid4()), str(uuid4()), 'conflict', 'Unrelated', '[]', '[]'))
+        view = self.service.list(self.project, self.local)
+        self.assertEqual(view['conflicts'], [])
+        self.assertEqual(view['local_changes'], [])
+        self.assertEqual(view['sync_conflicts'], [{'peer_id': self.peer_id}])
 
     def test_confirm_publishes_one_valid_two_parent_commit_and_is_idempotent(self):
         view = self.preview(); request = self.request(view); operation = str(uuid4())

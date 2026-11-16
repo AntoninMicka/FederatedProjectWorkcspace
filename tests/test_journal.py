@@ -24,6 +24,34 @@ class JournalTests(unittest.TestCase):
         self.state = self.base / 'state'
         self.journal = Journal(self.root, self.state)
 
+    def test_shared_readers_coexist_and_exclude_writer_across_processes(self):
+        other = Journal.attach(self.root, self.state, blocking=False)
+        with self.journal.lock(shared=True):
+            with other.lock(shared=True):
+                pass
+            with self.assertRaises(BlockingIOError):
+                with other.lock():
+                    self.fail('Writer entered during a shared read')
+            script = '''
+import fcntl, sys
+with open(sys.argv[1], 'a+b') as handle:
+    fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    fcntl.flock(handle, fcntl.LOCK_UN)
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(0)
+    sys.exit(1)
+'''
+            result = subprocess.run([sys.executable, '-c', script, str(self.state / 'writer.lock')],
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        with other.lock():
+            reader = Journal.attach(self.root, self.state, blocking=False)
+            with self.assertRaises(BlockingIOError):
+                with reader.lock(shared=True):
+                    self.fail('Reader entered during a write')
+
     def crash(self, stage, operation='import'):
         script = '''
 import os, sys

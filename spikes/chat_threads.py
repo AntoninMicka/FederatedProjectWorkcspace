@@ -512,65 +512,68 @@ class ChatThreads:
 
     def get(self, thread_id, node_id, user_id):
         with self.connect() as db:
-            row = self._owner(db, thread_id, node_id, user_id)
-            messages = []
-            for item in db.execute('SELECT message_id,sequence,role,content,content_sha256,'
-                                   'privacy,author_id,created_at,supersedes_id FROM messages '
-                                   'WHERE thread_id=? ORDER BY sequence', (thread_id,)):
-                uuid(item[0])
-                require(type(item[1]) is int and item[1] == len(messages) + 1,
-                        'Invalid stored chat message sequence')
-                require(item[2] in {'user', 'assistant'} and item[5] in PRIVACY,
-                        'Invalid stored chat message')
-                if item[2] == 'user':
-                    uuid(item[6])
-                else:
-                    require(isinstance(item[6], str) and item[6].startswith('backend:'),
-                            'Invalid stored chat message author')
-                    uuid(item[6].removeprefix('backend:'))
-                timestamp(item[7])
-                if item[8] is not None:
-                    uuid(item[8])
-                try:
-                    text = item[3].decode('utf-8')
-                except UnicodeError as exc:
-                    raise ValueError('Stored chat message is not UTF-8') from exc
-                require(hashlib.sha256(item[3]).hexdigest() == item[4],
-                        'Stored chat message digest mismatch')
-                messages.append(dict(zip(('message_id', 'sequence', 'role', 'content',
-                                          'content_sha256', 'privacy', 'author_id',
-                                          'created_at', 'supersedes_id'),
-                                         item[:3] + (text,) + item[4:])))
-            require(row[6] == len(messages), 'Invalid stored chat sequence counter')
-            turns = []
-            for item in db.execute('SELECT turn_id,user_message_id,run_id,assistant_message_id,'
-                                   'state,error,manifest_id,response_language,language_source,'
-                                   'language_compliance FROM turns WHERE thread_id=? ORDER BY rowid',
-                                   (thread_id,)):
-                for value in item[:2]:
-                    uuid(value)
-                if item[2] is not None:
-                    uuid(item[2])
-                if item[3] is not None:
-                    uuid(item[3])
-                if item[6] is not None:
-                    uuid(item[6])
-                if item[7] is not None:
-                    require(language_tag(item[7]) == item[7]
-                            and item[8] in LANGUAGE_SOURCES and item[9] == 'unverified',
-                            'Invalid stored turn language provenance')
-                require(item[4] in {'prepared', 'run-bound', 'completed'} | TERMINAL,
-                        'Invalid stored chat turn')
-                turns.append(dict(zip(('turn_id', 'user_message_id', 'run_id',
-                                       'assistant_message_id', 'state', 'error', 'manifest_id',
-                                       'response_language', 'language_source',
-                                       'language_compliance'), item)))
-            return dict(thread_id=thread_id, node_id=row[0], user_id=row[1], status=row[2],
-                        classification=row[3], created_at=row[4], revision=row[5],
-                        project_id=row[7], assignment_revision=row[8],
-                        response_language=row[9],
-                        forked_from_thread_id=row[10], forked_from_digest=row[11],
-                        messages=messages, turns=turns)
+            return self._get(db, thread_id, node_id, user_id)
+
+    def _get(self, db, thread_id, node_id, user_id):
+        row = self._owner(db, thread_id, node_id, user_id)
+        messages = []
+        for item in db.execute('SELECT message_id,sequence,role,content,content_sha256,'
+                               'privacy,author_id,created_at,supersedes_id FROM messages '
+                               'WHERE thread_id=? ORDER BY sequence', (thread_id,)):
+            uuid(item[0])
+            require(type(item[1]) is int and item[1] == len(messages) + 1,
+                    'Invalid stored chat message sequence')
+            require(item[2] in {'user', 'assistant'} and item[5] in PRIVACY,
+                    'Invalid stored chat message')
+            if item[2] == 'user':
+                uuid(item[6])
+            else:
+                require(isinstance(item[6], str) and item[6].startswith('backend:'),
+                        'Invalid stored chat message author')
+                uuid(item[6].removeprefix('backend:'))
+            timestamp(item[7])
+            if item[8] is not None:
+                uuid(item[8])
+            try:
+                text = item[3].decode('utf-8')
+            except UnicodeError as exc:
+                raise ValueError('Stored chat message is not UTF-8') from exc
+            require(hashlib.sha256(item[3]).hexdigest() == item[4],
+                    'Stored chat message digest mismatch')
+            messages.append(dict(zip(('message_id', 'sequence', 'role', 'content',
+                                      'content_sha256', 'privacy', 'author_id',
+                                      'created_at', 'supersedes_id'),
+                                     item[:3] + (text,) + item[4:])))
+        require(row[6] == len(messages), 'Invalid stored chat sequence counter')
+        turns = []
+        for item in db.execute('SELECT turn_id,user_message_id,run_id,assistant_message_id,'
+                               'state,error,manifest_id,response_language,language_source,'
+                               'language_compliance FROM turns WHERE thread_id=? ORDER BY rowid',
+                               (thread_id,)):
+            for value in item[:2]:
+                uuid(value)
+            if item[2] is not None:
+                uuid(item[2])
+            if item[3] is not None:
+                uuid(item[3])
+            if item[6] is not None:
+                uuid(item[6])
+            if item[7] is not None:
+                require(language_tag(item[7]) == item[7]
+                        and item[8] in LANGUAGE_SOURCES and item[9] == 'unverified',
+                        'Invalid stored turn language provenance')
+            require(item[4] in {'prepared', 'run-bound', 'completed'} | TERMINAL,
+                    'Invalid stored chat turn')
+            turns.append(dict(zip(('turn_id', 'user_message_id', 'run_id',
+                                   'assistant_message_id', 'state', 'error', 'manifest_id',
+                                   'response_language', 'language_source',
+                                   'language_compliance'), item)))
+        return dict(thread_id=thread_id, node_id=row[0], user_id=row[1], status=row[2],
+                    classification=row[3], created_at=row[4], revision=row[5],
+                    project_id=row[7], assignment_revision=row[8],
+                    response_language=row[9],
+                    forked_from_thread_id=row[10], forked_from_digest=row[11],
+                    messages=messages, turns=turns)
 
     def list(self, node_id, user_id):
         uuid(node_id); uuid(user_id)
@@ -595,6 +598,26 @@ class ChatThreads:
                 (node_id, project_id)).fetchall()
         return [self.get(thread_id, node_id, user_id)
                 for thread_id, user_id in rows]
+
+    def list_project_readonly(self, node_id, project_id):
+        """One read snapshot, with no schema initialization or writer transaction."""
+        uuid(node_id); uuid(project_id)
+        if not os.path.lexists(self.path):
+            return []
+        info = self.path.lstat()
+        require(self.root.resolve() == self.root and stat.S_ISREG(info.st_mode)
+                and info.st_uid == os.getuid() and info.st_nlink == 1
+                and not info.st_mode & 0o077, 'Unsafe chat thread store')
+        with closing(sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True,
+                                     timeout=.1)) as db:
+            db.execute('BEGIN')
+            require(db.execute('SELECT version FROM schema_info').fetchall() == [(6,)],
+                    'Chat store requires migration before state comparison')
+            self._validate_columns(db, version=6)
+            rows = db.execute('SELECT thread_id,user_id FROM threads '
+                              'WHERE node_id=? AND project_id=? '
+                              'ORDER BY created_at,thread_id', (node_id, project_id)).fetchall()
+            return [self._get(db, thread, node_id, user) for thread, user in rows]
 
     def list_visible(self, node_id, user_id, project_ids):
         uuid(node_id); uuid(user_id)

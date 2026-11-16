@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Private local deployment preferences, never credentials or project data."""
+from spikes.request_ownership import bounded_flock
 import fcntl
 import json
 import os
@@ -40,7 +41,7 @@ class DeploymentTargets:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         lock = os.open(str(self.path) + '.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(lock, 'a+b') as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+            bounded_flock(handle, fcntl.LOCK_EX, resource='Deployment preferences')
             targets = self.load()
             targets = [t for t in targets if (t['host'], t['container']) != (target['host'], target['container'])]
             targets.append(target)

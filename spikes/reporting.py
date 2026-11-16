@@ -7,6 +7,7 @@ external effect. A publication is one idempotent Workspace operation; manual
 MON-01 does not create a scheduled ReportRun or advance a scheduler cutoff.
 """
 import argparse
+import base64
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
@@ -41,25 +42,26 @@ class Reporting:
         self.node_path = node_path
         self.artifacts = Artifacts(node_path)
 
+    def read_snapshot(self, project_id, *, read_only=False):
+        if read_only:
+            ws = self.artifacts.projects.workspace(project_id, for_snapshot=True)
+        else:
+            ws = self.artifacts.workspace(project_id)
+            ws.recover()
+        head, files, entities = ws.committed_snapshot(project_id)
+        # Historical pin validation can be expensive; never retain the journal
+        # across it. The final checkpoint rejects both writes and new HEADs.
+        validate_git(ws.git, files, entities)
+        result = records(files, entities)
+        parents = {p['artifact_id'] for record in result.values() for p in record['previous']}
+        ws.snapshot_checkpoint(head)
+        return (dict(project_id=project_id, commit_id=head, records=list(result.values()),
+                     tips=[id_ for id_ in result if id_ not in parents],
+                     deduplication={id_: canonical_events(r) for id_, r in result.items()
+                                    if r['type'] == 'Story' and id_ not in parents}), files, entities)
+
     def read(self, project_id):
-        ws = self.artifacts.workspace(project_id)
-        # Explicit local read is a recovery entrypoint, like Artifacts.open.
-        ws.recover()
-        with ws.journal.lock(), ws.journal.connect() as db:
-            head = ws.git.head()
-            committed_project(ws.git, head, project_id)
-            files = ws.git.snapshot(head)
-            entities = validate_snapshot(files)
-            ws._read_locked(db, expected_head=head)
-            validate_git(ws.git, files, entities)
-            result = records(files, entities)
-            parents = {p['artifact_id'] for record in result.values() for p in record['previous']}
-            if ws.git.head() != head:
-                raise StaleIndex('Project changed while reading reporting records')
-            return dict(project_id=project_id, commit_id=head, records=list(result.values()),
-                        tips=[id_ for id_ in result if id_ not in parents],
-                        deduplication={id_: canonical_events(r) for id_, r in result.items()
-                                       if r['type'] == 'Story' and id_ not in parents})
+        return self.read_snapshot(project_id)[0]
 
     def pin(self, project_id, artifact_id, commit_id=None):
         ws = self.artifacts.workspace(project_id)
@@ -78,7 +80,8 @@ class Reporting:
             return result
 
     def apply(self, request, operation_id, *, confirm=False, checkpoint=lambda stage: None,
-              _assistance=None, _validate_only=False, _generation=None):
+              _assistance=None, _validate_only=False, _generation=None, _source_capture=None, _capture_guard=lambda *args:None,
+              _publication_guard=lambda *args:None, _output=None):
         """Store new revisions; request and approval are frozen by transact's digest.
 
         IDs for the revision and Markdown sibling derive from operation_id, so
@@ -89,12 +92,21 @@ class Reporting:
         fields(request, 'project_id base_head records')
         uuid(request['project_id']); hex_id(request['base_head'], True); uuid(operation_id)
         require(type(confirm) is bool, 'Invalid confirmation flag')
-        require(isinstance(request['records'], list) and 1 <= len(request['records']) <= 32,
-                'Expected 1 to 32 reporting revisions')
+        require(isinstance(request['records'], list) and 1 <= len(request['records']) <= (500 if _source_capture else 32),
+                'Reporting batch exceeds limit')
         request = deepcopy(request)
         ws = self.artifacts.workspace(request['project_id'])
         author = ProjectCreation(self.node_path).author_id()
         intent = dict(request, action='manual-reporting-v1', author_id=author, confirmed=confirm)
+        if _output is not None:
+            _output=deepcopy(_output)
+            fields(_output,'title built_at')
+            require(isinstance(_output['title'],str) and 0<len(_output['title'])<=200,'Invalid report output title')
+            from spikes.reporting_schema import moment
+            moment(_output['built_at'])
+            require(len(request['records'])==1 and request['records'][0]['type']=='ReportSnapshot','Output metadata requires one report')
+            intent['output']=deepcopy(_output)
+        if _source_capture is not None:intent['source_capture']=deepcopy(_source_capture)
         if _generation is not None:
             intent['generation']=deepcopy(_generation)
         assistance = deepcopy(_assistance)
@@ -109,8 +121,31 @@ class Reporting:
             files = workspace.git.snapshot(head)
             entities = validate_snapshot(files)
             existing = records(files, entities)
+            _publication_guard(workspace,files,entities)
             now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             changes = {}
+            raw_ref=None
+            if _source_capture is not None:
+                _capture_guard(workspace,files,entities)
+                fields(_source_capture,'raw url definition_ref input_id mime')
+                from spikes.source_collector import public_url
+                public_url(_source_capture['url'])
+                raw=base64.b64decode(_source_capture['raw'],validate=True)
+                require(0<len(raw)<=512*1024,'RSS capture exceeds limit')
+                raw_id=operation_uuid(operation_id,'rss-raw');raw_path=f'artifacts/{raw_id}/original.xml'
+                require(raw_id not in entities,'RSS capture artifact ID already exists')
+                raw_ref=dict(artifact_id=raw_id,path=raw_path,sha256=digest(raw),at='same-commit')
+                privacy=request['records'][0]['privacy']
+                require(all(s['type']=='SourceFinding' and s['privacy']==privacy and
+                    s['value']['definition_ref']==_source_capture['definition_ref'] and s['value']['input_id']==_source_capture['input_id']
+                    for s in request['records']),'RSS capture batch scope mismatch')
+                changes[raw_path]=raw
+                changes[f'artifacts/{raw_id}/metadata.json']=encoded(dict(schema_version=2,id=raw_id,title='Zachycený RSS kanál',
+                    kind='source',created_at=now,author_id=author,privacy=privacy,provenance='external',file='original.xml',
+                    source_url=_source_capture['url'],tags=['untrusted-external','rss-capture'],
+                    **{'import':dict(imported_at=now,imported_by=author,content_sha256=digest(raw),
+                        importer=dict(name='rss-monitoring',version='1'),
+                        **({'source_mime_type':_source_capture['mime']} if _source_capture['mime'] else {}))}))
             if assistance is not None:
                 # Application-owned audit, never a model-selected path. Exact
                 # context projection and instruction survive loss of the backend journal;
@@ -132,6 +167,14 @@ class Reporting:
                 value = deepcopy(spec['value'])
                 require(isinstance(value, dict), 'Invalid reporting value')
                 previous = spec['previous']
+                if spec['type']=='SourceFinding':
+                    require(value['item']['provenance']['raw_sha256']==(raw_ref or value['raw_ref'])['sha256'],'RSS capture hash differs')
+                    if raw_ref is not None:value['raw_ref']=deepcopy(raw_ref)
+                    value['item']['imported_at']=now
+                    if assistance is not None:
+                        audit_path=f'artifacts/{operation_uuid(operation_id,"assistance")}/assistance.json'
+                        value['selection']['evaluation_ref']=dict(artifact_id=operation_uuid(operation_id,'assistance'),
+                            path=audit_path,sha256=digest(changes[audit_path]),at='same-commit')
                 require(isinstance(previous, list), 'Invalid predecessors')
                 old_decisions = []
                 for parent in previous:
@@ -140,6 +183,8 @@ class Reporting:
                     require(before is not None and before['entity_id'] == entity_id, 'Unknown predecessor')
                     if spec['type'] in {'Event', 'Source'}:
                         value['imported_at'] = before['value']['imported_at']
+                    if spec['type']=='SourceFinding':
+                        for key in ('imported_at','discovered_at'):value['item'][key]=before['value']['item'][key]
                     if spec['type'] == 'Story':
                         old_decisions.extend(before['value']['decisions'])
                 if not previous and spec['type'] in {'Event', 'Source'}:
@@ -178,7 +223,7 @@ class Reporting:
                     value['generation']['result_sha256'] = digest(markdown)
                     changes[path] = markdown
                     changes[f'artifacts/{md_id}/metadata.json'] = encoded(dict(
-                        schema_version=1, id=md_id, title='Reporting — Markdown', kind='snapshot',
+                        schema_version=1, id=md_id, title=_output['title'] if _output else 'Reporting — Markdown', kind='snapshot',
                         created_at=now, author_id=author, privacy=spec['privacy'], provenance='snapshot', file='report.md'))
                 else:
                     require('markdown' not in spec, 'Markdown belongs to a publication')
@@ -189,8 +234,11 @@ class Reporting:
                 # pinned dependency in provenance, never an application-made guess.
                 record['provenance']['inputs'] = list({encoded(r): r for r in references(value)
                                                        if 'commit_id' in r}.values())
+                if spec['type']=='SourceFinding' and _source_capture is not None:
+                    record['provenance']['method']='import'
                 if assistance is not None:
-                    require(spec['type'] in {'Event', 'Story', 'EvidenceAssessment'},
+                    require(spec['type'] in {'Event', 'Story', 'EvidenceAssessment'} or
+                            (spec['type']=='SourceFinding' and assistance['audit'].get('schema')=='fpw-monitoring-evaluation-v1'),
                             'Assistance cannot change definitions or publish reports')
                     require(PRIVACY[spec['privacy']] >= PRIVACY[assistance['context_privacy']],
                             'Assisted reporting privacy would be relaxed')
@@ -204,10 +252,14 @@ class Reporting:
                 require(id_ not in entities, 'Revision ID already exists')
                 changes[f'artifacts/{id_}/record.json'] = encoded(record)
                 changes[f'artifacts/{id_}/metadata.json'] = encoded(dict(
-                    schema_version=1, id=id_, title=value.get('title', spec['type']),
+                    schema_version=1, id=id_, title=_output['title'] if _output and spec['type']=='ReportSnapshot' else value.get('title', (value['item']['title'] or 'RSS nález')[:180] if spec['type']=='SourceFinding' else spec['type']),
                     kind='snapshot' if spec['type'] == 'ReportSnapshot' else 'document', created_at=now,
                     author_id=author, privacy=spec['privacy'],
-                    provenance='llm-transformed' if assistance else 'user', file='record.json', tags=[SCHEMA]))
+                    provenance='external' if spec['type']=='SourceFinding' else ('llm-transformed' if assistance else 'user'), file='record.json', tags=[SCHEMA]))
+            if _output is not None:
+                from spikes.report_outputs import BUILT_PREFIX
+                metadata_path=f'artifacts/{operation_uuid(operation_id,"record:0")}/metadata.json'
+                metadata=json.loads(changes[metadata_path]);metadata['description']=BUILT_PREFIX+_output['built_at'];changes[metadata_path]=encoded(metadata)
             return changes, 'Local workspace author', author + '@local.invalid', 'Record manual reporting revisions'
 
         if _validate_only:

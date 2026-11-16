@@ -3,6 +3,7 @@
 #
 """Executable M0 schema and bounded metadata parsing, independent of storage."""
 from datetime import datetime
+from collections import OrderedDict
 import hashlib
 import json
 from pathlib import PurePosixPath
@@ -359,7 +360,55 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     return meta
 
 
+class _SnapshotMetadataCache:
+    """Intrinsic metadata/record checks, never contextual graph or authority."""
+    def __init__(self, *, max_entries=1024, max_bytes=8 * 1024 * 1024):
+        require(type(max_entries) is int and 0 < max_entries <= 1024
+                and type(max_bytes) is int and 0 < max_bytes <= 8 * 1024 * 1024,
+                'Invalid metadata cache limits')
+        self.entries = OrderedDict()
+        self.size = 0
+        self.max_entries, self.max_bytes = max_entries, max_bytes
+
+    def metadata(self, data, *, sidecar=False, registry=None, markdown=False):
+        key = (sidecar, registry, markdown, data)
+        if key in self.entries:
+            self.entries.move_to_end(key)
+            return self.entries[key]
+        value = validate_metadata(frontmatter(data) if markdown else parse_json(data),
+                                  sidecar=sidecar, registry=registry)
+        self._store(key, value)
+        return value
+
+    def _store(self, key, value):
+        data = key[3]
+        if len(data) <= self.max_bytes:
+            if key in self.entries:
+                self.entries.pop(key); self.size -= len(data)
+            while self.entries and (len(self.entries) >= self.max_entries
+                                    or self.size + len(data) > self.max_bytes):
+                old, _ = self.entries.popitem(last=False)
+                self.size -= len(old[3])
+            self.entries[key] = value
+            self.size += len(data)
+
+    def record(self, data):
+        key = ('reporting', None, None, data)
+        value = self.entries.get(key)
+        if value is not None:
+            self.entries.move_to_end(key)
+        return value
+
+    def remember_record(self, data, value):
+        self._store(('reporting', None, None, data), value)
+
+
 def validate_snapshot(files):
+    """Validate the complete projection; never trust a previous request's result."""
+    return _validate_snapshot(files)
+
+
+def _validate_snapshot(files, *, metadata_cache=None):
     """Validate artifact/registry projection only; project/node configuration is separate."""
     require(len(files) <= 10000 and sum(len(v) for v in files.values()) <= MAX_SNAPSHOT,
             'Snapshot exceeds PoC limits')
@@ -378,14 +427,17 @@ def validate_snapshot(files):
             groups.setdefault(parts[1], {})[parts[2]] = data
         elif parts[0] == 'registries':
             require(parts[1] in STATES and parts[2].endswith('.json'), 'Invalid registry path')
-            meta = validate_metadata(parse_json(data), registry=parts[1])
+            meta = (metadata_cache.metadata(data, registry=parts[1]) if metadata_cache is not None
+                    else validate_metadata(parse_json(data), registry=parts[1]))
             require(parts[2] == meta['id'] + '.json', 'Registry filename must match ID')
             insert(meta)
         else:
             raise ValidationError('Unsupported snapshot path')
     for artifact_id, entries in groups.items():
         if 'metadata.json' in entries:
-            meta = validate_metadata(parse_json(entries['metadata.json']), sidecar=True)
+            meta = (metadata_cache.metadata(entries['metadata.json'], sidecar=True)
+                    if metadata_cache is not None else
+                    validate_metadata(parse_json(entries['metadata.json']), sidecar=True))
             require(set(entries) == {'metadata.json', meta['file']}, 'Missing or extra sidecar content')
             if meta['schema_version'] == 2 and meta['kind'] == 'source':
                 digest = hashlib.sha256(entries[meta['file']]).hexdigest()
@@ -400,7 +452,8 @@ def validate_snapshot(files):
             require(len(entries) == 1, 'Expected one Markdown artifact')
             name, data = next(iter(entries.items()))
             require(name.endswith('.md'), 'Binary artifact needs sidecar')
-            meta = validate_metadata(frontmatter(data))
+            meta = (metadata_cache.metadata(data, markdown=True) if metadata_cache is not None
+                    else validate_metadata(frontmatter(data)))
             require(not (meta['schema_version'] == 2 and meta['kind'] == 'source'),
                     'External v2 source requires sidecar metadata')
         require(meta['id'] == artifact_id, 'Artifact directory must match ID')
@@ -409,7 +462,7 @@ def validate_snapshot(files):
         for relation in meta.get('relations', []):
             require(relation['target_id'] in entities, 'Dangling relation')
     from spikes.reporting_schema import records
-    records(files, entities)
+    records(files, entities, _record_cache=metadata_cache)
     from spikes.reference_schema import references
     references(files, entities)
     return entities
@@ -419,8 +472,15 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
     """Enforce invariants that require comparing two valid project snapshots."""
     base = validate_snapshot(base_files)
     candidate = validate_snapshot(candidate_files)
+    return _validate_transition(base_files, candidate_files, base, candidate,
+                                allow_privacy_relaxation=allow_privacy_relaxation)
+
+
+def _validate_transition(base_files, candidate_files, base, candidate, *,
+                         allow_privacy_relaxation=False, _record_cache=None):
+    """Internal invariants over snapshots already validated in this operation."""
     from spikes.reporting_schema import immutable_transition
-    immutable_transition(base_files, candidate_files, base, candidate)
+    immutable_transition(base_files, candidate_files, base, candidate, _record_cache=_record_cache)
     from spikes.reference_schema import transition
     transition(base_files, candidate_files, base, candidate)
     privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}

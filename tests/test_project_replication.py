@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import copy
+from contextlib import closing
 import hashlib
 import http.client
 from http.server import HTTPServer
@@ -248,6 +249,39 @@ class ProjectReplicationTests(unittest.TestCase):
             scheduler.stop()
         self.assertGreaterEqual(attempts, 2)
 
+    def test_validation_timeout_after_intent_preserves_exact_operation_for_recovery(self):
+        from spikes.git_budget import GitDeadlineExceeded
+        base = self.import_source('base-timeout')
+        initial, payload, _, _ = self.prepared(None)
+        self.receive(initial, payload)
+        candidate = self.import_source('candidate-timeout')
+        update, payload, _, _ = self.prepared(base)
+        operation_id = update['request']['operation_id']
+        calls = []
+        def validation(*args, **kwargs):
+            calls.append(args[1])
+            if len(calls) == 2:
+                raise GitDeadlineExceeded('publication history budget')
+            return validate_history(*args, **kwargs)
+        with patch('spikes.project_replication.validate_history', side_effect=validation):
+            with self.assertRaises(GitDeadlineExceeded):
+                self.receive(update, payload)
+        self.assertEqual(len(calls), 2)
+        workspace = Projects(self.nodes[1]).workspace(self.project_id)
+        self.assertEqual(workspace.git.head(), base)
+        with workspace.journal.connect() as db:
+            record, done = db.execute('SELECT record,done FROM operations WHERE id=?',
+                                       (operation_id,)).fetchone()
+        self.assertEqual(done, 0)
+        self.assertEqual(json.loads(record)['operation_id'], operation_id)
+        with self.assertRaises(PendingOperation):
+            workspace.read()
+        receipt = self.receive(update, payload)
+        self.assertEqual(receipt['receipt']['operation_id'], operation_id)
+        self.assertEqual(receipt['receipt']['head'], candidate)
+        self.assertEqual(workspace.git.head(), candidate)
+        self.assertTrue(workspace.read())
+
     def test_crash_after_cas_rolls_forward_without_second_ref_effect(self):
         base = self.import_source('base')
         initial, payload, _, _ = self.prepared(None)
@@ -409,14 +443,14 @@ class ProjectReplicationTests(unittest.TestCase):
         with patch('spikes.project_replication.prepare',
                    return_value=(envelope, payload, authority, count)), \
              patch('spikes.project_replication.ssl.create_default_context'), \
-             patch('spikes.project_replication.http.client.HTTPSConnection',
+             patch('spikes.project_replication.DeadlineHTTPSConnection',
                    return_value=connection):
             result = send(self.nodes[0], self.replication_id, operation, base,
                           ca=self.base / 'unused-ca.pem', deployment='web')
         self.assertEqual(result['head'], envelope['request']['candidate_head'])
         journal = self.nodes[0].parent / ('.' + self.nodes[0].name + '.network') \
             / 'git-transfer-journal.sqlite'
-        with sqlite3.connect(journal) as db:
+        with closing(sqlite3.connect(journal)) as db, db:
             done, stored = db.execute(
                 'SELECT done,receipt FROM transfers WHERE operation_id=?',
                 (operation,)).fetchone()
@@ -440,7 +474,17 @@ class ProjectReplicationTests(unittest.TestCase):
         first = self.import_source('first-live')
         server, thread, running, tls_config = self.https_replica()
         control = ReplicationControl(self.nodes[0], deployment='web')
+        from spikes.git_budget import GitDeadlineExceeded
+        from spikes.project_replication import ReplicationBusy
+        with patch.object(ReplicationReceiver, '_validate_bundle',
+                          side_effect=GitDeadlineExceeded('validation budget')):
+            with self.assertRaises(ReplicationBusy):
+                control.synchronize(self.replication_id)
+        pending = control.statuses(self.state(0)['replications'], self.node_ids[0])[self.replication_id]
+        self.assertEqual(pending['state'], 'offline')
+        operation_id = pending['operation_id']
         result = control.synchronize(self.replication_id)
+        self.assertEqual(result['operation_id'], operation_id)
         self.assertEqual(result['state'], 'idle')
         self.assertEqual(result['last_head'], first)
         destination = self.nodes[1].parent / 'projects' / ('project-' + self.project_id)

@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Signed, grant-bound project replication with durable CAS recovery."""
+from spikes.http_request_budget import RequestReadTimeout
 import base64
 from contextlib import closing
 import hashlib
-import http.client
 import ipaddress
 import json
 import os
@@ -21,6 +21,8 @@ from urllib.parse import urlsplit
 from spikes.administration import Administration, identifier
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.federation_accounts import MappingSignatures, canonical, openssl
+from spikes.http_deadline import DeadlineHTTPSConnection
+from spikes.git_budget import GitDeadlineExceeded, git_budget
 from spikes.git_transfer import MAX_BUNDLE, git_run, validate_history
 from spikes.journal import RecoveryConflict, sync_dir
 from spikes.metadata import require
@@ -31,6 +33,8 @@ from spikes.storage import Git
 from spikes.workspace import PendingOperation
 
 
+NETWORK_TIMEOUT = 30
+
 PATH = '/v1/federation/replicate'
 CONTENT_TYPE = 'application/vnd.federated-workspace.replication-v1'
 MAX_ENVELOPE = 16 * 1024
@@ -40,6 +44,10 @@ HASH = re.compile(r'[a-f0-9]{40}|[a-f0-9]{64}')
 
 class ReplicationRejected(ValueError):
     pass
+
+
+class ReplicationBusy(TimeoutError):
+    """Temporary peer exhaustion; retain the exact prepared operation."""
 
 
 class ReplicationConflict(ValueError):
@@ -220,6 +228,7 @@ class ReplicationReceiver:
                 'Replication bundle differs from signed request')
         return request, authority
 
+    @git_budget()
     def _validate_bundle(self, request, payload, privacy):
         root = private_root(self.node)
         with tempfile.TemporaryDirectory(prefix='replication-verify-', dir=root) as directory:
@@ -564,8 +573,9 @@ def send(node, replication_id, operation_id, expected_base, *, ca=None,
     ca = Path(ca) if ca else private_root(node) / (peer['id'] + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    connection = http.client.HTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=30)
+    connection = DeadlineHTTPSConnection(
+        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+    response = None
     try:
         connection.request('POST', PATH, body=encode_body(envelope, payload), headers={
             'Content-Type': CONTENT_TYPE,
@@ -573,14 +583,19 @@ def send(node, replication_id, operation_id, expected_base, *, ca=None,
         })
         response = connection.getresponse()
         raw = response.read(MAX_ENVELOPE + 1)
+        connection.check_deadline()
         require(len(raw) <= MAX_ENVELOPE, 'Replication response exceeds limit')
         response_body = json.loads(raw)
+        if response.status == 503:
+            raise ReplicationBusy('Replication peer is busy; retry the same operation')
         if response.status == 409:
             raise ReplicationConflict('Replica reported a conflict')
         if response.status != 200:
             raise ReplicationRejected('Replication peer rejected request')
         receipt_envelope = response_body
     finally:
+        if response is not None:
+            response.close()
         connection.close()
     _verify(receipt_envelope, authority['remote']['fingerprint'], 'receipt')
     receipt = validate_receipt(receipt_envelope['receipt'])
@@ -614,6 +629,10 @@ def reply(handler):
         result = ReplicationReceiver(
             handler.server.node, handler.server.administration).receive(envelope, payload)
         return handler.reply(200, result)
+    except RequestReadTimeout:
+        raise
+    except GitDeadlineExceeded:
+        return handler.reply(503, {'error': 'Replication validation temporarily unavailable'})
     except (ReplicationConflict, RecoveryConflict, PendingOperation):
         return handler.reply(409, {'error': 'Replication conflicts with replica state'})
     except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):

@@ -98,9 +98,11 @@ class MappingSignatures:
         self.root = Path(root)
         self.key = self.root / 'federation-key.pem'
 
-    def public_key(self):
+    def public_key(self, *, initialize=True):
         marker = self.root / 'federation-key.identity'
         if not os.path.lexists(self.key):
+            if not initialize:
+                raise ValueError('Federation identity requires startup initialization')
             if os.path.lexists(marker):
                 raise ValueError('Federation private key is missing; restore the original key')
             fd, temporary = tempfile.mkstemp(prefix='.federation-key-', dir=self.root)
@@ -125,6 +127,8 @@ class MappingSignatures:
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600 or marker.read_bytes() != public:
                 raise ValueError('Federation identity changed; restore original identity')
         else:
+            if not initialize:
+                raise ValueError('Federation identity requires startup initialization')
             fd, temporary = tempfile.mkstemp(prefix='.federation-identity-', dir=self.root)
             try:
                 with os.fdopen(fd, 'wb') as handle:
@@ -134,8 +138,8 @@ class MappingSignatures:
                 os.unlink(temporary)
         return public
 
-    def identity(self):
-        public = self.public_key()
+    def identity(self, *, initialize=True):
+        public = self.public_key(initialize=initialize)
         return {'public_key': base64.b64encode(public).decode(), 'fingerprint': hashlib.sha256(public).hexdigest()}
 
     def sign(self, spec, node_id, decision='confirm'):

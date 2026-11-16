@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
+from contextlib import closing
 import json
 from pathlib import Path
 import secrets
@@ -103,7 +104,7 @@ class FederationEnrollmentTests(unittest.TestCase):
         self.assertEqual(repeated['commit_id'], first_client_commit)
         self.assertEqual(self.state(self.server_admin)['commit_id'], first_server_commit)
         self.assertNotEqual(credential.read_text(), first_token)
-        with sqlite3.connect(self.server_admin.root / 'node-credentials.sqlite') as db:
+        with closing(sqlite3.connect(self.server_admin.root / 'node-credentials.sqlite')) as db:
             self.assertEqual(db.execute(
                 'SELECT revision FROM node_credentials WHERE peer_id=?',
                 (self.state(self.client_admin)['node_id'],)).fetchone(), (2,))
@@ -120,7 +121,7 @@ class FederationEnrollmentTests(unittest.TestCase):
         self.server_admin.request(self.system_actor, {
             'action': 'set-trust', 'expected_commit': server_state['commit_id'],
             'node_id': server_peer['id'], 'trust': 'revoked'})
-        with sqlite3.connect(self.server_admin.root / 'node-credentials.sqlite') as db:
+        with closing(sqlite3.connect(self.server_admin.root / 'node-credentials.sqlite')) as db:
             self.assertIsNone(db.execute(
                 'SELECT revision FROM node_credentials WHERE peer_id=?',
                 (server_peer['id'],)).fetchone())

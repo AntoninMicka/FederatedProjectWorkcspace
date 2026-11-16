@@ -26,6 +26,74 @@ from tests import test_local_api
 
 
 class ProjectTests(unittest.TestCase):
+    def test_desktop_short_cross_window_collision_completes_without_busy_error(self):
+        import threading
+        from spikes.desktop_management import DesktopManagementHandler
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopManagementHandler,
+                         projects=self.projects) as server:
+            server.application_lane.acquire()
+            release = threading.Timer(.025, server.application_lane.release)
+            release.start()
+            try:
+                response = driver.request(server, path='/v1/projects', body=b'{}')
+                self.assertIn(b'HTTP/1.0 200', response)
+            finally:
+                release.join()
+
+    def test_desktop_diagnostics_uses_registered_node_without_server_node_attribute(self):
+        import json
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.sync_diagnostics import observed
+
+        @observed
+        def transfer(node, peer_id, project_id):
+            return None
+
+        transfer(self.node_path, AUTHOR, ENTITY)
+        driver = test_local_api.LocalAPITests()
+        for projects in (self.projects, Projects()):
+            with self.subTest(configured=projects.node_path is not None):
+                with running_api('http', handler=DesktopManagementHandler,
+                                 projects=projects) as server:
+                    self.assertFalse(hasattr(server, 'node'))
+                    response = driver.request(server, path='/v1/diagnostics/status', body=b'{}')
+                header, body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b' 200 ', header)
+                result = json.loads(body)
+                self.assertEqual(result['scope'], 'local-process')
+                if projects.node_path is None:
+                    self.assertEqual(result['sync'], [])
+                else:
+                    self.assertTrue(any(row['project_id'] == ENTITY for row in result['sync']))
+
+    def test_desktop_reserves_ui_capacity_and_rejects_busy_lane_without_waiting(self):
+        import json
+        import time
+        from spikes.desktop_management import DesktopManagementHandler
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopManagementHandler,
+                         projects=self.projects) as server:
+            self.assertEqual(server.worker_limit, 5)
+            self.assertTrue(server.http_diagnostics()['ui_capacity_reserved'])
+            server.node_preferences_lane.acquire()
+            try:
+                started = time.monotonic()
+                response = driver.request(server, path='/v1/projects', body=b'{}')
+                self.assertIn(b'HTTP/1.0 200', response)
+                response = driver.request(server, path='/v1/counter',
+                                          body=b'{"action":"increment"}')
+                self.assertIn(b'HTTP/1.0 503', response)
+                self.assertLess(time.monotonic() - started, 1.5)
+                response = driver.request(server, method='GET', path='/', body=b'')
+                self.assertIn(b'HTTP/1.0 200', response)
+                response = driver.request(server, path='/v1/diagnostics/status', body=b'{}')
+                header, body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b'HTTP/1.0 200', header)
+                self.assertTrue(json.loads(body)['http']['lanes_busy']['node_preferences_lane'])
+            finally:
+                server.node_preferences_lane.release()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='project reads ')
         self.addCleanup(self.temp.cleanup)
@@ -104,6 +172,87 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(result['artifacts'][0]['title'], 'New committed title')
         self.assertEqual(self.projects.open(OTHER)['artifacts'][0]['title'], 'Druhý projekt')
 
+    def test_initialized_reads_skip_bootstrap_and_preserve_state_bytes(self):
+        from spikes.journal import Journal
+        from spikes.storage import Index
+        previous = self.projects.open(ENTITY)
+        files = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in self.state().iterdir()}
+        with patch.object(Journal, '__init__', side_effect=AssertionError('journal bootstrap')), \
+             patch.object(Index, '__init__', side_effect=AssertionError('index bootstrap')), \
+             patch('spikes.journal.sync_dir', side_effect=AssertionError('bootstrap fsync')):
+            self.assertEqual(self.projects.open(ENTITY), previous)
+            self.assertEqual(self.projects.plan_view(ENTITY)['commit_id'], previous['commit_id'])
+        self.assertEqual({p.name: (p.read_bytes(), p.stat().st_mtime_ns)
+                          for p in self.state().iterdir()}, files)
+
+    def test_attached_read_rejects_foreign_or_empty_journal_owner_without_bootstrap(self):
+        from spikes.journal import Journal
+        self.projects.open(ENTITY)
+        path = self.state() / 'journal.sqlite'
+        for owner in ('/another/project', None):
+            with self.subTest(owner=owner):
+                with closing(sqlite3.connect(path)) as db, db:
+                    db.execute('DELETE FROM owner')
+                    if owner is not None:
+                        db.execute('INSERT INTO owner VALUES (?)', (owner,))
+                before = path.read_bytes()
+                with patch.object(Journal, '__init__', side_effect=AssertionError('unsafe bootstrap')):
+                    with self.assertRaisesRegex(ValidationError, 'Journal belongs'):
+                        self.projects.open(ENTITY)
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_desktop_http_reads_share_git_deadline_and_expiry_returns_no_view(self):
+        from spikes.request_ownership import bounded_project_requests
+        import time
+        self.projects.open(ENTITY)
+        original = Git.run
+        for read in (self.projects.open, self.projects.plan_view):
+            with self.subTest(read=read.__name__):
+                clock = [time.monotonic()]
+                deadlines = []
+                def run(git, *args, **kwargs):
+                    if git.root == self.gits[0].root:
+                        deadlines.append(git.deadline)
+                    result = original(git, *args, **kwargs)
+                    if git.root == self.gits[0].root and args == ('ls-files', '-u'):
+                        clock[0] = git.deadline + .01
+                    return result
+                with bounded_project_requests(), \
+                     patch('spikes.projects.time.monotonic', side_effect=lambda: clock[0]), \
+                     patch.object(Git, 'run', run):
+                    with self.assertRaises(TimeoutError):
+                        read(ENTITY)
+                self.assertTrue(deadlines)
+                self.assertIsNotNone(deadlines[0])
+                self.assertEqual(set(deadlines), {deadlines[0]})
+                self.assertEqual(self.gits[0].head(), self.projects.open(ENTITY)['commit_id'])
+
+    def test_project_deadline_is_not_hidden_as_optional_draft_error(self):
+        from spikes.request_ownership import bounded_project_requests
+        self.projects.open(ENTITY)
+        with bounded_project_requests(), \
+             patch('spikes.plan_draft.read_plan_draft', side_effect=TimeoutError('expired')):
+            with self.assertRaises(TimeoutError):
+                self.projects.open(ENTITY)
+
+    def test_expired_final_read_budget_cannot_return_success(self):
+        from spikes.request_ownership import bounded_project_requests
+        import time
+        self.projects.open(ENTITY)
+        original = self.projects.replication
+        for read in (self.projects.open, self.projects.plan_view):
+            with self.subTest(read=read.__name__):
+                clock = [time.monotonic()]
+                def replication(project_id):
+                    result = original(project_id)
+                    clock[0] += 31
+                    return result
+                with bounded_project_requests(), \
+                     patch('spikes.projects.time.monotonic', side_effect=lambda: clock[0]), \
+                     patch.object(self.projects, 'replication', side_effect=replication):
+                    with self.assertRaises(TimeoutError):
+                        read(ENTITY)
+
     def test_project_history_is_head_bound_and_bounded(self):
         path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
         for index in range(22):
@@ -116,6 +265,71 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual(result['history']['entries'][0]['subject'], 'Change 21 <script>')
         self.assertEqual(result['history']['entries'][-1]['subject'], 'Change 2 <script>')
         self.assertTrue(all(row['author'] == 'M0 Test' for row in result['history']['entries']))
+
+    def test_batched_history_keeps_unicode_and_rejects_oversized_commit_metadata(self):
+        git = self.gits[0]
+        git.run('commit', '--allow-empty', '--author=Žluťoučký <test@example.invalid>',
+                '-m', 'Příliš žluťoučký <script>')
+        row = self.projects.open(ENTITY)['history']['entries'][0]
+        self.assertEqual(row['author'], 'Žluťoučký')
+        self.assertEqual(row['subject'], 'Příliš žluťoučký <script>')
+        git.run('commit', '--allow-empty', '-m', 'Oversized\n\n' + 'x' * (64 * 1024))
+        with self.assertRaisesRegex(ValidationError, 'Commit metadata exceeds'):
+            self.projects.open(ENTITY)
+
+    def test_unchanged_open_reuses_validated_view_without_reparsing_git_snapshot(self):
+        projects = Projects(self.node_path, network=True)
+        expected = projects.open(ENTITY)
+        with patch('spikes.workspace.Git.snapshot', side_effect=AssertionError('snapshot reread')), \
+             patch('spikes.workspace.project_task_graph', side_effect=AssertionError('graph rebuilt')):
+            value = projects.open(ENTITY)
+            self.assertEqual(value, expected)
+            value['history']['entries'][0]['subject'] = 'Forged in caller'
+            value['artifacts'].clear()
+            self.assertEqual(projects.open(ENTITY), expected)
+
+    def test_cached_open_still_rejects_forged_index_and_dirty_configuration(self):
+        self.projects.open(ENTITY)
+        with closing(sqlite3.connect(self.state() / 'index.sqlite')) as db, db:
+            db.execute("UPDATE entities SET title='Forged'")
+        with self.assertRaises(ValidationError):
+            self.projects.open(ENTITY)
+        (self.state() / 'index.sqlite').unlink()
+        self.projects.open(ENTITY)
+        config = self.gits[0].root / 'project.json'
+        config.write_bytes(config.read_bytes() + b' ')
+        with self.assertRaisesRegex(ValidationError, 'Working project.json differs'):
+            self.projects.open(ENTITY)
+
+    def test_cache_tracks_head_and_never_reuses_local_view_for_network_privacy(self):
+        first = self.projects.open(ENTITY)
+        meta = metadata('Changed'); meta['privacy'] = 'local-only'
+        path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
+        path.write_bytes(markdown(meta)); self.gits[0].commit('New private revision')
+        current = self.projects.open(ENTITY)
+        self.assertNotEqual(current['commit_id'], first['commit_id'])
+        self.assertEqual(current['artifacts'][0]['title'], 'Changed')
+        with self.assertRaises(ValidationError):
+            Projects(self.node_path, network=True).open(ENTITY)
+
+    def test_git_replacement_disables_cached_view(self):
+        first = self.projects.open(ENTITY)
+        path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
+        path.write_bytes(markdown(metadata('Changed')))
+        head = self.gits[0].commit('Changed revision'); self.projects.open(ENTITY)
+        self.gits[0].run('replace', head, first['commit_id'])
+        with self.assertRaises(ValidationError):
+            self.projects.open(ENTITY)
+
+    def test_cached_project_has_fresh_local_change_hint_without_snapshot_reread(self):
+        projects = Projects(self.node_path, network=True)
+        self.assertFalse(projects.open(ENTITY)['conflict_summary']['local_changes'])
+        path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
+        original = path.read_bytes(); path.write_bytes(original + b'\nWorking edit\n')
+        with patch('spikes.workspace.Git.snapshot', side_effect=AssertionError('snapshot reread')):
+            self.assertTrue(projects.open(ENTITY)['conflict_summary']['local_changes'])
+            path.write_bytes(original)
+            self.assertFalse(projects.open(ENTITY)['conflict_summary']['local_changes'])
 
     def test_invalid_registration_and_config_do_not_initialize_state(self):
         original = deepcopy(self.node)
@@ -175,6 +389,8 @@ class ProjectTests(unittest.TestCase):
         path.write_bytes(markdown(meta));self.gits[0].commit('Local-only source')
         with self.assertRaises(ValidationError):
             Projects(self.node_path,network=True).plan_view(ENTITY)
+        with self.assertRaises(ValidationError):
+            Projects(self.node_path,network=True).dashboard_view(ENTITY)
 
     def test_interrupted_initialization_and_rebuild_can_be_retried(self):
         with patch('spikes.workspace.Index', side_effect=RuntimeError('before index initialization')):

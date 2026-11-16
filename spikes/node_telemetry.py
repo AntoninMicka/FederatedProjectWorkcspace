@@ -11,6 +11,7 @@ import subprocess
 import threading
 import time
 
+from spikes.request_ownership import bounded_process_lock
 from spikes.metadata import require
 
 
@@ -256,7 +257,7 @@ class NodeTelemetry:
     def snapshot(self, group='all'):
         require(group in {'all', 'activity', 'capacity'},
                 'Unknown node telemetry group')
-        with self._lock:
+        with bounded_process_lock(self._lock, resource='Node telemetry'):
             sampled = self.clock()
             activity = group in {'all', 'activity'}
             capacity = group in {'all', 'capacity'}

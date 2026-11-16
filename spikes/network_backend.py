@@ -30,6 +30,9 @@ class _PrivateNetworkAccess:
 
 class ProbeHandler(WebHandler):
     def do_POST(self):
+        from spikes.sync_fingerprint import PATH as STATE_PATH, reply as reply_state
+        if self.path == STATE_PATH:
+            return reply_state(self)
         if self.path == PATH:
             return reply_probe(self)
         from spikes.project_replication import PATH as REPLICATION_PATH, reply

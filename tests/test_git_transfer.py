@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.git_transfer import validate_history
@@ -14,6 +15,44 @@ from spikes.storage import Git
 
 
 class GitTransferHistoryTests(unittest.TestCase):
+    def test_linear_history_reads_each_snapshot_once_per_validation(self):
+        from spikes.metadata import _validate_snapshot
+        commits = self.git.run('rev-list', self.git.head()).stdout.splitlines()
+        with patch.object(self.git, 'snapshot', wraps=self.git.snapshot) as read, \
+             patch('spikes.git_transfer._validate_snapshot', wraps=_validate_snapshot) as validate:
+            self.assertEqual(validate_history(self.git, self.git.head(), self.project_id), len(commits))
+        self.assertEqual(validate.call_count, len(commits))
+        self.assertEqual([call.args[0] for call in read.call_args_list], commits)
+        # A later transfer must read and validate again, not trust an old cache.
+        with patch.object(self.git, 'snapshot', wraps=self.git.snapshot) as read:
+            validate_history(self.git, self.git.head(), self.project_id)
+        self.assertEqual([call.args[0] for call in read.call_args_list], commits)
+
+    def test_history_cannot_return_success_after_semantic_validation_expires(self):
+        import time
+        from spikes.git_budget import GitDeadlineExceeded
+        from spikes.reporting_schema import validate_git
+        clock = [time.monotonic()]
+        original_head = self.git.head()
+        def delayed_validation(*args, **kwargs):
+            result = validate_git(*args, **kwargs)
+            clock[0] += 61
+            return result
+        with patch('spikes.git_budget.time.monotonic', side_effect=lambda: clock[0]), \
+             patch('spikes.reporting_schema.validate_git', side_effect=delayed_validation):
+            with self.assertRaises(GitDeadlineExceeded):
+                validate_history(self.git, original_head, self.project_id)
+        self.assertEqual(self.git.head(), original_head)
+        self.assertGreaterEqual(validate_history(self.git, original_head, self.project_id), 2)
+
+    def test_unchanged_blobs_are_not_read_again_for_each_historical_snapshot(self):
+        self.git.run('commit', '--allow-empty', '-m', 'Unchanged artifacts')
+        with patch.object(self.git, 'run', wraps=self.git.run) as run:
+            self.assertEqual(validate_history(self.git, self.git.head(), self.project_id), 3)
+        batches = [call for call in run.call_args_list
+                   if call.args[:2] == ('cat-file', '--batch')]
+        self.assertEqual(len(batches), 1)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         base = Path(self.temp.name)
@@ -36,6 +75,14 @@ class GitTransferHistoryTests(unittest.TestCase):
         metadata.write_text(json.dumps(value, sort_keys=True, indent=2) + '\n')
         self.git.commit('Bypass application invariant')
         with self.assertRaisesRegex(ValueError, 'Immutable source'):
+            validate_history(self.git, self.git.head(), self.project_id)
+
+    def test_changed_and_reverted_project_blob_cannot_hide_wrong_historical_identity(self):
+        path = self.root / 'project.json'; original = path.read_bytes()
+        value = json.loads(original); value['id'] = str(uuid4())
+        path.write_text(json.dumps(value)); self.git.commit('Wrong historical project ID')
+        path.write_bytes(original); self.git.commit('Restore project ID')
+        with self.assertRaisesRegex(ValueError, 'Registered project ID differs'):
             validate_history(self.git, self.git.head(), self.project_id)
 
 

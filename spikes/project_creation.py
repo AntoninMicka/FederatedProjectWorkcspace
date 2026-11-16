@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """Recoverable creation of a new local project, separate from artifact mutations."""
+from spikes.request_ownership import bounded_flock, bounded_project_wait, ProjectBusy
 from contextlib import contextmanager
 import ctypes
 from datetime import datetime, timezone
@@ -186,6 +187,8 @@ class ProjectCreation:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
+                if bounded_project_wait.get():
+                    raise ProjectBusy('Node project registry is busy', resource='node-operations') from exc
                 raise CreationConflict('Jiná operace uzlu právě probíhá. Zkuste to později.') from exc
             fd = os.open(self.database, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             os.close(fd)
@@ -718,7 +721,7 @@ class ProjectCreation:
               'Projektový stav je mimo filesystem nového umístění.')
         lock_fd = os.open(state / 'writer.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         with os.fdopen(lock_fd, 'a+b') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+            bounded_flock(lock, fcntl.LOCK_EX, resource='Project relocation')
             journal = state / 'journal.sqlite'
             regular(journal)
             with sqlite3.connect(journal, timeout=2) as project_db:

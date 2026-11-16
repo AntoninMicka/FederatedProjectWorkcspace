@@ -10,6 +10,72 @@ const {execFileSync} = require('node:child_process');
 const crypto = require('node:crypto');
 const bridge = require('../extensions/workspace-bridge/bridge');
 
+test('connection transport waits for EOF, bounds its queue and recovers after rejection', async t => {
+  const http = require('node:http');
+  const seen = [];
+  let finishFirst, firstSeen;
+  const entered = new Promise(resolve => { firstSeen = resolve; });
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      const request = JSON.parse(body);
+      seen.push(request.action);
+      if (request.action === 'hold') {
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        res.write('{');
+        finishFirst = () => res.end('"ok":true}');
+        firstSeen();
+      } else if (request.action === 'reject') {
+        res.writeHead(422); res.end('{"error":"refused"}');
+      } else res.end('{"ok":true}');
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const pairing = {schema_version: 2, connection_id: crypto.randomUUID(), token: 'a'.repeat(43),
+    name: 'Test', expires_at: Math.floor(Date.now()/1000) + 1000,
+    endpoint: `http://127.0.0.1:${server.address().port}`};
+  const first = bridge.connectionRequest(pairing, {action: 'hold'});
+  await entered;
+  const refused = assert.rejects(bridge.connectionRequest(pairing, {action: 'reject'}), /422/);
+  const following = Array.from({length: 30}, () => bridge.connectionRequest(pairing, {action: 'status'}));
+  await assert.rejects(bridge.connectionRequest(pairing, {action: 'overflow'}), /plná/);
+  // Another connection progresses while this one waits for response EOF.
+  await bridge.connectionRequest({...pairing, connection_id: crypto.randomUUID()}, {action: 'other'});
+  assert.deepEqual(seen, ['hold', 'other']);
+  finishFirst();
+  assert.deepEqual(await first, {ok: true});
+  await refused;
+  await Promise.all(following);
+  assert.equal(seen.filter(action => action === 'status').length, 30);
+  await bridge.connectionRequest(pairing, {action: 'after'});
+  assert.equal(seen.at(-1), 'after');
+});
+
+test('expired queued requests never dispatch and do not break the next request', async t => {
+  const http = require('node:http');
+  let finish, firstSeen, calls = 0;
+  const entered = new Promise(resolve => { firstSeen = resolve; });
+  const server = http.createServer((req, res) => {
+    req.resume();
+    if (++calls === 1) { finish = () => res.end('{}'); firstSeen(); }
+    else res.end('{}');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const pairing = {schema_version: 2, connection_id: crypto.randomUUID(), token: 'a'.repeat(43),
+    name: 'Test', expires_at: Math.floor(Date.now()/1000) + 1000,
+    endpoint: `http://127.0.0.1:${server.address().port}`};
+  const first = bridge.connectionRequest(pairing, {action: 'hold'});
+  await entered;
+  await assert.rejects(bridge.connectionRequest(pairing, {action: 'expired'}), /nebyl odeslán/);
+  assert.equal(calls, 1);
+  finish(); await first;
+  await bridge.connectionRequest(pairing, {action: 'next'});
+  assert.equal(calls, 2);
+});
+
 test('HTTP retries only pre-dispatch busy responses and bounds persistent overload', async t => {
   const http = require('node:http');
   let calls = 0, mode = 'recover';

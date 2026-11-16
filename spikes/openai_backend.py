@@ -22,9 +22,11 @@ from spikes.metadata import require, uuid
 from spikes.model_catalog import (ModelDiscoveryStore, ModelKnowledgeStore,
                                   project_catalog)
 from spikes.ollama_backend import BACKENDS, BackendRuns, OllamaAdapter
+from spikes.provider_deadline import MAX_PROVIDER_TIMEOUT, provider_connection
 
 
 OPENAI_ENDPOINT = 'https://api.openai.com/v1/responses'
+# Model discovery only; run bindings use MAX_PROVIDER_TIMEOUT.
 OPENAI_TIMEOUT = 180
 MAX_RESPONSE = 16 * 1024 * 1024
 MAX_MODEL_RESPONSE = 1024 * 1024
@@ -87,7 +89,7 @@ class OpenAIBinding:
                 and 1 <= value['max_output_tokens'] <= 128000,
                 'Invalid OpenAI output token limit')
         require(type(value['timeout_seconds']) is int
-                and 1 <= value['timeout_seconds'] <= OPENAI_TIMEOUT,
+                and 1 <= value['timeout_seconds'] <= MAX_PROVIDER_TIMEOUT,
                 'Invalid OpenAI timeout')
         return cls(value['binding_id'], value['revision'], value['endpoint'],
                    value['model'], value['target_id'], value['credential_ref'],
@@ -343,7 +345,8 @@ class OpenAIModelCatalog:
     @staticmethod
     def _http_transport(binding, secret):
         connection = http.client.HTTPSConnection('api.openai.com', 443,
-            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+            timeout=min(binding.timeout_seconds, OPENAI_TIMEOUT),
+            context=ssl.create_default_context())
         try:
             connection.request('GET', '/v1/models',
                 headers={'Authorization': 'Bearer ' + secret})
@@ -503,8 +506,14 @@ class OpenAIAdapter:
     def _response(value, binding):
         require(isinstance(value, dict) and set(value) >= {'id', 'status', 'model', 'output'},
                 'Invalid OpenAI response')
-        require(value['status'] == 'completed' and value['model'] == binding.model,
-                'OpenAI response did not complete with the requested model')
+        require(value['model'] == binding.model,
+                'OpenAI response model differs from the requested model')
+        if value['status'] != 'completed':
+            details = value.get('incomplete_details')
+            limited = (isinstance(details, dict)
+                       and details.get('reason') == 'max_output_tokens')
+            raise ValueError('OpenAI response exceeded max_output_tokens' if limited
+                             else 'OpenAI response did not complete')
         output = value['output']
         require(isinstance(output, list) and bool(output),
                 'OpenAI response has no output items')
@@ -541,8 +550,9 @@ class OpenAIAdapter:
 
     @staticmethod
     def _http_transport(binding, request, secret):
-        connection = http.client.HTTPSConnection('api.openai.com', 443,
-            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        connection = provider_connection(http.client.HTTPSConnection('api.openai.com', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context()),
+            binding.timeout_seconds)
         try:
             connection.request('POST', '/v1/responses', body=request,
                 headers={'Authorization': 'Bearer ' + secret,
@@ -563,8 +573,9 @@ class OpenAIAdapter:
 
     @staticmethod
     def _http_stream_transport(binding, request, secret, on_delta):
-        connection = http.client.HTTPSConnection('api.openai.com', 443,
-            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        connection = provider_connection(http.client.HTTPSConnection('api.openai.com', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context()),
+            binding.timeout_seconds, stream=True)
         try:
             connection.request('POST', '/v1/responses', body=request,
                 headers={'Authorization': 'Bearer ' + secret,
@@ -602,7 +613,7 @@ class OpenAIAdapter:
                         delta = event.get('delta')
                         require(isinstance(delta, str), 'Invalid OpenAI text delta')
                         deltas.append(delta); on_delta(delta)
-                    elif event['type'] == 'response.completed':
+                    elif event['type'] in {'response.completed', 'response.incomplete'}:
                         require(completed is None and isinstance(event.get('response'), dict),
                                 'Invalid OpenAI completed event')
                         completed = event['response']

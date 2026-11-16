@@ -3,6 +3,8 @@
 import base64
 import hashlib
 import json
+import sqlite3
+from contextlib import closing
 import os
 from pathlib import Path
 import stat
@@ -282,6 +284,88 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             prepared['operation_id'], self.node_id, self.user_id)['freshness'])
         self.assertFalse((self.state / 'output-materializations' /
                           prepared['operation_id']).exists())
+
+    def test_http_lock_and_sqlite_contention_preserve_prepared_julia_operation(self):
+        from spikes.request_ownership import ProjectBusy, bounded_project_requests
+        path = self.publish_definition()
+        service = JuliaWorkspaceService(self.node, Projects(self.node),
+            executor_factory=lambda git: JuliaExecutor(git=git, state_dir=self.state,
+                runtime_binding=self.binding, sandbox=DirectTestSandbox()))
+        operation_id = str(uuid4())
+        prepared = service.prepare({'operation_id': operation_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'definition_path': path, 'parameters': {'value': 42}}, user_id=self.author)
+        request = {'operation_id': operation_id, 'project_id': self.project_id,
+                   'approval_digest': prepared['approval_digest']}
+        # A held process owner cannot park an HTTP worker or start a process.
+        with service._lock:
+            started = time.monotonic()
+            with bounded_project_requests(), self.assertRaises(ProjectBusy):
+                service.execute(request, user_id=self.author)
+            self.assertLess(time.monotonic() - started, 1)
+        executor = service._executor(self.project_id)
+        with closing(sqlite3.connect(executor.store.path)) as owner:
+            owner.execute('BEGIN EXCLUSIVE')
+            started = time.monotonic()
+            with bounded_project_requests(), self.assertRaises(ProjectBusy):
+                service.execute(request, user_id=self.author)
+            self.assertLess(time.monotonic() - started, 1)
+            owner.rollback()
+        record = service.status(self.project_id, operation_id, user_id=self.author)
+        self.assertEqual(record['state'], 'prepared')
+        self.assertEqual(record['approval_digest'], prepared['approval_digest'])
+        self.assertFalse(record['worker_active'])
+        self.assertEqual(service._workers, {})
+        with executor.store.connect() as db:
+            self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 30000)
+        with bounded_project_requests(), executor.store.connect() as db:
+            self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 0)
+
+    def test_julia_http_reports_native_contention_as_unknown_without_dispatch(self):
+        import http.client
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.local_api import running_api
+        path = self.publish_definition()
+        projects = Projects(self.node)
+        service = JuliaWorkspaceService(self.node, projects,
+            executor_factory=lambda git: JuliaExecutor(git=git, state_dir=self.state,
+                runtime_binding=self.binding, sandbox=DirectTestSandbox()))
+        operation_id = str(uuid4())
+        prepared = service.prepare({'operation_id': operation_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'definition_path': path, 'parameters': {'value': 42}})
+        request = {'operation_id': operation_id, 'project_id': self.project_id,
+                   'approval_digest': prepared['approval_digest']}
+        with running_api('http', handler=DesktopManagementHandler, projects=projects) as server:
+            server.julia_workspace = service
+            def post(path, body):
+                connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+                try:
+                    connection.request('POST', path, json.dumps(body), headers={
+                        'Authorization': 'Bearer ' + server.token, 'Content-Type': 'application/json'})
+                    response = connection.getresponse()
+                    return response.status, json.loads(response.read())
+                finally:
+                    connection.close()
+            with service._lock:
+                status, payload = post('/v1/julia/execute', request)
+                self.assertEqual(status, 503, payload)
+                self.assertEqual(payload['outcome'], 'unknown')
+                self.assertEqual(payload['retry'], 'same-operation')
+            executor = service._executor(self.project_id)
+            with closing(sqlite3.connect(executor.store.path)) as owner:
+                owner.execute('BEGIN EXCLUSIVE')
+                status, payload = post('/v1/julia/execute', request)
+                self.assertEqual(status, 503, payload)
+                self.assertEqual(payload['outcome'], 'unknown')
+                owner.rollback()
+            status, record = post('/v1/julia/status',
+                                  {'project_id': self.project_id, 'operation_id': operation_id})
+            self.assertEqual(status, 200, record)
+            self.assertEqual(record['state'], 'prepared')
+            self.assertEqual(record['approval_digest'], prepared['approval_digest'])
+            self.assertFalse(record['worker_active'])
+            self.assertEqual(service._workers, {})
 
     def test_workspace_projection_confirmed_run_output_and_publication(self):
         path = self.publish_definition()

@@ -438,6 +438,22 @@ assert.ok(!q.startable(null,'A'));
         self.head=self.save(self.body+'\nExternal edit.\n')
         self.assertFalse(status(self.service,self.record)['current'])
 
+    def test_repair_retains_original_packet_and_new_packet_has_complete_selection(self):
+        original=self.packet()
+        self.head=self.save(self.body.replace('depends_on: TASK-01','depends_on: TASK-01, TASK-04')+
+                            '- [ ] [TASK-04] New prerequisite\n')
+        self.assertFalse(self.qstatus()['valid'])
+        preview=self.act('repair-preview')
+        repaired=self.act('repair',preview_sha256=preview['preview_sha256'])
+        self.assertEqual(repaired['task_ids'],['TASK-01','TASK-04','TASK-02','TASK-03'])
+        self.assertEqual(original,load(self.service,self.record['session_id'],original['packet_id']))
+        self.assertTrue(status(self.service,self.record,original)['blockers'])
+        self.request.update(expected_head=self.head,queue_revision=repaired['revision'])
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        replacement=load(self.service,self.record['session_id'])
+        self.assertNotEqual(original['packet_id'],replacement['packet_id'])
+        self.assertEqual(repaired['task_ids'],[t['id'] for t in replacement['manifest']['tasks']])
+
     def test_reordered_queue_refreshes_packet_without_mutating_history_or_acceptance(self):
         original = self.packet(); message = self.message(original); self.send(message)
         accepted = self.review(message); self.poll(); self.poll()
@@ -456,6 +472,22 @@ assert.ok(!q.startable(null,'A'));
         self.assertEqual(moved['revision'], refreshed['manifest']['queue_revision'])
         self.assertIn('TASK-01', refreshed['manifest']['accepted_task_ids'])
         self.assertEqual(original, load(self.service, self.record['session_id'], original['packet_id']))
+
+    def test_repair_removes_completed_reference_without_losing_accepted_receipt_history(self):
+        original=self.packet();message=self.message(original);self.send(message)
+        accepted=self.review(message);self.poll();self.poll()
+        preview=self.act('repair-preview');self.assertEqual(preview['removed_ids'],['TASK-01'])
+        repaired=self.act('repair',preview_sha256=preview['preview_sha256'])
+        self.assertEqual(repaired['task_ids'],['TASK-02','TASK-03']);self.assertTrue(repaired['valid'])
+        self.assertEqual(accepted['result']['commit_id'],Projects(self.node).repository(self.project).head())
+        self.assertEqual(original,load(self.service,self.record['session_id'],original['packet_id']))
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        refreshed=load(self.service,self.record['session_id'])
+        self.assertEqual(['TASK-02','TASK-03'],[t['id'] for t in refreshed['manifest']['tasks']])
+        from spikes.ide_queue import completion_reports
+        reports=completion_reports(self.node,self.project,self.owner)['TASK-01']
+        self.assertEqual(reports[0]['message_id'],message['message_id'])
+        self.assertEqual(reports[0]['outcome'],'accepted')
 
     def test_export_scope_and_wrong_owner_are_not_silently_expanded(self):
         with self.service.database() as db:

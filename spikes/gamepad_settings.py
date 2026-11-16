@@ -3,9 +3,8 @@
 """Explicitly saved, node-local presenter gamepad mapping."""
 import json
 import os
-from contextlib import closing
 from pathlib import Path
-import sqlite3
+from spikes.sqlite_ownership import sqlite_connection
 
 from spikes.journal import sync_dir
 from spikes.metadata import require
@@ -63,7 +62,8 @@ class GamepadSettings:
         if not self.path.exists():
             return dict(DEFAULT_GAMEPAD_SETTINGS)
         require(not self.path.is_symlink(), 'Nastavení gamepadu nesmí být symbolický odkaz.')
-        with closing(sqlite3.connect(f'{self.path.as_uri()}?mode=ro', uri=True)) as db:
+        with sqlite_connection(f'{self.path.as_uri()}?mode=ro', uri=True,
+                               resource='Node preferences') as db:
             exists = db.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='settings'").fetchone()
             row = db.execute('SELECT value FROM settings WHERE id=1').fetchone() if exists else None
@@ -78,7 +78,7 @@ class GamepadSettings:
             require(not self.path.is_symlink(), 'Nastavení gamepadu nesmí být symbolický odkaz.')
         else:
             os.close(fd)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Node preferences') as db:
             db.execute('PRAGMA synchronous=FULL')
             db.execute('CREATE TABLE IF NOT EXISTS settings '
                        '(id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)')

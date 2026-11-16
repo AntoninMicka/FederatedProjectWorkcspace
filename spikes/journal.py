@@ -6,9 +6,9 @@ from contextlib import contextmanager
 import fcntl
 import os
 from pathlib import Path
-import sqlite3
 import stat
 
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, safe_path, validate_snapshot
 
 
@@ -91,19 +91,23 @@ class Journal:
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.database, timeout=2)
-        db.execute('PRAGMA synchronous=FULL')
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        with sqlite_connection(self.database, resource='Project journal', timeout=2) as db:
+            db.execute('PRAGMA synchronous=FULL')
+            yield db
 
     @contextmanager
-    def lock(self):
+    def lock(self, *, shared=False):
+        from spikes.request_ownership import bounded_project_wait, ProjectBusy
         fd = os.open(self.state / 'writer.lock', os.O_CREAT | os.O_RDWR, 0o600)
         with os.fdopen(fd, 'a+b') as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX | (0 if self.blocking else fcntl.LOCK_NB))
+            bounded = bounded_project_wait.get()
+            try:
+                fcntl.flock(handle, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | (
+                    0 if self.blocking and not bounded else fcntl.LOCK_NB))
+            except BlockingIOError as exc:
+                if bounded:
+                    raise ProjectBusy('Project journal is busy', resource='project-journal') from exc
+                raise
             try:
                 yield
             finally:

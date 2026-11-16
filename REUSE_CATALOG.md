@@ -5,6 +5,67 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Oprava souběhu IDE discovery **adaptuje** existující action-based HTTP/browser
+admission a transport rozšíření. **Reuse:** `Projects.plan_view`, nativní
+projektové/SQLite zámky, původní kontrola credentials a přesný pre-dispatch
+retry. **Reject:** druhý writer, zvýšení timeoutů/workerů a automatické
+opakování neurčitého zápisu. Rozsah a recovery:
+[IDE discovery ownership](docs/http-concurrency-ownership.md#ide-connection-discovery-contention).
+
+Aktuální nástroje a čtení při synchronizaci **adaptují** existující Git
+snapshot, `Workspace.attach`, původní journal owner, reporting validátory,
+čistou funkci `pinned`, blokový editor a poolový read-only export. **Reuse:**
+nativní writer/CAS/recovery, report editions a existující bounded HTTP pool.
+**Reject:** články jako Podklady, dvojí UI varianty, dlouhá validace pod
+writer zámkem, per-blokové znovuotevírání Workspace a navýšení timeoutů.
+Soukromá inventura nedává důvod přebírat externí implementaci. Rozsah,
+crash boundaries a omezení:
+[monitoring read isolation](docs/current-monitoring-read-isolation.md).
+
+
+Změnové otisky automatické synchronizace **adaptují** podepsané katalogové
+požadavky, TLS pinning, původní sync journal a přesný replay. **Reuse:**
+normalizovaný inventář chatů, poolový portable filtr a read-only Git handle.
+**Reject:** mtime jako autorita, druhý writer/journal, vypnutí sémantické
+validace a potvrzování novějších dat starým ACK. Lokální inventura nedává
+důvod k přenosu externího kódu. Protokol, kompatibilita a crash boundaries:
+[ADR 0081](docs/adr/0081-complete-project-data-sync.md).
+
+
+Příjem nové sync operace **adaptuje** původní `_apply`: po první úplné
+validaci používá v témže volání privátní publikační část se stejnými bajty,
+opětovnou kontrolou integrity a živých oprávnění. **Reuse:** receive zámek,
+Workspace/CAS a původní journal/recovery. **Reject:** druhý průchod totožné
+Git historie v jednom příjmu, cache mezi requesty a veřejný přepínač
+pro vypnutí validace. Scope: [ADR 0081](docs/adr/0081-complete-project-data-sync.md).
+Stejné ověřené Git bajty se mohou vrátit původnímu peeru jako odpověď pouze
+v téže operaci a při shodě projektu, identit/fingerprintu, scope a všech
+aktuálních ref/head pod writer zámkem. Jiný stav používá původní exportní
+validaci; chaty/pooly se tímto způsobem necacheují.
+
+Dokončený content-sync replay **adaptuje** stávající inbound journal,
+přesnou shodu požadavku a oddělení validace payloadu od průchodu Git historií.
+**Reuse:** podpisy a původní lokální identita, současný branch scope, mapování
+chatů, pool validátor a receive zámek. **Reject:** neověřená obecná cache,
+nový formát/journal, změna odpovědi pod stejným ID a automatický retry.
+Oprávnění a recovery: [doplnění ADR 0081](docs/adr/0081-complete-project-data-sync.md).
+
+HTTP oprava z 9. 11. 2026 **adaptuje** existující bounded admission,
+browserové Web Locks, read-only autentizaci, katalog Git snapshotů a vzor
+uzlového `flock`. **Reuse:** Workspace writer/journal/CAS, sync replay,
+prezentační sessions a shutdown. **Reject:** druhý writer/job journal,
+plošné odstranění zámku, navyšování timeoutů/workerů a automatické retry.
+Rozsah inventury, vlastnictví a crash boundaries:
+[HTTP concurrency audit](docs/http-concurrency-ownership.md).
+
+Vestavěná diagnostika synchronizace a rezervace webového UI **adaptují**
+stávající bounded HTTP pool, administrační oprávnění, read-only autentizaci,
+panel sdílení a původní sync lifecycle. Pozorování používá stdlib
+`ContextVar`, omezenou paměťovou mapu a bezpečný logger služby. Nový daemon,
+druhý writer, diagnostická databáze a automatický retry jsou **reject**;
+soukromá inventura nedává důvod přebírat externí implementaci.
+Hranice a recovery: [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md).
+
 `F-M5-FULL-DATA-SYNC-01` **reuse/adaptuje** nativní bundle transport,
 `validate_history`, reportingové `validate_git`, původní peer/branch policy,
 sync journal a Workspace CAS/Index recovery. Stejný přesný bundle se sémanticky
@@ -17,6 +78,22 @@ externí kód se nepřebírá. Scope/recovery:
 [ADR 0081](docs/adr/0081-complete-project-data-sync.md).
 
 Katalog verzovaný v Gitu obsahuje technologie, komponenty tohoto workspace a pouze externí zdrojové repozitáře s ověřenou veřejnou dostupností.
+
+MON-08, samostatné bloky a pooly **adaptují** Reporting/Workspace revize,
+source connector, RSS transport a HTTP validátory, izolovaný evaluator,
+ContextBuilder, existující backend run journal a podepsaný federation exchange.
+Nová autoritativní kolekce mimo Git synchronizuje logické množiny, nikoli SQLite
+soubor či místní granty. **Reject:** nový Git writer, RSS leader, implicitní
+modelový dispatch a přepis starších sledování. Hranice a recovery:
+[ADR 0082](docs/adr/0082-composable-monitoring-and-message-pools.md).
+
+MON-08-10 **reuse/adaptuje** Reporting/Workspace transakce a CAS receipts,
+původní RSS a reporting journal, již existující worker locks, pool set-union
+import a společný formulářový renderer. Přesný původní náhled je frozen
+migration intent; podpůrné SQLite se nekopíruje. **Reject:** druhý Git writer,
+přepis původní historie, odhad RSS URL z obecné stránky, zploštění reportového
+řetězce bez explicitního mapování a automatická aktivace nových bloků.
+Scope/recovery: [ADR 0083](docs/adr/0083-one-time-monitoring-migration.md).
 
 ## Externí zdrojové repozitáře
 
@@ -493,6 +570,21 @@ writer a externí sync framework byly odmítnuty. Soukromá inventura nenabídla
 komponentu se shodnou branch policy, Git autoritou a crash hranicemi.
 Rozhodnutí: [ADR 0042](docs/adr/0042-bidirectional-native-git-sharing-sync.md).
 
+Výkonová oprava nečinného synchronizování **reuse/adaptuje** původní
+`last_sent.refs` a podepsané `known_remote_refs`, inventuru větví a writer lock:
+Git export, který by byl následně zahozen, se přesně při shodě inventáře vůbec
+nevytváří. Nevzniká persistentní validační cache ani další transport.
+Polling monitoringu adaptuje stávající explicitní načítání a viditelnost panelu;
+automatické čtení nepřekrývá rozpracované čtení ani editaci. Uložení stále vyvolá
+nové čtení, nesdílí starou odpověď před zápisem. Nový scheduler/framework není potřeba.
+
+Otevírání projektu **reuse/adaptuje** nativní `git cat-file --batch-check` a
+`git log --no-walk=unsorted -z` pro původních nejvýše 20 historických commitů.
+Zůstává přesná kontrola ID, pořadí, typu objektu a limitu 64 KiB před čtením
+formátovaných metadat. Stávající navigace načítá monitoring, modely, review a
+chat až při jejich otevření; fronta úkolů a přehled konfliktů zůstávají oddělené.
+Nevzniká cache aktuálního projektu ani alternativní historie či writer.
+
 `F-M5-CONFLICT-RESOLUTION-01` **reuse/adaptuje** stávající
 `ArtifactHistory`, bezpečný Markdown preview, Git wrapper, snapshot validaci,
 Workspace/Journal/Index a nativní 3-way schopnosti Git CLI. Git určí merge base,
@@ -509,6 +601,20 @@ Bounded řádkové porovnání ve stávajícím UI je pouze prezentační zvýra
 nenahrazuje Git jako autoritu výsledného stromu.
 Soukromá inventura neposkytla ověřenou komponentu se stejným Git, validačním a
 recovery kontraktem. Rozhodnutí: [ADR 0043](docs/adr/0043-explicit-federated-conflict-resolution.md).
+
+Criss-cross divergence **adapt/reuse** the same native `git merge-base --all`
+and `git merge-tree --write-tree`, isolated object store, preview digest and
+Workspace transaction/recovery. Inventory all common ancestors; let Git combine
+them instead of forcing one ancestor. **Reject:** selecting one merge base for
+the automatic result, rewriting live history, deleting incoming refs, a custom
+recursive merge algorithm and publishing without explicit confirmation.
+
+Doplnění necommitnutých konfliktů **reuse/adaptuje** tentýž přehled,
+`Git.snapshot`, omezený filesystem snapshot Journalu a existující sync journal.
+Read-only unified diff používá standardní `difflib`; stav peeru je pouze
+projekce posledního hlášení. Nevzniká další conflict store, Git writer ani
+automatický stash/restore. Původní writer lock a recovery zůstávají autoritou
+zápisů; kontrola nečistého cíle pouze předchází nákladnému ověření historie.
 
 `UX-WEB-NAV-01` **reuse/adaptuje sdílený shell `desktop_ui`, validovanou
 projekci `PresentationDocuments` a stávající `Administration`/federační
@@ -985,6 +1091,16 @@ refresh zachovává staré balíčky a lidské receipts. Nový writer, databáze
 journal ani samostatný frontend by duplikovaly existující hranice. Recovery
 a akceptaci doplňuje [fronta úkolů](docs/task-queue.md).
 
+Hotfix opravy fronty v MON-08 **reuse/adaptuje** TaskQueue `assess`,
+`dependency_start_blockers`, stávající owner/project lock a atomický JSON
+writer. Přidává explicitní repair-preview/repair a jednotlivé vyřazení
+odkazu; zachovává příznaky, audit a neměnné IDE balíčky/receipts. Ruční
+přesun v neplatné frontě nesmí přidat novou chybu. Druhý writer/journal,
+vyprázdnění celé fronty, tiché mazání chyb a bypass IDE publication/review
+guardů jsou **reject**. Veřejná i dosavadní soukromá inventura nepřináší
+další potřebnou komponentu; externí kód se nepřebírá. Scope a recovery:
+[fronta úkolů](docs/task-queue.md).
+
 PLAN-QUEUE-02 **reuse/adaptuje** `TaskQueue`, `IdeBridge`, jeho scoped
 messages/receipts/review, `Workspace.transact`, metadata a task graph,
 content-addressed export a nativní sidebar. Nový modul izoluje immutable packet,
@@ -1105,6 +1221,140 @@ schvalování byly odmítnuty. Veřejná i dostupná soukromá inventura neposky
 důvod kopírovat externí komponenty. Hranice/recovery:
 [ADR 0073](docs/adr/0073-monitoring-ui-and-period-synthesis.md).
 
+Izolovaný přímý RSS/Atom pilot **reuse/adaptuje** PublicSourceBinding,
+StaticHTMLAdapter transport (veřejné DNS/IP, TLS, timeout a byte limit),
+robots kontrolu a TextAdapter dekódování úplného gzip streamu. Nový úzký
+parser používá stdlib ElementTree a vrací pouze JSON pozorování s historií
+oprav; druhý projektový writer, scheduler, DB a externí reader SDK byly pro
+tento experiment **reject** jako nepotřebné. Veřejná i dostupná soukromá
+inventura byly zkontrolovány; externí kód se nepřenášel. Nejde o dokončený
+konektor nebo integraci do monitoringu. Scope a recovery:
+[RSS pilot](docs/rss-pilot.md).
+
+Sekce **Zdroje** nad RSS pilotem **reuse/adaptuje** společnou desktop/web
+navigaci, HTTP autentizaci a Administration RBAC. Reader je přesunutý do
+`spikes.rss_reader`, CLI zůstává tenký kompatibilní vstup. Nová je paměťová
+cache veřejných kanálů a přehled s jednotlivými/agregovanými záložkami.
+Další persistentní writer, automatický worker a závislost UI na vývojových
+skriptech byly **reject**; projektová data a recovery se nemění. Podrobnosti:
+[Zdroje v aplikaci](docs/rss-pilot.md#sekce-zdroje-v-aplikaci).
+
+MON-08-01 **reuse/adaptuje** Reporting record/revision/PinnedRef a jeho
+společnou validaci kandidáta v původním Workspace writeru, Monitoring
+materializační receipts a EvaluationScale, ReportingScheduler a HTTP/RBAC.
+Nový je uzavřený WatchDefinition a DAG vstupů nad stabilními identitami;
+kalendář doplňuje skutečný lokální den včetně DST. Příprava běhu připíná
+vlastní i upstream definice do existujících rules/task/run struktur.
+Druhý konfigurační writer, run journal, provider SDK a automatická migrace
+byly **reject**. Veřejná i dostupná soukromá inventura byly zkontrolovány;
+externí kód se nepřenášel. Recovery a hranice:
+[ADR 0074](docs/adr/0074-independent-monitoring-definitions.md).
+
+MON-08-02 **reuse/adaptuje** RSS parser/transport a cache, bounded
+`project_document`, tvar SearXNGResult a Projects/Reporting/PinnedRef s
+`SourceCollector.resolve`. Nový je společný descriptor/read/normalize
+kontrakt, inertní SourceItem/SourceBatch a přehled dostupnosti ve Zdroje.
+Jiný writer, crawler, scheduler, fetch journal, credential store a provider
+SDK byly **reject**. Veřejná i dostupná soukromá inventura byly zkontrolovány;
+externí kód se nepřenášel. Žádný provider nebyl připojený jen na základě
+přijetí konfiguračních metadat. Scope/recovery:
+[ADR 0075](docs/adr/0075-source-connector-contract.md).
+
+MON-08-07, fáze **designed**, navrhuje **reuse/adapt** Administration
+trust/mapping/CAS a podpisových primitives, ReportingScheduler rezervací a
+fencingu, RSS/backend effect journalů, ContextBuilder a Workspace receipts.
+Existující obousměrný Git sync zůstává datovým transportem; není execution
+autorita. Deployment preference nejsou ověření živého uzlu ani grant.
+Druhý projektový writer, sdílená SQLite DB, automatická volba koordinátora
+a převzetí unknown jiným uzlem jsou **reject**. Soukromá inventura nedokládá
+shodný execution/reconciliation kontrakt; kód ani neveřejné detaily se
+nepřenášejí. První interní implementace adaptuje původní ReportingScheduler
+FULL journal (migrace v4) pro unikátní logical effect reservation, immutable
+intent, begin/result přechody a fencing převzetí před begin. Nová DB ani
+writer nevznikají. Signed agreement, autentizovaný dispatch, import a fyzický
+PoC zbývají; journal sám není execution oprávnění:
+[ADR 0080](docs/adr/0080-monitoring-execution-placement.md).
+
+MON-08 closure verification **reuse/adapt** native signed project/pool sync,
+the existing model Context Manifest/run journal and published-output snapshot
+projection. Calendar processing extends the original block scheduler and its
+stable operation IDs with ZoneInfo boundaries; no second writer, job authority
+or model fallback is introduced. The X connector review retains the common
+source contract as the candidate, without copying external code or enabling a
+provider. See [calendar](docs/monitoring-processing-calendar.md) and
+[X review](docs/x-connector-review.md).
+
+The explicit 12 November GUI correction **reuse/adapts** native block catalogs,
+usage/dependency closure, sidebar navigation and the original save/CAS/receipt
+path. Entity forms have separate DOM owners; complex tasks aggregate the
+entity tables and store references. **Reject:** copying shared definitions,
+a separate complex-task entity editor or another persistence owner. Recovery:
+[entity workspaces](docs/monitoring-entity-workspaces.md).
+
+Concrete report presentations **reuse/adapt** `published_outputs`, PinnedRef,
+the existing deck encoder and `Artifacts.save` CAS/journal/receipt. One Git
+transaction stores deck and source metadata; native signed sync carries both.
+**Reject:** new research/model dispatch, copying an operational journal, a
+second writer or overwriting an older derived deck after source correction.
+Recovery and evidence: [report presentations](docs/report-output-presentations.md).
+
+MON-08-09, první UI řez, **reuse/adaptuje** nezávislé WatchDefinition,
+Reporting.apply atomic batch/receipts/graph validation, schválený Administration
+peer inventář, RSS binding/filter pipeline a explicitní WatchSynthesis.
+Nový společný editor ukládá RSS těžbu a navazující zpracování v jednom
+původním zápisu, s odděleným placement a deklarativním manual/scheduled
+požadavkem. Vlastní plánovací DB, druhý writer, implicitní execute grant,
+remote fallback a přepis staršího společného formátu byly **reject**.
+Nový externí zdroj se nepřebírá; dosavadní inventura zůstává podkladem reuse.
+Synchronizace a vzdálený dispatch se tím neimplementují. Scope/recovery:
+[nezávislé sledování — UI](docs/independent-monitoring.md#ui-těžba-a-zpracování-na-samostatných-uzlech-mon-08-09).
+
+Oprava identity vykonavatele **reuse/adaptuje** `configuration.parse_node`,
+původní WatchDefinition placement, Reporting writer a RSS/synthesis preflight.
+Vlastní uzel používá stejné veřejné UUID jako peer. Relativní local při importu
+se nepřekládá; automatické převzetí nebo implicitní grant byly **reject**.
+Nový externí kód ani persistentní vrstva nevznikají. Navazující
+[oddělení RSS/poolu/zpráv](docs/monitoring-pipeline-separation.md) je návrh;
+dočasné úložiště a fyzické odstranění odmítnutého textu ještě nejsou implementované.
+
+MON-08-06 **reuse/adaptuje** Reporting records/canonical_events, zmrazené
+WatchSynthesis manifesty, Workspace receipts, původní scheduler FULL journal,
+ContextBuilder/RoleRegistry a provider adapter/run journals. Nové jsou bounded
+analytický ledger, renderer a JSON role; node-local PreparedContext rozšiřuje
+stejný run JSON. Parsování souhrnné prózy jako potvrzené skutečnosti, druhý
+writer/journal, automatické hledání a model fallback jsou odmítnuté.
+Soukromá inventura nedokládá shodný evidence/recovery kontrakt; žádný její
+kód ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0079](docs/adr/0079-longitudinal-synthesis-analysis.md).
+
+MON-08-05 **reuse/adaptuje** Reporting/Workspace a jeho immutable receipts,
+ReportingScheduler reservation/lease/review/publication, WatchDefinition DAG,
+source capture/import piny a společné review UI. Nový selektor zmrazí
+projektový input manifest před materializací intentu; nevzniká nová DB,
+writer ani síťový účinek. Automatické hledání, druhý journal a přepis vydání
+jsou odmítnuté. Soukromá inventura nedokládá shodný kontrakt; žádný její kód
+ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0078](docs/adr/0078-frozen-watch-synthesis-inputs.md).
+
+MON-08-04 **reuse/adaptuje** WatchDefinition piny/revize, SourceItem, RSS
+publication plan, Reporting assistance audit, ContextBuilder, RoleRegistry
+a existující backend run journal. Přidává malý uzavřený vyhodnocovač a
+izolovaný stdlib regex podproces s časovým/CPU/paměťovým limitem; vlákno s
+nezrušitelným regexem a nový workflow/provider framework jsou odmítnuté.
+Soukromá inventura nedokládá shodnou implementaci; žádný její kód ani
+neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0077](docs/adr/0077-monitoring-filter-pipelines.md).
+
+MON-08-03 **reuse/adaptuje** Reporting/Workspace writer, sémantickou validaci,
+raw source metadata a receipts, původní ReportingScheduler DB/owner/grants,
+SourceCollector origin backoff, RSS observe aliases a společný SourceItem.
+Conditional GET rozšiřuje existující bounded DNS/IP/TLS transport pouze
+o dvě validované hlavičky. Nové jsou SourceFinding a schema-3 tabulky
+rss_bindings/rss_polls v původním journalu; druhá DB, writer, daemon,
+provider SDK a automatická lidská akceptace byly **reject**. Veřejná i
+dostupná soukromá inventura byly zkontrolovány; externí kód se nepřenášel.
+Recovery a hranice: [ADR 0076](docs/adr/0076-recurring-rss-findings.md).
+
 Náhled nevalidního plánu **adaptuje** původní TASK/DESCRIPTION gramatiku,
 Markdown renderer a strukturovaný editor. Rozpoznané fyzické bloky mají pouze
 zobrazovací klíč podle řádku; duplicitní stabilní ID je neslučují. Validovaný
@@ -1170,3 +1420,381 @@ HEAD/revize, zámek a atomický writer `TaskQueue._write`. Ověřuje vlastní
 předpoklady přidávaného uzlu; existující chyby zůstanou v `issues` a dál
 blokují publikaci balíčku. Nezavádí jiný writer ani automatickou akceptaci.
 Crash boundaries se nemění; upřesnění viz ADR 0062.
+
+Řešení místních změn blokujících synchronizaci adaptuje existující náhled
+konfliktů, ArtifactGit Stage/Commit a Workspace journal. Obnova souboru z HEAD
+uchovává původní obsah v privátním journalu; nevytváří druhý writer ani
+automaticky nerozhoduje o uživatelských změnách (ADR 0043).
+Otevírání projektů adaptuje existující validaci a obnovitelný index přidáním
+omezené procesní cache přesného HEAD (ADR 0022), odloženého načítání skrytých
+panelů a standardní HTTP komprese. Samostatná persistentní cache je odmítnuta.
+
+Projektové HTTP vlastnictví adaptuje existující přesnou admission tabulku,
+BoundedHTTPServer, ContextVar a autoritativní Journal flock. Stejné pole rozsahu
+používá browser i server; procesní mapa zahazuje neaktivní projekty. Reuse nativní
+Stage/Commit, Workspace CAS a synchronizačního replaye zachovává recovery.
+Odmítnuty jsou druhý persistentní writer, zvýšení worker poolu, automatický
+retry a označení inicializačních čtení za read-only. Viz dodatek ADR 0050.
+
+Audit blokujících míst adaptuje existující request-local ownership kontext
+pro zbývající file flocks, včetně read-only autentizace. Odchozí sync zachovává
+nativní uzlovou kapacitu i durable envelope; při kolizi neřadí neomezeně další
+vlákna. Stream používá existující NDJSON terminální chybu i po odeslání hlaviček.
+Odmítnuty jsou automatické retry, druhá HTTP odpověď a plošné snížení SQLite či
+provider timeoutů bez auditu jejich recovery. Viz docs/http-blocking-audit.md.
+Konfigurace ChatService adaptuje původní RLock přes stejný bounded ownership
+kontext; zachovává reentranci a existující credential/reset journal. Nezavádí
+nový konfigurační writer ani současný reset během chráněné konfigurace.
+
+Providerová HTTP skupina adaptuje původní bounded server a přesnou společnou
+server/browser admission tabulku. Zachovává společné pořadí streamů,
+konfigurace, recovery a souvisejících lifecycle operací; vlastníky Git/SQLite
+nenahrazuje. Administrace `list` používá vlastní agregující linku nad původním
+registry flockem a sync stores. Startup ověřuje úplnost klasifikace registrovaných
+rout. Odmítnuto je odebrání pouze tří stream zámků při ponechání jejich
+konkurujících mutací bez společného vlastníka, nový executor a navýšení workerů.
+Sdílené registry snapshoty adaptují existující `Administration.read_locked`
+a read-only autentizaci. Podpisová identita používá původní atomický bootstrap
+s explicitně neinicializujícím čtením; žádná rotace či jiný credential store.
+Revalidace účtu probíhá před doménovým dispatch po admission.
+
+Browser admission adaptuje stávající přesnou tabulku, Web Locks, AbortController
+a Response EOF drainer. Promise-tail frontu nahrazuje odstranitelné FIFO se
+stejnou celkovou kapacitou 64 a pětisekundovým pre-dispatch budgetem. Zachovává
+body/ID, rozlišuje not-started od unknown a nepřebírá backend recovery. Odmítnuty
+jsou timeout aktivního provideru v admission vrstvě, automatický resend a
+uvolnění aktivního vlastníka pouze podle zrušení calleru.
+
+Federační HTTPS deadline adaptuje stdlib `http.client`, ověřený `ssl` transport
+a nativní socketové `makefile` s časovým rozpočtem při každém raw čtení.
+Existující číselné IPv4 endpointy nepotřebují DNS; původní podpisy, TLS policy,
+journal, receipt a replay zůstávají autoritou. Samostatný HTTP klient, watchdog
+vlákna a automatické opakování byly odmítnuty: nepřidávají potřebnou garanci a
+mohly by oddělit životnost transportu od původní operace.
+
+SQLite HTTP ownership **adaptuje** existující stdlib transakce a request-local
+`bounded_project_requests`: projektový journal/index a read-only stav konfliktů
+při obsazení nečekají a používají stávající `ProjectBusy`/HTTP 503 kontrakt.
+Nativní timeouty, explicitní commity, journal a Git CAS zůstávají zachované.
+Samostatný writer, connection pool, WAL migrace a automatické opakování byly
+odmítnuty jako nepotřebné pro odstranění čekání na těchto zámcích. Recovery
+používá původní Workspace operaci podle ADR 0003.
+
+Inicializované projektové čtení **adaptuje** existující `Workspace.attach` a
+`Journal.attach` s kontrolou vlastníka pod původním zámkem. `Index.attach`
+přebírá aktuální projekci; starší verze používají původní validaci a rebuild.
+Chybějící stav používá původní bootstrap, chyby nejsou důvodem k resetu.
+Git čtení desktopového HTTP používá stávající monotónní deadline wrapperu Git.
+Druhý read store, nová cache a automatická recovery pending operací byly
+odmítnuty: existující HEAD/index validace a journal zůstávají autoritou.
+
+Git validační rozpočet **adaptuje** existující wrapper `Git.run`, jeho 30s limit
+podprocesu a nativní `validate_history`. ContextVar přenáší dřívější deadline do
+vnořených kontrol a nových Git wrapperů; nepřidává Git writer ani cache validace.
+Původní HTTP 503, outbox, journal a receipt recovery zachovávají request/operation
+ID při nedokončeném ověření. Vypnutí sémantické validace, nový timeout pro každou
+větev a automatické opakování byly odmítnuty. Dlouhé joby zůstávají samostatným
+protokolovým krokem, nikoli skrytou změnou tohoto transportu.
+
+Julia HTTP doména **adaptuje** stávající přesnou route tabulku, HTTP/Web Locks
+admission, `bounded_process_lock`, SQLite ownership a Julia run journal.
+Všech 12 Julia rout zůstává společně serializovaných; projektová publikace
+používá původní Workspace writer. Stav/approval/run ID ani recovery se nemění.
+Volné read-only zařazení status/cancel/reconcile, druhý writer a nové pooly byly
+odmítnuty: tyto operace sdílejí run lifecycle a status může inicializovat journal.
+
+Monitoring/RSS HTTP ownership **adaptuje** přesnou route tabulku, browser FIFO/
+Web Locks, bounded process/SQLite helpers a původní collector flock. Reporting
+leases, RSS poll journal, pool transakce, migration intents a Workspace writer
+zůstávají autoritou. Oddělená paměťová RSS cache má vlastní doménu; projektový
+monitoring jednu společnou doménu a jednorázové vytváření svých lazy služeb.
+Volné read-only zařazení statusu, per-projektový souběh bez auditu, nový writer,
+mazání obsazených journalů a automatický retry unknown operací byly odmítnuty.
+
+IDE/queue HTTP ownership **adaptuje** společnou přesnou route tabulku, browser
+FIFO/Web Locks, SQLite ownership a původní projektový/account queue flock.
+Bridge SQLite, neměnné packety, revize fronty a lidské review intenty zůstávají
+původní autoritou; projektový účinek používá Workspace writer/receipt recovery.
+Credential se znovu ověří po čekání na HTTP vlastníka. Read-only zařazení pollu,
+nový queue writer, automatická akceptace či resend a smazání busy stavů byly
+odmítnuty: status/refresh mohou obnovovat existující nativní operace.
+
+Google Drive connection lifetime **adaptuje** existující stdlib `closing` kolem
+původního SQLite transakčního kontextu. Commit/rollback a pak close proběhnou před
+uvolněním stávajícího flocku i při chybě inicializace či commitu. Nový writer,
+connection pool, změna schématu nebo timeoutů nejsou pro doložený leak potřebné;
+importní intent a Workspace recovery zůstávají podle ADR 0032/0003.
+
+Planning/document HTTP ownership **adaptuje** původní projektové lanes, review
+store, bounded SQLite/flock a společnou browser route tabulku. Dokumentové
+prezentace používají stejný projektový writer jako artefakty; presenter selection
+zůstává v samostatné procesní doméně. Šest review rout sdílí jeden vlastník,
+stateless katalog/graf zdrojů vlastní referenční linku. Nový plan store, automatické
+review, read-only výjimka pro recovery open a přepínání vybraného decku při save
+byly odmítnuty. Git/journal/CAS, frozen apply intent a receipt recovery se zachovají.
+
+### HTTP admission completion and provider deadlines
+
+**Reuse/adapt:** existing exact `http_admission_policy` domains, per-project
+admission, `sqlite_connection`, raw-read `http_deadline` and task `RunDeadline`.
+Provider/probe/enrollment HTTP keeps stdlib parsing and existing TLS policy;
+only deadline enforcement and response ownership are adapted. A small isolated
+stdlib resolver bounds hostname DNS without retaining blocked resolver threads.
+No external implementation or new persistent scheduler/writer is introduced.
+The native journal/CAS recovery remains authoritative.
+
+Startup-capacity regression: **adapt/reuse** native scoped project views,
+committed TODO projection, catalog-request invalidation and typed bounded
+ownership. Dashboard reuses the existing project route/owner and native
+journal/index/privacy checks. **Reject:** more HTTP workers, automatic replay,
+full-history reads for every startup card and a second persistent cache/writer.
+
+Manual sync batches: **adapt/reuse** existing `ManualSyncTasks`,
+`ContentSyncControl`, node outbound flock, cancellation events, runtime rows and
+exact native transfer recovery. A bounded volatile FIFO aligns manual admission
+with existing node capacity one; the scheduler yields to it. **Reject:** a
+second persistent writer/job journal, transport retries, deleting pending
+payloads on cancellation and sharing the outbound lock with inbound responses.
+
+Native export ownership: **adapt/reuse** initialized Workspace read attachment,
+native journal/index validation, frozen commit IDs, the existing isolated bare
+export pattern from `git_transfer.export_bundle`, exact-graph validation and
+Git phase budgets. Content sync retains original ref names; initial/replica
+transfer retains normalized main. **Reject:** copying live working files,
+exporting moving refs without final ownership checks, holding the journal over
+all history/pack work, weakening privacy/history validation or adding a cache
+that acts as a second authority.
+
+Busy diagnostics: **adapt/reuse** native `ProjectBusy`, bounded flock/SQLite
+translation, existing sync observations and the existing 503 response. Preserve
+separate inbound/outbound observations and forward only allowlisted resource
+and phase codes. **Reject:** guessing the owner from elapsed time, exposing
+exception text or paths, replacing native recovery, and retrying mutations
+based on diagnostic hints.
+
+Monitoring visibility after sync: **adapt/reuse** the existing completion event,
+visible-panel refresh and signed pool exchange. Verify the receiver's actual
+block catalog and pool contents, not only matching Git heads. **Reject:** copying
+remote block jobs or grants, activating intake on reception, refreshing hidden
+panels, and discarding unsaved block/composition edits. No persistent layer or
+crash boundary changes; native sync recovery remains unchanged.
+
+Independent channel polling: **adapt/reuse** `ComposableMonitoring.tick`, its
+stable-block local activation, HTTP validators, frozen filter references and the
+existing FULL intake/pool transaction. Selection changes invalidate cached HTTP
+validators at the next due poll instead of blocking source intake. **Reject:**
+requiring filter/pool reapproval to poll an unchanged source, persisting rejected
+feed text, a second scheduler or journal migration. Recovery remains ADR 0082.
+Activation follows the stable source/processing ID across definition revisions;
+reuse binding CAS and calendar run IDs to preserve pauses and prevent duplicate
+dispatch. Reject revision-only reactivation gates and activation of new blocks
+on sync reception (user clarification, 13 November 2026).
+
+Source-calibrated monitoring design: **adapt/reuse** the existing composition
+intent/manifest/model journal, bounded RSS reader, public-source DNS/TLS/robots
+transport and static projection, closed block validation and pure filter preview.
+**Reject:** filtering samples through the old rule before design, assuming that
+all channels of one publisher have identical fields, interpreting a current feed
+as a full archive, silently using article bodies/categories as runtime fields,
+or adding a crawler, pool ingestion or automatic activation to design.
+Scope, limits and recovery: [design calibration](docs/monitoring-design-calibration.md).
+
+RSS reader subscriptions: **adapt/reuse** `RSSSources`, bounded public HTTPS
+transport, `BoundedTree`, `sidebarItemMenu`, SQLite ownership and the
+`GamepadSettings` atomic node-preference pattern. OPML/JSON import is a bounded
+preview followed by one revision-checked transaction; it never imports a remote
+runtime journal or activates project monitoring. **Reject:** a second project
+writer, generic JSON backup guessing, XML entities, fetching during preview,
+and parallel or hidden reader refresh. Scope/recovery:
+[reader subscriptions](docs/rss-sources-reader.md).
+
+RSS reader peer sharing: **adapt/reuse** the existing subscriptions SQLite
+transaction, channel validator, RSS cache locks, Ed25519 envelopes, current
+peer registry/CA, deadline HTTPS connection and catalog scheduler. Causal
+revisions and the channel projection commit in the same existing DB; no
+project writer or second sync database is added. **Reject:** implicit permission
+from project sharing, copying SQLite/cache/credentials, last-writer-wins on
+concurrent edits, reviving deleted feeds on replay, hidden article fetching,
+and blocking reader views during the network wait. Scope/recovery:
+[ADR 0084](docs/adr/0084-rss-reader-subscription-sync.md).
+
+Unified tools and deletion: **adapt/reuse** `sidebarItemMenu`, original Julia
+preview/delete, monitoring block editors, composition and leave guards. Reuse
+Reporting revisions, native effect ownership and Workspace journal/CAS for an
+explicit deleted revision, preserving pool provenance and historical inputs.
+**Reject:** copying editors, a second deletion journal, physical removal of
+pinned definitions, implicit cascading deletion and deletion through LLM/save.
+Scope and recovery: [Tools](docs/tools-sidebar.md), [ADR 0082](docs/adr/0082-composable-monitoring-and-message-pools.md).
+
+Legacy task removal: **adapt/reuse** immutable Reporting refs, migration effect
+lock order, its task-specific `_pending` audit, and `retired_ids` execution
+guards. Keep old documents, definition revisions, published reports and native
+journals; one signed `MonitoringDeletion` receipt removes current execution and
+catalog eligibility. **Reject:** deleting historical pins, changing remote/local
+runtime outcomes, resurrecting a deleted definition and cascading removal of
+unreviewed dependents. Recovery and compatibility are part of ADR 0082.
+
+Unclipped list menus: **adapt/reuse** `sidebarItemMenu`, static details menus,
+existing handlers and native HTML Popover top layer. A shared event adapter
+positions one menu within the viewport and preserves action ownership; the
+fallback temporarily portals the original content, restoring it before actions.
+**Reject:** overflow-visible lists, z-index-only fixes, cloned action controls,
+a separate menu implementation per feature and orphaned overlays after rerender.
+Verification/reuse details: [Tools menus](docs/tools-sidebar.md#menu-mimo-rámeček-seznamu).
+
+Concrete report editions: **adapt/reuse** validated Git snapshots, existing
+ReportSnapshot/Markdown artifacts, scheduler candidate/result storage, native
+publication receipts, Reporting metadata and shared item menus. Titles freeze
+at assembly; Git-backed summaries and a head-bound lazy reader work without
+copying operational jobs. **Reject:** task shortcuts in place of editions,
+fetching every report body for the list, a second writer/index, re-timestamping
+retries, modifying approved Markdown and guessing missing historical build times.
+Scope/recovery: [Report outputs](docs/report-outputs.md).
+
+History validation isolation: **adapt/reuse** native Git bundle verification,
+semantic snapshot/transition validators, the existing Git deadline, subprocess
+process groups, bounded admission and exact journal replay. Keep a two-entry
+per-call cache of validated snapshots; validate the exported graph once. A
+disposable lower-priority process isolates CPU/GIL; volatile per-target pacing
+slows existing automatic retries without replacing operation authority.
+**Reject:** a persistent validation cache, skipping history/privacy checks, a
+second writer/journal, changing the wire protocol, extending deadlines and
+queueing unbounded validators. Recovery and evidence:
+[History validator](docs/history-validation-worker.md).
+
+Immutable history reuse: **adapt/reuse** `Git.snapshot` batch preflight,
+content-addressed blobs, metadata/record validators and the reporting resolver.
+Reuse exact object bytes and only intrinsic validation results within one
+bounded walk (16 MiB blobs, 8 MiB metadata/records); rerun layout, integrity,
+identity, envelope, graph/privacy and live-authority checks in their context.
+**Reject:** cross-transfer validation results, treating captured JSON as claims,
+trusting HEAD alone for historical project identity and extending the timeout.
+Target-hardware candidate evidence: [History validator](docs/history-validation-worker.md).
+
+### Bounded IDE HTTP waiting
+
+**Adapt/reuse:** existing `BoundedHTTPServer`, exact IDE route ownership,
+`request_ownership` and the configured HTTP lane budget. Replace only the
+IDE queue's ephemeral lock with one owner plus one waiting slot; retain native
+SQLite, queue flock, journal and receipt recovery. Shutdown cancels admission
+of the waiter. **Reject:** increasing worker counts, unbounded worker waiting,
+parallel bridge writers and automatic replay after dispatch. No external
+component is introduced. Recovery and verification:
+[HTTP ownership](docs/http-concurrency-ownership.md#bounded-ide-http-waiting).
+
+Queue status isolation **adapts** the existing action-specific HTTP/browser
+table and request-local `TaskQueue.execute` projection. Only exact `status`
+uses a separate owner; mutations keep the bridge/review/publication lane.
+Native project/index/journal, queue flock and SQLite remain authoritative.
+Queue/journal owners are released before building display rows from captured
+request-local data, after the existing write and final HEAD checks.
+**Reject:** another wait-budget increase, parallel queue mutations, a cached
+acceptance result or another persistent writer. Diagnostic actions use literal
+allowlists. Audit and recovery:
+[Queue status isolation](docs/http-concurrency-ownership.md#task-queue-status-isolation).
+
+IDE catalog readers **reuse/adapt** `Projects.workspace(for_snapshot=True)`,
+`Workspace.committed_snapshot` and the existing journal flock. Short initialized
+snapshot checkpoints now use shared read ownership on that same lock file;
+initialization, recovery, index rebuild and project writes remain exclusive.
+Only audited connection discovery uses the ordinary worker budget minus one
+for HTTP reader capacity, without queued waiters. The remaining ordinary slot
+prevents catalog traffic alone from consuming all general API capacity; the
+diagnostic reservation is separate. **Reject:** parallel
+index rebuild, cached account authority, increased workers/timeouts/retries,
+or a second lock file/writer. Audit:
+[Concurrent catalog reads](docs/http-concurrency-ownership.md#concurrent-ide-catalog-reads).
+
+P1 remediation A01–A06 **reuse/adapt** the existing HTTP route inventory,
+native binding/manifest guards, scheduler leases, Workspace snapshot/index
+checks, journal locks and Julia operation receipts. SQLite readers adapt the
+existing `MessagePools.read_db` read-only pattern and retain their own schema
+validation without writer bootstrap. A bounded selector
+prefix adapter feeds the existing HTTP parser; shared filesystem execution
+slots point to the original Julia journal. **Reject:** a second writer/job
+authority, automatic unknown-outcome replay, more application workers or
+longer wait budgets. No external implementation is imported. Boundaries and
+recovery: [P1 remediation](docs/concurrency-p1-remediation.md).
+
+### External response diagnostics and rejected stream text
+
+**Reuse/adapt:** existing backend run journals, fail-closed response validators,
+NDJSON terminal errors and the chat stream surface. Public diagnostics use an
+allowlist rather than exposing arbitrary provider exception text. Rejected text
+is displayed as an untrusted, downloadable UI notice, separate from accepted
+chat history and edit proposals. No persistent writer or recovery boundary is
+added. **Reject:** accepting truncated responses, automatic paid retries and
+silently increasing configured token budgets.
+
+Ochrana zpráv před pozdními vstupy **reuse/adaptuje** `block_jobs`,
+obsahové reference message pools, původní ContextBuilder/modelový journal,
+periodová ID a Workspace publication receipts. Odděluje effect flock sběru
+a zpracování, zachovává krátké serializované SQLite transakce. **Reject:**
+další runtime DB/writer, opakované generování při každém článku a automatický
+retry nejistého modelového volání. Scope/recovery:
+[ochranné období zpráv](docs/report-protection.md).
+
+Ruční opětovné zpracování zprávy **reuse/adaptuje** blokový processor,
+`block_jobs`, Git audit publikovaných zpráv, stávající modelový journal,
+HTTP/RBAC execution lane a původní publication writer. Zachovává periodu,
+obsahovou identitu definice a samostatná vydání; **reject** přepis původního
+výstupu, obnovení expirovaného textu z reportu a automatický retry unknown.
+Scope/recovery: [ruční zpracování](docs/report-protection.md#ruční-opětovné-zpracování).
+
+Sdílená aktivace a výsledky MON-08-07 **reuse/adaptují** existující pool
+set-union, FULL SQLite transakce, signed native exchange, synchronizační
+fingerprint, blokový processor, ContextBuilder a Workspace receipts.
+Přidávají validované logické druhy activation/report-outcome. **Reject:**
+kopie provozních databází, přenos credentials/leases/manifestů, časové
+last-wins přepisování pauzy, nový transport a automatické převzetí běhu.
+Scope/recovery: [sdílený stav monitoringu](docs/monitoring-shared-state.md).
+
+MON-08-08 kontrola neúplných vstupů **reuse/adaptuje** autentizovaný native
+sync intent, pool sidecar, místní `block_jobs` receipt a sdílené chybové výsledky.
+`pool_input_guard.py` přidává pouze manifest referencí a kontrolu relevantního
+období; žádný nový transport, databáze ani kopírování worker journalu.
+Import a potvrzení receipt používají jednu existující pool transakci.
+
+MON-08-09 facelift **reuse/adaptuje** účelové katalogové tabulky, vlastní
+editory částí, dependency closure a Reporting/Workspace CAS s receipts.
+Komplexní úloha připojuje existující ID akcemi nad tabulkami, bez vlastního
+editoru; žádné kopírování definic ani nový writer. Dva zápisy při vytvoření
+a připojení popisuje [obnova GUI](docs/monitoring-entity-workspaces.md).
+
+MON-08-09 stav zpracování **reuse/adaptuje** stávající omezený katalog
+místních a sdílených běhů i jejich chyb a ochranného intervalu. Jedno UI
+vysvětlení slouží tabulce, detailu bloku a konkrétní zprávě. Odděluje
+aktivaci rozvrhu, plánovaný uzel a skutečného vykonavatele; nepřidává nový
+monitor dostupnosti, persistentní stav ani synchronizační pole.
+
+MON-08-09 evidence vstupů **reuse/adaptuje** immutable audit vydání,
+Reporting snapshot, retained pool references, sdílené výsledky a původní
+kalendář. `monitoring_evidence.py` přidává pouze čtecí projekci. Souhrny
+rozhodnutí se ukládají v původní transakci sběru bez odmítnutých textů;
+nová vydání zachovávají doplňkové reference provenience. **Reject:** druhý
+processing ledger, obnovení expirovaných textů a automatické přegenerování
+při otevření zprávy. Viz [evidence a obnova](docs/monitoring-input-evidence.md).
+
+MON-08-09 řetězení přes ID zpracování **reuse/adaptuje** Reporting/PinnedRef,
+audit vydání, zmrazení vstupů WatchSynthesis, ContextBuilder, kalendář workeru,
+signed pool sidecar a původní journal/receipt recovery. Nový výběr v
+`monitoring_report_inputs.py` používá vydání podle stabilního block ID,
+nikoliv paralelní workflow či kopii databáze. **Reject:** výběr podle názvu,
+automatické nahrazování návrhem, časový vítěz konkurenčních oprav a opakování
+nejistého modelového efektu. Viz [kontrakt a obnova](docs/monitoring-report-chains.md).
+
+MON-08-11 X/Twitter PoC **reuse/adaptuje** SourceConnector/SourceContext,
+společné inertní položky, levné filtry, MessagePools, vlastnictví souborů,
+fsync a SQLite ownership wrapper. SearXNG poskytuje vzor explicitního
+no-retry efektu a místní konfigurace; jeho binding/result schema není
+zaměnitelné s placeným paginovaným X readem. Proto vzniká vlastní místní
+účtovací journal, nikoliv paralelní projektová sync databáze. Žádný externí
+kód se nekopíroval. **Reject:** scraping/fallback, full archive, automatický
+placený scheduler, user lookup a token v projektových definicích. Scope,
+retenci a crash boundaries popisuje [neověřený PoC](docs/x-connector-poc.md).
+
+Neúplné období řetězených zpráv **reuse/adaptuje** existující výběr vydání,
+zmrazený intent, schvalovací otisk, signed report-outcome, evidenci a ochranu.
+Přidává metadata mezer a aplikační upozornění do částečné syntézy; nový
+writer, úložiště ani automatický modelový retry nevzniká. Neověřené piny
+a konfliktní opravy se nadále odmítají. Viz [kontrakt](docs/monitoring-report-chains.md).

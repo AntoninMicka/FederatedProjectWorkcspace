@@ -61,3 +61,15 @@ HEAD. Import nemá externí mutaci, kterou by bylo třeba kompenzovat.
 - [Vyhledávání souborů](https://developers.google.com/workspace/drive/api/guides/search-files)
 - [files.list](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list)
 
+
+## Upřesnění vlastnictví SQLite spojení
+
+`GoogleDriveImport.locked` zavírá SQLite spojení explicitně až po původním
+commit/rollback a ještě před uvolněním souborového zámku. Samotný kontext SQLite
+spojení jej nezavírá. Close je zajištěn i při selhání inicializace před yield a
+při chybě commitu; další přístup nezávisí na garbage collection.
+
+Jde o opravu resource lifetime, nikoli nový persistentní krok. Schéma, timeout,
+explicitní commity/fsync, OAuth politika a crash/recovery hranice popsané výše
+se nemění. Ověření a původ obou ResourceWarning zaznamenává
+[audit vlastnictví](../http-concurrency-ownership.md).

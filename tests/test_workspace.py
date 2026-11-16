@@ -65,6 +65,27 @@ else:
                                 capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 73, result.stderr)
 
+    def test_http_index_collision_after_git_publication_preserves_recovery(self):
+        from spikes.request_ownership import ProjectBusy, bounded_project_requests
+        with closing(sqlite3.connect(self.workspace.index.path)) as owner:
+            owner.execute('BEGIN EXCLUSIVE')
+            with bounded_project_requests(), self.assertRaises(ProjectBusy):
+                self.workspace.apply(source(), **IDENTITY)
+            published = self.git.head()
+            self.assertNotEqual(published, self.initial)
+            record = self.active()
+            self.assertEqual(record['commit_id'], published)
+            self.assertEqual(record['state'], 'committed')
+            operation_id = record['operation_id']
+            owner.rollback()
+        with bounded_project_requests():
+            receipt = self.workspace.recover()
+        self.assertEqual(receipt['operation_id'], operation_id)
+        self.assertEqual(self.git.head(), published)
+        self.assertIsNone(self.active())
+        self.assertIsNone(self.workspace.recover())
+        self.assertTrue(self.workspace.read())
+
     def test_process_crashes_at_every_persistent_boundary(self):
         stages = ['prepared', 'file:0', 'file:1', 'applied', 'files-applied', 'commit-created',
                   'commit-ready', 'ref-updated', 'committed', 'git-indexed', 'indexed', 'completed']

@@ -11,6 +11,10 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.monitoring_ui import HTML as MONITORING_HTML, CSS as MONITORING_CSS, JS as MONITORING_JS
+from spikes.report_outputs_ui import HTML as REPORT_OUTPUT_HTML, CSS as REPORT_OUTPUT_CSS, JS as REPORT_OUTPUT_JS
+from spikes.sidebar_menu_ui import CSS as SIDEBAR_MENU_CSS, JS as SIDEBAR_MENU_JS
+from spikes.tools_sidebar_ui import TREE as TOOL_TREE, NEW_ACTIONS as TOOL_NEW_ACTIONS, CSS as TOOL_TREE_CSS, JS as TOOL_TREE_JS
+from spikes.rss_sources_ui import HTML as SOURCES_HTML, CSS as SOURCES_CSS, JS as SOURCES_JS
 from spikes.plan_status_ui import PLAN_STATUS_JS, PLAN_STATUS_CSS
 from spikes.manuals import manual_catalog
 from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
@@ -18,9 +22,11 @@ from spikes.task_stream_ui import TASK_STREAM_JS
 from spikes.task_file_edit_ui import FILE_EDIT_HTML, FILE_EDIT_CSS, FILE_EDIT_JS
 from spikes.artifact_history import ArtifactHistory
 from spikes.conflict_resolution import ConflictResolution
+from spikes.local_change_resolution import LocalChangeResolution
 from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
-from spikes.backend_contract import BackendResponseError, BackendUnknown
+from spikes.backend_contract import BackendResponseError, BackendUnknown, external_response_failure
+from spikes.provider_deadline import EXTERNAL_CLIENT_TIMEOUT_MS
 from spikes.metadata import MAX_FILE, ValidationError
 from spikes.presentation_visual import SLIDE_JS
 from spikes.presentation_documents import public_content
@@ -289,8 +295,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Nástroje</h2><div class="sidebar-tool-primary-actions">
 <button id="sidebar-new-tool" type="button" aria-label="Nový nástroj" aria-expanded="false" aria-controls="sidebar-tool-new-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 11v6M9 14h6"/></svg><span class="project-action-label" role="tooltip">Nový nástroj</span></button>
 <button id="sidebar-import-tool" type="button" aria-label="Importovat nástroj" aria-expanded="false" aria-controls="sidebar-tool-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5zM15 4v5h4M12 3v11M8.5 10.5 12 14l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat nástroj</span></button></div>
-<div id="sidebar-tool-new-options" class="sidebar-tool-options" hidden><button id="julia-editor-new" type="button">Nový Julia model</button></div>
-<div id="sidebar-tool-import-options" class="sidebar-tool-options" hidden><button id="julia-import-file-button" type="button">Julia soubor (.jl)</button><button type="button" disabled title="Převod zatím nemá schválený kontrakt">MATLAB (.m) · převod připravován</button></div>
+<div id="sidebar-tool-new-options" class="sidebar-tool-options sidebar-item-menu-items" role="menu" aria-label="Nový nástroj" hidden><button id="julia-editor-new" type="button">Nový Julia model</button></div>
+<div id="sidebar-tool-import-options" class="sidebar-tool-options sidebar-item-menu-items" hidden><button id="julia-import-file-button" type="button">Julia soubor (.jl)</button><button type="button" disabled title="Převod zatím nemá schválený kontrakt">MATLAB (.m) · převod připravován</button></div>
 <input id="julia-import-file" type="file" accept=".jl,text/x-julia" hidden>
 <p id="sidebar-tools-status" role="status">Otevřete projekt.</p>
 <ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul></div>
@@ -632,8 +638,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="model-catalog-export" type="button">Načíst pro kontrolu</button>
 <button id="model-catalog-import" type="button">Importovat validovaný JSON</button>
 </details></section>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
 <p><a class="provider-link" href="https://platform.openai.com/api-keys">Vytvořit nebo spravovat klíč u OpenAI ↗</a></p>
 <button type="submit">Uložit externí backend</button></form>
@@ -648,8 +654,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Model <input name="model" readonly required></label>
 <label>Protokol <input name="protocol_label" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://www.atlascloud.ai/dashboard/api-keys">Vytvořit nebo spravovat klíč u AtlasCloud ↗</a></p>
 <button type="submit">Uložit AtlasCloud backend</button>
 <button id="atlascloud-remove" type="button" hidden>Odstranit AtlasCloud binding a klíč</button></form>
@@ -661,8 +667,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
 <label>Model <input name="model" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://platform.claude.com/settings/keys">Vytvořit nebo spravovat klíč u Claude ↗</a></p>
 <button type="submit">Uložit Claude backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Claude binding a klíč</button></form>
@@ -674,8 +680,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
 <label>Model <input name="model" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://aistudio.google.com/apikey">Vytvořit nebo spravovat klíč u Gemini ↗</a></p>
 <button type="submit">Uložit Gemini backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Gemini binding a klíč</button></form>
@@ -687,8 +693,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
 <label>Model <input name="model" readonly required></label>
 <label>Endpoint <input name="endpoint" readonly required></label>
-<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="180" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="16384" required></label>
+<label title="Bez streamu celkový limit běhu; při streamu nejdelší pauza bez dat (celý stream nejvýše 30 minut).">Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="900" value="300" required></label>
 <p><a class="provider-link" href="https://console.x.ai/team/default/api-keys">Vytvořit nebo spravovat klíč u Grok ↗</a></p>
 <button type="submit">Uložit Grok backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Grok binding a klíč</button></form>
@@ -941,6 +947,14 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <h2 id="project-conflicts-title">Vyřešit konflikt</h2></header>
 <p>Výsledek je zatím pouze místní návrh. Projekt se změní až po kontrole a výslovném potvrzení.</p>
 <p id="project-conflicts-status" role="status" aria-live="polite"></p>
+<section id="project-conflicts-sync" hidden><h3>Konflikt při synchronizaci</h3>
+<p>Poslední pokus o synchronizaci vyžaduje rozhodnutí. Zkontrolujte konflikty také na protějším uzlu; jeho necommitnuté změny jsou viditelné přímo na něm.</p>
+<ul id="project-conflicts-sync-peers"></ul></section>
+<section id="project-conflicts-local-changes" hidden aria-labelledby="project-conflicts-local-title">
+<h3 id="project-conflicts-local-title">Místní změny blokující synchronizaci</h3>
+<p>Tyto změny dosud nejsou uložené v historii projektu. Porovnání ukazuje uloženou verzi a místní úpravu na tomto uzlu. Synchronizace ani merge je nepřepíší.</p>
+<ul id="project-conflicts-local-files" class="conflict-file-list"></ul>
+</section>
 <div class="conflict-toolbar"><label>Protější historie <select id="project-conflicts-select"></select></label></div>
 <div id="project-conflicts-workspace" hidden>
 <div class="conflict-files-heading"><h3>Konfliktní soubory</h3><p id="project-conflicts-files-summary"></p></div>
@@ -967,6 +981,15 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="project-conflicts-use-theirs" type="button">Použít vzdálenou</button>
 <button id="project-conflicts-use-both" type="button">Použít obě</button>
 <button id="project-conflicts-delete" type="button" class="secondary-button">Výsledný soubor smazat</button></div>
+</div></dialog>
+<dialog id="local-conflict-dialog" class="conflict-dialog" aria-labelledby="local-conflict-title">
+<div class="conflict-dialog-shell"><h2 id="local-conflict-title">Vyřešit místní změnu</h2>
+<p id="local-conflict-decision"></p><pre id="local-conflict-diff" class="conflict-code"></pre>
+<label>Popis rozhodnutí <input id="local-conflict-message" maxlength="1000"></label>
+<label><input id="local-conflict-approved" type="checkbox"> Zkontroloval(a) jsem rozdíl a potvrzuji toto rozhodnutí.</label>
+<p id="local-conflict-status" role="status"></p>
+<div class="form-actions"><button id="local-conflict-confirm" type="button" disabled>Potvrdit rozhodnutí</button>
+<button id="local-conflict-close" type="button" class="secondary-button">Zavřít</button></div>
 </div></dialog></section></div>
 <div id="plan-panel" role="tabpanel" aria-labelledby="plan-main-tab" hidden>
 <div class="page-heading"><div class="eyebrow">PLÁNOVÁNÍ</div><h1>Roadmapa projektu</h1></div>
@@ -978,6 +1001,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="task-queue-panel" role="tabpanel" aria-labelledby="task-queue-tab" hidden>
 <h1>Fronta úloh</h1><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
 <button id="task-queue-refresh" type="button">Obnovit frontu</button>
+<button id="task-queue-repair" type="button" disabled>Opravit pořadí a předpoklady…</button>
 <p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
@@ -2206,6 +2230,7 @@ async function navigateSidebarTab(tab){
  const finish=()=>{closeMobileSidebar();closeCompactSidebarMenu();return true;};
  if(tab.id==='manuals-tab'){selectSidebarTab(tab);showWorkspacePage(document.querySelector('#manuals-view'));await loadManuals();return finish();}
  if(tab.id==='projects-tab'){showProjectLanding();return finish();}
+ if(tab.id==='sources-sidebar-tab'){selectSidebarTab(tab);showWorkspacePage(document.querySelector('#sources-view'));await loadSources();return finish();}
  if(tab.id==='settings-sidebar-tab'){await openSettings();return finish();}
  if(tab.id==='federation-tab'){await openFederationSharing();return finish();}
  selectSidebarTab(tab);
@@ -2213,17 +2238,21 @@ async function navigateSidebarTab(tab){
  const destinations={'chats-tab':'chat-tab','todo-tab':'preview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
  if(activeProject&&destinations[tab.id])selectMainTab(document.getElementById(destinations[tab.id]));
  if(tab.id==='artifacts-tab'&&typeof showArtifactOverview==='function')await showArtifactOverview();
- if(tab.id==='tools-tab')juliaModelDetail.hidden=true;
+ if(tab.id==='tools-tab'){const project=activeProject;juliaModelDetail.hidden=true;await loadJuliaWorkspace();if(activeProject!==project)return finish();await loadRoadmapReview();if(activeProject!==project)return finish();if(typeof loadMonitoring==='function')await loadMonitoring();}
  if(tab.id==='chats-tab')await loadChat();
  if(tab.id==='plan-tab')await openTaskPlan();
  if(tab.id==='todo-tab'&&activeProject){await openMainTodoPreview();selectSidebarTab(tab);}
- if(tab.id==='presentations-tab'&&activeProject)await openOutputsOverview();
+ if(tab.id==='presentations-tab'&&activeProject){const project=activeProject;await openOutputsOverview();if(activeProject===project&&typeof loadMonitoring==='function')await loadMonitoring();}
  return finish();
 }
 async function navigateMainTab(tab){
  if(tab.getAttribute('aria-selected')==='true'&&!projectView.hidden)return true;
  if(!await canLeaveWorkspaceEditors())return false;
  showWorkspacePage(projectView);selectMainTab(tab);
+ if(tab.id==='plan-main-tab'){renderTaskPlan();await loadTaskQueue();}
+ if(tab.id==='monitoring-tab'&&typeof loadMonitoring==='function')await loadMonitoring();
+ if(tab.id==='tools-main-tab'){await loadJuliaWorkspace();await loadRoadmapReview();}
+ if(tab.id==='chat-tab')await loadChat();
  if(tab.id==='presentation-tab'&&(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head))await loadPresentationEditor();
  if(tab.id==='outputs-overview-tab')await openOutputsOverview();
  return true;
@@ -2476,15 +2505,17 @@ async function projectRequest(path,body,timeout=60000){
   path==='/v1/chat/status' || path==='/v1/external/status' || path==='/v1/media/status' ||
   path==='/v1/google-drive/status' || path.startsWith('/v1/backend-metrics/');
  try{
-  let response;
+  let response,result;
   try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
-  }catch(error){if(error?.name==='TimeoutError' || error?.name==='AbortError' ||
+   result=await response.json();
+  }catch(error){if(error?.phase==='admission'||error?.phase==='transport')throw error;
+   if(response||error?.name==='TimeoutError' || error?.name==='AbortError' ||
      String(error?.message || '').toLowerCase().includes('signal timed out')){
-    const timeoutError=new Error('Čekání na odpověď vypršelo. Operace mohla na backendu doběhnout; obnovte stav a původní běh automaticky neopakujte.');
-    timeoutError.status=408;timeoutError.outcome='unknown';throw timeoutError;
+    const timeoutError=new Error('Odpověď nelze bezpečně potvrdit. Operace mohla na backendu doběhnout; obnovte stav a původní běh automaticky neopakujte.');
+    timeoutError.status=408;timeoutError.outcome='unknown';timeoutError.retry='same-operation';timeoutError.phase='response';timeoutError.cause=error;throw timeoutError;
    }throw error;}
-  const result=await response.json();
+  if(path==='/v1/projects/open'&&result&&typeof result==='object'&&response.fpwAdmissionTiming)try{Object.defineProperty(result,'fpwAdmissionTiming',{value:response.fpwAdmissionTiming});}catch(error){}
   if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
    error.status=response.status;error.diagnostic=result.diagnostic;
    error.outcome=result.outcome;error.retry=result.retry;throw error;}
@@ -2814,6 +2845,7 @@ async function canLeaveArtifactEditor(){
  return resolveEditorLeave('Dokument',saveArtifactEditor,()=>{artifactEditorDirty=false;artifactEditorAttempt=null;artifactEditorItem=null;artifactEditorView.hidden=true;resetTaskFileEditEditor();});
 }
 async function canLeaveWorkspaceEditors(){
+ if(typeof canLeaveSources==='function'&&!canLeaveSources())return false;
  if(typeof canLeaveMonitoring==='function'&&!await canLeaveMonitoring())return false;
  if(editorLeavePending)return false;
  if(!presenterView.hidden&&!await closePresenter())return false;
@@ -2954,7 +2986,7 @@ document.querySelector('#artifact-delete-run').addEventListener('click',async ev
  catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
-window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||presentationEditorDirty||presentationEditorAttempt||juliaEditorDirty||juliaEditorAttempt||conflictDraftChanged()||projectConflictOperation){event.preventDefault();event.returnValue='';}});
+window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||presentationEditorDirty||presentationEditorAttempt||juliaEditorDirty||juliaEditorAttempt||conflictDraftChanged()||projectConflictOperation||projectLocalAttempt){event.preventDefault();event.returnValue='';}});
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -3067,32 +3099,39 @@ function rememberRecentProject(projectId){
  recentProjectOrder=[projectId,...recentProjectOrder.filter(id=>id!==projectId)].slice(0,12);
 }
 async function openRegisteredProject(projectId){
+ const started=performance.now();
  if(!await canLeaveWorkspaceEditors())return;
  ++catalogRequest;
- clearProject();const request=viewRequest;
- projectStatus.textContent='Otevírám projekt…';
+ let request=++viewRequest;
+ const timing={project_id:projectId,state:'pending'};window.workspaceLastProjectOpen=timing;
+ projectStatus.classList.remove('visually-hidden');projectStatus.textContent='Otevírám projekt…';
  try{
+  const requestStarted=performance.now(),previousProject=activeProject,previousHead=activeProject?.head;
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
   if(request!==viewRequest)return;
+  const received=performance.now();
+  if(!await canLeaveWorkspaceEditors()){if(request===viewRequest)projectStatus.textContent='Přepnutí projektu bylo zrušeno.';return;}
+  if(request!==viewRequest)return;
+  if(activeProject===previousProject&&activeProject?.id===projectId&&activeProject.head!==previousHead&&activeProject.head!==result.commit_id)return openRegisteredProject(projectId);
+  clearProject();request=viewRequest;
   rememberRecentProject(projectId);
   activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id,readOnly:Boolean(result.read_only),replication:result.replication||null};
-  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);installTaskPlanViews(result);if(result.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=result.plan_draft_error;renderSidebarArtifacts(result.artifacts);
+  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);taskQueueView=null;taskQueueMessage='Fronta se načte při otevření plánu.';renderTaskQueue();installTaskPlanViews(result,{loadQueue:false,renderGraph:false});if(result.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=result.plan_draft_error;renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-description').textContent=result.description;
   document.querySelector('#project-commit').textContent=result.commit_id;
   sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   syncSidebarProjectAvailability();
-  loadProjectConflictSummary();
-  if(typeof loadMonitoring==='function')await loadMonitoring();
-  await loadJuliaWorkspace();
-  await loadRoadmapReview();
-  await loadChat();
+  installProjectConflictSummary(result.conflict_summary,result.sync_conflicts);
   syncSidebarProjectAvailability();
   showProjectLanding();
   document.querySelector('#preview-status').textContent=result.read_only ?
    'Read-only replika: podklady lze prohlížet, změny provádějte na primárním uzlu.' : result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
- }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
+  Object.assign(timing,{state:'completed',total_ms:Math.round(performance.now()-started),request_ms:Math.round(received-requestStarted),render_ms:Math.round(performance.now()-received),admission:result.fpwAdmissionTiming||null});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(window.workspaceLastProjectOpen===timing)timing.paint_ms=Math.round(performance.now()-started);}));
+  projectStatus.classList.add('visually-hidden');
+ }catch(error){if(request===viewRequest){Object.assign(timing,{state:'failed',total_ms:Math.round(performance.now()-started),status:error.status||null});projectStatus.classList.remove('visually-hidden');projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent=error.message;}}
 }
 function renderProjectCatalog(items){
  projectCards.replaceChildren();sidebarProjects.replaceChildren();
@@ -3126,7 +3165,15 @@ function renderProjectCatalog(items){
 }
 async function loadDashboardTasks(items,request){
  const list=document.querySelector('#dashboard-task-list'),status=document.querySelector('#dashboard-task-status');list.replaceChildren();status.textContent='Načítám úkoly…';
- const available=items.filter(item=>item.available),results=await Promise.allSettled(available.map(item=>projectRequest('/v1/projects/open',{project_id:item.id})));
+ const available=items.filter(item=>item.available),results=[];
+ // Background dashboard work must not fill the ordinary HTTP worker pool.
+ // Foreground navigation increments catalogRequest; finish the current read,
+ // then stop before admitting another project. Never retry a failed request.
+ for(const item of available){
+  if(request!==catalogRequest||document.querySelector('#project-home').hidden)return;
+  try{results.push({status:'fulfilled',value:await projectRequest('/v1/projects/open',{project_id:item.id,scope:'dashboard'})});}
+  catch(reason){results.push({status:'rejected',reason});}
+ }
  if(request!==catalogRequest)return;
  let unavailable=0,openCount=0;
  for(let index=0;index<results.length;index++){
@@ -3218,15 +3265,17 @@ async function loadProjects(selectedId=null){
   const result=await projectRequest('/v1/projects',{details:true});
   if(request!==catalogRequest)return;
   renderProjectCatalog(result.projects);
-  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),...(!activeProject?[loadChat()]:[])]);
   projectStatus.textContent=result.projects.length ? 'Přehled je připravený.' : 'Zatím nemáte žádný projekt.';
-  if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
+  if(selectedId && result.projects.some(p=>p.id===selectedId)){await openRegisteredProject(selectedId);return;}
+  // Trash and chat are loaded by their explicit navigation handlers.
+  if(!document.querySelector('#project-home').hidden)await loadDashboardTasks(result.projects,request);
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
 
 
 document.addEventListener('contentsynccompleted',event=>{
  if(activeProject?.id===event.detail?.projectId)loadChat();
+ refreshMonitoringAfterSync(event);
 });
 document.querySelector('#sidebar-register-project').addEventListener('click',()=>{
  document.querySelector('#sidebar-project-import-options').hidden=true;
@@ -3720,7 +3769,9 @@ function toggleToolOptions(button,panel,otherButton,otherPanel){
 const sidebarNewTool=document.querySelector('#sidebar-new-tool'),sidebarImportTool=document.querySelector('#sidebar-import-tool');
 const sidebarToolNewOptions=document.querySelector('#sidebar-tool-new-options'),sidebarToolImportOptions=document.querySelector('#sidebar-tool-import-options');
 sidebarNewTool.addEventListener('click',()=>toggleToolOptions(sidebarNewTool,sidebarToolNewOptions,sidebarImportTool,sidebarToolImportOptions));
+sidebarToolNewOptions.addEventListener('click',async event=>{const button=event.target.closest('[data-new-monitoring-block]');if(button&&!button.disabled)await createMonitoringTool(button.dataset.newMonitoringBlock);});
 sidebarImportTool.addEventListener('click',()=>toggleToolOptions(sidebarImportTool,sidebarToolImportOptions,sidebarNewTool,sidebarToolNewOptions));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!sidebarToolNewOptions.hidden){sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');sidebarNewTool.focus();}});
 document.querySelector('#julia-editor-new').addEventListener('click',()=>{sidebarToolNewOptions.hidden=true;sidebarNewTool.setAttribute('aria-expanded','false');openJuliaEditor(true);});
 document.querySelector('#julia-editor-close').addEventListener('click',async event=>{event.preventDefault();await closeJuliaEditorPage();});
 juliaEditor.addEventListener('input',()=>{juliaEditorAttempt=null;juliaEditorDirty=juliaEditorState()!==juliaEditorBaseline;});
@@ -3737,7 +3788,7 @@ async function saveJuliaEditor(navigate=true){
 juliaEditor.addEventListener('submit',async event=>{event.preventDefault();await saveJuliaEditor();});
 function clearJulia(){
  if(juliaPoll){clearTimeout(juliaPoll);juliaPoll=null;}
- juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();juliaModelList.replaceChildren();
+ selectedToolKey=null;juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();juliaModelList.replaceChildren();
  juliaModelDetail.hidden=true;juliaModelDetail.querySelector('dl').replaceChildren();
  juliaDeletePreview=null;juliaDeleteOperation=null;document.querySelector('#julia-delete-confirm').checked=false;document.querySelector('#julia-delete-run').disabled=true;
  document.querySelector('#julia-preview-value').hidden=true;document.querySelector('#julia-preview-value').textContent='';
@@ -3776,12 +3827,13 @@ async function requestJuliaDelete(model){
 }
 function renderJuliaModelList(){
  juliaModelList.replaceChildren();
- for(const model of juliaCatalog){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),path=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent=model.computation.title;path.className='sidebar-item-id';path.textContent=`Julia · ${model.computation.entrypoint.path}`;open.append(title,path);open.addEventListener('click',()=>showJuliaModelDetail(model));
-  const actions=[{label:'Zobrazit',run:()=>showJuliaModelDetail(model)},{label:'Editovat',run:()=>openJuliaEditor(false,model.definition.path),disabled:!model.editable||activeProject?.readOnly},{label:'Spustit',run:()=>prepareJuliaRun(model),disabled:Boolean(activeProject?.readOnly)},{label:'Smazat',run:()=>requestJuliaDelete(model),disabled:!model.editable||activeProject?.readOnly}];
-  row.append(open,sidebarItemMenu(model.computation.title,actions,'sidebar-tool-menu'));juliaModelList.append(row);
+ for(const model of juliaCatalog){
+  const actions=[{label:'Editovat',run:()=>openJuliaEditor(false,model.definition.path),disabled:!model.editable||activeProject?.readOnly},{label:'Spustit',run:()=>prepareJuliaRun(model),disabled:Boolean(activeProject?.readOnly)},{label:'Smazat',run:()=>requestJuliaDelete(model),disabled:!model.editable||activeProject?.readOnly}];
+  const row=toolSidebarRow('julia:'+model.definition.path,model.computation.title,()=>showJuliaModelDetail(model),actions),path=document.createElement('small');
+  path.className='sidebar-item-id';path.textContent=`Julia · ${model.computation.entrypoint.path}`;row.querySelector('.sidebar-list-main').append(path);juliaModelList.append(row);
  }
- if(roadmapReviewRows.length||roadmapReviewError){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),detail=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent='Kontrola roadmapy';detail.className='sidebar-item-id';detail.textContent=roadmapReviewError?'Načtení selhalo · otevřít a obnovit':`${roadmapReviewRows.length} návrhů · node-local`;open.append(title,detail);open.addEventListener('click',openRoadmapReview);row.append(open);juliaModelList.append(row);}
- const total=juliaCatalog.length+(roadmapReviewRows.length||roadmapReviewError?1:0);document.querySelector('#sidebar-tools-status').textContent=roadmapReviewError?'Kontrolu roadmapy se nepodařilo načíst. Otevřete nástroj a zkuste Obnovit seznam.':`Počet nástrojů: ${total}`;
+ if(roadmapReviewRows.length||roadmapReviewError){const row=document.createElement('li'),open=document.createElement('button'),title=document.createElement('span'),detail=document.createElement('small');row.className='sidebar-list-row';open.type='button';open.className='sidebar-list-main';title.textContent='Kontrola roadmapy';detail.className='sidebar-item-id';detail.textContent=roadmapReviewError?'Načtení selhalo · otevřít a obnovit':`${roadmapReviewRows.length} návrhů · node-local`;open.append(title,detail);open.addEventListener('click',openRoadmapReview);row.append(open,sidebarItemMenu('Kontrola roadmapy',[{label:'Zobrazit',run:openRoadmapReview}]));juliaModelList.append(row);}
+ updateToolsCount();document.querySelector('#sidebar-tools-status').textContent=roadmapReviewError?'Kontrolu roadmapy se nepodařilo načíst. Otevřete nástroj a zkuste Obnovit seznam.':`Počet nástrojů: ${document.querySelectorAll('#sidebar-tools-tree .sidebar-list-row').length}`;
  if(typeof renderToolsOverview==='function')renderToolsOverview();
 }
 function roadmapReviewAction(row){return row.proposal.action||row.proposal.decision||row.proposal.outcome||'—';}
@@ -3888,15 +3940,15 @@ function juliaParameterValues(){
  }return values;
 }
 async function loadJuliaWorkspace(){
- if(!activeProject)return;clearJulia();juliaStatus.textContent='Načítám definice výpočtů…';
- try{const catalog=await projectRequest('/v1/julia/definitions',{project_id:activeProject.id,expected_head:activeProject.head});juliaCatalog=catalog.definitions;
+ if(!activeProject)return;const project=activeProject;clearJulia();juliaStatus.textContent='Načítám definice výpočtů…';
+ try{const catalog=await projectRequest('/v1/julia/definitions',{project_id:project.id,expected_head:project.head});if(activeProject!==project)return;juliaCatalog=catalog.definitions;
   for(const item of juliaCatalog){const option=document.createElement('option');option.value=item.definition.path;option.textContent=item.computation.title;juliaDefinition.append(option);}
   renderJuliaParameters();renderJuliaModelList();juliaStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} dostupných definic. Připravte read-only náhled.`:'Aktuální revize neobsahuje validovanou Julia definici.';
   juliaToolsStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} validovaných Julia modelů v aktuální revizi.`:'Založte nový model nebo načtěte Julia soubor do editoru.';
-  document.querySelector('#sidebar-tools-status').textContent=`Počet nástrojů: ${juliaCatalog.length}`;
+  updateToolsCount();
   document.querySelector('#julia-preview').disabled=!juliaCatalog.length||activeProject.readOnly;
-  const history=await projectRequest('/v1/julia/status',{project_id:activeProject.id});if(history.runs.length)renderJuliaRun(history.runs[0]);
- }catch(error){juliaStatus.textContent=error.message;}
+  const history=await projectRequest('/v1/julia/status',{project_id:project.id});if(activeProject!==project)return;if(history.runs.length)renderJuliaRun(history.runs[0]);
+ }catch(error){if(activeProject===project)juliaStatus.textContent=error.message;}
 }
 juliaDefinition.addEventListener('change',renderJuliaParameters);
 document.querySelector('#julia-model-detail-close').addEventListener('click',()=>{juliaModelDetail.hidden=true;});
@@ -4075,6 +4127,7 @@ document.querySelector('#presentation-print-confirm').addEventListener('change',
 document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
  presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
+ if(typeof renderPresentationReportLink==='function')renderPresentationReportLink();
 }
 function renderOutputsOverview(preferred=null){
  outputsOverviewList.replaceChildren();
@@ -4139,9 +4192,9 @@ async function openPresentationEditor(preferred=null){
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;selectSidebarTab(document.querySelector('#presentations-tab'));
  selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!await canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
  if(presentationEditorDeck)document.querySelector('#presentation-deck-title').focus();
- if(typeof renderPresentationReportLink==='function')renderPresentationReportLink();
 }
 async function createPresentationDocument(confirmDiscard=true){
+ document.querySelector('#presentation-report-link')?.remove();
  if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
 presentationEditorDocuments.addEventListener('change',async()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(await canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
@@ -4338,8 +4391,9 @@ function renderTaskQueue(){
  syncPlanQueueAddState();
  const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
  document.querySelector('#task-queue-publish').disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView?.valid||Boolean(activeProject?.readOnly);
+ document.querySelector('#task-queue-repair').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
  if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu.';return;}
- status.textContent=taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje ověření. ${taskQueueView.issues.join('; ')}`;
+ status.textContent=taskQueueMessage||(taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje opravu. ${taskQueueView.issues.join('; ')}`);
  for(const [index,item] of taskQueueView.items.entries()){
   const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button'),moves=document.createElement('span');
   open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.held?' · Pozastaveno':''}${item.children?.length?` · Dávka: ${item.children.length} podúkolů`:''}${item.agent_confirmed?' · Agent hlásí splnění':''}${item.user_requested?' · Ruční žádost z IDE':''}${item.user_confirmed?' · Přijato uživatelem':''}`;
@@ -4347,7 +4401,7 @@ function renderTaskQueue(){
   moves.className='task-queue-order-controls';
   for(const [direction,offset,symbol,label] of [['up',-1,'↑','Posunout nahoru'],['down',1,'↓','Posunout dolů']]){
    const button=document.createElement('button');button.type='button';button.className='task-queue-move-'+direction;button.textContent=symbol;button.ariaLabel=`${label}: ${item.id}`;button.title=button.ariaLabel+(item['move_'+direction+'_reason']?' — '+item['move_'+direction+'_reason']:'');
-   button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||!taskQueueView.valid||item['can_move_'+direction]!==true;
+   button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||item['can_move_'+direction]!==true;
    button.addEventListener('click',async()=>{
     const projectAtClick=activeProject;await changeTaskQueue('move',item.id,index+offset);
     if(activeProject!==projectAtClick||document.querySelector('#task-queue-panel').hidden)return;
@@ -4382,6 +4436,9 @@ function renderTaskQueue(){
    }
    row.append(reports);
   }
+  const single=document.createElement('button');single.type='button';single.textContent='Vyřadit jen tento odkaz';
+  single.title='Zachová ostatní položky včetně následníků. Zbývající předpoklady lze opravit bez vyprázdnění fronty.';
+  single.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);single.addEventListener('click',()=>changeTaskQueue('remove-single',item.id));row.append(single);
   list.append(row);
  }
 }
@@ -4437,8 +4494,14 @@ async function changeTaskQueue(action,taskId,targetIndex){
  try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
  if(action==='move')request.target_index=targetIndex;
  if(action==='set-flag')Object.assign(request,targetIndex);
- if(action==='remove'){const preview=await projectRequest('/v1/task-queue',{...request,action:'remove-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}`))return;request.preview_sha256=preview.preview_sha256;}
- const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
+ if(action==='remove'||action==='remove-single'){const preview=await projectRequest('/v1/task-queue',{...request,action:action+'-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}${action==='remove-single'?' · Ostatní odkazy zůstanou zachované.':''}`))return;request.preview_sha256=preview.preview_sha256;}
+ if(action==='repair'){
+  const preview=await projectRequest('/v1/task-queue',{...request,action:'repair-preview'});if(activeProject!==project)return;
+  if(preview.issues.length){taskQueueMessage='Opravu zatím nelze dokončit: '+preview.issues.join('; ')+'. Chybné odkazy můžete vyřadit jednotlivě; ostatní položky zůstanou.';return;}
+  if(!window.confirm(`Opravit frontu se zachováním nedokončených položek?\nDokončené odkazy k vyřazení: ${(preview.removed_ids||[]).join(', ')||'žádné'}\nDoplněné předpoklady: ${preview.added_ids.join(', ')||'žádné'}\nVýsledné pořadí:\n${preview.task_ids.join('\\n')}`))return;
+  request.preview_sha256=preview.preview_sha256;
+ }
+ const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;taskQueueMessage='';renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
  }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
  finally{taskQueueBusy=false;renderTaskQueue();}
 }
@@ -4453,6 +4516,7 @@ document.querySelector('#task-queue-publish').addEventListener('click',async()=>
  }catch(error){if(activeProject===project)target.textContent=error.message;}
 });
 document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
+document.querySelector('#task-queue-repair').addEventListener('click',()=>changeTaskQueue('repair'));
 
 function renderPlanDescription(target,item){
  if(item.description_markdown)renderMarkdown(item.description_markdown,target,null,true);
@@ -4648,10 +4712,10 @@ function renderTaskPlan(){
  graph.append(svg);applyPlanZoom();status.textContent=`${nodes.length}/${value.nodes.length} úkolů · ${value.ready.length} připravených · ${value.blocked.length} blokovaných · ${taskPlanSelection?.title||'Hlavní graf'}`;
 }
 function updateTaskPlanTreeSelection(queueOpen=false){for(const button of document.querySelectorAll('[data-plan-selection]'))button.setAttribute('aria-current',String(!queueOpen&&(taskPlanSelection?button.dataset.planSelection===taskPlanSelection.id:button.dataset.planSelection==='/')));for(const button of document.querySelectorAll('[data-plan-subgraph]'))button.setAttribute('aria-current',String(!queueOpen&&taskPlanSelection?.kind==='subgraph'&&button.dataset.planSubgraph===taskPlanSelection.id));}
-async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');installTaskPlanViews(view);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();return true;}
+async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');installTaskPlanViews(view);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();loadTaskQueue();return true;}
 async function openTaskQueue(){if(!activeProject||!await canLeaveWorkspaceEditors())return;showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));selectMainTab(document.querySelector('#task-queue-tab'));closeMobileSidebar();closeCompactSidebarMenu();await loadTaskQueue();}
 document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
-function installTaskPlanViews(result){renderTaskPlanSidebar(result.plan);}
+function installTaskPlanViews(result,options){renderTaskPlanSidebar(result.plan,options);}
 function renderTaskPlanSidebar(value,{loadQueue=true,renderGraph=true}={}){
  if(loadQueue){taskQueueView=null;loadTaskQueue();}
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
@@ -5020,15 +5084,66 @@ const projectConflictDialog=document.querySelector('#project-conflicts-dialog');
 const projectConflictResult=document.querySelector('#project-conflicts-result');
 const projectConflictConfirm=document.querySelector('#project-conflicts-confirm');
 const projectConflictPublish=document.querySelector('#project-conflicts-publish');
-let projectConflictRows=[],projectConflictPreview=null,projectConflictDrafts=new Map(),projectConflictOperation=null,projectConflictRequest=0,projectConflictPath=null;
+let projectConflictRows=[],projectLocalChanges=[],projectConflictPreview=null,projectConflictDrafts=new Map(),projectConflictOperation=null,projectConflictRequest=0,projectConflictPath=null;
+let projectLocalReview=null,projectLocalAttempt=null;
+const localConflictDialog=document.querySelector('#local-conflict-dialog');
+function closeLocalConflictDialog(){if(localConflictDialog.open)localConflictDialog.close();}
+async function reviewLocalProjectChange(item,choice){
+ if(!activeProject||activeProject.readOnly)return;
+ const status=document.querySelector('#local-conflict-status');
+ if(projectLocalAttempt){status.textContent='Rozhodnutí už bylo odesláno. Dokončete původní operaci stejným potvrzením.';localConflictDialog.showModal();return;}
+ const project=activeProject;projectLocalReview=null;
+ try{const review=await projectRequest('/v1/projects/conflicts/local-preview',{project_id:project.id,expected_head:project.head,path:item.path,choice});
+  if(activeProject!==project)return;if(project.head!==review.preview.expected_head)throw Error('Projekt se změnil; načtěte konflikty znovu.');projectLocalReview=review;
+  document.querySelector('#local-conflict-title').textContent=review.preview.title;
+  document.querySelector('#local-conflict-decision').textContent=choice==='keep'?'Zachovat tuto přesnou místní verzi a uložit ji jedním commitem do historie projektu.':'Obnovit pracovní soubor podle uložené verze. Původní místní bajty zůstanou v soukromém journalu tohoto uzlu jako záloha.';
+  document.querySelector('#local-conflict-diff').textContent=review.preview.commit_preview?.diff??item.diff??'Textový rozdíl není dostupný.';
+  const message=document.querySelector('#local-conflict-message');message.value=choice==='keep'?'Uložit prověřenou místní změnu':'Obnovit prověřený pracovní soubor';message.readOnly=false;
+  document.querySelector('#local-conflict-approved').checked=false;document.querySelector('#local-conflict-confirm').disabled=true;status.textContent=review.preview.commit_preview?.diff_truncated?'Textový náhled je zkrácen. Před potvrzením ověřte celý pracovní soubor; rozhodnutí zahrnuje všechny jeho bajty.':'Náhled nic nezměnil.';localConflictDialog.showModal();
+ }catch(error){projectConflictStatus.textContent=error.message;}
+}
+async function confirmLocalProjectChange(){
+ const project=activeProject,status=document.querySelector('#local-conflict-status');
+ if(!project||!projectLocalReview||!document.querySelector('#local-conflict-approved').checked)return false;
+ if(!projectLocalAttempt){const message=document.querySelector('#local-conflict-message').value;if(!message.trim()){status.textContent='Doplňte popis rozhodnutí.';return false;}projectLocalAttempt={...projectLocalReview,operation_id:crypto.randomUUID(),message,confirm:true};}
+ const attempt=projectLocalAttempt,button=document.querySelector('#local-conflict-confirm');button.disabled=true;document.querySelector('#local-conflict-message').readOnly=true;status.textContent='Provádím potvrzené rozhodnutí…';
+ try{const result=await projectRequest('/v1/projects/conflicts/local-confirm',attempt,120000);
+  if(projectLocalAttempt===attempt){projectLocalAttempt=null;projectLocalReview=null;closeLocalConflictDialog();}
+  if(activeProject===project){project.head=result.commit_id;await openRegisteredProject(project.id);if(activeProject?.id===project.id){projectStatus.classList.remove('visually-hidden');projectStatus.textContent=result.choice==='keep'?'Prověřená místní verze byla uložena do historie.':'Uložená verze obnovena. Záloha místních bajtů zůstává v journalu pod operací '+result.backup_operation_id+'.';}}
+  return true;
+ }catch(error){if(projectLocalAttempt===attempt){status.textContent=error.message+' · Při opakování se použije stejné ID operace.';button.disabled=false;}return false;}
+}
+document.querySelector('#local-conflict-approved').addEventListener('change',event=>{document.querySelector('#local-conflict-confirm').disabled=!event.target.checked;});
+document.querySelector('#local-conflict-message').addEventListener('input',()=>{document.querySelector('#local-conflict-approved').checked=false;document.querySelector('#local-conflict-confirm').disabled=true;});
+document.querySelector('#local-conflict-confirm').addEventListener('click',confirmLocalProjectChange);
+document.querySelector('#local-conflict-close').addEventListener('click',closeLocalConflictDialog);
+function renderProjectSyncConflicts(rows){
+ const section=document.querySelector('#project-conflicts-sync'),list=document.querySelector('#project-conflicts-sync-peers');list.replaceChildren();section.hidden=!rows?.length;
+ for(const row of rows||[]){const item=document.createElement('li');item.textContent=`Protější uzel: ${row.peer_id}`;list.append(item);}
+ return rows?.length||0;
+}
+function renderLocalProjectConflicts(changes){
+ projectLocalChanges=changes||[];const section=document.querySelector('#project-conflicts-local-changes'),files=document.querySelector('#project-conflicts-local-files');
+ files.replaceChildren();section.hidden=!projectLocalChanges.length;
+ for(const item of projectLocalChanges){const row=document.createElement('li'),details=document.createElement('details'),summary=document.createElement('summary'),diff=document.createElement('pre');
+  const labels={added:'Přidaný soubor',modified:'Místní úprava',deleted:'Smazaný soubor',staged:'Změna v Git indexu',unsupported:'Další místní změna'};
+  summary.textContent=`${item.path} · ${labels[item.status]||'Místní změna'}`;
+  diff.textContent=item.diff??'Textové porovnání není dostupné: binární obsah, nepodporovaná cesta nebo překročený limit náhledu.';
+  diff.className='conflict-code';details.append(summary,diff);
+  if(item.can_resolve){for(const [choice,label] of [['keep','Zachovat a uložit do historie'],['restore','Obnovit uloženou verzi']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=Boolean(activeProject?.readOnly);button.addEventListener('click',()=>reviewLocalProjectChange(item,choice));details.append(button);}}
+  row.append(details);files.append(row);
+ }
+}
 function closeConflictDialog(){if(!projectConflictDialog.open)return;if(projectConflictDialog.close)projectConflictDialog.close();else projectConflictDialog.removeAttribute('open');}
 function resetProjectConflicts(){
- ++projectConflictRequest;projectConflictRows=[];projectConflictPreview=null;projectConflictDrafts=new Map();projectConflictOperation=null;projectConflictPath=null;closeConflictDialog();
+ projectLocalReview=null;projectLocalAttempt=null;closeLocalConflictDialog();
+ ++projectConflictRequest;projectConflictRows=[];renderLocalProjectConflicts([]);renderProjectSyncConflicts([]);projectConflictPreview=null;projectConflictDrafts=new Map();projectConflictOperation=null;projectConflictPath=null;closeConflictDialog();
  projectConflictSelect.replaceChildren();projectConflictFiles.replaceChildren();projectConflictWorkspace.hidden=true;projectConflicts.hidden=true;
  projectConflictGrid.hidden=false;projectConflictHeading.hidden=false;projectConflictOpen.hidden=true;projectConflictConfirm.checked=false;projectConflictPublish.disabled=true;
 }
 function conflictDraftChanged(){return [...projectConflictDrafts.values()].some(item=>item.choice && item.choice!=='auto');}
 async function canLeaveConflictEditor(){
+ if(projectLocalAttempt){if(!window.confirm('Potvrzené rozhodnutí ještě nemá potvrzený výsledek. Opuštění operaci na serveru nezruší; její stav zůstane v journalu. Přesto odejít?'))return false;projectLocalAttempt=null;projectLocalReview=null;closeLocalConflictDialog();}
  if(!conflictDraftChanged()&&!projectConflictOperation)return true;
  return resolveEditorLeave('Řešení konfliktů',saveConflictEditor,()=>{closeConflictDialog();projectConflictDrafts=new Map();projectConflictOperation=null;});
 }
@@ -5040,19 +5155,26 @@ async function loadProjectConflictSummary(){
  if(!activeProject)return;const project=activeProject,request=++projectConflictRequest;projectConflictOpen.hidden=true;
  try{const result=await projectRequest('/v1/projects/conflicts/list',{project_id:project.id,expected_head:project.head});
   if(request!==projectConflictRequest||activeProject!==project)return;
-  projectConflictRows=result.conflicts||[];projectConflictOpen.hidden=!projectConflictRows.length;
-  projectConflictOpen.textContent=projectConflictRows.length===1?'Vyřešit konflikt':'Vyřešit konflikty ('+projectConflictRows.length+')';
- }catch(error){if(request===projectConflictRequest)projectConflictOpen.hidden=true;}
+  projectConflictRows=result.conflicts||[];renderLocalProjectConflicts(result.local_changes);
+  const count=projectConflictRows.length+projectLocalChanges.length+renderProjectSyncConflicts(result.sync_conflicts);projectConflictOpen.hidden=!count;
+  projectConflictOpen.textContent=count===1?'Zobrazit konflikt':'Zobrazit konflikty ('+count+')';
+ }catch(error){if(request===projectConflictRequest){projectConflictOpen.hidden=false;projectConflictOpen.textContent='Konflikty: přehled není dostupný';}}
+}
+function installProjectConflictSummary(summary,reports){
+ if(!summary){loadProjectConflictSummary();return;}
+ renderLocalProjectConflicts([]);const peerCount=renderProjectSyncConflicts(reports);
+ projectConflictOpen.hidden=!(summary.local_changes||summary.incoming||peerCount);
+ projectConflictOpen.textContent='Zobrazit konflikty';
 }
 async function openProjectConflicts(){
  if(!activeProject||!await canLeaveWorkspaceEditors())return;projectConflictGrid.hidden=true;projectConflictHeading.hidden=true;projectConflicts.hidden=false;projectConflictWorkspace.hidden=true;
- projectConflictStatus.textContent='Načítám zachované protější historie…';projectConflictSelect.replaceChildren();
+ projectConflictStatus.textContent='Načítám konflikty a místní změny…';projectConflictSelect.replaceChildren();renderLocalProjectConflicts([]);renderProjectSyncConflicts([]);
  const project=activeProject,request=++projectConflictRequest;
  try{const result=await projectRequest('/v1/projects/conflicts/list',{project_id:project.id,expected_head:project.head});
   if(request!==projectConflictRequest||activeProject!==project)return;
-  projectConflictRows=result.conflicts||[];
+  projectConflictRows=result.conflicts||[];renderLocalProjectConflicts(result.local_changes);const syncCount=renderProjectSyncConflicts(result.sync_conflicts);
   for(const row of projectConflictRows){const option=document.createElement('option');option.value=row.ref;option.textContent=`${row.branch} · ${row.head.slice(0,10)} · ${row.author} · ${row.subject}`;projectConflictSelect.append(option);}
-  projectConflictStatus.textContent=projectConflictRows.length?'Načítám seznam konfliktních souborů…':'Projekt nemá nevyřešenou divergenci.';
+  projectConflictStatus.textContent=projectLocalChanges.length?'Místní změny blokují příjem synchronizace a publikaci merge. Rozbalte soubor pro porovnání.':projectConflictRows.length?'Načítám seznam konfliktních souborů…':syncCount?'Poslední synchronizace hlásila konflikt. Zkontrolujte také protější uzel.':'Projekt nemá nevyřešené konflikty ani místní změny.';
   if(projectConflictRows.length)await loadConflictPreview();
  }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
 }
@@ -5120,7 +5242,7 @@ function updateConflictCompletion(){
  if(!projectConflictPreview)return;let unresolved=0;
  for(const item of projectConflictPreview.files){const draft=projectConflictDrafts.get(item.path);if(item.conflict&&!draft?.choice)unresolved++;}
  document.querySelector('#project-conflicts-unresolved').textContent=unresolved?`Zbývá vyřešit ${unresolved} konfliktních souborů.`:'Všechny konfliktní soubory mají explicitní výsledek.';
- projectConflictConfirm.disabled=Boolean(unresolved)||activeProject?.readOnly;projectConflictPublish.disabled=Boolean(unresolved)||!projectConflictConfirm.checked||activeProject?.readOnly;
+ projectConflictConfirm.disabled=Boolean(unresolved)||Boolean(projectLocalChanges.length)||activeProject?.readOnly;projectConflictPublish.disabled=Boolean(unresolved)||Boolean(projectLocalChanges.length)||!projectConflictConfirm.checked||activeProject?.readOnly;
  renderConflictFileList();
 }
 function renderConflictFile(){
@@ -5139,7 +5261,8 @@ async function loadConflictPreview(){
   if(request!==projectConflictRequest||activeProject!==project)return;
   projectConflictPreview=result;projectConflictDrafts=new Map();projectConflictOperation=null;
   for(const item of result.files)projectConflictDrafts.set(item.path,{choice:item.conflict?null:'auto',text:item.result,deleted:!item.result_exists});
-  projectConflictConfirm.checked=false;projectConflictWorkspace.hidden=false;updateConflictCompletion();projectConflictStatus.textContent='Vyberte soubor ze seznamu. Návrh je pouze v prohlížeči; Git ani projekt nebyly změněny.';
+  projectConflictConfirm.checked=false;projectConflictWorkspace.hidden=false;updateConflictCompletion();projectConflictStatus.textContent=projectLocalChanges.length?'Místní změny blokují publikaci merge. Obě porovnání můžete prohlížet; změny zůstávají zachované.':'Vyberte soubor ze seznamu. Návrh je pouze v prohlížeči; Git ani projekt nebyly změněny.';
+  if(result.merge_bases?.length>1)projectConflictStatus.textContent+=' Historie má více společných předků; Git sestavil návrh ze všech.';
  }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
 }
 function chooseConflict(choice){
@@ -5154,6 +5277,7 @@ projectConflictResult.addEventListener('scroll',()=>{const highlight=document.qu
 for(const [buttonId,panelId,otherId] of [['project-conflicts-raw','project-conflicts-raw-panel','project-conflicts-rendered-panel'],['project-conflicts-rendered','project-conflicts-rendered-panel','project-conflicts-raw-panel']])document.getElementById(buttonId).addEventListener('click',event=>{document.getElementById(panelId).hidden=false;document.getElementById(otherId).hidden=true;for(const button of event.currentTarget.parentElement.querySelectorAll('button')){const active=button===event.currentTarget;button.setAttribute('aria-selected',String(active));button.classList.toggle('secondary-button',!active);}renderConflictPreviews();});
 projectConflictConfirm.addEventListener('change',()=>updateConflictCompletion());
 async function saveConflictEditor(navigate=true){
+ if(projectLocalChanges.length){projectConflictStatus.textContent='Nejprve vyřešte místní změny blokující synchronizaci.';return false;}
  if(!activeProject||!projectConflictPreview)return false;if(projectConflictPreview.files.some(item=>item.conflict&&!projectConflictDrafts.get(item.path)?.choice)){projectConflictStatus.textContent='Nejprve vyřešte všechny konfliktní soubory.';return false;}projectConflictPublish.disabled=true;projectConflictStatus.textContent='Validuji celý projekt a vytvářím potvrzený merge commit…';
  if(!projectConflictOperation)projectConflictOperation=crypto.randomUUID();
  const resolution={project_id:projectConflictPreview.project_id,expected_head:projectConflictPreview.expected_head,incoming_ref:projectConflictPreview.incoming_ref,incoming_head:projectConflictPreview.incoming_head,base:projectConflictPreview.base,preview_sha256:projectConflictPreview.preview_sha256,resolutions:projectConflictPreview.files.map(item=>{const draft=projectConflictDrafts.get(item.path);const row={path:item.path,choice:draft.choice};if(draft.choice==='manual')row.text=draft.text;return row;})};
@@ -5530,22 +5654,41 @@ function threadWritable(){return !activeThread || (activeThread.status==='active
 async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=>{}){
  const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
- if(!response.ok)throw Object.assign(new Error('Streamovaný požadavek byl odmítnut.'),{status:response.status});
+ if(!response.ok){let value;try{value=await response.json();}catch(error){throw Object.assign(new Error('Odpověď streamu nelze potvrdit; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});}
+  throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,phase:'response'});}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
- while(true){const part=await reader.read();buffer+=decoder.decode(part.value || new Uint8Array(),{stream:!part.done});
+ try{while(true){const part=await reader.read();buffer+=decoder.decode(part.value || new Uint8Array(),{stream:!part.done});
   let newline;while((newline=buffer.indexOf('\\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);
    if(!line)continue;const event=JSON.parse(line);
    if(event.type==='delta' && typeof event.delta==='string')onDelta(event.delta);
    else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
    else if(event.type==='deadline')onDeadline(event);
    else if(event.type==='result')result=event.result;
-   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status});
+   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status,outcome:event.outcome,retry:event.retry,phase:'response'});
    else throw new Error('Neplatná událost streamu.');}
   if(part.done)break;}
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
+ }catch(error){if(error.status!==undefined)throw error;
+  throw Object.assign(new Error('Stream skončil bez potvrzeného výsledku; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});
+ }finally{reader.releaseLock();}
 }
 async function externalStreamRequest(request,onDelta){
  return streamRequest('/v1/external/send-stream',request,onDelta);
+}
+function preserveRejectedExternalStream(){
+ if(!chatStream.textContent)return;
+ const text=chatStream.textContent,notice=document.createElement('div');
+ notice.className='chat-message assistant';notice.dataset.incomplete='true';
+ const label=document.createElement('strong');
+ label.textContent='Neúplná / nepřijatá odpověď — není součástí historie ani podkladem pro automatické změny.';
+ const body=document.createElement('pre');body.style.whiteSpace='pre-wrap';body.textContent=text;
+ const download=document.createElement('button');download.type='button';download.textContent='Stáhnout přijatý text';
+ download.addEventListener('click',()=>{
+  const url=URL.createObjectURL(new Blob([label.textContent+String.fromCharCode(10,10)+text],{type:'text/plain;charset=utf-8'}));
+  const link=document.createElement('a');link.href=url;link.download='neuplna-odpoved.txt';
+  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ });
+ notice.append(label,body,download);chatMessages.append(notice);
 }
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
@@ -7462,14 +7605,14 @@ document.querySelector('#external-confirm').addEventListener('click',async event
  try{if(pendingExternalPreview.task){
     const projection=await projectRequest('/v1/tasks/external/confirm',{
      task_id:pendingExternalPreview.taskId,approval_id:preview.approval_id,
-     preview_sha256:preview.preview_sha256,approved:true,privacy:preview.privacy},210000);
+     preview_sha256:preview.preview_sha256,approved:true,privacy:preview.privacy},EXTERNAL_CLIENT_TIMEOUT_MS);
     // Raw provider results stay in the panel, never in the kept task projection.
     const {search_results:searchResults,...kept}=projection;
     replaceTaskProjection(kept);renderProviderSearchResults(searchResults,kept.thread_id);
    }else{
     const result=await projectRequest('/v1/external/confirm',
      {approval_id:preview.approval_id,preview_sha256:preview.preview_sha256,
-      approved:true,privacy:preview.privacy},210000);
+      approved:true,privacy:preview.privacy},EXTERNAL_CLIENT_TIMEOUT_MS);
     activeThread=result.thread;renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);draft.value='';
     renderProviderSearchResults(result.search_results,result.thread.thread_id);
    }
@@ -7542,13 +7685,14 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    await externalStreamRequest(pendingChatRequest,delta=>{receivedDeltas+=1;
     if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
     liveProgress.set(`${providerLabel} generuje odpověď…`);chatStream.textContent+=delta;keepChatStreamVisible();}) :
-   await projectRequest('/v1/external/send',pendingChatRequest,210000);
+   await projectRequest('/v1/external/send',pendingChatRequest,EXTERNAL_CLIENT_TIMEOUT_MS);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
     {enabled:providerStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
    chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=providerStreaming ?
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
+   preserveRejectedExternalStream();
    appendChatOperationNotice(error);
    const staleSelection=await refreshStaleRunSelection(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
@@ -8285,12 +8429,24 @@ if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
 HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script src="/app.js"></script>')
 CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
-HTML = HTML.replace('<ul id="sidebar-tool-list"', '<h3>Sledování</h3><button id="sidebar-monitoring-new" type="button" disabled>Nové sledování</button><ul id="sidebar-monitoring-list"></ul><h3>Modely a výpočty</h3><ul id="sidebar-tool-list"',1)
-HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><h3>Zprávy</h3><ul id="sidebar-report-list"></ul><h3>Prezentace</h3>',1)
+HTML = HTML.replace('<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul>', TOOL_TREE, 1)
+HTML = HTML.replace('<button id="julia-editor-new" type="button">Nový Julia model</button>', '<button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button>'+TOOL_NEW_ACTIONS, 1)
+CSS += TOOL_TREE_CSS + SIDEBAR_MENU_CSS
+JS = SIDEBAR_MENU_JS + TOOL_TREE_JS + JS
+HTML = HTML.replace('<h2>Výstupy</h2><h3>Prezentace</h3>', '<h2>Výstupy</h2><ul id="sidebar-output-tree"><li><details open><summary id="sidebar-report-heading">Zprávy</summary><ul id="sidebar-report-list"></ul></details></li><li><details open><summary>Prezentace</summary>',1)
+HTML = HTML.replace('<ul id="sidebar-presentation-list" aria-label="Prezentace ve výstupech projektu"></ul>', '<ul id="sidebar-presentation-list" aria-label="Prezentace ve výstupech projektu"></ul></details></li></ul>',1)
+HTML = HTML.replace('<main>', '<main>'+REPORT_OUTPUT_HTML,1)
+CSS += REPORT_OUTPUT_CSS
+JS = REPORT_OUTPUT_JS + JS
 HTML = HTML.replace('<button id="presentation-tab"', '<button id="monitoring-tab" role="tab" aria-controls="monitoring-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Sledování a zprávy</button><button id="presentation-tab"',1)
 HTML = HTML.replace('<div id="outputs-overview-panel"', MONITORING_HTML+'<div id="outputs-overview-panel"',1)
 CSS += MONITORING_CSS
 JS = MONITORING_JS + JS
+HTML = HTML.replace('<button id="tools-tab"', '<button id="sources-sidebar-tab" role="tab" aria-label="Zdroje" aria-controls="sidebar-sources" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="1"/><path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14"/></svg><span class="sidebar-tab-label" role="tooltip">Zdroje</span></button><button id="tools-tab"', 1)
+HTML = HTML.replace('<div id="sidebar-projects"', '<div id="sidebar-sources" role="tabpanel" aria-labelledby="sources-sidebar-tab" tabindex="0" hidden><h2>Zdroje</h2><div class="sources-primary-actions"><button id="sources-new" type="button" aria-label="Nový zdroj" title="Nový zdroj"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="sources-action-label" role="tooltip">Nový zdroj</span></button><button id="sources-import" type="button" aria-label="Importovat odběry" title="Importovat odběry"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg><span class="sources-action-label" role="tooltip">Importovat odběry</span></button></div><p id="sources-count"></p><ul id="sources-channel-tabs" role="tablist" aria-label="Kanály zdrojů" aria-orientation="vertical"></ul></div><div id="sidebar-projects"', 1)
+HTML = HTML.replace('<main>', '<main>'+SOURCES_HTML, 1)
+CSS += SOURCES_CSS
+JS = SOURCES_JS + JS
 JS += ADMIN_JS + FILE_EDIT_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
@@ -8300,12 +8456,17 @@ document.querySelector('[data-settings-item="settings-access-tab"]').hidden=fals
 document.querySelector('#presenter-fullscreen').hidden=false;
 document.querySelector('#federation-tab').hidden=false;
 """
+from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
+JS = HTTP_UI_ADMISSION_JS + JS
+JS = f'const EXTERNAL_CLIENT_TIMEOUT_MS={EXTERNAL_CLIENT_TIMEOUT_MS};\n' + JS
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
-PUBLIC_JS = SLIDE_JS + '''
+PUBLIC_JS = HTTP_UI_ADMISSION_JS + SLIDE_JS + '''
 const screen=document.querySelector('#screen');
 function render(result){renderSlideVisual(screen,result.visible?result.content:null,'h1');if(!result.visible){screen.replaceChildren();const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}screen.style.aspectRatio=result.ratio==='4:3'?'4 / 3':'16 / 9';}
-async function poll(){try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok)render(await response.json());}catch(error){}}
-async function reportDisplayRatio(){const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});}catch(error){}}
+let publicPollRunning=false;
+async function poll(){if(document.hidden||publicPollRunning)return;publicPollRunning=true;try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok)render(await response.json());}catch(error){}finally{publicPollRunning=false;}}
+async function reportDisplayRatio(){if(document.hidden)return;const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});}catch(error){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){reportDisplayRatio();poll();}});
 reportDisplayRatio();addEventListener('resize',reportDisplayRatio);poll();setInterval(poll,300);
 '''
 PUBLIC_HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Veřejné promítání</title>
@@ -8322,7 +8483,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = Handler.post_paths | {'/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/correct','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
+    post_paths = Handler.post_paths | {'/v1/x-sources/view','/v1/x-sources/save','/v1/x-sources/close','/v1/x-sources/forget','/v1/monitoring/block-x-collect','/v1/monitoring/migration-cancel','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/migration-apply','/v1/monitoring/migration-resume','/v1/monitoring/block-task-run','/v1/monitoring/blocks','/v1/monitoring/legacy-delete-preview','/v1/monitoring/legacy-delete','/v1/monitoring/block-delete','/v1/monitoring/blocks-save','/v1/monitoring/pool-view','/v1/monitoring/block-configure','/v1/monitoring/block-tick','/v1/monitoring/block-release','/v1/monitoring/block-process','/v1/monitoring/block-reprocess','/v1/monitoring/block-compose','/v1/monitoring/block-publish','/v1/monitoring/workflow-save','/v1/monitoring/workflow-run','/v1/monitoring/synthesis-run','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness','/v1/monitoring/filter-preview','/v1/rss-sources/view','/v1/rss-sources/refresh','/v1/rss-sources/save','/v1/rss-sources/import-preview','/v1/rss-sources/sync-settings','/v1/rss-sources/sync','/v1/rss-sources/sync-resolve','/v1/artifacts/git/status','/v1/artifacts/git/stage','/v1/artifacts/git/preview','/v1/artifacts/git/commit','/v1/monitoring/rss-status','/v1/monitoring/rss-configure','/v1/monitoring/rss-tick','/v1/monitoring/rss-reconcile','/v1/monitoring/finding-transition','/v1/monitoring/definitions','/v1/monitoring/definition-save','/v1/monitoring/correct','/v1/monitoring/output','/v1/monitoring/view','/v1/monitoring/save','/v1/monitoring/run','/v1/monitoring/publish','/v1/monitoring/presentation','/v1/monitoring/retry','/v1/monitoring/cancel','/v1/ide-bridge/connections', '/v1/ide-bridge/connection/create',
         '/v1/ide-bridge/connection/map', '/v1/ide-bridge/connection/revoke', '/v1/ide-bridge/connection/exchange', '/v1/ide-bridge/create', '/v1/ide-bridge/status',
         '/v1/ide-bridge/revoke', '/v1/ide-bridge/review', '/v1/ide-bridge/exchange', '/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -8336,6 +8497,7 @@ class DesktopHandler(Handler):
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
         '/v1/projects/conflicts/list', '/v1/projects/conflicts/preview',
         '/v1/projects/conflicts/confirm',
+        '/v1/projects/conflicts/local-preview', '/v1/projects/conflicts/local-confirm',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/editor/validate-plan',
         '/v1/artifacts/editor/plan-item/open', '/v1/artifacts/editor/plan-item/save',
@@ -8346,7 +8508,7 @@ class DesktopHandler(Handler):
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
         '/v1/chat/status', '/v1/chat/configure', '/v1/chat/models',
-        '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
+        '/v1/diagnostics/status', '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
         '/v1/node-telemetry/run',
         '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test', '/v1/chat/availability',
         '/v1/search/status', '/v1/search/configure', '/v1/search/test',
@@ -8436,6 +8598,11 @@ class DesktopHandler(Handler):
 
     def dispatch_ide_bridge(self, request):
         try:
+            # Credentials may have been revoked/expired while waiting for this
+            # domain. Reload the current record before any exchange action.
+            if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
+                if not self.authorized(self.single('Authorization') or ''):
+                    return self.send_error(401)
             service = self.ide_bridge()
             actor = getattr(self, 'actor', None)
             if self.path == '/v1/ide-bridge/connections' and request == {}:
@@ -8506,6 +8673,66 @@ class DesktopHandler(Handler):
         return self.backend_catalog_status()
 
     def dispatch(self, request):
+        if self.path.startswith('/v1/x-sources/'):
+            if hasattr(self,'actor') and not self.server.administration.is_admin(self.actor):return self.send_error(403)
+            from spikes.x_connector import XService
+            service=XService(self.server.projects.node_path)
+            try:
+                if self.path=='/v1/x-sources/view' and request=={}:result=service.view()
+                elif self.path=='/v1/x-sources/save' and isinstance(request,dict) and set(request)=={'revision','settings','subscriptions','token'}:
+                    result=service.save(request['revision'],request['settings'],request['subscriptions'],token=request['token'])
+                elif self.path=='/v1/x-sources/close' and isinstance(request,dict) and set(request)=={'operation_id','confirm'}:
+                    result=service.close_unknown(request['operation_id'],confirm=request['confirm'])
+                elif self.path=='/v1/x-sources/forget' and isinstance(request,dict) and set(request)=={'post_id','confirm'}:
+                    result=service.forget(request['post_id'],confirm=request['confirm'])
+                else:return self.send_error(400)
+                return self.reply(200,result)
+            except (ValueError,OSError) as exc:return self.reply(400,{'error':str(exc)})
+        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview', '/v1/rss-sources/sync-settings', '/v1/rss-sources/sync', '/v1/rss-sources/sync-resolve'}:
+            from spikes.rss_sources import sources_for
+            if not isinstance(request, dict):return self.send_error(400)
+            try:
+                service=sources_for(self.server)
+                from spikes import rss_subscription_state as rss_state
+                node=self.server.projects.node_path
+                if self.path.endswith(('/sync-settings','/sync','/sync-resolve')):
+                    if hasattr(self,'actor') and not self.server.administration.is_admin(self.actor):return self.send_error(403)
+                    if self.path.endswith('/sync-settings') and set(request)=={'peer_id','enabled','expected_enabled'}:
+                        if type(request['enabled']) is not bool or type(request['expected_enabled']) is not bool:return self.send_error(400)
+                        if request['enabled']:
+                            from spikes.federation_catalog import _authority
+                            _,peer,_,_=_authority(self.server.administration,request['peer_id'])
+                            if peer['sharing_level'] not in {'same-team','same-company'}:return self.send_error(403)
+                        rss_state.configure(node,request['peer_id'],request['enabled'],expected_enabled=request['expected_enabled'])
+                    elif self.path.endswith('/sync') and set(request)=={'peer_id'}:
+                        from spikes.rss_subscription_sync import synchronize
+                        synchronize(node,request['peer_id'],deployment='web' if hasattr(self,'actor') else 'desktop',full=True)
+                    elif self.path.endswith('/sync-resolve') and set(request)=={'url','chosen','revision','tips'}:
+                        rss_state.resolve(node,request['url'],request['chosen'],request['revision'],request['tips'])
+                    else:return self.send_error(400)
+                    result=service.view()
+                elif self.path.endswith('/view') and not request:
+                    result=service.view()
+                elif self.path.endswith('/refresh') and set(request) in ({'channel_id'}, {'channel_id','due_only'}):
+                    if 'due_only' in request and type(request['due_only']) is not bool:return self.send_error(400)
+                    result=service.refresh(request['channel_id'],due_only=request.get('due_only',False))
+                elif self.path.endswith('/save') and set(request)=={'revision','channels'}:
+                    result=service.save(request['revision'],request['channels'])
+                elif self.path.endswith('/import-preview') and set(request)=={'text'}:
+                    from spikes.rss_subscriptions import preview
+                    return self.reply(200,dict(preview(request['text'],service.channels),revision=service.revision))
+                else:return self.send_error(400)
+                result['can_refresh']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                if result['can_refresh']:
+                    result['reader_sync']=rss_state.view(node)
+                    result['reader_sync']['available_peers']=[]
+                    if hasattr(self.server,'administration'):
+                        actor=getattr(self,'actor',{'id':None,'node_role':'federation-admin','memberships':{}})
+                        peers=self.server.administration.request(actor,{'action':'list'})['peers']
+                        result['reader_sync']['available_peers']=[dict(id=p['id'],name=p['name']) for p in peers if p['trust']=='approved' and p['sharing_level'] in {'same-team','same-company'}]
+                return self.reply(200,result)
+            except (ValueError, TypeError, KeyError, OSError, sqlite3.Error) as exc:
+                return self.reply(422,{'error':str(exc)})
         if self.path.startswith('/v1/artifacts/git/'):
             if not isinstance(request,dict):return self.send_error(400)
             if getattr(self.server.projects,'network',False):return self.send_error(403)
@@ -8539,13 +8766,113 @@ class DesktopHandler(Handler):
             try:
                 if not isinstance(request,dict) or 'project_id' not in request:return self.send_error(400)
                 action=self.path.rsplit('/',1)[-1];pid=request['project_id']
-                service._data(pid,network=getattr(self.server.projects,'network',False))
+                network=getattr(self.server.projects,'network',False)
+                if action=='view' and set(request)=={'project_id','mode'} and request['mode']=='blocks':
+                    result=service.current_view(pid,network=network)
+                    result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    result['block_catalog']['can_manage']=result['can_manage']
+                    if result['can_manage']:
+                        result['execution_nodes']=service.execution_nodes(getattr(self.server,'administration',None))
+                    return self.reply(200,result)
+                monitoring_snapshot=service._data(pid,network=network,
+                    **({'read_only':True} if action in {'blocks','output','pool-view'} else {}))
+                if action=='migration-inventory' and set(request)=={'project_id'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    return self.reply(200,MonitoringMigration(service).inventory(pid))
+                if action=='migration-preview' and {'project_id','watch_ids','retention_days','processing_node_id'}<=set(request)<={'project_id','watch_ids','retention_days','processing_node_id','pool_bindings'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    return self.reply(200,MonitoringMigration(service).preview(pid,request['watch_ids'],request['retention_days'],request['processing_node_id'],pool_bindings=request.get('pool_bindings')))
+                if action=='output' and set(request)=={'project_id','output_id','expected_head'}:
+                    return self.reply(200,service.output(pid,request['output_id'],request['expected_head'],_snapshot=monitoring_snapshot))
+                if action=='blocks' and set(request)=={'project_id'}:
+                    result=service.composable.catalog(pid)
+                    result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    return self.reply(200,result)
+                if action=='pool-view' and set(request)=={'project_id','pool_id'}:
+                    return self.reply(200,service.composable.pool_view(pid,request['pool_id']))
+                if action=='rss-status' and set(request)=={'project_id'}:
+                    return self.reply(200,service.rss_runtime.status(pid))
+                if action in {'synthesis-trace','synthesis-freshness'} and set(request)=={'project_id','report_ref'}:
+                    from spikes.monitoring_synthesis import WatchSynthesis
+                    synthesis=WatchSynthesis(service.node)
+                    return self.reply(200,getattr(synthesis,'trace' if action=='synthesis-trace' else 'freshness')(pid,request['report_ref']))
+                if action=='filter-preview' and set(request)<={'project_id','pipeline','items','finding_refs','languages'} and 'pipeline' in request:
+                    from spikes.monitoring_filters import FilterPreviews
+                    return self.reply(200,FilterPreviews(service.node).preview(pid,request['pipeline'],
+                        **{k:v for k,v in request.items() if k not in {'project_id','pipeline'}}))
+                if action=='definitions' and set(request)=={'project_id'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).read(pid)
+                    result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    return self.reply(200,result)
                 if action=='view' and set(request)=={'project_id'}:
                     result=service.view(pid,network=getattr(self.server.projects,'network',False))
                     result['can_manage']=not hasattr(self,'actor') or self.server.administration.is_admin(self.actor)
+                    if result['can_manage']:
+                        result['execution_nodes']=service.execution_nodes(getattr(self.server,'administration',None))
                     return self.reply(200,result)
                 service._writable(pid)
-                if action=='save' and set(request)=={'project_id','operation_id','base_head','watch','new'}:
+                if action=='migration-apply' and {'project_id','watch_ids','retention_days','processing_node_id','preview_sha256','operation_id','confirm'}<=set(request)<={'project_id','watch_ids','retention_days','processing_node_id','preview_sha256','operation_id','confirm','pool_bindings'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    result=MonitoringMigration(service).apply(pid,request['watch_ids'],request['retention_days'],request['processing_node_id'],request['preview_sha256'],request['operation_id'],confirm=request['confirm'],pool_bindings=request.get('pool_bindings'))
+                elif action=='migration-cancel' and set(request)=={'project_id','operation_id','confirm'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    result=MonitoringMigration(service).cancel(pid,request['operation_id'],confirm=request['confirm'])
+                elif action=='migration-resume' and set(request)=={'project_id','operation_id'}:
+                    from spikes.monitoring_migration import MonitoringMigration
+                    result=MonitoringMigration(service).resume(pid,request['operation_id'])
+                elif action=='blocks-save' and set(request)=={'project_id','base_head','blocks','operation_id'}:
+                    result=service.composable.blocks.save(pid,request['base_head'],request['blocks'],request['operation_id'])
+                elif action=='legacy-delete-preview' and set(request)=={'project_id','kind','id'}:
+                    from spikes.monitoring_deletion import MonitoringDeletion
+                    return self.reply(200,MonitoringDeletion(service).preview(pid,request['kind'],request['id']))
+                elif action=='legacy-delete' and set(request)=={'project_id','base_head','sources','operation_id','confirm'}:
+                    from spikes.monitoring_deletion import MonitoringDeletion
+                    result=MonitoringDeletion(service).remove(pid,request['base_head'],request['sources'],request['operation_id'],confirm=request['confirm'])
+                elif action=='block-delete' and set(request)=={'project_id','base_head','block','operation_id','confirm'}:
+                    result=service.composable.remove(pid,request['base_head'],request['block'],request['operation_id'],confirm=request['confirm'])
+                elif action=='block-configure' and set(request)=={'project_id','block_id','enabled','confirm'}:
+                    result=service.composable.configure(pid,request['block_id'],request['enabled'],confirm=request['confirm'])
+                elif action=='block-tick' and set(request)=={'project_id'}:
+                    service.composable.tick(pid);result=service.composable.catalog(pid)
+                elif action=='block-release' and set(request)=={'project_id','job_id','confirm'}:
+                    service.composable.release_unknown(pid,request['job_id'],confirm=request['confirm']);result={'released':True}
+                elif action=='block-task-run' and set(request)=={'project_id','block_id','run_id'}:
+                    result=service.composable.run_task(pid,request['block_id'],request['run_id'])
+                elif action=='block-x-collect' and set(request)=={'project_id','block_id','run_id','confirm'}:
+                    result=service.composable.collect_x(pid,request['block_id'],request['run_id'],confirm=request['confirm'])
+                elif action=='block-process' and set(request)=={'project_id','block_id','run_id'}:
+                    result=service.composable.process(pid,request['block_id'],request['run_id'])
+                elif action=='block-reprocess' and set(request)=={'project_id','source_run_id','run_id','confirm'}:
+                    result=service.composable.reprocess(pid,request['source_run_id'],request['run_id'],confirm=request['confirm'])
+                elif action=='block-compose' and set(request) in ({'project_id','run_id','goal','confirm'},
+                        {'project_id','run_id','goal','confirm','source_ids','proposal_kind'}):
+                    result=service.composable.compose(pid,request['run_id'],request['goal'],confirm=request['confirm'],
+                        source_ids=request.get('source_ids',()),proposal_kind=request.get('proposal_kind','task'))
+                elif action=='block-publish' and set(request)=={'project_id','run_id','approval_digest','confirm'}:
+                    result=service.composable.publish(pid,request['run_id'],request['approval_digest'],confirm=request['confirm'])
+                elif action=='workflow-save'  and set(request)=={'project_id','operation_id','base_head','privacy','collection','processing'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).save_workflow({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
+                elif action=='workflow-run' and set(request)=={'project_id','definition_ref','period_start'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).run_workflow(pid,request['definition_ref'],request['period_start'])
+                elif action=='synthesis-run' and set(request)<={'project_id','definition_ref','period','external_refs'} and {'definition_ref','period'}<=set(request):
+                    from spikes.monitoring_synthesis import WatchSynthesis
+                    result=WatchSynthesis(service.node).execute(pid,request['definition_ref'],request['period'],external_refs=request.get('external_refs'))
+                elif action=='rss-configure' and set(request)=={'project_id','watch_id','input_id','definition_ref','enabled','mode','confirm'}:
+                    result=service.rss_runtime.configure({k:v for k,v in request.items() if k!='confirm'},confirm=request['confirm'])
+                    result={k:v for k,v in result.items() if k!='validators'}
+                elif action=='rss-tick' and set(request)=={'project_id'}:
+                    service.rss_runtime.tick(pid);result=service.rss_runtime.status(pid)
+                elif action=='rss-reconcile' and set(request)=={'project_id','poll_id','confirm'}:
+                    result=service.rss_runtime.reconcile(pid,request['poll_id'],confirm=request['confirm'])
+                elif action=='finding-transition' and set(request)=={'project_id','finding_ref','stage','reason','operation_id','confirm'}:
+                    result=service.rss_runtime.transition(pid,request['finding_ref'],request['stage'],request['reason'],request['operation_id'],confirm=request['confirm'])
+                elif action=='definition-save' and set(request)=={'project_id','operation_id','base_head','watch_id','previous','privacy','definition'}:
+                    from spikes.monitoring_definitions import MonitoringDefinitions
+                    result=MonitoringDefinitions(service.node).save({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
+                elif action=='save' and set(request)=={'project_id','operation_id','base_head','watch','new'}:
                     result=service.save({k:v for k,v in request.items() if k!='operation_id'},request['operation_id'])
                 elif action=='run' and set(request)=={'project_id','watch_id','kind'}:
                     result=service.run_now(pid,request['watch_id'],request['kind'])
@@ -8555,12 +8882,19 @@ class DesktopHandler(Handler):
                     result=service.correct(pid,request['run_id'])
                 elif action=='presentation' and set(request)=={'project_id','run_id'}:
                     result=service.presentation(pid,request['run_id'])
+                elif action=='presentation' and set(request)=={'project_id','output_id','expected_head','confirm'}:
+                    result=service.output_presentation(pid,request['output_id'],request['expected_head'],confirm=request['confirm'],_snapshot=monitoring_snapshot)
                 elif action in {'retry','cancel'} and set(request)=={'project_id','run_id','confirm'}:
                     job=service.scheduler.get(request['run_id'])
                     if job['project_id']!=pid:return self.send_error(403)
                     result=service.retry(pid,request['run_id'],request['confirm']) if action=='retry' else service.scheduler.cancel(request['run_id'],confirm=request['confirm'])
                 else:return self.send_error(400)
                 return self.reply(200,result)
+            except StaleIndex:
+                reading=action in {'view','blocks','output','pool-view','definitions','rss-status'}
+                return self.reply(503 if reading else 409,
+                    {'error':'Projekt se během operace změnil; obnovte přehled.',
+                     'outcome':'unknown','retry':'read-again' if reading else 'review-operation'})
             except (ValueError,KeyError,OSError,sqlite3.Error,subprocess.SubprocessError,PendingOperation,BackendUnknown,BackendResponseError) as exc:
                 return self.reply(422,{'error':str(exc)})
         if self.path.startswith('/v1/ide-bridge/'):
@@ -8617,6 +8951,8 @@ class DesktopHandler(Handler):
                         request['operation_id'], request['preview_sha256'],
                         request.get('proposal_ids')))
                 return self.send_error(400)
+            except (PendingOperation, RecoveryConflict):
+                return self.reply(409, {'error': 'Projekt vyžaduje obnovu rozpracované operace.'})
             except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/document-patterns' and isinstance(request, dict):
@@ -8757,6 +9093,8 @@ class DesktopHandler(Handler):
                         request['project_id'], request['artifact_id'], request['expected_head'],
                         session_artifact_id=session_id))
                 return self.send_error(400)
+            except (PendingOperation, RecoveryConflict):
+                return self.reply(409, {'error': 'Projekt vyžaduje obnovu rozpracované operace.'})
             except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
@@ -8942,6 +9280,15 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/diagnostics/status' and request == {}:
+                from spikes.sync_diagnostics import observations
+                return self.reply(200, {'scope': 'local-process',
+                    'active_http_workers': (self.server.active_worker_count()
+                        if hasattr(self.server, 'active_worker_count') else None),
+                    'http': (self.server.http_diagnostics()
+                        if hasattr(self.server, 'http_diagnostics') else None),
+                    'sync': (observations(projects.node_path)
+                        if projects.node_path is not None else [])})
             if self.path == '/v1/node-telemetry/status' and isinstance(request, dict) \
                     and set(request) <= {'group'}:
                 return self.reply(200, self.server.chat_service.telemetry_status(
@@ -9018,8 +9365,10 @@ class DesktopHandler(Handler):
                     emit({'type': 'result', 'result': result})
                 except BackendUnknown:
                     emit_error(409, 'Výsledek externího běhu není známý; požadavek automaticky neopakujte.')
-                except BackendResponseError:
-                    emit_error(502, 'Externí LLM odpověď nebylo možné bezpečně přijmout.')
+                except BackendResponseError as exc:
+                    try: emit({'type': 'error', 'status': 502,
+                               **external_response_failure(exc)})
+                    except OSError: pass
                 except (ValueError, OSError, sqlite3.Error):
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
                 return
@@ -9225,9 +9574,11 @@ class DesktopHandler(Handler):
                 return self.reply(200, {'id': request['source'].get('project_id'),
                                         'commit_id': receipt['commit_id']})
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
-                    and set(request) == {'project_id', 'scope'} and request['scope'] == 'plan'
+                    and set(request) == {'project_id', 'scope'}
+                    and isinstance(request['scope'], str) and request['scope'] in {'plan', 'dashboard'}
                     and isinstance(request['project_id'], str)):
-                return self.reply(200, projects.plan_view(request['project_id']))
+                return self.reply(200, (projects.plan_view if request['scope'] == 'plan'
+                                        else projects.dashboard_view)(request['project_id']))
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))
@@ -9237,6 +9588,15 @@ class DesktopHandler(Handler):
                     return self.send_error(400)
                 conflicts = ConflictResolution(
                     node, network=getattr(projects, 'network', False))
+                if self.path in {'/v1/projects/conflicts/local-preview', '/v1/projects/conflicts/local-confirm'}:
+                    local = LocalChangeResolution(node, network=getattr(projects, 'network', False))
+                    if self.path.endswith('/local-preview') and isinstance(request, dict) and set(request) == {
+                            'project_id', 'expected_head', 'path', 'choice'}:
+                        return self.reply(200, local.local_preview(**request))
+                    if self.path.endswith('/local-confirm') and isinstance(request, dict) and set(request) == {
+                            'preview', 'approval_digest', 'operation_id', 'message', 'confirm'}:
+                        return self.reply(200, local.local_confirm(**request))
+                    return self.send_error(400)
                 if (self.path == '/v1/projects/conflicts/list'
                         and isinstance(request, dict)
                         and set(request) == {'project_id', 'expected_head'}):
@@ -9395,17 +9755,15 @@ class DesktopHandler(Handler):
                                    'Lokální LLM požadavek selhal.'),
                                    'diagnostic': exc.code, 'outcome': 'failed',
                                    'retry': 'new-run'})
-        except OpenAIResponseError:
+        except OpenAIResponseError as exc:
             if self.path == '/v1/external/models':
                 return self.reply(502, {'error': 'Seznam modelů externího provideru nelze načíst. '
                                        'Uložené nastavení nebylo změněno.'})
-            return self.reply(502, {'error': 'Externí LLM odpověď nebylo možné bezpečně přijmout. '
-                                   'Běh byl ukončen bez automatického opakování.'})
-        except BackendResponseError:
-            message = ('Externí LLM odpověď nebylo možné bezpečně přijmout. '
-                       'Běh byl ukončen bez automatického opakování.'
-                       if self.path.startswith('/v1/external/') else
-                       'Obrazový backend nevrátil bezpečně použitelný PNG výsledek. '
+            return self.reply(502, external_response_failure(exc))
+        except BackendResponseError as exc:
+            if self.path.startswith(('/v1/external/', '/v1/tasks/')):
+                return self.reply(502, external_response_failure(exc))
+            message = ('Obrazový backend nevrátil bezpečně použitelný PNG výsledek. '
                        'Běh byl ukončen bez automatického opakování.')
             return self.reply(502, {'error': message})
         except PendingOperation:
@@ -9492,6 +9850,10 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})
             if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
                 return self.reply(422, {'error': 'Akci dokumentu nelze provést. Ověřte aktuální verzi, metadata, vztahy a recovery stav projektu.'})
+            if self.path.startswith('/v1/projects/conflicts/'):
+                return self.reply(422, {'error':
+                    'Řešitel konfliktů nemůže bezpečně zpracovat tuto historii nebo lokální stav. '
+                    'Konfliktní verze zůstaly zachované.', 'diagnostic': 'conflict-resolution-invalid'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})

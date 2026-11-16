@@ -28,6 +28,39 @@ ručně upravit nebo zvolit naši, protější, obě či smazanou variantu. Bin�
 jinak nepodporovaný soubor dovolí jen celo-souborovou volbu. Přejmenování se v
 první verzi rozloží na vlastněné cesty, ale UI je označí jako `rename/update`.
 
+## Více společných předků (11. 11. 2026)
+
+Po protisměrných merge commitech má reálný federovaný projekt dva nejlepší
+společné předky (criss-cross historie). Původní požadavek na právě jednoho
+blokoval již seznam konfliktů, přestože Git data byla platná. Toto omezení
+se nahrazuje podporou 1 až 32 společných předků. Pro více předků sestavuje
+`git merge-tree --write-tree` návrh ze všech předků svým nativním algoritmem;
+aplikace mu nesmí vnutit jediný `--merge-base`.
+
+Inventura cest zahrnuje rozdíly obou konců vůči všem předkům. Pole `base`
+zachovává deterministický reprezentativní commit pro interní inventuru,
+nikoli autoritu automatického výsledku. U více předků obsahuje náhled
+`merge_bases`; jejich seřazený seznam je součástí schvalovaného digestu.
+UI nadále nabízí lokální/výsledný/vzdálený text a vysvětlí použití více předků.
+Jednopředkové náhledy a potvrzovací kontrakt se nemění.
+
+Crash boundaries a recovery zůstávají původní: výpočet zapisuje pouze do
+dočasného object store, bez změny refs, pracovního stromu či journalu projektu.
+Až explicitní potvrzení použije původní Workspace transakci se dvěma rodiči,
+sémantickou validací a indexem. Přerušení po ref update se dokončí ze stejného
+journalu; opakování nesmí vytvořit další commit. Regresní criss-cross test
+ověřuje nezměněný stav po náhledu, skutečně konfliktní kandidát, oba rodiče,
+obnovu po ref update a aktualizovanou projekci indexu.
+
+Ověření opravy: 21 cílených testů řešitele, merge scénářů a sdíleného UI
+prošlo; samostatný Qt/WebEngine conflict smoke rovněž prošel. JavaScript
+prošel `node --check`, diff prošel `git diff --check`. Izolovaný planner nad
+skutečnou dvoupředkovou historií sestavil návrh jedné změněné cesty bez
+textového konfliktu a beze změny HEAD, refs či pracovního stromu. Tato
+diagnostika neprováděla publikaci ani nenahrazuje živé potvrzení v aplikaci.
+Plná sada po této opravě nebyla opakována; dřívější výsledek celé sady se
+vztahuje k předchozí revizi.
+
 ## Reuse a UI spike
 
 - **Reuse/adapt:** `Git`, `Workspace`/Journal/Index, snapshot a relationship
@@ -120,3 +153,83 @@ a LXC i následný sync výsledku. Samostatná fyzická mobilní a úplná
 klávesnicová akceptace nebyla doložena a zůstává omezením mimo přijatý desktopový
 scénář. Implementované chování a důkazy eviduje
 [WORK_LOG](../../WORK_LOG.md#f-m5-conflict-resolution-01--historie-a-ruční-řešení-divergence--2026-10-23).
+
+## Doplnění 2026-11-10 — místní změny blokující synchronizaci
+
+Přehled konfliktů rozlišuje commitnutou divergenci, necommitnuté místní změny
+a poslední hlášení konfliktu při synchronizaci s peerem. Místní změna se zobrazí
+i bez incoming refu. Text pod `artifacts/` a `registries/` má omezený unified
+diff proti aktuálnímu HEAD; binární obsah, změny pouze v Git indexu a ostatní
+cesty mají položku s vysvětlením nedostupného textového porovnání. Obsah je
+inertní text. Web znovu ověřuje privacy i podle místního kandidátního snapshotu;
+neplatná metadata nebo `local-only` obsah se nesmějí přes toto porovnání zveřejnit.
+Nedostupný přehled se v UI nevydává za nepřítomnost konfliktů.
+
+Položka necommitnuté změny je read-only porovnání, nikoli druhá cesta publikace.
+Neprovádí stash, reset, commit ani obnovu projektu. Existující merge potvrzení
+zůstává odmítnuté při nečistém projektu; UI tuto překážku také výslovně zobrazuje
+a zablokuje publikaci. Hlášení peeru neobsahuje jeho necommitnutý obsah:
+uživatel jej prohlíží na uzlu, který změnu vlastní.
+
+Příjem synchronizace po ověření podpisu a přesné kontrole uloženého requestu
+nejprve rozpozná dokončený replay. Pro ostatní požadavky zkontroluje registrovaný
+cílový projekt pod neblokujícím writer lockem ještě před ověřením Git historie.
+Nečistý projekt bez rozpracovaného journalového zápisu vrátí stávající HTTP 409;
+odesílatel zachová původní outbound operation ID a zobrazí stav `conflict`.
+Metadata-only poll má stejnou kontrolu, protože i jeho odpověď připravuje Git stav.
+Nejde o změnu formátu federačního protokolu.
+
+Crash hranice ADR 0042/0081 ani publikační recovery výše se nemění. Včasné
+odmítnutí nevytváří nový inbound intent, nepotvrdí přenos a nesmaže existující
+nedokončený request. Rozpracovaná journalová operace má nadále původní
+roll-forward cestu; její vlastní rozpracované bajty se nesmějí zaměnit za cizí
+necommitnutou úpravu. Po vyřešení místní změny lze pokračovat stejným operation
+ID. Dokončený replay vrací původní odpověď i při novější místní úpravě, protože
+nic znovu nepublikuje. Kontrola čistoty při skutečném zápisu zůstává zachovaná
+kvůli změnám vzniklým až po předběžné kontrole.
+
+### Výslovné vyřešení místní změny
+
+Na další žádost uživatele přibývá k původnímu read-only porovnání samostatný
+náhled/potvrzení pro **obsah jednoho sledovaného artefaktu**. Uživatel může
+zachovat prověřené bajty a uložit je do historie, nebo obnovit uloženou verzi
+pracovního souboru. Metadata, nesledované soubory, registry a odlišná staged
+verze nejsou tímto krokem automaticky přepsány; takový stav vyžaduje vlastní
+posouzení. Akce neřeší následnou divergenci commitnutých větví za uživatele.
+
+Webová varianta vyžaduje současné write RBAC a původní lokální write guard.
+Jde o explicitní výjimku pro tento omezený conflict workflow, nikoli povolení
+obecných Stage/Commit endpointů ve webu: ty nadále zůstávají desktopové.
+Náhled váže project ID, HEAD, větev, jedinou deklarovanou cestu obsahu, přesné
+hashe původních a pracovních bajtů a digest celého rozhodnutí. Síťová cesta
+odmítne `local-only` jak v původním, tak kandidátním snapshotu. Potvrzení znovu
+ověří shodu pod writer lockem; samotný náhled nezapisuje.
+
+**Zachovat:** adaptuje `ArtifactGit.stage` a `ArtifactGit.commit` nad původním
+Workspace writerem. Stage má deterministické dílčí UUID odvozené od hlavního
+operation ID. Digest celého rozhodnutí včetně zprávy je připnutý v obou
+fázích. Crash po Stage se dokončuje stejným intentem; commit prochází původní
+metadata/reporting/plan validací, journalem, CAS a indexací. Pád po CAS ani
+ztracená odpověď nevytvoří druhý commit. Pozdější pracovní bajty zůstávají
+zachované jako další necommitnutá změna, nikoli součást starého rozhodnutí.
+
+**Obnovit:** nový druh `artifact-working-restore` v témže privátním projektovém
+journalu nemění Git HEAD ani Git index. Před zásahem atomicky uloží request
+digest, HEAD/větev/index tree, vlastněnou cestu, původní bajty jako base64 zálohu
+a původní journalové before/after obrazy. Po fsync intentu použije existující
+atomickou souborovou obnovu Journalu. Až po úspěchu v jedné SQLite transakci
+označí operaci dokončenou a odstraní pending payload. Záloha zůstává v privátním
+operation recordu mimo projektový Git; HTTP receipt vrací pouze její operation
+ID, ne zálohované bajty. Nový formát Git artefaktů ani federace nevzniká.
+
+Obnova po pádu před zápisem či po výměně souboru kontroluje původní HEAD,
+větev, Git index a souborové before/after bajty. Cizí editace vede ke konfliktu
+a ponechání intentu i zálohy, nikoli k přepsání. Opakování již dokončené obnovy
+je no-op i při novější pracovní úpravě. Stávající správa oprav může přerušenou
+operaci dokončit přes `Workspace.recover`; downgrade s nedokončenou novou
+operací nemá být vydáván za ověřenou kompatibilní recovery cestu.
+
+UI vyžaduje náhled, popis a explicitní potvrzení. Neznámý výsledek opakuje se
+stejným operation ID; opuštění stránky nezruší serverový intent. Nepotvrzený
+náhled lze zavřít bez změny projektu. Akceptace skutečné uživatelské volby se
+neodvozuje od nasazení ani od testů na dočasných projektech.

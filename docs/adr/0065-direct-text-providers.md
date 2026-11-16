@@ -53,6 +53,12 @@ Pravidla konektoru:
   jako neznámý výsledek. Timeout, ztráta spojení a stream bez dokončení končí
   `unknown` bez opakování, `succeeded` se vrací idempotentně, `failed` vyžaduje nový
   běh. Takové chování je závazné i tam, kde provider doporučuje opakování.
+- Timeout vazby (`timeout_seconds`, 1–900 s, společně pro Claude, Gemini, Grok,
+  OpenAI i AtlasCloud) je bez streamu absolutní limit celého požadavku. Se streamem
+  omezuje připojení a každou pauzu bez dat; celý stream končí nejpozději po
+  1800 s. Lokální UI čeká na nestreamované externí volání déle než nejvyšší limit
+  backendu, aby výsledek určil journal, ne prohlížeč. Delší běh nemění crash
+  boundaries: zůstává v `dispatching` a po pádu či shutdownu (ADR 0050) je `unknown`.
 - `model-discovery-*` drží poslední úplný snapshot. Selhání kterékoli stránky
   nepřepíše poslední validní data.
 - `backend-reset-<adapter>.json` řídí odstranění: nejdřív binding, potom secret;

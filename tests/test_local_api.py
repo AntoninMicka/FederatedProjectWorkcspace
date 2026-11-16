@@ -18,6 +18,42 @@ from spikes.local_api import Handler, MAX_BODY, private_directory, running_api
 
 
 class LocalAPITests(unittest.TestCase):
+    def test_request_action_diagnostics_keep_only_known_literals_on_exact_routes(self):
+        from types import SimpleNamespace
+        from spikes.local_api import BoundedHTTPServer
+        request = object()
+        server = SimpleNamespace(_worker_condition=threading.Condition(),
+                                 _request_details={request: {}})
+        for path, action in (('/v1/task-queue', 'private-token'),
+                             ('/v1/task-queue', []),
+                             ('/v1/task-queue?private-token', 'status')):
+            BoundedHTTPServer.describe_request_action(server, request, path, {'action': action})
+        self.assertEqual(server._request_details[request], {})
+        BoundedHTTPServer.describe_request_action(server, request, '/v1/task-queue', {'action': 'status'})
+        self.assertEqual(server._request_details[request], {'action': 'status'})
+
+    def test_production_route_inventory_requires_classification_for_new_routes(self):
+        from spikes.http_admission_policy import validate_route_ownership, request_lane
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.web_server import WebHandler
+        validate_route_ownership(DesktopManagementHandler.post_paths)
+        validate_route_ownership(WebHandler.post_paths)
+        with self.assertRaisesRegex(ValueError, 'ownership audit'):
+            validate_route_ownership(WebHandler.post_paths | {'/v1/new-mutation'})
+        self.assertEqual(request_lane('/v1/administration', {'action':'list'}), 'node_status_lane')
+        self.assertEqual(request_lane('/v1/task-queue', {'action':'status'}), 'task_queue_status_lane')
+        for action in ('add', 'revalidate', 'repair', 'set-flag', 'unknown', []):
+            self.assertEqual(request_lane('/v1/task-queue', {'action':action}), 'ide_queue_lane')
+        for request in ({'action':'create-user'}, {'action':[]}, {}, None):
+            self.assertEqual(request_lane('/v1/administration', request), 'provider_lane')
+
+    def test_timeout_logging_excludes_raw_request_and_error_arguments(self):
+        handler = object.__new__(Handler)
+        with self.assertLogs('spikes.local_api', level='WARNING') as logs:
+            handler.log_error('Request timed out: %r', 'private-token-and-payload')
+        self.assertIn('socket_timeout', str(logs.output))
+        self.assertNotIn('private-token-and-payload', str(logs.output))
+
     @contextmanager
     def servers(self):
         with tempfile.TemporaryDirectory() as runtime:
@@ -97,13 +133,46 @@ class LocalAPITests(unittest.TestCase):
 
     def test_merged_readonly_routes_keep_independent_lanes(self):
         routes = {
-            '/v1/counter': 'application_lane',
+            '/v1/counter': 'node_preferences_lane',
+            '/v1/chat/send-stream': 'provider_execution_lane',
+            '/v1/tasks/route-stream': 'provider_execution_lane',
+            '/v1/external/send-stream': 'provider_execution_lane',
+            '/v1/chat/status': 'provider_status_lane',
+            '/v1/administration': 'provider_lane',
             '/v1/node-telemetry/status': 'telemetry_lane',
             '/v1/chat/availability': 'availability_lane',
             '/v1/roadmap-refinement/list': 'review_lane',
             '/v1/roadmap-refinement/detail': 'review_lane',
             '/v1/roadmap-refinement/reconcile/preview': 'review_lane',
+            '/v1/projects': 'catalog_lane',
+            '/v1/presentation/status': 'presentation_lane',
+            '/v1/presentation/control': 'presentation_lane',
+            '/v1/presentation/public': 'presentation_lane',
+            '/v1/presentations/use': 'presentation_lane',
+            '/v1/federation/content-sync': 'content_sync_lane',
         }
+
+        from spikes.http_admission_policy import JULIA_ROUTES
+        routes.update(dict.fromkeys(JULIA_ROUTES, 'julia_lane'))
+        from spikes.http_admission_policy import MONITORING_ROUTES, RSS_SOURCE_ROUTES, X_SOURCE_ROUTES
+        routes.update(dict.fromkeys(MONITORING_ROUTES, 'monitoring_lane'))
+        from spikes.http_admission_policy import MONITORING_EXECUTION_ROUTES, MONITORING_CONTROL_ROUTES
+        routes.update(dict.fromkeys(MONITORING_EXECUTION_ROUTES, 'monitoring_execution_lane'))
+        routes.update(dict.fromkeys(MONITORING_CONTROL_ROUTES, 'monitoring_control_lane'))
+        routes.update(dict.fromkeys(RSS_SOURCE_ROUTES, 'rss_sources_lane'))
+        routes.update(dict.fromkeys(X_SOURCE_ROUTES, 'x_sources_lane'))
+        # Reader sync waits on the peer without owning the local cache lane.
+        routes['/v1/rss-sources/sync'] = 'catalog_transfer_lane'
+        from spikes.http_admission_policy import IDE_QUEUE_ROUTES
+        routes.update(dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue_lane'))
+        from spikes.http_admission_policy import REFINEMENT_ROUTES, REFERENCE_ROUTES
+        routes.update(dict.fromkeys(REFINEMENT_ROUTES, 'review_lane'))
+        routes.update(dict.fromkeys(REFERENCE_ROUTES, 'reference_lane'))
+        from spikes.http_admission_policy import (NODE_PREFERENCE_ROUTES,
+            FEDERATION_CONTROL_ROUTES, FEDERATION_TRANSFER_LANES)
+        routes.update(dict.fromkeys(NODE_PREFERENCE_ROUTES, 'node_preferences_lane'))
+        routes.update(dict.fromkeys(FEDERATION_CONTROL_ROUTES, 'federation_control_lane'))
+        routes.update({path: lane+'_lane' for path, lane in FEDERATION_TRANSFER_LANES.items()})
 
         class LaneHandler(Handler):
             post_paths = set(routes)
@@ -157,7 +226,7 @@ class LocalAPITests(unittest.TestCase):
             blocked.start()
             try:
                 self.assertTrue(entered.wait(1))
-                response = self.request(server)
+                response = self.request(server, path='/v1/block', body=b'{}')
                 self.assertIn(b' 503 ', response.split(b'\r\n', 1)[0])
                 self.assertEqual(server.counter, 0)
             finally:
@@ -195,8 +264,8 @@ class LocalAPITests(unittest.TestCase):
                     responses.append(b'')
 
             clients = [threading.Thread(target=request, args=(path,)) for path in (
-                '/v1/block', '/v1/node-telemetry/status', '/v1/counter',
-                '/v1/counter')]
+                '/v1/block', '/v1/node-telemetry/status', '/v1/block',
+                '/v1/block')]
             for client in clients[:2]:
                 client.start()
             self.assertTrue(application_entered.wait(1))
@@ -213,7 +282,8 @@ class LocalAPITests(unittest.TestCase):
                 self.assertIn(exc.errno, {
                     errno.ECONNRESET, errno.ENOTCONN, errno.EPIPE})
                 excess = b''
-            self.assertEqual(excess, b'')
+            self.assertIn(b'HTTP/1.0 503', excess)
+            self.assertIn(b'{"error":"server busy"}', excess)
             self.assertEqual(server.active_worker_count(), 4)
             release.set()
             for client in clients:
@@ -383,6 +453,48 @@ class LocalAPITests(unittest.TestCase):
                 with running_api('unix', root):
                     self.fail('unsafe parent accepted')
             root.chmod(0o700)
+
+    def test_trickling_body_expires_before_dispatch_and_releases_worker(self):
+        class ShortReadHandler(Handler):
+            request_read_seconds = .15
+        with running_api('http', handler=ShortReadHandler) as server:
+            with self.connect(server) as client:
+                header = (f'POST /v1/counter HTTP/1.1\r\nHost: {server.authority}\r\n'
+                          f'Authorization: Bearer {server.token}\r\n'
+                          'Content-Type: application/json\r\nContent-Length: 100\r\n\r\n')
+                client.sendall(header.encode())
+                for _ in range(4):
+                    client.sendall(b' ')
+                    time.sleep(.04)
+                response = client.recv(4096)
+                self.assertIn(b' 503 ', response)
+                self.assertEqual(server.counter, 0)
+            self.assertIn(b' 200 ', self.request(server))
+            self.assertEqual(server.counter, 1)
+
+    def test_peer_body_deadline_is_transient_before_any_receiver_dispatch(self):
+        from spikes.web_server import WebHandler
+        from spikes import federation_catalog, federation_sync, project_replication
+        class ShortReadHandler(WebHandler):
+            request_read_seconds = .1
+        paths = [('/v1/federation/probe', 'application/json'),
+                 (federation_catalog.PATH, federation_catalog.CONTENT_TYPE),
+                 (federation_sync.PATH, federation_sync.CONTENT_TYPE),
+                 (project_replication.PATH, project_replication.CONTENT_TYPE)]
+        with running_api('http', handler=ShortReadHandler) as server:
+            for path, content_type in paths:
+                with self.subTest(path=path), self.connect(server) as client:
+                    header = (f'POST {path} HTTP/1.1\r\nHost: {server.authority}\r\n'
+                              f'Content-Type: {content_type}\r\nContent-Length: 100\r\n\r\n')
+                    client.sendall(header.encode()+b' ')
+                    response = bytearray()
+                    while True:
+                        data = client.recv(4096)
+                        if not data: break
+                        response.extend(data)
+                    self.assertIn(b' 503 ', response)
+                    self.assertIn(b'not-started', response)
+                    self.assertEqual(server.counter, 0)
 
     def test_stalled_client_and_pipeline_do_not_mutate_twice(self):
         with self.servers() as servers:

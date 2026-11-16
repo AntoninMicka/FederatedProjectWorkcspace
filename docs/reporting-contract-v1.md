@@ -13,6 +13,26 @@ jeho implementace. Lokální ruční řez MON-01 nyní popisuje
 Následující „musí“ zůstávají normativními požadavky; scheduler, collector,
 vícefázový ReportRun a externí doručení se tímto neprohlašují za hotové.
 
+Rozšíření 6. 11. 2026: [ADR 0074](adr/0074-independent-monitoring-definitions.md)
+přidává typ `WatchDefinition` a denní `Period` pro samostatná propojená
+sledování. Jejich [modelové API](independent-monitoring.md) samo neprovádí
+automatický sběr ani syntézu; původní cílový reportingový tok tím není akceptovaný.
+
+Rozšíření MON-08-03 v [ADR 0076](adr/0076-recurring-rss-findings.md) přidává
+`SourceFinding` pro neměnné RSS nálezy, jejich opravy a processing stavy.
+Jde o untrusted zdrojová data, nikoli potvrzené Events nebo EvidenceAssessment.
+
+Rozšíření 8. 11. 2026: [ADR 0082](adr/0082-composable-monitoring-and-message-pools.md)
+přidává typ `MonitoringBlock` pro samostatné zdroje, filtry, pooly,
+zpracování a komplexní úlohy. Definice používají stejnou neměnnou obálku;
+obsah poolů je samostatná kolekce mimo Git. Uživatelský postup a skutečné
+hranice nové implementace popisuje [návod](composable-monitoring.md).
+
+Jednorázový převod podle [ADR 0083](adr/0083-one-time-monitoring-migration.md)
+přidává neměnný `MonitoringMigration` s původními refs, cílovými block IDs,
+refs převzatých nálezů a hashem posouzeného náhledu. Jen jeho provenance.inputs
+má limit 628 unikátních refs (128 definic + 500 nálezů); ostatní limity zůstávají.
+
 ## 1. Verze, identity a společné typy
 
 Projektové záznamy mají obálku `schema: fpw-reporting-record-v1` s právě
@@ -22,7 +42,7 @@ přípustné. Nullable hodnoty jsou explicitní `null`, nikoli chybějící pole
 | Pole | Typ a význam |
 | --- | --- |
 | `schema` | Přesně `fpw-reporting-record-v1`. |
-| `type` | `ReportingTask`, `Event`, `Source`, `Story`, `EvidenceAssessment`, `EvaluationScale`, `ReportSnapshot`. |
+| `type` | `ReportingTask`, `Event`, `Source`, `Story`, `EvidenceAssessment`, `EvaluationScale`, `ReportSnapshot`; ADR 0074 přidává `WatchDefinition`, ADR 0076 `SourceFinding`. |
 | `entity_id` | Kanonické UUID stabilní identity napříč revizemi. |
 | `revision_id` | Nové kanonické UUID každé neměnné revize; rovná se ID jejího projektového artefaktu. |
 | `previous` | Seznam 0–2 `PinnedRef` stejné identity a typu. Genesis má prázdný seznam; dva rodiče znamenají výslovně posouzené sloučení větví. |
@@ -56,7 +76,7 @@ Společné uzavřené typy:
 | `BatchRef` | `{artifact_id, path, sha256, at}`; `at` je přesně `same-commit`. Jen nový sourozenec v téže atomické operaci téhož projektu. Kandidátní strom musí obsah i hash ověřit; při pozdějším čtení se řeší v commitu obsahujícím záznam. |
 | `Ref` | Právě jeden z výše uvedených tvarů. Vstupy hotového ReportSnapshotu jsou jen `PinnedRef`; nové souběžně vydávané Markdown bajty mohou mít `BatchRef`. |
 | `DateValue` | `{precision, start, end, basis}`. precision `unknown`, `day`, `month`, `year` nebo `range`. unknown má start/end null; ostatní mají platné ISO datum a interval `[start,end)` v kalendářních dnech, basis seznam source/evidence `Ref`. |
-| `Period` | `{kind, timezone, calendar_revision, start_local, end_local, start_utc, end_utc}`. kind `weekly`, `monthly`, `quarterly`, `annual` nebo `custom`; IANA timezone, přesný kalendářní předpis, časy s offsetem a stejné krajní UTC okamžiky. Interval je vždy `[start,end)`. |
+| `Period` | `{kind, timezone, calendar_revision, start_local, end_local, start_utc, end_utc}`. kind `daily` (ADR 0074), `weekly`, `monthly`, `quarterly`, `annual` nebo `custom`; IANA timezone, přesný kalendářní předpis, časy s offsetem a stejné krajní UTC okamžiky. Interval je vždy `[start,end)`. |
 | `Review` | `{decision, actor_id, at, policy_revision, note}`. decision `confirmed`, `disputed` nebo `retracted`; UUID aktéra, UTC čas, připnutá revize oprávněné policy a důvod. Samotné tvrzení importovaného JSONu nenahrazuje aplikační autorizaci. |
 
 Časy končící `_at` a UTC hranice jsou RFC3339 UTC s `Z`, podle stávajícího

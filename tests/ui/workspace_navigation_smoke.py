@@ -69,7 +69,7 @@ window.navigationTest={done:false};
  // Section defaults never close the current project, including Projects itself.
  seed();const retained=activeProject;
  projectRequest=async(path)=>{if(path==='/v1/projects'||path==='/v1/projects/delete/trash')return {projects:[]};throw Error('test-offline');};
- const defaults={'projects-tab':'project-overview-tab','chats-tab':'chat-tab','todo-tab':'project-overview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
+ const defaults={'projects-tab':'project-overview-tab','chats-tab':'chat-tab','todo-tab':'preview-tab','plan-tab':'plan-main-tab','artifacts-tab':'preview-tab','tools-tab':'tools-main-tab','presentations-tab':'outputs-overview-tab'};
  for(const [section,destination] of Object.entries(defaults)){showWorkspacePage(historyView);await navigateSidebarTab(document.getElementById(section));check(activeProject===retained,'Section closed project: '+section);check(!projectView.hidden&&document.getElementById(destination).getAttribute('aria-selected')==='true','Wrong section default: '+section);}
  check(document.querySelector('#sidebar-close-project').disabled===false,'Close project not enabled');
  const actions=[...document.querySelectorAll('.sidebar-project-primary-actions>button')].map(button=>button.id);check(actions.join(',')==='sidebar-create-project,sidebar-import-project,sidebar-close-project,sidebar-project-trash','Wrong project action order');

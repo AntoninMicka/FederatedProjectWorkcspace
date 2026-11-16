@@ -17,8 +17,13 @@ from spikes.metadata import parse_json, require, safe_path, timestamp, uuid, Val
 SCHEMA = 'fpw-reporting-record-v1'
 PRIVACY = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 DIMENSIONS = ('maturity', 'relevance', 'novelty', 'impact', 'confidence')
-PERIODS = {'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
+PERIODS = {'daily', 'weekly', 'monthly', 'quarterly', 'annual', 'custom'}
 TYPES = {
+    'MonitoringDeletion': ('monitoring-deletion', 'sources'),
+    'MonitoringMigration': ('migration', 'sources block_ids finding_refs retention_days processing_node_id preview_sha256'),
+    'MonitoringBlock': ('block', 'kind title config'),
+    'SourceFinding': ('finding', 'definition_ref input_id item aliases entry_sha256 stage selection change_reason raw_ref'),
+    'WatchDefinition': ('watch', 'title goal scope active schedule inputs selection evaluation report placement'),
     'ReportingTask': ('task', 'title goal scope source_policy calendar selection_policy scale_ref outputs execution retention_policy'),
     'EvaluationScale': ('scale', 'title dimensions comparison_policy'),
     'Source': ('source', 'task_ref title locator declared_author source_role publication_date imported_at retrieved_at capture_state raw_ref availability license'),
@@ -156,7 +161,9 @@ def period(value):
         require(start < end, 'Empty reporting period')
         if value['kind'] != 'custom':
             require(start.time() == end.time() == datetime.min.time(), 'Calendar boundaries must be midnight')
-            if value['kind'] == 'weekly':
+            if value['kind'] == 'daily':
+                require((end.date() - start.date()).days == 1, 'Daily interval spans one local day')
+            elif value['kind'] == 'weekly':
                 require(start.weekday() == 0 and (end.date() - start.date()).days == 7,
                         'Weekly interval starts Monday and spans seven local days')
             else:
@@ -207,7 +214,14 @@ def validate_record(record):
     provenance = record['provenance']
     fields(provenance, 'method inputs run_refs')
     choice(provenance['method'], {'user', 'import', 'derived', 'migration'})
-    sequence(provenance['inputs'], ref)
+    if record['type']=='MonitoringMigration':
+        # One migration audit pins up to 128 definitions plus 500 imported findings.
+        inputs=provenance['inputs']
+        require(isinstance(inputs,list) and len(inputs)<=628 and len({encoded(i) for i in inputs})==len(inputs),
+                'Migration provenance exceeds limit or repeats a reference')
+        for item in inputs:ref(item)
+    else:
+        sequence(provenance['inputs'], ref)
     def run_ref(item):
         fields(item, 'run_id manifest_sha256 result_sha256')
         uuid(item['run_id']); hex_id(item['manifest_sha256']); hex_id(item['result_sha256'])
@@ -215,6 +229,16 @@ def validate_record(record):
     kind = record['type']
     suffix, names = TYPES[kind]
     v = record['value']
+    if kind=='ReportSnapshot' and isinstance(v,dict) and 'synthesis' in v:
+        names+=' synthesis'
+        fields(v['synthesis'],'manifest_ref complete missing')
+        ref(v['synthesis']['manifest_ref'])
+        require(type(v['synthesis']['complete']) is bool,'Invalid synthesis completeness')
+        sequence(v['synthesis']['missing'],text)
+        require(v['synthesis']['complete']==(not v['synthesis']['missing']),'Synthesis completeness differs from gaps')
+    if kind=='ReportSnapshot' and isinstance(v,dict) and 'analysis_ref' in v:
+        require('synthesis' in v,'Analysis requires frozen synthesis inputs');ref(v['analysis_ref']);names+=' analysis_ref'
+    if kind=='MonitoringBlock' and isinstance(v,dict) and 'deleted' in v:names+=' deleted'
     fields(v, 'schema ' + names)
     require(v['schema'] == 'fpw-reporting-' + suffix + '-v1', 'Unknown reporting value version')
     for key in ('title', 'goal', 'summary', 'correction_reason', 'declared_author'):
@@ -226,7 +250,22 @@ def validate_record(record):
     for key in ('categories', 'entities', 'geographies', 'tags', 'limitations'):
         if key in v:
             sequence(v[key], text)
-    if kind == 'ReportingTask':
+    if kind == 'MonitoringDeletion':
+        from spikes.monitoring_deletion import validate_deletion
+        validate_deletion(v)
+    elif kind == 'MonitoringMigration':
+        from spikes.monitoring_migration import validate_migration
+        validate_migration(v)
+    elif kind == 'MonitoringBlock':
+        from spikes.monitoring_blocks import validate_block
+        validate_block(v)
+    elif kind == 'SourceFinding':
+        from spikes.rss_finding_schema import validate_finding
+        validate_finding(v)
+    elif kind == 'WatchDefinition':
+        from spikes.monitoring_definition_schema import validate_definition
+        validate_definition(v)
+    elif kind == 'ReportingTask':
         scope(v['scope'])
         for key in ('source_policy', 'selection_policy', 'retention_policy'):
             ref(v[key])
@@ -376,7 +415,7 @@ def canonical_events(story):
 
 
 
-def records(files, entities):
+def records(files, entities, *, _record_cache=None):
     result = {}
     for id_, meta in entities.items():
         # Raw sources remain opaque even when the captured filename is
@@ -387,8 +426,9 @@ def records(files, entities):
         tagged = SCHEMA in meta.get('tags', [])
         if not tagged and meta['file'] != 'record.json' and b'fpw-reporting-record-' not in data:
             continue
+        cached = _record_cache.record(data) if _record_cache is not None else None
         try:
-            payload = parse_json(data, maximum=16 * 1024 * 1024)
+            payload = cached if cached is not None else parse_json(data, maximum=16 * 1024 * 1024)
         except ValidationError:
             require(not tagged and b'fpw-reporting-record-' not in data, 'Malformed reporting JSON')
             continue
@@ -398,13 +438,19 @@ def records(files, entities):
         require(meta['file'] == 'record.json', 'Reporting record requires record.json')
         path = f'artifacts/{id_}/record.json'
         if meta['file'] == 'record.json':
-            record = validate_record(parse_json(files[path], maximum=1024 * 1024))
-            require(files[path] == encoded(record), 'Reporting JSON must use canonical serialization')
+            record = cached
+            if record is None:
+                record = validate_record(parse_json(files[path], maximum=1024 * 1024))
+                require(files[path] == encoded(record), 'Reporting JSON must use canonical serialization')
+                if _record_cache is not None:
+                    _record_cache.remember_record(data, record)
             require(record['revision_id'] == id_ and record['recorded_at'] == meta['created_at']
                     and record['recorded_by'] == meta['author_id'] and record['privacy'] == meta['privacy'],
                     'Reporting envelope differs from metadata')
             require(meta['kind'] == ('snapshot' if record['type'] == 'ReportSnapshot' else 'document'),
                     'Invalid reporting artifact kind')
+            if record['type']=='SourceFinding':
+                require(meta['provenance']=='external','Finding metadata must remain external source data')
             result[id_] = record
     identities = {}
     parents = set()
@@ -420,6 +466,11 @@ def records(files, entities):
             parents.add(before['revision_id'])
             if record['type'] in {'Event', 'Source'}:
                 require(before['value']['imported_at'] == record['value']['imported_at'], 'Import time is immutable')
+            if record['type']=='SourceFinding':
+                prior=before['value'];current=record['value']
+                require(current['input_id']==prior['input_id'] and all(current['item'][k]==prior['item'][k] for k in ('source_id','source_locator')), 'Finding identity changed')
+                require(set(prior['aliases'])<=set(current['aliases']),'Finding aliases are append-only')
+                require(all(current['item'][k]==prior['item'][k] for k in ('discovered_at','imported_at')),'Finding first-seen/import times are immutable')
             if record['type'] == 'Story':
                 old, new = before['value']['decisions'], record['value']['decisions']
                 require(new[:len(old)] == old, 'Story decisions are append-only')
@@ -445,6 +496,14 @@ def records(files, entities):
                     require(id_ not in active, 'Cyclic reporting revisions')
                     active.add(id_); stack.append((id_, True))
                     stack.extend((p['artifact_id'], False) for p in result[id_]['previous'])
+    from spikes.monitoring_deletion import validate_deletions
+    validate_deletions(result,files,entities)
+    from spikes.monitoring_definition_schema import validate_graph
+    validate_graph(result)
+    from spikes.monitoring_blocks import validate_blocks
+    validate_blocks(result)
+    from spikes.monitoring_migration import validate_migrations
+    validate_migrations(result)
     publications = set()
     corrections = set()
     for record in result.values():
@@ -465,9 +524,9 @@ def records(files, entities):
     return result
 
 
-def immutable_transition(base_files, candidate_files, base_entities, candidate_entities):
-    before = records(base_files, base_entities)
-    after = records(candidate_files, candidate_entities)
+def immutable_transition(base_files, candidate_files, base_entities, candidate_entities, *, _record_cache=None):
+    before = records(base_files, base_entities, _record_cache=_record_cache)
+    after = records(candidate_files, candidate_entities, _record_cache=_record_cache)
     require(not (set(after) - set(before)) & set(base_entities),
             'Reporting revision must use a new artifact ID')
     for id_ in before:
@@ -477,7 +536,8 @@ def immutable_transition(base_files, candidate_files, base_entities, candidate_e
                 'Reporting revisions are immutable; create a successor')
 
 
-def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
+def validate_git(git, files, entities, base_files=None, *, head='HEAD', _snapshot_loader=None,
+                 _record_cache=None):
     """Resolve all local references against exact commits before journal/CAS.
 
     Cross-project refs fail closed in MON-01: their authorization belongs to
@@ -485,7 +545,7 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
     """
     from spikes.configuration import committed_project, parse_project
     from spikes.metadata import validate_snapshot
-    all_records = records(files, entities)
+    all_records = records(files, entities, _record_cache=_record_cache)
     if not all_records:
         return
     if head != 'HEAD':
@@ -509,8 +569,11 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                 require(pinned_commit.returncode==0 and pinned_commit.stdout.strip() == commit,
                         'Reference must pin a commit')
                 committed_project(git, commit, project, check_worktree=False)
-                selected = git.snapshot(commit)
-                cache[commit] = selected, validate_snapshot(selected)
+                if _snapshot_loader is None:
+                    selected = git.snapshot(commit)
+                    cache[commit] = selected, validate_snapshot(selected)
+                else:
+                    cache[commit] = _snapshot_loader(commit)
             selected, metas = cache[commit]
         require(reference['path'] in selected and digest(selected[reference['path']]) == reference['sha256'],
                 'Pinned reporting bytes mismatch')
@@ -518,7 +581,7 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
         require(meta is not None and meta.get('file') == reference['path'].split('/')[-1], 'Invalid content reference')
         payload = None
         if meta['kind'] != 'source' and meta.get('file') == 'record.json':
-            payload = records(selected, metas).get(meta['id'])
+            payload = records(selected, metas, _record_cache=_record_cache).get(meta['id'])
         if expected:
             require(payload is not None and payload['type'] == expected, 'Wrong reporting reference type')
         return meta, payload
@@ -543,6 +606,26 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
         if kind == 'Source' and v['raw_ref'] is not None:
             meta, _ = resolve(v['raw_ref'])
             require(meta['kind'] == 'source', 'Captured bytes must be immutable source')
+        if kind=='SourceFinding':
+            _,definition=resolve(v['definition_ref'],'WatchDefinition')
+            if 'audit' in v['selection']:
+                require(v['selection']['audit']['pipeline']==definition['value']['selection'].get('pipeline'),
+                        'Finding filter differs from pinned definition')
+            if 'evaluation_ref' in v['selection']:
+                evaluation=v['selection']['evaluation_ref'];meta,_=resolve(evaluation)
+                selected=files if 'at' in evaluation else cache[evaluation['commit_id']][0]
+                audit=parse_json(selected[evaluation['path']])
+                require(meta['kind']=='snapshot' and meta['file']=='assistance.json' and
+                        audit.get('schema')=='fpw-monitoring-evaluation-v1','Invalid finding evaluation audit')
+                require(audit['pipeline']==definition['value']['selection'].get('pipeline') and
+                        audit['run_ref'] in record['provenance']['run_refs'] and
+                        audit['result']['decision']==v['selection']['decision'] and
+                        audit['result']['trustworthiness'] in {'unverified','insufficient'},'Finding evaluation provenance differs')
+            inputs=[i for i in definition['value']['inputs'] if i['id']==v['input_id']]
+            require(len(inputs)==1 and inputs[0]['kind']=='external' and inputs[0]['connector']=='rss-atom','Finding input is not an RSS source')
+            require(inputs[0]['locator']==v['item']['source_locator'] and v['item']['source_id']==v['input_id'],'Finding source differs from definition')
+            require(v['item']['privacy']==record['privacy'],'Finding privacy differs from envelope')
+            meta,_=resolve(v['raw_ref']);require(meta['kind']=='source','Finding raw capture must be a source')
         if kind == 'Event':
             for source in v['sources']:
                 _, source_record = resolve(source, 'Source')
@@ -576,6 +659,88 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                 _, source = resolve(evidence['source_ref'], 'Source')
                 require(source['value']['task_ref'] == v['task_ref'], 'Assessment/source task mismatch')
         if kind == 'ReportSnapshot':
+            if 'synthesis' in v:
+                manifest=v['synthesis']['manifest_ref'];meta,_=resolve(manifest)
+                selected=cache[manifest['commit_id']][0];plan=parse_json(selected[manifest['path']])
+                from spikes.monitoring_synthesis import validate_manifest
+                validate_manifest(plan)
+                require(plan.get('schema')=='fpw-watch-input-manifest-v1' and meta['kind']=='document','Invalid synthesis manifest')
+                resolve(v['rules_ref']);rules=parse_json(cache[v['rules_ref']['commit_id']][0][v['rules_ref']['path']])
+                require(rules.get('synthesis_manifest')==manifest and
+                        rules['definition_ref']['artifact_id']==plan['definition_ref']['artifact_id'] and
+                        rules['definition_ref']['sha256']==plan['definition_ref']['sha256'],'Synthesis manifest differs from task rules')
+                _,watch=resolve(plan['definition_ref'],'WatchDefinition')
+                from spikes.monitoring import ident
+                require(task['entity_id']==ident(watch['entity_id'],'definition-task-entity') and plan['project_id']==project,
+                        'Synthesis belongs to another watch or project')
+                from spikes.monitoring_synthesis import policy,windows
+                configured={i['id']:i for i in watch['value']['inputs']}
+                require({i['input_id'] for i in plan['inputs']}==set(configured),'Frozen input bindings differ from definition')
+                require({i['input_id']:i['definition_ref'] for i in rules['input_definitions']}==
+                        {i['input_id']:i['definition_ref'] for i in plan['inputs'] if i['kind']=='watch'},'Run rules changed frozen upstream definitions')
+                require(plan['period']==v['period'] and plan['knowledge_cutoff']==v['knowledge_cutoff'] and
+                        plan['complete']==v['synthesis']['complete'] and plan['missing']==v['synthesis']['missing'], 'Synthesis differs from frozen inputs')
+                require(git.run('merge-base','--is-ancestor',plan['input_head'],v['input_head'],check=False).returncode==0,'Frozen head is beyond report input head')
+                for link in plan['inputs']:
+                    config=configured[link['input_id']]
+                    require(link['kind']==config['kind'] and link['policy']==policy(config) and
+                            link['take']==config.get('take','captured-source'),'Frozen input policy differs from definition')
+                    if config['kind']=='watch':
+                        _,upstream=resolve(link['definition_ref'],'WatchDefinition')
+                        require(upstream['entity_id']==config['watch_id'],'Frozen input belongs to another watch')
+                        if config['take']=='reports':
+                            require(link['expected']==windows(upstream['value']['schedule'],v['period'],link['policy']['window']),
+                                    'Frozen expected periods differ from upstream calendar')
+                    covered=set()
+                    for pin in link['refs']:
+                        input_meta,input_record=resolve(pin)
+                        if config['kind']=='watch' and config['take']=='reports':
+                            require(input_record is not None and input_record['type']=='ReportSnapshot' and
+                                    input_record['value']['period'] in link['expected'],'Expected an issued input period')
+                            _,input_task=resolve(input_record['value']['task_ref'],'ReportingTask')
+                            require(input_task['entity_id']==ident(config['watch_id'],'definition-task-entity'),'Input report belongs to another watch')
+                            key=encoded(input_record['value']['period']);require(key not in covered,'Duplicate input reporting period');covered.add(key)
+                        elif config['kind']=='watch':
+                            require(input_record is not None and input_record['type']=='SourceFinding','Expected upstream finding')
+                            _,owner=resolve(input_record['value']['definition_ref'],'WatchDefinition')
+                            item=input_record['value'];at=moment(item['item']['discovered_at'])
+                            require(owner['entity_id']==config['watch_id'] and moment(v['period']['start_utc'])<=at<moment(v['period']['end_utc']),'Finding is outside input watch or period')
+                            approval=link['policy']['approval']
+                            require(approval=='captured' or item['stage']=='processed' or approval=='selected' and item['selection']['decision']=='selected','Finding does not satisfy required approval')
+                        require(PRIVACY[record['privacy']]>=PRIVACY[input_meta['privacy']],'Synthesis input would relax privacy')
+                        require(git.run('merge-base','--is-ancestor',pin['commit_id'],plan['input_head'],check=False).returncode==0,'Synthesis pin exceeds frozen head')
+                        at=input_record['recorded_at'] if input_record else input_meta['created_at']
+                        require(moment(at)<=moment(v['knowledge_cutoff']),'Synthesis input exceeds knowledge cutoff')
+                    missing=(not link['expected'] or covered!={encoded(p) for p in link['expected']}) if config['kind']=='watch' and config['take']=='reports' else not link['refs']
+                    require(bool(link['missing'])==missing and (not missing or link['policy']['missing']=='allow-incomplete'),
+                            'Synthesis hides missing or unapproved incomplete inputs')
+                if 'analysis_ref' in v:
+                    analysis=v['analysis_ref'];meta,_=resolve(analysis)
+                    ledger=parse_json(cache[analysis['commit_id']][0][analysis['path']])
+                    from spikes.synthesis_analysis import from_git
+                    from types import SimpleNamespace
+                    expected=from_git(SimpleNamespace(git=git),project,plan,manifest,watch['value'],record['privacy'],files,entities)
+                    require(meta['kind']=='document' and ledger==expected,'Analytical ledger differs from exact frozen evidence')
+                    if v['generation']['mode']=='assisted':
+                        context=v['generation']['context_manifest_ref'];meta,_=resolve(context)
+                        audit=parse_json(cache[context['commit_id']][0][context['path']])
+                        from spikes.synthesis_model import validate_result,SCHEMA as COMMENTARY,ROLE,INSTRUCTION
+                        require(audit.get('schema')==COMMENTARY and audit['ledger_ref']==analysis and
+                                audit['context']['target']==watch['value']['report']['analysis']['target'] and
+                                audit['context']['task']['role_id']=='analyst' and audit['context']['task']['role_revision']==ROLE,
+                                'Analytical model audit differs from definition')
+                        require(audit['instruction']==INSTRUCTION+ledger['instruction'] and
+                                audit['context']['task']['instruction_sha256']==digest(audit['instruction'].encode()),'Analytical model instruction differs')
+                        selected_ids={analysis['artifact_id'],watch['revision_id'],manifest['artifact_id']}|{p['artifact_id'] for p in ledger['evidence_refs']}
+                        require({i['input_id'] for i in audit['context']['inputs']}==selected_ids,'Analytical model context omits frozen evidence')
+                        exact={p['artifact_id']:p for p in ledger['evidence_refs']+[analysis,manifest,plan['definition_ref']]}
+                        require(all(i['source']=='project' and i['path']==exact[i['input_id']]['path'] and
+                                    i['sha256']==exact[i['input_id']]['sha256'] for i in audit['context']['inputs']),
+                                'Analytical context differs from frozen source bytes')
+                        validate_result(audit['result'],ledger)
+                        from spikes.synthesis_analysis import render
+                        require(digest(render(ledger,watch['value']['report']['required_sections'],audit['result']).encode())==
+                                audit['result_sha256']==v['generation']['result_sha256'],'Analytical model render differs from verified result')
             _snapshot(v, task['value'], resolve)
             require(moment(v['knowledge_cutoff']) <= moment(record['recorded_at']),
                     'Knowledge cutoff cannot be in the future')
@@ -588,7 +753,10 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                     require(git.run('merge-base', '--is-ancestor', reference['commit_id'], v['input_head'],
                                     check=False).returncode == 0, 'Report input is newer than input_head')
                     _, item = resolve(reference)
-                    require(moment(item['recorded_at']) <= moment(v['knowledge_cutoff']), 'Input is beyond knowledge cutoff')
+                    # Synthesis freezes evidence before deterministic task/scale
+                    # materialization. Only its exact task scale is control data.
+                    control_scale='synthesis' in v and key=='scale_refs' and reference==task['value']['scale_ref']
+                    require(control_scale or moment(item['recorded_at']) <= moment(v['knowledge_cutoff']), 'Input is beyond knowledge cutoff')
             markdown_bytes = (files if 'at' in v['markdown'] else
                               cache[v['markdown']['commit_id']][0])[v['markdown']['path']]
             try:
@@ -597,7 +765,8 @@ def validate_git(git, files, entities, base_files=None, *, head='HEAD'):
                 raise ValidationError('Report Markdown must be UTF-8') from exc
             require(all(section in markdown for section in task['value']['outputs']['required_sections']),
                     'Report omits required sections')
-            require(v['events'] or 'Nebyla doložena významná změna.' in markdown,
+            frozen_inputs='synthesis' in v and any(link['refs'] for link in plan['inputs'])
+            require(v['events'] or frozen_inputs or 'Nebyla doložena významná změna.' in markdown,
                     'Empty report must explicitly state no demonstrated significant change')
 
 

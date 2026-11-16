@@ -19,6 +19,7 @@ from spikes.configuration import parse_node, read_config
 from spikes.context_builder import Authority, ContextBuilder, ProjectInput, AdHocInput, TaskInstruction
 from spikes.backend_contract import ROLES
 from spikes.metadata import require, uuid, validate_snapshot, parse_json
+from spikes.request_ownership import ProjectBusy, bounded_process_lock
 from spikes.project_creation import ProjectCreation
 from spikes.presentation_documents import new_deck, new_slide, encode_deck
 from spikes.reporting import Reporting, operation_uuid
@@ -34,7 +35,7 @@ PROFILES={
  'monthly':'Významné události a možné průlomy, jejich důkazy a změny trendů.',
  'quarterly':'Vývoj trendů, benchmarků a zralosti napříč měsíci; rozpory a stagnace.',
  'annual':'Souhrn vývoje od výchozího stavu, pokroky, regrese, limity a rozpracované případové studie.'}
-LABELS=dict(weekly='Týdenní přehled',monthly='Měsíční syntéza',quarterly='Čtvrtletní vývoj',annual='Roční zpráva')
+LABELS=dict(daily='Denní přehled',weekly='Týdenní přehled',monthly='Měsíční syntéza',quarterly='Čtvrtletní vývoj',annual='Roční zpráva')
 MARKER='<!-- '+WATCH+' -->\n'
 UNKNOWN=dict(precision='unknown',start=None,end=None,basis=[])
 
@@ -74,17 +75,46 @@ class Monitoring:
     def __init__(self,node,projects,*,clock=time.time,collector=None,adapter_factory=None):
         self.node=Path(node);self.projects=projects;self.clock=clock
         self.reporting=Reporting(node);self.artifacts=Artifacts(node)
+        self._services_lock=threading.RLock()
         self._scheduler=None
+        self._rss_runtime=None
+        self._composable_runtime=None
         self.collector=collector or SourceCollector(node,clock=clock)
         self.adapter_factory=adapter_factory;self.last_errors={};self.lock=threading.Lock()
         self.stop_event=threading.Event();self.thread=None
+        self.intake_thread=None;self.intake_lock=threading.Lock()
 
     @property
     def scheduler(self):
-        if self._scheduler is None:self._scheduler=ReportingScheduler(self.node,clock=self.clock)
+        if self._scheduler is None:
+            with bounded_process_lock(self._services_lock,resource='Monitoring services'):
+                if self._scheduler is None:
+                    self._scheduler=ReportingScheduler(self.node,clock=self.clock)
         return self._scheduler
 
-    def _data(self,pid,*,network=False):
+    @property
+    def rss_runtime(self):
+        if self._rss_runtime is None:
+            with bounded_process_lock(self._services_lock,resource='Monitoring services'):
+                if self._rss_runtime is None:
+                    from spikes.rss_monitoring import RSSMonitoring
+                    self._rss_runtime=RSSMonitoring(self.node,clock=self.clock,scheduler=self.scheduler)
+        return self._rss_runtime
+
+    @property
+    def composable(self):
+        if self._composable_runtime is None:
+            with bounded_process_lock(self._services_lock,resource='Monitoring services'):
+                if self._composable_runtime is None:
+                    from spikes.composable_monitoring import ComposableMonitoring
+                    self._composable_runtime = ComposableMonitoring(self)
+        return self._composable_runtime
+
+    def _data(self,pid,*,network=False,read_only=False):
+        if read_only:
+            ws=self.projects.workspace(pid,for_snapshot=True)
+            head,files,entities=ws.committed_snapshot(pid,network=network)
+            return ws,head,files,entities,records(files,entities)
         ws=self.projects.workspace(pid,blocking=True);head=ws.git.head()
         files=ws.git.snapshot(head);entities=validate_snapshot(files)
         require(not network or all(m['privacy']!='local-only' for m in entities.values()),'Projekt obsahuje local-only data.')
@@ -99,8 +129,11 @@ class Monitoring:
         return digest(encoded({k:v for k,v in cfg.items() if k!='active'}))
 
     def watches(self,files,entities):
+        from spikes.monitoring_deletion import deleted_from_files
+        deleted=deleted_from_files(files)
         out=[]
         for id_,m in entities.items():
+            if id_ in deleted:continue
             if m.get('file') and m['kind']=='document' and m['provenance']=='user':
                 raw=files.get('artifacts/'+id_+'/'+m['file'],b'')
                 if raw.startswith(MARKER.encode()):
@@ -110,6 +143,8 @@ class Monitoring:
         return out
 
     def granted(self,pid,cfg):
+        from spikes.monitoring_migration import retired_ids
+        if cfg['id'] in retired_ids(self.node,pid):return False
         return self.scheduler.watch_granted(pid,cfg['id'],digest(encoded(cfg)))
 
     def binding(self):
@@ -119,11 +154,11 @@ class Monitoring:
         ws=self.projects.workspace(pid,blocking=True);ws.recover()
         return ws.receipt(op)
 
-    def _doc(self,pid,id_,title,body,op,privacy):
+    def _doc(self,pid,id_,title,body,op,privacy,*,metadata=None):
         receipt=self._receipt(pid,op)
         if receipt is None:
             self.artifacts.save(dict(project_id=pid,artifact_id=id_,title=title,body=body,
-                base_head=self.projects.repository(pid).head(),new=True),op,privacy=privacy)
+                base_head=self.projects.repository(pid).head(),new=True,**({'metadata':metadata} if metadata else {})),op,privacy=privacy)
             receipt=self._receipt(pid,op)
         return self.reporting.pin(pid,id_,receipt['commit_id'])
 
@@ -134,6 +169,12 @@ class Monitoring:
                 dict(type=kind,value=value,entity_id=entity,previous=previous or [],privacy=privacy)]),op)
             receipt=self._receipt(pid,op)
         return self.reporting.pin(pid,operation_uuid(op,'record:0'),receipt['commit_id'])
+
+    def _scale(self,pid,watch_id,privacy,operation_label='scale-op'):
+        return self._record(pid,'EvaluationScale',dict(schema='fpw-reporting-scale-v1',title='Vývoj a důkazy v1',
+            comparison_policy='same-revision-only',dimensions={k:[dict(value=v,label=str(v),criteria='Úroveň '+str(v)+' vyžaduje konkrétní doložený scope.')
+                for v in (['insufficient','low','medium','high'] if k=='confidence' else range(6))] for k in DIMENSIONS}),
+            ident(watch_id,operation_label),privacy)
 
     def ready(self,pid,cfg):
         """Materialize a declarative revision; never mutate an earlier step's intent."""
@@ -149,10 +190,7 @@ class Monitoring:
                 urls=cfg['urls'],source_role='unknown',license=dict(identifier=cfg['access_note'],terms_ref=rule,
                     capture_allowed=True,retention_policy=rule))
             policy_ref=self._doc(pid,ident(ns,'collector-policy'),'Sledování — schválený sběr',encoded(policy).decode(),ident(ns,'policy-op'),privacy)
-        scale=self._record(pid,'EvaluationScale',dict(schema='fpw-reporting-scale-v1',title='Vývoj a důkazy v1',
-            comparison_policy='same-revision-only',dimensions={k:[dict(value=v,label=str(v),criteria='Úroveň '+str(v)+' vyžaduje konkrétní doložený scope.')
-                for v in (['insufficient','low','medium','high'] if k=='confidence' else range(6))] for k in DIMENSIONS}),
-            ident(cfg['id'],'scale-op'),privacy)
+        scale=self._scale(pid,cfg['id'],privacy)
         op=ident(ns,'task-op');receipt=self._receipt(pid,op)
         if receipt is not None:return self.reporting.pin(pid,operation_uuid(op,'record:0'),receipt['commit_id'])
         data=self.reporting.read(pid);tips=set(data['tips']);prior=[r for r in data['records'] if r['type']=='ReportingTask'
@@ -169,6 +207,8 @@ class Monitoring:
     def save(self,request,operation_id):
         require(set(request)=={'project_id','base_head','watch','new'},'Neplatný požadavek sledování.')
         cfg=validate_watch(deepcopy(request['watch']));pid=request['project_id'];self._writable(pid)
+        from spikes.monitoring_migration import require_not_retired
+        require_not_retired(self.node,pid,cfg['id'])
         ws,head,files,entities,_=self._data(pid)
         require(request['new'] or (cfg['id'] in entities and entities[cfg['id']]['privacy']==cfg['privacy']),
                 'Soukromí existujícího sledování je neměnné.')
@@ -186,7 +226,7 @@ class Monitoring:
         return dict(result,watch_id=cfg['id'])
 
     def jobs(self,pid):
-        with self.scheduler.db() as db:
+        with self.scheduler.db(read_only=True) as db:
             return [json.loads(r[0]) for r in db.execute('SELECT document FROM runs') if json.loads(r[0])['project_id']==pid]
 
     @staticmethod
@@ -306,7 +346,7 @@ class Monitoring:
         if kind=='weekly':
             displayed=[(r,reason) for r,reason in changes if reason!='context']
         else:displayed=changes
-        header={'weekly':'Novinky a opravy','monthly':'Významné události a možné průlomy',
+        header={'daily':'Denní podklady','weekly':'Novinky a opravy','monthly':'Významné události a možné průlomy',
                 'quarterly':'Vývoj trendů a benchmarků','annual':'Vývoj od výchozího stavu'}[kind]
         lines=['# Přehled',f'\n{cfg["name"]} — {LABELS[kind]}',
             f'\nObdobí: {run["period"]["start_local"]} — {run["period"]["end_local"]}',
@@ -404,7 +444,7 @@ class Monitoring:
         job=next((r for r in self.jobs(pid) if r['task_ref']==task and r['period']==period
                   and (r['baseline_snapshot']==correction if correction else not self.scheduler.is_correction(r['run_id']))),None)
         if job and job['state']=='collecting':
-            with self.scheduler.db() as db:
+            with self.scheduler.db(read_only=True) as db:
                 until=db.execute('SELECT lease_until FROM runs WHERE run_id=?',(job['run_id'],)).fetchone()[0]
             if until<=self.clock():
                 try:self.scheduler.claim(job['run_id'],str(uuid4()))
@@ -433,8 +473,8 @@ class Monitoring:
             self.scheduler.stage(job['run_id'],claim['lease_token'],dict(project_id=pid,base_head=self.projects.repository(pid).head(),records=[
                 dict(type='ReportSnapshot',entity_id=None,previous=[],privacy=cfg['privacy'],value=value,markdown=markdown)]),_generation=generation)
         except Exception as exc:
-            try:self.scheduler.fail(job['run_id'],claim['lease_token'],outcome='unknown' if isinstance(exc,(TimeoutError,)) or 'Unknown' in type(exc).__name__ else 'failed')
-            except (ValueError,OSError):pass
+            try:self.scheduler.fail(job['run_id'],claim['lease_token'],outcome='unknown' if isinstance(exc,(TimeoutError,ProjectBusy)) or 'Unknown' in type(exc).__name__ else 'failed')
+            except (ValueError,OSError,ProjectBusy):pass
             raise
         return self.scheduler.get(job['run_id'])
 
@@ -446,6 +486,8 @@ class Monitoring:
             for project in ids:
                 try:
                     data=self._data(project)
+                    self.rss_runtime.tick(project)
+                    self.composable.tick(project)
                     for cfg in self.watches(data[2],data[3]):
                         if not cfg['active'] or not self.granted(project,cfg):continue
                         try:
@@ -478,6 +520,11 @@ class Monitoring:
         self._writable(pid);job=self.scheduler.get(run_id)
         require(job['project_id']==pid,'Cizí report.')
         data=self._data(pid);task=data[4].get(job['task_ref']['artifact_id'])
+        try:rules=json.loads(data[2][job['rules_ref']['path']])
+        except (ValueError,UnicodeError):rules={}
+        if isinstance(rules,dict) and 'synthesis_manifest' in rules:
+            from spikes.monitoring_synthesis import WatchSynthesis
+            return WatchSynthesis(self.node).retry(run_id,confirm=confirm)
         cfg=next((c for c in self.watches(data[2],data[3]) if task and ident(c['id'],'task-entity')==task['entity_id']),None)
         require(cfg and cfg['active'] and self.granted(pid,cfg) and self.ready(pid,cfg)==job['task_ref'],
                 'Opakování vyžaduje aktivní původní revizi zadání.')
@@ -495,6 +542,10 @@ class Monitoring:
 
     def publish(self,pid,run_id,sha,confirm):
         self._writable(pid);job=self.scheduler.get(run_id);require(job['project_id']==pid,'Cizí report.')
+        preview=self.scheduler.preview(run_id)
+        if 'synthesis' in preview['request']['records'][0]['value']:
+            from spikes.monitoring_synthesis import WatchSynthesis
+            return WatchSynthesis(self.node).publish(run_id,sha,confirm=confirm)
         self.scheduler.approve(run_id,sha,confirm=confirm)
         result=self.scheduler.publish(run_id)
         data=self._data(pid);cfg=next((c for c in self.watches(data[2],data[3]) if ident(c['id'],'task-entity')==next(
@@ -534,10 +585,101 @@ class Monitoring:
                     if row['project_id']==pid:out[cfg['id']].append(dict(run_id=row['run_id'],url=row['preview']['url'],state=row['state'],error=row['error_code']))
         return out
 
+    def output(self,pid,output_id,expected_head,*,_snapshot=None):
+        uuid(output_id)
+        ws,head,files,entities,rs=_snapshot if _snapshot is not None else self._data(pid)
+        require(head==expected_head,'Projekt se změnil; obnovte seznam výstupů.')
+        from spikes.report_outputs import published_outputs
+        outputs=published_outputs(pid,head,files,entities,rs,selected=output_id,include_content=True,include_intent=True)
+        require(len(outputs)==1,'Zpráva není v této revizi projektu dostupná.')
+        intent=outputs[0].pop('reprocess_intent',None)
+        if intent:
+            from spikes.monitoring_evidence import Evidence
+            from spikes.message_pools import MessagePools
+            from spikes.monitoring_blocks import MonitoringBlocks
+            blocks=MonitoringBlocks(self.node).read(pid,_snapshot=(dict(commit_id=head,records=list(rs.values())),files,entities))['blocks']
+            rows=MessagePools.export_readonly(self.node,pid,clock=self.clock,transferable=False)
+            outputs[0]['input_evidence']=Evidence(None,pid,blocks,rows,[],clock=self.clock,issued=published_outputs(pid,head,files,entities,rs)).report(intent,outputs[0].get('built_at'))
+        require(ws.git.head()==head,'Projekt se změnil; obnovte seznam výstupů.')
+        return dict(outputs[0],commit_id=head)
+
+    def output_presentation(self,pid,output_id,expected_head,*,confirm,checkpoint=lambda stage:None,_snapshot=None):
+        """One reviewed, idempotent projection of an exact issued output; no model."""
+        from spikes.report_outputs import PRESENTATION_SOURCE, presentation_source, derived_presentations
+        from spikes.reporting_schema import hex_id
+        require(confirm is True,'Potvrďte vytvoření prezentace z vydané zprávy.')
+        uuid(output_id);hex_id(expected_head,True);self._writable(pid)
+        op=ident(output_id,'presentation:'+expected_head);aid=ident(output_id,'deck:'+expected_head)
+        old=self._receipt(pid,op)
+        if old:
+            ws=self.projects.workspace(pid,blocking=True)
+            files=ws.git.snapshot(old['commit_id']);entities=validate_snapshot(files)
+            source=presentation_source(entities.get(aid,{}))
+            require(source and source['project_id']==pid and source['artifact_id']==output_id
+                    and source['commit_id']==expected_head,'Presentation operation belongs to another intent')
+            return dict(artifact_id=aid,commit_id=old['commit_id'],report_ref=source)
+        data=self._data(pid) if _snapshot is None else _snapshot
+        ws,head,files,entities,rs=data
+        output=self.output(pid,output_id,expected_head,_snapshot=data)
+        pin=output['report_ref']
+        for existing in derived_presentations(pid,files,entities,rs):
+            if existing['source_ref']['artifact_id']==output_id and existing['source_ref']['sha256']==pin['sha256']:
+                return dict(artifact_id=existing['artifact_id'],commit_id=head,report_ref=existing['source_ref'])
+        title=('Prezentace — '+output['title'])[:200]
+        deck=new_deck();deck['title']=title
+        sections=[s for s in output['markdown'].split('\n## ') if s.strip()][:10]
+        require(sections,'Vydaná zpráva nemá obsah pro prezentaci.')
+        slides=[]
+        for i,section in enumerate(sections):
+            slide=new_slide();slide['id']=ident(aid,'slide:'+str(i));parts=section.strip().splitlines()
+            slide['title']=parts[0].lstrip('# ')[:200] or title
+            slide['bullets']=[line.strip()[:800] for line in parts[1:] if line.strip()][:12]
+            slide['notes']='Zdrojová zpráva: '+pin['artifact_id']+' @ '+pin['commit_id']+'\n'+pin['sha256']
+            slide['next']=ident(aid,'slide:'+str(i+1)) if i+1<len(sections) else None;slides.append(slide)
+        deck['slides']=slides
+        result=self.artifacts.save(dict(project_id=pid,artifact_id=aid,title=title,body=encode_deck(deck),new=True,base_head=head,
+            metadata=dict(tags=['monitoring-derived-presentation'],description=PRESENTATION_SOURCE+encoded(pin).decode().strip())),
+            op,privacy=entities[output_id]['privacy'],checkpoint=checkpoint)
+        return dict(artifact_id=aid,commit_id=result['commit_id'],report_ref=pin)
+
+    def execution_nodes(self, administration=None):
+        """Admin-only desired-placement choices; no network probe or execute grant."""
+        if administration is None:
+            from spikes.administration import Administration
+            administration=Administration(self.node,deployment='desktop')
+        node=parse_node(read_config(self.node),location=self.node)
+        nodes=[dict(id=node['id'],name=node['name'],local=True)]
+        if not administration.root.exists():return dict(nodes=nodes,error=None)
+        try:
+            with administration.read_locked() as state:
+                nodes.extend(dict(id=p['id'],name=p['name'],local=False)
+                             for p in state['peers'] if p['trust']=='approved')
+            return dict(nodes=nodes,error=None)
+        except (OSError,ValueError) as exc:
+            return dict(nodes=nodes,error='Seznam federovaných uzlů není dostupný: '+str(exc))
+
+    def current_view(self, pid, *, network=False):
+        """One committed snapshot for current tools and report editions."""
+        from spikes.report_outputs import published_outputs
+        from spikes.monitoring_placement import local_node_id
+        reporting = Reporting(self.node)
+        data, files, entities = reporting.read_snapshot(pid, read_only=True)
+        require(not network or all(m['privacy']!='local-only' for m in entities.values()),
+                'Projekt obsahuje local-only data.')
+        head = data['commit_id']
+        catalog = self.composable.catalog(pid, _snapshot=(data, files, entities))
+        result = dict(project_id=pid, commit_id=head, node_id=local_node_id(self.node),
+                      outputs=published_outputs(pid, head, files, entities,
+                                                {r['revision_id']:r for r in data['records']}),
+                      reports=[], block_catalog=catalog, error=self._runtime_error(pid))
+        self.projects.workspace(pid,for_snapshot=True).snapshot_checkpoint(head)
+        return result
+
     def view(self,pid,*,network=False):
         ws,head,files,entities,rs=self._data(pid,network=network);watches=self.watches(files,entities)
         reports=[]
-        for job in self.jobs(pid):
+        jobs=self.jobs(pid)
+        for job in jobs:
             task=rs.get(job['task_ref']['artifact_id']);name=task['value']['title'] if task else 'Sledování'
             watch_id=next((c['id'] for c in watches if task and ident(c['id'],'task-entity')==task['entity_id']),None)
             row=dict(id=job['run_id'],watch_id=watch_id,name=name,kind=job['period']['kind'],period=job['period'],state=job['state'],error=job['last_error'],markdown=None,approval_digest=None,report_ref=None,
@@ -546,7 +688,11 @@ class Monitoring:
                      superseded=False)
             if job['candidate']:
                 preview=self.scheduler.preview(job['run_id']);row.update(markdown=preview['request']['records'][0]['markdown'],approval_digest=preview['approval_digest'])
+                row['synthesis']=preview['request']['records'][0]['value'].get('synthesis')
             if job['workspace_receipt']:row['report_ref']=job['workspace_receipt']['snapshot']
+            if row.get('synthesis') and row['report_ref']:
+                from spikes.monitoring_synthesis import WatchSynthesis
+                row['freshness']=WatchSynthesis(self.node).freshness(pid,row['report_ref'])
             reports.append(row)
         corrected={r['value']['corrects']['artifact_id'] for r in rs.values() if r['type']=='ReportSnapshot' and r['value']['corrects']}
         for row in reports:row['superseded']=bool(row['report_ref'] and row['report_ref']['artifact_id'] in corrected)
@@ -554,20 +700,60 @@ class Monitoring:
         except (OSError,ValueError):binding=None
         now=datetime.fromtimestamp(self.clock(),timezone.utc)
         next_runs={c['id']:{kind:calendar_period(self.boundary(c,kind,now).isoformat(),kind,c['timezone'],'iso-calendar-v1')['end_local'] for kind in c['periods']} for c in watches}
-        return dict(project_id=pid,commit_id=head,watches=watches,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
+        from spikes.monitoring_definitions import MonitoringDefinitions
+        definition_view=MonitoringDefinitions(self.node).read(pid)
+        require(definition_view['commit_id']==head,'Projekt se během čtení sledování změnil; obnovte přehled.')
+        definitions=definition_view['definitions']
+        rss_status=self.rss_runtime.status(pid)
+        require(rss_status['commit_id']==head,'Projekt se během čtení RSS změnil; obnovte přehled.')
+        from spikes.report_outputs import published_outputs
+        outputs=published_outputs(pid,head,files,entities,rs)
+        for row in reports:
+            job=next((j for j in jobs if j['run_id']==row['id']),None)
+            output=(job or {}).get('candidate') or {}
+            row['output']=output.get('output')
+            if not row['output'] and job and job.get('attempts') and job['attempts'][-1].get('finished_at'):
+                from spikes.report_outputs import output_title
+                built_at=job['attempts'][-1]['finished_at']
+                row['output']=dict(title=output_title(row['name'],built_at,row['period']['timezone']),built_at=built_at)
+        return dict(outputs=outputs,project_id=pid,commit_id=head,node_id=definition_view['node_id'],watches=watches,definitions=definitions,rss=rss_status,next_runs=next_runs,granted={c['id']:self.granted(pid,c) for c in watches},reports=sorted(reports,key=lambda r:r['period']['end_utc'],reverse=True),
             inputs=[dict(id=id_,title=m['title'],privacy=m['privacy']) for id_,m in entities.items()
                     if m.get('file') and not files['artifacts/'+id_+'/'+m['file']].startswith(MARKER.encode())],
-            profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self.last_errors.get(pid) or self.last_errors.get('runtime'))
+            profiles=PROFILES,binding=binding,collections=self.collection_status(pid,watches),watch_errors={c['id']:self.last_errors.get(c['id']) for c in watches},error=self._runtime_error(pid))
+
+    def _runtime_error(self, pid):
+        return next((self.last_errors.get(key) for key in
+                     (pid,(pid,'intake'),(pid,'processing'),'runtime',('runtime','intake'),('runtime','processing'))
+                     if self.last_errors.get(key)),None)
+
+    def tick_blocks(self, *, lane=None):
+        """The live scheduler executes only the current composable model."""
+        from spikes.request_ownership import bounded_project_requests
+        lock = self.intake_lock if lane == 'intake' else self.lock
+        if not self.node.exists() or not lock.acquire(blocking=False): return
+        try:
+            with bounded_project_requests():
+                for project in self.projects._bindings():
+                    pid=project['project_id']
+                    try:
+                        self.composable.tick(pid, lane=lane)
+                        self.last_errors.pop((pid,lane),None)
+                    except Exception as exc:
+                        self.last_errors[(pid,lane)]=str(exc)[:500]
+        finally: lock.release()
 
     def start(self):
         if self.thread:return
-        def loop():
+        def loop(lane):
             while not self.stop_event.wait(10):
-                try:self.tick()
-                except Exception as exc:self.last_errors['runtime']=str(exc)[:500]
-        self.thread=threading.Thread(target=loop,name='workspace-monitoring',daemon=True);self.thread.start()
+                try:self.tick_blocks(lane=lane)
+                except Exception as exc:self.last_errors[('runtime',lane)]=str(exc)[:500]
+        self.thread=threading.Thread(target=loop,args=('processing',),name='workspace-monitoring',daemon=True)
+        self.intake_thread=threading.Thread(target=loop,args=('intake',),name='workspace-rss-intake',daemon=True)
+        self.thread.start();self.intake_thread.start()
 
     def close(self):
         self.stop_event.set()
         if self.thread:self.thread.join(timeout=1)
-        return not self.thread or not self.thread.is_alive()
+        if self.intake_thread:self.intake_thread.join(timeout=1)
+        return all(not thread or not thread.is_alive() for thread in (self.thread,self.intake_thread))

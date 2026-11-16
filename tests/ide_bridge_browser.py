@@ -39,7 +39,7 @@ def finished(value):
  if value!='ready':return
  phase+=1
  if phase==1:page.runJavaScript("document.querySelector('#access-key').value="+json.dumps(os.environ['BRIDGE_KEY'])+";document.querySelector('#login-form').requestSubmit();")
- elif phase==2:page.runJavaScript("document.querySelector('#settings-sidebar-tab').click();document.querySelector('[data-settings-tab=\"settings-ide-tab\"]').click()")
+ elif phase==2:page.runJavaScript("(async()=>{await openSettings();document.querySelector('[data-settings-tab=\"settings-ide-tab\"]').click();})()")
  elif phase==3:page.runJavaScript("document.querySelector('#ide-bridge-name').value='Browser IDE';document.querySelector('#ide-bridge-form').requestSubmit()")
  elif phase==4:page.runJavaScript("(()=>{const row=document.querySelector('#ide-bridge-projects tbody tr');row.querySelector('input[type=checkbox]').checked=true;const inputs=row.querySelectorAll('input');inputs[1].value='/local/project.code-workspace';inputs[2].value='https://example.invalid/source.git';row.querySelector('button').click();})()")
  elif phase==5:page.runJavaScript("document.querySelector('#ide-bridge-connections button').click()")

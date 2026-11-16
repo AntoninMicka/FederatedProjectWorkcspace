@@ -10,17 +10,21 @@ import re
 import ssl
 import stat
 import sqlite3
+from spikes.request_ownership import ProjectBusy
 import subprocess
 from urllib.parse import urlsplit
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import BoundedHTTPServer
+from spikes.http_admission_policy import validate_route_ownership
 from spikes.chat_service import ChatService
 from spikes.project_creation import ProjectCreation
 from spikes.project_creation_actions import ProjectCreationActions
 from spikes.project_deletion import ProjectDeletion
 from spikes.project_deletion_actions import ProjectDeletionActions
 from spikes.projects import Projects
+from spikes.workspace import PendingOperation
+from spikes.journal import RecoveryConflict
 from spikes.administration import Administration, AccessDenied
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
@@ -113,9 +117,11 @@ def secret(path):
 
 
 class WebHandler(DesktopHandler):
+    assets = ASSETS
+    reserve_ui_worker = True
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     google_drive_callback_path = '/oauth/google-drive/callback'
-    post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
+    post_paths = DesktopHandler.post_paths | {'/v1/diagnostics/status', '/v1/administration', '/v1/session',
                                                '/v1/federation/enroll',
                                                '/v1/federation/catalog/reconcile',
                                                '/v1/federation/content/reconcile',
@@ -131,12 +137,18 @@ class WebHandler(DesktopHandler):
                                                '/v1/notebooklm/confirm'}
 
     def _do_POST(self):
+        from spikes.sync_fingerprint import PATH as STATE_PATH, reply as reply_state
+        if self.path == STATE_PATH:
+            return reply_state(self)
         from spikes.federation_probe import PATH, reply_probe
         if self.path == PATH:
             return reply_probe(self)
         from spikes.federation_catalog import PATH as CATALOG_PATH, reply as reply_catalog
         if self.path == CATALOG_PATH:
             return reply_catalog(self)
+        from spikes.rss_subscription_sync import PATH as RSS_SYNC_PATH,reply as reply_rss
+        if self.path == RSS_SYNC_PATH:
+            return reply_rss(self)
         from spikes.project_replication import PATH as REPLICATION_PATH, reply
         if self.path == REPLICATION_PATH:
             return reply(self)
@@ -152,10 +164,7 @@ class WebHandler(DesktopHandler):
             self.actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
             return True
         try:
-            operation = (self.server.administration.authenticate_readonly
-                         if self.path in {'/v1/node-telemetry/status', '/v1/chat/availability'}
-                         else self.server.administration.authenticate)
-            self.actor = operation(auth)
+            self.actor = self.server.administration.authenticate_readonly(auth)
             return self.actor is not None
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
             self.actor = None
@@ -211,6 +220,31 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        # Admission may follow body reading or waiting for another owner.
+        # Bind domain authorization to the current account at dispatch time.
+        if getattr(self, 'actor', {}).get('id') is not None:
+            actor = self.server.administration.authenticate_readonly(
+                self.single('Authorization') or '')
+            if actor is None:
+                return self.send_error(401)
+            self.actor = actor
+        if self.path == '/v1/diagnostics/status':
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            if request != {}:
+                return self.send_error(400)
+            from spikes.sync_diagnostics import observations
+            return self.reply(200, {'scope': 'local-process',
+                'active_http_workers': self.server.active_worker_count(),
+                'http': self.server.http_diagnostics(),
+                'sync': observations(self.server.node)})
+        if self.path.startswith('/v1/x-sources/'):
+            if not self.server.administration.is_admin(self.actor):return self.send_error(403)
+            return super().dispatch(request)
+        if self.path in {'/v1/rss-sources/view', '/v1/rss-sources/refresh', '/v1/rss-sources/save', '/v1/rss-sources/import-preview', '/v1/rss-sources/sync-settings', '/v1/rss-sources/sync', '/v1/rss-sources/sync-resolve'}:
+            if not self.path.endswith('/view') and not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            return super().dispatch(request)
         if self.path.startswith('/v1/ide-bridge/'):
             if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
                 return self.dispatch_ide_bridge(request)
@@ -392,6 +426,8 @@ class WebHandler(DesktopHandler):
                 return self.reply(200, control.view())
             except AccessDenied:
                 return self.send_error(403)
+            except ProjectBusy:
+                raise
             except Exception:
                 return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/federation/content/reconcile',
@@ -427,6 +463,8 @@ class WebHandler(DesktopHandler):
                                         'content_sync_statuses': control.statuses()})
             except AccessDenied:
                 return self.send_error(403)
+            except ProjectBusy:
+                raise
             except Exception:
                 return self.reply(409, {'error': 'Obsah projektu se nepodařilo synchronizovat; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
@@ -446,6 +484,8 @@ class WebHandler(DesktopHandler):
                     state['replications'], state['node_id'])})
             except AccessDenied:
                 return self.send_error(403)
+            except ProjectBusy:
+                raise
             except Exception:
                 return self.reply(409, {'error': 'Synchronizaci se nepodařilo dokončit; '
                                                'aktuální stav je uložen pro bezpečné opakování.'})
@@ -465,7 +505,8 @@ class WebHandler(DesktopHandler):
                 if result['commit_id'] != request['expected_head']:
                     raise ValueError('Project changed before output projection')
                 return self.reply(200, result)
-            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError,
+                    PendingOperation, RecoveryConflict):
                 return self.reply(409, {'error': 'Definice výstupů nelze načíst z potvrzené verze projektu.'})
         if self.path.startswith('/v1/backend-metrics/'):
             if not self.server.administration.is_admin(self.actor):
@@ -587,7 +628,7 @@ class WebHandler(DesktopHandler):
         if self.path.startswith('/v1/monitoring/'):
             if not isinstance(request,dict) or not self.server.administration.allowed(self.actor,request.get('project_id')):
                 return self.send_error(403)
-            if self.path!='/v1/monitoring/view' and (not self.server.administration.is_admin(self.actor) or not self._can_write(request.get('project_id'))):
+            if self.path not in {'/v1/monitoring/output','/v1/monitoring/legacy-delete-preview','/v1/monitoring/migration-inventory','/v1/monitoring/migration-preview','/v1/monitoring/blocks','/v1/monitoring/pool-view','/v1/monitoring/view','/v1/monitoring/definitions','/v1/monitoring/rss-status','/v1/monitoring/filter-preview','/v1/monitoring/synthesis-trace','/v1/monitoring/synthesis-freshness'} and (not self.server.administration.is_admin(self.actor) or not self._can_write(request.get('project_id'))):
                 return self.send_error(403)
         if self.path in {'/v1/artifacts/editor/plan-item/save', '/v1/artifacts/editor/plan-item/create',
                          '/v1/artifacts/editor/plan-item/dependencies', '/v1/artifacts/editor/plan-item/delete'}:
@@ -598,6 +639,13 @@ class WebHandler(DesktopHandler):
             resolution = request.get('resolution') if isinstance(request, dict) else None
             if (not isinstance(resolution, dict)
                     or not self._can_write(resolution.get('project_id'))):
+                return self.send_error(403)
+        if self.path == '/v1/projects/conflicts/local-preview':
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
+        if self.path == '/v1/projects/conflicts/local-confirm':
+            preview = request.get('preview') if isinstance(request, dict) else None
+            if not isinstance(preview, dict) or not self._can_write(preview.get('project_id')):
                 return self.send_error(403)
         if self.path == '/v1/artifacts/delete/confirm':
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
@@ -646,6 +694,14 @@ class WebHandler(DesktopHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def do_GET(self):
+        # Immutable UI assets use reserved worker capacity and never touch the
+        # project writer. OAuth callbacks retain serialized application access.
+        if self.path in ASSETS:
+            self.server.describe_request(self.request, 'ui-assets', 'serving')
+            return self._do_GET()
+        return super().do_GET()
+
 
 class WebServer(BoundedHTTPServer):
     def get_request(self):
@@ -655,7 +711,7 @@ class WebServer(BoundedHTTPServer):
             if not self.application_access.allows(peer):
                 raise OSError('Client outside configured application access policy')
             connection.settimeout(2)
-            return self.tls.wrap_socket(connection, server_side=True), address
+            return self.tls.wrap_socket(connection, server_side=True, do_handshake_on_connect=False), address
         except (OSError, ValueError):
             connection.close()
             raise OSError('Connection rejected') from None
@@ -679,6 +735,7 @@ def validate_hostname(hostname):
 
 
 def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
+    validate_route_ownership(WebHandler.post_paths)
     network = ipaddress.ip_network(lan)
     if network.version != 4 or network.prefixlen < 8 or not network.is_private:
         raise ValueError('Specify a private IPv4 LAN subnet')
@@ -686,9 +743,13 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     hostname = validate_hostname(hostname)
     token = secret(token_file)
     creator = ProjectCreation(node)
+    creator.initialize_node('Web workspace')
     if creator.database.exists():
         creator.recover()
         ProjectDeletion(node).recover()
+    administration = Administration(node)
+    # Bootstrap/migrate before binding a listener or authenticating readers.
+    administration.bootstrap()
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(cert, key)
@@ -725,7 +786,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     server.notebooklm_import_actions = NotebookLMImportActions(
         node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
     server.google_drive_import = GoogleDriveImport(node)
-    server.administration = Administration(node)
+    server.administration = administration
     from spikes.monitoring import Monitoring
     server.monitoring=Monitoring(Path(node),server.projects)
     server.monitoring.start()

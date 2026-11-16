@@ -23,6 +23,22 @@ class MonitoringTests(unittest.TestCase):
             periods=dict(PROFILES),presentation=True,mode='deterministic',binding=None,tags=['robotika'])
         self.save()
 
+    def test_busy_after_collection_lease_is_unknown_and_never_automatically_replayed(self):
+        from unittest.mock import patch
+        from spikes.request_ownership import ProjectBusy
+        period = self.period('2026-03-23T00:00:00+01:00')
+        with patch.object(self.service, 'synthesize', side_effect=ProjectBusy('collector busy')) as dispatch:
+            with self.assertRaises(ProjectBusy):
+                self.service.execute(self.pid, self.cfg, period)
+            jobs = self.service.jobs(self.pid)
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0]['state'], 'unknown')
+            saved = jobs[0]['run_id']
+            result = self.service.execute(self.pid, self.cfg, period)
+            self.assertEqual(result['run_id'], saved)
+            self.assertEqual(result['state'], 'unknown')
+            self.assertEqual(dispatch.call_count, 1)
+
     def save(self,new=True):
         return self.service.save(dict(project_id=self.pid,base_head=self.f.git.head(),watch=self.cfg,new=new),str(uuid4()))
 
@@ -137,7 +153,7 @@ class MonitoringTests(unittest.TestCase):
         job=self.service.execute(self.pid,self.cfg,self.period())
         scheduler=self.service.scheduler
         with scheduler.db() as db:
-            db.execute('DROP TABLE watch_grants');db.execute('UPDATE schema_info SET version=1')
+            db.execute('DROP TABLE watch_grants');db.execute('DROP TABLE rss_bindings');db.execute('DROP TABLE rss_polls');db.execute('DROP TABLE execution_effects');db.execute('UPDATE schema_info SET version=1')
         migrated=ReportingScheduler(self.node)
         self.assertEqual(migrated.get(job['run_id']),job)
         self.assertFalse(migrated.watch_granted(self.pid,self.cfg['id'],'a'*64))

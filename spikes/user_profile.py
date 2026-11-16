@@ -5,8 +5,7 @@ import json
 import os
 import getpass
 import pwd
-from contextlib import closing
-import sqlite3
+from spikes.sqlite_ownership import sqlite_connection
 from pathlib import Path
 
 from spikes.metadata import require
@@ -48,7 +47,8 @@ class UserProfile:
         if not self.path.exists():
             return system_profile()
         require(not self.path.is_symlink(), 'Profil nesmí být symbolický odkaz.')
-        with closing(sqlite3.connect(f'{self.path.as_uri()}?mode=ro', uri=True)) as db:
+        with sqlite_connection(f'{self.path.as_uri()}?mode=ro', uri=True,
+                               resource='Node preferences') as db:
             # DDL may have committed before the first profile write was interrupted.
             exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='profile'").fetchone()
             row = db.execute('SELECT value FROM profile WHERE id=1').fetchone() if exists else None
@@ -64,7 +64,7 @@ class UserProfile:
             require(not self.path.is_symlink(), 'Profil nesmí být symbolický odkaz.')
         else:
             os.close(fd)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Node preferences') as db:
             db.execute('PRAGMA synchronous=FULL')
             db.execute('CREATE TABLE IF NOT EXISTS profile (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)')
             db.execute('INSERT OR REPLACE INTO profile VALUES (1, ?)', (json.dumps(value, ensure_ascii=False),))

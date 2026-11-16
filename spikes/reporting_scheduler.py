@@ -8,12 +8,12 @@ import json
 import math
 import os
 from pathlib import Path
-import sqlite3
 import stat
 import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import require, uuid, validate_snapshot
 from spikes.configuration import parse_node, read_config
 from spikes.journal import sync_dir
@@ -34,8 +34,8 @@ def calendar_period(start_local, kind, zone, revision):
     start = datetime.fromisoformat(start_local)
     require(start.tzinfo is not None and start.isoformat() == start.astimezone(ZoneInfo(zone)).isoformat(),
             'Explicit timezone offset required')
-    if kind == 'weekly':
-        end_date = start.date() + timedelta(days=7)
+    if kind in {'daily', 'weekly'}:
+        end_date = start.date() + timedelta(days=1 if kind == 'daily' else 7)
     else:
         require(kind in {'monthly', 'quarterly', 'annual'}, 'Custom periods require explicit manual intent')
         month = start.year * 12 + start.month - 1 + {'monthly': 1, 'quarterly': 3, 'annual': 12}[kind]
@@ -45,6 +45,10 @@ def calendar_period(start_local, kind, zone, revision):
                   start_local=start.isoformat(), end_local=end.isoformat(), start_utc=utc(start), end_utc=utc(end))
     validate_period(result)
     return result
+
+
+class RunJournalNeedsMigration(ValueError):
+    """An owned legacy journal requires the original exclusive migration."""
 
 
 class ReportingScheduler:
@@ -66,22 +70,43 @@ class ReportingScheduler:
         self.path = self.root / 'reporting-runs.sqlite'
         require(self._creating or self.path.is_file(), 'Reporting run journal is missing; reconciliation required')
         self.clock = clock
-        with self.db():
-            pass
+        initialized = self._creating
+        if self._creating:
+            with self.db():
+                pass
+        else:
+            try:
+                with self.db(read_only=True):
+                    pass
+            except RunJournalNeedsMigration:
+                initialized = True
+                with self.db():
+                    pass
         self._creating=False
-        sync_dir(self.root);sync_dir(self.root.parent)
+        if initialized:
+            sync_dir(self.root);sync_dir(self.root.parent)
 
     @contextmanager
-    def db(self):
-        fd = os.open(self.path, os.O_RDWR | (os.O_CREAT if self._creating else 0) | os.O_NOFOLLOW, 0o600)
+    def db(self, *, read_only=False):
+        flags = os.O_RDONLY if read_only else os.O_RDWR | (os.O_CREAT if self._creating else 0)
+        fd = os.open(self.path, flags | os.O_NOFOLLOW, 0o600)
         info = os.fstat(fd); os.close(fd)
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and
                 info.st_nlink == 1 and not info.st_mode & 0o077, 'Unsafe reporting run journal')
-        db = sqlite3.connect(self.path.as_uri()+'?mode=rw',uri=True,timeout=30)
-        try:
-            db.execute('PRAGMA synchronous=FULL')
-            db.execute('BEGIN IMMEDIATE')
+        with sqlite_connection(self.path.as_uri()+('?mode=ro' if read_only else '?mode=rw'), uri=True, timeout=30,
+                               resource='Reporting run journal') as db:
+            if read_only:
+                db.execute('PRAGMA query_only=ON')
+                db.execute('BEGIN')
+            else:
+                db.execute('PRAGMA synchronous=FULL')
+                db.execute('BEGIN IMMEDIATE')
             tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if read_only:
+                version = db.execute('SELECT version,node_id,owner_id FROM schema_info').fetchall() if 'schema_info' in tables else []
+                if version in ([(1,*self.owner)], [(2,*self.owner)], [(3,*self.owner)]):
+                    raise RunJournalNeedsMigration('Reporting run journal requires migration')
+                require(version == [(4,*self.owner)], 'Unknown reporting run journal schema or owner')
             if not tables:
                 require(self._creating, 'Reporting run journal has no schema; reconciliation required')
                 db.execute('CREATE TABLE schema_info(version INTEGER NOT NULL,node_id TEXT NOT NULL,owner_id TEXT NOT NULL)')
@@ -94,25 +119,34 @@ class ReportingScheduler:
                     kind TEXT NOT NULL, cutoff TEXT, snapshot BLOB NOT NULL,
                     PRIMARY KEY(project_id,task_entity,kind))''')
                 db.execute('CREATE TABLE watch_grants(project_id TEXT NOT NULL,watch_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(project_id,watch_id))')
+                tables={'schema_info','runs','cutoffs','watch_grants'};version=[(2,*self.owner)]
             else:
                 version=db.execute('SELECT version,node_id,owner_id FROM schema_info').fetchall() if 'schema_info' in tables else []
                 if tables=={'schema_info','runs','cutoffs'} and version==[(1,*self.owner)]:
                     db.execute('CREATE TABLE watch_grants(project_id TEXT NOT NULL,watch_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(project_id,watch_id))')
                     db.execute('UPDATE schema_info SET version=2');tables.add('watch_grants');version=[(2,*self.owner)]
-                require(tables == {'schema_info', 'runs', 'cutoffs','watch_grants'} and version == [(2,*self.owner)],
-                        'Unknown reporting run journal schema or owner')
                 require([r[1] for r in db.execute('PRAGMA table_info(runs)')] ==
                         ['run_id','reservation','request_digest','document','candidate','task_entity',
                          'delivery_required','lease_owner','lease_token','lease_until'], 'Unknown run columns')
                 require([r[1] for r in db.execute('PRAGMA table_info(cutoffs)')] ==
                         ['project_id','task_entity','kind','cutoff','snapshot'], 'Unknown cutoff columns')
+            base={'schema_info','runs','cutoffs','watch_grants'}
+            if tables==base and version==[(2,*self.owner)]:
+                db.execute('CREATE TABLE rss_bindings(key TEXT PRIMARY KEY,document BLOB NOT NULL)')
+                db.execute('CREATE TABLE rss_polls(id TEXT PRIMARY KEY,binding TEXT NOT NULL,state TEXT NOT NULL,document BLOB NOT NULL,result BLOB,plan BLOB,receipt BLOB)')
+                db.execute('UPDATE schema_info SET version=3')
+                tables|={'rss_bindings','rss_polls'};version=[(3,*self.owner)]
+            v3=base|{'rss_bindings','rss_polls'}
+            if tables==v3 and version==[(3,*self.owner)]:
+                db.execute('CREATE TABLE execution_effects(id TEXT PRIMARY KEY,stream TEXT NOT NULL,document BLOB NOT NULL)')
+                db.execute('UPDATE schema_info SET version=4')
+                tables.add('execution_effects');version=[(4,*self.owner)]
+            require(tables==v3|{'execution_effects'} and version==[(4,*self.owner)],
+                    'Unknown reporting run journal schema or owner')
+            require([r[1] for r in db.execute('PRAGMA table_info(rss_bindings)')]==['key','document'], 'Unknown RSS binding columns')
+            require([r[1] for r in db.execute('PRAGMA table_info(rss_polls)')]==['id','binding','state','document','result','plan','receipt'], 'Unknown RSS poll columns')
+            require([r[1] for r in db.execute('PRAGMA table_info(execution_effects)')]==['id','stream','document'], 'Unknown execution effect columns')
             yield db
-            db.commit()
-        except BaseException:
-            db.rollback()
-            raise
-        finally:
-            db.close()
 
     def now(self):
         value = self.clock()
@@ -135,11 +169,21 @@ class ReportingScheduler:
         db.execute('UPDATE runs SET document=? WHERE run_id=?', (encoded(run), run['run_id']))
 
     def get(self, run_id):
-        with self.db() as db:
+        with self.db(read_only=True) as db:
             return self._row(db, run_id)[0]
 
-    def is_correction(self,run_id):
+    def bind_assistance_context(self,run_id,token,context):
+        """Freeze provider context in the existing FULL journal before dispatch."""
+        require(isinstance(context,dict) and len(encoded(context))<=8*1024*1024,'Assistance context exceeds limit')
         with self.db() as db:
+            run,row=self._row(db,run_id);self._lease(run,row,token)
+            old=run.get('assistance_context')
+            require(old is None or old==context,'Original assistance context cannot be replaced')
+            run['assistance_context']=deepcopy(context);self._save(db,run)
+        return context
+
+    def is_correction(self,run_id):
+        with self.db(read_only=True) as db:
             return self._row(db,run_id)[1][7].startswith('correction:')
 
     def grant_watch(self,project_id,watch_id,sha):
@@ -148,13 +192,13 @@ class ReportingScheduler:
             db.execute('INSERT OR REPLACE INTO watch_grants VALUES(?,?,?)',(project_id,watch_id,sha))
 
     def watch_granted(self,project_id,watch_id,sha):
-        with self.db() as db:
+        with self.db(read_only=True) as db:
             row=db.execute('SELECT digest FROM watch_grants WHERE project_id=? AND watch_id=?',(project_id,watch_id)).fetchone()
             return row is not None and row[0]==sha
 
     def preview(self, run_id):
         """Recover the exact review surface after an application restart."""
-        with self.db() as db:
+        with self.db(read_only=True) as db:
             run,row=self._row(db,run_id)
             request=self._candidate(run,row)
             return dict(run=run,request=request,approval_digest=digest(row[1]))
@@ -366,10 +410,13 @@ class ReportingScheduler:
             require(v['generation']['mode']=='manual' or (_generation is not None and v['generation']==_generation),
                     'Assisted report requires an application-verified generation proof')
             self.reporting.validate(request,run_id,_generation=_generation)
-            run['candidate']=dict(manifest_sha256=digest(encoded(v)),markdown_sha256=digest(spec['markdown'].encode()),
+            from spikes.report_outputs import output_title
+            built_at=self.stamp()
+            heading=next((line[2:].strip() for line in spec['markdown'].splitlines() if line.startswith('# ')),'Zpráva')
+            run['candidate']=dict(output=dict(title=output_title(heading,built_at,run['period']['timezone']),built_at=built_at),manifest_sha256=digest(encoded(v)),markdown_sha256=digest(spec['markdown'].encode()),
                                   cache_ref='sqlite:'+run_id)
             run['state']='review'
-            run['attempts'][-1].update(finished_at=self.stamp(),outcome='succeeded',result_sha256=digest(encoded(request)))
+            run['attempts'][-1].update(finished_at=built_at,outcome='succeeded',result_sha256=digest(encoded(request)))
             db.execute('UPDATE runs SET candidate=? WHERE run_id=?',(encoded(request),run_id));self._save(db,run)
         checkpoint('run-review')
         return dict(run=run,approval_digest=digest(encoded(request)))
@@ -391,7 +438,7 @@ class ReportingScheduler:
         checkpoint('run-approved')
         return run
 
-    def publish(self, run_id, *, checkpoint=lambda stage: None):
+    def publish(self, run_id, *, checkpoint=lambda stage: None, _publication_guard=lambda *args:None):
         with self.db() as db:
             run,row=self._row(db,run_id)
             if run['state'] in {'issued','completed'}:
@@ -407,7 +454,8 @@ class ReportingScheduler:
         # Existing writer's request digest and receipt bridge this crash boundary.
         generation=request['records'][0]['value']['generation']
         receipt=self.reporting.apply(request,run_id,confirm=True,checkpoint=checkpoint,
-                                     _generation=generation if generation['mode']=='assisted' else None)
+                                     _generation=generation if generation['mode']=='assisted' else None,
+                                     _publication_guard=_publication_guard,_output=run['candidate'].get('output'))
         checkpoint('workspace-receipt')
         pin=self.reporting.pin(run['project_id'],operation_uuid(run_id,'record:0'),receipt['commit_id'])
         with self.db() as db:
@@ -470,7 +518,7 @@ class ReportingScheduler:
 
     def cutoff(self, project_id, task_entity, kind):
         uuid(project_id);uuid(task_entity)
-        with self.db() as db:
+        with self.db(read_only=True) as db:
             row=db.execute('SELECT cutoff,snapshot FROM cutoffs WHERE project_id=? AND task_entity=? AND kind=?',
                            (project_id,task_entity,kind)).fetchone()
             return None if row is None else dict(last_successful_cutoff=row[0],last_issued_snapshot=json.loads(row[1]))

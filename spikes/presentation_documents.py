@@ -373,6 +373,9 @@ class PresentationDocuments:
                 row = dict(document)
                 try:
                     row['deck'] = decode_deck(document['body'])
+                    from spikes.report_outputs import presentation_source
+                    source=presentation_source(document.get('metadata',{}))
+                    if source and source['project_id']==project_id:row['report_source']=source
                 except (ValueError, TypeError, KeyError) as exc:
                     row['error'] = str(exc)
                 docs.append(row)

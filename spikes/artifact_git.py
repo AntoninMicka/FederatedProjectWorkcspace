@@ -69,7 +69,7 @@ class ArtifactGit:
                 result['working_preview']=working
             return result
 
-    def stage(self,request,operation_id,*,checkpoint=lambda stage:None):
+    def stage(self,request,operation_id,*,checkpoint=lambda stage:None,_context_digest=None):
         require(isinstance(request,dict) and set(request)=={'project_id','artifact_id','base_head','working_sha256'},'Invalid Stage request')
         pid=request['project_id'];ws=self.workspace(pid)
         def prepare(workspace):
@@ -78,15 +78,18 @@ class ArtifactGit:
             raw=read_working_file(workspace.git.root,path)
             require(digest(raw)==request['working_sha256'],'Working file changed since preview; refresh before Stage')
             return path,raw
-        return ws.stage_artifact(operation_id,request,prepare,checkpoint=checkpoint)
+        intent=dict(request)
+        if _context_digest is not None:intent['conflict_context_sha256']=_context_digest
+        return ws.stage_artifact(operation_id,intent,prepare,checkpoint=checkpoint)
 
-    def _preview(self,ws,pid,aid,head):
+    def _preview(self,ws,pid,aid,head,*,_working=None):
         files,entities,path,meta=self.current(ws,pid,aid,head)
         require(self.metadata_unchanged(ws,path,files),'Artifact metadata changed; review metadata first')
-        raw=self.staged(ws,path)
+        raw=self.staged(ws,path) if _working is None else _working
         require(raw!=files[path],'Selected file has no staged changes')
         candidate=dict(files);candidate[path]=raw
         after=validate_transition(files,candidate);validate_git(ws.git,candidate,after,files)
+        if self.network:require(all(m['privacy']!='local-only' for m in after.values()),'Project contains local-only data')
         plan=project_task_graph(candidate,after,pid,head)
         require(plan['status'] in {'ready','missing'},'Roadmap is not valid: '+plan.get('error',''))
         try:
@@ -104,13 +107,16 @@ class ArtifactGit:
             value,_=self._preview(ws,pid,aid,head)
             return dict(preview=value,approval_digest=digest(canonical(value)))
 
-    def commit(self,preview,approval_digest,message,operation_id,*,confirm=False,checkpoint=lambda stage:None):
+    def commit(self,preview,approval_digest,message,operation_id,*,confirm=False,checkpoint=lambda stage:None,
+               _context_digest=None,_validate_context=None):
         require(confirm is True,'Explicit Commit confirmation required')
         require(isinstance(message,str) and 0<len(message.strip())<=1000 and '\0' not in message,'Commit message required')
         require(digest(canonical(preview))==approval_digest,'Commit preview digest differs')
         pid=preview['project_id'];ws=self.workspace(pid);author=ProjectCreation(self.node).author_id()
         request=dict(action='artifact-staged-commit-v1',preview=preview,approval_digest=approval_digest,message=message)
+        if _context_digest is not None:request['conflict_context_sha256']=_context_digest
         def prepare(workspace):
+            if _validate_context is not None:_validate_context(workspace)
             current,raw=self._preview(workspace,pid,preview['artifact_id'],preview['base_head'])
             require(current==preview,'Staged file changed; review again')
             return {preview['path']:raw},'Local workspace author',author+'@local.invalid',message

@@ -124,3 +124,18 @@ zabraňuje opakovanému přenosu při nezměněných headech. Retence dokončen�
 journalů, automatické řešení divergence, shallow/partial clone a smart Git
 HTTP/SSH transport zůstávají navazující optimalizace, nikoli podmínka tohoto
 bezpečného řezu.
+
+### Nativní export nad připnutým snapshotem
+
+Export nedrží projektový journal po dobu celé validace historie a balení Gitu.
+Pod krátkým vlastníkem zachytí povolené refs/head a stav bez pending operace;
+drahá práce proběhne nad těmito immutable commity v privátním dočasném bare
+repozitáři. Hotové přenášené bajty nadále procházejí úplnou validací grafu.
+Před použitím výsledku se pod nativním vlastníkem znovu ověří refs/head, čistý
+strom a nepřítomnost rozpracovaného zápisu. Souběžný commit export zneplatní
+jako busy; místní změna či journal se nemaže ani nepřepisuje.
+
+Stejná hranice platí pro normalizovaný export počátečního přenosu/repliky.
+Dočasný export před durable intentem lze zahodit. Po publikaci platí původní
+ID, přesný payload, CAS/index recovery a immutable replay odpovědi podle
+ADR 0003 a 0081. Nejde o oslabení validace ani o nový retry protokol.

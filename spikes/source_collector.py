@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 from spikes.artifacts import Artifacts
 from spikes.configuration import committed_project, parse_node, read_config
+from spikes.request_ownership import bounded_flock
 from spikes.metadata import parse_json, require, timestamp, uuid, validate_snapshot
 from spikes.project_creation import ProjectCreation
 from spikes.projects import directory
@@ -154,7 +155,7 @@ class SourceCollector:
             info = os.fstat(handle.fileno())
             require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                     and info.st_nlink == 1 and not info.st_mode & 0o077, 'Unsafe collector lock')
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            bounded_flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB, resource='Source collector')
             runs = PublicSourceRuns(self.state)
             journal_present = runs.path.exists() and runs.path.stat().st_size > 0
             if (existed or publication) and not journal_present:

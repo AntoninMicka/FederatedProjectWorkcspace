@@ -216,7 +216,10 @@ class OpenAIBackendTests(unittest.TestCase):
         class Response:
             status = 200
             def readline(self, _limit): return next(lines, b'')
+            def close(self): pass
         class Connection:
+            sock = None
+            def connect(self): pass
             def __init__(self, *args, **kwargs): pass
             def request(self, *_args, **_kwargs): pass
             def getresponse(self): return Response()
@@ -320,7 +323,10 @@ class OpenAIBackendTests(unittest.TestCase):
         events = []
         class Response:
             status = 302
+            def close(self): pass
         class Connection:
+            sock = None
+            def connect(self): pass
             def __init__(self, *args, **kwargs): events.append(kwargs['timeout'])
             def request(self, method, path, body=None, headers=None):
                 events.append((method, path, headers['Authorization']))

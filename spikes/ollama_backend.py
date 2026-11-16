@@ -6,6 +6,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 import base64
 import hashlib
+from spikes.provider_deadline import budget_connection
 import http.client
 import ipaddress
 import json
@@ -933,6 +934,8 @@ class OllamaAdapter:
             connection = http.client.HTTPSConnection(
                 parsed.hostname, parsed.port, timeout=OLLAMA_FIRST_TOKEN_TIMEOUT,
                 context=ssl._create_unverified_context())
+        connection = budget_connection(connection, OLLAMA_FIRST_TOKEN_TIMEOUT,
+            deadline=control, total_seconds=OLLAMA_GENERATE_TIMEOUT)
         try:
             try:
                 connection.connect()
@@ -1088,6 +1091,7 @@ class OllamaAdapter:
             connection = http.client.HTTPSConnection(
                 parsed.hostname, parsed.port, timeout=timeout,
                 context=context)
+        connection = budget_connection(connection, timeout)
         try:
             try:
                 connection.connect()

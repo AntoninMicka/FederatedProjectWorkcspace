@@ -1,0 +1,178 @@
+{
+  "document_type": "monitoring-placement-design-examples-v1",
+  "status": "designed-not-implemented",
+  "not_executable": true,
+  "signatures_omitted": true,
+  "example_data_only": true,
+  "desired_placements": {
+    "rss": {
+      "mode": "capability",
+      "node_id": null,
+      "capabilities": [
+        "connector:rss-atom-v1",
+        "filter:regex-isolated-v1"
+      ]
+    },
+    "model": {
+      "mode": "node",
+      "node_id": "00000000-0000-4000-8000-000000000002",
+      "capabilities": []
+    }
+  },
+  "unsigned_agreement_payload": {
+    "schema": "fpw-monitoring-execution-agreement-v1",
+    "agreement_id": "00000000-0000-4000-8000-000000000008",
+    "revision": 1,
+    "epoch": 1,
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "project_ref": "refs/heads/main",
+    "coordinator_node_id": "00000000-0000-4000-8000-000000000003",
+    "participants": [
+      {
+        "node_id": "00000000-0000-4000-8000-000000000002",
+        "user_id": "00000000-0000-4000-8000-000000000004",
+        "identity_revision": 1,
+        "fingerprint": "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "node_id": "00000000-0000-4000-8000-000000000003",
+        "user_id": "00000000-0000-4000-8000-000000000005",
+        "identity_revision": 1,
+        "fingerprint": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ],
+    "effects": [
+      {
+        "watch_id": "00000000-0000-4000-8000-000000000006",
+        "kind": "rss.fetch",
+        "executor_node_id": "00000000-0000-4000-8000-000000000003"
+      },
+      {
+        "watch_id": "00000000-0000-4000-8000-000000000007",
+        "kind": "model.generate",
+        "executor_node_id": "00000000-0000-4000-8000-000000000002"
+      }
+    ],
+    "privacy": [
+      "public",
+      "project"
+    ]
+  },
+  "capability_offer_payload": {
+    "schema": "fpw-monitoring-capability-offer-v1",
+    "node_id": "00000000-0000-4000-8000-000000000003",
+    "revision": 1,
+    "observed_at": "2026-11-07T09:59:00Z",
+    "valid_until": "2026-11-07T10:01:00Z",
+    "capabilities": [
+      "connector:rss-atom-v1",
+      "filter:regex-isolated-v1"
+    ],
+    "limits": {
+      "max_feed_wire_bytes": 524288,
+      "regex_as_limit_bytes": 201326592,
+      "regex_wall_limit_ms": 750
+    },
+    "verified_in_this_example": false
+  },
+  "logical_effect": {
+    "project_id": "00000000-0000-4000-8000-000000000001",
+    "project_ref": "refs/heads/main",
+    "watch_id": "00000000-0000-4000-8000-000000000006",
+    "input_id": "00000000-0000-4000-8000-000000000009",
+    "effect": "rss.fetch",
+    "slot": {
+      "start_utc": "2026-11-07T10:00:00Z",
+      "end_utc": "2026-11-07T10:15:00Z"
+    }
+  },
+  "unsigned_ticket_payload": {
+    "schema": "fpw-monitoring-execution-ticket-v1",
+    "effect_id": "915c6c2c-a0c5-52c7-a5b7-6a5950cc168b",
+    "intent_sha256": "a995278dfed53d0dd3191e9936e2544b54b2254cb3c1f21c02e2ed4522794ac1",
+    "agreement_id": "00000000-0000-4000-8000-000000000008",
+    "agreement_revision": 1,
+    "coordinator_epoch": 1,
+    "assignment_id": "00000000-0000-4000-8000-000000000010",
+    "assignment_revision": 1,
+    "coordinator_node_id": "00000000-0000-4000-8000-000000000003",
+    "executor_node_id": "00000000-0000-4000-8000-000000000003",
+    "capability_offer_revision": 1,
+    "fence": 1,
+    "lease_expires_at": "2026-11-07T10:01:00Z",
+    "knowledge_cutoff": "2026-11-07T10:00:00Z",
+    "definition_ref": {
+      "project_id": "00000000-0000-4000-8000-000000000001",
+      "artifact_id": "00000000-0000-4000-8000-000000000011",
+      "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "artifacts/00000000-0000-4000-8000-000000000011/record.json",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "effect_kind": "rss.fetch",
+    "begin_effect_required": true
+  },
+  "unsigned_result_descriptor_payload": {
+    "schema": "fpw-monitoring-execution-result-v1",
+    "effect_id": "915c6c2c-a0c5-52c7-a5b7-6a5950cc168b",
+    "intent_sha256": "a995278dfed53d0dd3191e9936e2544b54b2254cb3c1f21c02e2ed4522794ac1",
+    "assignment_id": "00000000-0000-4000-8000-000000000010",
+    "assignment_revision": 1,
+    "coordinator_epoch": 1,
+    "executor_node_id": "00000000-0000-4000-8000-000000000003",
+    "fence": 1,
+    "state": "result-ready",
+    "payload": {
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "bytes": 1024,
+      "mime": "application/json",
+      "transport": "separate-approved-transfer"
+    },
+    "domain_receipt": {
+      "journal": "rss-polls",
+      "poll_id": "00000000-0000-4000-8000-000000000012",
+      "state": "fetched"
+    },
+    "publication_receipt": null
+  },
+  "unknown_view": {
+    "state": "unknown-effect",
+    "effect_id": "915c6c2c-a0c5-52c7-a5b7-6a5950cc168b",
+    "executor_node_id": "00000000-0000-4000-8000-000000000003",
+    "assignment_revision": 1,
+    "reason": "Original dispatch outcome has no verified receipt",
+    "can_dispatch": false,
+    "can_failover": false,
+    "action": "Reconcile the original effect on its assigned node"
+  },
+  "migration_notes": [
+    "Existing placement fields remain readable; this file is not a runtime configuration.",
+    "Execution agreement requires a separate explicit Administration schema migration.",
+    "No signature, credential, lease secret or real node identity is included.",
+    "Capability numbers describe existing connector/regex limits, not measured hardware availability.",
+    "Legacy autonomous workers require quiescence and original effect reconciliation before managed activation.",
+    "The example coordinator is Omnia; publication requires an independently approved local project write role."
+  ],
+  "execution_intent": {
+    "schema": "fpw-monitoring-execution-intent-v1",
+    "effect_id": "915c6c2c-a0c5-52c7-a5b7-6a5950cc168b",
+    "definition_ref": {
+      "project_id": "00000000-0000-4000-8000-000000000001",
+      "artifact_id": "00000000-0000-4000-8000-000000000011",
+      "commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "artifacts/00000000-0000-4000-8000-000000000011/record.json",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "input_head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "input_refs": [],
+    "knowledge_cutoff": "2026-11-07T10:00:00Z",
+    "source": {
+      "connector": "rss-atom",
+      "url": "https://example.test/rss"
+    },
+    "target": null,
+    "limits": {
+      "max_feed_wire_bytes": 524288,
+      "poll_interval_seconds": 900
+    }
+  }
+}

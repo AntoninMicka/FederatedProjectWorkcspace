@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Signed exchange of project existence without project content or Git history."""
-from contextlib import closing
+from spikes.http_request_budget import RequestReadTimeout
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
-import http.client
 import ipaddress
 import json
 import os
@@ -18,11 +18,14 @@ from urllib.parse import urlsplit
 
 from spikes.administration import Administration, AccessDenied, identifier, label
 from spikes.federation_accounts import canonical
+from spikes.http_deadline import DeadlineHTTPSConnection
 from spikes.metadata import require
 from spikes.network_backend import private_root
 from spikes.project_replication import _signature, _verify
 from spikes.projects import Projects
 
+
+NETWORK_TIMEOUT = 15
 
 PATH = '/v1/federation/catalog'
 CONTENT_TYPE = 'application/vnd.federated-workspace.catalog-v1+json'
@@ -42,6 +45,7 @@ class CatalogStore:
         self.root = private_root(node)
         self.path = self.root / 'federation-catalog.sqlite'
 
+    @contextmanager
     def _open(self):
         fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
@@ -51,26 +55,27 @@ class CatalogStore:
                     'Unsafe federation catalog store')
         finally:
             os.close(fd)
-        db = sqlite3.connect(self.path, timeout=30)
-        db.execute('PRAGMA synchronous=FULL')
-        db.execute('CREATE TABLE IF NOT EXISTS outbound ('
-                   'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
-                   'digest TEXT NOT NULL, projects TEXT NOT NULL)')
-        db.execute('CREATE TABLE IF NOT EXISTS inbound ('
-                   'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
-                   'digest TEXT NOT NULL, projects TEXT NOT NULL, '
-                   'updated_at TEXT NOT NULL)')
-        db.execute('CREATE TABLE IF NOT EXISTS runtime ('
-                   'peer_id TEXT PRIMARY KEY, state TEXT NOT NULL, '
-                   'detail TEXT NOT NULL, updated_at TEXT NOT NULL)')
-        db.commit()
-        return db
+        from spikes.sqlite_ownership import sqlite_connection
+        with sqlite_connection(self.path, timeout=30, resource='Federation catalog') as db:
+            db.execute('PRAGMA synchronous=FULL')
+            db.execute('CREATE TABLE IF NOT EXISTS outbound ('
+                       'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
+                       'digest TEXT NOT NULL, projects TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS inbound ('
+                       'peer_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, '
+                       'digest TEXT NOT NULL, projects TEXT NOT NULL, '
+                       'updated_at TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS runtime ('
+                       'peer_id TEXT PRIMARY KEY, state TEXT NOT NULL, '
+                       'detail TEXT NOT NULL, updated_at TEXT NOT NULL)')
+            db.commit()
+            yield db
 
     def outbound(self, peer_id, projects):
         identifier(peer_id)
         raw = canonical(projects).decode('ascii')
         digest = hashlib.sha256(raw.encode('ascii')).hexdigest()
-        with closing(self._open()) as db, db:
+        with self._open() as db, db:
             row = db.execute(
                 'SELECT revision,digest,projects FROM outbound WHERE peer_id=?',
                 (peer_id,)).fetchone()
@@ -87,7 +92,7 @@ class CatalogStore:
         raw = canonical(projects).decode('ascii')
         digest = hashlib.sha256(raw.encode('ascii')).hexdigest()
         now = _now()
-        with closing(self._open()) as db, db:
+        with self._open() as db, db:
             row = db.execute(
                 'SELECT revision,digest FROM inbound WHERE peer_id=?',
                 (peer_id,)).fetchone()
@@ -106,12 +111,12 @@ class CatalogStore:
                 'Invalid catalog runtime state')
         require(isinstance(detail, str) and len(detail) <= 500,
                 'Invalid catalog runtime detail')
-        with closing(self._open()) as db, db:
+        with self._open() as db, db:
             db.execute('INSERT OR REPLACE INTO runtime VALUES (?,?,?,?)',
                        (peer_id, state, detail, _now()))
 
     def projections(self):
-        with closing(self._open()) as db:
+        with self._open() as db:
             rows = db.execute(
                 'SELECT peer_id,revision,projects,updated_at FROM inbound '
                 'ORDER BY peer_id').fetchall()
@@ -123,7 +128,7 @@ class CatalogStore:
         return result
 
     def statuses(self):
-        with closing(self._open()) as db:
+        with self._open() as db:
             return {row[0]: {'state': row[1], 'detail': row[2],
                              'updated_at': row[3]}
                     for row in db.execute(
@@ -157,7 +162,7 @@ def validate_catalog(value):
 
 def _authority(service, peer_id):
     identifier(peer_id)
-    with service.locked() as (_, state, commit, _):
+    with service.read_current() as (_, state, commit, _):
         peer = next((item for item in state['peers'] if item['id'] == peer_id), None)
         if (not peer or peer['trust'] != 'approved'
                 or peer['sharing_level'] == 'unspecified'):
@@ -232,8 +237,9 @@ def synchronize(node, peer_id, *, deployment='desktop', ca=None):
     ca = Path(ca) if ca else private_root(node) / (peer_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    connection = http.client.HTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=15)
+    connection = DeadlineHTTPSConnection(
+        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+    response = None
     try:
         raw = canonical(envelope)
         require(len(raw) <= MAX_BODY, 'Project catalog request exceeds limit')
@@ -241,12 +247,15 @@ def synchronize(node, peer_id, *, deployment='desktop', ca=None):
             'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc})
         response = connection.getresponse()
         response_raw = response.read(MAX_BODY + 1)
+        connection.check_deadline()
         require(len(response_raw) <= MAX_BODY,
                 'Project catalog response exceeds limit')
         if response.status != 200:
             raise AccessDenied('Peer rejected project catalog')
         response_envelope = json.loads(response_raw)
     finally:
+        if response is not None:
+            response.close()
         connection.close()
     returned = validate_catalog(_verify(
         response_envelope, peer['fingerprint'], 'catalog')['catalog'])
@@ -326,6 +335,8 @@ class CatalogScheduler:
         while not self.stopping.is_set():
             try:
                 self.control.run_automatic()
+                from spikes.rss_subscription_sync import run_automatic
+                run_automatic(self.control.node,deployment=self.control.deployment)
                 delay = self.interval
             except Exception:
                 # Node registry reads share the node writer lock with project
@@ -359,6 +370,8 @@ def reply(handler):
         require(len(raw) == int(length), 'Incomplete project catalog')
         result = receive(handler.server.administration, json.loads(raw))
         return handler.reply(200, result)
+    except RequestReadTimeout:
+        raise
     except AccessDenied:
         return handler.reply(403, {'error': 'Project catalog is not authorized'})
     except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError,

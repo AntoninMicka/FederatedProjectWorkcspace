@@ -153,12 +153,39 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
     req.on('error', reject); req.end(data);
   });
 }
+// Sync, sidebar and updater share one transport owner per credential identity.
+// Retain ownership through response EOF and the existing pre-dispatch retries.
+const requestQueues = new Map();
+function queuedRequest(pairing, route, body, ca) {
+  const key = pairing.connection_id || pairing.session_id;
+  let state = requestQueues.get(key);
+  if (!state) { state = {tail: Promise.resolve(), pending: 0}; requestQueues.set(key, state); }
+  if (state.pending >= 32) return Promise.reject(new Error('Fronta požadavků Workspace je plná.'));
+  state.pending++;
+  let expired = false, timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      expired = true;
+      reject(new Error('Vypršel čas čekání ve frontě Workspace; požadavek nebyl odeslán.'));
+    }, 5000);
+  });
+  const job = state.tail.then(() => {
+    if (expired) return;
+    clearTimeout(timer);
+    return httpRequest(pairing, route, body, ca);
+  });
+  state.tail = job.catch(() => {}).finally(() => {
+    clearTimeout(timer);
+    if (--state.pending === 0) requestQueues.delete(key);
+  });
+  return Promise.race([job, timeout]);
+}
 function connectionRequest(pairing, body, ca) {
-  return httpRequest(pairing, '/v1/ide-bridge/connection/exchange', {...body, connection_id: pairing.connection_id}, ca);
+  return queuedRequest(pairing, '/v1/ide-bridge/connection/exchange', {...body, connection_id: pairing.connection_id}, ca);
 }
 function request(pairing, body, ca) {
   return pairing.connection_id ? connectionRequest(pairing, {action: 'exchange', request: body}, ca)
-    : httpRequest(pairing, '/v1/ide-bridge/exchange', body, ca);
+    : queuedRequest(pairing, '/v1/ide-bridge/exchange', body, ca);
 }
 async function sync(root, pairing, repoRoot, ca, transport = request) {
   validatePairing(pairing);

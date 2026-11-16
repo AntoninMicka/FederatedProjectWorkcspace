@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Native Git initial transfer, public history only, without hooks or merge."""
+from spikes.request_ownership import bounded_flock, ProjectBusy
 import fcntl
+from collections import OrderedDict
 import hashlib
 import json
 import os
@@ -12,14 +14,16 @@ import sys
 import tempfile
 
 from spikes.administration import Administration, identifier
+from spikes.git_budget import git_budget
 from spikes.configuration import committed_project
 from spikes.federation_probe import check_peer
 from spikes.journal import sync_dir
 from spikes.lxc_setup import ACTOR
-from spikes.metadata import require, validate_snapshot, validate_transition
+from spikes.metadata import (require, _validate_snapshot, _validate_transition,
+                             _SnapshotMetadataCache)
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
-from spikes.storage import Git
+from spikes.storage import Git, _GitBlobCache
 
 MAX_BUNDLE = 64 * 1024 * 1024
 
@@ -28,26 +32,52 @@ def git_run(git, *args, **kwargs):
     return git.run(*args, env_extra={'GIT_NO_REPLACE_OBJECTS': '1'}, **kwargs)
 
 
+@git_budget()
 def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'})):
     require(isinstance(allowed_privacy, (set, frozenset)) and bool(allowed_privacy)
             and allowed_privacy <= {'public', 'project', 'confidential'},
             'Invalid transfer privacy scope')
     commits = git_run(git, 'rev-list', '--max-count=501', head).stdout.splitlines()
     require(0 < len(commits) <= 500, 'History exceeds initial-transfer limit of 500 commits')
+    # A child and its parent recur in adjacent validation steps. Keep only two
+    # immutable snapshots, scoped to this call; never cache authorization or
+    # validation results between transfers.
+    snapshots = OrderedDict()
+    metadata_cache = _SnapshotMetadataCache()
+    blob_cache = _GitBlobCache()
+    project_blobs = set()
+
+    def snapshot(commit):
+        if commit not in snapshots:
+            files = git.snapshot(commit, _blob_cache=blob_cache)
+            snapshots[commit] = files, _validate_snapshot(files, metadata_cache=metadata_cache)
+            while len(snapshots) > 2:
+                snapshots.popitem(last=False)
+        snapshots.move_to_end(commit)
+        return snapshots[commit]
+
     for commit in commits:
-        committed_project(git, commit, project_id, check_worktree=False)
+        git.check_deadline()
         entries = git_run(git, 'ls-tree', '-r', '-z', commit).stdout
+        project_blob = None
         for entry in filter(None, entries.split('\0')):
             info, path = entry.split('\t', 1)
             mode, kind, _ = info.split()
             require(mode in {'100644', '100755'} and kind == 'blob', 'Symlinks/submodules are not transferable')
             require(path == 'project.json' or path.startswith(('artifacts/', 'registries/')),
                     'Unclassified historical file cannot be transferred: ' + path)
-        entities = validate_snapshot(git.snapshot(commit))
-        candidate = git.snapshot(commit)
+            if path == 'project.json':
+                project_blob = info.split()[2]
+        require(project_blob is not None, 'Missing committed project.json')
+        if project_blob not in project_blobs:
+            committed_project(git, commit, project_id, check_worktree=False)
+            project_blobs.add(project_blob)
+        candidate, entities = snapshot(commit)
         parents = git_run(git, 'show', '-s', '--format=%P', commit).stdout.split()
         for parent in parents:
-            validate_transition(git.snapshot(parent), candidate)
+            parent_files, parent_entities = snapshot(parent)
+            _validate_transition(parent_files, candidate, parent_entities, entities,
+                                 _record_cache=metadata_cache)
         for item in entities.values():
             require(item['privacy'] in allowed_privacy,
                     'Transfer grant does not allow ' + item['privacy'] +
@@ -56,33 +86,56 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
         # Validate each historical revision in its own context, including bare
         # repositories whose HEAD is unborn or points at a different branch.
         from spikes.reporting_schema import validate_git
-        validate_git(git, candidate, entities, head=commit)
+        validate_git(git, candidate, entities, head=commit, _snapshot_loader=snapshot,
+                     _record_cache=metadata_cache)
+        git.check_deadline()
     return len(commits)
 
 
-def export_bundle(node, project_id, allowed_privacy=frozenset({'public'})):
-    ws = Projects(node).workspace(project_id, blocking=False)
+def _export_head(ws, expected=None):
+    """Capture/check an export snapshot under the native writer, never pack here."""
     with ws.journal.lock(), ws.journal.connect() as db:
-        ws._branch(); ws._read_locked(db)
-        require(not git_run(ws.git, 'status', '--porcelain', '--untracked-files=all').stdout, 'Project must be clean')
-        require(git_run(ws.git, 'rev-parse', '--is-shallow-repository').stdout.strip() == 'false', 'Shallow history is not transferable')
-        grafts = Path(git_run(ws.git, 'rev-parse', '--git-path', 'info/grafts').stdout.strip())
-        require(not (grafts if grafts.is_absolute() else ws.git.root / grafts).exists(), 'Git grafts are not supported')
+        if ws._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+            raise ProjectBusy('Project has an unfinished publication')
+        ws._branch()
         head = ws.git.head()
-        with tempfile.TemporaryDirectory(prefix='fw-export-') as directory:
-            root = Path(directory); repo = root / 'export.git'; repo.mkdir()
-            git = Git(repo)
-            git_run(git, 'init', '--bare', '--template=', '--initial-branch=main')
-            git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags', str(ws.git.root), head)
-            git_run(git, 'update-ref', 'refs/heads/main', head, '0' * 40)
-            # Verify the exact exported graph, independently of source configuration.
-            count = validate_history(git, head, project_id, allowed_privacy)
-            path = root / 'project.bundle'
-            git_run(git, 'bundle', 'create', str(path), 'refs/heads/main')
-            require(path.stat().st_size <= MAX_BUNDLE, 'Bundle exceeds 64 MiB')
-            payload = path.read_bytes()
-        require(ws.git.head() == head, 'Source changed during export')
-        return payload, head, count
+        if expected is not None and head != expected:
+            raise ProjectBusy('Source changed during export')
+        ws._read_locked(db)
+        require(not git_run(ws.git, 'status', '--porcelain', '--untracked-files=all').stdout,
+                'Project must be clean')
+        require(git_run(ws.git, 'rev-parse', '--is-shallow-repository').stdout.strip() == 'false',
+                'Shallow history is not transferable')
+        grafts = Path(git_run(ws.git, 'rev-parse', '--git-path', 'info/grafts').stdout.strip())
+        require(not (grafts if grafts.is_absolute() else ws.git.root / grafts).exists(),
+                'Git grafts are not supported')
+        if ws.git.head() != head:
+            raise ProjectBusy('Source changed during export snapshot')
+        return head
+
+
+@git_budget()
+def export_bundle(node, project_id, allowed_privacy=frozenset({'public'})):
+    projects = Projects(node)
+    binding = next((row for row in projects._bindings() if row['project_id'] == project_id), None)
+    ws = projects.workspace(project_id, blocking=False, for_read=True)
+    head = _export_head(ws)
+    with tempfile.TemporaryDirectory(prefix='fw-export-') as directory:
+        root = Path(directory); repo = root / 'export.git'; repo.mkdir(mode=0o700)
+        git = Git(repo)
+        git_run(git, 'init', '--bare', '--template=', '--initial-branch=main')
+        git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags', str(ws.git.root), head)
+        git_run(git, 'update-ref', 'refs/heads/main', head, '0' * 40)
+        # Verify exact exported history independently of source configuration.
+        count = validate_history(git, head, project_id, allowed_privacy)
+        path = root / 'project.bundle'
+        git_run(git, 'bundle', 'create', str(path), 'refs/heads/main')
+        require(path.stat().st_size <= MAX_BUNDLE, 'Bundle exceeds limit')
+        payload = path.read_bytes()
+    if binding is None or binding not in Projects(node)._bindings():
+        raise ProjectBusy('Project registration changed during export')
+    _export_head(ws, head)
+    return payload, head, count
 
 
 def transfer(node, target, project_id, operation_id, ca):
@@ -135,7 +188,7 @@ def import_bundle(request, payload):
     require(root.stat().st_uid == os.getuid() and not root.stat().st_mode & 0o077, 'Unsafe transfer directory')
     fd = os.open(root / 'lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'a+b') as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+        bounded_flock(handle, fcntl.LOCK_EX, resource='Git transfer')
         stage = root / request['operation_id']
         stage.mkdir(mode=0o700, exist_ok=True)
         require(stage == stage.resolve(), 'Unsafe transfer stage')

@@ -2,15 +2,41 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """M0 experiment for controlled repositories; not a production Git sandbox."""
-from contextlib import closing
 import json
+from collections import OrderedDict
 import os
 from pathlib import Path
-import sqlite3
 import subprocess
 import time
 
+from spikes.git_budget import GitDeadlineExceeded, effective_deadline, check_deadline
+from spikes.sqlite_ownership import sqlite_connection
 from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, validate_snapshot
+
+
+class _GitBlobCache:
+    """Bounded exact object bytes; owned by one immutable history traversal."""
+    def __init__(self):
+        self.entries = OrderedDict()
+        self.size = 0
+
+    def get(self, oid, size):
+        data = self.entries.get(oid)
+        if data is not None:
+            require(len(data) == size, 'Cached Git object size differs')
+            self.entries.move_to_end(oid)
+        return data
+
+    def put(self, oid, data):
+        if len(data) > 16 * 1024 * 1024:
+            return
+        previous = self.entries.pop(oid, None)
+        if previous is not None:
+            self.size -= len(previous)
+        while self.entries and (len(self.entries) >= 2048
+                                or self.size + len(data) > 16 * 1024 * 1024):
+            _, old = self.entries.popitem(last=False); self.size -= len(old)
+        self.entries[oid] = data; self.size += len(data)
 
 
 class Git:
@@ -25,15 +51,19 @@ class Git:
                    GIT_AUTHOR_EMAIL='m0@example.invalid', GIT_COMMITTER_NAME='M0 Test',
                    GIT_COMMITTER_EMAIL='m0@example.invalid', LC_ALL='C')
         env.update(env_extra or {})
-        timeout = 30 if self.deadline is None else min(30, self.deadline - time.monotonic())
+        deadline = effective_deadline(self.deadline)
+        timeout = 30 if deadline is None else min(30, deadline - time.monotonic())
         if timeout <= 0:
-            raise TimeoutError('Operation deadline exceeded')
+            raise GitDeadlineExceeded('Git operation deadline exceeded')
         return subprocess.run(
             ['git', '-c', f'core.hooksPath={os.devnull}', '-c', 'commit.gpgSign=false',
              '-c', 'core.autocrlf=false', '-c', 'core.fsmonitor=false', *args],
             cwd=self.root, env=env, capture_output=True, text=not binary,
             check=check, timeout=timeout, input=input,
         )
+
+    def check_deadline(self):
+        check_deadline(self.deadline)
 
     def head(self):
         return self.run('rev-parse', 'HEAD').stdout.strip()
@@ -43,7 +73,7 @@ class Git:
         self.run('commit', '-m', message)
         return self.head()
 
-    def snapshot(self, commit, *, env_extra=None):
+    def snapshot(self, commit, *, env_extra=None, _blob_cache=None):
         """Read artifact/registry bytes from a fixed commit or tree under PoC limits."""
         entries = self.run('ls-tree', '-r', '-l', '-z', commit, '--', 'artifacts/',
                            'registries/', env_extra=env_extra).stdout
@@ -62,13 +92,21 @@ class Git:
             objects.append((path, oid, size))
         if not objects:
             return {}
+        files, missing = {}, []
+        for path, oid, size in objects:
+            data = _blob_cache.get(oid, size) if _blob_cache is not None else None
+            if data is None:
+                missing.append((path, oid, size))
+            else:
+                files[path] = data
+        if not missing:
+            return files
         # Preflight all limits before requesting bytes. One process reads only
         # fixed object IDs; filenames and blob content never enter its protocol.
         output = self.run('cat-file', '--batch', binary=True, env_extra=env_extra,
-                          input=''.join(oid + '\n' for _, oid, _ in objects).encode('ascii')).stdout
-        files = {}
+                          input=''.join(oid + '\n' for _, oid, _ in missing).encode('ascii')).stdout
         offset = 0
-        for path, oid, size in objects:
+        for path, oid, size in missing:
             end = output.find(b'\n', offset)
             require(end >= 0 and output[offset:end] == f'{oid} blob {size}'.encode('ascii'),
                     'Invalid Git batch header')
@@ -76,9 +114,12 @@ class Git:
             end = offset + size
             require(end < len(output) and output[end:end + 1] == b'\n', 'Truncated Git batch object')
             files[path] = output[offset:end]
+            if _blob_cache is not None:
+                _blob_cache.put(oid, files[path])
             offset = end + 1
         require(offset == len(output), 'Unexpected Git batch data')
-        return files
+        return (files if _blob_cache is None else
+                {path: files[path] for path, _, _ in objects})
 
 
 class StaleIndex(RuntimeError):
@@ -135,7 +176,7 @@ class Index:
         self.path = Path(path)
         fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         os.close(fd)
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Project index') as db:
             version = self._version(db)
             if version == 0:
                 tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -179,6 +220,21 @@ class Index:
                     require([item[1] for item in db.execute('PRAGMA table_info(' + table + ')')]
                             == columns, 'Unrecognized v2 index; index retained')
 
+    @classmethod
+    def attach(cls, path):
+        """Attach to a current index; retain legacy initialization/validation."""
+        index = cls.__new__(cls)
+        index.path = Path(path)
+        # No creation on this path; an absent file must use explicit bootstrap.
+        fd = os.open(index.path, os.O_RDWR | os.O_NOFOLLOW)
+        os.close(fd)
+        with sqlite_connection(index.path.absolute().as_uri() + '?mode=rw', uri=True,
+                               resource='Project index') as db:
+            version = index._version(db)
+        if version != cls.VERSION:
+            return cls(path)
+        return index
+
     def _version(self, db):
         version = db.execute('PRAGMA user_version').fetchone()[0]
         require(version in {0, 1, 2, self.VERSION}, 'Unsupported index schema version; index retained')
@@ -202,7 +258,7 @@ class Index:
             imported = meta['import']; importer = imported['importer']
             imports.append((id_, *(imported.get(key) for key in self.IMPORT_FIELDS),
                             importer['name'], importer.get('version')))
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Project index') as db:
             db.execute('PRAGMA foreign_keys=ON')
             db.execute('BEGIN IMMEDIATE')
             if self._version(db) != self.VERSION:
@@ -239,7 +295,7 @@ class Index:
         return commit
 
     def _read(self, git, query):
-        with closing(sqlite3.connect(self.path)) as db, db:
+        with sqlite_connection(self.path, resource='Project index') as db:
             db.execute('BEGIN')
             if self._version(db) == 0:
                 raise StaleIndex('Legacy index must be rebuilt from current HEAD')

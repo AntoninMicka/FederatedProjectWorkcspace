@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Explicitly enabled same-node bridge for discovered publication modules."""
+from spikes.request_ownership import bounded_flock
 from contextlib import contextmanager
 import fcntl
 import hashlib
@@ -121,7 +122,7 @@ class PublicationCms:
             require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                     and info.st_nlink == 1 and not info.st_mode & 0o077,
                     'Unsafe CMS writer lock')
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            bounded_flock(fd, fcntl.LOCK_EX, resource='CMS publication')
             yield
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN)

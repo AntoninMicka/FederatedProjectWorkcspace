@@ -1091,7 +1091,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Zobrazit odeslaný request', JS)
         self.assertIn('Ollama nevrátila platný návrh externího volání',
                       Path('spikes/desktop_ui.py').read_text())
-        self.assertIn('Externí LLM odpověď nebylo možné bezpečně přijmout',
+        self.assertIn('external_response_failure(exc)',
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn("'/v1/tasks/'", Path('spikes/desktop_ui.py').read_text())
         self.assertIn('error.status=response.status', JS)
@@ -1151,7 +1151,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="chats-tab"', HTML)
         self.assertNotIn('id="back-projects"', HTML)
         sidebar_tabs = HTML.split('id="sidebar-tabs"', 1)[1].split('</div>', 1)[0]
-        labels = ['Projekty', 'Chaty', 'Úkoly', 'Plán', 'Podklady', 'Nástroje', 'Výstupy', 'Manuály', 'Nastavení', 'Federace']
+        labels = ['Projekty', 'Chaty', 'Úkoly', 'Plán', 'Podklady', 'Zdroje', 'Nástroje', 'Výstupy', 'Manuály', 'Nastavení', 'Federace']
         self.assertEqual([label for _, label in sorted(
             (sidebar_tabs.index(f'aria-label="{label}"'), label) for label in labels)], labels)
         self.assertEqual(sidebar_tabs.count('class="sidebar-tab-icon"'), len(labels))
@@ -1232,9 +1232,10 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('QDialog', Path('spikes/desktop_transfer.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_network.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_deployment.py').read_text())
-        self.assertIn('<h2>Výstupy</h2><h3>Zprávy</h3>', HTML)
+        self.assertIn('id="sidebar-output-tree"', HTML)
+        self.assertIn('id="sidebar-report-heading">Zprávy</summary>', HTML)
         self.assertIn('id="sidebar-report-list"', HTML)
-        self.assertIn('<h3>Prezentace</h3>', HTML)
+        self.assertIn('<summary>Prezentace</summary>', HTML)
         self.assertIn('#sidebar-settings-list{flex:1}', CSS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', HTML)
         sidebar_chats = HTML.split('id="sidebar-chats"', 1)[1].split('</div></div>', 1)[0]
@@ -1292,7 +1293,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
         self.assertNotIn('.dashboard-tasks{grid-row:span', CSS)
         self.assertIn('#dashboard-tasks{display:flex!important', CSS)
-        self.assertIn("projectRequest('/v1/projects/open',{project_id:item.id})", JS)
+        self.assertIn("projectRequest('/v1/projects/open',{project_id:item.id,scope:'dashboard'})", JS)
         self.assertIn('recentProjectOrder=[projectId,...recentProjectOrder.filter', JS)
         self.assertIn('<div id="project-create-view" hidden>', HTML)
         self.assertNotIn('id="project-create-back"', HTML)

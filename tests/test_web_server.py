@@ -30,6 +30,223 @@ from tests.test_notebooklm_import import valid_members
 
 
 class WebTests(unittest.TestCase):
+    def test_account_revoked_between_authentication_and_admission_cannot_dispatch(self):
+        from spikes.web_server import WebHandler
+        _, raw, _ = self.request(path='/v1/administration',body='{"action":"list"}')
+        state=json.loads(raw)
+        code, raw, _ = self.request(path='/v1/administration',body=json.dumps({
+            'action':'create-user','expected_commit':state['commit_id'],
+            'name':'Revoked','node_role':'node-admin'}))
+        self.assertEqual(code,200,raw);state=json.loads(raw)
+        user,key=state['users'][0],state['access_key']
+        original=WebHandler.authorized
+        def revoke_after_auth(handler, auth):
+            allowed=original(handler,auth)
+            if allowed and handler.actor.get('id')==user['id']:
+                self.server.administration.request(
+                    {'id':None,'node_role':'federation-admin','memberships':{}},
+                    {'action':'update-user','expected_commit':state['commit_id'],
+                     'user_id':user['id'],'active':False,'node_role':'member','memberships':{}})
+            return allowed
+        with patch.object(WebHandler,'authorized',revoke_after_auth):
+            code, raw, _ = self.request(path='/v1/administration',body='{"action":"list"}',
+                headers={'Authorization':'Bearer '+key})
+        self.assertEqual(code,401,raw)
+
+    def test_account_authentication_shares_registry_reader_on_other_routes(self):
+        code, raw, _ = self.request(path='/v1/administration',body='{"action":"list"}')
+        self.assertEqual(code,200,raw);state=json.loads(raw)
+        code, raw, _ = self.request(path='/v1/administration',body=json.dumps({
+            'action':'create-user','expected_commit':state['commit_id'],
+            'name':'Reader','node_role':'member'}))
+        self.assertEqual(code,200,raw);key=json.loads(raw)['access_key']
+        with self.server.administration.read_locked():
+            code, raw, _ = self.request(path='/v1/session',body='{}',
+                headers={'Authorization':'Bearer '+key})
+            self.assertEqual(code,200,raw)
+            self.assertEqual(json.loads(raw)['node_role'],'member')
+
+    def test_slow_content_receive_does_not_own_ui_application_or_presenter(self):
+        import time
+        from spikes.web_server import WebHandler
+        # Keep the real TLS server, admission, authentication and UI handlers.
+        # Only the expensive peer protocol body is gated deterministically.
+        for slow_path, duration in (('/v1/federation/content-sync', .5),
+                                    ('/v1/chat/test', 1.2)):
+            with self.subTest(slow_path=slow_path):
+                entered, release = threading.Event(), threading.Event()
+                results = []
+                # Peer protocols enter directly in _do_POST; JSON services
+                # acquire their owner after body validation, before dispatch.
+                entry = '_do_POST' if slow_path.endswith('content-sync') else 'dispatch'
+                original = getattr(WebHandler, entry)
+
+                def gated(handler, *args):
+                    if handler.path != slow_path:
+                        return original(handler, *args)
+                    entered.set()
+                    if not release.wait(5):
+                        return handler.reply(504, {'error': 'test timeout'})
+                    time.sleep(duration)
+                    return handler.reply(200, {'done': True})
+
+                with patch.object(WebHandler, entry, gated):
+                    worker = threading.Thread(target=lambda: results.append(
+                        self.request(path=slow_path)))
+                    worker.start()
+                    try:
+                        self.assertTrue(entered.wait(2))
+                        for method, path, body in (
+                                ('GET', '/', ''),
+                                ('POST', '/v1/projects', '{}'),
+                                ('POST', '/v1/presentation/public', '{}'),
+                                ('POST', '/v1/presentation/control', '{"action":"blackout"}'),
+                                ('POST', '/v1/node-telemetry/status', '{}'),
+                                ('POST', '/v1/administration', '{"action":"list"}'),
+                                ('POST', '/v1/diagnostics/status', '{}')):
+                            code, raw, _ = self.request(method=method, path=path, body=body)
+                            self.assertEqual(code, 200, (path, raw))
+                            self.assertTrue(worker.is_alive())
+                        if slow_path.endswith('content-sync'):
+                            code, raw, _ = self.request(path='/v1/counter',
+                                                       body='{"action":"increment"}')
+                            self.assertEqual(code, 200, raw)
+                            self.assertEqual(json.loads(raw)['value'], 1)
+                        code, raw, _ = self.request(path=slow_path)
+                        self.assertEqual(code, 503, raw)
+                        diagnostic = self.server.http_diagnostics()
+                        owner = next(row for row in diagnostic['requests']
+                                     if row['operation'] == slow_path)
+                        self.assertEqual(owner['stage'], 'processing')
+                        self.assertLessEqual(diagnostic['active_workers'], diagnostic['worker_limit'])
+                    finally:
+                        release.set()
+                        worker.join(5)
+                    self.assertFalse(worker.is_alive())
+                    self.assertEqual(results[0][0], 200, results)
+
+    def test_catalog_and_presenter_authentication_is_readonly(self):
+        self.assertEqual(self.create_project('Concurrent catalog')[0], 200)
+        code, raw, _ = self.request(path='/v1/administration', body='{"action":"list"}')
+        self.assertEqual(code, 200, raw)
+        state = json.loads(raw)
+        code, raw, _ = self.request(path='/v1/administration', body=json.dumps({
+            'action': 'create-user', 'expected_commit': state['commit_id'],
+            'name': 'Catalog reader', 'node_role': 'member'}))
+        self.assertEqual(code, 200, raw)
+        key = json.loads(raw)['access_key']
+        self.server.application_lane.acquire()
+        try:
+            with patch.object(self.server.administration, 'authenticate',
+                              side_effect=AssertionError('mutable authentication')):
+                for path in ('/v1/projects', '/v1/presentation/public'):
+                    code, raw, _ = self.request(path=path, headers={'Authorization': 'Bearer ' + key})
+                    self.assertEqual(code, 200, raw)
+                    if path == '/v1/projects':
+                        self.assertEqual(json.loads(raw)['projects'], [])
+                    self.assertEqual(self.request(path=path, headers={
+                        'Authorization': 'Bearer invalid'})[0], 401)
+        finally:
+            self.server.application_lane.release()
+
+    def test_full_tls_pool_returns_readable_503_before_dispatch(self):
+        from unittest.mock import patch
+        from spikes.web_server import WebHandler
+        # Reserve every admission slot; no additional handler may be created.
+        for _ in range(self.server.worker_limit):
+            self.assertTrue(self.server._worker_slots.acquire(blocking=False))
+        try:
+            with patch.object(WebHandler, '_do_GET', side_effect=AssertionError('dispatch')):
+                code, body, _ = self.request(method='GET', path='/', body='')
+            self.assertEqual(code, 503)
+            self.assertEqual(json.loads(body), {'error': 'server busy'})
+            self.assertEqual(self.server.http_diagnostics()['admission_rejections'], 1)
+        finally:
+            for _ in range(self.server.worker_limit):
+                self.server._worker_slots.release()
+        self.assertEqual(self.request(method='GET', path='/', body='')[0], 200)
+
+    def test_busy_web_lane_rejects_without_queuing_or_dispatch(self):
+        from unittest.mock import patch
+        from spikes.web_server import WebHandler
+        import time
+        self.server.node_preferences_lane.acquire()
+        try:
+            started = time.monotonic()
+            with patch.object(WebHandler, 'dispatch', side_effect=AssertionError('dispatch')):
+                code, body, _ = self.request(path='/v1/counter')
+            self.assertEqual(code, 503, body)
+            self.assertLess(time.monotonic() - started, 1.5)
+        finally:
+            self.server.node_preferences_lane.release()
+
+    def test_ui_assets_have_reserved_capacity_beside_four_busy_post_workers(self):
+        from unittest.mock import patch
+        from spikes.web_server import WebHandler
+        release = threading.Event()
+        entered = threading.Barrier(5)
+        replies = []
+
+        original_post = WebHandler.dispatch
+
+        def block(handler, request):
+            if handler.path == '/v1/diagnostics/status':
+                return original_post(handler, request)
+            entered.wait(timeout=5)
+            if not release.wait(10):
+                return handler.reply(504, {'error': 'test timeout'})
+            return handler.reply(200, {'done': True})
+
+        routes = ['/v1/counter', '/v1/node-telemetry/status',
+                  '/v1/chat/availability', '/v1/roadmap-refinement/list']
+        with patch.object(WebHandler, 'dispatch', block):
+            clients = [threading.Thread(target=lambda route=route:
+                       replies.append(self.request(path=route))) for route in routes]
+            for client in clients:
+                client.start()
+            try:
+                entered.wait(timeout=5)
+                code, body, _ = self.request(path='/v1/diagnostics/status')
+                self.assertEqual(code, 200, body)
+                self.assertEqual(json.loads(body)['scope'], 'local-process')
+                self.assertTrue(json.loads(body)['http']['ui_capacity_reserved'])
+                self.assertTrue(json.loads(body)['http']['lanes_busy']['node_preferences_lane'])
+                requests = json.loads(body)['http']['requests']
+                self.assertTrue(any(item['kind'] == 'node_preferences_lane'
+                                    and item['stage'] == 'processing' for item in requests))
+                self.assertTrue(all(item['elapsed_ms'] >= 0 for item in requests))
+                # The fifth POST cannot occupy capacity reserved for the UI.
+                code, _, _ = self.request(path='/v1/projects')
+                self.assertEqual(code, 503)
+                code, body, _ = self.request(method='GET', path='/', body='')
+                self.assertEqual(code, 200)
+                self.assertIn(b'<html', body.lower() if isinstance(body, bytes) else body.lower().encode())
+            finally:
+                release.set()
+                for client in clients:
+                    client.join(10)
+        self.assertEqual(len(replies), 4)
+        self.assertTrue(all(reply[0] == 200 for reply in replies))
+
+    def test_diagnostics_requires_admin_and_uses_readonly_authentication(self):
+        from unittest.mock import patch
+        self.assertEqual(self.create_project('Diagnostic access')[0], 200)
+        code, raw, _ = self.request(path='/v1/administration', body='{"action":"list"}')
+        self.assertEqual(code, 200)
+        for role in ('member', 'node-admin'):
+            state = json.loads(raw)
+            code, data, _ = self.request(path='/v1/administration', body=json.dumps({
+                'action': 'create-user', 'expected_commit': state['commit_id'],
+                'name': 'Diagnostic ' + role, 'node_role': role}))
+            self.assertEqual(code, 200, data)
+            headers = {'Authorization': 'Bearer ' + json.loads(data)['access_key']}
+            with patch.object(self.server.administration, 'authenticate',
+                              side_effect=AssertionError('mutable authentication')):
+                code, _, _ = self.request(path='/v1/diagnostics/status', headers=headers)
+            self.assertEqual(code, 200 if role == 'node-admin' else 403)
+            code, raw, _ = self.request(path='/v1/administration', body='{"action":"list"}')
+            self.assertEqual(code, 200)
+
     def test_dns_hostname_validation_is_fail_closed(self):
         self.assertEqual(validate_hostname('Workspace.Cacke.Internal'),
                          'workspace.cacke.internal')
@@ -249,6 +466,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(403, queue('add', extra, headers)[0])
         self.assertEqual(403, queue('move', dict(extra, target_index=0), headers)[0])
         self.assertEqual(403, queue('set-flag', dict(extra, flag='held', value=True), headers)[0])
+        for action in ('repair-preview','repair','remove-single-preview','remove-single'):
+            self.assertEqual(403,queue(action,extra,headers)[0])
         state = admin({'action': 'update-user', 'expected_commit': state['commit_id'],
             'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {pid: 'editor'}})
         self.assertEqual(200, queue('add', extra, headers)[0])
@@ -260,6 +479,17 @@ class WebTests(unittest.TestCase):
         self.assertEqual(422, queue('move', dict(extra, task_id='TASK-X', revision=2, target_index=1), headers)[0])
         self.assertEqual(422, queue('remove', dict(extra, revision=3, preview_sha256='bad'), headers)[0])
         self.assertEqual(head, self.server.projects.repository(pid).head())
+
+        head=Artifacts(self.root/'node.json').save(dict(project_id=pid,artifact_id=main_todo_id(pid),
+            base_head=head,title='Roadmap',body='- [ ] [TASK-A] A\n  - depends_on: TASK-X\n- [ ] [TASK-B] B\n  - depends_on: TASK-A\n- [ ] [TASK-X] X\n',new=False),str(uuid4()))['commit_id']
+        before=json.loads(queue('status')[1]);self.assertFalse(before['valid'])
+        repair=dict(revision=before['revision'],expected_head=head)
+        code,data,_=queue('repair-preview',repair);self.assertEqual(200,code,data)
+        preview=json.loads(data);self.assertEqual(preview['added_ids'],['TASK-X'])
+        code,data,_=queue('repair',dict(repair,preview_sha256=preview['preview_sha256']))
+        self.assertEqual(200,code,data);self.assertTrue(json.loads(data)['valid'])
+        self.assertEqual(json.loads(data)['task_ids'],['TASK-X','TASK-A'])
+        self.assertEqual(json.loads(queue('status',headers=headers)[1])['revision'],3)
 
     def test_roadmap_graph_projection_and_revision_pinned_svg_export(self):
         code, data, _ = self.request(path='/v1/roadmap/graph',
@@ -738,7 +968,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="outputs-overview-panel" role="tabpanel"', WEB_HTML)
         self.assertIn('id="outputs-overview-list"', WEB_HTML)
         self.assertIn("querySelector('#outputs-overview-tab').hidden=false", WEB_JS)
-        self.assertIn("if(tab.id==='presentations-tab'&&activeProject)await openOutputsOverview()", WEB_JS)
+        self.assertIn("if(tab.id==='presentations-tab'&&activeProject){const project=activeProject;await openOutputsOverview();", WEB_JS)
         self.assertIn("projectRequest('/v1/outputs/definitions'", WEB_JS)
         self.assertNotIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", WEB_JS)
@@ -818,6 +1048,22 @@ class WebTests(unittest.TestCase):
             self.assertEqual(code, 200); self.assertIn('Vraťte se'.encode(), data)
             self.assertEqual(headers['Referrer-Policy'], 'no-referrer')
             called.assert_called_once()
+
+    def test_output_definitions_preserve_external_pending_operation_as_conflict(self):
+        code, data, _ = self.create_project('Pending output definitions')
+        self.assertEqual(code, 200, data); pid = json.loads(data)['id']
+        workspace = Projects(self.root / 'node.json').workspace(pid)
+        head = workspace.git.head(); operation = str(uuid4())
+        marker = json.dumps({'kind': 'external-replication', 'operation_id': operation})
+        with workspace.journal.connect() as db:
+            db.execute('INSERT INTO operations(id,record) VALUES (?,?)', (operation, marker))
+        code, data, _ = self.request(path='/v1/outputs/definitions',
+                                    body=json.dumps({'project_id': pid, 'expected_head': head}))
+        self.assertEqual(code, 409, data)
+        with workspace.journal.connect() as db:
+            self.assertEqual(db.execute('SELECT record,done FROM operations WHERE id=?',
+                                         (operation,)).fetchone(), (marker, 0))
+        self.assertEqual(workspace.git.head(), head)
 
     def test_inherited_feature_routes_have_complete_web_runtime_wiring(self):
         self.assertEqual(self.create_project('Runtime wiring')[0], 200)
@@ -1191,6 +1437,15 @@ class WebTests(unittest.TestCase):
                                      body=json.dumps(request))
         self.assertEqual(code, 200); self.assertEqual(
             json.loads(data)['conflicts'][0]['ref'], incoming)
+        (workspace.git.root / content).write_text('Uncommitted roadmap change\n')
+        code, data, _ = self.request(path='/v1/projects/conflicts/list',
+                                     body=json.dumps(request))
+        self.assertEqual(code, 200)
+        local_change = json.loads(data)['local_changes'][0]
+        self.assertEqual(local_change['path'], content)
+        self.assertIn('+Uncommitted roadmap change', local_change['diff'])
+        self.assertEqual(git.head(), local)
+        (workspace.git.root / content).write_text('local\n')
         request['incoming_ref'] = incoming
         code, data, _ = self.request(path='/v1/projects/conflicts/preview',
                                      body=json.dumps(request))
@@ -1225,6 +1480,77 @@ class WebTests(unittest.TestCase):
         self.assertEqual(first[0],200);self.assertEqual(second[0],200)
         self.assertEqual(json.loads(first[1]),json.loads(second[1]))
         self.assertEqual(len(json.loads(self.request()[1])['projects']),1)
+
+    def test_local_change_resolution_web_preview_confirm_and_reader_denial(self):
+        _, data, _ = self.create_project('Local edit')
+        project = json.loads(data)['id']; node = self.root / 'node.json'
+        workspace = Projects(node).workspace(project); artifact = str(uuid4())
+        head = Artifacts(node).save(dict(project_id=project, artifact_id=artifact,
+            base_head=workspace.git.head(), title='Document', body='Saved\n', new=True), str(uuid4()))['commit_id']
+        path = f'artifacts/{artifact}/content.md'; target = workspace.git.root / path
+        for choice in ('restore', 'keep'):
+            target.write_text('Reviewed working edit\n')
+            request = dict(project_id=project, expected_head=head, path=path, choice=choice)
+            code, data, _ = self.request(path='/v1/projects/conflicts/local-preview', body=json.dumps(request))
+            self.assertEqual(code, 200, data); preview = json.loads(data)
+            operation = str(uuid4())
+            confirmation = dict(**preview, operation_id=operation, message='Reviewed decision', confirm=True)
+            code, data, _ = self.request(path='/v1/projects/conflicts/local-confirm', body=json.dumps(confirmation))
+            self.assertEqual(code, 200, data); result = json.loads(data)
+            repeated = self.request(path='/v1/projects/conflicts/local-confirm', body=json.dumps(confirmation))
+            self.assertEqual(repeated[0], 200, repeated[1])
+            self.assertEqual(json.loads(repeated[1]), result)
+            if choice == 'restore':
+                self.assertEqual(workspace.git.head(), head)
+                self.assertEqual(target.read_text(), 'Saved\n')
+                self.assertEqual(result['backup_operation_id'], operation)
+            else:
+                self.assertNotEqual(workspace.git.head(), head)
+                self.assertEqual(workspace.git.snapshot(result['commit_id'])[path], b'Reviewed working edit\n')
+                head = result['commit_id']
+        target.write_text('Reader must not resolve this\n')
+        state = json.loads(self.request(path='/v1/administration', body='{"action":"list"}')[1])
+        state = json.loads(self.request(path='/v1/administration', body=json.dumps(dict(
+            action='create-user', expected_commit=state['commit_id'], name='Reader', node_role='member')))[1])
+        user, key = state['users'][0], state['access_key']
+        self.request(path='/v1/administration', body=json.dumps(dict(action='update-user',
+            expected_commit=state['commit_id'], user_id=user['id'], active=True,
+            node_role='member', memberships={project:'reader'})))
+        headers = {'Authorization':'Bearer '+key}
+        self.assertEqual(403, self.request(path='/v1/projects/conflicts/local-preview',
+            body=json.dumps(dict(project_id=project, expected_head=head, path=path, choice='restore')), headers=headers)[0])
+        self.assertEqual(403, self.request(path='/v1/projects/conflicts/local-confirm',
+            body=json.dumps(confirmation), headers=headers)[0])
+        self.assertEqual(target.read_text(), 'Reader must not resolve this\n')
+
+    def test_project_open_negotiates_compact_gzip_without_changing_the_view(self):
+        import gzip
+        _, data, _ = self.create_project('Compressed project')
+        pid = json.loads(data)['id']; node = self.root / 'node.json'
+        head = Projects(node).open(pid)['commit_id']
+        Artifacts(node).save(dict(project_id=pid, artifact_id=main_todo_id(pid),
+            base_head=head, title='Příliš žluťoučké úkoly',
+            body=''.join(f'- [ ] [TASK-{number}] Příliš žluťoučký úkol {number}\n' for number in range(1000)),
+            new=True), str(uuid4()))
+        body = json.dumps({'project_id':pid})
+        code, raw, headers = self.request(path='/v1/projects/open', body=body)
+        self.assertEqual(code, 200, raw)
+        self.assertNotIn('Content-Encoding', headers)
+        self.assertIn('Příliš'.encode(), raw)
+        code, packed, headers = self.request(path='/v1/projects/open', body=body,
+            headers={'Accept-Encoding':'br, gzip;q=0.8'})
+        self.assertEqual(code, 200, packed)
+        self.assertEqual(headers['Content-Encoding'], 'gzip')
+        self.assertEqual(headers['Vary'], 'Accept-Encoding')
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        self.assertEqual(int(headers['Content-Length']), len(packed))
+        self.assertEqual(json.loads(gzip.decompress(packed)), json.loads(raw))
+        self.assertLess(len(packed), len(raw) // 4)
+        code, uncompressed, headers = self.request(path='/v1/projects/open', body=body,
+            headers={'Accept-Encoding':'gzip;q=0'})
+        self.assertEqual(code, 200)
+        self.assertNotIn('Content-Encoding', headers)
+        self.assertEqual(json.loads(uncompressed), json.loads(raw))
 
     def test_admin_previews_plans_and_confirms_server_local_notebooklm_export(self):
         archive = self.notebook_archive()
@@ -1431,7 +1757,7 @@ def result(value):
  elif phase==1:
   phase=2;run("document.querySelector('.project-card').click();")
  elif phase==2:
-  phase=3;run("(()=>{document.querySelector('#tools-tab').click();document.querySelector('#tools-main-tab').click();const toolbar=document.querySelector('.sidebar-tool-primary-actions'),list=document.querySelector('#sidebar-tool-list'),input=document.querySelector('#julia-import-file');if(!toolbar||list.children.length!==0||!document.querySelector('#sidebar-tools-status').textContent.includes('Počet nástrojů: 0')||!document.querySelector('#julia-editor-new')){juliaToolsStatus.textContent='FAIL: Julia tool evidence unavailable';return;}const transfer=new DataTransfer();transfer.items.add(new File(['# imported smoke\\nvalue = 7\\n'],'smoke-model.jl',{type:'text/x-julia'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()")
+  phase=3;run("(async()=>{await navigateSidebarTab(document.querySelector('#tools-tab'));await navigateMainTab(document.querySelector('#tools-main-tab'));const toolbar=document.querySelector('.sidebar-tool-primary-actions'),list=document.querySelector('#sidebar-tool-list'),input=document.querySelector('#julia-import-file');if(!toolbar||list.children.length!==0||!document.querySelector('#sidebar-tools-status').textContent.includes('Počet nástrojů: 0')||!document.querySelector('#julia-editor-new')){juliaToolsStatus.textContent='FAIL: Julia tool evidence unavailable';return;}const transfer=new DataTransfer();transfer.items.add(new File(['# imported smoke\\nvalue = 7\\n'],'smoke-model.jl',{type:'text/x-julia'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()")
  elif phase==3:
   phase=4;run("(()=>{const root=document.querySelector('#julia-source-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]'),textarea=root.querySelector('[data-raw-content]');if(juliaEditor.elements.title.value!=='smoke-model'||!textarea.value.includes('imported smoke')||!juliaToolsStatus.textContent.includes('lokálním konceptu')){juliaEditorStatus.textContent='FAIL: Julia import draft unavailable';return;}if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor je Julia')||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia file help unavailable';return;}select.value='julia.function';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Julia funkce'||!example.textContent.includes('function total')){juliaEditorStatus.textContent='FAIL: Julia pattern help unavailable';return;}textarea.setSelectionRange(textarea.value.length,textarea.value.length);root.querySelector('[data-raw-insert]').click();if(!textarea.value.includes('function model')){juliaEditorStatus.textContent='FAIL: Julia pattern insertion unavailable';return;}root.querySelector('[data-raw-validate]').click();})()")
  elif phase==4:
@@ -1446,7 +1772,7 @@ def poll():
  checks={
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
- 2:"!document.querySelector('#project-view').hidden&&document.querySelector('#sidebar-tools-status').textContent.startsWith('Počet nástrojů:')?'ready':'waiting'",
+ 2:"!document.querySelector('#project-view').hidden?'ready':'waiting'",
  3:"(()=>{if(document.querySelector('#julia-source-raw-widget [data-raw-pattern]')?.querySelector('option[value=\\\"julia.function\\\"]')&&!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('imported smoke'))return'ready';const s=juliaEditorStatus.textContent||juliaToolsStatus.textContent;return s&&s.startsWith('FAIL:')?s:'waiting'})()",
  4:"(()=>{const failure=juliaEditorStatus.textContent;if(failure.startsWith('FAIL:'))return failure;return document.querySelector('#julia-source-raw-widget [data-raw-status]').textContent.startsWith('Obsah je validní')?'ready':'waiting'})()",
  5:"!juliaEditor.hidden&&juliaEditor.elements.julia_code.value.includes('function model')?'ready':'FAIL: Julia draft was discarded without confirmation'",
@@ -1527,13 +1853,14 @@ def result(value):
  if phase==0: phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
  elif phase==1: phase=2;run("[...document.querySelectorAll('#sidebar-project-list button')].find(b=>b.dataset.id==="+json.dumps(project)+").click();")
  elif phase==2: phase=3;run("document.querySelector('#plan-tab').click();")
- elif phase==3: phase=4;run("document.querySelector('#sidebar-plan-list button').click();")
+ elif phase==3: phase=4;run("[...document.querySelectorAll('#sidebar-plan-list button')].find(button=>button.textContent.startsWith('Rozhraní (')).click();")
  elif phase==4: phase=5;run("document.querySelector('.roadmap-node').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));")
  elif phase==5: finish('project plan smoke: main graph, subgraph and keyboard detail OK',0)
 def poll():
  global ticks
  ticks+=1
- if ticks>350: finish('project plan timeout at '+str(phase));return
+ if ticks>350:
+  view.page().runJavaScript("JSON.stringify({selection:taskPlanSelection,status:document.querySelector('#plan-status').textContent,nodes:document.querySelectorAll('.roadmap-node').length,head:activeProject?.head,queue:taskQueueView?.expected_head})",lambda value:finish('project plan timeout at '+str(phase)+' '+str(value)));return
  checks={0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('#sidebar-project-list button')?'ready':'waiting'",2:"document.querySelector('#project-title').textContent==='Plánovaný projekt'&&!document.querySelector('#project-view').hidden?'ready':'waiting'",3:"!document.querySelector('#plan-panel').hidden&&document.querySelectorAll('.roadmap-node').length===3?'ready':'waiting'",4:"document.querySelectorAll('.roadmap-node').length===2?'ready':'waiting'",5:"document.querySelector('#plan-detail h3').textContent.includes('UI-01')||document.querySelector('#plan-detail h3').textContent.includes('DOC-01')?'ready':'waiting'"}
  view.page().runJavaScript(checks[phase],result)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100)

@@ -134,21 +134,48 @@ class StreamTaskTests(unittest.TestCase):
             with self.assertRaises(UnknownRun):service.task_route(request,on_delta=lambda _:None,on_status=lambda _:None,control=control)
         self.assertEqual(head,self.git.head())
 
-    def test_http_stop_bypasses_busy_application_lane_and_has_terminal_stream_event(self):
+    def test_http_stream_keeps_status_and_control_available_during_runtime_reset(self):
         entered=threading.Event()
         def blocked(binding,raw,delta,status,control):
             entered.set()
-            deadline=time.monotonic()+3
+            deadline=time.monotonic()+10
             while control.reason is None and time.monotonic()<deadline:time.sleep(.005)
             control.check()
         service,request=self.stream_service(blocked)
         driver=local_api.LocalAPITests();responses=[]
-        with running_api('http',handler=DesktopHandler) as server:
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.administration import Administration
+        from spikes.user_profile import UserProfile
+        with running_api('http',handler=DesktopManagementHandler) as server:
             server.chat_service=service;server.projects=service.projects
+            server.user_profile=UserProfile(service.node_path)
+            server.administration=Administration(service.node_path,deployment='desktop')
+            actor={'id':None,'node_role':'federation-admin','memberships':{}}
+            before=server.administration.request(actor,{'action':'list'})
             thread=threading.Thread(target=lambda:responses.append(driver.request(server,path='/v1/tasks/route-stream',body=json.dumps(request).encode())))
             thread.start()
             try:
                 self.assertTrue(entered.wait(2))
+                self.assertTrue(server.provider_execution_lane.locked())
+                self.assertFalse(server.provider_lane.locked())
+                self.assertFalse(server.application_lane.locked())
+                for path,body in [('/v1/counter',{'action':'increment'}),
+                                  ('/v1/user-profile',{'action':'load'}),
+                                  ('/v1/administration',{'action':'list'})]:
+                    response=driver.request(server,path=path,body=json.dumps(body).encode())
+                    self.assertIn(b' 200 ',response.split(b'\r\n',1)[0],response)
+                    self.assertTrue(thread.is_alive())
+                response=driver.request(server,path='/v1/chat/status',body=b'{}')
+                self.assertIn(b' 200 ',response.split(b'\r\n',1)[0],response)
+                response=driver.request(server,path='/v1/backend-catalog/reset',body=json.dumps(
+                    {'backend_id':'ollama','confirmed':True}).encode())
+                self.assertIn(b' 200 ',response.split(b'\r\n',1)[0],response)
+                response=driver.request(server,path='/v1/administration',body=json.dumps(
+                    {'action':'create-user','name':'Concurrent','node_role':'member',
+                     'expected_commit':before['commit_id']}).encode())
+                self.assertIn(b' 403 ',response.split(b'\r\n',1)[0],response)
+                after=server.administration.request(actor,{'action':'list'})
+                self.assertEqual(after['commit_id'],before['commit_id'])
                 response=driver.request(server,path='/v1/tasks/run-control',body=json.dumps(dict(project_id=ENTITY,run_id=request['run_id'],action='stop')).encode())
                 self.assertIn(b' 200 ',response.split(b'\r\n',1)[0])
             finally:
@@ -182,6 +209,40 @@ class StreamTaskTests(unittest.TestCase):
             self.assertEqual('hard-timeout',control.reason)
         finally:
             control.close();release.set();upstream.shutdown();upstream.server_close();thread.join()
+
+    def test_extension_during_blocked_provider_read_preserves_success(self):
+        from dataclasses import replace
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from tests import test_ollama_backend
+        started = threading.Event()
+        class Slow(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers['Content-Length']))
+                self.send_response(200); self.end_headers()
+                started.set(); time.sleep(.55)
+                for done, text in [(False, 'OK'), (True, '')]:
+                    self.wfile.write(json.dumps(dict(model='gemma3', created_at='now',
+                        response=text, done=done)).encode()+b'\n')
+                self.wfile.flush()
+            def log_message(self, *args): pass
+        upstream = ThreadingHTTPServer(('127.0.0.1', 0), Slow)
+        thread = threading.Thread(target=upstream.serve_forever, daemon=True); thread.start()
+        binding = test_ollama_backend.OllamaBinding.parse(test_ollama_backend.OllamaBindingTests().binding())
+        binding = replace(binding, endpoint='http://127.0.0.1:'+str(upstream.server_port))
+        control = RunDeadline(lambda _: None, soft=.2)
+        def extend():
+            if started.wait(1):
+                time.sleep(.05); control.extend()
+        extender = threading.Thread(target=extend); extender.start()
+        try:
+            control.start()
+            result = OllamaAdapter._http_stream_transport(binding, b'{}', lambda _:None, lambda _:None, control=control)
+            self.assertEqual(result['response'], 'OK')
+            self.assertTrue(control.extended)
+            self.assertIsNone(control.reason)
+        finally:
+            control.close(); extender.join(2)
+            upstream.shutdown(); upstream.server_close(); thread.join(2)
 
     def test_https_deadline_decisions_require_current_writer_and_exact_owner(self):
         from tests import test_web_server

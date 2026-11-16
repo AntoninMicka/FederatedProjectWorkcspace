@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 """Google Drive per-file selection, staging and atomic publication tests."""
 import json
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 import tempfile
 import unittest
@@ -89,6 +91,57 @@ class GoogleDriveImportTests(unittest.TestCase):
         self.assertEqual(query['trigger_onepick'], ['true'])
         self.service.callback(query['state'][0], 'authorization-code', ','.join(ids))
         return started['selection_id']
+
+    def test_locked_connection_closes_after_commit_and_rollback(self):
+        with self.service.locked() as db:
+            revision = db.execute('SELECT revision FROM configuration').fetchone()[0]
+            db.execute('UPDATE configuration SET revision=revision+1')
+        with self.assertRaises(sqlite3.ProgrammingError):
+            db.execute('SELECT 1')
+        with self.assertRaisesRegex(ValueError, 'abort transaction'):
+            with self.service.locked() as failed:
+                failed.execute('UPDATE configuration SET revision=revision+100')
+                raise ValueError('abort transaction')
+        with self.assertRaises(sqlite3.ProgrammingError):
+            failed.execute('SELECT 1')
+        with self.service.locked() as reopened:
+            self.assertEqual(reopened.execute('SELECT revision FROM configuration').fetchone()[0], revision+1)
+
+    def test_schema_failure_closes_connection_before_context_can_yield(self):
+        original_connect = sqlite3.connect
+        opened = []
+        class BrokenSchema(sqlite3.Connection):
+            def executescript(inner, script):
+                raise sqlite3.OperationalError('injected schema failure')
+        def connect(*args, **kwargs):
+            connection = original_connect(*args, **kwargs, factory=BrokenSchema)
+            opened.append(connection)
+            return connection
+        with patch('spikes.google_drive_import.sqlite3.connect', side_effect=connect):
+            with self.assertRaisesRegex(sqlite3.OperationalError, 'injected schema failure'):
+                with self.service.locked():
+                    self.fail('Failed schema initialization yielded a connection')
+        self.assertEqual(len(opened), 1)
+        with self.assertRaises(sqlite3.ProgrammingError):
+            opened[0].execute('SELECT 1')
+        self.assertTrue(self.service.status()['configured'])
+
+    def test_busy_commit_rolls_back_and_closes_before_next_import_access(self):
+        with closing(sqlite3.connect(self.service.database)) as reader:
+            revision = reader.execute('SELECT revision FROM configuration').fetchall()[0][0]
+            with self.assertRaises(sqlite3.OperationalError):
+                with self.service.locked() as db:
+                    db.execute('PRAGMA busy_timeout=0')
+                    reader.execute('BEGIN')
+                    reader.execute('SELECT revision FROM configuration').fetchall()
+                    db.execute('UPDATE configuration SET revision=revision+1')
+            with self.assertRaises(sqlite3.ProgrammingError):
+                db.execute('SELECT 1')
+            reader.rollback()
+        with self.service.locked() as reopened:
+            self.assertEqual(reopened.execute('SELECT revision FROM configuration').fetchone()[0], revision)
+            reopened.execute('UPDATE configuration SET revision=revision+1')
+        self.assertTrue(self.service.status()['configured'])
 
     def test_reset_erases_oauth_configuration_and_tokens_but_keeps_history_tables(self):
         started = self.service.authorize(self.actor, {
