@@ -1585,6 +1585,8 @@ _MANUAL_SYNCS = ManualSyncTasks()
 
 
 class ContentSyncScheduler:
+    NAME, STOP_TIMEOUT = 'federation-content-sync', 65
+
     def __init__(self, node, *, deployment, interval=60):
         self.control = ContentSyncControl(node, deployment=deployment)
         self.interval = interval; self.stopping = threading.Event(); self.thread = None
@@ -1607,10 +1609,12 @@ class ContentSyncScheduler:
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 
-    def stop(self):
+    def stop(self, timeout=None):
+        """Return whether the worker finished; a live worker stays referenced."""
+        from spikes.background_workers import drain
         self.stopping.set()
-        if self.thread is not None:
-            self.thread.join(timeout=65); self.thread = None
+        clean, self.thread = drain(self.thread, self.STOP_TIMEOUT if timeout is None else timeout)
+        return clean
 
 
 def reply(handler):

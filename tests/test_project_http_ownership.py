@@ -82,7 +82,7 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
             self.assertEqual(status, 200, payload)
             self.assertEqual(payload['sync_conflicts'], [{'peer_id': peer_id}])
 
-    def test_julia_owner_is_independent_but_its_routes_remain_serialized(self):
+    def test_julia_owner_is_independent_and_status_bypasses_long_julia_work(self):
         entered, release = threading.Event(), threading.Event()
         results = []
         class Julia:
@@ -103,8 +103,12 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
                 self.assertTrue(entered.wait(2))
                 self.assertEqual(self.post(server, '/v1/julia/status',
                     {'project_id': self.ids[0]}, token='invalid')[0], 401)
+                # AUDIT-B2-T2: status has its own read lane; other Julia work
+                # (here a second definitions request) remains serialized.
                 status, payload, _ = self.post(server, '/v1/julia/status',
                                                {'project_id': self.ids[0]})
+                self.assertEqual(status, 200, payload)
+                status, payload, _ = self.post(server, '/v1/julia/definitions', body)
                 self.assertEqual(status, 503, payload)
                 self.assertEqual(payload['outcome'], 'not-started')
                 self.assertEqual(self.post(server, '/v1/counter', {'action': 'increment'})[0], 200)

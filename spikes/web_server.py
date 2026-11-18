@@ -817,9 +817,8 @@ def main():
         except KeyboardInterrupt:
             pass
         finally:
-            content_scheduler.stop()
-            catalog_scheduler.stop()
-            scheduler.stop()
+            from spikes.background_workers import stop_all
+            stop_all(content_scheduler, catalog_scheduler, scheduler)
 
 
 if __name__ == '__main__':

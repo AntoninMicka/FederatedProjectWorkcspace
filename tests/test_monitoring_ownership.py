@@ -86,7 +86,12 @@ class MonitoringOwnershipTests(unittest.TestCase):
             worker.start()
             try:
                 self.assertTrue(entered.wait(2))
+                # AUDIT-B2-T2: the cache view answers during a network refresh;
+                # a second fetch-domain request stays serialized behind it.
                 status, payload, _ = self.post(server, '/v1/rss-sources/view', {})
+                self.assertEqual(status, 200, payload)
+                self.assertEqual(payload['channels'][0]['state'], 'loading')
+                status, payload, _ = self.post(server, '/v1/rss-sources/refresh', {'channel_id': 'test'})
                 self.assertEqual(status, 503, payload)
                 self.assertEqual(payload['outcome'], 'not-started')
                 self.assertEqual(self.post(server, '/v1/monitoring/rss-status', {'project_id': self.pid})[0], 200)

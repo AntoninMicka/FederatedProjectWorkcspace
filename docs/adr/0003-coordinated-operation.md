@@ -68,6 +68,33 @@ kontrol před obnovou; nikdy nejde o SQL zápis pod SH ani povýšení na míst�
 Bootstrap a migrace zůstávají výhradní. Recovery protokol se nemění.
 Podrobnosti: [náprava P1](../concurrency-p1-remediation.md).
 
+## Upřesnění AUDIT-B2: sdílení čtenářů a crash boundaries, 18. 11. 2026
+
+Dávka AUDIT-B2 aplikuje výše uvedený vzor čtecího vlastnictví na zbylé čtenáře
+([audit B1](../audit-b1-locks-versions-oddities.md#audit-b1-t2--zámky-a-mutexy)).
+Rozhodnutí se nemění: zápisy, inicializace, recovery a obnova indexu zůstávají
+výhradní, žádný SQL zápis neběží pod `LOCK_SH` a nedochází k povýšení zámku na
+místě. Formát journalu, indexu, Gitu ani lokálních store se nemění.
+
+Crash boundaries změněných cest:
+
+| Cesta | Trvalý zápis | Pád a obnova |
+|---|---|---|
+| Otevření inicializovaného journalu (SH kontrola schématu, vlastníka a práv) | žádný | Bez nové hranice. Chybějící nebo neúplný journal jde do dosavadního výhradního bootstrapu (DDL v jedné SQLite transakci, `chmod`, `fsync` adresáře), který se při dalším otevření zopakuje. |
+| `recover()` bez rozpracované operace | žádný | SH kontrola jen čte; nalezená operace se obnovuje beze změny pod EX po opětovné kontrole. |
+| `repair_index()` před čtením pod SH | atomická výměna indexu pod EX (`Index.rebuild`) | Beze změny: index je obnovitelná projekce, po pádu ho další čtenář obnoví z HEAD. Pod SH se index jen čte; změna HEAD mezi opravou a čtením vrací `StaleIndex`. |
+| Status fronty pod SH | žádný | Čte atomicky nahrazovaný soubor; zápisy fronty (EX, `fsync`, `rename`) se nemění. |
+| Čtenáři lokálních SQLite store (`mode=ro`) | žádný | Store vyžadující vytvoření nebo migraci odmítne zápis (`SQLITE_READONLY`) a čtenář přejde na dosavadní zapisovací cestu s migrací v jedné transakci. |
+| Přímá SQLite spojení v omezeném HTTP požadavku | beze změny | BUSY/LOCKED přeruší příkaz nebo commit; nedokončenou transakci vrátí SQLite nebo transakce volajícího. Dříve potvrzené kroky vícekrokové operace zůstávají; výsledek je `unknown` jako u `sqlite_connection` ([ADR 0050](0050-bounded-http-monitor-concurrency.md)). |
+| HTTP lane, RSS view, telemetrie | žádný | Pouze paměťový stav procesu. |
+| Shutdown schedulerů katalogu, replikace a obsahu | žádný | Worker, který nedoběhne do společného deadlinu, zůstává odkazovaný a hlášený jako unclean. Konec procesu je pak pád v neznámé fázi; obnovu řídí journal nebo replay dané operace ([ADR 0038](0038-personal-project-replication.md), [ADR 0041](0041-federated-project-existence-catalog.md), [ADR 0042](0042-bidirectional-native-git-sharing-sync.md)). |
+
+Bariérou mezi kontrolou nativní operace a zrušením RSS pollu je flock RSS
+workeru, nikoli journal: publikaci pollu spouští jen `tick` a `reconcile` drží
+tentýž flock přes kontrolu i změnu stavu. Kontrola journalu proto stačí pod SH.
+Ověření: `tests/test_reader_locks.py`, `tests/test_lock_scopes.py`,
+`tests/test_background_workers.py` a regrese v `tests/test_rss_monitoring.py`.
+
 ## Přenos ověření na cílový uzel
 
 `spikes.target_probe` adaptuje stejné checkpointy pro ruční M0-05 bez přenosu celé testové sady. Vytvoří vlastní dočasný projekt/stav na explicitním filesystemu, provede tři normální zápisy a 12 `os._exit(73)` v samostatných workerech. Storage protokol ani výše uvedené crash boundaries se nemění. Po obnově ověří commit/bajty/index a idempotenci; na konci úspěchu odstraní pouze vlastní adresář, při selhání ponechá diagnostická data. Jde o pád aplikačního procesu mezi checkpointy, nikoli výpadek napájení nebo přerušení uvnitř libovolného Git/SQLite syscallu. Výsledky lokální validace a skutečného cílového běhu se evidují odděleně ve WORK_LOG.

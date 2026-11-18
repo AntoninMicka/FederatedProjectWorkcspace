@@ -207,6 +207,23 @@ class RSSMonitoringTests(unittest.TestCase):
         self.assertEqual(self.runtime.reconcile(self.f.project,poll['id'],confirm=True)['state'],'cancelled')
         self.assertEqual(self.f.git.head(),head)
 
+    def test_reconcile_barrier_is_the_worker_flock_not_the_journal(self):
+        # AUDIT-B2-T3 (B-LOCK-04): only tick() starts the poll's publication and
+        # both it and reconcile() hold the RSS worker flock across check and change.
+        def interrupt(stage):
+            if stage=='rss-plan':raise OSError('interrupted')
+        self.runtime.tick(self.f.project,checkpoint=interrupt)
+        poll=self.status()['polls'][0];self.assertEqual(poll['state'],'publishing')
+        head=self.f.git.head();calls=len(self.calls)
+        with self.runtime.locked() as acquired:
+            self.assertTrue(acquired)
+            with self.assertRaisesRegex(ValueError,'RSS worker is busy'):
+                self.runtime.reconcile(self.f.project,poll['id'],confirm=True)
+            self.assertIsNone(self.runtime.tick(self.f.project))
+        self.assertEqual((self.f.git.head(),len(self.calls)),(head,calls))
+        self.assertEqual(self.status()['polls'][0]['state'],'publishing')
+        self.assertEqual(self.runtime.reconcile(self.f.project,poll['id'],confirm=True)['state'],'cancelled')
+
     def test_process_crash_during_dispatch_recovers_unknown_without_another_get(self):
         script='''
 import os,sys

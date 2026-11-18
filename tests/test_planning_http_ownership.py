@@ -165,7 +165,11 @@ class PlanningHTTPOwnershipTests(unittest.TestCase):
             worker.start()
             try:
                 self.assertTrue(entered.wait(2))
+                # AUDIT-B2-T2 (A11): unrelated reference computations are independent;
+                # the same computation stays serialized.
                 code, payload, _ = self.post(server, '/v1/document-patterns', {'action': 'catalog'})
+                self.assertEqual(code, 200, payload)
+                code, payload, _ = self.post(server, '/v1/roadmap/graph', {'format': 'json'})
                 self.assertEqual(code, 503, payload); self.assertEqual(payload['outcome'], 'not-started')
                 self.assertEqual(self.post(server, '/v1/projects/open', {'project_id': self.ids[0]})[0], 200)
                 self.assertEqual(self.post(server, '/v1/roadmap-refinement/list', {'project_id': self.ids[0]})[0], 200)
