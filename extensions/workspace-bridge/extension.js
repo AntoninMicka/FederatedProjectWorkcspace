@@ -135,6 +135,8 @@ async function activate(context) {
           try {
             if (local.refresh) mapping = await refreshProject(config, current, session, local);
             let result = await bridge.sync(mailbox(mapping.session_id), {...config.pairing, ...mapping}, local.repository, config.ca);
+            for (const rejected of result.rejected_messages || [])
+              output.appendLine(`${rejected.task_id} / ${rejected.message_id}: ${rejected.reason}; zpráva zachována v rejections/.`);
             const project = current.projects.find(item => item.project_id === mapping.project_id);
             if (!local.refresh && !result.has_queue && result.stale && project && project.expected_head !== mapping.expected_head
                 && !await hasPendingMessages(mapping.session_id)) {

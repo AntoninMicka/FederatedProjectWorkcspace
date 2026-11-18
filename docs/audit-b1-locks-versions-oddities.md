@@ -632,16 +632,16 @@ B2-T3 kvůli recovery).
 | 12 | B-VER-02 | P2 | Větve `plan_schema_version == 3` jako past pro plán v4 | AUDIT-B3-T2 |
 | 13 | B-ODD-02 | P2 | Text hlášky jako stav mezi backendem a rozšířením | AUDIT-B3-T2 (typovaný stav), AUDIT-B3-T3 (starší rozšíření × nový backend) |
 | 14 | B-ODD-01 | P2 | Smyčky synchronizace spolknou výjimky bez logu a stavu | AUDIT-B4-T1 |
-| 15 | B-ODD-04 | P2 | Testy doslovného zdrojového textu UI místo chování | nová dávka, viz návrh změny plánu |
+| 15 | B-ODD-04 | P2 | Testy doslovného zdrojového textu UI místo chování | AUDIT-B7-T1 (nová dávka) |
 | 16 | B-LOCK-11 | P3 | Čtení SQLite store otevírá writer transakci | AUDIT-B2-T1 |
 | 17 | B-VER-03 | P3 | Hlášky nerozlišují nepodporovanou verzi | AUDIT-B3-T2 |
 | 18 | B-VER-04 | P3 | Chybí protokolová verze rozšíření–backend | AUDIT-B3-T1, AUDIT-B3-T3 |
 | 19 | B-ODD-03 | P3 | Větvení podle textu výjimky v procesu | AUDIT-B4-T1 |
 | 20 | B-ODD-10 | P3 | Tři tiché `catch {}` v UI a rozšíření | AUDIT-B4-T1 |
-| 21 | B-ODD-05 | P3 | Stejnojmenné `NETWORK_TIMEOUT` s různými hodnotami, odvozené literály | AUDIT-B4-T2 |
-| 22 | B-ODD-06 | P3 | Pět kopií IPv4 politiky peeru | AUDIT-B4-T2 |
-| 23 | B-ODD-07 | P3 | Skryté legacy bloky UI napojené na JS | AUDIT-B4-T3 |
-| 24 | B-ODD-09 | P3 | Duplicitní desktop/web dispatch 24 rout | AUDIT-B4-T3 |
+| 21 | B-ODD-05 | P3 | Stejnojmenné `NETWORK_TIMEOUT` s různými hodnotami, odvozené literály | AUDIT-B5-T1 (dříve B4-T2) |
+| 22 | B-ODD-06 | P3 | Pět kopií IPv4 politiky peeru | AUDIT-B5-T1 (dříve B4-T2) |
+| 23 | B-ODD-07 | P3 | Skryté legacy bloky UI napojené na JS | AUDIT-B6-T1 (dříve B4-T3) |
+| 24 | B-ODD-09 | P3 | Duplicitní desktop/web dispatch 24 rout | AUDIT-B6-T1 (dříve B4-T3) |
 | 25 | B-LOCK-12 | P3 | Zobrazení poolu provádí cleanup | **odmítnuto**: read-only varianta `export_readonly` existuje, cleanup jen vynucuje retenci a nemá doložený dopad |
 | 26 | B-ODD-08 | P3 | Obří inline UI | **odloženo, bez dávky**: stylistické; přesun assetů je velký refaktoring a bez behaviorálních testů (B-ODD-04) by nešel ověřit |
 
@@ -651,8 +651,14 @@ dvou výslovně zdůvodněných přesunů výše.
 
 ### Návrh změny plánu k review
 
-Navrhované změny autoritativního plánu. Neprovádím je; vyžadují schválení
-a zápis přes Workspace lifecycle.
+Navrhované změny autoritativního plánu. **Zapsáno 18. 11. 2026 na výslovný
+pokyn uživatele** nativním editorem položek plánu (`PlanItems`: journal,
+Git CAS, jedna operace = jeden commit) do artefaktu „Roadmapa projektu“
+(`75404a16-1e1d-522c-8e90-54a0db1fa604`) projektu
+`c898b941-8eb0-4406-8dad-6e2b96c06d59`: 18 commitů `8a71ad0..e67d75b`,
+revize grafu `540be809f468d18ff98426722982e41fbdb93a78a7fb7579da918b237f366d62`.
+Body 1–4 jsou zapsané do položek; pořadí z bodu 5 vyjadřují stávající
+závislosti a tento dokument. Akceptace AUDIT-B1-T5 zůstává lidským review.
 
 1. **AUDIT-B2** (jedna větev, jeden PR) — upřesnit rozsah úkolů:
    B2-T1 = B-LOCK-01, 02, 03, 04 (čtení), 05, 11; B2-T2 = B-LOCK-06, 07,
@@ -668,10 +674,13 @@ a zápis přes Workspace lifecycle.
    dávky (jedna dávka = jeden PR): B4 chyby a hlášky = B4-T1 (B-ODD-01,
    03, 10); samostatná dávka limity a síť = dnešní B4-T2 (B-ODD-05, 06);
    samostatná dávka legacy a duplicity = dnešní B4-T3 (B-ODD-07, 09).
-   Stabilní ID nových dávek přidělí review.
+   Uživatel zvolil ID **AUDIT-B5** (úkol B5-T1) a **AUDIT-B6** (B6-T1);
+   plánované nezahájené B4-T2 a B4-T3 byly smazány, jejich text převzaly
+   B5-T1 a B6-T1 (historie zůstává v Gitu projektu).
 4. **Nová dávka pro B-ODD-04** — behaviorální testy kritických toků UI
    místo asercí na zdrojový text; textové kontroly ponechat jen pro
-   kontrakty. Předpoklad pro případné pozdější řešení B-ODD-08.
+   kontrakty. Předpoklad pro případné pozdější řešení B-ODD-08. Zapsáno
+   jako **AUDIT-B7** (úkol B7-T1).
 5. **Pořadí:** B2 (obsahuje oba P1) → B3 → dávky z B4 a testovací dávka
    v libovolném pořadí. B2 a B3 jsou nezávislé; souběžně je lze řešit jen
    na samostatných větvích bez stacked PR.

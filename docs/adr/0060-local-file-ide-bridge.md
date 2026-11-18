@@ -7,6 +7,21 @@ Navazuje na ADR 0003, 0008, 0055 a 0059; feature DEV-IDE-TODO-01.
 
 ## Rozhodnutí a autorita
 
+### Obnova po trvalém odmítnutí inboxu (0.5.9)
+
+Explicitně zastaralé hlášení nesmí znemožnit prázdný poll a načtení nového
+zadání. Adaptace používá původní UUID/digest replay a atomický souborový writer;
+podrobnosti popisuje [předání fronty](../ide-queue-handoff.md#chyba-a-obnova).
+Marker `rejections/<id>.json` je lokální záznam odmítnutí, nikoli backendový
+receipt nebo autorita review. Původní zpráva zůstává v inboxu.
+
+Crash boundaries: před atomickou publikací markeru se opakuje stejné UUID;
+již přijatá zpráva se podle serverového digestu pouze přehraje. Po publikaci
+markeru se přesně stejné odmítnuté bajty neodesílají. Pád před novým snapshotem
+opraví další prázdný poll. Změněné bajty pod odmítnutým UUID jsou chyba,
+nikoli povolení opakovat zápis. Neznámé účinky ani `503` marker nevytvářejí.
+Git, projektový index, journal a lidské review se touto obnovou nemění.
+
 VS Code/VSCodium rozšíření vystaví obyčejné TODO.md, INSTRUCTIONS.md,
 snapshot.json, inbox/*.json a receipts/*.json v privátním globalStorage
 editoru. Nejsou projektovými artefakty ani novým autoritativním plánem.

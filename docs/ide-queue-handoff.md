@@ -114,6 +114,19 @@ Workspace bridge i v `STATUS.json` konkrétní task ID a message ID.
 
 ## Chyba a obnova
 
+Od rozšíření 0.5.9 explicitní HTTP 422 pro nahrazený packet, změněnou pracovní
+frontu nebo starou source revision nezablokuje celý inbox. Po odmítnutí dávky
+klient ověří jednotlivé zprávy se stejnými UUID; již přijaté se bezpečně
+přehrají. Pro jednotlivě odmítnutou zprávu atomicky uloží důvod a digest
+do `rejections/<message_id>.json`. Původní inbox zůstává beze změny, nevzniká
+falešný serverový receipt ani lidské review. Následuje prázdný poll pro aktuální
+zadání; ostatní zprávy mohou pokračovat. Nové hlášení vyžaduje nový packet
+a nové UUID, nikdy tichý přepis starého reportu.
+
+`503 busy`, transportní chyba a neznámý výsledek zprávu nevyřazují. Důvod
+trvalého odmítnutí je ve výstupu Workspace bridge, při daném sync také
+v `STATUS.json` a trvale v `rejections/`.
+
 Při unknown/timeoutu nejprve načtěte stav a původní receipts. Stejné UUID se
 stejnými bajty je idempotentní; jiné bajty se stejným UUID se odmítnou. Při
 připraveném review obnovte jeho původní operation ID přes **Dokončit připravené

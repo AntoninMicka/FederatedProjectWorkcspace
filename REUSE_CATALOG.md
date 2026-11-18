@@ -1116,6 +1116,12 @@ změně pracovní fronty; nové reporty nadále vyžadují aktuální výběr. D
 odkazy mohou zůstat jako historie bez předstírání přijatého reportu. Druhý
 writer, automatické zamítání zpráv a mazání fronty jsou **reject**.
 
+Obnova zastaralého IDE inboxu (0.5.9) **adaptuje** `bridge.sync`, atomický
+souborový writer a serverový UUID/digest replay. Jednotlivě potvrzené stale
+odmítnutí má lokální marker s důvodem; původní zpráva zůstává zachovaná.
+Nový broker, falešné receipts, přeznačení reportu a retry neznámých účinků
+jsou **reject**. Recovery rozšiřuje [ADR 0060](docs/adr/0060-local-file-ide-bridge.md).
+
 AI-FILE-EDIT-01 **reuse/adaptuje** `ExplicitTaskPlan`, Context Manifest,
 `TaskOutcomes`, sdílený raw editor, `Artifacts.save` a `Workspace.transact`.
 Nový modul váže přesný diff na původní ID/revizi a ukládá schválený požadavek
