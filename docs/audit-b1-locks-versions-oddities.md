@@ -5,10 +5,10 @@ SPDX-License-Identifier: MPL-2.0
 
 # AUDIT-B1 — zámky, verzové podmínky a podivnosti
 
-Stav dokumentu: **AUDIT-B1-T1 až T4 designed** (metodika, inventura, audit
-zámků, verzových podmínek a dalších podivností). Prioritizaci a mapování na
-nápravné dávky doplní AUDIT-B1-T5. Priority B-LOCK, B-VER a B-ODD jsou
-předběžné do T5.
+Stav dokumentu: **AUDIT-B1-T1 až T5 designed** (metodika, inventura, audit
+zámků, verzových podmínek, dalších podivností a prioritizace). Platné priority
+a zařazení nálezů jsou v [sekci T5](#audit-b1-t5--prioritizace-a-návrh-nápravných-dávek);
+priority v tabulkách T2–T4 jsou jejich výchozí odhad.
 
 Audit je podklad k review. Není akceptací, změnou autoritativního plánu ani
 oprávněním k hromadnému odstranění zámků či podmínek. Nálezová ID nejsou úkoly
@@ -573,3 +573,112 @@ chybějící cíl.
   a testovacích modulů, nikoli pravdivost tvrzení o chování.
 - B-ODD-02 a B-ODD-07 nemají dynamickou reprodukci; B-ODD-04 hodnotí
   kvalitu důkazů, nikoli funkčnost aplikace.
+
+## AUDIT-B1-T5 — prioritizace a návrh nápravných dávek
+
+Vstupem jsou nálezy T2–T4 (12 B-LOCK, 4 B-VER, 10 B-ODD) nad výchozím
+commitem `0e69cc5` a kontrola, zda je pozdější commit `ed1d536` nezměnil.
+Zařazení je **návrh k lidskému review**; autoritativní plán mění jen
+Workspace lifecycle. Nálezová ID nejsou úkoly Workspace.
+
+### Stav nálezů nad aktuálním HEAD
+
+`ed1d536` (`fix(ide-queue): prevent review and refresh circular blocking`)
+mění `ide_queue.py`, `task_queue.py`, `ide_bridge.py`, rozšíření a ADR 0062.
+Žádný nález neodstraňuje:
+
+- B-LOCK-05 trvá: `TaskQueue.execute` drží pro `status` stejné zámky;
+  změna se týká jen hodnocení dokončených položek.
+- B-ODD-02 trvá: rozšíření nyní rozpoznává hlášku přes `startsWith`
+  (`extension.js:155`), stav se tedy dál odvozuje z textu.
+- Review hlášení se nově váže na neměnný packet místo aktuální
+  `queue_revision`; nativní writer dál kontroluje HEAD a podmínky úkolu.
+  Je to zdokumentováno v ADR 0062 a odpovídá pravidlu B3-T1 (vazba na
+  stabilní identitu, ne revizi). Nový nález nevzniká.
+
+Commit je runtime oprava mimo rozsah auditní dávky („bez změny runtime
+kódu“). Rozhodnutí, zda ho ponechat v PR dávky, nebo přesunout do vlastní
+větve, je na uživateli.
+
+### Konzistence s ADR
+
+| Oblast | ADR | Závěr |
+|---|---|---|
+| B-LOCK-01 až 05, 11 | [ADR 0003](adr/0003-coordinated-operation.md#upřesnění-čtecího-vlastnictví-11-11-2026) | Navržené nápravy aplikují už přijatý vzor (SH čtení, uvolnění SH a EX pro revalidovanou obnovu indexu, neměnný Git mimo zámek). Bootstrap a migrace zůstávají výhradní; B-LOCK-01 jen nespouští bootstrap nad inicializovaným journalem. Zápisy zůstávají serializované. ADR se nemění. |
+| B-LOCK-06 až 10 | [ADR 0050](adr/0050-bounded-http-monitor-concurrency.md) | Bounded kapacita a krátké admission čekání zůstávají; mění se mapování domén a rozsah kritických sekcí. Pokud B2 změní počty workerů nebo rezervu, vyžaduje to doplnění ADR 0050. |
+| B-VER-01 až 04, B-ODD-02 | [ADR 0082](adr/0082-composable-monitoring-and-message-pools.md), [ADR 0060](adr/0060-local-file-ide-bridge.md), [ADR 0062](adr/0062-pinned-queue-handoff.md) | Pravidlo B3-T1 odpovídá ADR 0082 (aktivace na stabilním ID bloku) a ADR 0062 po `ed1d536`. Rozhodnutí o viditelném degradovaném stavu jednoho artefaktu (B-VER-01) by měnilo princip sémantické validace celého snapshotu: vyžaduje ADR. Protokolová verze rozšíření (B-VER-04) doplňuje ADR 0060. |
+| B-ODD-06 | `docs/desktop-network.md`, [ADR 0020](adr/0020-lxc-web-viewer.md) | Jen IPv4 je zdokumentovaný předpoklad; B4-T2 rozhodne o IPv6 výslovně. |
+
+### Prioritizovaný seznam a zařazení
+
+Platná priorita je výsledkem T5. Proti výchozím odhadům T2–T4 se nemění
+žádná priorita; mění se jen zařazení dvou nálezů mimo jejich kategorii
+(B-ODD-02 do B3 kvůli kompatibilitě rozšíření a backendu, B-LOCK-09 do
+B2-T3 kvůli recovery).
+
+| Pořadí | ID | Pri | Stručně | Zařazení |
+|---:|---|---|---|---|
+| 1 | B-LOCK-01 | P1 | EX bootstrap journalu při každém otevření projektu | AUDIT-B2-T1 |
+| 2 | B-LOCK-02 | P1 | Čistá čtení pod EX journalu přes snapshot a validaci | AUDIT-B2-T1 |
+| 3 | B-LOCK-03 | P2 | Čtení s možnou obnovou indexu vždy pod EX | AUDIT-B2-T1 |
+| 4 | B-LOCK-05 | P2 | Status fronty pod výhradními zámky, globální HTTP lane | AUDIT-B2-T1 |
+| 5 | B-LOCK-04 | P2 | Bodová kontrola nativní operace pod EX; u RSS bez skutečné bariéry | AUDIT-B2-T1 (čtení na SH); bariéru `rss_monitoring` posoudit v AUDIT-B2-T3 |
+| 6 | B-LOCK-06 | P2 | RSS view pod cache mutexem a sdílenou lane s fetch (A07) | AUDIT-B2-T2 |
+| 7 | B-LOCK-10 | P2 | Sdílená reference/Julia lane, telemetrie pod mutexem (A11) | AUDIT-B2-T2 |
+| 8 | B-LOCK-08 | P2 | Přímé SQLite connecty s čekáním 30 s mimo bounded politiku (A09) | AUDIT-B2-T2 |
+| 9 | B-LOCK-07 | P2 | Klientská FIFO serializace v prohlížeči a rozšíření (A08) | AUDIT-B2-T2, až po oddělení backendových čtenářů v B2-T1 |
+| 10 | B-LOCK-09 | P2 | Ztráta reference na živý worker při shutdownu (A10) | AUDIT-B2-T3 |
+| 11 | B-VER-01 | P2 | Artefakt s metadaty N+1 znepřístupní celý projekt | AUDIT-B3-T1 (pravidlo, případně ADR), AUDIT-B3-T2 (hláška), AUDIT-B3-T3 (fixture R3) |
+| 12 | B-VER-02 | P2 | Větve `plan_schema_version == 3` jako past pro plán v4 | AUDIT-B3-T2 |
+| 13 | B-ODD-02 | P2 | Text hlášky jako stav mezi backendem a rozšířením | AUDIT-B3-T2 (typovaný stav), AUDIT-B3-T3 (starší rozšíření × nový backend) |
+| 14 | B-ODD-01 | P2 | Smyčky synchronizace spolknou výjimky bez logu a stavu | AUDIT-B4-T1 |
+| 15 | B-ODD-04 | P2 | Testy doslovného zdrojového textu UI místo chování | nová dávka, viz návrh změny plánu |
+| 16 | B-LOCK-11 | P3 | Čtení SQLite store otevírá writer transakci | AUDIT-B2-T1 |
+| 17 | B-VER-03 | P3 | Hlášky nerozlišují nepodporovanou verzi | AUDIT-B3-T2 |
+| 18 | B-VER-04 | P3 | Chybí protokolová verze rozšíření–backend | AUDIT-B3-T1, AUDIT-B3-T3 |
+| 19 | B-ODD-03 | P3 | Větvení podle textu výjimky v procesu | AUDIT-B4-T1 |
+| 20 | B-ODD-10 | P3 | Tři tiché `catch {}` v UI a rozšíření | AUDIT-B4-T1 |
+| 21 | B-ODD-05 | P3 | Stejnojmenné `NETWORK_TIMEOUT` s různými hodnotami, odvozené literály | AUDIT-B4-T2 |
+| 22 | B-ODD-06 | P3 | Pět kopií IPv4 politiky peeru | AUDIT-B4-T2 |
+| 23 | B-ODD-07 | P3 | Skryté legacy bloky UI napojené na JS | AUDIT-B4-T3 |
+| 24 | B-ODD-09 | P3 | Duplicitní desktop/web dispatch 24 rout | AUDIT-B4-T3 |
+| 25 | B-LOCK-12 | P3 | Zobrazení poolu provádí cleanup | **odmítnuto**: read-only varianta `export_readonly` existuje, cleanup jen vynucuje retenci a nemá doložený dopad |
+| 26 | B-ODD-08 | P3 | Obří inline UI | **odloženo, bez dávky**: stylistické; přesun assetů je velký refaktoring a bez behaviorálních testů (B-ODD-04) by nešel ověřit |
+
+Kontrola úplnosti: 26 nálezů, 24 zařazených, 1 odmítnutý, 1 odložený
+s důvodem. Každá dávka obsahuje jen nálezy své kategorie, s výjimkou
+dvou výslovně zdůvodněných přesunů výše.
+
+### Návrh změny plánu k review
+
+Navrhované změny autoritativního plánu. Neprovádím je; vyžadují schválení
+a zápis přes Workspace lifecycle.
+
+1. **AUDIT-B2** (jedna větev, jeden PR) — upřesnit rozsah úkolů:
+   B2-T1 = B-LOCK-01, 02, 03, 04 (čtení), 05, 11; B2-T2 = B-LOCK-06, 07,
+   08, 10; B2-T3 = B-LOCK-09, bariéra B-LOCK-04 u `rss_monitoring`, crash
+   boundaries změněných operací s odkazem na ADR 0003. Akceptace B2-T1
+   doplnit o sondu R1: souběžní čtenáři nedostanou `ProjectBusy`, zapisovatel
+   je dál vyloučen.
+2. **AUDIT-B3** (jedna větev, jeden PR) — B3-T1 = pravidlo kompatibility
+   včetně rozhodnutí k B-VER-01 (ADR) a protokolové verze B-VER-04;
+   B3-T2 = B-VER-01 (hláška), 02, 03, B-ODD-02; B3-T3 = fixture R3, plán
+   v4 (R4), starší rozšíření × nový backend.
+3. **AUDIT-B4** — podle svého rozsahu rozdělit na tematicky nezávislé
+   dávky (jedna dávka = jeden PR): B4 chyby a hlášky = B4-T1 (B-ODD-01,
+   03, 10); samostatná dávka limity a síť = dnešní B4-T2 (B-ODD-05, 06);
+   samostatná dávka legacy a duplicity = dnešní B4-T3 (B-ODD-07, 09).
+   Stabilní ID nových dávek přidělí review.
+4. **Nová dávka pro B-ODD-04** — behaviorální testy kritických toků UI
+   místo asercí na zdrojový text; textové kontroly ponechat jen pro
+   kontrakty. Předpoklad pro případné pozdější řešení B-ODD-08.
+5. **Pořadí:** B2 (obsahuje oba P1) → B3 → dávky z B4 a testovací dávka
+   v libovolném pořadí. B2 a B3 jsou nezávislé; souběžně je lze řešit jen
+   na samostatných větvích bez stacked PR.
+
+### Ověření T5
+
+- Každý z 26 nálezů je zařazen, nebo výslovně odmítnut či odložen.
+- Konzistence s ADR 0003, 0050, 0060, 0062, 0082 a ADR 0020 je výše;
+  změna ADR je navržena jen u B-VER-01 a doplnění ADR 0060 u B-VER-04.
+- Odkazy dokumentu a `git diff --check` jsou ověřené po poslední úpravě.
