@@ -152,11 +152,13 @@ async function activate(context) {
                     {viewColumn: editor.viewColumn, preserveFocus: true, preview: false});
               }
             }
-            if (result.queue_refresh_error === 'Queue refresh waits for human review') {
+            if (result.queue_refresh_error?.startsWith('Queue refresh waits for human review')) {
               // An intentional review boundary is not a broken connection.
               await bridge.atomic(path.join(mailbox(mapping.session_id), 'STATUS.json'), JSON.stringify({
-                stale: true, waiting_review: true, synchronized_at: new Date().toISOString()}));
+                stale: true, waiting_review: true, queue_refresh_error: result.queue_refresh_error,
+                synchronized_at: new Date().toISOString()}));
               count++; stale++; waitingReview++;
+              output.appendLine((mapping.title || session) + ': ' + result.queue_refresh_error);
               continue;
             }
             if (result.queue_refresh_error) throw Error(result.queue_refresh_error);

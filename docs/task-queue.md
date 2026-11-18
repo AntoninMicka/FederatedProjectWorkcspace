@@ -12,7 +12,9 @@ roadmapě. Rozsah první dávky nezahrnuje transport do IDE ani spouštění age
 V roadmapě použijte existující filtr **Připravené**: nedokončené položky bez
 závislostí nebo s předpoklady ve stavu Vyřešeno/Dokončeno, přičemž nejvýše
 jeden předpoklad může být Probíhá. Vyberte položku a v detailu
-stiskněte **Přidat do fronty**. Fronta neobsahuje duplikáty ani dokončené položky.
+stiskněte **Přidat do fronty**. Nelze přidat duplikát ani již dokončenou položku.
+Položka dokončená až po zařazení může zůstat ve frontě jako historie;
+její odebrání není podmínkou platnosti ani předání dalších úkolů.
 
 Filtr **Navazující** ukazuje nedokončené položky, které ještě mají nesplněné
 závislosti, ale všechny tyto přímé předpoklady už jsou ve frontě. Úkol bez
@@ -68,7 +70,7 @@ Změna roadmapy nebo revize fronty zneplatní oba typy náhledu.
 
 **Obnovit frontu** pouze načte aktuální stav. Po změně roadmapy znovu otevřete
 projekt a použijte **Znovu ověřit**. Obnova ze staré revize není automatické
-přijetí nových závislostí: chybějící ID, dokončená položka bez navázaného přijatého receiptu nebo předpoklad,
+přijetí nových závislostí: chybějící ID nebo předpoklad,
 který chybí před úkolem, zablokují předání do IDE. Nezávislou novou položku
 lze přidat po ověření jejích vlastních předpokladů; nesouvisející chyby tím
 nezmizí. Vadné odkazy lze jednotlivě odebrat s náhledem nebo opravit pořadí

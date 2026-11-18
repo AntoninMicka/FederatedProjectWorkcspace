@@ -217,7 +217,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     await fs.mkdir(path.join(root, 'inbox'), {recursive: true, mode: 0o700});
     await fs.mkdir(path.join(root, 'receipts'), {recursive: true});
     if (missingInbox) { missingInbox = false; await fs.rm(path.join(root, 'inbox'), {recursive: true}); }
-    return {queue_refresh_error: syncMode === 'review' ? 'Queue refresh waits for human review' : null, stale: syncMode === 'review' || syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
+    return {queue_refresh_error: syncMode === 'review' ? 'Queue refresh waits for human review: TASK-01 / report-id (review the report in Workspace)' : null, stale: syncMode === 'review' || syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
   };
   const vscode = {env: {}, StatusBarAlignment: {Left: 1},
     commands: {registerCommand: (name, callback) => {commands.set(name, callback);return {dispose(){}};}},
@@ -288,6 +288,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     const file = path.join(first.base,'storage','bridge-private','sessions',mapping.session_id,'STATUS.json');
     const status = JSON.parse(await fs.readFile(file,'utf8'));
     assert.equal(status.waiting_review,true);
+    assert.match(status.queue_refresh_error, /TASK-01.*report-id/);
     assert.equal(status.error,undefined);
   }
   syncMode = 'ok'; notices.length = 0;

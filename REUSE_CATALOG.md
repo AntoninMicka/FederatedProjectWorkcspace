@@ -1110,6 +1110,12 @@ z existujícího review journalu, nepřidává se druhý completion writer.
 Hardlinky/symlinky míří pouze do exportní cache, nikdy do kanonického Gitu.
 Recovery: [ADR 0062](docs/adr/0062-pinned-queue-handoff.md).
 
+Oprava cyklu review/refresh **adaptuje** tentýž packet, `status(check_queue=False)`,
+review intent a nativní HEAD/CAS writer. Již doručený report lze posoudit i po
+změně pracovní fronty; nové reporty nadále vyžadují aktuální výběr. Dokončené
+odkazy mohou zůstat jako historie bez předstírání přijatého reportu. Druhý
+writer, automatické zamítání zpráv a mazání fronty jsou **reject**.
+
 AI-FILE-EDIT-01 **reuse/adaptuje** `ExplicitTaskPlan`, Context Manifest,
 `TaskOutcomes`, sdílený raw editor, `Artifacts.save` a `Workspace.transact`.
 Nový modul váže přesný diff na původní ID/revizi a ukládá schválený požadavek

@@ -60,8 +60,12 @@ Přijetí mění plánový HEAD, nikoli připnutý manifest. Zbývající polož
 postoupit jen po ověření řetězce původní HEAD → native receipt přijatého
 výsledku tohoto packetu → další takový receipt. Každý commit musí mít přesného
 rodiče a nativní journal musí potvrdit jeho operation ID. Libovolný cizí
-commit, superseded packet, revokace či změna pracovní fronty blokují další
-completion. Nejde o automatický rebase starého zadání. Přijetí v UI se navíc
+commit, superseded packet a revokace blokují další completion. Změna pracovní
+fronty blokuje příjem nového reportu ze staré generace, ale ne lidské review
+již trvale doručené zprávy: to ověřuje neměnný packet, aktuální HEAD a podmínky
+úkolu. Stejná pravidla platí při obnově připraveného review; pouhá změna výběru
+nesmí vytvořit cyklus „nelze přijmout / nelze obnovit“. Nejde o automatický
+rebase starého zadání. Přijetí v UI se navíc
 řídí aktuálním serverovým queue_reviewable, nikoli pouhou shodou task ID.
 Původní požadavek na explicitní nové předání při změně revize nahrazuje
 níže schválená automatická obnova. Staré soubory a zprávy zůstávají.
@@ -86,7 +90,9 @@ JSON fronty. Původní text tasku a stav jeho dokončení drží pouze roadmapa.
    UUID; jiné bajty pod stejným ID se odmítnou. Neznámé účinky se nereportují
    jako no-change ani se nevytváří nové message ID pro slepý retry.
 4. Review používá původní bridge intent → Workspace journal → Git → index →
-   bridge outcome. Před native write se ověří stále stejný balíček i fronta.
+   bridge outcome. Před native write se ověří stále stejný balíček; aktuální
+   HEAD a podmínky úkolu znovu kontroluje nativní writer. Pracovní výběr
+   není autoritou již doručeného reportu a jeho změna review neblokuje.
    Po commitu a před outcome je packet dočasně stale; obnovuje se přesně stejný
    intent. Native receipt zabrání druhému commitu. Status fronty se po outcome
    znovu odvodí, bez nové koordinační transakce přes filesystem a SQLite.
@@ -131,8 +137,11 @@ blockerem. Stejný neúplný vstup nevytváří generaci při každém pollu.
 Validní řetězec lidských přijetí umožňuje postup A → B ještě před dalším
 idle pollem. Ten poté připne i snapshot mappingu k novému commitu.
 
-Nezpracované `completed`/`progress` hlášení a připravené review pozastaví
-automatickou obnovu. Zprávy z IDE se nejdřív doručují v dávkách po 20;
+Nezpracované `completed`/`progress` hlášení nedokončeného úkolu a připravené
+review pozastaví automatickou obnovu. Hlášení úkolu již dokončeného v aktuálním
+Workspace obnovu neblokuje; zpráva zůstává bez automatické akceptace. Blokace
+uvádí task ID, message ID a požadovaný krok ve Workspace.
+Zprávy z IDE se nejdřív doručují v dávkách po 20;
 obnova probíhá až v cyklu bez odesílaných zpráv. Tím není zaručena znalost
 rozepsaného textu v editoru či práce běžícího agenta: ten musí znovu načíst
 konkrétní předání a report pod starým superseded packet ID se odmítne.
@@ -142,7 +151,9 @@ se přehrávají podle UUID a digestu i po změně snapshotu.
 Při nové generaci se dřívější lidská přijetí přenesou pouze z ověřeného
 native receipt řetězce předchozího packetu a jen pro stále dokončené vybrané
 tasky. Manifest nese `accepted_task_ids` a `previous_packet_id`; samotný
-checkbox bez tohoto důkazu se za lidskou akceptaci nevydává.
+checkbox bez tohoto důkazu se za lidskou akceptaci nevydává. Dokončená položka
+smí zůstat ve výběru bez chyby validace; v novém packetu je historií, nikoli
+způsobilým úkolem nebo důkazem přijetí původní zprávy.
 
 Crash boundaries: fronta se pouze čte pod existujícím zámkem. Nový snapshot
 mappingu a balíček se zapisují společnou bridge SQLite transakcí, která

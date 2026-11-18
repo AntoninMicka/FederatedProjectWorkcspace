@@ -225,9 +225,8 @@ class QueuePacketTests(unittest.TestCase):
         self.assertTrue(report['acceptable']);self.assertEqual(self.record['session_id'],report['session_id'])
         self.assertEqual(m['evidence'],report['evidence']);self.assertIsNone(report['review_request'])
         self.act('set-flag','TASK-03',flag='held',value=True)
-        self.assertFalse(self.qstatus()['items'][0]['reports'][0]['acceptable'],'superseded generation')
-        with self.assertRaises(ValueError):self.review(m)
-        self.act('set-flag','TASK-03',flag='held',value=False)
+        self.assertTrue(self.qstatus()['items'][0]['reports'][0]['acceptable'])
+        self.assertEqual('accepted', self.review(m)['outcome'])
 
     def test_accepting_from_queue_completes_only_that_task(self):
         packet=self.packet();m=self.message(packet);self.send(m)
@@ -237,6 +236,32 @@ class QueuePacketTests(unittest.TestCase):
         items=self.qstatus()['items']
         self.assertTrue(items[0]['user_confirmed']);self.assertFalse(items[1]['user_confirmed'])
         self.assertEqual('accepted',items[0]['reports'][0]['outcome']);self.assertFalse(items[0]['reports'][0]['acceptable'])
+
+    def test_queue_selection_change_does_not_deadlock_durable_report_review(self):
+        packet = self.packet(); message = self.message(packet); self.send(message)
+        preview = self.act('remove-single-preview', 'TASK-03')
+        self.act('remove-single', 'TASK-03', preview_sha256=preview['preview_sha256'])
+        self.assertIn('human review', self.poll()['queue_refresh_error'])
+        self.assertTrue(self.qstatus()['items'][0]['reports'][0]['acceptable'])
+        with self.assertRaisesRegex(ValueError, 'Working queue changed'):
+            self.send(self.message(packet))
+        self.assertEqual('accepted', self.review(message)['outcome'])
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        self.assertEqual(['TASK-01', 'TASK-02'], self.qstatus()['task_ids'])
+
+    def test_prepared_review_survives_selection_change_before_native_write(self):
+        packet = self.packet(); message = self.message(packet); self.send(message)
+        request = dict(project_id=self.project, session_id=self.record['session_id'],
+                       message_id=message['message_id'], decision='accepted', note='',
+                       expected_head=self.head, operation_id=str(uuid4()))
+        def stop(stage):
+            if stage == 'intent-prepared': raise RuntimeError('interrupted review')
+        with self.assertRaises(RuntimeError):
+            self.service.review(None, request, checkpoint=stop)
+        self.act('set-flag', 'TASK-03', flag='held', value=True)
+        self.assertIn('prepared review', self.poll()['queue_refresh_error'])
+        self.assertEqual('accepted', self.service.review(None, request)['outcome'])
+        self.assertIsNone(self.poll()['queue_refresh_error'])
 
     def test_batch_row_lists_reports_of_its_linked_tasks(self):
         packet=self.batch_queue();m=self.message(packet,'BATCH-01-A');self.send(m)
@@ -433,10 +458,12 @@ assert.ok(!q.startable(null,'A'));
         p=self.packet();m=self.message(p);self.send(m)
         preview=self.act('remove-preview','TASK-03');self.act('remove','TASK-03',preview_sha256=preview['preview_sha256'])
         self.assertTrue(status(self.service,self.record)['blockers'])
-        with self.assertRaises(ValueError):self.review(m)
+        with self.assertRaises(ValueError):self.send(self.message(p))
         self.assertEqual(self.head,Projects(self.node).repository(self.project).head())
         self.head=self.save(self.body+'\nExternal edit.\n')
         self.assertFalse(status(self.service,self.record)['current'])
+        with self.assertRaisesRegex(ValueError, 'Roadmap changed'):
+            self.review(m)
 
     def test_repair_retains_original_packet_and_new_packet_has_complete_selection(self):
         original=self.packet()
@@ -599,6 +626,38 @@ assert.ok(!q.startable(null,'A'));
         value = status(self.service, self.record)
         self.assertTrue(value['items'][0]['user_confirmed'])
         self.assertTrue(value['items'][1]['eligible'])
+
+    def test_external_completion_unblocks_refresh_without_removal_or_report_acceptance(self):
+        packet = self.packet(); message = self.message(packet); self.send(message)
+        self.head = self.save(self.body.replace('- [ ] [TASK-01]', '- [x] [TASK-01]'))
+        result = self.poll()
+        self.assertIsNone(result['queue_refresh_error'])
+        self.assertFalse(result['stale'])
+        self.assertEqual(['TASK-01', 'TASK-02', 'TASK-03'], self.qstatus()['task_ids'])
+        self.assertTrue(self.qstatus()['valid'])
+        self.poll(); value = status(self.service, self.record)
+        self.assertFalse(value['items'][0]['user_confirmed'])
+        self.assertFalse(value['items'][0]['eligible'])
+        self.assertTrue(value['items'][1]['eligible'])
+        self.assertEqual(packet, load(self.service, self.record['session_id'], packet['packet_id']))
+        with self.service.database() as db:
+            self.assertIsNotNone(db.execute('SELECT 1 FROM messages WHERE id=?', (message['message_id'],)).fetchone())
+            self.assertIsNone(db.execute('SELECT 1 FROM reviews WHERE id=?', (message['message_id'],)).fetchone())
+
+    def test_external_completion_and_removed_reference_unblock_refresh(self):
+        packet = self.packet(); message = self.message(packet); self.send(message)
+        self.head = self.save(self.body.replace('- [ ] [TASK-01]', '- [x] [TASK-01]'))
+        preview = self.act('remove-single-preview', 'TASK-01')
+        self.act('remove-single', 'TASK-01', preview_sha256=preview['preview_sha256'])
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        self.assertEqual(['TASK-02', 'TASK-03'], [t['id'] for t in load(self.service, self.record['session_id'])['manifest']['tasks']])
+
+    def test_review_blocker_identifies_task_and_message(self):
+        packet = self.packet(); message = self.message(packet); self.send(message)
+        self.head = self.save(self.body.replace('Third', 'Changed third'))
+        reason = self.poll()['queue_refresh_error']
+        self.assertIn(message['task_id'], reason)
+        self.assertIn(message['message_id'], reason)
 
     def test_human_acceptance_is_reflected_by_next_idle_poll_without_stale_snapshot(self):
         packet = self.packet(); message = self.message(packet); self.send(message)
