@@ -52,6 +52,10 @@ Jeden zapisující proces serializuje operace nad projektem. Návrh toku: valida
 
 Index musí nést commit ID. Dotazy při nesouladu vracejí stav obnovy, nikoli tiše stará data. Necommitnuté změny má editor zobrazovat odděleně. Synchronizace se připravuje v izolovaném pracovním prostoru a publikuje až po validaci a kontrole nezměněného výchozího HEAD.
 
+## Kompatibilita verzí a revizí
+
+Neznámá novější verze dat, dokumentu nebo protokolu nikdy nevede k tichému vypnutí. Vždy je výsledkem typovaná viditelná chyba `UnsupportedVersion`, nebo již navržený viditelný degradovaný stav. Zapnutí a místní aktivace se váží na stabilní ID, nikoli na revizi. Revizní vazba existuje jen z důvodu bezpečnosti nebo řízení souběhu a vždy je viditelná. Stav sdílený přes hranici procesu nese strojový kód vedle lidské hlášky. Projektový snapshot s nepodporovanou verzí se neotevře a chyba jmenuje artefakt ([ADR 0085](docs/adr/0085-unsupported-version-fails-closed.md)). Rozšíření a backend si vyměňují protokolovou verzi ([ADR 0060](docs/adr/0060-local-file-ide-bridge.md#doplnění-18-11-2026--protokolová-verze-rozšíření-a-backendu-audit-b3)). Kontrakt: [kompatibilita verzí a revizí](docs/version-compatibility.md). Stav: designed (AUDIT-B3-T1).
+
 ## Odvozená lokální cache
 
 Navržené materializované kompiláty jsou zahoditelné soubory odvozené ze zdrojů podle zachovaného zadání. Výsledky leží mimo projektový Git, neverzují se ani nesynchronizují; aktualizují se ručně. Nejsou projektovým indexem ani autoritativním journalem/run recordem. [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje aktuálnost, privacy, obnovu po pádu a explicitní uložení výsledku jako artefaktu. Stav je designed, bez implementace.
