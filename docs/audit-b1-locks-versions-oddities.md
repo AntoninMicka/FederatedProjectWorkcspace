@@ -5,10 +5,10 @@ SPDX-License-Identifier: MPL-2.0
 
 # AUDIT-B1 — zámky, verzové podmínky a podivnosti
 
-Stav dokumentu: **AUDIT-B1-T1 a T2 designed** (metodika, inventura a audit
-zámků). Nálezy B-VER a B-ODD doplní AUDIT-B1-T3 a T4, prioritizaci
-a mapování na nápravné dávky AUDIT-B1-T5. Priority B-LOCK jsou předběžné
-do T5.
+Stav dokumentu: **AUDIT-B1-T1 až T3 designed** (metodika, inventura, audit
+zámků a verzových podmínek). Nálezy B-ODD doplní AUDIT-B1-T4, prioritizaci
+a mapování na nápravné dávky AUDIT-B1-T5. Priority B-LOCK a B-VER jsou
+předběžné do T5.
 
 Audit je podklad k review. Není akceptací, změnou autoritativního plánu ani
 oprávněním k hromadnému odstranění zámků či podmínek. Nálezová ID nejsou úkoly
@@ -403,3 +403,120 @@ N = síť, — = jen paměť. „Ctl“ = blokuje status/cancel téže práce.
   deadlocku ani měření desktop režimu s blokujícím čekáním.
 - Audit nenavrhuje oslabení journalu: zápisy nad stejnými nativními daty
   zůstávají serializované podle ADR 0003.
+
+## AUDIT-B1-T3 — podmínky vázané na verzi a revizi
+
+Výchozí commit `0e69cc5`. Prošel jsem 139 literálových verzových podmínek
+z V01 (52 modulů), 6 porovnání s pojmenovanou konstantou
+(`backend_catalog`, `backend_contract`, `model_catalog`), verzové brány
+rozšíření, revizní vazby uvedené v zadání a legacy/compat větve z V04.
+V03 (322 porovnání revize, digestu či fingerprintu) sloužil jako seznam
+modulů; neprocházel jsem jej řádek po řádku, viz [limity](#ověření-t3-a-limity).
+
+### Dva významy „verze N+1“
+
+- **(a) za běhu:** program dostane data nebo zprávu vyšší verze (downgrade,
+  novější peer, novější rozšíření, ručně zacommitovaný artefakt).
+- **(b) při vývoji:** do kódu se přidá verze N+1 a některá větev `== N`
+  nebo `in {…}` se nedoplní.
+
+Kategorie výsledku podle metodiky: explicitní chyba / migrace / viditelný
+degradovaný stav / tiché vypnutí / tichý fallback. U (b) je „tichý fallback“
+odhad z cesty kódu, nikoli pozorované chování.
+
+### Souhrn
+
+Pro (a) jsem **nenašel žádné tiché vypnutí**. Neznámá vyšší verze dat,
+DB schématu i zpráv končí explicitní chybou, starší verze migrací.
+Problémem je dosah a srozumitelnost chyb: jediný artefakt s metadaty v5
+znepřístupní celý projekt a hlášky nerozlišují „nepodporovaná novější
+verze“ od poškozených dat. Tichý fallback existuje jen jako vývojová past (b)
+v autonomii. Revizní vazby ze zadání jsou viditelné, a tedy legitimní.
+
+### Reprodukce
+
+**R3 — artefakt s metadaty v5 v jinak platném projektu.** Dočasný projekt,
+skutečné `Artifacts`/`Projects`; metadata se zvýší přímo v Git commitu.
+Spuštění: `PYTHONPATH=$PWD python3 probe_r3.py`.
+
+```python
+"""AUDIT-B1-T3 probe: one artifact with metadata schema_version N+1 in a committed project."""
+import json, subprocess, tempfile
+from pathlib import Path
+from uuid import uuid4
+from spikes.artifacts import Artifacts, main_todo_id
+from spikes.project_creation import ProjectCreation
+from spikes.storage import Git
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp); node = base / 'node.json'; root = base / 'project'
+    pid = ProjectCreation(node).create('Project', str(root), str(uuid4()))['id']
+    artifacts = Artifacts(node); git = Git(root)
+    artifacts.save(dict(project_id=pid, artifact_id=main_todo_id(pid), base_head=git.head(),
+                        title='T', body='- [ ] Task\n', new=True), str(uuid4()))
+    print('before:', len(artifacts.open(pid)['documents']), 'documents')
+    path = root / 'artifacts' / main_todo_id(pid) / 'metadata.json'
+    meta = json.loads(path.read_text()); meta['schema_version'] = 5
+    path.write_text(json.dumps(meta, indent=2) + '\n')
+    subprocess.run(['git', '-C', str(root), 'commit', '-qam', 'newer metadata'], check=True,
+                   env={'GIT_AUTHOR_NAME': 'n', 'GIT_AUTHOR_EMAIL': 'n@x', 'GIT_COMMITTER_NAME': 'n',
+                        'GIT_COMMITTER_EMAIL': 'n@x', 'PATH': '/usr/bin:/bin'})
+    for name, call in (('artifacts.open', lambda: artifacts.open(pid)),
+                       ('projects.open', lambda: artifacts.projects.open(pid))):
+        try:
+            call(); print(name, '-> ok')
+        except Exception as exc:
+            print(name, '->', type(exc).__name__ + ':', exc)
+```
+
+Výsledek: `before: 1 documents`; po commitu `artifacts.open` i
+`projects.open` → `ValidationError: Unknown schema version`.
+
+**R4 — plán autonomie v4 v `parse_plan`.** Přímé volání
+`spikes.action_autonomy.parse_plan` s `schema_version: 4`:
+jen se základními poli → `ValidationError: Unsupported autonomy plan schema`;
+s poli verze 3 (`countdown_seconds`, `policy`) →
+`ValidationError: Unknown or missing autonomy plan field`. Tichý fallback
+B-VER-02 je tedy za běhu nedosažitelný, ale hláška u druhé varianty
+neuvádí verzi.
+
+### Nálezy B-VER
+
+| ID | Pri | Zdroj | Podmínka | N+1 | Výsledek | Důkaz | Doporučený kontrakt |
+|---|---|---|---|---|---|---|---|
+| B-VER-01 | P2 | `metadata.py:303` (přes `validate_snapshot`) | Metadata artefaktu musí mít `schema_version in {1, 2, 3, 4}`. | (a) | Explicitní chyba, ale pro **celý projekt**: otevření ani čtení neprojde a hláška neuvádí artefakt, nalezenou verzi ani potřebu novějšího programu. | R3 | Chyba s ID artefaktu, nalezenou a podporovanou verzí a výzvou k aktualizaci. Zda připustit viditelný degradovaný stav jednoho artefaktu, je architektonická otázka (sémantická validace celého snapshotu, ADR) pro T5. |
+| B-VER-02 | P2 | `autonomy_service.py:144`, `:555`, `:569`; `action_autonomy.py:924`, `:927`, `:1543`, `:1582` | Chování plánu se větví podle `plan_schema_version == 3` nebo `in {2, 3}`; jinak se použije logika v1/v2 (`_append_search_continuation`, výchozí `countdown_seconds`, bez automatického `advance`, bez `policy`). | (b) | Tichý fallback na starou logiku pro budoucí plán v4. Za běhu nedosažitelné (R4). | S, R4 | Větvit podle deklarované schopnosti plánu (např. přítomnost `policy`), nebo vyčerpávající výčet verzí s explicitní chybou pro neznámou. |
+| B-VER-03 | P3 | `administration.py:213`, `extensions/workspace-bridge/bridge.js:56`, `federation_sync.py:264`, `federation_catalog.py:142`, `action_autonomy.py:361-362` | Neznámá vyšší verze registru, pairing, výměny obsahu, katalogu peeru či plánu. | (a) | Explicitní chyba s hláškou, která verzi nezmiňuje nebo ji slučuje s jinou chybou: „Invalid registry identity/version“, „Neplatné nebo expirované propojení.“, „Invalid content sync exchange“, „Invalid project catalog“, „Unknown or missing autonomy plan field“. | S, R4 | Samostatná typovaná chyba „nepodporovaná verze N, podporováno ≤ M“ před kontrolou polí; u federace a rozšíření uvést, kterou stranu aktualizovat. |
+| B-VER-04 | P3 | `ide_bridge.py:231` (`set(message) <= {…}`), `bridge.js:56`, `updater.js:46` | Mezi rozšířením a backendem není deklarovaná protokolová verze. Backend verzi rozšíření nekontroluje; nové pole od novějšího rozšíření odmítne jako „Invalid message“; rozšíření přijímá pairing `{1, 2}`. Updater jen nabízí aktualizaci. | (a) | Explicitní, ale nerozlišená chyba; kompatibilitu nelze ověřit předem. | S | Protokolová verze v pairing/exchange a srozumitelná nekompatibilita na obou stranách. |
+
+### Podmínky bez nálezu
+
+| Skupina | Zdroj | Výsledek při N+1 | Verdikt |
+|---|---|---|---|
+| Lokální DB schémata | `action_autonomy.py:719`, `chat_threads.py:64`, `role_workflows.py:100`, `summary_tasks.py:66`, `reporting_scheduler.py:107-108`, `storage.py:240`, `project_repair.py:324`, `project_creation.py:199` | Starší verze migrace; vyšší explicitní chyba („Unsupported …“, u indexu „index retained“). | správný kontrakt |
+| Node registry | `administration.py:141-151`, `:187`, `:207-213` | Migrace při startu; vyšší verze explicitní chyba (hlášku řeší B-VER-03). Sady polí `in {…}` při přidání verze selžou explicitně, ne tiše. | správný kontrakt |
+| Sloupce podle `version >= N` | `chat_threads.py:161-174` | Volá se jen za bránou `1..6` (`:64`); `>=` je dopředně správný směr. | správný kontrakt |
+| Dokumenty, zprávy a deskriptory `require(schema_version == 1)` | ~80 řádků V01 (`research_workflow`, `output_*`, `ollama/openai/atlascloud/direct/media_backend`, `public_source`, `presentation_*`, `project_replication`, `configuration`, `module_manifest`, …) a pojmenované konstanty v `backend_catalog`, `backend_contract`, `model_catalog` | Explicitní chyba. | správný kontrakt; srozumitelnost hlášek jako B-VER-03 |
+| Vazba aktivace autonomie | `action_autonomy.py:1054`, `:1160` | Digest aktivace musí sedět; náhrada plánu (`replace_plan`) aktivaci zruší a vyžaduje novou. | legitimní viditelná kontrola |
+| Verze CMS modulu | `publication_cms.py:335-336`, `status` | Změna verze modulu → viditelný stav „enable it again after review“, `compatible: false`. | legitimní viditelná kontrola |
+| Context Manifest | `context_builder.py:385-396` | Změna HEAD, autority, binding či policy revize → explicitní chyba před odesláním. | legitimní viditelná kontrola |
+| Discovery katalog OpenAI | `openai_backend.py:244-265`, `model_catalog.py:307-313` | Jiná binding/credential revize nebo legacy soubor → `freshness: 'stale'`. | viditelný degradovaný stav |
+| Schválení náhledem, pin peeru, CAS revize | `preview_sha256`, fingerprint peeru, `expected_head` (V03) | Explicitní odmítnutí s výzvou obnovit náhled. | legitimní bezpečnostní kontrola (omezení zadání) |
+| Legacy větve s verzovým významem | `presentation_documents.py:58`, `:312-336` (v1 → v2 v paměti), `chat_threads.py` (legacy tabulky), `ollama_backend.py:454-478` (`legacy_digest` pro retry), `roadmap_rebuild.py:480-568` (karanténa) | Migrace nebo zachování identity požadavku. | ponechat; mrtvý kód a skryté legacy UI (`desktop_ui.py:425`, `:563`) patří do T4 |
+| Discovery rozšíření | `bridge.js:97` (`ENOENT` → uložený endpoint) | Dokumentovaná kompatibilita se starším desktopem; chybný endpoint selže viditelně. | ponechat |
+
+### Ověření T3 a limity
+
+- Žádné „tiché vypnutí“ typu (a) jsem nenašel; tichý fallback B-VER-02 je
+  doložen cestou kódu a jeho nedosažitelnost za běhu sondou R4.
+- R3 a R4 běžely v dočasných adresářích bez změny runtime kódu.
+- V03 jsem neprocházel řádek po řádku; ověřené jsou revizní vazby uvedené
+  v zadání a vzorek tichých návratů (`if … != …: return/continue`), který
+  našel jen legitimní filtrování (`reporting_schema.py:828`,
+  `report_outputs.py:66`).
+- Neověřeno: validaci konfigurace CMS verze 2+ provádí externí modul
+  (`publication_cms.py:262-305` předává `sites.json` skriptu); kód modulu
+  jsem nečetl.
+- Commit `ed1d536` (po výchozím commitu) mění revizní vazbu fronty:
+  review se už neváže na aktuální `queue_revision`, ale na neměnný packet.
+  Zhodnotí ji T5 nad aktuálním HEAD.
