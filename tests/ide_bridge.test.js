@@ -105,12 +105,13 @@ test('HTTP retries only pre-dispatch busy responses and bounds persistent overlo
   }
 });
 test('rejected requests expose a bounded reason and redact credentials without retrying writes', async t => {
-  const http=require('node:http');let calls=0;
+  const http=require('node:http');let calls=0, stale=false;
   const pairing={schema_version:2,connection_id:crypto.randomUUID(),name:'IDE',token:'a'.repeat(43),
     endpoint:'',expires_at:Math.floor(Date.now()/1000)+1000};
   const server=http.createServer((req,res)=>{
     req.resume();calls++;res.statusCode=422;
-    res.end(JSON.stringify({error:'Bridge export exceeds 1 MiB\n'+pairing.token+' '+ 'x'.repeat(1000)}));
+    res.end(JSON.stringify({error:stale ? 'Packet superseded; Working queue changed; publish a new packet'
+      : 'Bridge export exceeds 1 MiB\n'+pairing.token+' '+ 'x'.repeat(1000)}));
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   t.after(()=>new Promise(resolve=>server.close(resolve)));
@@ -121,6 +122,11 @@ test('rejected requests expose a bounded reason and redact credentials without r
     assert(error.message.length<600);return true;
   });
   assert.equal(calls,1);
+  stale=true;
+  await assert.rejects(bridge.connectionRequest(pairing,{action:'exchange'}),error=>{
+    assert.equal(error.staleReport,true);assert.equal(error.status,422);return true;
+  });
+  assert.equal(calls,2,'a terminal stale rejection must not retry the batch automatically');
 });
 
 async function fixture(t) {
@@ -161,6 +167,60 @@ test('large snapshots stay readable when pretty JSON would exceed the file budge
   assert(Buffer.byteLength(JSON.stringify(snapshot,null,2))>2*1024*1024);
   await bridge.sync(f.root,f.pairing,f.repo,null,async()=>f.response);
   assert.deepEqual(JSON.parse(await bridge.read(path.join(f.root,'snapshot.json'))),snapshot);
+});
+
+test('stale inbox report is retained without blocking current snapshot or other messages', async t => {
+  const f = await fixture(t);
+  await bridge.sync(f.root, f.pairing, f.repo, null, async () => f.response);
+  const old = {message_id: crypto.randomUUID(), task_id: 'TASK-01', kind: 'progress'};
+  const valid = {message_id: crypto.randomUUID(), task_id: 'TASK-02', kind: 'message'};
+  for (const m of [old, valid]) await bridge.atomic(path.join(f.root, 'inbox', m.message_id+'.json'), JSON.stringify(m));
+  const calls = [];
+  const transport = async (_pairing, request) => {
+    calls.push(request.messages.map(m=>m.message_id));
+    if (request.messages.some(m=>m.message_id===old.message_id))
+      throw Object.assign(new Error('Packet superseded'), {status:422, staleReport:true});
+    return {...f.response, snapshot:{...f.response.snapshot, todo:'CURRENT TASKS'},
+      receipts:request.messages.map(m=>({message_id:m.message_id,status:'received'}))};
+  };
+  const result = await bridge.sync(f.root, f.pairing, f.repo, null, transport);
+  assert.equal(result.rejected_messages[0].message_id, old.message_id);
+  assert.equal(await fs.readFile(path.join(f.root,'TODO.md'),'utf8'),'CURRENT TASKS');
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(f.root,'inbox',old.message_id+'.json'),'utf8')),old);
+  await assert.rejects(fs.access(path.join(f.root,'receipts',old.message_id+'.json')), {code:'ENOENT'});
+  calls.length=0;
+  await bridge.sync(f.root, f.pairing, f.repo, null, transport);
+  assert.deepEqual(calls,[[]]);
+  await bridge.atomic(path.join(f.root,'inbox',old.message_id+'.json'),JSON.stringify({...old,body:'Changed'}));
+  await assert.rejects(bridge.sync(f.root,f.pairing,f.repo,null,transport),/zpráva byla změněna/);
+});
+
+test('busy and unknown delivery never quarantine or discard an inbox report', async t => {
+  const f = await fixture(t);
+  await bridge.sync(f.root,f.pairing,f.repo,null,async()=>f.response);
+  const m={message_id:crypto.randomUUID(),task_id:'TASK-01',kind:'completed'};
+  await bridge.atomic(path.join(f.root,'inbox',m.message_id+'.json'),JSON.stringify(m));
+  for (const failure of [Object.assign(new Error('resource busy'),{status:503}),new Error('lost response')]) {
+    await assert.rejects(bridge.sync(f.root,f.pairing,f.repo,null,async()=>{throw failure;}));
+    await assert.rejects(fs.access(path.join(f.root,'rejections',m.message_id+'.json')),{code:'ENOENT'});
+    await fs.access(path.join(f.root,'inbox',m.message_id+'.json'));
+  }
+});
+
+test('lost refresh after durable rejection recovers without sending rejected bytes again', async t => {
+  const f=await fixture(t);
+  await bridge.sync(f.root,f.pairing,f.repo,null,async()=>f.response);
+  const m={message_id:crypto.randomUUID(),task_id:'TASK-01',kind:'progress'};
+  await bridge.atomic(path.join(f.root,'inbox',m.message_id+'.json'),JSON.stringify(m));
+  await assert.rejects(bridge.sync(f.root,f.pairing,f.repo,null,async(_p,request)=>{
+    if(request.messages.length)throw Object.assign(new Error('Wrong source revision'),{staleReport:true,status:422});
+    throw new Error('lost idle response');
+  }),/lost idle response/);
+  await bridge.sync(f.root,f.pairing,f.repo,null,async(_p,request)=>{
+    assert.deepEqual(request.messages,[]);return f.response;
+  });
+  await fs.access(path.join(f.root,'inbox',m.message_id+'.json'));
+  await fs.access(path.join(f.root,'rejections',m.message_id+'.json'));
 });
 test('rejects Git-contained mailbox, symlinks, repository mismatch and wrong server response', async t => {
   const f = await fixture(t);
@@ -217,7 +277,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     await fs.mkdir(path.join(root, 'inbox'), {recursive: true, mode: 0o700});
     await fs.mkdir(path.join(root, 'receipts'), {recursive: true});
     if (missingInbox) { missingInbox = false; await fs.rm(path.join(root, 'inbox'), {recursive: true}); }
-    return {queue_refresh_error: syncMode === 'review' ? 'Queue refresh waits for human review' : null, stale: syncMode === 'review' || syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
+    return {queue_refresh_error: syncMode === 'review' ? 'Queue refresh waits for human review: TASK-01 / report-id (review the report in Workspace)' : null, stale: syncMode === 'review' || syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
   };
   const vscode = {env: {}, StatusBarAlignment: {Left: 1},
     commands: {registerCommand: (name, callback) => {commands.set(name, callback);return {dispose(){}};}},
@@ -288,6 +348,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     const file = path.join(first.base,'storage','bridge-private','sessions',mapping.session_id,'STATUS.json');
     const status = JSON.parse(await fs.readFile(file,'utf8'));
     assert.equal(status.waiting_review,true);
+    assert.match(status.queue_refresh_error, /TASK-01.*report-id/);
     assert.equal(status.error,undefined);
   }
   syncMode = 'ok'; notices.length = 0;

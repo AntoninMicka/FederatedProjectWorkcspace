@@ -336,7 +336,7 @@ class IdeBridge:
             if not queued: continue
             value = None
             if not pending and not session['revoked']:
-                try: value = queue_status(self, records[session['session_id']], view=view)
+                try: value = queue_status(self, records[session['session_id']], view=view, check_queue=False)
                 except (ValueError, OSError, sqlite3.Error, PendingOperation): pass
             for entry in queued:
                 entry['queue_reviewable'] = bool(value and not value['blockers'] and

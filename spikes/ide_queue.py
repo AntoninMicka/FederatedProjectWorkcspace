@@ -133,7 +133,7 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None, automatic
                     and parent and not parent['revoked'], 'Mapping changed before publication')
             require(not any(json.loads(r[0]).get('state') == 'prepared' for r in db.execute('SELECT record FROM reviews WHERE session=?', (record['session_id'],))), 'Finish prepared review before publishing')
             if automatic:
-                require(not waiting_review(db, record['session_id']), 'Queue refresh waits for human review')
+                require(not (reason := waiting_review(db, record['session_id'], graph)), reason)
                 db.execute('UPDATE sessions SET record=? WHERE id=?', (canonical(record), record['session_id']))
                 checkpoint('queue-snapshot-updated')
             require(git.head() == head, 'Project changed before queue publication')
@@ -170,12 +170,21 @@ def build_hierarchy(task_ids, nodes):
     return hierarchy, linked, problems
 
 
-def waiting_review(db, session_id):
+def waiting_review(db, session_id, graph):
+    completed = {n['id'] for n in graph['nodes'] if n['checked']}
     for message, review in db.execute('SELECT m.record,r.record FROM messages m LEFT JOIN reviews r '
                                     'ON r.session=m.session AND r.id=m.id WHERE m.session=?', (session_id,)):
-        if json.loads(message)['kind'] in {'completed', 'progress'} and (not review or json.loads(review)['state'] != 'completed'):
-            return True
-    return False
+        message = json.loads(message)
+        review = json.loads(review) if review else None
+        # Prepared native operations must recover even if the task is now complete.
+        if review and review['state'] != 'completed':
+            return ('Queue refresh waits for human review: '
+                    f"{message['task_id']} / {message['message_id']} (prepared review; resume it in Workspace)")
+        if (message['kind'] in {'completed', 'progress'} and not review
+                and message['task_id'] not in completed):
+            return ('Queue refresh waits for human review: '
+                    f"{message['task_id']} / {message['message_id']} (review the report in Workspace)")
+    return None
 
 
 def refresh(service, record, *, checkpoint=lambda stage: None):
@@ -199,8 +208,8 @@ def refresh(service, record, *, checkpoint=lambda stage: None):
                 and state['task_ids'] == [t['id'] for t in packet['manifest']['tasks']]):
             return record, '; '.join(value['blockers'])
     with service.database() as db:
-        if waiting_review(db, record['session_id']):
-            return record, 'Queue refresh waits for human review'
+        if reason := waiting_review(db, record['session_id'], view['plan']):
+            return record, reason
     try:
         publish(service, service.connection_actor(record), dict(project_id=record['project_id'], session_id=record['session_id'],
             expected_head=view['commit_id'], queue_revision=state['revision'], repository_commit=None),
@@ -337,10 +346,13 @@ def validate_completion(service, record, message, *, current_head=None):
     elif message['kind'] == 'completed' or evidence is not None:
         require(isinstance(evidence, dict) and set(evidence) == {'tests', 'diff'}
                 and all(isinstance(v, str) and 0 < len(v.strip()) <= 4096 for v in evidence.values()), 'Completion evidence required')
-    value = status(service, record, packet)
+    value = status(service, record, packet, check_queue=current_head is None)
     require(current_head is None or value['current_head'] == current_head, 'Review HEAD changed')
-    require(not value['blockers'] and scoped_item(value, message['task_id'])['startable' if message['kind'] == 'progress' else 'eligible'],
-            'Queue item is blocked, stale or already accepted')
+    require(not value['blockers'], '; '.join(value['blockers']))
+    item = scoped_item(value, message['task_id'])
+    require(item['startable' if message['kind'] == 'progress' else 'eligible'],
+            message['task_id'] + ': ' + '; '.join(item['blocked_by'] + item['completion_blocked_by'] + item['open_children'])
+            or 'Queue item is blocked, stale or already accepted')
 
 
 def queue_projection(node, project_id, actor_id, view):
@@ -396,7 +408,5 @@ def validate_prepared(service, record, message):
     packet = load(service, record['session_id'], message['queue_packet_id'])
     latest = load(service, record['session_id'])
     require(packet and latest['packet_id'] == packet['packet_id'], 'Queue packet superseded before native write')
-    queue = TaskQueue(service.node, network=service.network)
-    with queue._lock(record['project_id'], packet['manifest']['owner_id']) as path:
-        state = queue._read(path, record['project_id'], packet['manifest']['owner_id'])
-    require(state['revision'] == packet['manifest']['queue_revision'] and state['task_ids'] == [n['id'] for n in packet['manifest']['tasks']], 'Queue changed before native write')
+    # A durable report refers to its immutable packet, not the mutable working
+    # selection. Native HEAD/CAS and task prerequisites are checked by the writer.

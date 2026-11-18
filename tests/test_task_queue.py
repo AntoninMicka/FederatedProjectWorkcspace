@@ -111,7 +111,7 @@ class TaskQueueTests(unittest.TestCase):
     def test_removing_completed_item_keeps_dependents_and_queue_valid(self):
         for identifier in ['TASK-A', 'TASK-B', 'TASK-C']: self.act('add', identifier)
         self.save(BODY.replace('- [ ] [TASK-A]', '- [x] [TASK-A]'))
-        self.assertTrue(self.status()['issues'])
+        self.assertFalse(self.status()['issues'])
         preview = self.act('remove-preview', 'TASK-A')
         self.assertEqual(['TASK-A'], preview['removed_ids'])
         result = self.act('remove', 'TASK-A', preview_sha256=preview['preview_sha256'])
@@ -185,10 +185,10 @@ class TaskQueueTests(unittest.TestCase):
     def test_completed_existing_entry_does_not_block_ready_add(self):
         self.act('add', 'TASK-A')
         self.save(BODY.replace('- [ ] [TASK-A]', '- [x] [TASK-A]'))
-        before=self.status();self.assertFalse(before['valid'])
+        before=self.status();self.assertTrue(before['valid'])
         result=self.act('add', 'TASK-X')
         self.assertEqual(['TASK-A','TASK-X'], result['task_ids'])
-        self.assertEqual(before['issues'], result['issues']);self.assertFalse(result['valid'])
+        self.assertEqual(before['issues'], result['issues']);self.assertTrue(result['valid'])
         preview=self.act('repair-preview');self.assertEqual(preview['removed_ids'],['TASK-A'])
         self.assertEqual(preview['task_ids'],['TASK-X']);self.assertFalse(preview['issues'])
 
@@ -199,7 +199,7 @@ class TaskQueueTests(unittest.TestCase):
         held=self.act('set-flag','TASK-READY',flag='held',value=True)
         body=BODY
         for identifier in completed:body=body.replace('- [ ] ['+identifier+']','- [x] ['+identifier+']')
-        self.save(body);before=self.status();self.assertEqual(len(before['issues']),5)
+        self.save(body);before=self.status();self.assertEqual(before['issues'],[])
         preview=self.act('repair-preview')
         self.assertEqual(preview['removed_ids'],completed);self.assertEqual(preview['task_ids'],['TASK-READY'])
         self.assertEqual(preview['issues'],[]);self.assertEqual(before,self.status())

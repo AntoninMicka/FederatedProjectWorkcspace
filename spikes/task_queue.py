@@ -39,8 +39,9 @@ def assess(task_ids, graph, accepted=()):
         node = nodes.get(identifier)
         if node is None:
             issues.append(identifier + ': položka již není v roadmapě')
-        elif node['checked'] and identifier not in accepted:
-            issues.append(identifier + ': položka je dokončená')
+        elif node['checked']:
+            # A retained completed reference is history, not a new completion claim.
+            pass
         else:
             missing = [d for d in dependency_start_blockers(node['depends_on'], nodes) if d not in seen]
             if missing:
@@ -96,7 +97,7 @@ def queue_faults(task_ids, graph, accepted):
     for identifier in task_ids:
         node=nodes.get(identifier)
         if node is None:faults.add(('missing',identifier))
-        elif node['checked'] and identifier not in accepted:faults.add(('completed',identifier))
+        elif node['checked']:pass
         else:
             faults.update(('dependency',identifier,d) for d in dependency_start_blockers(node['depends_on'],nodes) if d not in seen)
         seen.add(identifier)
@@ -220,9 +221,7 @@ class TaskQueue:
             for current in ids:
                 ids += [n['id'] for n in nodes.values() if n['parent_id'] == current]
             # Acceptance is revalidated by the review itself; this only drives the button.
-            current = projection and (state['revision'] == projection['manifest']['queue_revision']
-                                      and state['task_ids'] == [t['id'] for t in projection['manifest']['tasks']])
-            return [dict(report, acceptable=bool(current and report['outcome'] is None
+            return [dict(report, acceptable=bool(projection and report['outcome'] is None
                                                  and report['queue_packet_id'] == projection['packet_id']
                                                  and report['task_id'] in (startable if report['kind'] == 'progress' else eligible)))
                     for i in ids for report in reports.get(i, [])]

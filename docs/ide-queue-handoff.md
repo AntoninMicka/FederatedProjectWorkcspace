@@ -66,7 +66,9 @@ Přijetí A může odblokovat B, přestože původní manifest zůstává stejn�
 Server uzná jen přesný řetězec přijetí z tohoto packetu; jiné změny plánu
 vyvolají automatické vytvoření nové generace. Starý balíček se nepřeznačuje
 za current a agent musí načíst nové předání. Report čekající na lidské
-review obnovu pozastaví, dokud jej člověk nepřijme nebo neodmítne.
+review obnovu pozastaví, dokud jej člověk nepřijme nebo neodmítne, nebo dokud
+úkol není dokončený v aktuálním Workspace. Zpráva se tím automaticky
+nepřijímá. Dokončená položka může zůstat ve frontě jako historie.
 Container s otevřenými potomky nelze dokončit místo nich; zařaďte jeho tasky.
 
 ## Příznaky, ruční potvrzení a dávky (rozšíření 0.5.0)
@@ -105,7 +107,25 @@ dokončit úkol** a **Odmítnout** se stejným review jako Nastavení → IDE �
 a ukazuje pět nejnovějších na úkol, u dávky i zprávy jejích podúkolů. Plugin zprávy jen
 zobrazuje, přijetí z IDE credentialu ADR 0062 nepovoluje.
 
+Změna pracovního výběru či příznaku jiné položky neblokuje přijetí již
+doručené zprávy. Review stále kontroluje původní balíček, plánový HEAD,
+oprávnění a předpoklady úkolu. Při čekání uvádí synchronizace ve výstupu
+Workspace bridge i v `STATUS.json` konkrétní task ID a message ID.
+
 ## Chyba a obnova
+
+Od rozšíření 0.5.9 explicitní HTTP 422 pro nahrazený packet, změněnou pracovní
+frontu nebo starou source revision nezablokuje celý inbox. Po odmítnutí dávky
+klient ověří jednotlivé zprávy se stejnými UUID; již přijaté se bezpečně
+přehrají. Pro jednotlivě odmítnutou zprávu atomicky uloží důvod a digest
+do `rejections/<message_id>.json`. Původní inbox zůstává beze změny, nevzniká
+falešný serverový receipt ani lidské review. Následuje prázdný poll pro aktuální
+zadání; ostatní zprávy mohou pokračovat. Nové hlášení vyžaduje nový packet
+a nové UUID, nikdy tichý přepis starého reportu.
+
+`503 busy`, transportní chyba a neznámý výsledek zprávu nevyřazují. Důvod
+trvalého odmítnutí je ve výstupu Workspace bridge, při daném sync také
+v `STATUS.json` a trvale v `rejections/`.
 
 Při unknown/timeoutu nejprve načtěte stav a původní receipts. Stejné UUID se
 stejnými bajty je idempotentní; jiné bajty se stejným UUID se odmítnou. Při
