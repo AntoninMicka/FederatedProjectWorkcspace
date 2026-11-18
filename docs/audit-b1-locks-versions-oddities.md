@@ -5,10 +5,10 @@ SPDX-License-Identifier: MPL-2.0
 
 # AUDIT-B1 — zámky, verzové podmínky a podivnosti
 
-Stav dokumentu: **AUDIT-B1-T1 designed** (metodika a inventura). Katalog
-nálezů B-LOCK, B-VER a B-ODD doplní úkoly AUDIT-B1-T2 až T4, prioritizaci
-a mapování na nápravné dávky AUDIT-B1-T5. Do té doby dokument neobsahuje
-žádný nález ani verdikt.
+Stav dokumentu: **AUDIT-B1-T1 a T2 designed** (metodika, inventura a audit
+zámků). Nálezy B-VER a B-ODD doplní AUDIT-B1-T3 a T4, prioritizaci
+a mapování na nápravné dávky AUDIT-B1-T5. Priority B-LOCK jsou předběžné
+do T5.
 
 Audit je podklad k review. Není akceptací, změnou autoritativního plánu ani
 oprávněním k hromadnému odstranění zámků či podmínek. Nálezová ID nejsou úkoly
@@ -252,3 +252,154 @@ tabulky s výše uvedeným vzorem.
   (např. `provider_deadline.py` volí `AF_INET6`); T4 je vyřadí.
 - O10 zahrnuje i legitimní čtení fixture a výstupních souborů; teprve T4
   odliší testy textu implementace od testů chování.
+
+## AUDIT-B1-T2 — zámky a mutexy
+
+Výchozí commit `0e69cc5`; zdrojová místa platí pro něj. Prošel jsem všech
+20 `LOCK_EX`/2 `LOCK_SH` míst (L01–L03), 50 získání zámku journalu (`journal.lock(` a `self.lock(` v `journal.py`),
+30 `threading` primitiv (L05), enkapsulující funkce všech 111 řádků
+`BEGIN IMMEDIATE/EXCLUSIVE` (L04), HTTP admission (L08), Web Locks (L09)
+a frontu rozšíření (L10). A07–A11 předchozího auditu jsou ověřené znovu.
+
+### Souhrn
+
+Výhradní režim čtenářů je převážně v **nativní vrstvě**, nikoli v HTTP
+admission. Projektový journal `writer.lock` se získává 4× sdíleně a 46×
+výhradně. Mnoho čistých čtení drží EX přes `git snapshot` a validaci
+celého projektu. Výchozí otevření `Projects.workspace()` navíc vždy
+spouští EX bootstrap journalu. V HTTP režimu (`bounded_project_wait`) i při
+`blocking=False` se zámek bere s `LOCK_NB`, takže souběžný čtenář nečeká,
+ale **okamžitě dostane `ProjectBusy`** (HTTP 503 / typed busy).
+
+Správný vzor už v kódu existuje a je otestovaný: `Workspace.committed_snapshot`
+(krátký SH checkpoint, neměnný Git mimo zámek, druhý checkpoint)
+a `_read_current_index` (SH, při zastaralém indexu uvolnit a znovu ověřit
+pod EX). Náprava nemusí navrhovat nový mechanismus, jen jej použít.
+
+### Reprodukce
+
+**R1 — EX čtenář journalu odmítá čtenáře.** Izolovaný dočasný projekt,
+skutečné `ArtifactHistory`, `Artifacts`, `Workspace`; HTTP režim simuluje
+`bounded_project_requests()`. Spuštění z kořene repozitáře:
+`PYTHONPATH=$PWD python3 probe_r1.py`.
+
+```python
+"""AUDIT-B1-T2 probe: an EX-held native reader refuses concurrent readers under HTTP bounded wait."""
+import tempfile, threading
+from pathlib import Path
+from uuid import uuid4
+
+from spikes.artifact_history import ArtifactHistory
+from spikes.artifacts import Artifacts, main_todo_id
+from spikes.project_creation import ProjectCreation
+from spikes.request_ownership import bounded_project_requests, ProjectBusy
+from spikes.storage import Git
+
+
+def outcome(fn):
+    try:
+        with bounded_project_requests():
+            fn()
+        return 'ok'
+    except ProjectBusy as exc:
+        return f'ProjectBusy({exc.busy_resource})'
+
+
+def hold(cm_factory, entered, release):
+    with cm_factory():
+        entered.set(); release.wait(10)
+
+
+with tempfile.TemporaryDirectory() as temp:
+    base = Path(temp); node = base / 'node.json'; root = base / 'project'
+    pid = ProjectCreation(node).create('Project', str(root), str(uuid4()))['id']
+    artifacts = Artifacts(node); history = ArtifactHistory(node); git = Git(root)
+    aid = main_todo_id(pid)
+    artifacts.save(dict(project_id=pid, artifact_id=aid, base_head=git.head(), title='T',
+                        body='- [ ] Task\n', new=True), str(uuid4()))
+    head = git.head(); ws = artifacts.workspace(pid)
+    readers = {
+        'history.list (EX reader)': lambda: history.list(pid, aid, head),
+        'snapshot_checkpoint (SH reader)': lambda: ws.snapshot_checkpoint(head),
+        'artifacts.workspace() bootstrap': lambda: artifacts.workspace(pid),
+        'projects.workspace(for_read=True)': lambda: artifacts.projects.workspace(pid, for_read=True, blocking=False),
+    }
+    holders = {
+        'history._read held (EX)': lambda: history._read(pid, aid, head),
+        'journal.lock(shared=True) held (SH)': lambda: ws.journal.lock(shared=True),
+    }
+    print('baseline:', {k: outcome(f) for k, f in readers.items()})
+    for name, factory in holders.items():
+        entered, release = threading.Event(), threading.Event()
+        t = threading.Thread(target=hold, args=(factory, entered, release)); t.start()
+        assert entered.wait(10)
+        print(name + ':', {k: outcome(f) for k, f in readers.items()})
+        release.set(); t.join()
+```
+
+| Držený zámek | `history.list` | `snapshot_checkpoint` (SH) | `artifacts.workspace()` | `workspace(for_read=True)` |
+|---|---|---|---|---|
+| žádný | ok | ok | ok | ok |
+| `history._read` (EX čtenář) | ProjectBusy | ProjectBusy | ProjectBusy | ProjectBusy |
+| `journal.lock(shared=True)` (SH čtenář) | ProjectBusy | ok | ProjectBusy | ok |
+
+**R2 — vyvrácení statického podezření u SQLite store.** Helpery
+`connect()` v `chat_threads`, `role_workflows`, `summary_tasks`
+a `output_execution` zakládají `BEGIN IMMEDIATE`. Sonda držela otevřený
+výsledek `ChatThreads.connect()` a souběžně volala `ChatThreads.list()`:
+čekání **0,00 s**. Helper po bootstrapu a validaci schématu provede
+`commit()` (`chat_threads.py` ve `connect`, `return closing(db)`); writer
+rezervace tedy kryje jen otevření, nikoli celé čtení. Viz B-LOCK-11.
+
+### Nálezy B-LOCK
+
+Sloupec „I/O pod zámkem“: G = Git subprocess/snapshot, D = disk/SQLite,
+N = síť, — = jen paměť. „Ctl“ = blokuje status/cancel téže práce.
+
+| ID | Pri | Zdroj | Chráněný invariant / čtenáři a zapisovatelé | I/O | Ctl | Důkaz | Verdikt |
+|---|---|---|---|---|---|---|---|
+| B-LOCK-01 | P1 | `projects.py:127`, `workspace.py:57`, `journal.py:60` | EX bootstrap journalu (DDL, owner check, `chmod`, `fsync` adresáře) při **každém** výchozím otevření `Projects.workspace()`, tedy i u čtenářů. Invariant je nutný jen při chybějícím journalu. Jen 6 ze 134 volání `.workspace(` předává `for_read`/`for_snapshot`. | D | ne | R1 | převést čtení na SH/attach (`open_for_read`); EX jen při chybějícím či neinicializovaném journalu |
+| B-LOCK-02 | P1 | `artifact_history.py:33`, `conflict_resolution.py:73`, `artifact_git.py:57`, `artifact_git.py:105`, `artifact_actions.py:32`, `artifact_actions.py:81`, `artifacts.py:36`, `cross_references.py:94`, `:113`, `:195`, `:332`, `reporting.py:69`, `google_drive_import.py:463`, `source_import.py:97`, `context_builder.py:196`, `:385`, `workspace.py:534` (`receipt`), `project_repair.py:676` | Čistá čtení (historie, konflikt, Git status/preview, plan draft, validace plánu, otevření dokumentu, reference, pin, výběr zdrojů, Context Manifest, receipt) drží EX journalu přes `git snapshot` a `validate_snapshot`. Čtenáři se navzájem odmítají, i když žádný nezapisuje. | G, D | ne | R1 (`history`), ostatní S | převést čtení na SH nebo snapshot (`committed_snapshot`); pending/HEAD kontrolu ponechat |
+| B-LOCK-03 | P2 | `cross_references.py:94`, `:113`, `:195`, `:332`, `reporting.py:69`, `artifacts.py:36`, `federation_sync.py:364`, `git_transfer.py:97` | Čtenáři volají `_read_locked`, který může přestavět SQLite index. To zápis do indexu a EX potřebuje, ale jen při zastaralém indexu. | G, D | ne | S | převést na `_read_current_index` (SH, EX jen pro revalidovanou opravu) |
+| B-LOCK-04 | P2 | `desktop_ui.py:8759`, `ide_bridge_panel.py:410`, `roadmap_dependencies.py:254`, `rss_monitoring.py:291` | Bodová kontrola „existuje nativní operace?“ pod EX bez vlastní mutace pod týmž zámkem. U `rss_monitoring` se vlastní stav mění až po uvolnění journalu, takže EX neposkytuje bariéru proti souběžnému startu. | D (G) | ne | S | převést čtení na SH; u `rss_monitoring` T5 posoudí, zda je potřebná skutečná bariéra (CAS na stavu pollu) |
+| B-LOCK-05 | P2 | `task_queue.py:134`, `task_queue.py:231`, HTTP `task_queue_status` lane | Akce `status` (bez zápisu, `should_write = action != 'status'`) drží výhradní queue flock s `LOCK_NB` a EX journalu. Souběžný status vrátí „Frontu právě mění jiný požadavek“. HTTP lane `task_queue_status` je navíc jedna pro všechny projekty (A11). | G, D | ano (status) | S | převést status na snapshot čtení; zápisy ponechat serializované per projekt a uživatele |
+| B-LOCK-06 | P2 | `rss_sources.py:46` (`view`), `rss_sources.py:93` (`refresh`), HTTP `rss_sources` lane | A07 trvá. HTTP view sdílí lane s refresh/save/import (6 rout). `view` drží cache mutex přes normalizaci, řazení a `deepcopy`; od #146 navíc přes `store.load()` (SQLite) při každém zobrazení. | D | ano (view) | S nad `0e69cc5`; R v auditu 11. 11. | zúžit kritickou sekci (snapshot pod mutexem, zpracování mimo); oddělit HTTP čtení od fetch |
+| B-LOCK-07 | P2 | `http_ui_admission.py:98`, `extensions/workspace-bridge/bridge.js:158` | A08 trvá. Browser drží jeden request na lane key do EOF včetně Web Lock napříč okny; rozšíření má jeden FIFO na `connection_id` pro všechny projekty, sidebar, sync a updater. | N | nepřímo | S | po oddělení backendových čtenářů zúžit klíč; FIFO účinků a timeout-before-send zachovat |
+| B-LOCK-08 | P2 | 21× `sqlite3.connect(..., timeout=30)` v 18 modulech (např. `chat_threads.py`, `publication_cms.py`, `publication_cloudflare.py`, `ollama_backend.py`) | A09 trvá. Přímé connecty (31 modulů) obcházejí bounded HTTP politiku `sqlite_connection` (17 modulů); čekání až 30 s. | D | — | S | sjednotit přes `sqlite_connection`; nejdřív zmapovat, které cesty jsou HTTP dosažitelné |
+| B-LOCK-09 | P2 | `federation_catalog.py:351-352`, `replication_control.py:143-144`, `federation_sync.py:1610` | A10 trvá. Po `join(timeout=20/35/65)` se reference na thread nastaví na `None` bez `is_alive()`. Není to zámek, ale ztráta vlastnictví workeru. | — | — | S | deadline-aware drain s výsledkem clean/unclean; živou referenci zachovat |
+| B-LOCK-10 | P2 | HTTP `reference` lane (`/v1/roadmap/graph`, `/v1/document-patterns`), `julia` lane (12 rout včetně `status` a `cancel`), `node_telemetry.py:260` | A11 trvá. Nesouvisející reference výpočty sdílejí mutex. `julia/cancel` má rezervovaný worker slot, ale stejný `julia_lane` mutex jako publish. Telemetrie drží mutex i přes `nvidia-smi` (timeout 2 s). | G, N (Julia), proces | ano (Julia) | S nad `0e69cc5`; R v auditu 11. 11. | oddělit domény a control cestu; telemetrii zúžit na stavové delty |
+| B-LOCK-11 | P3 | `chat_threads.py:43`, `role_workflows.py`, `summary_tasks.py`, `output_execution.py` (`connect`) | Každé otevření včetně čtení (`get`, `list`) zakládá `BEGIN IMMEDIATE`, validaci a případnou migraci schématu, pak `commit`. Čtení se neserializují (R2), ale čtenář čeká až 30 s za cizí zápisovou transakcí a sám krátce blokuje zapisovatele. | D | ne | R2 | zúžit: read-only otevření (vzor `list_project_readonly`, `export_readonly`) |
+| B-LOCK-12 | P3 | `message_pools.py:206` (`export`), `:256` (`view`, výchozí `read_only=False`) | Zobrazení poolu ve výchozím režimu provádí `_cleanup` pod `BEGIN IMMEDIATE`. Čtení má zápisový vedlejší účinek; read-only varianta existuje. | D | ne | S | zdokumentovat nebo oddělit cleanup od čtení |
+
+### Zámky bez nálezu
+
+| Zámek | Zdroj | Důvod verdiktu **nutný** |
+|---|---|---|
+| Journal writer EX při zápisu a recovery | `journal.py:127`, `:154`, `workspace.py:124`, `:149`, `:236`, `:265`, `:372` | ADR 0003: serializace zápisu a roll-forward; nezpochybňuje se. |
+| Journal SH | `workspace.py:84`, `:365`, `:390`, `projects.py:152` | Správný vzor čtenáře. |
+| Cancel/zrušení s vlastní mutací pod EX | `roadmap_refinement.py:924`, `task_file_edit.py:193`, `local_change_resolution.py:94` | Bariéra proti souběžnému startu nativní operace; mutace probíhá pod zámkem. |
+| Zápisové a federační operace pod EX | `federation_sync.py:504`, `:910`, `project_replication.py:298`, `project_repair.py:755`, `cross_references.py:247`, `source_collector.py:220`, `:365`, `reporting.py:269` | Zápis nebo příprava zápisu s `_writable()`; dry-run `reporting.py:269` validuje kandidáta stejnou cestou jako zápis. |
+| Node registry EX/SH | `administration.py:118`, `:180` | Zápis EX, čtení SH; vzorový stav. |
+| Singletony workerů (`LOCK_NB`) | `composable_monitoring.py:68`, `rss_monitoring.py:103`, `roadmap_refinement.py:407`, `source_collector.py:158`, `julia_computation.py:534`, `project_creation.py:188`, `project_deletion.py:85`, `project_repair.py:183`, `federation_sync.py:113`, `:1333` | Jeden běžící worker či operace; neblokující pokus bez čekání. |
+| Zapisovatelé node stavu | `deployment_targets.py:44`, `publication_cms.py:125`, `publication_cloudflare.py:278`, `replication_control.py:51`, `project_creation.py:724`, `git_transfer.py:191`, `google_drive_import.py:204` | Zápis lokálního stavu. Delší I/O pod zámkem u CMS/Cloudflare/Drive pokrývá B-LOCK-08 (A09); `git_transfer` drží globální zámek přes staging a `git bundle verify`, souběh přenosů nebyl měřen. |
+| HTTP admission primitiva | `local_api.py:72-89`, `:345`, `request_ownership.py:71-122` | Omezená kapacita a krátké admission čekání (ADR 0050). Problémem je mapování domén (B-LOCK-05/06/10), nikoli primitiva. |
+| Procesní mutexy nad malými mapami | `workspace.py:29`, `sync_retry.py:12`, `sync_fingerprint.py:39`, `sync_diagnostics.py:29`, `backend_availability.py:16`, `task_stream.py:18`, `:156`, `julia_workspace.py:90`, `federation_sync.py:1466`, `http_ingress.py:67`, `history_validation.py:20` | Krátké sekce nad pamětí nebo omezená kapacita; žádné I/O čtenáře pod nimi nebylo nalezeno. |
+| Konfigurační RLock providerů | `chat_service.py:457` (pouze `configure*`, `reset_backend`) | Chrání jen mutace konfigurace. |
+| Monitoring | `monitoring.py:78-85`, `monitoring_deletion.py:119`, `monitoring_migration.py:262`, `:324` | Neblokující singleton zpracování a správa služeb; HTTP stránku pokrývá náprava A02/A06. |
+| SQLite IMMEDIATE v zápisových metodách | zbylé funkce L04 (`prepare`, `finish`, `_dispatch`, `put`, `save`, …) a read-only režimy `julia_computation`, `reporting_scheduler`, `x_connector` | Zápisové transakce; čtení mají `mode=ro`. |
+
+### Ověření T2 a limity
+
+- Každé tvrzení „čtenář blokuje čtenáře“ má zdrojové místo. B-LOCK-01
+  a B-LOCK-02 (`history`) jsou reprodukované R1; ostatní řádky jsou
+  výslovně statické. Podezření u SQLite store R2 vyvrátila a nález
+  B-LOCK-11 má proto prioritu P3.
+- A07–A11 jsou nad `0e69cc5` ověřené staticky: mapování lane, FIFO klíč,
+  přímé connecty, join bez `is_alive` a telemetrie se od auditu 11. 11.
+  nezměnily, s výjimkou SQLite `store.load()` přidaného do RSS `view`.
+  Původní reprodukce A07 a A11 nebyly znovu spuštěny.
+- Sondy R1/R2 neměnily runtime kód a běžely v dočasných adresářích bez
+  sítě a peerů. Nebyl proveden zátěžový test, formální důkaz absence
+  deadlocku ani měření desktop režimu s blokujícím čekáním.
+- Audit nenavrhuje oslabení journalu: zápisy nad stejnými nativními daty
+  zůstávají serializované podle ADR 0003.
