@@ -5,9 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # AUDIT-B1 — zámky, verzové podmínky a podivnosti
 
-Stav dokumentu: **AUDIT-B1-T1 až T3 designed** (metodika, inventura, audit
-zámků a verzových podmínek). Nálezy B-ODD doplní AUDIT-B1-T4, prioritizaci
-a mapování na nápravné dávky AUDIT-B1-T5. Priority B-LOCK a B-VER jsou
+Stav dokumentu: **AUDIT-B1-T1 až T4 designed** (metodika, inventura, audit
+zámků, verzových podmínek a dalších podivností). Prioritizaci a mapování na
+nápravné dávky doplní AUDIT-B1-T5. Priority B-LOCK, B-VER a B-ODD jsou
 předběžné do T5.
 
 Audit je podklad k review. Není akceptací, změnou autoritativního plánu ani
@@ -520,3 +520,56 @@ neuvádí verzi.
 - Commit `ed1d536` (po výchozím commitu) mění revizní vazbu fronty:
   review se už neváže na aktuální `queue_revision`, ale na neměnný packet.
   Zhodnotí ji T5 nad aktuálním HEAD.
+
+## AUDIT-B1-T4 — další podivnosti
+
+Výchozí commit `0e69cc5`. Vstupem byla inventura O01–O11 a I03/I04.
+Široké `except` (O01) jsem klasifikoval podle těla handleru: 37 chybu
+znovu vyhodí nebo přeloží, 29 vrací chybový stav či odpověď, 4 logují,
+32 předávají chybu jinak (UI hláška, `last_errors`, stav řádku) a 4 ji
+tiše spolknou.
+
+### Souhrn
+
+Skutečně skryté chyby jsou vzácné a soustředěné ve smyčkách schedulerů.
+Větším rizikem pro údržbu je vazba na text: text chybové hlášky slouží
+jako stav přes hranici procesu a stovky testů ověřují doslovný zdrojový
+text inline UI místo chování. Ostatní nálezy jsou duplicity s nízkou
+prioritou. Automatická kontrola odkazů dokumentace na kód nenašla žádný
+chybějící cíl.
+
+### Nálezy B-ODD
+
+| ID | Pri | Zdroj | Podivnost | Důkaz | Verdikt |
+|---|---|---|---|---|---|
+| B-ODD-01 | P2 | `federation_catalog.py:317`, `federation_sync.py:1573`, `replication_control.py:109`, `rss_subscription_sync.py:129` | Smyčky automatické synchronizace spolknou každou výjimku (`except Exception: pass`). Trvalý stav se zapíše jen v části cest: RSS zapisuje chybu jen uvnitř `try` (`prepare()` na `rss_subscription_sync.py:107` je mimo), katalog jen pro vyjmenované typy výjimek (`federation_catalog.py:297-305`). Neočekávaná chyba, například programátorská, zmizí bez logu i stavu. | S | zjednodušit: logovat a zapsat obecný chybový stav peeru; očekávané typy ponechat |
+| B-ODD-02 | P2 | `extensions/workspace-bridge/extension.js:155` ↔ `ide_queue.py:136`, `:203` (po `ed1d536` `:181`, `:185`); `bridge.js:130` ↔ HTTP odpověď `{'error': 'server busy'}` (`local_api.py:352`, `:365`) | Text chybové hlášky slouží jako stav přes hranici procesu (backend → rozšíření). Commit `ed1d536` musel hlášku změnit na obou stranách současně (`===` → `startsWith`); starší rozšíření s novým backendem by čekání na review nepoznalo. | S, historie `ed1d536` | zjednodušit: typovaný kód stavu (např. `waiting_review: true`, `busy: 'server'`) vedle lidské hlášky |
+| B-ODD-03 | P3 | `desktop_ui.py:9793`, `project_repair.py:389`, `role_workflow_service.py:205`, `summary_service.py:189`, `composable_monitoring.py:404` | Rozhodování podle textu výjimky nebo uložené hlášky v rámci procesu (`str(exc) == …`, `'unavailable to this owner' in str(exc)`). Změna formulace tiše změní větvení. | S | zjednodušit: typovaná výjimka nebo kód |
+| B-ODD-04 | P2 | `tests/test_desktop.py` a další (O10) | Testy ověřují doslovný zdrojový text: 531 asercí `assertIn(…, JS)` a 626 asercí na `HTML` jen v `test_desktop` (celkem 736 asercí na HTML/zdroj ve všech testech), včetně víceřádkových fragmentů kódu s přesnými mezerami a skrytého legacy markupu (`test_desktop.py:871`, `test_backend_catalog.py:88`). Takový test refaktoring rozbije bez změny chování a chování nedokládá. Behaviorální browser testy existují jen pro část oblastí (`tests/*_browser.py`, `tests/*.test.js`). | S | zjednodušit: kritické toky pokrýt behaviorálními browser testy, textové kontroly ponechat jen pro skutečné kontrakty (ID prvků, CSP) |
+| B-ODD-05 | P3 | `federation_catalog.py:28`, `federation_sync.py:55`, `project_replication.py:36`; joiny `federation_catalog.py:351`, `replication_control.py:143`, `federation_sync.py:1610` | Stejnojmenná `NETWORK_TIMEOUT` má ve třech modulech hodnoty 15, 60 a 30 s. Bounded `join` při shutdownu má tyto hodnoty natvrdo + 5 s (20/35/65) jako literál. Celkem 91 číselných `timeout=` v 59 modulech, z toho 31× `30` převážně u SQLite (B-LOCK-08). | S | zjednodušit: pojmenované rozpočty podle zdroje; join odvodit z konstanty |
+| B-ODD-06 | P3 | peer politiky `federation_catalog.py:234`, `federation_sync.py:1094`, `project_replication.py:571`, `rss_subscription_sync.py:88`, `sync_fingerprint.py:171`; bind/endpoint `network_backend.py:111`, `web_server.py:742`, `http_deadline.py:99`, `:106`, `deployment_targets.py:70`, `lxc_deployment.py:83`, `:107` | Pět kopií téměř stejné politiky „soukromá IPv4 adresa peeru“; replikace na rozdíl od ostatních zakazuje loopback. Jen IPv4 je zdokumentovaný předpoklad (`docs/desktop-network.md:8`, ADR 0020), chyby jsou explicitní. | S | ponechat předpoklad; zjednodušit do jednoho helperu; rozdíl u loopbacku zdokumentovat nebo sjednotit |
+| B-ODD-07 | P3 | `desktop_ui.py:425` (`legacy-home-diagnostics`), `desktop_ui.py:563` (`backend-settings-legacy`) | Skryté legacy bloky UI stále nesou funkční prvky napojené na JS (`chat-backend-form`: 3 odkazy) a testy ověřují jejich markup. Není doloženo, zda je cesta k nim dosažitelná. | S | odstranit, nebo zdokumentovat, proč zůstávají; dosažitelnost ověří T5 |
+| B-ODD-08 | P3 | `desktop_ui.py` (I03: 9 914 řádků, 119 řádků nad 500 znaků; I04: 169 v celém `spikes/`) | Celé HTML/CSS/JS UI je inline v Python řetězcích. Ztěžuje review i diff a umožňuje B-ODD-04. | S | zjednodušit: statické assety mimo Python; stylistické, proto P3 |
+| B-ODD-09 | P3 | `web_server.py:119` (`WebHandler(DesktopHandler)`), 24 rout dispatchovaných v obou handlerech (např. `/v1/task-queue`, `/v1/media/preview`, `/v1/workflows/prepare`) | Web přepisuje dispatch kvůli RBAC, vlastníkovi a privacy (`allow_local_only=False`). Oddělení je oprávněné, ale validace se udržuje dvakrát; divergence nebyla měřena. | S | zjednodušit: sdílený dispatch s parametrem politiky |
+| B-ODD-10 | P3 | `desktop_ui.py:8467`, `:8468`, `extensions/workspace-bridge/extension.js:187` | Prázdné `catch {}` tiše ztratí chybu prezentačního pollu, nastavení poměru stran a hlášení nedostupnosti. Ostatních 10 z 13 (O04) je best-effort (měření času, parsování URL, reload se zachovanou původní hláškou). | S | zobrazit nebo zalogovat u tří tichých; ostatní ponechat |
+
+### Podivnosti bez nálezu
+
+| Skupina | Zdroj | Verdikt |
+|---|---|---|
+| Překlad a vrácení chyby | 37 + 29 širokých `except` (O01) | ponechat |
+| Validace převádějící výjimku na neplatnou hodnotu | `action_autonomy.py:113` | ponechat |
+| Liveness vzorek bez detailu | `backend_availability.py:47` (komentář: diagnostika může obsahovat privátní endpoint) | ponechat |
+| Retry přechodných závodů při startu scheduleru | `federation_catalog.py:341`, `federation_sync.py:1600`, `replication_control.py:133` | ponechat; zdokumentováno komentářem |
+| Rollback s opětovným vyhozením | `network_backend.py:177` | ponechat |
+| Odkazy dokumentace na kód | 67 cest v backticku, 56 Markdown odkazů na `spikes/`/`tests/`/`extensions/`/`scripts/`, 103 testovacích modulů `tests.test_*` v `*.md` a `docs/` | všechny cíle existují nad `0e69cc5` |
+
+### Ověření T4 a limity
+
+- Každý nález má zdrojové místo; stylistické nálezy (B-ODD-08) mají P3.
+- Klasifikace O01 je heuristická podle prvních řádků těla handleru;
+  tiché a hraniční případy jsem prošel ručně.
+- Kontrola dokumentace ověřila jen existenci odkazovaných souborů
+  a testovacích modulů, nikoli pravdivost tvrzení o chování.
+- B-ODD-02 a B-ODD-07 nemají dynamickou reprodukci; B-ODD-04 hodnotí
+  kvalitu důkazů, nikoli funkčnost aplikace.
