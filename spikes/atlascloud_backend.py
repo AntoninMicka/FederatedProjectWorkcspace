@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import ssl
 import stat
 
@@ -173,7 +174,7 @@ class AtlasCloudCredentials:
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                 and info.st_nlink == 1 and not info.st_mode & 0o077,
                 'Unsafe AtlasCloud credential store')
-        db = sqlite3.connect(self.path, timeout=30)
+        db = bounded_connect(self.path, timeout=30)
         db.execute('PRAGMA synchronous=FULL')
         db.execute('CREATE TABLE IF NOT EXISTS credentials ('
                    'reference TEXT PRIMARY KEY, secret TEXT NOT NULL, revision INTEGER NOT NULL)')

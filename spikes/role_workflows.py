@@ -11,6 +11,7 @@ import sqlite3
 import stat
 
 from spikes.metadata import require, timestamp, uuid
+from spikes.sqlite_ownership import readonly_refused, store_connection
 
 
 STEP_STATES = {'unused', 'prepared', 'run-bound', 'succeeded', 'failed',
@@ -39,16 +40,17 @@ class RoleWorkflows:
                 'Workflow state directory requires owned mode 0700')
         self.path = self.root / 'role-workflows.sqlite'
 
-    def connect(self):
-        fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        info = os.fstat(fd); os.close(fd)
-        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
-                and info.st_nlink == 1 and not info.st_mode & 0o077,
-                'Unsafe workflow journal')
-        db = sqlite3.connect(self.path, timeout=30)
+    def connect(self, *, readonly=False):
+        """readonly: no writer transaction on a current store; None if absent.
+
+        Initialization or migration refused by mode=ro falls back to the writer path.
+        """
+        db = store_connection(self.path, 'Unsafe workflow journal', readonly=readonly)
+        if db is None:
+            return None
         try:
             db.execute('PRAGMA synchronous=FULL')
-            db.execute('BEGIN IMMEDIATE')
+            db.execute('BEGIN' if readonly else 'BEGIN IMMEDIATE')
             tables = {row[0] for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' "
                 "AND name NOT LIKE 'sqlite_%'")}
@@ -121,8 +123,16 @@ class RoleWorkflows:
                     'Unknown or incomplete workflow schema')
             db.commit()
             return closing(db)
-        except Exception:
-            db.close(); raise
+        except Exception as exc:
+            db.close()
+            if readonly and readonly_refused(exc):
+                return self.connect()
+            raise
+
+    def _reader(self):
+        """Read without a writer transaction; an absent store uses the writer bootstrap."""
+        db = self.connect(readonly=True)
+        return db if db is not None else self.connect()
 
     @staticmethod
     def _owned(row, node_id, user_id):
@@ -289,7 +299,7 @@ class RoleWorkflows:
 
     def get(self, workflow_id, node_id, user_id):
         uuid(workflow_id); uuid(node_id); uuid(user_id)
-        with self.connect() as db:
+        with self._reader() as db:
             workflow = db.execute('SELECT node_id,user_id,project_id,expected_head,'
                 'request_digest,request_json,publish_state,publish_digest,publish_json,'
                 'receipt_json FROM workflows WHERE workflow_id=?',
@@ -359,7 +369,7 @@ class RoleWorkflows:
 
     def list(self, node_id, user_id):
         uuid(node_id); uuid(user_id)
-        with self.connect() as db:
+        with self._reader() as db:
             ids = [row[0] for row in db.execute(
                 'SELECT workflow_id FROM workflows WHERE node_id=? AND user_id=? '
                 'ORDER BY rowid', (node_id, user_id))]

@@ -1330,9 +1330,8 @@ def main():
         catalog_scheduler.start()
         content_scheduler.start()
         result = app.exec()
-        content_scheduler.stop()
-        catalog_scheduler.stop()
-        replication_scheduler.stop()
+        from spikes.background_workers import stop_all
+        stop_all(content_scheduler, catalog_scheduler, replication_scheduler)
         controller.wait()
         federation_network.wait()
         federation_deployment.wait()

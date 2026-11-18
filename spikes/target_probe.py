@@ -11,6 +11,7 @@ import platform
 import resource
 import shutil
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import subprocess
 import sys
 import tempfile
@@ -76,7 +77,7 @@ def worker():
 def verify(base):
     root, state = base / 'project', base / 'state'
     workspace = Workspace(root, state)
-    with closing(sqlite3.connect(workspace.journal.database)) as db:
+    with closing(bounded_connect(workspace.journal.database)) as db:
         row = db.execute('SELECT record FROM operations WHERE done=0').fetchone()
     pending = json.loads(row[0]) if row else None
     if pending:

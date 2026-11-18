@@ -36,7 +36,8 @@ HTTP_UI_ADMISSION_JS = r'''
   const path=url.pathname+url.search;
   let body;if(Object.hasOwn(actionLanes,path)||Object.hasOwn(projectFields,path))try{body=JSON.parse(options.body);}catch(error){}
   let key=lane(path,body);
-  if(key==='project'||key==='project_read'){
+  // Reader lanes that are per project on the server stay per project here too.
+  if(key==='project'||key==='project_read'||key==='task_queue_status'){
    try{const field=projectFields[url.pathname],scope=field?body[field]:body;
     if(typeof scope?.project_id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.project_id))key+=':'+scope.project_id;
    }catch(error){}

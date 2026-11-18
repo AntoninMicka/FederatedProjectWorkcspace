@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import stat
 
 from spikes.administration import identifier
@@ -27,7 +28,7 @@ def database(node, *, create=False):
     info = os.fstat(fd); os.close(fd)
     require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and info.st_nlink == 1
             and not info.st_mode & 0o077, 'Unsafe transfer journal')
-    with closing(sqlite3.connect(path, timeout=60)) as db:
+    with closing(bounded_connect(path, timeout=60)) as db:
         db.execute('PRAGMA synchronous=FULL')
         if create:
             db.execute('CREATE TABLE IF NOT EXISTS transfers '

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import stat
 import subprocess
 import time
@@ -89,7 +90,7 @@ def _stat(path, *, content=False):
 def _readonly_database(path):
     """Open existing SQLite bytes without creating a database, WAL or SHM."""
     uri = path.resolve(strict=True).as_uri() + '?mode=ro&immutable=1'
-    with closing(sqlite3.connect(uri, uri=True, timeout=2)) as db:
+    with closing(bounded_connect(uri, uri=True, timeout=2)) as db:
         db.execute('PRAGMA query_only=ON')
         yield db
 
@@ -673,7 +674,7 @@ class ProjectRepairActions:
         binding = context['binding']
         require(binding is not None, 'Project registration changed')
         journal = Journal.attach(binding['root'], binding['state_dir'], blocking=False)
-        with journal.lock(), journal.connect() as db:
+        with journal.lock(shared=True), journal.connect() as db:
             row = db.execute('SELECT record,done FROM operations WHERE id=?',
                              (operation_id,)).fetchone()
             if row is None:

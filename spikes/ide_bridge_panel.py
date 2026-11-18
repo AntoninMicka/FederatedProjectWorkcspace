@@ -407,7 +407,7 @@ def review(service, actor, request, *, checkpoint=lambda stage: None):
         # A prepared bridge intent may outlive its original HEAD without ever
         # reaching the project journal. Such an intent is terminally stale;
         # an existing native operation must instead recover its exact receipt.
-        with workspace.journal.lock(), workspace.journal.connect() as db:
+        with workspace.journal.lock(shared=True), workspace.journal.connect() as db:
             native = db.execute('SELECT 1 FROM operations WHERE id=?', (request['operation_id'],)).fetchone()
             effectless_stale = not native and workspace.git.head() != request['expected_head']
         if effectless_stale:

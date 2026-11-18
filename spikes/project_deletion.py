@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import stat
 import time
 
@@ -47,7 +48,7 @@ def _read_only(path, query, values=()):
         return []
     _owned_file(path)
     uri = path.resolve(strict=True).as_uri() + '?mode=ro'
-    with closing(sqlite3.connect(uri, uri=True, timeout=2)) as db:
+    with closing(bounded_connect(uri, uri=True, timeout=2)) as db:
         return db.execute(query, values).fetchall()
 
 

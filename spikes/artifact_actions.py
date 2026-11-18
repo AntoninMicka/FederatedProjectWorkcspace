@@ -29,7 +29,7 @@ class ArtifactActions:
         if include_working_draft and not self.projects.network and artifact_id==main_todo_id(project_id):
             from spikes.plan_draft import read_plan_draft
             ws=self.projects.workspace(project_id)
-            with ws.journal.lock():draft=read_plan_draft(ws,project_id,expected_head)
+            with ws.journal.lock(shared=True):draft=read_plan_draft(ws,project_id,expected_head)
             if draft:
                 files=ws.git.snapshot(expected_head);files[draft[0]['source']['path']]=draft[1]
                 result['after']=dict(document(files,validate_snapshot(ws.git.snapshot(expected_head)),artifact_id),working_draft=True)
@@ -78,7 +78,7 @@ class ArtifactActions:
         if project['commit_id'] != expected_head:
             raise StaleIndex('Project changed; reopen editor')
         workspace = self.artifacts.workspace(project_id)
-        with workspace.journal.lock(), workspace.journal.connect() as db:
+        with workspace.journal.lock(shared=True), workspace.journal.connect() as db:
             require(not workspace._active(db) and
                     not db.execute('SELECT 1 FROM pending').fetchone(),
                     'Project has an unfinished operation')

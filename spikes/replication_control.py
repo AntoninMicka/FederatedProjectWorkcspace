@@ -112,6 +112,8 @@ class ReplicationControl:
 
 class ReplicationScheduler:
     """Periodically reconcile enabled primary grants without blocking the UI."""
+    NAME, STOP_TIMEOUT = 'project-replication', 35
+
     def __init__(self, node, *, deployment, interval=60):
         self.control = ReplicationControl(node, deployment=deployment)
         self.interval = interval
@@ -137,8 +139,9 @@ class ReplicationScheduler:
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 
-    def stop(self):
+    def stop(self, timeout=None):
+        """Return whether the worker finished; a live worker stays referenced."""
+        from spikes.background_workers import drain
         self.stopping.set()
-        if self.thread is not None:
-            self.thread.join(timeout=35)
-            self.thread = None
+        clean, self.thread = drain(self.thread, self.STOP_TIMEOUT if timeout is None else timeout)
+        return clean

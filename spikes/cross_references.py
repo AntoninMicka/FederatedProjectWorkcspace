@@ -90,9 +90,9 @@ class CrossReferences:
 
     def source_pin(self, project_id, artifact_id, commit_id=None):
         self.authorize(project_id); uuid(artifact_id)
-        ws = self.artifacts.workspace(project_id)
-        with ws.journal.lock(), ws.journal.connect() as db:
-            ws._read_locked(db)
+        ws = self.artifacts.workspace(project_id); ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            ws._read_shared(db)
             head = ws.git.head(); committed_project(ws.git, head, project_id)
             current = ws.git.snapshot(head); current_entities = validate_snapshot(current)
             require(artifact_id in current_entities, 'Source artifact is unavailable')
@@ -109,10 +109,10 @@ class CrossReferences:
     def live(self, source, *, boundary='same-node'):
         pin(source)
         access = self.authorize(source['project_id'])
-        ws = self.artifacts.workspace(source['project_id'])
-        with ws.journal.lock(), ws.journal.connect() as db:
-            # Nonblocking writer locks prevent reciprocal A→B/B→A deadlocks.
-            ws._read_locked(db)
+        ws = self.artifacts.workspace(source['project_id']); ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            # Nonblocking locks prevent reciprocal A→B/B→A deadlocks; readers share SH.
+            ws._read_shared(db)
             head = ws.git.head(); committed_project(ws.git, head, source['project_id'])
             current = ws.git.snapshot(head); current_entities = validate_snapshot(current)
             if source['artifact_id'] not in current_entities:
@@ -191,9 +191,9 @@ class CrossReferences:
 
     def local(self, project_id, reference_id):
         self.authorize(project_id); uuid(reference_id)
-        ws = self.artifacts.workspace(project_id)
-        with ws.journal.lock(), ws.journal.connect() as db:
-            head = ws.git.head(); ws._read_locked(db, expected_head=head)
+        ws = self.artifacts.workspace(project_id); ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            head = ws.git.head(); ws._read_shared(db)
             committed_project(ws.git, head, project_id)
             files = ws.git.snapshot(head); entities = validate_snapshot(files)
             value = references(files, entities).get(reference_id)
@@ -328,9 +328,9 @@ class CrossReferences:
 
     def index(self, project_id):
         self.authorize(project_id)
-        ws=self.artifacts.workspace(project_id)
-        with ws.journal.lock(),ws.journal.connect() as db:
-            head=ws.git.head(); projection=ws._read_locked(db,ws.index.read_projection,expected_head=head)
+        ws=self.artifacts.workspace(project_id); ws.repair_index()
+        with ws.journal.lock(shared=True),ws.journal.connect() as db:
+            head=ws.git.head(); projection=ws._read_shared(db,ws.index.read_projection)
             files=ws.git.snapshot(head); entities=validate_snapshot(files)
             ids=list(references(files,entities))
             require(all(id_ in projection['entities'] for id_ in ids),'Reference index differs from Git')

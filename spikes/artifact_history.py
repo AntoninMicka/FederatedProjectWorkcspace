@@ -30,7 +30,7 @@ class ArtifactHistory:
     def _read(self, project_id, artifact_id, expected_head):
         uuid(project_id); uuid(artifact_id); commit_id(expected_head)
         ws = self.artifacts.workspace(project_id)
-        with ws.journal.lock(), ws.journal.connect() as db:
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
             if ws._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
                 raise PendingOperation('Projekt má nedokončenou operaci. Historie ji neobnovuje.')
             ws._branch()

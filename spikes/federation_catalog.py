@@ -319,6 +319,8 @@ class CatalogControl:
 
 
 class CatalogScheduler:
+    NAME, STOP_TIMEOUT = 'federation-catalog', 20
+
     def __init__(self, node, *, deployment, interval=60):
         self.control = CatalogControl(node, deployment=deployment)
         self.interval = interval
@@ -345,11 +347,12 @@ class CatalogScheduler:
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 
-    def stop(self):
+    def stop(self, timeout=None):
+        """Return whether the worker finished; a live worker stays referenced."""
+        from spikes.background_workers import drain
         self.stopping.set()
-        if self.thread is not None:
-            self.thread.join(timeout=20)
-            self.thread = None
+        clean, self.thread = drain(self.thread, self.STOP_TIMEOUT if timeout is None else timeout)
+        return clean
 
 
 def reply(handler):

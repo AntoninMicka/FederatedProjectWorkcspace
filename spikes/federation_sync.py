@@ -361,15 +361,18 @@ def _inventory(git, scope):
 
 def _bundle_snapshot(workspace, scope, expected=None):
     """Brief native owner for snapshot admission/final publication checks."""
-    with workspace.journal.lock(), workspace.journal.connect() as db:
+    workspace.repair_index()
+    with workspace.journal.lock(shared=True), workspace.journal.connect() as db:
         if workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise SyncBusy('Shared project has an unfinished publication', resource='pending-publication')
         workspace._branch()
         refs = _inventory(workspace.git, scope)
         if expected is not None and refs != expected:
             raise SyncBusy('Shared branches changed during bundle preparation', resource='snapshot-changed')
-        workspace._read_locked(db)
-        if git_run(workspace.git, 'status', '--porcelain', '--untracked-files=all').stdout:
+        workspace._read_shared(db)
+        # Shared readers must not race for .git/index.lock via opportunistic refresh.
+        if git_run(workspace.git, 'status', '--porcelain', '--untracked-files=all',
+                   env_extra={'GIT_OPTIONAL_LOCKS': '0'}).stdout:
             raise SyncConflict('Shared project worktree has local changes')
         require(refs, 'Sharing scope selects no local branch')
         # External Git users do not acquire our journal flock either.
@@ -1582,6 +1585,8 @@ _MANUAL_SYNCS = ManualSyncTasks()
 
 
 class ContentSyncScheduler:
+    NAME, STOP_TIMEOUT = 'federation-content-sync', 65
+
     def __init__(self, node, *, deployment, interval=60):
         self.control = ContentSyncControl(node, deployment=deployment)
         self.interval = interval; self.stopping = threading.Event(); self.thread = None
@@ -1604,10 +1609,12 @@ class ContentSyncScheduler:
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 
-    def stop(self):
+    def stop(self, timeout=None):
+        """Return whether the worker finished; a live worker stays referenced."""
+        from spikes.background_workers import drain
         self.stopping.set()
-        if self.thread is not None:
-            self.thread.join(timeout=65); self.thread = None
+        clean, self.thread = drain(self.thread, self.STOP_TIMEOUT if timeout is None else timeout)
+        return clean
 
 
 def reply(handler):

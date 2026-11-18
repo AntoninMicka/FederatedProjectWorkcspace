@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
@@ -116,7 +117,7 @@ class PresentationSessions:
             require(not self.path.is_symlink(), 'Journal relací nesmí být symbolický odkaz.')
         else:
             os.close(fd)
-        db = sqlite3.connect(self.path)
+        db = bounded_connect(self.path)
         db.execute('PRAGMA synchronous=FULL')
         db.execute('PRAGMA foreign_keys=ON')
         db.execute('CREATE TABLE IF NOT EXISTS sessions ('

@@ -65,11 +65,11 @@ class Reporting:
 
     def pin(self, project_id, artifact_id, commit_id=None):
         ws = self.artifacts.workspace(project_id)
-        ws.recover()
-        with ws.journal.lock(), ws.journal.connect() as db:
+        ws.recover(); ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
             head = ws.git.head()
             committed_project(ws.git, head, project_id)
-            ws._read_locked(db, expected_head=head)
+            ws._read_shared(db)
             commit = commit_id or head
             hex_id(commit, True)
             committed_project(ws.git, commit, project_id, check_worktree=False)

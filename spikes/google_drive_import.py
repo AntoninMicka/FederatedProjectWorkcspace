@@ -15,6 +15,7 @@ import re
 import secrets
 import shutil
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import stat
 import time
 from urllib.error import HTTPError, URLError
@@ -204,7 +205,7 @@ class GoogleDriveImport:
             bounded_flock(lock, fcntl.LOCK_EX, resource='Google Drive import')
             fd = os.open(self.database, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             os.close(fd)
-            with closing(sqlite3.connect(self.database, timeout=2)) as db, db:
+            with closing(bounded_connect(self.database, timeout=2)) as db, db:
                 db.executescript('''
                     PRAGMA synchronous=FULL;
                     CREATE TABLE IF NOT EXISTS configuration (
@@ -460,7 +461,7 @@ class GoogleDriveImport:
     def _project_sources(self, project_id, head):
         ws = Projects(self.node_path).workspace(project_id, blocking=False,
                                                   deadline=time.monotonic() + 30)
-        with ws.journal.lock(), ws.journal.connect() as db:
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
             require(not db.execute('SELECT 1 FROM pending').fetchone(),
                     'Projekt má nedokončenou Workspace operaci.')
             require(ws.git.head() == head, 'Projekt se změnil. Obnovte Drive náhled.')

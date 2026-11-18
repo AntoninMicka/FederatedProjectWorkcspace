@@ -218,6 +218,7 @@ global.fetch=async(path,options)=>{const body=JSON.parse(options.body),key=path+
         self.assertIn('provider ordering OK', result.stdout)
 
     def test_julia_queue_is_independent_and_retains_ownership_until_eof(self):
+        # AUDIT-B2-T2: cancel/status own control/read lanes; other Julia work keeps FIFO.
         script = r'''
 const assert=require('node:assert/strict');
 global.window=globalThis;global.location={href:'http://localhost/',origin:'http://localhost'};
@@ -227,16 +228,17 @@ global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStrea
 (async()=>{
  const post=path=>fetch(path,{method:'POST',body:'{}'});
  const julia=await post('/v1/julia/definitions');
- const cancel=post('/v1/julia/cancel');
+ const cancel=await post('/v1/julia/cancel');
+ const status=await post('/v1/julia/status');
  const reconcile=post('/v1/julia/reconcile');
  const application=await post('/v1/counter');
  const provider=await post('/v1/chat/status');
- assert(!sent.includes('/v1/julia/cancel'));
+ assert(sent.includes('/v1/julia/cancel')&&sent.includes('/v1/julia/status'));
  assert(!sent.includes('/v1/julia/reconcile'));
  const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
+ end('/v1/julia/cancel');await cancel.text();end('/v1/julia/status');await status.text();
+ assert(!sent.includes('/v1/julia/reconcile'));
  end('/v1/julia/definitions');await julia.text();
- const cancelled=await cancel;assert(!sent.includes('/v1/julia/reconcile'));
- end('/v1/julia/cancel');await cancelled.text();
  const reconciled=await reconcile;end('/v1/julia/reconcile');await reconciled.text();
  end('/v1/counter');end('/v1/chat/status');await Promise.all([application.text(),provider.text()]);
  console.log('Julia domain EOF ownership OK');
@@ -259,18 +261,21 @@ global.fetch=async(path)=>{sent.push(path);return new Response(new ReadableStrea
  const status=await post('/v1/monitoring/view');
  const publish=post('/v1/monitoring/block-publish');
  const rss=await post('/v1/rss-sources/refresh');
- const rssView=post('/v1/rss-sources/view');
+ // AUDIT-B2-T2: the cache view never waits behind a network refresh.
+ const rssView=await post('/v1/rss-sources/view');
+ const rssSave=post('/v1/rss-sources/save');
  const others=[];
  for(const path of ['/v1/counter','/v1/projects/open','/v1/chat/status','/v1/julia/status'])others.push([path,await post(path)]);
- assert(sent.includes('/v1/monitoring/view'));
- for(const path of ['/v1/monitoring/block-publish','/v1/rss-sources/view'])assert(!sent.includes(path),'Owner bypassed: '+path);
+ assert(sent.includes('/v1/monitoring/view')&&sent.includes('/v1/rss-sources/view'));
+ for(const path of ['/v1/monitoring/block-publish','/v1/rss-sources/save'])assert(!sent.includes(path),'Owner bypassed: '+path);
  const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
  end('/v1/monitoring/block-process');await monitoring.text();
  end('/v1/monitoring/view');await status.text();
  const published=await publish;end('/v1/monitoring/block-publish');await published.text();
- assert(!sent.includes('/v1/rss-sources/view'));
+ end('/v1/rss-sources/view');await rssView.text();
+ assert(!sent.includes('/v1/rss-sources/save'));
  end('/v1/rss-sources/refresh');await rss.text();
- const refreshed=await rssView;end('/v1/rss-sources/view');await refreshed.text();
+ const saved=await rssSave;end('/v1/rss-sources/save');await saved.text();
  for(const [path,response] of others){end(path);await response.text();}
  console.log('monitoring and public RSS domains OK');
 })().catch(e=>{console.error(e);process.exitCode=1;});
@@ -382,19 +387,24 @@ global.fetch=async(path,options)=>{sent.push(path);return new Response(new Reada
  const review=await post('/v1/roadmap-refinement/list');
  const decision=post('/v1/roadmap-refinement/decide');
  const reference=await post('/v1/roadmap/graph');
- const patterns=post('/v1/document-patterns');
+ // AUDIT-B2-T2 (A11): unrelated reference computations have separate owners.
+ const patterns=await post('/v1/document-patterns');
+ const graph=post('/v1/roadmap/graph');
  const presenter=await post('/v1/presentation/status');
  const application=await post('/v1/counter');
  assert(sent.includes('/v1/presentations/save'));
- for(const path of ['/v1/projects/open','/v1/roadmap-refinement/decide','/v1/document-patterns'])assert(!sent.includes(path),'Owner bypassed: '+path);
+ assert(sent.includes('/v1/document-patterns'));
+ assert.equal(sent.filter(path=>path==='/v1/roadmap/graph').length,1,'Graph owner bypassed');
+ for(const path of ['/v1/projects/open','/v1/roadmap-refinement/decide'])assert(!sent.includes(path),'Owner bypassed: '+path);
  const end=path=>{const c=controllers.get(path);c.enqueue(new TextEncoder().encode('{}'));c.close();};
  end('/v1/presentations/open');await document.text();
  const saved=await save;end('/v1/presentations/save');await saved.text();
  const opened=await view;end('/v1/projects/open');await opened.text();
  end('/v1/roadmap-refinement/list');await review.text();
  const decided=await decision;end('/v1/roadmap-refinement/decide');await decided.text();
+ end('/v1/document-patterns');await patterns.text();
  end('/v1/roadmap/graph');await reference.text();
- const catalog=await patterns;end('/v1/document-patterns');await catalog.text();
+ const graphed=await graph;end('/v1/roadmap/graph');await graphed.text();
  end('/v1/presentation/status');end('/v1/counter');await Promise.all([presenter.text(),application.text()]);
  console.log('planning/document/reference ownership OK');
 })().catch(e=>{console.error(e);process.exitCode=1;});

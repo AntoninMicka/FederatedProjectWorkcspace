@@ -39,16 +39,18 @@ test('connection transport waits for EOF, bounds its queue and recovers after re
   const first = bridge.connectionRequest(pairing, {action: 'hold'});
   await entered;
   const refused = assert.rejects(bridge.connectionRequest(pairing, {action: 'reject'}), /422/);
-  const following = Array.from({length: 30}, () => bridge.connectionRequest(pairing, {action: 'status'}));
+  const following = Array.from({length: 30}, () => bridge.connectionRequest(pairing, {action: 'queued'}));
   await assert.rejects(bridge.connectionRequest(pairing, {action: 'overflow'}), /plná/);
   // Another connection progresses while this one waits for response EOF.
   await bridge.connectionRequest({...pairing, connection_id: crypto.randomUUID()}, {action: 'other'});
-  assert.deepEqual(seen, ['hold', 'other']);
+  // Status has its own backend lane and does not wait behind the held mutation.
+  assert.deepEqual(await bridge.connectionRequest(pairing, {action: 'status'}), {ok: true});
+  assert.deepEqual(seen, ['hold', 'other', 'status']);
   finishFirst();
   assert.deepEqual(await first, {ok: true});
   await refused;
   await Promise.all(following);
-  assert.equal(seen.filter(action => action === 'status').length, 30);
+  assert.deepEqual(seen.slice(3), ['reject', ...Array(30).fill('queued')]);
   await bridge.connectionRequest(pairing, {action: 'after'});
   assert.equal(seen.at(-1), 'after');
 });

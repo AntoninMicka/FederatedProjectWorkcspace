@@ -111,7 +111,7 @@ class TaskQueue:
         self.root = self.node.parent / ('.' + self.node.name + '.task-queues')
 
     @contextmanager
-    def _lock(self, project_id, actor_id):
+    def _lock(self, project_id, actor_id, *, shared=False):
         uuid(project_id)
         require(isinstance(actor_id, str) and 0 < len(actor_id) <= 256, 'Queue owner required')
         require(self.root.parent.resolve() == self.root.parent, 'Symlink queue parent')
@@ -132,7 +132,9 @@ class TaskQueue:
             info = os.fstat(fd)
             require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                     and stat.S_IMODE(info.st_mode) == 0o600, 'Unsafe queue lock')
-            try: bounded_flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB, resource='Task queue')
+            # Status only reads the atomically replaced file; changes stay exclusive.
+            mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+            try: bounded_flock(fd, mode | fcntl.LOCK_NB, resource='Task queue')
             except BlockingIOError: raise ValueError('Frontu právě mění jiný požadavek; načtěte ji znovu.')
             yield path
         finally:
@@ -227,7 +229,9 @@ class TaskQueue:
                     for i in ids for report in reports.get(i, [])]
         accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)
-        with self._lock(project_id, actor_id) as path, workspace.journal.lock(), workspace.journal.connect() as db:
+        reader = action == 'status'
+        with self._lock(project_id, actor_id, shared=reader) as path, \
+                workspace.journal.lock(shared=reader), workspace.journal.connect() as db:
             require(not workspace._active(db) and not db.execute('SELECT 1 FROM pending').fetchone(),
                     'Projekt má nedokončenou operaci.')
             head = view['commit_id']
@@ -246,7 +250,7 @@ class TaskQueue:
                 require(request['expected_head'] == head, 'Roadmapa se změnila; načtěte ji znovu.')
                 if action in {'add', 'remove-preview', 'remove', 'remove-single-preview','remove-single','move', 'set-flag'}:
                     require(isinstance(request['task_id'], str), 'Task ID required')
-            should_write = action != 'status'
+            should_write = not reader
             if action in {'repair-preview','repair'}:
                 # Completed tasks no longer need a working-queue reference.
                 # Their removal is explicit in the revision-bound preview;

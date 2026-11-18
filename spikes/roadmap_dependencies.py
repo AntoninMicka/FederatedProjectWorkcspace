@@ -251,7 +251,7 @@ def apply_review(service, operation_id, expected_digest, proposal_ids, checkpoin
     request = dict(action='apply-roadmap-dependencies', project_id=service.project_id,
                    proposals=intent['proposals'], expected_head=intent['expected_head'],
                    preview_sha256=expected_digest)
-    with workspace.journal.lock(), workspace.journal.connect() as db:
+    with workspace.journal.lock(shared=True), workspace.journal.connect() as db:
         native_exists = db.execute('SELECT record FROM operations WHERE id=?', (operation_id,)).fetchone()
     if native_exists:
         expected = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()

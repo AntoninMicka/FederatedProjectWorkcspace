@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 
 from spikes.configuration import local_path, overlap, parse_node, parse_project, read_config
 from spikes.administration import Administration
@@ -76,7 +77,7 @@ def _actor(node):
     database = ProjectCreation(node).database
     regular(database)
     uri = database.resolve().as_uri() + '?mode=ro'
-    with closing(sqlite3.connect(uri, uri=True)) as connection:
+    with closing(bounded_connect(uri, uri=True)) as connection:
         rows = connection.execute('SELECT id FROM local_author').fetchall()
     require(len(rows) == 1, 'Expected one durable local author')
     uuid(rows[0][0])
@@ -89,7 +90,7 @@ def _journal_state(binding):
         return {'present': False, 'pending_files': 0, 'unfinished_operations': 0}
     regular(database)
     uri = database.resolve().as_uri() + '?mode=ro'
-    with closing(sqlite3.connect(uri, uri=True)) as connection:
+    with closing(bounded_connect(uri, uri=True)) as connection:
         owner = connection.execute('SELECT root FROM owner').fetchall()
         pending = connection.execute('SELECT count(*) FROM pending').fetchone()[0]
         unfinished = connection.execute('SELECT count(*) FROM operations WHERE done=0').fetchone()[0]
@@ -103,7 +104,7 @@ def _operation_record(binding, operation_id):
         return None
     regular(database)
     uri = database.resolve().as_uri() + '?mode=ro'
-    with closing(sqlite3.connect(uri, uri=True)) as connection:
+    with closing(bounded_connect(uri, uri=True)) as connection:
         row = connection.execute('SELECT record, done FROM operations WHERE id=?',
                                  (operation_id,)).fetchone()
     if row is None:
