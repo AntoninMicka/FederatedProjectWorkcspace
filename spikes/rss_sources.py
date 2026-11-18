@@ -33,61 +33,72 @@ class RSSSources:
             if kind!='rss-atom':
                 self.cache[channel['id']].update(state='unavailable',error=CONNECTORS[kind]().describe()['availability']['reason'])
 
-    def _reload_locked(self):
-        if self.store is None:return
-        revision,channels=self.store.load()
-        if revision==self.revision:return
+    def _load(self):
+        """Read subscriptions (SQLite) outside the cache mutex (AUDIT-B2-T2, A07)."""
+        return (self.revision, self.store.load()) if self.store is not None else None
+
+    def _reload_locked(self, loaded):
+        """Apply a load only if no save/reload changed the cache since it started."""
+        if loaded is None:return
+        seen,(revision,channels)=loaded
+        if revision==self.revision or seen!=self.revision:return
         old={c['id']:c for c in self.channels}
         self.cache={c['id']:(self.cache[c['id']] if c['id'] in old and old[c['id']]['url']==c['url'] else
                     dict(observation=None,error=None,state='unloaded',attempted=None)) for c in channels}
         self.channels,self.revision=channels,revision
 
     def view(self):
+        loaded = self._load()
         with bounded_process_lock(self.lock, resource='RSS cache'):
-            self._reload_locked()
-            channels, entries, items = [], [], []
-            for channel in self.channels:
-                cached = self.cache[channel['id']]
-                observation = cached['observation']
-                channels.append(dict(channel, state=cached['state'], error=cached['error'],
-                    checked_at=observation['observed_at'] if observation else None,
-                    due=cached['attempted'] is None or self.clock()-cached['attempted'] >= channel['poll_seconds'],
-                    counts=observation['counts'] if observation else None))
-                if observation:
-                    for record in observation['records']:
-                        revision = record['revisions'][-1]
-                        context = SourceContext(channel['id'], channel['url'], record['revisions'][0]['observed_at'],
-                            'public', 'node-memory-until-backend-restart', channel=channel['name'])
-                        normalized = RSSConnector().normalize_entry(revision['entry'], context, revision.get('raw_sha256'))
-                        items.append(normalized)
-                        entries.append(dict(revision['entry'], title=normalized['title'], url=normalized['url'],
-                            author=normalized['author'], published_at=normalized['published_at'], id=record['id'],
-                            channel_id=channel['id'], channel_name=channel['name'],
-                            observed_at=revision['observed_at'], revisions=len(record['revisions'])))
-            entries.sort(key=lambda e: (e['published_at'] or e['observed_at'], e['id']), reverse=True)
-            return deepcopy(dict(revision=self.revision, channels=channels, entries=entries, items=items, connectors=connector_catalog()))
+            self._reload_locked(loaded)
+            # Observations are replaced, never mutated, so a shallow snapshot is stable.
+            revision, now = self.revision, self.clock()
+            snapshot = [(channel, dict(self.cache[channel['id']])) for channel in self.channels]
+        channels, entries, items = [], [], []
+        for channel, cached in snapshot:
+            observation = cached['observation']
+            channels.append(dict(channel, state=cached['state'], error=cached['error'],
+                checked_at=observation['observed_at'] if observation else None,
+                due=cached['attempted'] is None or now-cached['attempted'] >= channel['poll_seconds'],
+                counts=observation['counts'] if observation else None))
+            if observation:
+                for record in observation['records']:
+                    revision_ = record['revisions'][-1]
+                    context = SourceContext(channel['id'], channel['url'], record['revisions'][0]['observed_at'],
+                        'public', 'node-memory-until-backend-restart', channel=channel['name'])
+                    normalized = RSSConnector().normalize_entry(revision_['entry'], context, revision_.get('raw_sha256'))
+                    items.append(normalized)
+                    entries.append(dict(revision_['entry'], title=normalized['title'], url=normalized['url'],
+                        author=normalized['author'], published_at=normalized['published_at'], id=record['id'],
+                        channel_id=channel['id'], channel_name=channel['name'],
+                        observed_at=revision_['observed_at'], revisions=len(record['revisions'])))
+        entries.sort(key=lambda e: (e['published_at'] or e['observed_at'], e['id']), reverse=True)
+        return deepcopy(dict(revision=revision, channels=channels, entries=entries, items=items, connectors=connector_catalog()))
 
     def save(self, revision, edits):
         from spikes.rss_subscriptions import channel
         require(isinstance(edits, list) and 1 <= len(edits) <= 1000, 'Vyberte 1 až 1000 kanálů.')
         edits = [channel(c) for c in edits]
         require(len({c['id'] for c in edits}) == len(edits), 'Duplicitní ID kanálu.')
-        with bounded_process_lock(self.refresh_lock, resource='RSS refresh'), bounded_process_lock(self.lock, resource='RSS cache'):
-            self._reload_locked()
-            require(revision == self.revision or all(c in self.channels for c in edits), 'Odběry se změnily; obnovte přehled.')
-            merged = {c['id']: c for c in self.channels}; merged.update({c['id']:c for c in edits})
-            values = list(merged.values())
-            require(len({c['url'] for c in values}) == len(values), 'Tato URL již má vlastní kanál.')
-            new_revision = self.store.save(revision, values) if self.store else self.revision+1
-            for c in edits:
-                old = next((old for old in self.channels if old['id']==c['id']), None)
-                if old is None or old['url'] != c['url']:
-                    self.cache[c['id']] = dict(observation=None,error=None,state='unloaded',attempted=None)
-            self.channels, self.revision = values, new_revision
+        with bounded_process_lock(self.refresh_lock, resource='RSS refresh'):
+            loaded = self._load()
+            with bounded_process_lock(self.lock, resource='RSS cache'):
+                self._reload_locked(loaded)
+                require(revision == self.revision or all(c in self.channels for c in edits), 'Odběry se změnily; obnovte přehled.')
+                merged = {c['id']: c for c in self.channels}; merged.update({c['id']:c for c in edits})
+                values = list(merged.values())
+                require(len({c['url'] for c in values}) == len(values), 'Tato URL již má vlastní kanál.')
+                new_revision = self.store.save(revision, values) if self.store else self.revision+1
+                for c in edits:
+                    old = next((old for old in self.channels if old['id']==c['id']), None)
+                    if old is None or old['url'] != c['url']:
+                        self.cache[c['id']] = dict(observation=None,error=None,state='unloaded',attempted=None)
+                self.channels, self.revision = values, new_revision
         return self.view()
 
     def refresh(self, channel_id, *, due_only=False):
-        with bounded_process_lock(self.lock,resource='RSS cache'):self._reload_locked()
+        loaded = self._load()
+        with bounded_process_lock(self.lock,resource='RSS cache'):self._reload_locked(loaded)
         require(channel_id == 'all' or channel_id in self.cache, 'Neznámý kanál.')
         require(channel_id != 'all' or len(self.channels)<=8, 'Více než osm kanálů načítejte jednotlivě.')
         if not self.refresh_lock.acquire(blocking=False):

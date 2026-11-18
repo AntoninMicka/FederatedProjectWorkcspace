@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import ssl
 import stat
 import struct
@@ -256,7 +257,7 @@ class ReplicationReceiver:
     def _store(self, envelope, payload):
         request = envelope['request']; digest = request_digest(request)
         encoded = canonical(envelope).decode('ascii')
-        with closing(sqlite3.connect(_journal_path(self.node), timeout=60)) as db:
+        with closing(bounded_connect(_journal_path(self.node), timeout=60)) as db:
             db.execute('PRAGMA synchronous=FULL')
             db.execute('BEGIN IMMEDIATE')
             db.execute('''CREATE TABLE IF NOT EXISTS replication_inbound (
@@ -504,7 +505,7 @@ class ReplicationReceiver:
         envelope_receipt = _signature(
             self.administration.root, validate_receipt(receipt),
             authority['local']['node_id'], 'receipt')
-        with closing(sqlite3.connect(_journal_path(self.node), timeout=60)) as db:
+        with closing(bounded_connect(_journal_path(self.node), timeout=60)) as db:
             with db:
                 changed = db.execute(
                     'UPDATE replication_inbound SET receipt=? '

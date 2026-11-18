@@ -83,6 +83,8 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         self.project_read_lane = ConcurrentReadLane(max_workers - 1)
         # Queue status takes only shared queue/journal locks (AUDIT-B2-T1).
         self.task_queue_status_lane = ConcurrentReadLane(max_workers - 1)
+        # RSS view reads a short cache snapshot, never the network (AUDIT-B2-T2).
+        self.rss_view_lane = ConcurrentReadLane(max_workers - 1)
         self.backend_availability = BackendAvailability()
         self.project_lanes = ProjectLanes()
         self.request_lane_timeout = lane_timeout

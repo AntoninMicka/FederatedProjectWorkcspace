@@ -158,11 +158,18 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
     req.on('error', reject); req.end(data);
   });
 }
-// Sync, sidebar and updater share one transport owner per credential identity.
+// One transport owner per credential identity and backend lane. Mutations share
+// the ide_queue lane and keep their FIFO; status and updater reads have their
+// own backend lanes and no longer wait behind sync (AUDIT-B2-T2, A08).
 // Retain ownership through response EOF and the existing pre-dispatch retries.
 const requestQueues = new Map();
+const READ_LANES = Object.freeze({status: 'ide_status', 'extension-update': 'ide_update'});
+function transportLane(route, body) {
+  return route === '/v1/ide-bridge/connection/exchange' && Object.hasOwn(READ_LANES, body?.action)
+    ? READ_LANES[body.action] : 'ide_queue';
+}
 function queuedRequest(pairing, route, body, ca) {
-  const key = pairing.connection_id || pairing.session_id;
+  const key = (pairing.connection_id || pairing.session_id) + ':' + transportLane(route, body);
   let state = requestQueues.get(key);
   if (!state) { state = {tail: Promise.resolve(), pending: 0}; requestQueues.set(key, state); }
   if (state.pending >= 32) return Promise.reject(new Error('Fronta požadavků Workspace je plná.'));

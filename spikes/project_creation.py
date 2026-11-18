@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import shutil
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import stat
 import tempfile
 import time
@@ -192,7 +193,7 @@ class ProjectCreation:
                 raise CreationConflict('Jiná operace uzlu právě probíhá. Zkuste to později.') from exc
             fd = os.open(self.database, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             os.close(fd)
-            db = sqlite3.connect(self.database, timeout=2)
+            db = bounded_connect(self.database, timeout=2)
             try:
                 db.execute('PRAGMA synchronous=FULL')
                 version = db.execute('PRAGMA user_version').fetchone()[0]
@@ -724,7 +725,7 @@ class ProjectCreation:
             bounded_flock(lock, fcntl.LOCK_EX, resource='Project relocation')
             journal = state / 'journal.sqlite'
             regular(journal)
-            with sqlite3.connect(journal, timeout=2) as project_db:
+            with bounded_connect(journal, timeout=2) as project_db:
                 project_db.execute('PRAGMA synchronous=FULL')
                 owner = project_db.execute('SELECT root FROM owner').fetchone()
                 check(owner and owner[0] in {record['old_root'], record['root']},

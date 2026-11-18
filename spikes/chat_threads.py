@@ -9,7 +9,7 @@ import sqlite3
 import stat
 
 from spikes.metadata import require, timestamp, uuid
-from spikes.sqlite_ownership import readonly_refused, store_connection
+from spikes.sqlite_ownership import bounded_connect, readonly_refused, store_connection
 from spikes.response_language import LANGUAGE_SOURCES, language_tag
 
 
@@ -616,7 +616,7 @@ class ChatThreads:
         require(self.root.resolve() == self.root and stat.S_ISREG(info.st_mode)
                 and info.st_uid == os.getuid() and info.st_nlink == 1
                 and not info.st_mode & 0o077, 'Unsafe chat thread store')
-        with closing(sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True,
+        with closing(bounded_connect(self.path.as_uri() + '?mode=ro', uri=True,
                                      timeout=.1)) as db:
             db.execute('BEGIN')
             require(db.execute('SELECT version FROM schema_info').fetchall() == [(6,)],

@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Durable non-Git message collections; set-union sync, never database copying."""
+from spikes.sqlite_ownership import bounded_connect
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
@@ -243,7 +244,7 @@ class MessagePools:
                          stat.S_ISREG(info.st_mode) and info.st_nlink == 1),
                     'Unsafe pool state')
         owner = parse_node(read_config(node), location=node)['id']
-        with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=.1)) as db:
+        with closing(bounded_connect(path.as_uri() + '?mode=ro', uri=True, timeout=.1)) as db:
             db.execute('BEGIN')
             require(db.execute('SELECT version,node FROM pool_schema').fetchall() == [(1, owner)],
                     'Unknown pool schema or owner')

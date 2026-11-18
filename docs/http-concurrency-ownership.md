@@ -873,6 +873,8 @@ selected presentation state or lazy server services. Its Projects adapter reads
 the current registration file; project writes still use Workspace journal/CAS.
 All Julia routes stay mutually serialized, including status/cancel/reconcile;
 status initializes/queries its run journal and is not a pure-read exemption.
+*Superseded 18 November 2026 for status/output/cancel:* see
+[narrowed reader and control owners](#narrowed-reader-and-control-owners-audit-b2-t2-18-november-2026).
 Native workers already run outside HTTP admission and keep their existing
 journal/state-transition ownership.
 
@@ -1749,3 +1751,28 @@ authorization and the same transactional writer. No new lane or lock primitive
 is introduced. A paused manual-transfer test verifies that an authenticated
 reader view still completes before the transfer is released. Scope/recovery:
 [ADR 0084](adr/0084-rss-reader-subscription-sync.md).
+
+## Narrowed reader and control owners (AUDIT-B2-T2), 18 November 2026
+
+Source remediation of [audit B1](audit-b1-locks-versions-oddities.md#nálezy-b-lock)
+findings B-LOCK-06, 07, 08 and 10 (concurrency audit A07–A09, A11). Worker
+counts, the reserved UI worker, queue capacities and deadlines are unchanged, so
+[ADR 0050](adr/0050-bounded-http-monitor-concurrency.md) needs no amendment.
+
+| Change | Before | Now | Why it is safe |
+|---|---|---|---|
+| `/v1/rss-sources/view` | `rss_sources_lane` with refresh/save/import | own `rss_view_lane`, N−1 reader capacity | The view snapshots channel/cache references under the cache mutex; observations are replaced, never mutated. Normalization, sorting and `deepcopy` run outside it. Subscription `load()` (SQLite, `mode=ro`) runs outside the mutex and is applied only if no save/reload changed the revision meanwhile. |
+| `/v1/julia/status`, `/v1/julia/output` | `julia_lane` with publish/execute | `julia_status_lane` | `JuliaRunStore.get/list` open the journal `mode=ro` with `query_only`; the earlier note that status initializes the run journal no longer holds. Executors are request-local; the worker map keeps its short mutex. |
+| `/v1/julia/cancel` | `julia_lane` (reserved worker, same mutex as publish) | `julia_control_lane` | Cancel is a native SQLite transition with its own transaction; SQLite serializes it against publish/execute writes. |
+| `/v1/roadmap/graph`, `/v1/document-patterns` | one `reference_lane` | `roadmap_graph_lane`, `document_patterns_lane` | Unrelated, non-persistent computations (A11 reproduction). Each stays serialized. |
+| Node telemetry | mutex across `nvidia-smi` (2 s), memory, disk | mutex only for CPU/network deltas | Only the delta samples are shared state. |
+| Direct `sqlite3.connect` (34 calls, 27 modules) | up to the native timeout (often 30 s) inside HTTP | `bounded_connect`: unchanged outside HTTP; in a bounded request no SQLite wait, BUSY/LOCKED as `ProjectBusy` | Same contract as `sqlite_connection`; transactions, migrations and outcomes are unchanged. A busy statement or commit is rolled back by SQLite or by the caller's transaction. |
+| Browser key for `task_queue_status` | one key for all projects | per project, as `project_read` | Server status takes only shared queue/journal locks (AUDIT-B2-T1). |
+| IDE extension transport | one FIFO per connection | FIFO per connection and backend lane | Mutations share `ide_queue` and keep their order; `status` and `extension-update` have their own backend lanes. Timeout-before-send and EOF ownership are unchanged. |
+
+Status, output and cancel of the same Julia run now answer while a publish or
+execution request holds `julia_lane`; the RSS view answers during a network
+refresh. Crash boundaries and persistent formats do not change: no journal,
+Git or index write moved. Regressions: `tests/test_lock_scopes.py`, the lane
+matrix in `tests/test_local_api.py`, `tests/test_http_ui_admission.py` and
+`tests/ide_bridge.test.js`.

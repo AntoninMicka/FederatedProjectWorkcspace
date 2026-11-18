@@ -257,15 +257,17 @@ class NodeTelemetry:
     def snapshot(self, group='all'):
         require(group in {'all', 'activity', 'capacity'},
                 'Unknown node telemetry group')
-        with bounded_process_lock(self._lock, resource='Node telemetry'):
-            sampled = self.clock()
-            activity = group in {'all', 'activity'}
-            capacity = group in {'all', 'capacity'}
-            metrics = self._gpu(include_gpu=activity, include_vram=capacity)
-            if activity:
+        activity = group in {'all', 'activity'}
+        capacity = group in {'all', 'capacity'}
+        # Only CPU/network deltas are stateful; external nvidia-smi (2 s timeout),
+        # memory and disk reads stay outside the mutex (AUDIT-B2-T2, A11).
+        metrics = self._gpu(include_gpu=activity, include_vram=capacity)
+        if capacity:
+            metrics.update(ram=self._memory(), disk=self._disk())
+        if activity:
+            with bounded_process_lock(self._lock, resource='Node telemetry'):
+                sampled = self.clock()
                 metrics.update(cpu=self._cpu(), net=self._network(sampled))
-            if capacity:
-                metrics.update(ram=self._memory(), disk=self._disk())
-            return {'schema_version': 1, 'scope': 'workspace-node',
-                    'group': group, 'observed_at': observed_at(),
-                    'metrics': metrics}
+        return {'schema_version': 1, 'scope': 'workspace-node',
+                'group': group, 'observed_at': observed_at(),
+                'metrics': metrics}

@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import secrets
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import stat
 import subprocess
 from urllib.parse import urlsplit
@@ -715,7 +716,7 @@ class Administration:
         os.close(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
             raise ValueError('Unsafe credential store')
-        with closing(sqlite3.connect(path)) as db, db:
+        with closing(bounded_connect(path)) as db, db:
             db.execute('PRAGMA synchronous=FULL')
             db.execute('CREATE TABLE IF NOT EXISTS credentials (ref TEXT PRIMARY KEY, user_id TEXT NOT NULL, digest TEXT NOT NULL)')
             db.execute('INSERT INTO credentials VALUES (?, ?, ?)', (reference, user_id, hashlib.sha256(token.encode()).hexdigest()))
@@ -732,7 +733,7 @@ class Administration:
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
                 or info.st_mode & 0o077):
             raise ValueError('Unsafe node credential store')
-        with closing(sqlite3.connect(path)) as db, db:
+        with closing(bounded_connect(path)) as db, db:
             db.execute('PRAGMA synchronous=FULL')
             db.execute('CREATE TABLE IF NOT EXISTS node_credentials '
                        '(peer_id TEXT PRIMARY KEY, local_user_id TEXT NOT NULL, '
@@ -753,7 +754,7 @@ class Administration:
         if path.exists():
             if path.is_symlink():
                 raise ValueError('Unsafe node credentials')
-            with closing(sqlite3.connect(path)) as db, db:
+            with closing(bounded_connect(path)) as db, db:
                 db.execute('DELETE FROM node_credentials WHERE peer_id=?', (peer_id,))
             sync_dir(self.root)
         network_root = self.node.parent / ('.' + self.node.name + '.network')
@@ -779,7 +780,7 @@ class Administration:
                 return None
             if path.is_symlink():
                 raise ValueError('Unsafe credentials')
-            with closing(sqlite3.connect(path)) as db, db:
+            with closing(bounded_connect(path)) as db, db:
                 row = db.execute('SELECT ref, user_id FROM credentials WHERE digest=?', (digest,)).fetchone()
             if row:
                 return next((u for u in state['users'] if u['id'] == row[1] and u['credential_ref'] == row[0] and u['active']), None)
@@ -802,7 +803,7 @@ class Administration:
                 if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
                         or info.st_nlink != 1 or info.st_mode & 0o077):
                     raise ValueError('Unsafe credentials')
-                with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True,
+                with closing(bounded_connect(path.as_uri() + '?mode=ro', uri=True,
                                              timeout=2)) as db:
                     db.execute('PRAGMA query_only=ON')
                     row = db.execute(

@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 from uuid import NAMESPACE_URL, uuid5
 
 from spikes.metadata import require, uuid, validate_snapshot
@@ -30,7 +31,7 @@ def local_author_id(node):
     database = ProjectCreation(node).database
     regular(database)
     uri = database.resolve().as_uri() + '?mode=ro'
-    with closing(sqlite3.connect(uri, uri=True)) as connection:
+    with closing(bounded_connect(uri, uri=True)) as connection:
         rows = connection.execute('SELECT id FROM local_author').fetchall()
     require(len(rows) == 1, 'Expected one durable local author')
     uuid(rows[0][0])

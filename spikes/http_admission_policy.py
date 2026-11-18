@@ -416,9 +416,16 @@ ROUTE_LANES = {
     **dict.fromkeys(X_SOURCE_ROUTES, 'x_sources'),
     # Network wait owns no reader cache; definitions use the native SQLite CAS.
     '/v1/rss-sources/sync': 'catalog_transfer',
+    # AUDIT-B2-T2 (A07/A11): readers and control never wait behind fetch/publish.
+    # The view takes only a short cache snapshot; Julia status/output/cancel use
+    # request-local executors, their SQLite store and the short worker-map mutex.
+    '/v1/rss-sources/view': 'rss_view',
+    '/v1/julia/status': 'julia_status', '/v1/julia/output': 'julia_status',
+    '/v1/julia/cancel': 'julia_control',
     **dict.fromkeys(IDE_QUEUE_ROUTES, 'ide_queue'),
     **dict.fromkeys(REFINEMENT_ROUTES, 'review'),
-    **dict.fromkeys(REFERENCE_ROUTES, 'reference'),
+    # Unrelated reference computations keep separate serialized owners (A11).
+    '/v1/roadmap/graph': 'roadmap_graph', '/v1/document-patterns': 'document_patterns',
     **dict.fromkeys(NODE_PREFERENCE_ROUTES, 'node_preferences'),
     **dict.fromkeys(FEDERATION_CONTROL_ROUTES, 'federation_control'),
     **FEDERATION_TRANSFER_LANES,

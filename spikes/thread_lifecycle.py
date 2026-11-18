@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+from spikes.sqlite_ownership import bounded_connect
 import stat
 
 from spikes.chat_records import MARKER, OUTPUT_MARKER
@@ -41,7 +42,7 @@ class ThreadLifecycle:
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                 and info.st_nlink == 1 and not info.st_mode & 0o077,
                 'Unsafe thread lifecycle journal')
-        db = sqlite3.connect(self.path, timeout=30)
+        db = bounded_connect(self.path, timeout=30)
         db.execute('PRAGMA synchronous=FULL')
         db.execute('''CREATE TABLE IF NOT EXISTS operations(
             operation_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL UNIQUE,
@@ -66,13 +67,13 @@ class ThreadLifecycle:
     def _rows(self, name, query, values=()):
         path = self._existing_db(name)
         if path is None: return []
-        with closing(sqlite3.connect(path, timeout=30)) as db:
+        with closing(bounded_connect(path, timeout=30)) as db:
             return db.execute(query, values).fetchall()
 
     def _table_exists(self, name, table):
         path = self._existing_db(name)
         if path is None: return False
-        with closing(sqlite3.connect(path, timeout=30)) as db:
+        with closing(bounded_connect(path, timeout=30)) as db:
             return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
                               (table,)).fetchone() is not None
 
@@ -209,7 +210,7 @@ class ThreadLifecycle:
     def _delete_ids(self, filename, table, column, values):
         path = self._existing_db(filename)
         if path is None or not values: return
-        with closing(sqlite3.connect(path, timeout=30)) as db:
+        with closing(bounded_connect(path, timeout=30)) as db:
             db.execute('PRAGMA synchronous=FULL'); db.execute('BEGIN IMMEDIATE')
             db.executemany(f'DELETE FROM {table} WHERE {column}=?', [(v,) for v in values])
             db.commit()

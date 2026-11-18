@@ -168,6 +168,12 @@ class LocalAPITests(unittest.TestCase):
         from spikes.http_admission_policy import REFINEMENT_ROUTES, REFERENCE_ROUTES
         routes.update(dict.fromkeys(REFINEMENT_ROUTES, 'review_lane'))
         routes.update(dict.fromkeys(REFERENCE_ROUTES, 'reference_lane'))
+        # AUDIT-B2-T2: readers/control own separate lanes from fetch/publish.
+        routes.update({'/v1/rss-sources/view': 'rss_view_lane',
+                       '/v1/julia/status': 'julia_status_lane', '/v1/julia/output': 'julia_status_lane',
+                       '/v1/julia/cancel': 'julia_control_lane',
+                       '/v1/roadmap/graph': 'roadmap_graph_lane',
+                       '/v1/document-patterns': 'document_patterns_lane'})
         from spikes.http_admission_policy import (NODE_PREFERENCE_ROUTES,
             FEDERATION_CONTROL_ROUTES, FEDERATION_TRANSFER_LANES)
         routes.update(dict.fromkeys(NODE_PREFERENCE_ROUTES, 'node_preferences_lane'))
