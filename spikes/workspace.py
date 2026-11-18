@@ -331,6 +331,11 @@ class Workspace:
     def recover(self, checkpoint=lambda stage: None):
         if getattr(self, 'snapshot_read_only', False):
             raise PermissionError('Committed snapshot reader cannot recover writes')
+        # Readers call recover() on every open; with nothing to recover they need
+        # only SH. Any recovery work re-checks under EX (no in-place upgrade).
+        with self.journal.lock(shared=True), self.journal.connect() as db:
+            if self._active(db) is None and not db.execute('SELECT 1 FROM pending').fetchone():
+                return None
         with self.journal.lock(), self.journal.connect() as db:
             record = self._active(db)
             if record is None:
@@ -372,6 +377,24 @@ class Workspace:
         with self.journal.lock(), self.journal.connect() as db:
             check(db)
             return self._read_locked(db, query, expected_head=expected_head)
+
+    def repair_index(self):
+        """Bring the index to HEAD before a caller takes its own SH reader lock.
+
+        Never call while holding this journal's lock. A pending operation is left
+        to the caller's own owner check. Under SH callers then only read the index;
+        a HEAD change in between surfaces as StaleIndex, never as old data.
+        """
+        try:
+            self._read_current_index(self.index.read)
+        except PendingOperation:
+            pass
+
+    def _read_shared(self, db, query=None):
+        """Pure index read for a caller holding SH: no rebuild, StaleIndex on drift."""
+        if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+            raise PendingOperation('Project has an unfinished operation')
+        return (query or self.index.read)(self.git)
 
     def _read_locked(self, db, query=None, *, expected_head=None):
         if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
@@ -531,7 +554,7 @@ class Workspace:
                     sum(len(ref.split('/', 5)) == 6 and ref.split('/', 5)[5] == branch_name for ref in incoming))}
 
     def receipt(self, operation_id):
-        with self.journal.lock(), self.journal.connect() as db:
+        with self.journal.lock(shared=True), self.journal.connect() as db:
             row = db.execute('SELECT record FROM operations WHERE id=? AND done=1',
                              (operation_id,)).fetchone()
             return json.loads(row[0]) if row else None

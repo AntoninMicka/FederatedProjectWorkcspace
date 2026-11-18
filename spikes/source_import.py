@@ -94,7 +94,7 @@ class Sources(Artifacts):
         require(isinstance(digest, str) and bool(re.fullmatch(r'[a-f0-9]{64}', digest)),
                 'Invalid source digest')
         ws = self.workspace(project_id)
-        with ws.journal.lock(), ws.journal.connect() as db:
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
             require(ws.git.head() == base_head, 'Projekt se změnil. Načtěte jej znovu.')
             files = ws.git.snapshot(base_head)
             entities = validate_snapshot(files)

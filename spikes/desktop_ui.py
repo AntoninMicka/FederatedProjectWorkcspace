@@ -8756,7 +8756,7 @@ class DesktopHandler(Handler):
                     if action in {'stage','commit'}:
                         pid=request['request']['project_id'] if action=='stage' else request['preview']['project_id']
                         workspace=service.workspace(pid)
-                        with workspace.journal.lock(),workspace.journal.connect() as db:
+                        with workspace.journal.lock(shared=True),workspace.journal.connect() as db:
                             if db.execute('SELECT 1 FROM operations WHERE id=?',(request['operation_id'],)).fetchone() is None:outcome='not-started'
                 except (ValueError,TypeError,KeyError,OSError,sqlite3.Error):pass
                 return self.reply(422,{'error':str(exc),'outcome':outcome})

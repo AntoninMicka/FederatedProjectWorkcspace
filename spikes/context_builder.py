@@ -193,7 +193,7 @@ class ContextBuilder:
             require(isinstance(response_language, ResponseLanguage),
                     'Invalid response language policy')
             response_language.validate()
-        with self.workspace.journal.lock(), self.workspace.journal.connect() as db:
+        with self.workspace.journal.lock(shared=True), self.workspace.journal.connect() as db:
             return self._prepare_locked(db, manifest_id, run_id, authority, target,
                                         project_inputs, ad_hoc_inputs, public_source_inputs,
                                         omitted, conversation, task, response_language)
@@ -382,7 +382,7 @@ class ContextBuilder:
         require(prepared.manifest_bytes == _canonical(manifest), 'Manifest bytes changed')
         require(manifest['payload_sha256'] == _digest(prepared.payload)
                 and manifest['payload_size'] == len(prepared.payload), 'Prepared payload changed')
-        with self.workspace.journal.lock(), self.workspace.journal.connect() as db:
+        with self.workspace.journal.lock(shared=True), self.workspace.journal.connect() as db:
             if self.workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
                 raise PendingOperation('Project has an unfinished operation')
             require(self.workspace.git.head() == manifest['project_commit'],

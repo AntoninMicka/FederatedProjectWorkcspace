@@ -28,8 +28,8 @@ from spikes.storage import Git, _GitBlobCache
 MAX_BUNDLE = 64 * 1024 * 1024
 
 
-def git_run(git, *args, **kwargs):
-    return git.run(*args, env_extra={'GIT_NO_REPLACE_OBJECTS': '1'}, **kwargs)
+def git_run(git, *args, env_extra=None, **kwargs):
+    return git.run(*args, env_extra={**(env_extra or {}), 'GIT_NO_REPLACE_OBJECTS': '1'}, **kwargs)
 
 
 @git_budget()
@@ -94,15 +94,18 @@ def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}
 
 def _export_head(ws, expected=None):
     """Capture/check an export snapshot under the native writer, never pack here."""
-    with ws.journal.lock(), ws.journal.connect() as db:
+    ws.repair_index()
+    with ws.journal.lock(shared=True), ws.journal.connect() as db:
         if ws._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise ProjectBusy('Project has an unfinished publication')
         ws._branch()
         head = ws.git.head()
         if expected is not None and head != expected:
             raise ProjectBusy('Source changed during export')
-        ws._read_locked(db)
-        require(not git_run(ws.git, 'status', '--porcelain', '--untracked-files=all').stdout,
+        ws._read_shared(db)
+        # Shared readers must not race for .git/index.lock via opportunistic refresh.
+        require(not git_run(ws.git, 'status', '--porcelain', '--untracked-files=all',
+                            env_extra={'GIT_OPTIONAL_LOCKS': '0'}).stdout,
                 'Project must be clean')
         require(git_run(ws.git, 'rev-parse', '--is-shallow-repository').stdout.strip() == 'false',
                 'Shallow history is not transferable')

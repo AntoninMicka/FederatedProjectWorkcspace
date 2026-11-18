@@ -54,7 +54,7 @@ class ArtifactGit:
     def status(self,pid,aid,head,*,page=1):
         require(type(page) is int and 1<=page<=4096,'Invalid preview page')
         ws=self.workspace(pid)
-        with ws.journal.lock(),ws.journal.connect() as db:
+        with ws.journal.lock(shared=True),ws.journal.connect() as db:
             require(ws._active(db) is None and not db.execute('SELECT 1 FROM pending').fetchone(),'Recover pending operation first')
             files,entities,path,meta=self.current(ws,pid,aid,head)
             raw=read_working_file(ws.git.root,path);staged=self.staged(ws,path);metadata_ok=self.metadata_unchanged(ws,path,files)
@@ -102,7 +102,7 @@ class ArtifactGit:
 
     def preview(self,pid,aid,head):
         ws=self.workspace(pid)
-        with ws.journal.lock(),ws.journal.connect() as db:
+        with ws.journal.lock(shared=True),ws.journal.connect() as db:
             require(ws._active(db) is None and not db.execute('SELECT 1 FROM pending').fetchone(),'Recover pending operation first')
             value,_=self._preview(ws,pid,aid,head)
             return dict(preview=value,approval_digest=digest(canonical(value)))

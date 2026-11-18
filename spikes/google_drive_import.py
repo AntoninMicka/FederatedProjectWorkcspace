@@ -460,7 +460,7 @@ class GoogleDriveImport:
     def _project_sources(self, project_id, head):
         ws = Projects(self.node_path).workspace(project_id, blocking=False,
                                                   deadline=time.monotonic() + 30)
-        with ws.journal.lock(), ws.journal.connect() as db:
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
             require(not db.execute('SELECT 1 FROM pending').fetchone(),
                     'Projekt má nedokončenou Workspace operaci.')
             require(ws.git.head() == head, 'Projekt se změnil. Obnovte Drive náhled.')

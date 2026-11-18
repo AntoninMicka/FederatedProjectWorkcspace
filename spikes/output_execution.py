@@ -13,6 +13,7 @@ import stat
 import tempfile
 
 from spikes.metadata import MAX_METADATA, parse_json, require, safe_path, timestamp, uuid
+from spikes.sqlite_ownership import readonly_refused, store_connection
 from spikes.output_capabilities import canonical_output_capability
 from spikes.output_plans import (canonical_output_plan, canonical_output_policy,
                                  validate_output_plan)
@@ -49,17 +50,18 @@ class OutputExecutionStore:
                 'Output execution state directory requires owned mode 0700')
         self.path = self.root / 'output-executions.sqlite'
 
-    def connect(self):
-        fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        info = os.fstat(fd); os.close(fd)
-        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
-                and info.st_nlink == 1 and not info.st_mode & 0o077,
-                'Unsafe output execution journal')
-        db = sqlite3.connect(self.path, timeout=30)
+    def connect(self, *, readonly=False):
+        """readonly: no writer transaction on a current store; None if absent.
+
+        Initialization or migration refused by mode=ro falls back to the writer path.
+        """
+        db = store_connection(self.path, 'Unsafe output execution journal', readonly=readonly)
+        if db is None:
+            return None
         try:
             db.execute('PRAGMA foreign_keys=ON')
             db.execute('PRAGMA synchronous=FULL')
-            db.execute('BEGIN IMMEDIATE')
+            db.execute('BEGIN' if readonly else 'BEGIN IMMEDIATE')
             tables = {row[0] for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
             if not tables:
@@ -113,8 +115,16 @@ class OutputExecutionStore:
                     'Unknown or incomplete output execution schema')
             db.commit()
             return closing(db)
-        except Exception:
-            db.close(); raise
+        except Exception as exc:
+            db.close()
+            if readonly and readonly_refused(exc):
+                return self.connect()
+            raise
+
+    def _reader(self):
+        """Read without a writer transaction; an absent store uses the writer bootstrap."""
+        db = self.connect(readonly=True)
+        return db if db is not None else self.connect()
 
     @staticmethod
     def _owner(row, node_id, user_id):
@@ -244,7 +254,7 @@ class OutputExecutionStore:
 
     def get(self, operation_id, node_id, user_id):
         uuid(operation_id); uuid(node_id); uuid(user_id)
-        with self.connect() as db:
+        with self._reader() as db:
             execution = db.execute('SELECT node_id,user_id,project_id,project_commit,'
                 'request_digest,request_json,preview_json,approval_digest,state,error,'
                 'receipt_json FROM executions WHERE operation_id=?',

@@ -361,15 +361,18 @@ def _inventory(git, scope):
 
 def _bundle_snapshot(workspace, scope, expected=None):
     """Brief native owner for snapshot admission/final publication checks."""
-    with workspace.journal.lock(), workspace.journal.connect() as db:
+    workspace.repair_index()
+    with workspace.journal.lock(shared=True), workspace.journal.connect() as db:
         if workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise SyncBusy('Shared project has an unfinished publication', resource='pending-publication')
         workspace._branch()
         refs = _inventory(workspace.git, scope)
         if expected is not None and refs != expected:
             raise SyncBusy('Shared branches changed during bundle preparation', resource='snapshot-changed')
-        workspace._read_locked(db)
-        if git_run(workspace.git, 'status', '--porcelain', '--untracked-files=all').stdout:
+        workspace._read_shared(db)
+        # Shared readers must not race for .git/index.lock via opportunistic refresh.
+        if git_run(workspace.git, 'status', '--porcelain', '--untracked-files=all',
+                   env_extra={'GIT_OPTIONAL_LOCKS': '0'}).stdout:
             raise SyncConflict('Shared project worktree has local changes')
         require(refs, 'Sharing scope selects no local branch')
         # External Git users do not acquire our journal flock either.

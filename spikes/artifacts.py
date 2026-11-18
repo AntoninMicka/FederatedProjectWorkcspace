@@ -33,14 +33,15 @@ class Artifacts:
         # Presentation HTTP readers also use this native recovery entrypoint.
         # Their project owner must cover opening and any roll-forward work.
         ws.recover()
-        with ws.journal.lock(), ws.journal.connect() as db:
+        ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
             ws._branch()
             require(not ws.git.run('ls-files', '-u').stdout, 'Unresolved merge')
             head = ws.git.head()
             meta = committed_project(ws.git, head, project_id)
             files = ws.git.snapshot(head)
             entities = validate_snapshot(files)
-            rows = ws._read_locked(db)
+            rows = ws._read_shared(db)
             require(rows == sorted((m['id'], m['title']) for m in entities.values()),
                     'Index differs from validated commit')
             from spikes.artifact_catalog import document_ids

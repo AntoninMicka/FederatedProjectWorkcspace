@@ -9,6 +9,7 @@ import sqlite3
 import stat
 
 from spikes.metadata import require, timestamp, uuid
+from spikes.sqlite_ownership import readonly_refused, store_connection
 from spikes.response_language import LANGUAGE_SOURCES, language_tag
 
 
@@ -40,18 +41,18 @@ class ChatThreads:
                 'Chat state directory requires owned mode 0700')
         self.path = self.root / 'chat-threads.sqlite'
 
-    def connect(self):
-        flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
-        fd = os.open(self.path, flags, 0o600)
-        info = os.fstat(fd); os.close(fd)
-        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
-                and info.st_nlink == 1 and not info.st_mode & 0o077,
-                'Unsafe chat thread store')
-        db = sqlite3.connect(self.path, timeout=30)
+    def connect(self, *, readonly=False):
+        """readonly: no writer transaction on a current store; None if absent.
+
+        Initialization or migration refused by mode=ro falls back to the writer path.
+        """
+        db = store_connection(self.path, 'Unsafe chat thread store', readonly=readonly)
+        if db is None:
+            return None
         try:
             db.execute('PRAGMA foreign_keys=ON')
             db.execute('PRAGMA synchronous=FULL')
-            db.execute('BEGIN IMMEDIATE')
+            db.execute('BEGIN' if readonly else 'BEGIN IMMEDIATE')
             tables = {row[0] for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
             legacy_tables = {'schema_info', 'threads', 'messages', 'turns'}
@@ -112,9 +113,16 @@ class ChatThreads:
                     self._validate_columns(db, version=6)
             db.commit()
             return closing(db)
-        except Exception:
+        except Exception as exc:
             db.close()
+            if readonly and readonly_refused(exc):
+                return self.connect()
             raise
+
+    def _reader(self):
+        """Read without a writer transaction; an absent store uses the writer bootstrap."""
+        db = self.connect(readonly=True)
+        return db if db is not None else self.connect()
 
     @staticmethod
     def _create(db):
@@ -484,7 +492,7 @@ class ChatThreads:
 
     def get_turn(self, turn_id, node_id, user_id):
         uuid(turn_id)
-        with self.connect() as db:
+        with self._reader() as db:
             row = db.execute('SELECT turn_id,thread_id,user_message_id,run_id,'
                              'assistant_message_id,state,error,manifest_id,response_language,'
                              'language_source,language_compliance FROM turns WHERE turn_id=?',
@@ -511,7 +519,7 @@ class ChatThreads:
                              'language_compliance'), row))
 
     def get(self, thread_id, node_id, user_id):
-        with self.connect() as db:
+        with self._reader() as db:
             return self._get(db, thread_id, node_id, user_id)
 
     def _get(self, db, thread_id, node_id, user_id):
@@ -577,7 +585,7 @@ class ChatThreads:
 
     def list(self, node_id, user_id):
         uuid(node_id); uuid(user_id)
-        with self.connect() as db:
+        with self._reader() as db:
             rows = db.execute('SELECT thread_id,created_at,revision,status FROM threads '
                               'WHERE node_id=? AND user_id=? ORDER BY created_at,thread_id',
                               (node_id, user_id)).fetchall()
@@ -591,7 +599,7 @@ class ChatThreads:
 
     def list_project(self, node_id, project_id):
         uuid(node_id); uuid(project_id)
-        with self.connect() as db:
+        with self._reader() as db:
             rows = db.execute(
                 'SELECT thread_id,user_id FROM threads '
                 'WHERE node_id=? AND project_id=? ORDER BY created_at,thread_id',
@@ -624,7 +632,7 @@ class ChatThreads:
         projects = sorted(set(project_ids))
         for project_id in projects:
             uuid(project_id)
-        with self.connect() as db:
+        with self._reader() as db:
             clauses = ['(user_id=? AND project_id IS NULL)']
             parameters = [node_id, user_id]
             if projects:

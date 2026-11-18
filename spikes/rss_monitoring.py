@@ -288,7 +288,7 @@ class RSSMonitoring:
                 if receipt is not None:
                     self._finish(poll_id,json.loads(row[2]),json.loads(row[4]),receipt)
                     return dict(poll_id=poll_id,state='completed')
-                with ws.journal.lock(),ws.journal.connect() as db:
+                with ws.journal.lock(shared=True),ws.journal.connect() as db:
                     require(db.execute('SELECT 1 FROM operations WHERE id=?',(plan['operation_id'],)).fetchone() is None,
                             'Existing Workspace publication requires recovery')
             with self.scheduler.db() as db:

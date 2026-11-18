@@ -57,6 +57,8 @@ class Journal:
         self.state.mkdir(parents=True, exist_ok=True, mode=0o700)
         require(self.state.stat().st_dev == self.root.stat().st_dev, 'Journal must be on same filesystem')
         self.database = self.state / 'journal.sqlite'
+        if self._initialized():
+            return
         with self.lock(), self.connect() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS owner (root TEXT NOT NULL);
@@ -72,6 +74,32 @@ class Journal:
                 require(owner[0] == str(self.root), 'Journal belongs to another project')
         os.chmod(self.database, 0o600)
         sync_dir(self.state)
+
+    SCHEMA = frozenset({('table', 'owner'), ('table', 'pending'), ('table', 'operations'),
+                        ('index', 'one_active_operation')})
+
+    def _initialized(self):
+        """Shared check of a complete journal; bootstrap itself stays exclusive (ADR 0003).
+
+        Any missing table, owner or private mode falls back to the exclusive bootstrap,
+        which repeats every check. A foreign owner is refused, never re-initialized.
+        """
+        try:
+            info = self.database.lstat()
+        except FileNotFoundError:
+            return False
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
+            return False
+        with self.lock(shared=True), self.connect() as db:
+            objects = {tuple(row) for row in db.execute(
+                "SELECT type, name FROM sqlite_master WHERE type IN ('table', 'index')")}
+            if not self.SCHEMA <= objects:
+                return False
+            owners = db.execute('SELECT root FROM owner').fetchall()
+        if not owners:
+            return False
+        require(owners == [(str(self.root),)], 'Journal belongs to another project')
+        return True
 
     @classmethod
     def attach(cls, root, state, *, blocking=True):

@@ -70,7 +70,7 @@ class ConflictResolution:
     def _read(self, project_id, expected_head):
         _commit(expected_head)
         ws = self._workspace(project_id)
-        with ws.journal.lock(), ws.journal.connect() as db:
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
             if ws._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
                 raise PendingOperation(
                     'Projekt má nedokončenou operaci. Řešení konfliktu ji neobnovuje.')

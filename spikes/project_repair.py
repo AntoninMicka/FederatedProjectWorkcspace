@@ -673,7 +673,7 @@ class ProjectRepairActions:
         binding = context['binding']
         require(binding is not None, 'Project registration changed')
         journal = Journal.attach(binding['root'], binding['state_dir'], blocking=False)
-        with journal.lock(), journal.connect() as db:
+        with journal.lock(shared=True), journal.connect() as db:
             row = db.execute('SELECT record,done FROM operations WHERE id=?',
                              (operation_id,)).fetchone()
             if row is None:
