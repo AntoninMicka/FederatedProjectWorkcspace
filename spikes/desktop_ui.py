@@ -7976,7 +7976,7 @@ function renderAutonomyQueue(){
    const confirmRevision=autonomyButton('Potvrdit přesnou revizi',async()=>{if(!confirm(`Potvrdit změnu plánu?\n${reason.textContent}\n${impact.textContent}\n${exact.textContent}`))return;await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/revision/confirm',{workflow_id:workflow.workflow_id,proposal_id:pending.proposal_id,approval_digest:pending.approval_digest});});
    box.append(title,reason,impact,exact,confirmRevision);revisionPanels.append(box);
   }
-  const revisionReady=workflow.plan_schema_version===3&&!autonomyTerminal.has(workflow.state)&&
+  const revisionReady=(workflow.plan_capabilities||[]).includes('revisions')&&!autonomyTerminal.has(workflow.state)&&
    !(workflow.revision_proposals||[]).some(item=>item.state==='pending')&&
    workflow.steps.some(item=>item.state==='completed')&&workflow.steps.every(item=>['completed','cancelled'].includes(item.state));
   if(revisionReady){
@@ -8631,7 +8631,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, service.revoke(**request, actor=actor))
             return self.send_error(400)
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
-            return self.reply(422, {'error': str(exc)})
+            code = getattr(exc, 'code', None)
+            return self.reply(422, {'error': str(exc), **({'code': code} if isinstance(code, str) else {})})
 
     def backend_catalog_status(self):
         states = {}

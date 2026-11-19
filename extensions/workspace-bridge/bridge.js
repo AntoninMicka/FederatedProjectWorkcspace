@@ -52,8 +52,13 @@ async function atomic(file, data) {
     try {await directory.sync();} finally {await directory.close();}
   }
 }
+// Extension–backend protocol (ADR 0060, contract K7); independent of the package version.
+const BRIDGE_PROTOCOL = 1;
+const PAIRING_VERSIONS = [1, 2];
 function validatePairing(pairing) {
-  if (!pairing || ![1, 2].includes(pairing.schema_version) || !/^[A-Za-z0-9_-]{43}$/.test(pairing.token)
+  if (pairing && Number.isInteger(pairing.schema_version) && pairing.schema_version > Math.max(...PAIRING_VERSIONS))
+    throw new Error(`Propojení vytvořil novější Workspace (schéma ${pairing.schema_version}, podporováno 1–${Math.max(...PAIRING_VERSIONS)}). Aktualizujte rozšíření.`);
+  if (!pairing || !PAIRING_VERSIONS.includes(pairing.schema_version) || !/^[A-Za-z0-9_-]{43}$/.test(pairing.token)
       || !Number.isInteger(pairing.expires_at) || pairing.expires_at * 1000 <= Date.now())
     throw new Error('Neplatné nebo expirované propojení.');
   if (pairing.schema_version === 2 && (!UUID.test(pairing.connection_id) || typeof pairing.name !== 'string'))
@@ -116,7 +121,8 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? https : http;
     const options = {method: 'POST', headers: {'Authorization': 'Bearer ' + pairing.token,
-      'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data)}};
+      'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data),
+      'X-Workspace-Bridge-Protocol': String(BRIDGE_PROTOCOL)}};
     if (ca) options.ca = ca;
     const req = transport.request(url, options, response => {
       let chunks = [], size = 0;
@@ -127,7 +133,8 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
         // This response is emitted before dispatch: replay cannot repeat a write.
         let busy = false;
         if (response.statusCode === 503) {
-          try { busy = JSON.parse(text).error === 'server busy'; } catch (_) { /* other 503 */ }
+          // Typed code first (K6); the text covers backends older than the code.
+          try { const value = JSON.parse(text); busy = value.code === 'server_busy' || (value.code === undefined && value.error === 'server busy'); } catch (_) { /* other 503 */ }
         }
         if (busy && attempt < 3) {
           setTimeout(() => httpRequest(pairing, route, body, ca, attempt + 1).then(resolve, reject),
@@ -139,10 +146,11 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
           let reason='', staleReport=false;
           try {
             const value=JSON.parse(text);
-            staleReport = response.statusCode === 422 && typeof value.error === 'string'
+            staleReport = response.statusCode === 422 && (value.code === 'stale_report'
+              || value.code === undefined && typeof value.error === 'string'
               && (value.error === 'Wrong source revision'
                 || value.error.split('; ').includes('Packet superseded')
-                || value.error.includes('Working queue changed; publish a new packet'));
+                || value.error.includes('Working queue changed; publish a new packet')));
             if(typeof value.error==='string')reason=value.error.split(pairing.token).join('[credential]')
               .replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,500);
           } catch (_) { /* Non-JSON error responses retain the HTTP status. */ }

@@ -310,3 +310,55 @@ Ověření zahrnuje export přes 1 MiB přes skutečné HTTP do skutečné schr�
 druhý autosync a úplnou shodu dat po načtení čtečkou IDE; dále případ, kdy by
 odsazovaný JSON překročil souborový limit, a odmítnutí přes limit HTTP podoby
 kvůli escapování českých znaků bez projektové mutace.
+
+## Doplnění 18. 11. 2026 — protokolová verze rozšíření a backendu (AUDIT-B3)
+
+Nález B-VER-04 ([audit B1](../audit-b1-locks-versions-oddities.md#nálezy-b-ver)):
+mezi rozšířením a backendem není deklarovaná protokolová verze. Novější
+rozšíření s novým polem zprávy dostane jen „Invalid message“. Rozšíření přijímá
+pairing `{1, 2}` a neznámou verzi hlásí jako neplatné nebo expirované
+propojení. Stav doplnění: **implemented** (AUDIT-B3-T2, T3; rozšíření 0.5.10), čeká
+na review.
+Obecné pravidlo je v [kontraktu kompatibility](../version-compatibility.md).
+
+Rozhodnutí:
+
+- Protokolová verze je celé číslo, nezávislé na verzi balíčku rozšíření
+  a na `schema_version` souboru pairing. Dnešní chování je protokol 1.
+- Rozšíření posílá v každém HTTP požadavku na backend hlavičku
+  `X-Workspace-Bridge-Protocol: <verze>`. Chybějící hlavička znamená
+  protokol 1, takže dnešní rozšíření funguje beze změny.
+- Backend odpovídá hlavičkou `X-Workspace-Bridge-Protocol: <min>-<max>`.
+  Verzi mimo rozsah odmítne **před** kontrolou polí kódem 426 a JSON
+  `{"error": …, "code": "unsupported_version", "kind": "ide-protocol",
+  "found": N, "supported": [min, max], "update": "backend" | "extension"}`.
+  Hláška bez credentials uvádí, kterou stranu aktualizovat.
+- V rámci jedné protokolové verze zůstávají množiny polí uzavřené, včetně
+  `set(message) <= {…}` v `ide_bridge.py`. Nové pole zprávy nebo nový
+  povinný význam odpovědi vyžaduje novou protokolovou verzi.
+- Akce `connection/exchange` s `action: "extension-update"` se přijímá pro
+  každý protokol od 1 výš, i když je jinak pod minimem. Starší rozšíření se tak
+  vždy může aktualizovat. Updater nadále jen nabízí a instaluje vyšší stabilní
+  verzi stejného rozšíření a nemění pairing.
+- Rozšíření s neznámou novější `schema_version` pairing hlásí: „Propojení
+  vytvořil novější Workspace (schéma N, podporováno 1–2). Aktualizujte
+  rozšíření.“ Neplatný či expirovaný pairing hlásí jako dosud.
+- Typované stavy odpovědí (`queue_refresh_state`, `code: "server_busy"`,
+  `code: "stale_report"`) podle K6 kontraktu se zavádějí v protokolu 1
+  jako **doplňková** pole. Backend ponechává dosavadní text, takže starší
+  rozšíření stav rozpozná. Nové rozšíření bez kódu použije dosavadní
+  rozpoznání textu. Text lze odstranit až zvýšením minima protokolu.
+
+Reuse/adapt: existující `httpRequest`, `Handler.reply`, uzavřené validátory
+zpráv a updater. Nový kanál ani perzistentní stav nevzniká.
+
+Crash boundaries a recovery se nemění. Hlavička i odmítnutí jsou bezstavové,
+vznikají před dispatchem a nezapisují do journalu, Gitu, indexu ani schránky.
+Odmítnutý požadavek lze po aktualizaci strany beze změny opakovat. Idempotence
+podle `message_id` zůstává.
+
+Ověření (AUDIT-B3-T3): starší rozšíření bez hlavičky × nový backend
+(synchronizace, review podle textu, `extension-update`); nové rozšíření × backend
+bez hlavičky a kódu; protokol nad maximem → 426 s `update: backend` bez
+mutace; pod minimem → `update: extension` a stále funkční `extension-update`;
+pairing schema 3 → hláška o novějším Workspace.

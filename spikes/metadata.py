@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """Executable M0 schema and bounded metadata parsing, independent of storage."""
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
 from collections import OrderedDict
 import hashlib
@@ -26,6 +28,7 @@ STATES = {
     'reviews': {'open', 'verified', 'rejected'},
     'tasks': {'open', 'in-progress', 'done', 'cancelled'},
 }
+METADATA_VERSIONS = frozenset({1, 2, 3, 4})
 REQUIRED = {'schema_version', 'id', 'title', 'kind', 'created_at', 'author_id', 'privacy', 'provenance'}
 OPTIONAL = {'description', 'tags', 'source_url', 'relations'}
 IMPORT_REQUIRED = {'imported_at', 'imported_by', 'content_sha256', 'importer'}
@@ -40,6 +43,73 @@ class ValidationError(ValueError):
 def require(condition, message):
     if not condition:
         raise ValidationError(message)
+
+
+# Version compatibility contract K1 (docs/version-compatibility.md): an
+# unknown version is a typed, visible error, checked before any field.
+_SUBJECT = re.compile(r'[A-Za-z0-9._:/@-]{1,200}')
+_UPDATE_TEXT = {'this-node': 'tento Workspace', 'peer': 'protistranu',
+                'extension': 'rozšíření Workspace', 'backend': 'Workspace backend'}
+_seen_versions = ContextVar('unsupported_versions', default=None)
+
+
+class UnsupportedVersion(ValidationError):
+    """A version outside the reader's closed set; never read as an older one."""
+    def __init__(self, kind, found, supported, *, subject=None, update='this-node', older=None):
+        lo, hi = min(supported), max(supported)
+        self.kind = kind
+        self.found = found if type(found) is int else None
+        self.supported = (lo, hi)
+        self.subject = subject if isinstance(subject, str) and _SUBJECT.fullmatch(subject) else None
+        # Only a newer version can be fixed by updating; anything else is invalid data.
+        self.update = (update if self.found is not None and self.found > hi
+                       else older if self.found is not None else None)
+        target = f' {self.subject}' if self.subject else ''
+        shown = self.found if self.found is not None else 'chybí'
+        advice = f' Aktualizujte {_UPDATE_TEXT[self.update]}.' if self.update else ''
+        super().__init__(f'Nepodporovaná verze schématu {shown} pro {kind}{target}; '
+                         f'podporováno {lo}–{hi}.{advice}')
+        seen = _seen_versions.get()
+        if seen is not None:
+            seen.append(self)
+
+    def details(self):
+        return {'error': str(self), 'code': 'unsupported_version', 'kind': self.kind,
+                'subject': self.subject, 'found': self.found,
+                'supported': list(self.supported), 'update': self.update}
+
+
+def require_version(value, supported, kind, *, subject=None, update='this-node'):
+    if type(value) is not int or value not in supported:
+        raise UnsupportedVersion(kind, value, supported, subject=subject, update=update)
+    return value
+
+
+def peer_unsupported_version(body, subject=None):
+    """Translate a peer's typed refusal: the peer is the older side (K3)."""
+    try:
+        value = json.loads(body) if len(body) <= 4096 else None
+    except (ValueError, UnicodeError):
+        return None
+    if not isinstance(value, dict) or value.get('code') != 'unsupported_version':
+        return None
+    kind, found, supported = value.get('kind'), value.get('found'), value.get('supported')
+    if not (isinstance(kind, str) and re.fullmatch(r'[a-z-]{1,40}', kind) and type(found) is int
+            and isinstance(supported, list) and len(supported) == 2
+            and all(type(item) is int for item in supported) and supported[0] <= supported[1]):
+        return None
+    return UnsupportedVersion(kind, found, supported, subject=subject, update='peer')
+
+
+@contextmanager
+def version_error_scope():
+    """Collect typed version errors of one request so a generic reply keeps them."""
+    seen = []
+    token = _seen_versions.set(seen)
+    try:
+        yield seen
+    finally:
+        _seen_versions.reset(token)
 
 
 def uuid(value):
@@ -298,9 +368,10 @@ def frontmatter(data):
 
 def validate_metadata(meta, *, sidecar=False, registry=None):
     require(isinstance(meta, dict), 'Metadata must be an object')
+    require_version(meta.get('schema_version'), METADATA_VERSIONS,
+                    'registry' if registry else 'artifact-metadata', subject=meta.get('id'))
     extra = {'file'} if sidecar else ({'status', 'body'} if registry else set())
     require(REQUIRED | extra <= meta.keys(), 'Missing required metadata')
-    require(type(meta['schema_version']) is int and meta['schema_version'] in {1, 2, 3, 4}, 'Unknown schema version')
     allowed = REQUIRED | OPTIONAL | extra
     if meta['schema_version'] == 2: allowed |= {'import'}
     if meta['schema_version'] == 3: allowed |= {'generation'}
@@ -408,6 +479,14 @@ def validate_snapshot(files):
     return _validate_snapshot(files)
 
 
+def _subject(kind, subject, call):
+    """Name the snapshot entry by its validated path, never by untrusted content."""
+    try:
+        return call()
+    except UnsupportedVersion as exc:
+        raise UnsupportedVersion(kind, exc.found, exc.supported, subject=subject) from None
+
+
 def _validate_snapshot(files, *, metadata_cache=None):
     """Validate artifact/registry projection only; project/node configuration is separate."""
     require(len(files) <= 10000 and sum(len(v) for v in files.values()) <= MAX_SNAPSHOT,
@@ -427,17 +506,19 @@ def _validate_snapshot(files, *, metadata_cache=None):
             groups.setdefault(parts[1], {})[parts[2]] = data
         elif parts[0] == 'registries':
             require(parts[1] in STATES and parts[2].endswith('.json'), 'Invalid registry path')
-            meta = (metadata_cache.metadata(data, registry=parts[1]) if metadata_cache is not None
-                    else validate_metadata(parse_json(data), registry=parts[1]))
+            meta = _subject('registry', f'{parts[1]}/{parts[2][:-5]}', lambda: (
+                metadata_cache.metadata(data, registry=parts[1]) if metadata_cache is not None
+                else validate_metadata(parse_json(data), registry=parts[1])))
             require(parts[2] == meta['id'] + '.json', 'Registry filename must match ID')
             insert(meta)
         else:
             raise ValidationError('Unsupported snapshot path')
     for artifact_id, entries in groups.items():
         if 'metadata.json' in entries:
-            meta = (metadata_cache.metadata(entries['metadata.json'], sidecar=True)
-                    if metadata_cache is not None else
-                    validate_metadata(parse_json(entries['metadata.json']), sidecar=True))
+            meta = _subject('artifact-metadata', artifact_id, lambda: (
+                metadata_cache.metadata(entries['metadata.json'], sidecar=True)
+                if metadata_cache is not None else
+                validate_metadata(parse_json(entries['metadata.json']), sidecar=True)))
             require(set(entries) == {'metadata.json', meta['file']}, 'Missing or extra sidecar content')
             if meta['schema_version'] == 2 and meta['kind'] == 'source':
                 digest = hashlib.sha256(entries[meta['file']]).hexdigest()
@@ -452,8 +533,9 @@ def _validate_snapshot(files, *, metadata_cache=None):
             require(len(entries) == 1, 'Expected one Markdown artifact')
             name, data = next(iter(entries.items()))
             require(name.endswith('.md'), 'Binary artifact needs sidecar')
-            meta = (metadata_cache.metadata(data, markdown=True) if metadata_cache is not None
-                    else validate_metadata(frontmatter(data)))
+            meta = _subject('artifact-metadata', artifact_id, lambda: (
+                metadata_cache.metadata(data, markdown=True) if metadata_cache is not None
+                else validate_metadata(frontmatter(data))))
             require(not (meta['schema_version'] == 2 and meta['kind'] == 'source'),
                     'External v2 source requires sidecar metadata')
         require(meta['id'] == artifact_id, 'Artifact directory must match ID')

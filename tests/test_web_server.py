@@ -159,7 +159,7 @@ class WebTests(unittest.TestCase):
             with patch.object(WebHandler, '_do_GET', side_effect=AssertionError('dispatch')):
                 code, body, _ = self.request(method='GET', path='/', body='')
             self.assertEqual(code, 503)
-            self.assertEqual(json.loads(body), {'error': 'server busy'})
+            self.assertEqual(json.loads(body), {'error': 'server busy', 'code': 'server_busy'})
             self.assertEqual(self.server.http_diagnostics()['admission_rejections'], 1)
         finally:
             for _ in range(self.server.worker_limit):

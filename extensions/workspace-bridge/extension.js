@@ -154,7 +154,9 @@ async function activate(context) {
                     {viewColumn: editor.viewColumn, preserveFocus: true, preview: false});
               }
             }
-            if (result.queue_refresh_error?.startsWith('Queue refresh waits for human review')) {
+            // Typed state first (K6); the text prefix covers backends older than the state.
+            if (result.queue_refresh_state === 'waiting_review' || (result.queue_refresh_state === undefined
+                && result.queue_refresh_error?.startsWith('Queue refresh waits for human review'))) {
               // An intentional review boundary is not a broken connection.
               await bridge.atomic(path.join(mailbox(mapping.session_id), 'STATUS.json'), JSON.stringify({
                 stale: true, waiting_review: true, queue_refresh_error: result.queue_refresh_error,

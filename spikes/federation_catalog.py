@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 from spikes.administration import Administration, AccessDenied, identifier, label
 from spikes.federation_accounts import canonical
 from spikes.http_deadline import DeadlineHTTPSConnection
-from spikes.metadata import require
+from spikes.metadata import peer_unsupported_version, require, require_version
 from spikes.network_backend import private_root
 from spikes.project_replication import _signature, _verify
 from spikes.projects import Projects
@@ -135,12 +135,15 @@ class CatalogStore:
                         'SELECT peer_id,state,detail,updated_at FROM runtime')}
 
 
+CATALOG_VERSIONS = frozenset({1})
+
+
 def validate_catalog(value):
     expected = {'schema_version', 'purpose', 'source_node_id',
                 'recipient_node_id', 'revision', 'projects'}
-    require(isinstance(value, dict) and set(value) == expected
-            and value.get('schema_version') == 1
-            and value.get('purpose') == PURPOSE,
+    require(isinstance(value, dict), 'Invalid project catalog')
+    require_version(value.get('schema_version'), CATALOG_VERSIONS, 'project-catalog')
+    require(set(value) == expected and value.get('purpose') == PURPOSE,
             'Invalid project catalog')
     identifier(value['source_node_id']); identifier(value['recipient_node_id'])
     require(value['source_node_id'] != value['recipient_node_id']
@@ -251,6 +254,9 @@ def synchronize(node, peer_id, *, deployment='desktop', ca=None):
         require(len(response_raw) <= MAX_BODY,
                 'Project catalog response exceeds limit')
         if response.status != 200:
+            typed = peer_unsupported_version(response_raw, subject=peer_id)
+            if typed:
+                raise typed
             raise AccessDenied('Peer rejected project catalog')
         response_envelope = json.loads(response_raw)
     finally:

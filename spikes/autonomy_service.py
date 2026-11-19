@@ -141,7 +141,7 @@ class AutonomyService:
         pending_revision = any(
             item.get('state') == 'pending'
             for item in resumed.get('revision_proposals', []))
-        if (resumed.get('plan_schema_version') == 3
+        if ('revisions' in resumed.get('plan_capabilities', ())
                 and resumed.get('mode') == 'automatic'
                 and resumed.get('steps') and settled and not pending_revision):
             return self.advance(workflow_id)
@@ -552,7 +552,7 @@ class AutonomyService:
     def advance(self, workflow_id):
         current = self._owned(workflow_id)
         node_id, user_id = self._identity()
-        if current.get('plan_schema_version') == 3:
+        if 'revisions' in current.get('plan_capabilities', ()):
             reconciled = self._append_research_planner(current, node_id, user_id)
             reconciled = self._materialize_planner(reconciled, node_id, user_id)
             if (reconciled['plan_revision'] != current['plan_revision']
@@ -566,7 +566,7 @@ class AutonomyService:
                          'project-write'},
             allowed_privacy={'public', 'project', 'confidential', 'local-only'},
             expected_head=workspace.git.head())
-        if result.get('plan_schema_version') == 3:
+        if 'revisions' in result.get('plan_capabilities', ()):
             result = self._append_research_planner(result, node_id, user_id)
             return self._materialize_planner(result, node_id, user_id)
         return self._append_search_continuation(result, node_id, user_id)

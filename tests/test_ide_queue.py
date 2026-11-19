@@ -241,12 +241,16 @@ class QueuePacketTests(unittest.TestCase):
         packet = self.packet(); message = self.message(packet); self.send(message)
         preview = self.act('remove-single-preview', 'TASK-03')
         self.act('remove-single', 'TASK-03', preview_sha256=preview['preview_sha256'])
-        self.assertIn('human review', self.poll()['queue_refresh_error'])
+        waiting = self.poll()
+        self.assertIn('human review', waiting['queue_refresh_error'])
+        self.assertEqual('waiting_review', waiting['queue_refresh_state'])  # typed state, K6
         self.assertTrue(self.qstatus()['items'][0]['reports'][0]['acceptable'])
-        with self.assertRaisesRegex(ValueError, 'Working queue changed'):
+        with self.assertRaisesRegex(ValueError, 'Working queue changed') as stale:
             self.send(self.message(packet))
+        self.assertEqual('stale_report', stale.exception.code)
         self.assertEqual('accepted', self.review(message)['outcome'])
-        self.assertIsNone(self.poll()['queue_refresh_error'])
+        settled = self.poll()
+        self.assertIsNone(settled['queue_refresh_error']); self.assertIsNone(settled['queue_refresh_state'])
         self.assertEqual(['TASK-01', 'TASK-02'], self.qstatus()['task_ids'])
 
     def test_prepared_review_survives_selection_change_before_native_write(self):
@@ -259,7 +263,9 @@ class QueuePacketTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.service.review(None, request, checkpoint=stop)
         self.act('set-flag', 'TASK-03', flag='held', value=True)
-        self.assertIn('prepared review', self.poll()['queue_refresh_error'])
+        waiting = self.poll()
+        self.assertIn('prepared review', waiting['queue_refresh_error'])
+        self.assertEqual('waiting_review', waiting['queue_refresh_state'])
         self.assertEqual('accepted', self.service.review(None, request)['outcome'])
         self.assertIsNone(self.poll()['queue_refresh_error'])
 
