@@ -36,7 +36,7 @@ from spikes.git_transfer import MAX_BUNDLE, git_run
 from spikes.history_validation import validate_histories
 from spikes.sync_retry import automatic_retry
 from spikes.journal import sync_dir
-from spikes.metadata import require
+from spikes.metadata import peer_unsupported_version, require, require_version
 from spikes.network_backend import private_root
 from spikes.project_creation import ProjectCreation
 from spikes.project_replication import _signature, _verify
@@ -247,21 +247,25 @@ def _scope_allows(scope, ref):
     return content_policy_allows(scope, ref)
 
 
+EXCHANGE_VERSIONS = frozenset({2, 3})
+
+
 def validate_exchange(value):
     fields = {'schema_version', 'operation_id', 'project_id', 'source_node_id',
               'recipient_node_id', 'sharing_level', 'scope', 'refs',
               'known_remote_refs', 'bundle_size', 'bundle_sha256',
               'chat_inventory', 'known_remote_chats', 'chat_size',
               'chat_sha256'}
-    if isinstance(value, dict) and value.get('schema_version') == 3:
+    require(isinstance(value, dict), 'Invalid content sync exchange')
+    require_version(value.get('schema_version'), EXCHANGE_VERSIONS, 'content-sync')
+    if value['schema_version'] == 3:
         fields |= {'pool_size', 'pool_sha256'}
         require(type(value.get('pool_size')) is int and 0 < value['pool_size'] <= MAX_POOL_PAYLOAD and
                 isinstance(value.get('pool_sha256'), str) and re.fullmatch(r'[a-f0-9]{64}', value['pool_sha256']),
                 'Invalid pool transfer metadata')
         require(value.get('sharing_level') == 'same-team' and value.get('scope') == {'mode': 'all'},
                 'Pool synchronization requires full same-team project sharing')
-    require(isinstance(value, dict) and set(value) == fields
-            and value['schema_version'] in {2, 3}, 'Invalid content sync exchange')
+    require(set(value) == fields, 'Invalid content sync exchange')
     for field in ('operation_id', 'project_id', 'source_node_id', 'recipient_node_id'):
         identifier(value[field])
     require(value['source_node_id'] != value['recipient_node_id']
@@ -1127,7 +1131,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                 resource=safe_busy_resource(diagnostic.get('busy_resource')),
                 peer_phase=safe_peer_phase(diagnostic.get('peer_phase')))
         if response.status != 200:
-            raise SyncRejected('Peer rejected content sync')
+            typed = peer_unsupported_version(body, subject=peer_id)
+            raise SyncRejected('Peer rejected content sync' + (f': {typed}' if typed else ''))
         response_envelope, response_payload = decode_body(body)
     finally:
         if response is not None:

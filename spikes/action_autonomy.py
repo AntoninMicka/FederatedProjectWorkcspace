@@ -13,7 +13,7 @@ import sqlite3
 from spikes.sqlite_ownership import bounded_connect
 import stat
 
-from spikes.metadata import ValidationError, parse_json, require, uuid
+from spikes.metadata import ValidationError, parse_json, require, require_version, uuid
 from spikes.research_workflow import (validate_research_input,
                                       validate_research_output)
 
@@ -131,9 +131,9 @@ def _validate_typed_value(value, value_type, field):
 
 def parse_action_descriptor(data):
     value = parse_json(data)
-    require(isinstance(value, dict) and type(value.get('schema_version')) is int,
-            'Unsupported autonomy action schema')
-    version = value['schema_version']
+    require(isinstance(value, dict), 'Unsupported autonomy action schema')
+    version = require_version(value.get('schema_version'), {1, 2}, 'autonomy-action',
+                              subject=value.get('action_id'))
     fields = {'schema_version', 'action_id', 'version', 'display_name',
               'effect', 'permissions', 'privacy', 'required_inputs',
               'max_cost_units', 'automatable', 'confirmation'}
@@ -141,8 +141,6 @@ def parse_action_descriptor(data):
         fields |= {'input_types', 'output_types', 'preconditions', 'successors',
                    'execution_boundary'}
     _fields(value, fields, 'action descriptor')
-    require(version in {1, 2},
-            'Unsupported autonomy action schema')
     _identifier(value['action_id'], 'action ID')
     require(isinstance(value['version'], str) and VERSION.fullmatch(value['version']),
             'Invalid autonomy action version')
@@ -349,18 +347,32 @@ def load_action_registry(directory=REVIEWED_ACTIONS):
     return ActionRegistry(descriptors)
 
 
+# Contract K2: behaviour asks for a capability of a known version; an unknown
+# version is rejected before its fields and never runs as plan v1.
+PLAN_CAPABILITIES = {
+    1: frozenset(),
+    2: frozenset({'countdown', 'continuation'}),
+    3: frozenset({'countdown', 'policy', 'revisions'}),
+}
+PLAN_CAPABILITY_FIELDS = {'countdown': 'countdown_seconds', 'continuation': 'continuation',
+                          'policy': 'policy'}
+
+
+def plan_capabilities(plan):
+    return PLAN_CAPABILITIES[require_version(
+        plan.get('schema_version'), PLAN_CAPABILITIES, 'autonomy-plan',
+        subject=plan.get('workflow_id'))]
+
+
 def parse_plan(value, registry, *, allow_materialized=False):
-    require(isinstance(value, dict) and type(value.get('schema_version')) is int,
-            'Unsupported autonomy plan schema')
+    require(isinstance(value, dict), 'Unsupported autonomy plan schema')
+    capabilities = plan_capabilities(value)
     version = value['schema_version']
     fields = {'schema_version', 'workflow_id', 'project_id', 'expected_head',
               'mode', 'privacy', 'budget', 'steps'}
-    if version == 2:
-        fields |= {'countdown_seconds', 'continuation'}
-    elif version == 3:
-        fields |= {'countdown_seconds', 'policy'}
+    fields |= {PLAN_CAPABILITY_FIELDS[name] for name in capabilities
+               if name in PLAN_CAPABILITY_FIELDS}
     _fields(value, fields, 'plan')
-    require(version in {1, 2, 3}, 'Unsupported autonomy plan schema')
     uuid(value['workflow_id']); uuid(value['project_id'])
     require(isinstance(value['expected_head'], str)
             and bool(GIT_HEAD.fullmatch(value['expected_head'])),
@@ -921,11 +933,13 @@ class AutonomyQueue:
                 db.execute('SELECT global_paused FROM settings').fetchone()[0])
             result['mode'] = plan['mode']; result['privacy'] = plan['privacy']
             result['plan_schema_version'] = plan['schema_version']
+            capabilities = plan_capabilities(plan)
+            result['plan_capabilities'] = sorted(capabilities)
             result['policy'] = (deepcopy(plan['policy'])
-                                if plan['schema_version'] == 3 else None)
+                                if 'policy' in capabilities else None)
             result['budget'] = plan['budget']
             result['countdown_seconds'] = (plan['countdown_seconds']
-                if plan['schema_version'] in {2, 3} else self.countdown_seconds)
+                if 'countdown' in capabilities else self.countdown_seconds)
             proposed_activation = digest({
                 'workflow_id': workflow_id, 'plan_digest': row['plan_digest'],
                 'mode': plan['mode'], 'budget': plan['budget']})
@@ -1192,7 +1206,7 @@ class AutonomyQueue:
                     'Autonomy continuation is not active')
             plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
                               allow_materialized=True)
-            require(plan['schema_version'] == 2,
+            require('continuation' in plan_capabilities(plan),
                     'Static autonomy plan cannot append steps')
             stored = db.execute('SELECT state FROM steps WHERE workflow_id=?',
                                 (workflow_id,)).fetchall()
@@ -1320,7 +1334,7 @@ class AutonomyQueue:
             'Another autonomy revision proposal is pending')
         plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
                           allow_materialized=True)
-        require(plan['schema_version'] == 3,
+        require('revisions' in plan_capabilities(plan),
                 'Only a dynamic autonomy plan can be revised')
         require(all(proposal['budget'][key] >= plan['budget'][key]
                     for key in proposal['budget']),
@@ -1422,7 +1436,7 @@ class AutonomyQueue:
                     'Autonomy search step cannot be edited now')
             plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
                               allow_materialized=True)
-            require(plan['schema_version'] == 2, 'Static autonomy step cannot be revised')
+            require('continuation' in plan_capabilities(plan), 'Static autonomy step cannot be revised')
             ordinal = len(plan['steps']) - 1; previous = plan['steps'][ordinal]
             stored = db.execute('SELECT * FROM steps WHERE workflow_id=? AND ordinal=?',
                                 (workflow_id, ordinal)).fetchone()
@@ -1541,7 +1555,7 @@ class AutonomyQueue:
             if candidate is None:
                 require(all(item['state'] == 'completed' for item in stored_steps),
                         'Autonomy workflow has no runnable step')
-                require(plan['schema_version'] != 3,
+                require('revisions' not in plan_capabilities(plan),
                         'Dynamic autonomy plan awaits a revision or explicit finish')
                 db.execute("UPDATE workflows SET state='completed',updated_at=? "
                            "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
@@ -1580,7 +1594,7 @@ class AutonomyQueue:
                            "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
                 return self.get(workflow_id, node_id, user_id)
             countdown_seconds = (plan['countdown_seconds']
-                if plan['schema_version'] in {2, 3} else self.countdown_seconds)
+                if 'countdown' in plan_capabilities(plan) else self.countdown_seconds)
             if (plan['mode'] == 'automatic' and not needs_approval
                     and stored['state'] == 'queued' and countdown_seconds):
                 not_before = (datetime.now(timezone.utc)

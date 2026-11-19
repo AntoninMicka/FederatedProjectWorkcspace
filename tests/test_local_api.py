@@ -289,7 +289,7 @@ class LocalAPITests(unittest.TestCase):
                     errno.ECONNRESET, errno.ENOTCONN, errno.EPIPE})
                 excess = b''
             self.assertIn(b'HTTP/1.0 503', excess)
-            self.assertIn(b'{"error":"server busy"}', excess)
+            self.assertIn(b'{"error":"server busy","code":"server_busy"}', excess)
             self.assertEqual(server.active_worker_count(), 4)
             release.set()
             for client in clients:

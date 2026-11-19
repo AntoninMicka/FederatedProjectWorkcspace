@@ -7,8 +7,8 @@ Datum: 2026-11-18. Úkol AUDIT-B3-T1, nález B-VER-01
 ([audit B1](../audit-b1-locks-versions-oddities.md#nálezy-b-ver)). Zdrojová
 větev `feature/audit-b3-version-compat`, výchozí HEAD `0ac911a`. Kanonický
 Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`, projektový HEAD
-`ec78422`. Rozhodnutí uživatele z 18. 11. 2026. Stav: **designed**,
-implementaci provádí AUDIT-B3-T2.
+`ec78422`. Rozhodnutí uživatele z 18. 11. 2026. Stav: **implemented**
+(AUDIT-B3-T2, T3), čeká na review.
 
 ## Kontext
 

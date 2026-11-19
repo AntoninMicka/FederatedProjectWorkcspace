@@ -25,7 +25,8 @@ from spikes.backend_availability import BackendAvailability
 from spikes.http_admission_policy import LANES, ROUTE_LANES, PROJECT_ROUTES, PROJECT_READ_ROUTES, RESERVED_ROUTES, ACTION_LANES, DIAGNOSTIC_ACTIONS, STREAM_ROUTES, SERVICE_ROUTES, request_lane
 from spikes.request_ownership import BoundedWaitingLane, ConcurrentReadLane, ProjectLanes, ProjectBusy, bounded_project_requests
 
-from spikes.metadata import parse_json, ValidationError
+from spikes import bridge_protocol
+from spikes.metadata import parse_json, UnsupportedVersion, ValidationError, version_error_scope
 
 
 def _accepts_project_gzip(headers):
@@ -51,6 +52,13 @@ MAX_BODY = 4096
 MAX_HTTP_WORKERS = 4
 REQUEST_LANE_TIMEOUT = 2
 SHUTDOWN_GRACE_SECONDS = 225
+
+
+# Typed cross-process state (contract K6); the text stays for older clients.
+SERVER_BUSY = {'error': 'server busy', 'code': 'server_busy'}
+
+# Rejections that may stem from validated content; auth/size/route errors never do.
+VERSION_ERROR_CODES = frozenset({400, 409, 422, 426})
 
 
 class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
@@ -110,7 +118,7 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
     def _reject_request(self, request, *, code=503):
         with self._worker_condition:
             self._admission_rejections += 1
-        payload = b'{"error":"server busy"}' if code == 503 else b'{"error":"request rejected"}'
+        payload = b'{"error":"server busy","code":"server_busy"}' if code == 503 else b'{"error":"request rejected"}'
         try:
             request.settimeout(.1)
             request.sendall(('HTTP/1.0 '+str(code)+' Request Rejected\r\n').encode() +
@@ -268,7 +276,15 @@ class Handler(BaseHTTPRequestHandler):
         reason = 'socket_timeout' if format.startswith('Request timed out') else 'http_error'
         logging.getLogger(__name__).warning('http_request_failed reason=%s', reason)
 
+    def handle_one_request(self):
+        with version_error_scope() as self.version_errors:
+            return super().handle_one_request()
+
     def reply(self, code, payload):
+        seen = getattr(self, 'version_errors', None)
+        if seen and code in VERSION_ERROR_CODES and isinstance(payload, dict):
+            # A route's generic rejection must not hide an unsupported version (K1).
+            payload = dict(payload, **seen[-1].details())
         project_view = code == 200 and self.path == '/v1/projects/open'
         compact = project_view or code == 200 and self.path == '/v1/federation/rss-subscriptions'
         data = (json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode()
@@ -291,6 +307,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Connection', 'close')
         if code == 503:
             self.send_header('Retry-After', '1')
+        if self.path.startswith(bridge_protocol.ROUTE_PREFIX):
+            self.send_header(bridge_protocol.HEADER, bridge_protocol.response_header())
         self.end_headers()
         try:
             self.wfile.write(data)
@@ -353,7 +371,7 @@ class Handler(BaseHTTPRequestHandler):
                     if hasattr(self.server, 'http_diagnostics') else []))
             if typed_busy:
                 raise ProjectBusy('HTTP operation owner is busy', outcome='not-started')
-            return self.reply(503, {'error': 'server busy'})
+            return self.reply(503, SERVER_BUSY)
         try:
             describe(self.request, kind, 'processing')
             return operation()
@@ -366,7 +384,7 @@ class Handler(BaseHTTPRequestHandler):
             slots = None
         if slots is not None and not slots.acquire(blocking=False):
             logging.getLogger(__name__).warning('http_request_busy reason=ui_worker_reserved')
-            return self.reply(503, {'error': 'server busy'})
+            return self.reply(503, SERVER_BUSY)
         try:
             return self._admitted_POST()
         finally:
@@ -473,6 +491,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_error(400)
             request = parse_json(body, self.max_body)
         except (ValidationError, UnicodeError, ValueError):
+            return self.send_error(400)
+        try:
+            bridge_protocol.check(self.path, self.headers, request)
+        except UnsupportedVersion as exc:
+            return self.reply(426, exc.details())
+        except ValueError:
             return self.send_error(400)
         self._dispatch_request(request)
 

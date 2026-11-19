@@ -9,7 +9,7 @@ from pathlib import Path
 
 from spikes.ide_bridge import canonical
 from spikes.ide_bridge_panel import authorize, live, content, descriptors, reviewer
-from spikes.metadata import require, validate_snapshot
+from spikes.metadata import ValidationError, require, validate_snapshot
 from spikes.project_creation import ProjectCreation
 from spikes.task_graph import dependency_start_blockers
 from spikes.task_queue import TaskQueue, assess
@@ -170,6 +170,19 @@ def build_hierarchy(task_ids, nodes):
     return hierarchy, linked, problems
 
 
+class ReviewWait(str):
+    """Human text of an intentional review boundary, typed for the IDE (K6)."""
+    state = 'waiting_review'
+
+
+class StaleReport(ValidationError):
+    """A report for a superseded export; the IDE re-reads instead of failing (K6)."""
+    code = 'stale_report'
+
+
+STALE_BLOCKERS = ('Packet superseded', 'Working queue changed; publish a new packet')
+
+
 def waiting_review(db, session_id, graph):
     completed = {n['id'] for n in graph['nodes'] if n['checked']}
     for message, review in db.execute('SELECT m.record,r.record FROM messages m LEFT JOIN reviews r '
@@ -178,11 +191,11 @@ def waiting_review(db, session_id, graph):
         review = json.loads(review) if review else None
         # Prepared native operations must recover even if the task is now complete.
         if review and review['state'] != 'completed':
-            return ('Queue refresh waits for human review: '
+            return ReviewWait('Queue refresh waits for human review: '
                     f"{message['task_id']} / {message['message_id']} (prepared review; resume it in Workspace)")
         if (message['kind'] in {'completed', 'progress'} and not review
                 and message['task_id'] not in completed):
-            return ('Queue refresh waits for human review: '
+            return ReviewWait('Queue refresh waits for human review: '
                     f"{message['task_id']} / {message['message_id']} (review the report in Workspace)")
     return None
 
@@ -348,7 +361,10 @@ def validate_completion(service, record, message, *, current_head=None):
                 and all(isinstance(v, str) and 0 < len(v.strip()) <= 4096 for v in evidence.values()), 'Completion evidence required')
     value = status(service, record, packet, check_queue=current_head is None)
     require(current_head is None or value['current_head'] == current_head, 'Review HEAD changed')
-    require(not value['blockers'], '; '.join(value['blockers']))
+    if value['blockers']:
+        error = (StaleReport if any(b in STALE_BLOCKERS for b in value['blockers'])
+                 else ValidationError)
+        raise error('; '.join(value['blockers']))
     item = scoped_item(value, message['task_id'])
     require(item['startable' if message['kind'] == 'progress' else 'eligible'],
             message['task_id'] + ': ' + '; '.join(item['blocked_by'] + item['completion_blocked_by'] + item['open_children'])

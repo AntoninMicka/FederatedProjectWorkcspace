@@ -5,7 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # Kontrakt kompatibility verzí a revizí
 
-Stav: **designed** (AUDIT-B3-T1, 18. 11. 2026). Zdrojová větev
+Stav: **designed** (AUDIT-B3-T1), **implemented** (AUDIT-B3-T2, T3), 18. 11. 2026;
+čeká na review. Zdrojová větev
 `feature/audit-b3-version-compat`, výchozí HEAD `0ac911a`. Kanonický Workspace
 projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`, projektový HEAD `ec78422`.
 Kontrakt navazuje na nálezy B-VER-01 až 04 a B-ODD-02
@@ -193,6 +194,28 @@ v journalu zůstává zachovaná a obnova ji dokončí až program, který verzi
 podporuje. Odmítnutý federační příjem nic neaplikuje. Typované kódy K6 a
 protokolová hlavička K7 jsou bezstavové části odpovědí.
 
+## Implementace (AUDIT-B3-T2) a regrese (AUDIT-B3-T3)
+
+| Pravidlo | Implementace |
+|---|---|
+| K1 | `UnsupportedVersion`, `require_version` a `version_error_scope` ve `spikes/metadata.py`. `Handler.reply` (`local_api.py`) doplní chybovou odpověď 400, 409, 422 nebo 426 o typované údaje poslední verzové chyby téhož požadavku, takže je generická hláška routy nepřepíše. Odpovědi 401, 403, 404, 413 a 503 údaje nenesou. |
+| K1 upřesnění | Pole `update` je vyplněné jen u **novější** verze. Nižší, chybějící nebo nečíselná verze jsou neplatná data bez rady k aktualizaci (`update: null`). Výjimkou je protokol K7, kde nižší verze znamená aktualizovat rozšíření. `subject` je jen bezpečný identifikátor; u snapshotu se bere z validované cesty, ne z obsahu. |
+| K2 | `PLAN_CAPABILITIES` a `plan_capabilities()` v `action_autonomy.py`. Pohled na běh vrací `plan_capabilities`. `autonomy_service.py` a UI se ptají na `revisions`, `continuation`, `countdown` a `policy` místo `plan_schema_version == 3`. |
+| K3 | Metadata artefaktu a registru (`validate_metadata`, `_validate_snapshot`), registr uzlu (`Administration.validate`), výměna obsahu (`validate_exchange`), katalog projektů (`validate_catalog`), plán a deskriptor akce. Odesílatel přeloží typované odmítnutí peeru (`peer_unsupported_version`) na `update: peer`: u výměny obsahu jako text stavu `rejected`, u katalogu jako `UnsupportedVersion`. |
+| K6 | `SERVER_BUSY` (`code: server_busy`, i v přímé odpovědi admission), `StaleReport` (`code: stale_report`) a `ReviewWait` → `queue_refresh_state: waiting_review` / `blocked` / `null`. Rozšíření rozhoduje podle kódu a když kód chybí, podle dosavadního textu. |
+| K7 | `spikes/bridge_protocol.py`, kontrola v `_do_POST` před dispatchem, hlavička odpovědi na `/v1/ide-bridge/*`. Rozšíření 0.5.10 posílá `X-Workspace-Bridge-Protocol: 1` a pairing s novějším schématem hlásí jako potřebu aktualizace. |
+
+Regrese: `tests/test_version_compat.py`, která obsahuje fixture R3 (včetně
+nezměněného HEAD a journalu a otevření po návratu verze), fixture R4 (parse
+i uložený běh v4), registr, výměnu obsahu, katalog, překlad odmítnutí peeru
+a protokol rozšíření a backendu přes skutečné HTTP. Dále `tests/ide_bridge.test.js`
+(kód × dosavadní text oběma směry, 426, hlavička, pairing schema 3, typované
+čekání na review) a `tests/test_ide_queue.py` (`queue_refresh_state`,
+`stale_report`). K4 dokládají stávající testy
+`test_monitoring_blocks.BlockTests.test_source_revision_change_preserves_activation_and_invalidates_http_cache`,
+`…test_filter_change_keeps_schedule_and_reloads_unchanged_feed_without_reactivation`
+a `…test_identical_processing_save_recovers_stale_revision_error_without_reactivation`.
+
 ## Konzistence s ADR a federačním kontraktem
 
 | Podklad | Vztah ke kontraktu |
@@ -205,12 +228,16 @@ protokolová hlavička K7 jsou bezstavové části odpovědí.
 
 ## Limity
 
-- Kontrakt je navržený, nikoli implementovaný. Výčet míst v T2 vychází
-  z auditu B1, který neprošel V03 řádek po řádku. Další přesné rovnosti
-  nalezené během T2 spadají pod stejné pravidlo.
-- Přenos kódu `unsupported_version` zpět k odesílateli federačních dat
-  závisí na tom, zda dnešní transport chybovou odpověď předává. T2 to ověří.
-  Pokud ji nepředává, zůstane to zdokumentovaným omezením a nebude se to
-  vydávat za doručené.
+- Výčet míst vychází z auditu B1, který neprošel V03 řádek po řádku.
+  Zbývající `require(schema_version == 1)` u dokumentů a deskriptorů audit
+  hodnotil jako správný kontrakt. Jejich hlášky zatím nejsou typované a pod
+  K1 je převede až další dotčená změna.
+- Odmítnutí peeru se k odesílateli dostane jen přes chybové tělo HTTP
+  (≤ 4 KiB, validovaná pole). Překlad je ověřený jednotkovým testem
+  `peer_unsupported_version`. Průchod do UI přes dvě skutečné instance uzlů
+  ověřený není. Peer starší než tato dávka kód neposílá a odesílatel pak
+  vidí dosavadní obecné odmítnutí.
+- Automatická obnova (`ContentSyncScheduler`) zapisuje typované odmítnutí
+  jen jako text stavu `rejected`. Strojový kód se v uloženém stavu neukládá.
 - Validaci konfigurace externího CMS modulu audit nečetl. Kontrakt pro ni platí
   jako požadavek, nikoli jako ověřený stav.

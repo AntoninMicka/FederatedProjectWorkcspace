@@ -317,7 +317,8 @@ Nález B-VER-04 ([audit B1](../audit-b1-locks-versions-oddities.md#nálezy-b-ver
 mezi rozšířením a backendem není deklarovaná protokolová verze. Novější
 rozšíření s novým polem zprávy dostane jen „Invalid message“. Rozšíření přijímá
 pairing `{1, 2}` a neznámou verzi hlásí jako neplatné nebo expirované
-propojení. Stav doplnění: **designed** (AUDIT-B3-T1), implementace AUDIT-B3-T2.
+propojení. Stav doplnění: **implemented** (AUDIT-B3-T2, T3; rozšíření 0.5.10), čeká
+na review.
 Obecné pravidlo je v [kontraktu kompatibility](../version-compatibility.md).
 
 Rozhodnutí:

@@ -251,7 +251,9 @@ class IdeBridge:
                         t['id'] for t in record['snapshot']['tasks']}, 'Unknown task')
             from spikes.ide_bridge_panel import validate_checklist
             validate_checklist(message, record['snapshot']['tasks'])
-            require(message['revision'] == record['snapshot']['revision'], 'Wrong source revision')
+            if message['revision'] != record['snapshot']['revision']:
+                from spikes.ide_queue import StaleReport
+                raise StaleReport('Wrong source revision')
             require(isinstance(message['repository_commit'], str) and re.fullmatch(
                 r'[0-9a-f]{40}|[0-9a-f]{64}', message['repository_commit']), 'Invalid repository commit')
             from spikes.ide_queue import validate_completion
@@ -294,6 +296,9 @@ class IdeBridge:
             stale = self.projects.repository(record['project_id']).head() != record['snapshot']['commit_id']
         return dict(session_id=record['session_id'], has_queue=load(self, record['session_id']) is not None, stale=stale, receipts=receipts,
                     queue_refresh_error=queue_refresh_error,
+                    # Typed state (K6); the error text remains for older extensions.
+                    queue_refresh_state=(getattr(queue_refresh_error, 'state', 'blocked')
+                                         if queue_refresh_error else None),
                     snapshot=record['snapshot'], repository=record['repository'],
                     instructions=record['instructions'])
 

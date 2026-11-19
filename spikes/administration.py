@@ -20,6 +20,7 @@ from uuid import uuid4, UUID
 
 from spikes.configuration import committed_project, parse_node, read_config, overlap
 from spikes.journal import sync_dir
+from spikes.metadata import require_version
 from spikes.storage import Git
 from spikes.project_creation import ProjectCreation
 from spikes.federation_accounts import (
@@ -27,6 +28,7 @@ from spikes.federation_accounts import (
     validate_replication_spec, validate_spec,
 )
 
+REGISTRY_VERSIONS = frozenset(range(1, 7))
 NODE_ROLES = {'member', 'node-admin', 'federation-admin'}
 PROJECT_ROLES = {'project-admin', 'editor', 'reviewer', 'reader'}
 PEER_RELATIONSHIPS = {'legacy', 'p2p', 'client-server'}
@@ -203,7 +205,9 @@ class Administration:
             yield snapshot
 
     def validate(self, state, node_id):
-        version = state.get('schema_version')
+        if not isinstance(state, dict):
+            raise ValueError('Invalid registry identity/version')
+        version = require_version(state.get('schema_version'), REGISTRY_VERSIONS, 'node-registry')
         expected = {'schema_version', 'node_id', 'users', 'peers'}
         if version in {2, 3, 4, 5, 6}:
             expected.add('mappings')
@@ -211,7 +215,7 @@ class Administration:
             expected.add('replications')
         if version == 6:
             expected.add('project_shares')
-        if set(state) != expected or type(version) is not int or version not in {1, 2, 3, 4, 5, 6} or state['node_id'] != node_id:
+        if set(state) != expected or type(version) is not int or state['node_id'] != node_id:
             raise ValueError('Invalid registry identity/version')
         seen = set()
         for user in state['users']:

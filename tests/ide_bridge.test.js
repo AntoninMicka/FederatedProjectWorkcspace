@@ -131,6 +131,44 @@ test('rejected requests expose a bounded reason and redact credentials without r
   assert.equal(calls,2,'a terminal stale rejection must not retry the batch automatically');
 });
 
+test('typed codes, protocol header and legacy text both classify responses (AUDIT-B3, K6/K7)', async t => {
+  const http=require('node:http');let calls=0, reply=null;const protocols=[];
+  const server=http.createServer((req,res)=>{
+    req.resume();calls++;protocols.push(req.headers['x-workspace-bridge-protocol']);
+    const [status,body]=reply(calls);res.statusCode=status;res.end(JSON.stringify(body));
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const pairing={schema_version:2,connection_id:crypto.randomUUID(),name:'IDE',token:'a'.repeat(43),
+    endpoint:`http://127.0.0.1:${server.address().port}`,expires_at:Math.floor(Date.now()/1000)+1000};
+  // New backend: the machine code decides, whatever the human text says.
+  reply=n=>n<2?[503,{error:'Server je vytížený',code:'server_busy'}]:[200,{ok:true}];
+  assert.deepEqual(await bridge.connectionRequest(pairing,{action:'status'}),{ok:true});
+  assert.equal(calls,2);
+  calls=0;reply=()=>[422,{error:'Report patří k nahrazenému exportu',code:'stale_report'}];
+  await assert.rejects(bridge.connectionRequest(pairing,{action:'exchange'}),e=>e.staleReport===true);
+  // A code wins over a matching legacy text: a different code is not busy or stale.
+  calls=0;reply=()=>[503,{error:'server busy',code:'other'}];
+  await assert.rejects(bridge.connectionRequest(pairing,{action:'status'}),/\(503\)/);assert.equal(calls,1);
+  calls=0;reply=()=>[422,{error:'Wrong source revision',code:'other'}];
+  await assert.rejects(bridge.connectionRequest(pairing,{action:'exchange'}),e=>e.staleReport===false);
+  // Older backend without codes: the legacy text is still recognised.
+  calls=0;reply=()=>[422,{error:'Wrong source revision'}];
+  await assert.rejects(bridge.connectionRequest(pairing,{action:'exchange'}),e=>e.staleReport===true);
+  // Protocol mismatch is shown with the side to update, never retried.
+  calls=0;reply=()=>[426,{error:'Nepodporovaná verze schématu 1 pro ide-protocol; podporováno 2–2. Aktualizujte rozšíření Workspace.',
+    code:'unsupported_version',update:'extension'}];
+  await assert.rejects(bridge.connectionRequest(pairing,{action:'status'}),e=>e.status===426&&/Aktualizujte rozšíření/.test(e.message));
+  assert.equal(calls,1);
+  assert(protocols.every(value=>value==='1'),protocols.join(','));
+});
+test('pairing from a newer Workspace asks to update the extension', () => {
+  const pairing={schema_version:3,connection_id:crypto.randomUUID(),name:'IDE',token:'a'.repeat(43),
+    endpoint:'http://127.0.0.1:1',expires_at:Math.floor(Date.now()/1000)+1000};
+  assert.throws(()=>bridge.validatePairing(pairing),/novější Workspace \(schéma 3, podporováno 1–2\)\. Aktualizujte rozšíření/);
+  assert.throws(()=>bridge.validatePairing({...pairing,schema_version:0}),/Neplatné nebo expirované propojení/);
+});
+
 async function fixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'ide-bridge-'));
   t.after(() => fs.rm(base, {recursive: true, force: true}));
@@ -279,6 +317,8 @@ test('plugin settings map multiple projects and restore them after restart', asy
     await fs.mkdir(path.join(root, 'inbox'), {recursive: true, mode: 0o700});
     await fs.mkdir(path.join(root, 'receipts'), {recursive: true});
     if (missingInbox) { missingInbox = false; await fs.rm(path.join(root, 'inbox'), {recursive: true}); }
+    // 'review' = older backend (text only); 'review-typed' = typed state with a changed text (K6).
+    if (syncMode === 'review-typed') return {queue_refresh_error: 'Fronta čeká na review: TASK-01 / report-id', queue_refresh_state: 'waiting_review', stale: true};
     return {queue_refresh_error: syncMode === 'review' ? 'Queue refresh waits for human review: TASK-01 / report-id (review the report in Workspace)' : null, stale: syncMode === 'review' || syncMode === 'stale' || (syncMode === 'refresh' && child.expected_head !== projects.find(p => p.project_id === child.project_id).expected_head)};
   };
   const vscode = {env: {}, StatusBarAlignment: {Left: 1},
@@ -342,16 +382,18 @@ test('plugin settings map multiple projects and restore them after restart', asy
     assert.match(notices[0].message, pattern);
     assert.equal(statusItems.at(-1).command,'workspaceBridge.sync','failed sync must not redirect to configuration');
   }
-  syncMode = 'review'; notices.length = 0;
-  await commands.get('workspaceBridge.sync')();
-  assert.match(notices[0].message, /2 projektů, 2 zastaralých, 0 chyb/);
-  assert.match(notices[0].message, /čeká na posouzení/);
-  for (const mapping of mappings) {
-    const file = path.join(first.base,'storage','bridge-private','sessions',mapping.session_id,'STATUS.json');
-    const status = JSON.parse(await fs.readFile(file,'utf8'));
-    assert.equal(status.waiting_review,true);
-    assert.match(status.queue_refresh_error, /TASK-01.*report-id/);
-    assert.equal(status.error,undefined);
+  for (const mode of ['review', 'review-typed']) {
+    syncMode = mode; notices.length = 0;
+    await commands.get('workspaceBridge.sync')();
+    assert.match(notices[0].message, /2 projektů, 2 zastaralých, 0 chyb/);
+    assert.match(notices[0].message, /čeká na posouzení/);
+    for (const mapping of mappings) {
+      const file = path.join(first.base,'storage','bridge-private','sessions',mapping.session_id,'STATUS.json');
+      const status = JSON.parse(await fs.readFile(file,'utf8'));
+      assert.equal(status.waiting_review,true);
+      assert.match(status.queue_refresh_error, /TASK-01.*report-id/);
+      assert.equal(status.error,undefined);
+    }
   }
   syncMode = 'ok'; notices.length = 0;
   await commands.get('workspaceBridge.sync')();
