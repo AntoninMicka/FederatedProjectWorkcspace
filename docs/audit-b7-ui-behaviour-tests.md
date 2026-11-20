@@ -142,6 +142,31 @@ selže; ověřeno dočasným vrácením opravy.
    `await`. Statická kontrola [`tests/test_ui_event_handlers.py`](../tests/test_ui_event_handlers.py)
    běží v CI i bez prohlížeče a hlídá, aby se vzor nevrátil.
 
+### Regrese z AUDIT-B6-T1 na webu
+
+Po nasazení hlavy větve hlásilo webové přihlášení „request rejected“. AUDIT-B6-T1
+odstranil skryté tlačítko `#presentation-editor`, ale webový bootstrap
+(`WEB_JS` v `spikes/web_server.py`) ho dál skrýval. Skript tak spadl dřív,
+než zaregistroval obsluhu přihlášení. Formulář se pak odeslal nativně jako
+`GET` s přístupovým klíčem v URL a server ho odmítl. Testy desktopu webový
+bootstrap nespouštějí, proto chybu nezachytily.
+
+Oprava:
+
+- Odkaz na odstraněný prvek je pryč.
+- Webová CSP je sjednocená s desktopem na `form-action 'none'`. Případně
+  rozbitý skript tak klíč do URL nikdy nepošle. Web nativně odesílané
+  formuláře nepoužívá, `method="dialog"` CSP neomezuje.
+- Harness umí webovou variantu (`BrowserPage(web=True)`): skutečný
+  `make_server` přes TLS na loopbacku s vygenerovanou testovací CA.
+- [`tests/test_ui_web_login_browser.py`](../tests/test_ui_web_login_browser.py)
+  ověřuje přihlášení a odmítnutí chybného klíče bez opuštění stránky.
+  Statická kontrola, že oba bootstrapy odkazují jen na existující prvky,
+  běží v CI i bez prohlížeče.
+
+**Doporučení:** přístupový klíč použitý při selhaném přihlášení mohl zůstat
+v historii prohlížeče a v adresním řádku. Pokud to vadí, vyměňte ho.
+
 ## Další zjištění (neopraveno, k rozhodnutí)
 
 - `closeSettings()` (návrat z nastavení na původní záložku) volá jen smoke

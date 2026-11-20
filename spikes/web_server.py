@@ -52,7 +52,6 @@ document.querySelector('#google-drive-local-only').disabled=true;
 document.querySelector('#notebooklm-local-only').disabled=true;
 document.querySelector('#presentation-tab').hidden=true;
 document.querySelector('#outputs-overview-tab').hidden=false;
-document.querySelector('#presentation-editor').hidden=true;
 document.querySelector('#open-federation-network').closest('li').hidden=true;
 document.querySelector('#open-federation-deployment').closest('li').hidden=true;
 let accessKey='';
@@ -531,7 +530,7 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('Referrer-Policy', 'no-referrer')
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
         self.send_header('Connection', 'close')
         self.end_headers()
         self.wfile.write(data)

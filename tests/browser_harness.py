@@ -93,7 +93,7 @@ def ndjson(*events):
 
 
 class _Pipe:
-    def __init__(self, browser, profile):
+    def __init__(self, browser, profile, extra_flags=()):
         commands_read, self._commands = os.pipe()
         self._events, events_write = os.pipe()
 
@@ -104,6 +104,7 @@ class _Pipe:
                  '--no-default-browser-check', '--disable-extensions', '--disable-gpu',
                  '--disable-background-networking', '--window-size=1280,900',
                  '--user-data-dir=' + profile]
+        flags.extend(extra_flags)
         if os.environ.get('CI') == 'true':
             # Ubuntu 24.04 runners restrict the user namespaces Chrome's sandbox
             # needs. The pages are local test fixtures, not untrusted content.
@@ -154,11 +155,16 @@ class _Pipe:
 class BrowserPage:
     """One headless page on the desktop UI; use as a context manager."""
 
-    def __init__(self, api=None, *, node=None, chat_service=None, timeout=20):
+    def __init__(self, api=None, *, node=None, chat_service=None, web=False, timeout=20):
         """``node``: a node.json path for the real backend; without it every
-        unscripted /v1 request gets 404, so the page runs on scripted data only."""
+        unscripted /v1 request gets 404, so the page runs on scripted data only.
+
+        ``web=True`` serves the web variant instead: the real ``make_server``
+        over TLS on loopback with a generated local CA. The page itself sends
+        the access key (``self.access_key``), so nothing is injected; every
+        request goes to the real server and is only recorded."""
         self.api = api or FakeApi()
-        self.node, self.chat_service = node, chat_service
+        self.node, self.chat_service, self.web = node, chat_service, web
         self.timeout = timeout
         self.console = []
         self.exceptions = []
@@ -178,8 +184,10 @@ class BrowserPage:
         self._policy = request_policy
         self._stack = ExitStack()
         try:
+            if self.web:
+                self._start_web()
             projects = None
-            if self.node is not None:
+            if self.node is not None and not self.web:
                 from spikes.administration import Administration
                 from spikes.project_creation import ProjectCreation
                 from spikes.projects import Projects
@@ -187,15 +195,17 @@ class BrowserPage:
                 administration = Administration(self.node, deployment='desktop')
                 administration.bootstrap()
                 projects = Projects(self.node)
-            self.server = self._stack.enter_context(
-                running_api('http', handler=DesktopManagementHandler, projects=projects))
-            if self.node is not None:
+            if not self.web:
+                self.server = self._stack.enter_context(
+                    running_api('http', handler=DesktopManagementHandler, projects=projects))
+            if self.node is not None and not self.web:
                 from spikes.desktop import attach_desktop_services
                 chat = self.chat_service(self.node, projects) if self.chat_service else None
                 attach_desktop_services(self.server, self.node, administration,
                                         chat_service=chat, monitoring=False)
             profile = self._stack.enter_context(tempfile.TemporaryDirectory(prefix='fpw-browser-'))
-            self._pipe = _Pipe(browser, profile)
+            # Only the web variant serves the generated loopback test CA.
+            self._pipe = _Pipe(browser, profile, ['--ignore-certificate-errors'] if self.web else ())
             self._stack.callback(self._pipe.close)
             target = self._call('Target.createTarget', {'url': 'about:blank'})['targetId']
             self._session = self._call('Target.attachToTarget',
@@ -213,6 +223,29 @@ class BrowserPage:
             self._stack.close()
             raise
         return self
+
+    def _start_web(self):
+        import secrets
+        import threading
+        from spikes.network_backend import NetworkBackend
+        from spikes.web_server import make_server
+        tls = NetworkBackend(self.node).generate('127.0.0.1', 8443, '192.168.100.0/24')
+        token = self.node.parent / 'web-access-key'
+        self.access_key = secrets.token_urlsafe(32)
+        token.write_text(self.access_key)
+        token.chmod(0o600)
+        server = make_server('127.0.0.1', 0, '192.168.100.0/24', tls['cert'], tls['key'], token, self.node)
+        thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True)
+        thread.start()
+
+        def stop():
+            server.shutdown()
+            server.monitoring.close()
+            server.server_close()
+            thread.join(5)
+        self._stack.callback(stop)
+        server.origin = f'https://127.0.0.1:{server.server_port}'
+        self.server = server
 
     def __exit__(self, *exc):
         self._stack.close()
@@ -262,6 +295,23 @@ class BrowserPage:
         request, ident = params['request'], params['requestId']
         url, method = request['url'], request['method']
         path = urlsplit(url).path
+        if self.web:
+            # The web page authenticates itself; record and pass everything on.
+            if path.startswith('/v1/'):
+                body = request.get('postData')
+                try:
+                    parsed = json.loads(body) if body else None
+                except ValueError:
+                    parsed = body
+                self.api.requests.append({
+                    'path': path, 'method': method, 'body': parsed,
+                    'network_id': params.get('networkId'),
+                    'authenticated': {name.lower(): value for name, value in request['headers'].items()}
+                    .get('authorization') == 'Bearer ' + self.access_key})
+            elif urlsplit(url).query or method != 'GET':
+                self.api.requests.append({'path': path, 'method': method, 'navigation': url})
+            self._pipe.send('Fetch.continueRequest', {'requestId': ident}, self._session)
+            return
         initiator = self.server.origin + '/' if url.startswith(self.server.origin) else ''
         policy = self._policy(url, initiator, method, self.server.origin)
         if policy == 'allow' or (policy == 'block' and url.startswith(self.server.origin)
