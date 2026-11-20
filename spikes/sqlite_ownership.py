@@ -7,10 +7,15 @@ import sqlite3
 
 from spikes.request_ownership import ProjectBusy, bounded_project_wait, busy_resource_for
 
+# Inside an HTTP request SQLite waits this long for a concurrent writer before
+# reporting typed busy. Local transactions are short; a zero wait turned every
+# background write into a failed request (ADR 0050, addendum AUDIT-B7-T1).
+BOUNDED_SQLITE_WAIT = 2
+
 
 @contextmanager
 def sqlite_connection(database, *, resource, timeout=5, **options):
-    """Do not park HTTP workers on SQLite locks; preserve native transactions.
+    """Wait at most BOUNDED_SQLITE_WAIT in HTTP workers; preserve native transactions.
 
     Only SQLite BUSY/LOCKED become typed busy outcomes. Rollback/close precede
     translation; completed commits and earlier journal stages remain durable.
@@ -19,7 +24,8 @@ def sqlite_connection(database, *, resource, timeout=5, **options):
     bounded = bounded_project_wait.get()
     db = None
     try:
-        db = sqlite3.connect(database, timeout=0 if bounded else timeout, **options)
+        db = sqlite3.connect(database, timeout=min(timeout, BOUNDED_SQLITE_WAIT) if bounded else timeout,
+                             **options)
         with db:
             yield db
     except sqlite3.OperationalError as exc:
@@ -118,13 +124,14 @@ def bounded_connect(database, *, resource='Local SQLite store', timeout=5, **opt
     """Direct sqlite3.connect under the request-local bounded wait (AUDIT-B2-T2, A09).
 
     Outside HTTP requests the connection and its timeout are unchanged. Inside a
-    bounded request SQLite does not wait, and BUSY/LOCKED become ProjectBusy
-    instead of parking the worker for up to the native timeout.
+    bounded request SQLite waits at most BOUNDED_SQLITE_WAIT, and BUSY/LOCKED
+    become ProjectBusy instead of parking the worker for up to the native timeout.
     """
     if not bounded_project_wait.get():
         return sqlite3.connect(database, timeout=timeout, **options)
     if 'factory' in options:
         raise ValueError('Bounded SQLite connection cannot take a custom factory')
-    db = sqlite3.connect(database, timeout=0, factory=_BoundedConnection, **options)
+    db = sqlite3.connect(database, timeout=min(timeout, BOUNDED_SQLITE_WAIT),
+                         factory=_BoundedConnection, **options)
     db.fpw_resource = resource
     return db

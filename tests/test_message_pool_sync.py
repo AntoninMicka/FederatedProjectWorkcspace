@@ -220,7 +220,7 @@ class PoolSyncTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'pool crash'):receiver.receive(env,payload,crash)
         from spikes.sync_diagnostics import snapshot
         diagnostic = snapshot(self.f.nodes[1], self.f.node_ids[0], self.pid)
-        self.assertEqual(diagnostic['phase'], 'receive-publication')
+        self.assertEqual(diagnostic['phase'], 'receive-publication-pool-apply')
         self.assertEqual(diagnostic['state'], 'failed')
         self.assertEqual(self.services[1].pools.export(self.pid),[])
         receiver.receive(env,payload);receiver.receive(env,payload)

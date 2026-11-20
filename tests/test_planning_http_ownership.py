@@ -8,6 +8,8 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+
+from spikes.sqlite_ownership import BOUNDED_SQLITE_WAIT
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -133,7 +135,8 @@ class PlanningHTTPOwnershipTests(unittest.TestCase):
         with service._connect() as db:
             self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 5000)
         with bounded_project_requests(), service._connect() as db:
-            self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 0)
+            self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0],
+                             BOUNDED_SQLITE_WAIT * 1000)
 
     def test_document_open_preserves_external_pending_operation_as_conflict(self):
         pid = self.ids[0]; workspace = self.projects.workspace(pid)

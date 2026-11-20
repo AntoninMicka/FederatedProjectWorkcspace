@@ -739,10 +739,12 @@ def _apply(node, exchange, payload, checkpoint=lambda stage: None,
     if not payload:
         return False
     _verify_bundle(node, exchange, payload, service)
-    return _apply_verified_history(node, exchange, payload, checkpoint, authorize, service)
+    return _apply_verified_history(node, exchange, payload, checkpoint, authorize, service,
+                                   stage='local-publication')
 
 
-def _apply_verified_history(node, exchange, payload, checkpoint, authorize, service):
+def _apply_verified_history(node, exchange, payload, checkpoint, authorize, service,
+                            *, stage='receive-publication'):
     """Publish only the exact bytes whose Git history this call verified.
 
     Receiver admission already validated history before persisting its intent.
@@ -754,12 +756,14 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
     bundle_payload, chats = _verify_incoming_payload(exchange, payload, service)
     pools = _pool_payload(exchange,payload)
     if pools:
+        phase(stage + '-pools')
         authorize()
         from spikes.pool_sync import prepare
         prepare(node,exchange['project_id'],pools,operation_id=exchange['operation_id'],
                 source_node_id=exchange['source_node_id'],checkpoint=checkpoint)
     conflict = False
     if bundle_payload:
+        phase(stage + '-git')
         if _binding(node, exchange['project_id']) is None:
             conflict = _apply_initial(
                 node, exchange, bundle_payload, checkpoint, authorize)
@@ -770,6 +774,7 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
         # The durable inbound request is the cross-store recovery authority.
         # Retry first makes Git idempotently current, then atomically applies
         # chats; a crash between those effects rolls forward from the same bytes.
+        phase(stage + '-chats')
         authorize()
         chats = validate_chat_payload(
             canonical(chats), project_id=exchange['project_id'],
@@ -779,6 +784,7 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
             node, chats, checkpoint=checkpoint)) or conflict
     pools = _pool_payload(exchange, payload)
     if pools and not conflict:
+        phase(stage + '-pool-apply')
         authorize()
         from spikes.pool_sync import apply
         apply(node, exchange['project_id'], pools, checkpoint=checkpoint,

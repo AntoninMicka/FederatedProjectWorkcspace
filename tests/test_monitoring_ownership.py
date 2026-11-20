@@ -8,6 +8,8 @@ import tempfile
 import threading
 import time
 import unittest
+
+from spikes.sqlite_ownership import BOUNDED_SQLITE_WAIT
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -117,7 +119,7 @@ class MonitoringOwnershipTests(unittest.TestCase):
                     self.assertEqual(status, 503, payload)
                     self.assertEqual(payload['outcome'], 'unknown')
                     self.assertEqual(payload['retry'], 'same-operation')
-                    self.assertLess(time.monotonic() - started, 1)
+                    self.assertLess(time.monotonic() - started, BOUNDED_SQLITE_WAIT + 1)
                     self.assertEqual(self.post(server, '/v1/projects/open', {'project_id': self.pid})[0], 200)
                     owner.rollback()
                     self.assertEqual(path.read_bytes(), before)
@@ -126,7 +128,8 @@ class MonitoringOwnershipTests(unittest.TestCase):
             with owner.db() as db:
                 self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 30000)
             with bounded_project_requests(), owner.db() as db:
-                self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 0)
+                self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0],
+                                 BOUNDED_SQLITE_WAIT * 1000)
 
     def test_lazy_services_are_single_flight_and_http_contention_is_bounded(self):
         entered, release = threading.Event(), threading.Event()

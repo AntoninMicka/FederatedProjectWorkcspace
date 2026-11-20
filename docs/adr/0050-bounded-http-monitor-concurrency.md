@@ -622,3 +622,41 @@ Přesný rozsah, zachování historických dat, crash boundaries a ověření:
 [aktuální monitoring a čtení](../current-monitoring-read-isolation.md).
 Toto rozhodnutí neprohlašuje všechny zbývající UI/publikační cesty za
 izolované ani nedokládá fyzickou akceptaci Omnie.
+
+## Doplnění 2026-11-20: krátké čekání na SQLite v HTTP požadavku (AUDIT-B7-T1)
+
+Mění rozhodnutí v sekci „SQLite contention při otevření projektu“, které
+AUDIT-B2-T2 rozšířilo na všechna SQLite úložiště. Uvnitř omezeného HTTP
+požadavku teď SQLite na zámek souběžného zapisovatele počká nejvýš
+`BOUNDED_SQLITE_WAIT` (2 s, [`spikes/sqlite_ownership.py`](../../spikes/sqlite_ownership.py)).
+Teprve potom BUSY/LOCKED přejde do `ProjectBusy`. Nižší nativní timeout
+úložiště (např. 0,1 s u read-only čtení poolů) zůstává.
+
+Důvod: nulové čekání v praxi selhávalo. Na webovém uzlu na routeru běží
+neustále plánovač monitoringu, který krátce zapisuje do úložiště poolů
+a dalších databází. Každá taková kolize okamžitě shodila požadavek. Příjem
+synchronizace obsahu trval přes 2 minuty a skončil
+`SyncBusy busy_resource=sqlite` ve fázi uložení. Další pokus pak začal
+celou práci znovu, takže uživatel viděl „busy“ opakovaně. Lokální
+transakce trvají zlomky sekundy; dvě sekundy pokryjí běžnou kolizi
+a přitom HTTP workera nedrží dlouho.
+
+Beze změny zůstává:
+
+- zámky `flock` (projektový journal, vlastník procesu, registr uzlu) se
+  v HTTP požadavku dál berou bez čekání, protože jejich držitel může běžet
+  dlouho;
+- mimo HTTP požadavek platí původní nativní timeouty;
+- typ výsledku (`ProjectBusy`, `outcome=unknown`) a recovery podle ADR 0003.
+  Rollback nepotvrzené transakce neruší dříve uložený intent.
+
+Diagnostika zároveň pojmenovává úložiště poolů (`message-pools`) a chatů
+(`chat-threads`) místo obecného `sqlite`. Fáze uložení příjmu se dělí na
+podfáze (`receive-publication-pools`, `-git`, `-chats`, `-pool-apply`).
+Log `sync_failed` uvádí trvání každé fáze. Úspěšná synchronizace delší než
+30 s se zapíše jako `sync_slow`.
+
+Odloženo: uložení příjmu na routeru (Git, index, chaty a pooly) může
+trvat déle než 60 s, které čeká odesílatel. Dokončování příjmu na pozadí
+po uložení záměru je navržený samostatný odklad. Rozhodne se o něm podle
+změřených podfází.

@@ -20,6 +20,7 @@ from uuid import uuid4
 
 from scripts import julia_runtime_binding
 from scripts.julia_runtime_binding import main as runtime_binding_cli
+from spikes.sqlite_ownership import BOUNDED_SQLITE_WAIT
 from spikes.julia_cli import main as julia_cli
 from spikes.julia_computation import (BubblewrapSandbox, DirectTestSandbox,
     JuliaExecutor, RUN_SCHEMA, _distribution_digest, validate_computation)
@@ -309,7 +310,7 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             started = time.monotonic()
             with bounded_project_requests(), self.assertRaises(ProjectBusy):
                 service.execute(request, user_id=self.author)
-            self.assertLess(time.monotonic() - started, 1)
+            self.assertLess(time.monotonic() - started, BOUNDED_SQLITE_WAIT + 1)
             owner.rollback()
         record = service.status(self.project_id, operation_id, user_id=self.author)
         self.assertEqual(record['state'], 'prepared')
@@ -319,7 +320,8 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
         with executor.store.connect() as db:
             self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 30000)
         with bounded_project_requests(), executor.store.connect() as db:
-            self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], 0)
+            self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0],
+                             BOUNDED_SQLITE_WAIT * 1000)
 
     def test_julia_http_reports_native_contention_as_unknown_without_dispatch(self):
         import http.client
