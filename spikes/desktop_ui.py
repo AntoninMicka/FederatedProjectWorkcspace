@@ -8467,7 +8467,7 @@ let publicPollRunning=false;
 const linkStatus=document.querySelector('#link-status');
 // AUDIT-B4-T1 (B-ODD-10): a failed poll keeps the last slide but is visible;
 // the console logs only on a state change, never every 300 ms.
-function publicLink(ok,error){if(linkStatus.hidden===ok)return;linkStatus.hidden=ok;document.body.dataset.link=ok?'ok':'lost';if(!ok)console.warn('presentation_public_poll_failed',error);}
+function publicLink(ok,error){if(linkStatus.hidden===ok)return;linkStatus.hidden=ok;if(!ok)console.warn('presentation_public_poll_failed',error);}
 async function poll(){if(document.hidden||publicPollRunning)return;publicPollRunning=true;try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(!response.ok)throw new Error('HTTP '+response.status);render(await response.json());publicLink(true);}catch(error){publicLink(false,error);}finally{publicPollRunning=false;}}
 let ratioFailed=false;
 async function reportDisplayRatio(){if(document.hidden)return;const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{const response=await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});if(!response.ok)throw new Error('HTTP '+response.status);ratioFailed=false;}catch(error){if(!ratioFailed)console.warn('presentation_display_ratio_failed',error);ratioFailed=true;}}

@@ -13,11 +13,11 @@ function element() {
     querySelectorAll() { return []; }, querySelector() { return null; }, setAttribute() {},
     classList: {add() {}, remove() {}, toggle() {}}};
 }
-const screen = element(), link = element(), body = element();
+const screen = element(), link = element();
 link.hidden = true;
 const warnings = [];
 let mode = 'ok';
-const document = {hidden: false, body, createElement: element, addEventListener() {},
+const document = {hidden: false, createElement: element, addEventListener() {},
   querySelector: selector => ({'#screen': screen, '#link-status': link})[selector] || null};
 async function fetch() {
   if (mode === 'throw') throw new TypeError('Failed to fetch');
@@ -37,12 +37,12 @@ const polls = () => warnings.filter(name => name === 'presentation_public_poll_f
 (async () => {
   const steps = [];
   await settle();
-  steps.push(['start', link.hidden, body.dataset.link ?? null, polls()]);
+  steps.push(['start', link.hidden, polls()]);
   for (const [name, next] of [['throw-1', 'throw'], ['throw-2', 'throw'], ['http-503', 'http'], ['recovered', 'ok']]) {
     mode = next;
     await vm.runInContext('poll()', context);
     await settle();
-    steps.push([name, link.hidden, body.dataset.link ?? null, polls()]);
+    steps.push([name, link.hidden, polls()]);
   }
   mode = 'http';
   await vm.runInContext('reportDisplayRatio()', context);

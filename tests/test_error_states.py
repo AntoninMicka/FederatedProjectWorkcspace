@@ -232,11 +232,11 @@ class PublicScreenTests(unittest.TestCase):
                                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         steps = {step[0]: step[1:] for step in json.loads(result.stdout)['steps']}
-        self.assertEqual(steps['start'], [True, None, 0])
-        self.assertEqual(steps['throw-1'], [False, 'lost', 1])
-        self.assertEqual(steps['throw-2'], [False, 'lost', 1], 'repeated failure must not flood the log')
-        self.assertEqual(steps['http-503'], [False, 'lost', 1])
-        self.assertEqual(steps['recovered'], [True, 'ok', 1])
+        self.assertEqual(steps['start'], [True, 0])
+        self.assertEqual(steps['throw-1'], [False, 1])
+        self.assertEqual(steps['throw-2'], [False, 1], 'repeated failure must not flood the log')
+        self.assertEqual(steps['http-503'], [False, 1])
+        self.assertEqual(steps['recovered'], [True, 1])
         self.assertEqual(steps['ratio'], [1])
 
 
