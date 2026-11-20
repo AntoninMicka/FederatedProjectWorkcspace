@@ -37,6 +37,28 @@ class CreationTests(unittest.TestCase):
     def create(self, **kwargs):
         return self.service.create('První projekt', self.root, self.operation, **kwargs)
 
+    def test_author_is_read_without_the_node_writer_lock(self):
+        # AUDIT-B7-T1: concurrent status requests used to fail with
+        # ProjectBusy('node-operations') just to read the local author.
+        import fcntl
+        from spikes.request_ownership import bounded_project_wait
+        first = self.service.author_id()      # creates the author under the lock
+        with open(self.service.runtime / 'writer.lock', 'a+b') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            token = bounded_project_wait.set(True)
+            try:
+                self.assertEqual(ProjectCreation(self.node).author_id(), first)
+            finally:
+                bounded_project_wait.reset(token)
+        self.assertEqual(self.service.author_id(), first)
+
+    def test_missing_author_journal_is_still_created_under_the_lock(self):
+        self.assertFalse(self.service.database.exists())
+        author = self.service.author_id()
+        self.assertTrue(self.service.database.exists())
+        with closing(sqlite3.connect(self.service.database)) as db:
+            self.assertEqual(db.execute('SELECT id FROM local_author').fetchall(), [(author,)])
+
     def seeded(self, **kwargs):
         project_id = kwargs.pop('project_id', str(uuid4()))
         artifact_id = str(uuid4())

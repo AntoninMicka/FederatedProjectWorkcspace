@@ -296,6 +296,13 @@ zahrne každý top-level `tests/test_*.py` právě jednou a vyvažuje shardy pod
 velikosti zdrojů; nejde o paralelní běh ve společném Python procesu. Rozdělení
 lze bez spuštění zkontrolovat přepínačem `--list`.
 
+Behaviorální testy UI (`tests/test_ui_*_browser.py`) řídí headless Chromium
+nebo Chrome jen přes standardní knihovnu Pythonu a skutečný desktopový backend
+s loopback fake Ollamou a SearXNG. Prohlížeč hledají na `PATH`, případně
+v `FPW_BROWSER`. Bez prohlížeče se lokálně přeskočí. CI nastavuje
+`FPW_REQUIRE_BROWSER=1`, takže chybějící prohlížeč je tam selhání. Podrobnosti
+jsou v [AUDIT-B7](docs/audit-b7-ui-behaviour-tests.md).
+
 Testy vytvářejí izolované dočasné repozitáře a SQLite databáze a nemění globální Git konfiguraci. Výchozí sada používá dočasné Unix sockety a porty na `127.0.0.1` pro [lokální API PoC](docs/adr/0006-local-api-transport.md); nepotřebuje internet. Sandbox musí povolit lokální bind, jinak jde o selhání testu. Cíleně: `python3 -m unittest tests.test_local_api -v`. Volitelné [srovnání C++/libgit2](spikes/libgit2/README.md) vyžaduje samostatné sestavení; jeho explicitně zapnutý HTTP test používá pouze loopback a smyšlené credentials. Bez sestaveného probe jsou srovnávací testy označené jako skipped.
 
 Pracovní projekci existujícího projektu lze ověřit bez zápisu:

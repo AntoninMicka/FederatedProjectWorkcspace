@@ -2194,7 +2194,7 @@ function sidebarItemMenu(label,actions,legacyClass=''){
  const items=document.createElement('div');items.className='sidebar-item-menu-items';items.setAttribute('role','menu');
  for(const action of actions){
   const button=document.createElement('button');button.type='button';button.textContent=action.label;button.disabled=Boolean(action.disabled);button.setAttribute('role','menuitem');
-  button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;closeCompactSidebarMenu();await action.run(event.currentTarget);});items.append(button);
+  button.addEventListener('click',async event=>{const eventTarget=event.currentTarget;event.stopPropagation();menu.open=false;closeCompactSidebarMenu();await action.run(eventTarget);});items.append(button);
  }
  menu.append(trigger,items);return menu;
 }
@@ -2499,16 +2499,16 @@ document.querySelector('#google-drive-privacy').addEventListener('change',()=>{
  googleDriveSelection=null;if(googleDrivePoll)clearTimeout(googleDrivePoll);googleDrivePoll=null;resetGoogleDrivePlan();
  googleDriveStatus.textContent='Změnili jste privacy; spusťte nový Drive výběr.';
 });
-document.querySelector('#google-drive-recover').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;googleDriveStatus.textContent='Obnovuji potvrzený Drive import z lokálního stagingu…';
+document.querySelector('#google-drive-recover').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;googleDriveStatus.textContent='Obnovuji potvrzený Drive import z lokálního stagingu…';
  try{const result=await projectRequest('/v1/google-drive/recover',{},180000);
   if(!result.receipt)throw new Error('Žádný potvrzený import nečeká na obnovu.');
   await openRegisteredProject(result.receipt.project_id);
   sidebarArtifactStatus.textContent=`Drive import byl obnoven; ${result.receipt.file_count} souborů bylo publikováno v jednom commitu.`;
- }catch(error){googleDriveStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){googleDriveStatus.textContent=error.message;eventTarget.disabled=false;}
 });
-document.querySelector('#google-drive-select').addEventListener('click',async event=>{
- if(!activeProject)return;event.currentTarget.disabled=true;resetGoogleDrivePlan();setGoogleDriveStep(2,1);
+document.querySelector('#google-drive-select').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!activeProject)return;eventTarget.disabled=true;resetGoogleDrivePlan();setGoogleDriveStep(2,1);
  googleDriveStatus.textContent='Připravuji bezpečné přihlášení přímo u Googlu…';
  try{const result=await projectRequest('/v1/google-drive/authorize',{project_id:activeProject.id,
    expected_head:activeProject.head,privacy:document.querySelector('#google-drive-privacy').value});
@@ -2522,21 +2522,21 @@ document.querySelector('#google-drive-select').addEventListener('click',async ev
   }
   googleDrivePoll=setTimeout(pollGoogleDrive,1000);
  }catch(error){googleDriveStatus.textContent='Přihlášení se nepodařilo zahájit. '+error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 document.querySelector('#google-drive-confirm-check').addEventListener('change',event=>{
  document.querySelector('#google-drive-run').disabled=!event.currentTarget.checked || !googleDrivePlan || googleDrivePlan.blockers.length>0;
  setGoogleDriveStep(event.currentTarget.checked ? 4 : 3,event.currentTarget.checked ? 3 : 2);
 });
-document.querySelector('#google-drive-run').addEventListener('click',async event=>{
+document.querySelector('#google-drive-run').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!googleDrivePlan || !document.querySelector('#google-drive-confirm-check').checked)return;
  if(!googleDriveOperation)googleDriveOperation=crypto.randomUUID();
- event.currentTarget.disabled=true;googleDriveStatus.textContent='Stahuji a atomicky importuji potvrzený výběr…';
+ eventTarget.disabled=true;googleDriveStatus.textContent='Stahuji a atomicky importuji potvrzený výběr…';
  try{const result=await projectRequest('/v1/google-drive/confirm',{
    plan:googleDrivePlan,operation_id:googleDriveOperation},180000);
   const projectId=result.project_id;googleDriveSelection=null;googleDrivePlan=null;googleDriveOperation=null;
   await openRegisteredProject(projectId);sidebarArtifactStatus.textContent=`Z Google Drive bylo importováno ${result.file_count} souborů v jednom commitu.`;
- }catch(error){googleDriveStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){googleDriveStatus.textContent=error.message;eventTarget.disabled=false;}
 });
 document.querySelector('#open-source-import').addEventListener('click',openSourceImport);
 document.querySelector('#google-drive-open-settings').addEventListener('click',async()=>{
@@ -2852,10 +2852,10 @@ async function prepareArtifactDeletion(){
 }
 document.querySelector('#artifact-delete-confirm').addEventListener('change',event=>{document.querySelector('#artifact-delete-run').disabled=!(event.currentTarget.checked&&artifactDeletePreview);});
 document.querySelector('#artifact-delete-cancel').addEventListener('click',hideArtifactDeletion);
-document.querySelector('#artifact-delete-run').addEventListener('click',async event=>{
- if(!artifactDeletePreview||!document.querySelector('#artifact-delete-confirm').checked)return;event.currentTarget.disabled=true;artifactEditorStatus.textContent='Odstraňuji dokument…';
+document.querySelector('#artifact-delete-run').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!artifactDeletePreview||!document.querySelector('#artifact-delete-confirm').checked)return;eventTarget.disabled=true;artifactEditorStatus.textContent='Odstraňuji dokument…';
  try{const projectId=activeProject.id;await projectRequest('/v1/artifacts/delete/confirm',{project_id:projectId,artifact_id:artifactDeletePreview.artifact_id,base_head:artifactDeletePreview.base_head,preview_sha256:artifactDeletePreview.preview_sha256,operation_id:artifactDeleteOperation},120000);artifactEditorItem=null;artifactDeleteOperation=null;await openRegisteredProject(projectId);previewStatus.textContent='Dokument byl odstraněn. Git historie zůstala zachovaná.';}
- catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ catch(error){artifactEditorStatus.textContent=error.message;eventTarget.disabled=false;}
 });
 document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
 window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||presentationEditorDirty||presentationEditorAttempt||juliaEditorDirty||juliaEditorAttempt||conflictDraftChanged()||projectConflictOperation||projectLocalAttempt){event.preventDefault();event.returnValue='';}});
@@ -3234,13 +3234,13 @@ document.querySelector('#project-create-confirm-check').addEventListener('change
  document.querySelector('#project-create-confirm').disabled=!(event.currentTarget.checked&&projectCreationPlan);
 });
 document.querySelector('#project-create-cancel').addEventListener('click',()=>resetProjectCreationPreview('Náhled byl zrušen.'));
-document.querySelector('#project-create-confirm').addEventListener('click',async event=>{
+document.querySelector('#project-create-confirm').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!projectCreationPlan||!document.querySelector('#project-create-confirm-check').checked)return;
- event.currentTarget.disabled=true;createStatus.textContent='Vytvářím projekt…';
+ eventTarget.disabled=true;createStatus.textContent='Vytvářím projekt…';
  try{const result=await projectRequest('/v1/projects/create/confirm',{plan:projectCreationPlan},120000);
   const title=result.title;projectCreationAttempt=null;projectCreationPlan=null;projectCreationLocation=null;projectCreateForm.reset();projectCreatePreview.hidden=true;
   createStatus.textContent=`Projekt „${title}“ byl vytvořen.`;await loadProjects(result.id);
- }catch(error){createStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){createStatus.textContent=error.message;eventTarget.disabled=false;}
 });
 
 const notebookStatus=document.querySelector('#notebooklm-status');
@@ -3518,8 +3518,8 @@ document.querySelector('#notebooklm-choose-target').addEventListener('click',()=
 document.querySelector('#notebooklm-archive').addEventListener('input',()=>resetNotebookArchive());
 notebookSelection.addEventListener('change',()=>resetNotebookPlan('Výběr se změnil. Připravte nový plán.'));
 document.querySelector('#notebooklm-privacy').addEventListener('change',()=>resetNotebookPlan('Privacy se změnila. Připravte nový plán.'));
-document.querySelector('#notebooklm-load').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;notebookStatus.textContent='Kontroluji archiv…';resetNotebookPlan();
+document.querySelector('#notebooklm-load').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;notebookStatus.textContent='Kontroluji archiv…';resetNotebookPlan();
  try{notebookBundle=await projectRequest('/v1/notebooklm/preview',notebookArchiveRequest(),120000);
   notebookSelection.replaceChildren(...notebookBundle.notebooks.map(item=>{
    const option=document.createElement('option');option.value=item.selection_digest;
@@ -3528,10 +3528,10 @@ document.querySelector('#notebooklm-load').addEventListener('click',async event=
   notebookAttempt=null;notebookTargetCapability=null;
   notebookSelection.disabled=false;document.querySelector('#notebooklm-plan').disabled=false;
   notebookStatus.textContent=`Nalezeno ${notebookBundle.notebooks.length} projektů NotebookLM. Vyberte právě jeden.`;
- }catch(error){resetNotebookArchive(error.message);}finally{event.currentTarget.disabled=false;}
+ }catch(error){resetNotebookArchive(error.message);}finally{eventTarget.disabled=false;}
 });
-document.querySelector('#notebooklm-plan').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;
+document.querySelector('#notebooklm-plan').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;
  try{notebookStatus.textContent='Připravuji plán…';
   if(!notebookAttempt)notebookAttempt={operation_id:crypto.randomUUID()};
   notebookPlan=await projectRequest('/v1/notebooklm/plan',{...notebookArchiveRequest(),
@@ -3545,17 +3545,17 @@ document.querySelector('#notebooklm-plan').addEventListener('click',async event=
   const output=document.querySelector('#notebooklm-preview');output.textContent=JSON.stringify(summary,null,2);output.hidden=false;
   document.querySelector('#notebooklm-confirm-row').hidden=false;document.querySelector('#notebooklm-confirm').checked=false;
   document.querySelector('#notebooklm-run').disabled=true;notebookStatus.textContent='Plán je připraven k potvrzení.';
- }catch(error){resetNotebookPlan(error.message);}finally{event.currentTarget.disabled=false;}
+ }catch(error){resetNotebookPlan(error.message);}finally{eventTarget.disabled=false;}
 });
 document.querySelector('#notebooklm-confirm').addEventListener('change',event=>{
  document.querySelector('#notebooklm-run').disabled=!(event.currentTarget.checked&&notebookPlan);});
-document.querySelector('#notebooklm-run').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;notebookStatus.textContent='Importuji projekt…';
+document.querySelector('#notebooklm-run').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;notebookStatus.textContent='Importuji projekt…';
  try{const result=await projectRequest('/v1/notebooklm/confirm',{
    ...notebookArchiveRequest(),plan:notebookPlan},180000);
   notebookStatus.textContent='Projekt byl vytvořen jedním počátečním commitem.';
   notebookPlan=null;await loadProjects(result.id);
- }catch(error){notebookStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){notebookStatus.textContent=error.message;eventTarget.disabled=false;}
 });
 
 """
@@ -3834,17 +3834,17 @@ document.querySelector('#julia-import-file').addEventListener('change',async eve
 });
 document.querySelector('#julia-delete-confirm').addEventListener('change',event=>{document.querySelector('#julia-delete-run').disabled=!(event.currentTarget.checked&&juliaDeletePreview);});
 document.querySelector('#julia-delete-cancel').addEventListener('click',event=>{event.preventDefault();juliaDeleteDialog.close();juliaDeletePreview=null;juliaDeleteOperation=null;juliaToolsStatus.textContent='Odstranění bylo zrušeno.';});
-document.querySelector('#julia-delete-run').addEventListener('click',async event=>{
- if(!juliaDeletePreview||!juliaDeleteOperation)return;event.currentTarget.disabled=true;
+document.querySelector('#julia-delete-run').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!juliaDeletePreview||!juliaDeleteOperation)return;eventTarget.disabled=true;
  try{const result=await projectRequest('/v1/julia/editor/delete/confirm',{operation_id:juliaDeleteOperation,project_id:juliaDeletePreview.project_id,base_head:juliaDeletePreview.base_head,definition_path:juliaDeletePreview.definition_path,preview_sha256:juliaDeletePreview.preview_sha256},120000);juliaDeleteDialog.close();juliaDeletePreview=null;juliaDeleteOperation=null;const projectId=activeProject.id;await openRegisteredProject(projectId);selectSidebarTab(document.querySelector('#tools-tab'));selectMainTab(document.querySelector('#tools-main-tab'));juliaToolsStatus.textContent=`Julia model byl odstraněn v commitu ${result.commit_id||'projektu'}; Git historie zůstala zachovaná.`;}
- catch(error){juliaToolsStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ catch(error){juliaToolsStatus.textContent=error.message;eventTarget.disabled=false;}
 });
-document.querySelector('#julia-preview').addEventListener('click',async event=>{
- const selected=selectedJulia();if(!selected)return;event.currentTarget.disabled=true;
+document.querySelector('#julia-preview').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ const selected=selectedJulia();if(!selected)return;eventTarget.disabled=true;
  try{const prepared=await projectRequest('/v1/julia/preview',{operation_id:crypto.randomUUID(),project_id:activeProject.id,expected_head:activeProject.head,definition_path:selected.definition.path,parameters:juliaParameterValues()});
   juliaPrepared=prepared;const shown={commit:prepared.preview.project_commit,title:prepared.preview.title,privacy:prepared.preview.privacy,parameters:prepared.preview.parameters,outputs:prepared.preview.outputs,runtime:prepared.preview.runtime,effects:prepared.preview.effects,not_included:prepared.preview.not_included,approval_digest:prepared.approval_digest};
   const output=document.querySelector('#julia-preview-value');output.textContent=JSON.stringify(shown,null,2);output.hidden=false;document.querySelector('#julia-run-confirm-row').hidden=false;document.querySelector('#julia-run-confirm').checked=false;juliaStatus.textContent='Náhled je připraven; nic nebylo spuštěno.';
- }catch(error){juliaStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){juliaStatus.textContent=error.message;}finally{eventTarget.disabled=false;}
 });
 document.querySelector('#julia-run-confirm').addEventListener('change',event=>{document.querySelector('#julia-run').disabled=!(event.currentTarget.checked&&juliaPrepared&&!activeProject.readOnly);});
 document.querySelector('#julia-run').addEventListener('click',async event=>{
@@ -3868,7 +3868,7 @@ document.querySelector('#julia-cancel').addEventListener('click',async()=>{try{r
 document.querySelector('#julia-reconcile').addEventListener('click',async()=>{try{renderJuliaRun(await projectRequest('/v1/julia/reconcile',{project_id:activeProject.id,operation_id:juliaRun.operation_id}));}catch(error){juliaStatus.textContent=error.message;}});
 document.querySelector('#julia-output-preview').addEventListener('click',async()=>{try{const result=await projectRequest('/v1/julia/output',{project_id:activeProject.id,operation_id:juliaRun.operation_id,output_name:document.querySelector('#julia-output-name').value});const target=document.querySelector('#julia-output-value');target.textContent=result.preview_available?new TextDecoder().decode(Uint8Array.from(atob(result.content_b64),c=>c.charCodeAt(0))):`Náhled není dostupný; výstup má ${result.output.size} B.`;}catch(error){juliaStatus.textContent=error.message;}});
 document.querySelector('#julia-publish-confirm').addEventListener('change',event=>{document.querySelector('#julia-publish').disabled=!(event.currentTarget.checked&&juliaRun&&!activeProject.readOnly);});
-document.querySelector('#julia-publish').addEventListener('click',async event=>{event.currentTarget.disabled=true;try{const result=await projectRequest('/v1/julia/publish',{publication_id:crypto.randomUUID(),operation_id:juliaRun.operation_id,project_id:activeProject.id,output_name:document.querySelector('#julia-output-name').value,artifact_id:crypto.randomUUID(),title:document.querySelector('#julia-publish-title').value,filename:document.querySelector('#julia-publish-filename').value,expected_head:activeProject.head,privacy:document.querySelector('#julia-publish-privacy').value},120000);juliaStatus.textContent=`Výstup byl publikován v commitu ${result.commit_id||result.result?.commit_id||'projektu'}.`;await openRegisteredProject(activeProject.id);}catch(error){juliaStatus.textContent=error.message;event.currentTarget.disabled=false;}});
+document.querySelector('#julia-publish').addEventListener('click',async event=>{const eventTarget=event.currentTarget;eventTarget.disabled=true;try{const result=await projectRequest('/v1/julia/publish',{publication_id:crypto.randomUUID(),operation_id:juliaRun.operation_id,project_id:activeProject.id,output_name:document.querySelector('#julia-output-name').value,artifact_id:crypto.randomUUID(),title:document.querySelector('#julia-publish-title').value,filename:document.querySelector('#julia-publish-filename').value,expected_head:activeProject.head,privacy:document.querySelector('#julia-publish-privacy').value},120000);juliaStatus.textContent=`Výstup byl publikován v commitu ${result.commit_id||result.result?.commit_id||'projektu'}.`;await openRegisteredProject(activeProject.id);}catch(error){juliaStatus.textContent=error.message;eventTarget.disabled=false;}});
 const presentationTab=document.querySelector('#presentation-tab');
 const outputsOverviewTab=document.querySelector('#outputs-overview-tab');
 const outputsOverviewList=document.querySelector('#outputs-overview-list');
@@ -4181,12 +4181,12 @@ function openBackendReset(backend){
 }
 document.querySelector('#backend-reset-cancel').addEventListener('click',()=>backendResetDialog.close());
 backendResetDialog.addEventListener('close',()=>{backendResetTarget=null;});
-document.querySelector('#backend-reset-confirm').addEventListener('click',async event=>{
- if(!backendResetTarget)return;event.currentTarget.disabled=true;
+document.querySelector('#backend-reset-confirm').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!backendResetTarget)return;eventTarget.disabled=true;
  try{const result=await projectRequest('/v1/backend-catalog/reset',{backend_id:backendResetTarget.backend_id,confirmed:true});
   backendResetDialog.close();renderBackendCatalog(result);await loadBackendBinding();}
  catch(error){document.querySelector('#backend-reset-dialog-text').textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 function renderBackendCatalog(value){
  const body=document.querySelector('#backend-catalog-table tbody');body.replaceChildren();
@@ -4785,29 +4785,29 @@ document.querySelector('#cms-add-domain').addEventListener('click',()=>{if(cmsAc
 document.querySelector('#cms-remove-domain').addEventListener('click',()=>{if(cmsConfig.sites.length<=1)return;const hostname=cmsHostname.value,index=cmsConfig.sites.findIndex(site=>site.hostname===hostname);if(index<0)return;
  cmsConfig.sites.splice(index,1);cmsHostname.options[index].remove();cmsHostname.selectedIndex=Math.min(index,cmsHostname.options.length-1);renderCmsSite();cmsStatus.textContent='Doména byla odebrána z rozepsané konfigurace. Výstup se změní až po potvrzeném generování.';
 });
-document.querySelector('#cms-preview-button').addEventListener('click',async event=>{event.currentTarget.disabled=true;
+document.querySelector('#cms-preview-button').addEventListener('click',async event=>{const eventTarget=event.currentTarget;eventTarget.disabled=true;
  try{saveCmsSiteForm();const request={config:structuredClone(cmsConfig),hostname:cmsHostname.value};cmsStatus.textContent='Generuji izolovaný náhled…';
   const result=await projectRequest('/v1/publication-cms/preview',request,60000);cmsPreview={request,result};cmsGenerationAttempt=null;
   document.querySelector('#cms-request-preview').textContent=JSON.stringify({module_version:result.module_version,hostname:result.hostname,preview_sha256:result.preview_sha256,config:request.config},null,2);
   document.querySelector('#cms-preview-frame').srcdoc=result.html;document.querySelector('#cms-preview').hidden=false;
   document.querySelector('#cms-confirm').checked=false;document.querySelector('#cms-generate-button').disabled=true;cmsStatus.textContent='Náhled je připraven. Výstup ještě nebyl změněn.';
- }catch(error){cmsStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}});
+ }catch(error){cmsStatus.textContent=error.message;}finally{eventTarget.disabled=false;}});
 document.querySelector('#cms-confirm').addEventListener('change',event=>{document.querySelector('#cms-generate-button').disabled=!event.currentTarget.checked || !cmsPreview;});
-document.querySelector('#cms-generate-button').addEventListener('click',async event=>{if(!cmsPreview || !document.querySelector('#cms-confirm').checked)return;
- event.currentTarget.disabled=true;cmsStatus.textContent='Generuji potvrzené statické weby…';
+document.querySelector('#cms-generate-button').addEventListener('click',async event=>{const eventTarget=event.currentTarget;if(!cmsPreview || !document.querySelector('#cms-confirm').checked)return;
+ eventTarget.disabled=true;cmsStatus.textContent='Generuji potvrzené statické weby…';
  if(!cmsGenerationAttempt)cmsGenerationAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsPreview.result.preview_sha256,approved:true,config:cmsPreview.request.config};
  try{const result=await projectRequest('/v1/publication-cms/generate',cmsGenerationAttempt,60000);cmsStatus.textContent=`Vygenerováno ${result.generated_hostnames.length} webů · modul ${result.module_version} · ${result.output}.`;cmsGenerationAttempt=null;}
- catch(error){cmsStatus.textContent=error.message;event.currentTarget.disabled=false;}});
+ catch(error){cmsStatus.textContent=error.message;eventTarget.disabled=false;}});
 document.querySelector('#cms-deployment-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;
  try{const request=Object.fromEntries(new FormData(form));cmsDeploymentStatus.textContent='Ukládám node-local Cloudflare připojení…';
   const result=await projectRequest('/v1/publication-cms/deployment/configure',request);form.elements.api_token.value='';cmsDeploymentStatus.textContent=result.message;await loadCmsDeploymentStatus();
  }catch(error){cmsDeploymentStatus.textContent=error.message;}});
 document.querySelector('#cms-deployment-refresh').addEventListener('click',loadCmsDeploymentStatus);
-document.querySelector('#cms-deployment-preview-button').addEventListener('click',async event=>{event.currentTarget.disabled=true;
+document.querySelector('#cms-deployment-preview-button').addEventListener('click',async event=>{const eventTarget=event.currentTarget;eventTarget.disabled=true;
  try{cmsDeploymentStatus.textContent='Načítám provider stav a připravuji přesný plán…';cmsDeploymentPreview=await projectRequest('/v1/publication-cms/deployment/preview',{});cmsDeploymentAttempt=null;
   document.querySelector('#cms-deployment-request-preview').textContent=JSON.stringify(cmsDeploymentPreview,null,2);document.querySelector('#cms-deployment-preview').hidden=false;
   document.querySelector('#cms-deployment-confirm').checked=false;document.querySelector('#cms-deployment-run').disabled=true;cmsDeploymentStatus.textContent='Plán je připraven. Cloudflare ještě nebyl změněn.';
- }catch(error){cmsDeploymentStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}});
+ }catch(error){cmsDeploymentStatus.textContent=error.message;}finally{eventTarget.disabled=false;}});
 document.querySelector('#cms-deployment-confirm').addEventListener('change',event=>{document.querySelector('#cms-deployment-run').disabled=!event.currentTarget.checked || !cmsDeploymentPreview;});
 document.querySelector('#cms-deployment-run').addEventListener('click',async event=>{if(!cmsDeploymentPreview || !document.querySelector('#cms-deployment-confirm').checked)return;
  event.currentTarget.disabled=true;if(!cmsDeploymentAttempt)cmsDeploymentAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsDeploymentPreview.preview_sha256,approved:true};
@@ -5436,12 +5436,12 @@ function startResourceMonitoring(){
  resourceCapacityTimer=setInterval(()=>loadNodeTelemetry('capacity'),RESOURCE_CAPACITY_INTERVAL);
  backendAvailabilityTimer=setInterval(()=>scheduleBackendStateRefresh(0),BACKEND_AVAILABILITY_INTERVAL);
 }
-document.querySelector('#ollama-runtime-policy-save').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;runtimePolicyStatus.textContent='Ukládám očekávání runtime…';
+document.querySelector('#ollama-runtime-policy-save').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;runtimePolicyStatus.textContent='Ukládám očekávání runtime…';
  try{const result=await projectRequest('/v1/node-telemetry/configure',{
   expected_processor:runtimePolicySelect.value});
   runtimePolicyDirty=false;renderNodeTelemetry(result);}
- catch(error){runtimePolicyStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ catch(error){runtimePolicyStatus.textContent=error.message;}finally{eventTarget.disabled=false;}
 });
 const mainPanelContent=document.querySelector('#main-panel-content');
 const chatMessages=document.querySelector('#chat-messages');
@@ -5754,9 +5754,9 @@ function renderThreadList(threads){
   const items=document.createElement('div');items.className='sidebar-item-menu-items sidebar-chat-menu-items';items.setAttribute('role','menu');
   function action(label,callback,disabled=false){
    const item=document.createElement('button');item.type='button';item.textContent=label;item.disabled=disabled;item.setAttribute('role','menuitem');
-   item.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;
+   item.addEventListener('click',async event=>{const eventTarget=event.currentTarget;event.stopPropagation();menu.open=false;
     if(activeThread?.thread_id!==thread.thread_id)await openStoredThread(thread.thread_id);
-    if(activeThread?.thread_id===thread.thread_id)await callback(event.currentTarget);});
+    if(activeThread?.thread_id===thread.thread_id)await callback(eventTarget);});
    items.append(item);
   }
   action('Zobrazit',async()=>{},!activeProject);
@@ -6387,8 +6387,8 @@ document.querySelector('#search-cancel').addEventListener('click',()=>{
  pendingSearchPreview=null;showSearchApproval(false);
  document.querySelector('#search-confirm-check').checked=false;
 });
-document.querySelector('#search-confirm').addEventListener('click',async event=>{
- if(!pendingSearchPreview)return;event.currentTarget.disabled=true;
+document.querySelector('#search-confirm').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!pendingSearchPreview)return;eventTarget.disabled=true;
  const approvalStatus=document.querySelector('#search-preview-status'),cancel=document.querySelector('#search-cancel');
  approvalStatus.textContent='SearXNG hledá a Ollama zpracovává výsledky…';cancel.disabled=true;
  const preview=pendingSearchPreview.preview;
@@ -6404,7 +6404,7 @@ document.querySelector('#search-confirm').addEventListener('click',async event=>
     'Kolo není konečné. Napište do pole dole vlastní zpřesnění; před odesláním jej zkontrolujete.') :
    'Řízené hledání a syntéza jsou dokončené.';
  }catch(error){approvalStatus.textContent=error.message;
-  offerSearchRecovery(error,preview.binding);event.currentTarget.disabled=false;}
+  offerSearchRecovery(error,preview.binding);eventTarget.disabled=false;}
  finally{cancel.disabled=false;}
 });
 async function preparePublicSource(projection,searchId,source){
@@ -6529,8 +6529,8 @@ document.querySelector('#public-source-cancel').addEventListener('click',()=>{
  pendingPublicSourcePreview=null;document.querySelector('#public-source-preview').hidden=true;
  document.querySelector('#public-source-confirm-check').checked=false;
 });
-document.querySelector('#public-source-confirm').addEventListener('click',async event=>{
- if(!pendingPublicSourcePreview)return;event.currentTarget.disabled=true;
+document.querySelector('#public-source-confirm').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!pendingPublicSourcePreview)return;eventTarget.disabled=true;
  const {request,preview}=pendingPublicSourcePreview;
  chatOperationStatus.textContent='Ověřuji robots.txt a načítám jednu bounded statickou stránku…';
  try{const fetched=await withChatProgress('Načítám a bezpečně zpracovávám zdroj…',()=>
@@ -6544,7 +6544,7 @@ document.querySelector('#public-source-confirm').addEventListener('click',async 
   pendingPublicSourcePreview=null;
   document.querySelector('#public-source-confirm-check').checked=false;
   chatOperationStatus.textContent='Veřejný zdroj byl načten jako inertní nedůvěryhodný text.';
- }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){chatOperationStatus.textContent=error.message;eventTarget.disabled=false;}
 });
 document.querySelector('#chat-new-thread').addEventListener('click',async()=>{
  if(!await canLeaveWorkspaceEditors())return;
@@ -6598,7 +6598,10 @@ async function prepareActiveThreadDeletion(button){
   document.querySelector('#chat-delete-run').disabled=true;
   chatOperationStatus.textContent=preview.blockers.length?
    'Smazání blokuje aktivní nebo neznámý účinek.':'Zkontrolujte rozsah a potvrďte smazání.';
- }catch(error){chatOperationStatus.textContent=error.message;if(button)button.disabled=false;}
+ }catch(error){chatOperationStatus.textContent=error.message;}
+ // Re-enable also after a preview (AUDIT-B7-T1), so a cancelled preview can be
+ // prepared again; the confirmation itself stays behind the checkbox.
+ finally{if(button)button.disabled=false;}
 }
 document.querySelector('#chat-delete-confirm').addEventListener('change',event=>{
  document.querySelector('#chat-delete-run').disabled=!event.currentTarget.checked ||
@@ -6607,8 +6610,8 @@ document.querySelector('#chat-delete-confirm').addEventListener('change',event=>
 document.querySelector('#chat-delete-cancel').addEventListener('click',()=>{
  pendingThreadDeletion=null;document.querySelector('#chat-delete-preview').hidden=true;
 });
-document.querySelector('#chat-delete-run').addEventListener('click',async event=>{
- if(!pendingThreadDeletion)return;event.currentTarget.disabled=true;
+document.querySelector('#chat-delete-run').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!pendingThreadDeletion)return;eventTarget.disabled=true;
  const {preview,operation_id}=pendingThreadDeletion;
  try{await projectRequest('/v1/chat/delete/confirm',{thread_id:preview.thread_id,operation_id,
    expected_revision:preview.expected_revision,preview_sha256:preview.preview_sha256});
@@ -6616,7 +6619,7 @@ document.querySelector('#chat-delete-run').addEventListener('click',async event=
   pendingThreadDeletion=null;activeTaskThreadId=null;taskOutcomes=[];
   document.querySelector('#chat-delete-preview').hidden=true;renderThreadList(knownThreads);renderChat(null);
   chatOperationStatus.textContent='Lokální vlákno a jeho podporovaný navázaný stav byly odstraněny. Git historie zůstala zachovaná.';
- }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){chatOperationStatus.textContent=error.message;eventTarget.disabled=false;}
 });
 function chatBindingLabel(binding){
  const boundary=binding.boundary==='private-network'?'Privátní síť':'Stejný počítač';
@@ -6781,13 +6784,13 @@ document.querySelector('#openai-image-form').addEventListener('submit',async eve
   status.textContent=`OpenAI Images ${result.binding.model} bylo uloženo.`;
  }catch(error){status.textContent=error.message;}
 });
-document.querySelector('#backend-metrics-refresh').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;backendMetricsStatus.textContent='Načítám účetní přehled…';
+document.querySelector('#backend-metrics-refresh').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;backendMetricsStatus.textContent='Načítám účetní přehled…';
  const end=Math.floor(Date.now()/1000),start=end-30*86400;
  try{const report=await projectRequest('/v1/backend-metrics/refresh',{start_time:start,end_time:end},210000);
   renderBackendMetrics({credential:{available:true},report});
  }catch(error){backendMetricsStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 const runBackendNames={'ollama':'Ollama','openai-responses':'OpenAI','atlascloud-text':'AtlasCloud','anthropic-messages':'Claude','gemini-generate':'Gemini','xai-responses':'Grok'};
 let chatRunFilter={backend:'',model:''};
@@ -6953,13 +6956,13 @@ taskInputs.addEventListener('toggle',()=>promptForm.classList.toggle('inputs-ope
 taskInputs.addEventListener('keydown',event=>{
  if(event.key==='Escape'&&taskInputs.open){event.preventDefault();taskInputs.open=false;taskInputs.querySelector('summary').focus();}
 });
-document.querySelector('#chat-mode').addEventListener('change',async event=>{
- pendingChatRequest=null;const mode=event.currentTarget.value;
+document.querySelector('#chat-mode').addEventListener('change',async event=>{const eventTarget=event.currentTarget;
+ pendingChatRequest=null;const mode=eventTarget.value;
  if(mode==='orchestration' && activeThread?.classification==='brainstorming'){
   try{activeThread=await projectRequest('/v1/chat/orchestration',{
     source_thread_id:activeThread.thread_id,thread_id:crypto.randomUUID(),created_at:new Date().toISOString()});
    activeTaskThreadId=activeThread.thread_id;taskOutcomes=[];renderTaskPublicSources();renderChat(activeThread);rememberThread(activeThread);
-  }catch(error){event.currentTarget.value='brainstorming';chatOperationStatus.textContent=error.message;}
+  }catch(error){eventTarget.value='brainstorming';chatOperationStatus.textContent=error.message;}
  }else{activeThread=null;activeTaskThreadId=crypto.randomUUID();taskOutcomes=[];renderTaskPublicSources();renderChat(null);renderThreadList(knownThreads);}
  refreshChatModeControls();
 });
@@ -7060,12 +7063,12 @@ function searchCandidate(){
  if(boundary==='private-network')binding.tls_cert_sha256=normalizeFingerprint(fields.tls_cert_sha256.value);
  return binding;
 }
-document.querySelector('#search-backend-test').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;settingsSearchStatus.textContent='Odesílám pevný testovací dotaz „SearXNG“…';
+document.querySelector('#search-backend-test').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;settingsSearchStatus.textContent='Odesílám pevný testovací dotaz „SearXNG“…';
  try{const result=await projectRequest('/v1/search/test',searchCandidate(),65000);
   settingsSearchStatus.textContent=`SearXNG je dostupné; test vrátil ${result.result_count} bounded výsledků. Uložené nastavení nebylo změněno.`;}
  catch(error){settingsSearchStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 searchForm.addEventListener('submit',async event=>{
  event.preventDefault();settingsSearchStatus.textContent='Ukládám SearXNG binding…';
@@ -7083,8 +7086,8 @@ document.querySelector('#google-drive-config-form').addEventListener('submit',as
    `OAuth klient je uložen · scope drive.file · konfigurace ${result.credential_revision} · ${result.client_id_hint}.`;
  }catch(error){fields.client_secret.value='';settingsGoogleDriveStatus.textContent=error.message;}
 });
-document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
+document.querySelector('#chat-backend-test').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
  try{const result=await projectRequest('/v1/chat/test',backendCandidate(),15000);
   ollamaAvailability={available:true,model_available:result.model_available,
    checked_at:new Date().toISOString()};
@@ -7096,7 +7099,7 @@ document.querySelector('#chat-backend-test').addEventListener('click',async even
    `Ollama je dostupná a model ${result.model} je připraven.` :
    `Ollama je dostupná, ale model ${result.model} není mezi ${result.model_count} dostupnými modely.`;
  }catch(error){ollamaAvailability={available:false,checked_at:new Date().toISOString()};localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 const OLLAMA_CHAT_CATALOG_MIN_INTERVAL=30000;
 let ollamaCatalogRequest=0,ollamaCatalogListKey=null,chatCatalogCheckedAt=0,chatCatalogRefreshing=false;
@@ -7146,16 +7149,16 @@ for(const name of ['boundary','endpoint','target_id','tls_cert_sha256'])chatForm
  document.querySelector('#ollama-model-catalog-status').textContent='Pro načtení modelů doplňte připojení. Model lze zadat ručně.';
 });
 window.addEventListener('focus',()=>{if(!projectView.hidden)refreshChatOllamaCatalog();});
-ollamaStreamingToggle.addEventListener('change',async event=>{
- const requested=event.currentTarget.checked;event.currentTarget.disabled=true;
+ollamaStreamingToggle.addEventListener('change',async event=>{const eventTarget=event.currentTarget;
+ const requested=eventTarget.checked;eventTarget.disabled=true;
  ollamaStreamingState.textContent='Ukládám nastavení streamování…';
  try{const result=await projectRequest('/v1/chat/preferences',{streaming:requested});
   applyOllamaStreamingStatus(result);
- }catch(error){event.currentTarget.checked=ollamaStreaming;
-  event.currentTarget.disabled=!ollamaStreamingSupported;
+ }catch(error){eventTarget.checked=ollamaStreaming;
+  eventTarget.disabled=!ollamaStreamingSupported;
   ollamaStreamingState.textContent=error.message;}
 });
-document.querySelector('#response-language-save').addEventListener('click',async event=>{
+document.querySelector('#response-language-save').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  const scope=document.querySelector('#response-language-scope').value;
  const request={scope,tag:document.querySelector('#response-language-tag').value.trim()};
  if(scope==='project'){
@@ -7166,13 +7169,13 @@ document.querySelector('#response-language-save').addEventListener('click',async
   if(!activeThread){responseLanguageState.textContent='Nejprve otevřete vlákno.';return;}
   request.thread_id=activeThread.thread_id;request.expected_revision=activeThread.revision;
  }
- event.currentTarget.disabled=true;responseLanguageState.textContent='Ukládám jazykovou preferenci…';
+ eventTarget.disabled=true;responseLanguageState.textContent='Ukládám jazykovou preferenci…';
  try{const result=await projectRequest('/v1/chat/response-language',request);
   if(result.thread){activeThread=result.thread;rememberThread(result.thread);renderChat(result.thread);}
   applyResponseLanguageStatus({response_language_policy:result.policy});
   responseLanguageState.textContent=`Uloženo ${result.tag} pro úroveň ${scope}. Model může požadavek nedodržet; výstup se nepřekládá.`;
  }catch(error){responseLanguageState.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 chatForm.addEventListener('submit',async event=>{
  event.preventDefault();const binding=backendCandidate();
@@ -7204,14 +7207,14 @@ document.querySelector('#external-backend-form').addEventListener('submit',async
    `Externí backend ${result.binding.model} byl uložen; klíč server nevrátil.`;}
  catch(error){fields.secret.value='';settingsExternalStatus.textContent=error.message;}
 });
-document.querySelector('#external-load-models').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;settingsExternalStatus.textContent='Načítám dostupné modely…';
+document.querySelector('#external-load-models').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;settingsExternalStatus.textContent='Načítám dostupné modely…';
  try{const result=await projectRequest('/v1/external/models',{});
   fillExternalModels(result);
   const available=(result.offers || []).filter(item=>item.provider_id==='openai'&&item.availability==='available').length;
   settingsExternalStatus.textContent=`Načteno ${available} nabídek pro textový Responses backend · ${result.fetched_at}. ${result.freshness==='stale'?'Zobrazuje se poslední platný stale snapshot.':'Snapshot je aktuální.'} Ruční ID zůstává povoleno.`;
  }catch(error){settingsExternalStatus.textContent=error.message+' Uložené nastavení nebylo změněno.';}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 document.querySelector('#atlascloud-backend-form').elements.offer_id.addEventListener('change',event=>{
  const form=document.querySelector('#atlascloud-backend-form');
@@ -7303,10 +7306,10 @@ for(const adapter of Object.keys(DIRECT_PROVIDERS)){
   finally{button.disabled=false;}
  });
 }
-document.querySelector('#atlascloud-load-models').addEventListener('click',async event=>{
+document.querySelector('#atlascloud-load-models').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  const form=document.querySelector('#atlascloud-backend-form'),fields=form.elements;
  if(!fields.secret.value){settingsAtlasCloudStatus.textContent='Nejprve vložte AtlasCloud API klíč.';return;}
- event.currentTarget.disabled=true;settingsAtlasCloudStatus.textContent='Připojuji a načítám AtlasCloud modely…';
+ eventTarget.disabled=true;settingsAtlasCloudStatus.textContent='Připojuji a načítám AtlasCloud modely…';
  try{const result=await projectRequest('/v1/atlascloud/models',{
    secret:fields.secret.value});
   atlasCloudBinding=result.binding;atlasCloudStreaming=result.capabilities?.streaming===true;
@@ -7314,7 +7317,7 @@ document.querySelector('#atlascloud-load-models').addEventListener('click',async
   const available=(result.model_catalog?.offers || []).filter(item=>item.availability==='available'&&item.freshness==='fresh').length;
   settingsAtlasCloudStatus.textContent=`Načteno ${available} použitelných AtlasCloud nabídek. Vyberte model a uložte backend.`;
  }catch(error){settingsAtlasCloudStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 document.querySelector('#atlascloud-backend-form').addEventListener('submit',async event=>{
  event.preventDefault();const form=event.currentTarget,fields=form.elements;
@@ -7335,26 +7338,26 @@ document.querySelector('#atlascloud-backend-form').addEventListener('submit',asy
   settingsAtlasCloudStatus.textContent=`AtlasCloud ${result.binding.model} byl uložen; klíč server nevrátil.`;
  }catch(error){fields.secret.value='';settingsAtlasCloudStatus.textContent=error.message;}
 });
-document.querySelector('#atlascloud-remove').addEventListener('click',async event=>{
+document.querySelector('#atlascloud-remove').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!confirm('Odstranit AtlasCloud binding i uložený API klíč z tohoto uzlu?'))return;
- event.currentTarget.disabled=true;
+ eventTarget.disabled=true;
  try{const result=await projectRequest('/v1/atlascloud/remove',{confirmed:true});
   atlasCloudBinding=null;atlasCloudStreaming=false;
   fillAtlasCloudOffers(result.model_catalog,null);refreshChatModeControls();
   settingsAtlasCloudStatus.textContent='AtlasCloud binding a klíč byly odstraněny.';
  }catch(error){settingsAtlasCloudStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
-document.querySelector('#model-catalog-export').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;
+document.querySelector('#model-catalog-export').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;
  try{const value=await projectRequest('/v1/model-catalog/knowledge',{});
   document.querySelector('#model-catalog-knowledge').value=JSON.stringify(value,null,2);
   document.querySelector('#model-catalog-status').textContent='Reviewovaná znalostní vrstva byla načtena pro kontrolu.';
  }catch(error){document.querySelector('#model-catalog-status').textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
-document.querySelector('#model-catalog-import').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;
+document.querySelector('#model-catalog-import').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ eventTarget.disabled=true;
  try{const value=JSON.parse(document.querySelector('#model-catalog-knowledge').value);
   const saved=await projectRequest('/v1/model-catalog/import',{expected_revision:value.revision,catalog:value});
   document.querySelector('#model-catalog-knowledge').value=JSON.stringify(saved,null,2);
@@ -7362,7 +7365,7 @@ document.querySelector('#model-catalog-import').addEventListener('click',async e
   const [external,atlas]=await Promise.all([projectRequest('/v1/external/status',{}),projectRequest('/v1/atlascloud/status',{})]);
   fillExternalModels(external.model_catalog);fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
  }catch(error){document.querySelector('#model-catalog-status').textContent=error.message+' Předchozí znalostní vrstva zůstala zachována.';}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 draft.addEventListener('input',()=>{
  const disabled=!activeProject || !draft.value.trim() || !threadWritable();
@@ -7381,7 +7384,7 @@ async function showExternalPreview(request){
   chatOperationStatus.textContent='Externí požadavek ještě nebyl odeslán. Zkontrolujte náhled.';
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
-document.querySelector('#external-preview-button').addEventListener('click',async event=>{
+document.querySelector('#external-preview-button').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
  const selectedOffer=selectedRunOffer();if(!selectedOffer){chatOperationStatus.textContent='Vyberte backend a model.';return;}
  const selectedAdapter=selectedOffer.adapter_id;
@@ -7394,10 +7397,10 @@ document.querySelector('#external-preview-button').addEventListener('click',asyn
  created_at:new Date().toISOString()};
  if(selectedAdapter!=='ollama')request.run_choice=runChoiceForOffer('brainstorming',selectedOffer);
  if(document.querySelector('#provider-web-search').checked)request.provider_web_search=true;
- event.currentTarget.disabled=true;await showExternalPreview(request);
- event.currentTarget.disabled=!activeProject || !draft.value.trim();
+ eventTarget.disabled=true;await showExternalPreview(request);
+ eventTarget.disabled=!activeProject || !draft.value.trim();
 });
-document.querySelector('#external-propose-button').addEventListener('click',async event=>{
+document.querySelector('#external-propose-button').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
  const request={proposal_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
@@ -7405,7 +7408,7 @@ document.querySelector('#external-propose-button').addEventListener('click',asyn
   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
   content:draft.value,privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString()};
- event.currentTarget.disabled=true;chatOperationStatus.textContent='Ollama připravuje návrh externího volání…';
+ eventTarget.disabled=true;chatOperationStatus.textContent='Ollama připravuje návrh externího volání…';
  try{const result=await projectRequest('/v1/external/propose',request,210000);
   pendingExternalProposal={request,result};
   document.querySelector('#external-proposal-purpose').textContent=result.proposal.purpose;
@@ -7421,7 +7424,7 @@ document.querySelector('#external-propose-button').addEventListener('click',asyn
   document.querySelector('#external-proposal').hidden=false;
   chatOperationStatus.textContent='Ollama pouze navrhla výběr. Zkontrolujte nebo upravte jej.';
  }catch(error){chatOperationStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=!activeProject || !draft.value.trim();}
+ finally{eventTarget.disabled=!activeProject || !draft.value.trim();}
 });
 document.querySelector('#external-proposal-use').addEventListener('click',async()=>{
  if(!pendingExternalProposal)return;
@@ -7715,8 +7718,12 @@ async function runChatRecord(button,action){
     artifact_id:crypto.randomUUID(),title:'Výstup z brainstormingu',body:answer.content,
     created_at:new Date().toISOString(),message_ids:[answer.message_id],snapshot_id:null,snapshot_sha256:null});
   }
-  chatOperationStatus.textContent=action==='snapshot'?'Otisk byl uložen do projektu.':'Výstup byl uložen jako editovatelný dokument.';
+  const saved=action==='snapshot'?'Otisk byl uložen do projektu.':'Výstup byl uložen jako editovatelný dokument.';
+  chatOperationStatus.textContent=saved;
   await openRegisteredProject(activeProject.id);selectMainTab(document.querySelector('#chat-tab'));
+  // Reopening the project resets the chat view (AUDIT-B7-T1): load it again so
+  // the saved thread stays open and the result stays visible.
+  await loadChat();chatOperationStatus.textContent=saved;
  }catch(error){chatOperationStatus.textContent=error.message;}
  finally{button.disabled=false;}
 }
@@ -7954,13 +7961,13 @@ document.querySelector('#workflow-opponent-confirm').addEventListener('change',e
  document.querySelector('#workflow-opponent-dispatch').disabled=!event.currentTarget.checked;});
 document.querySelector('#workflow-title').addEventListener('input',()=>{pendingWorkflowPublish=null;});
 document.querySelector('#workflow-publish-step').addEventListener('change',()=>{pendingWorkflowPublish=null;});
-document.querySelector('#workflow-prepare').addEventListener('click',async event=>{
+document.querySelector('#workflow-prepare').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!activeProject || !chatBinding){workflowStatus.textContent='Nejprve otevřete projekt a nastavte lokální backend.';return;}
  const purpose=document.querySelector('#workflow-purpose').value.trim();
  const creatorIds=[...document.querySelectorAll('#workflow-creator-artifacts input:checked')].map(item=>item.value);
  const opponentIds=[...document.querySelectorAll('#workflow-opponent-artifacts input:checked')].map(item=>item.value);
  if(!purpose || !creatorIds.length){workflowStatus.textContent='Zadejte účel a vyberte alespoň jeden creator podklad.';return;}
- event.currentTarget.disabled=true;workflowStatus.textContent='Připravuji přesný creator požadavek…';
+ eventTarget.disabled=true;workflowStatus.textContent='Připravuji přesný creator požadavek…';
  try{const creatorTarget=await workflowTarget(document.querySelector('#workflow-creator-model').value);
   const opponentTarget=await workflowTarget(document.querySelector('#workflow-opponent-model').value);
   pendingWorkflowRequest={schema:'fpw-role-workflow-v1',workflow_id:crypto.randomUUID(),
@@ -7972,7 +7979,7 @@ document.querySelector('#workflow-prepare').addEventListener('click',async event
     role_id:'opponent',role_revision:'opponent-v1',target:opponentTarget,artifact_ids:opponentIds}};
   roleWorkflow=await projectRequest('/v1/workflows/prepare',pendingWorkflowRequest);
   pendingWorkflowRequest=null;renderWorkflow();workflowStatus.textContent='Creator požadavek je připraven k samostatnému potvrzení.';
- }catch(error){workflowStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){workflowStatus.textContent=error.message;}finally{eventTarget.disabled=false;}
 });
 document.querySelector('#workflow-creator-dispatch').addEventListener('click',async event=>{
  const step=workflowStep(1);if(!roleWorkflow || !step)return;event.currentTarget.disabled=true;
@@ -7985,11 +7992,11 @@ document.querySelector('#workflow-creator-dispatch').addEventListener('click',as
   workflowStatus.textContent=error.message+localRunRetryHint(error);
  }
 });
-document.querySelector('#workflow-opponent-prepare').addEventListener('click',async event=>{
- if(!roleWorkflow)return;event.currentTarget.disabled=true;workflowStatus.textContent='Připravuji přesný opponent handoff…';
+document.querySelector('#workflow-opponent-prepare').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
+ if(!roleWorkflow)return;eventTarget.disabled=true;workflowStatus.textContent='Připravuji přesný opponent handoff…';
  try{roleWorkflow=await projectRequest('/v1/workflows/opponent/prepare',{workflow_id:roleWorkflow.workflow_id,
    project_id:activeProject.id});renderWorkflow();workflowStatus.textContent='Opponent handoff je připraven k novému potvrzení.';
- }catch(error){workflowStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){workflowStatus.textContent=error.message;}finally{eventTarget.disabled=false;}
 });
 document.querySelector('#workflow-opponent-dispatch').addEventListener('click',async event=>{
  const step=workflowStep(2);if(!roleWorkflow || !step)return;event.currentTarget.disabled=true;
@@ -8002,17 +8009,17 @@ document.querySelector('#workflow-opponent-dispatch').addEventListener('click',a
   workflowStatus.textContent=error.message+localRunRetryHint(error);
  }
 });
-document.querySelector('#workflow-publish-button').addEventListener('click',async event=>{
+document.querySelector('#workflow-publish-button').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!roleWorkflow || !activeProject)return;const stepId=document.querySelector('#workflow-publish-step').value;
  const step=roleWorkflow.steps.find(item=>item.step_id===stepId);const title=document.querySelector('#workflow-title').value.trim();
  if(!step || !title){workflowStatus.textContent='Vyberte výsledek a zadejte název.';return;}
  if(!pendingWorkflowPublish)pendingWorkflowPublish={workflow_id:roleWorkflow.workflow_id,step_id:step.step_id,
   result_sha256:step.response_sha256,project_id:activeProject.id,expected_head:activeProject.head,
   artifact_id:crypto.randomUUID(),title,created_at:new Date().toISOString(),operation_id:crypto.randomUUID()};
- event.currentTarget.disabled=true;workflowStatus.textContent='Ukládám vybraný workflow výstup do projektu…';
+ eventTarget.disabled=true;workflowStatus.textContent='Ukládám vybraný workflow výstup do projektu…';
  try{await projectRequest('/v1/workflows/publish',pendingWorkflowPublish,120000);const projectId=activeProject.id;
   await openRegisteredProject(projectId);workflowStatus.textContent='Workflow výstup byl uložen do projektu.';
- }catch(error){workflowStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){workflowStatus.textContent=error.message;}finally{eventTarget.disabled=false;}
 });
 let summaryPreview=null,pendingSummaryRequest=null,pendingSummaryPublish=null;
 const summaryStatus=document.querySelector('#summary-status');
@@ -8043,7 +8050,7 @@ document.querySelector('#summary-kind').addEventListener('change',event=>{
  pendingSummaryRequest=null;summaryPreview=null;summaryPreviewElement.replaceChildren();
  document.querySelector('#summary-publish-controls').hidden=true;
 });
-document.querySelector('#summary-generate').addEventListener('click',async event=>{
+document.querySelector('#summary-generate').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!activeProject || !chatBinding){summaryStatus.textContent='Nejprve otevřete projekt a nastavte lokální backend.';return;}
  const kind=document.querySelector('#summary-kind').value;
  try{
@@ -8066,7 +8073,7 @@ document.querySelector('#summary-generate').addEventListener('click',async event
     target:chatBinding,selection,focus:focusText?{input_id:crypto.randomUUID(),content:focusText,
      privacy:document.querySelector('#summary-focus-privacy').value}:null};
   }
-  event.currentTarget.disabled=true;summaryStatus.textContent='Připravuji souhrn…';
+  eventTarget.disabled=true;summaryStatus.textContent='Připravuji souhrn…';
   const result=await projectRequest('/v1/summary/preview',pendingSummaryRequest,210000);
   summaryPreview=result;pendingSummaryRequest=null;pendingSummaryPublish=null;renderSummary(result.response);
   document.querySelector('#summary-publish-controls').hidden=false;
@@ -8075,9 +8082,9 @@ document.querySelector('#summary-generate').addEventListener('click',async event
   if([409,422,502].includes(error.status))pendingSummaryRequest=null;
   summaryStatus.textContent=error.message+localRunRetryHint(error);
  }
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
-document.querySelector('#summary-publish').addEventListener('click',async event=>{
+document.querySelector('#summary-publish').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!summaryPreview || !activeProject)return;
  try{
   const title=document.querySelector('#summary-title').value.trim();
@@ -8086,12 +8093,12 @@ document.querySelector('#summary-publish').addEventListener('click',async event=
    preview_sha256:summaryPreview.response_sha256,project_id:activeProject.id,
    expected_head:activeProject.head,artifact_id:crypto.randomUUID(),title,
    created_at:new Date().toISOString(),operation_id:crypto.randomUUID()};
-  event.currentTarget.disabled=true;summaryStatus.textContent='Ukládám souhrn do projektu…';
+  eventTarget.disabled=true;summaryStatus.textContent='Ukládám souhrn do projektu…';
   await projectRequest('/v1/summary/publish',pendingSummaryPublish);
   const projectId=activeProject.id;summaryStatus.textContent='Souhrn byl uložen do projektu.';
   await openRegisteredProject(projectId);
  }catch(error){summaryStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 let extractionPreview=null,pendingExtractionRequest=null,pendingExtractionPublish=null;
 const extractionStatus=document.querySelector('#extraction-status');
@@ -8110,7 +8117,7 @@ function renderExtractionSources(){
 document.querySelector('#extraction-kind').addEventListener('change',event=>{
  document.querySelector('#extraction-artifacts').hidden=event.target.value!=='artifacts';clearExtraction();
 });
-document.querySelector('#extraction-generate').addEventListener('click',async event=>{
+document.querySelector('#extraction-generate').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!activeProject || !chatBinding){extractionStatus.textContent='Nejprve otevřete projekt a nastavte lokální backend.';return;}
  try{
   const kind=document.querySelector('#extraction-kind').value;let selection;
@@ -8128,7 +8135,7 @@ document.querySelector('#extraction-generate').addEventListener('click',async ev
    role_id:'extractor',role_revision:'extractor-v1',target:chatBinding,schema_id:schemaId,
    schema_revision:schemaRevision,selection,focus:focusText?
    {input_id:crypto.randomUUID(),content:focusText,privacy:document.querySelector('#extraction-focus-privacy').value}:null};
-  event.currentTarget.disabled=true;extractionStatus.textContent='Připravuji extrakci…';
+  eventTarget.disabled=true;extractionStatus.textContent='Připravuji extrakci…';
   const result=await projectRequest('/v1/extraction/preview',pendingExtractionRequest,210000);
   extractionPreview=result;pendingExtractionRequest=null;pendingExtractionPublish=null;
   extractionPreviewElement.textContent=JSON.stringify(JSON.parse(result.response),null,2);
@@ -8137,18 +8144,18 @@ document.querySelector('#extraction-generate').addEventListener('click',async ev
  }catch(error){
   if([409,422,502].includes(error.status))pendingExtractionRequest=null;
   extractionStatus.textContent=error.message+localRunRetryHint(error);
- }finally{event.currentTarget.disabled=false;}
+ }finally{eventTarget.disabled=false;}
 });
-document.querySelector('#extraction-publish').addEventListener('click',async event=>{
+document.querySelector('#extraction-publish').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!extractionPreview || !activeProject)return;
  try{const title=document.querySelector('#extraction-title').value.trim();if(!title)throw new Error('Zadejte název extrakce.');
   if(!pendingExtractionPublish)pendingExtractionPublish={task_id:extractionPreview.task_id,
    preview_sha256:extractionPreview.response_sha256,project_id:activeProject.id,expected_head:activeProject.head,
    artifact_id:crypto.randomUUID(),title,created_at:new Date().toISOString(),operation_id:crypto.randomUUID()};
-  event.currentTarget.disabled=true;extractionStatus.textContent='Ukládám extrakci do projektu…';
+  eventTarget.disabled=true;extractionStatus.textContent='Ukládám extrakci do projektu…';
   await projectRequest('/v1/extraction/publish',pendingExtractionPublish);const projectId=activeProject.id;
   extractionStatus.textContent='Extrakce byla uložena do projektu.';await openRegisteredProject(projectId);
- }catch(error){extractionStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){extractionStatus.textContent=error.message;}finally{eventTarget.disabled=false;}
 });
 let metadataPreview=null,pendingMetadataRequest=null,pendingMetadataPublish=null;
 const metadataStatus=document.querySelector('#metadata-status');
@@ -8164,7 +8171,7 @@ function renderMetadataSources(){
   option.textContent=item.title;select.append(option);}
 }
 document.querySelector('#metadata-artifact').addEventListener('change',clearMetadata);
-document.querySelector('#metadata-generate').addEventListener('click',async event=>{
+document.querySelector('#metadata-generate').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!activeProject || !chatBinding){metadataStatus.textContent='Nejprve otevřete projekt a nastavte lokální backend.';return;}
  const artifactId=document.querySelector('#metadata-artifact').value;
  if(!artifactId){metadataStatus.textContent='Vyberte jeden artefakt.';return;}
@@ -8174,7 +8181,7 @@ document.querySelector('#metadata-generate').addEventListener('click',async even
    project_id:activeProject.id,expected_head:activeProject.head,role_id:'metadata-advisor',
    role_revision:'metadata-advisor-v1',target:chatBinding,
    selection:{kind:'artifacts',artifact_ids:[artifactId]},focus:null,metadata_input_id:crypto.randomUUID()};
-  event.currentTarget.disabled=true;metadataStatus.textContent='Připravuji návrh metadat…';
+  eventTarget.disabled=true;metadataStatus.textContent='Připravuji návrh metadat…';
   const result=await projectRequest('/v1/metadata-suggestions/preview',pendingMetadataRequest,210000);
   metadataPreview=result;pendingMetadataRequest=null;pendingMetadataPublish=null;
   document.querySelector('#metadata-description-before').textContent='Původní: '+(result.diff.description.before || 'bez popisu');
@@ -8192,9 +8199,9 @@ document.querySelector('#metadata-generate').addEventListener('click',async even
  }catch(error){
   if([409,422,502].includes(error.status))pendingMetadataRequest=null;
   metadataStatus.textContent=error.message+localRunRetryHint(error);
- }finally{event.currentTarget.disabled=false;}
+ }finally{eventTarget.disabled=false;}
 });
-document.querySelector('#metadata-publish').addEventListener('click',async event=>{
+document.querySelector('#metadata-publish').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!metadataPreview || !activeProject)return;
  try{const applyDescription=document.querySelector('#metadata-apply-description').checked;
   const tags=[...document.querySelectorAll('#metadata-tag-list input:checked')].map(item=>item.value);
@@ -8203,11 +8210,11 @@ document.querySelector('#metadata-publish').addEventListener('click',async event
    preview_sha256:metadataPreview.response_sha256,project_id:activeProject.id,
    expected_head:activeProject.head,artifact_id:document.querySelector('#metadata-artifact').value,
    apply_description:applyDescription,tags,operation_id:crypto.randomUUID()};
-  event.currentTarget.disabled=true;metadataStatus.textContent='Ukládám potvrzená metadata…';
+  eventTarget.disabled=true;metadataStatus.textContent='Ukládám potvrzená metadata…';
   await projectRequest('/v1/metadata-suggestions/publish',pendingMetadataPublish);
   const projectId=activeProject.id;metadataStatus.textContent='Vybraná metadata byla uložena.';
   await openRegisteredProject(projectId);
- }catch(error){metadataStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){metadataStatus.textContent=error.message;}finally{eventTarget.disabled=false;}
 });
 let imageApproval=null,imageResult=null,pendingImageRequest=null,pendingImagePublish=null;
 const imageStatus=document.querySelector('#image-status');
@@ -8229,7 +8236,7 @@ document.querySelector('#image-adapter').addEventListener('change',()=>{clearIma
 for(const id of ['image-prompt','image-size','image-quality','image-seed','image-privacy']){
  document.querySelector('#'+id).addEventListener('input',clearImage);
 }
-document.querySelector('#image-preview-button').addEventListener('click',async event=>{
+document.querySelector('#image-preview-button').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!activeProject){imageStatus.textContent='Nejprve otevřete projekt.';return;}
  const adapter=document.querySelector('#image-adapter').value;
  const prompt=document.querySelector('#image-prompt').value;
@@ -8241,14 +8248,14 @@ document.querySelector('#image-preview-button').addEventListener('click',async e
   quality:adapter==='comfyui'?'auto':document.querySelector('#image-quality').value,
   seed:adapter==='comfyui'?Number(document.querySelector('#image-seed').value):null,
   privacy:document.querySelector('#image-privacy').value};
- event.currentTarget.disabled=true;imageStatus.textContent='Připravuji požadavek bez volání provideru…';
+ eventTarget.disabled=true;imageStatus.textContent='Připravuji požadavek bez volání provideru…';
  try{imageApproval=await projectRequest('/v1/media/preview',pendingImageRequest);
   document.querySelector('#image-request-json').textContent=JSON.stringify(imageApproval,null,2);
   document.querySelector('#image-request-preview').hidden=false;
   document.querySelector('#image-confirm').checked=false;document.querySelector('#image-dispatch').disabled=true;
   imageStatus.textContent='Požadavek je připraven. Provider ještě nebyl zavolán.';
  }catch(error){pendingImageRequest=null;imageStatus.textContent=error.message;}
- finally{event.currentTarget.disabled=false;}
+ finally{eventTarget.disabled=false;}
 });
 document.querySelector('#image-confirm').addEventListener('change',event=>{
  document.querySelector('#image-dispatch').disabled=!event.currentTarget.checked || !imageApproval;
@@ -8271,7 +8278,7 @@ document.querySelector('#image-dispatch').addEventListener('click',async event=>
    'PNG byl validován, ale překročil 4 MiB limit UI náhledu. Původní bajty lze uložit do projektu.';
  }catch(error){imageStatus.textContent=error.message;}
 });
-document.querySelector('#image-publish').addEventListener('click',async event=>{
+document.querySelector('#image-publish').addEventListener('click',async event=>{const eventTarget=event.currentTarget;
  if(!imageResult || !activeProject)return;
  const title=document.querySelector('#image-title').value.trim();
  if(!title){imageStatus.textContent='Vyplňte název artefaktu.';return;}
@@ -8279,11 +8286,11 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
   result_sha256:imageResult.result_sha256,project_id:activeProject.id,
   expected_head:activeProject.head,artifact_id:crypto.randomUUID(),title,
   created_at:new Date().toISOString(),operation_id:crypto.randomUUID(),privacy:imageResult.privacy};
- event.currentTarget.disabled=true;imageStatus.textContent='Ukládám původní validovaný PNG do projektu…';
+ eventTarget.disabled=true;imageStatus.textContent='Ukládám původní validovaný PNG do projektu…';
  try{const projectId=activeProject.id;
   await projectRequest('/v1/media/publish',pendingImagePublish,120000);
   imageStatus.textContent='Obrázek byl uložen do projektu.';await openRegisteredProject(projectId);
- }catch(error){imageStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){imageStatus.textContent=error.message;eventTarget.disabled=false;}
 });
 refreshImageAdapter();
 if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}

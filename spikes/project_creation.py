@@ -244,8 +244,34 @@ class ProjectCreation:
 
     def author_id(self):
         """Reuse the durable local author, never substitute the node UUID."""
+        author = self._committed_author()
+        if author is not None:
+            return author
         with self._locked() as db:
             return db.execute('SELECT id FROM local_author').fetchone()[0]
+
+    def _committed_author(self):
+        """Read the author without the node writer lock (AUDIT-B7-T1).
+
+        The row is inserted once, in a committed and synced transaction under
+        the exclusive lock, and never changes. Reading it is not an operation
+        of the node, so concurrent status requests must not collide on the
+        writer lock. Anything unusual (no journal, no row, a hot journal that a
+        read-only connection cannot roll back, a lock) returns None and the
+        caller takes the locked path, which creates or recovers the row.
+        """
+        try:
+            if self.node_path != self.node_path.resolve():
+                return None
+            regular(self.database)
+            db = sqlite3.connect(f'{self.database.as_uri()}?mode=ro', uri=True, timeout=0)
+            try:
+                row = db.execute('SELECT id FROM local_author').fetchone()
+            finally:
+                db.close()
+        except (OSError, ValueError, sqlite3.Error):
+            return None
+        return row[0] if row else None
 
     def _save(self, db, record, *, done=False):
         db.execute('INSERT OR REPLACE INTO creations VALUES (?, ?, ?)',

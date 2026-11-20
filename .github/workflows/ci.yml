@@ -47,6 +47,10 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run unit-test shard
+        env:
+          # Behavioural UI tests drive the preinstalled Chrome; a missing
+          # browser must fail the run instead of silently skipping them.
+          FPW_REQUIRE_BROWSER: "1"
         run: |
           python scripts/test_shards.py --shard "${{ matrix.shard }}" --shards 4
 
