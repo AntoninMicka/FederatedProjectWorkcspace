@@ -88,50 +88,6 @@ AUTONOMY_VALIDATION_ERRORS = {
 }
 
 
-def scan_gamepads():
-    """Return a safe, Linux-specific list of likely joystick/gamepad devices."""
-    base = Path('/dev/input')
-    if not base.exists():
-        return {'available': False, 'devices': [], 'message': 'Linux /dev/input není dostupné.'}
-    matches = []
-    for entry in sorted(base.iterdir(), key=lambda p: p.name):
-        if not entry.name.startswith('event'):
-            continue
-        path = str(entry)
-        name = entry.name
-        labels = [name]
-        try:
-            result = subprocess.run(
-                ['udevadm', 'info', '--query=property', '--name=' + path],
-                capture_output=True, text=True, check=False, timeout=2)
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            result = None
-        if result and result.returncode == 0:
-            for line in result.stdout.splitlines():
-                if '=' not in line:
-                    continue
-                key, value = line.split('=', 1)
-                if key in {'ID_INPUT_JOYSTICK', 'ID_INPUT_GAMEPAD', 'ID_INPUT_KEYBOARD', 'DEVNAME'}:
-                    labels.append(f'{key}={value}')
-                    if key in {'ID_INPUT_JOYSTICK', 'ID_INPUT_GAMEPAD'} and value in {'1', 'true', 'True'}:
-                        matches.append(path)
-        if any(token in ' '.join(labels).lower() for token in ('gamepad', 'joystick', 'controller', 'pad')):
-            matches.append(path)
-    devices = []
-    seen = set()
-    for path in sorted(set(matches)):
-        device_name = path.rsplit('/', 1)[-1]
-        if path in seen:
-            continue
-        seen.add(path)
-        devices.append({'path': path, 'name': device_name})
-    return {
-        'available': bool(devices),
-        'devices': devices,
-        'message': 'Nalezeno gamepad/joystick zařízení.' if devices else 'Nebyl nalezen žádný gamepad/joystick.'
-    }
-
-
 def presentation_deck():
     """Return a small presenter deck for desktop projection demo."""
     return {
@@ -422,24 +378,9 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="form-actions"><button id="project-repair-confirm" type="button" disabled>Provést potvrzenou opravu</button>
 <button id="project-repair-cancel" type="button" class="secondary-button">Zrušit náhled</button></div>
 </section></section></div>
-<div id="legacy-home-diagnostics" hidden aria-hidden="true">
-<details class="diagnostics"><summary>Ověření spojení</summary>
-<button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
-<details class="diagnostics"><summary>Gamepad demo</summary>
-<button id="gamepad-scan" type="button">Vyhledat gamepad</button>
-<p id="gamepad-status" role="status">Stav: zatím bez skenování.</p>
-<ul id="gamepad-list" aria-live="polite"></ul>
-</details>
-<details id="presentation-mode" class="diagnostics presentation-panel"><summary>Promítání prezentace</summary>
-<button id="presentation-start" type="button">Spustit prezentaci</button>
-<button id="presentation-editor" type="button">Editor prezentací…</button>
-<button id="presentation-open" type="button">Otevřít presenter</button>
-<button id="presentation-prev" type="button" disabled aria-label="Předchozí slide">Předchozí</button>
-<button id="presentation-next" type="button" disabled aria-label="Další slide">Další</button>
-<button id="presentation-fullscreen" type="button" disabled>Celá obrazovka</button>
-<p id="presentation-status" role="status">Stav: prezentace není spuštěna.</p>
-<div id="presentation-slide" tabindex="0" aria-live="polite">Zde se zobrazí aktuální slide.</div>
-</details>
+<!-- Hidden JS-to-backend round trip; desktop --smoke clicks #increment and reads #count. -->
+<div id="smoke-diagnostics" hidden aria-hidden="true">
+<button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p>
 </div>
 <div id="project-create-view" hidden>
 <header><span class="badge">Nový projekt</span><span>Samostatný průvodce vytvořením</span></header>
@@ -560,8 +501,10 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <h2 id="settings-backend-title">Podporované backendy</h2>
 <p>Backend může poskytovat modely, obraz, hledání, import úložiště nebo metriky zdrojů.</p>
 <div class="settings-table-wrap"><table id="backend-catalog-table"><thead><tr><th>Backend</th><th>Služby</th><th>Stav</th><th>Akce</th></tr></thead><tbody></tbody></table></div>
-<div id="backend-settings-legacy" hidden>
-<hr><h2>Lokální AI backend</h2>
+<!-- Hidden home of every backend settings group; the backend catalog dialog moves the
+     groups of one backend into itself and returns them on close. -->
+<div id="backend-settings-forms" hidden>
+<section class="backend-settings-group" data-backend-settings="ollama"><h3>Lokální AI backend</h3>
 <p id="settings-backend-status" role="status" aria-live="polite">Načítám stav lokálního backendu…</p>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
@@ -583,7 +526,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="chat-backend-test" type="button">Ověřit bez uložení</button>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu, stabilní ID cíle a připnutý certifikát. Test načte pouze seznam modelů; neposílá projektová data a nastavení neukládá. Tajné klíče se zde nezobrazují.</small>
-<hr><h2>Řízené webové hledání</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="searxng"><h3>Řízené webové hledání</h3>
 <p id="settings-search-status" role="status" aria-live="polite">SearXNG zatím nebylo načteno.</p>
 <form id="search-backend-form">
 <label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
@@ -595,7 +539,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="search-backend-test" type="button">Ověřit veřejným testovacím dotazem</button>
 <button type="submit">Uložit SearXNG</button></form>
 <small>Test odešle pouze pevný veřejný dotaz „SearXNG“. Projektová data se neodesílají. Skutečný dotaz se odešle až po kontrole přesného náhledu a potvrzení; obsah „Jen na tomto počítači“ se odmítne.</small>
-<hr><h2>Google Drive import</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="google-drive"><h3>Google Drive import</h3>
 <p id="settings-google-drive-status" role="status" aria-live="polite">Připojení zatím nebylo načteno.</p>
 <details class="oauth-setup-guide"><summary>Jak připravit první přihlášení</summary>
 <ol><li id="google-drive-client-guide">Načítám správný typ OAuth klienta pro tuto aplikaci.</li>
@@ -607,7 +552,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>OAuth client secret <input name="client_secret" type="password" minlength="8" maxlength="512" autocomplete="new-password" required></label>
 <button type="submit">Uložit Google OAuth klienta</button></form>
 <small>Použije se pouze per-file scope <code>drive.file</code>. OAuth klient a tokeny zůstanou v soukromém stavu uzlu mimo projektový Git; secret se po uložení vymaže a backend jej nevrací.</small>
-<hr><h2>Lokální obrazový backend ComfyUI</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="comfyui"><h3>Lokální obrazový backend ComfyUI</h3>
 <p id="settings-comfy-status" role="status">Načítám nastavení ComfyUI…</p>
 <form id="comfy-backend-form">
 <label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
@@ -621,7 +567,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
 <button type="submit">Uložit ComfyUI</button></form>
 <small>Uloží se pouze verzovaný API workflow. Při generování lze měnit jen prompt, rozměry a seed; custom workflow od LLM se nespouští.</small>
-<hr><h2>Externí textový backend</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="openai-responses"><h3>Externí textový backend</h3>
 <p id="settings-external-status" role="status" aria-live="polite">Načítám stav externího backendu…</p>
 <form id="external-backend-form">
 <label>Provider <input value="OpenAI Responses API" disabled></label>
@@ -644,7 +591,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p><a class="provider-link" href="https://platform.openai.com/api-keys">Vytvořit nebo spravovat klíč u OpenAI ↗</a></p>
 <button type="submit">Uložit externí backend</button></form>
 <small>Správa klíče se otevře v systémovém prohlížeči; workspace nevidí přihlášení ani vytvořený klíč. Klíč sem potom vložíte jednou, po odeslání se vymaže z formuláře a server jej nikdy nevrací. Externí volání bude dostupné až po samostatném náhledu a potvrzení.</small>
-<hr><h2>AtlasCloud textový backend</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="atlascloud-text"><h3>AtlasCloud textový backend</h3>
 <p id="settings-atlascloud-status" role="status" aria-live="polite">Načítám stav AtlasCloud…</p>
 <form id="atlascloud-backend-form">
 <label>Provider <input value="AtlasCloud text API" disabled></label>
@@ -659,7 +607,9 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p><a class="provider-link" href="https://www.atlascloud.ai/dashboard/api-keys">Vytvořit nebo spravovat klíč u AtlasCloud ↗</a></p>
 <button type="submit">Uložit AtlasCloud backend</button>
 <button id="atlascloud-remove" type="button" hidden>Odstranit AtlasCloud binding a klíč</button></form>
-<hr><h2>Claude textový backend</h2>
+<small>Modely, protokol a capabilities se načítají z živého AtlasCloud katalogu. Backendový profil určuje providerová pravidla konkrétní nabídky; uložení stále vyžaduje výslovný výběr a nevytváří fallback.</small>
+</section>
+<section class="backend-settings-group" data-backend-settings="anthropic-messages"><h3>Claude textový backend</h3>
 <p id="settings-anthropic-messages-status" role="status" aria-live="polite">Načítám stav Claude…</p>
 <form id="anthropic-messages-backend-form" class="direct-backend-form" data-adapter="anthropic-messages">
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
@@ -672,7 +622,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p><a class="provider-link" href="https://platform.claude.com/settings/keys">Vytvořit nebo spravovat klíč u Claude ↗</a></p>
 <button type="submit">Uložit Claude backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Claude binding a klíč</button></form>
-<hr><h2>Gemini textový backend</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="gemini-generate"><h3>Gemini textový backend</h3>
 <p id="settings-gemini-generate-status" role="status" aria-live="polite">Načítám stav Gemini…</p>
 <form id="gemini-generate-backend-form" class="direct-backend-form" data-adapter="gemini-generate">
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
@@ -685,7 +636,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p><a class="provider-link" href="https://aistudio.google.com/apikey">Vytvořit nebo spravovat klíč u Gemini ↗</a></p>
 <button type="submit">Uložit Gemini backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Gemini binding a klíč</button></form>
-<hr><h2>Grok textový backend</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="xai-responses"><h3>Grok textový backend</h3>
 <p id="settings-xai-responses-status" role="status" aria-live="polite">Načítám stav Grok…</p>
 <form id="xai-responses-backend-form" class="direct-backend-form" data-adapter="xai-responses">
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
@@ -698,20 +650,20 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p><a class="provider-link" href="https://console.x.ai/team/default/api-keys">Vytvořit nebo spravovat klíč u Grok ↗</a></p>
 <button type="submit">Uložit Grok backend</button>
 <button class="direct-remove" type="button" hidden>Odstranit Grok binding a klíč</button></form>
-<small>Modely, protokol a capabilities se načítají z živého AtlasCloud katalogu. Backendový profil určuje providerová pravidla konkrétní nabídky; uložení stále vyžaduje výslovný výběr a nevytváří fallback.</small>
-<hr><h2>OpenAI Images</h2>
+</section>
+<section class="backend-settings-group" data-backend-settings="openai-responses"><h3>OpenAI Images</h3>
 <p id="settings-openai-image-status" role="status">Obrazový binding zatím nebyl načten.</p>
 <form id="openai-image-form"><label>Model <input name="model" value="gpt-image-1" maxlength="128" required></label>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
 <button type="submit">Uložit obrazový binding</button></form>
 <small>Použije uložený OpenAI credential, ale samostatný Images endpoint, model a binding. Klíč se do formuláře ani odpovědi nevrací.</small>
-<section id="backend-metrics" hidden><hr><h2>Spotřeba a náklady OpenAI</h2>
+<section id="backend-metrics" hidden><h3>Spotřeba a náklady OpenAI</h3>
 <p id="backend-metrics-status" role="status">Účetní přehled zatím nebyl načten.</p>
 <form id="backend-metrics-form"><label>OpenAI Admin API klíč
 <input name="secret" type="password" autocomplete="new-password" maxlength="4096"></label>
 <button type="submit">Uložit administrátorský klíč</button>
 <button id="backend-metrics-refresh" type="button">Načíst posledních 30 dní</button></form>
-<pre id="backend-metrics-report" hidden></pre></section></div>
+<pre id="backend-metrics-report" hidden></pre></section></section></div>
 <dialog id="backend-settings-dialog" aria-labelledby="backend-settings-dialog-title"><h2 id="backend-settings-dialog-title">Nastavit backend</h2>
 <div id="backend-settings-dialog-body"></div><p id="backend-settings-dialog-status" role="status" aria-live="polite"></p>
 <button id="backend-settings-dialog-close" type="button">Zavřít</button></dialog>
@@ -1335,8 +1287,6 @@ h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#62718
 button{border:0;border-radius:8px;background:#176b60;color:white;font-weight:600;padding:12px 18px;cursor:pointer}
 button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
-#gamepad-list{list-style:none;padding-left:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
-#gamepad-list li{background:#edf7f4;border:1px solid #d2e5e0;border-radius:8px;padding:8px 12px;color:#1f3a41}
 .home-heading,.settings-heading{margin-top:28px}.home-heading h1{font-size:38px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}.form-section{margin:14px 0;padding:12px;border:1px solid #dce3e9;border-radius:10px;background:#f8fbfc}.form-section h3{margin:0 0 8px}.compact-list{max-height:220px;overflow:auto;padding-left:22px}.compact-list li{margin:5px 0;overflow-wrap:anywhere}
 .settings-card .settings-toggle{display:flex;align-items:center;gap:9px}.settings-card .settings-toggle input{width:auto}
@@ -1363,7 +1313,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
-.settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}
+.settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form,#backend-settings-dialog-body .backend-settings-group+.backend-settings-group{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}#backend-settings-dialog-body .backend-settings-group>h3{margin:0 0 8px}#backend-settings-dialog-body .backend-settings-group>small{display:block;margin-top:8px}
 .task-queue-list{max-height:30vh;overflow-y:auto;overscroll-behavior:contain}.task-queue-list li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0}.task-queue-reports{flex-basis:100%;margin-left:12px}.task-queue-reports p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}.task-queue-list li button:first-child{text-align:left;overflow-wrap:anywhere}
 .roadmap-card{max-width:none}.roadmap-heading,.roadmap-controls,.roadmap-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.roadmap-heading{justify-content:space-between}.roadmap-heading h2{margin-bottom:4px}.roadmap-heading p{margin-top:0}.roadmap-controls{padding:12px 0}.roadmap-controls label:not(.roadmap-check){display:flex;align-items:center;gap:7px}.roadmap-check{display:flex;align-items:center;gap:7px}.roadmap-legend{margin:10px 0;font-size:12px}.roadmap-legend span{padding:4px 8px;border:2px solid #557384;border-radius:999px;background:#fff}.roadmap-legend .completed{background:#e2f3eb;border-color:#26735e}.roadmap-legend .in-progress{background:#fff2c7;border-color:#9a6900}.roadmap-legend .deferred{background:#eef1f3;border-color:#87939a}.roadmap-legend .critical{border-width:4px}.roadmap-legend .ready{border-color:#176b60;border-style:dashed}.roadmap-graph{min-height:360px;max-height:62vh;overflow:auto;border:1px solid #cbd7de;border-radius:12px;background:#f7fafb;overscroll-behavior:contain}.roadmap-graph svg{display:block;min-width:100%}.roadmap-node{cursor:pointer}.roadmap-node:focus rect,.roadmap-node:hover rect{filter:drop-shadow(0 3px 4px #17334255);stroke:#0d6b5d;stroke-width:4}.roadmap-detail{margin-top:12px;padding:12px 14px;border-left:4px solid #176b60;background:#eff8f5}.roadmap-detail h3{margin:0 0 6px}.roadmap-detail dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;margin:0}.roadmap-detail dt{font-weight:700}.roadmap-detail dd{margin:0;overflow-wrap:anywhere}
 .plan-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);gap:14px}.plan-layout .roadmap-graph{min-width:0}.plan-layout .roadmap-detail{margin-top:0}.roadmap-detail dd{white-space:pre-line}#sidebar-plan h3{font-size:13px;margin:16px 0 0}#sidebar-plan-list button{width:100%;text-align:left;background:transparent;color:#dce8f1;padding:9px 7px}#sidebar-plan-tree{max-height:55%;overflow:auto}#sidebar-plan-tree,#sidebar-plan-tree ul{list-style:none;padding:0;margin:8px 0}#sidebar-plan-tree ul{margin:2px 0 2px 12px;padding-left:10px;border-left:1px solid #496072}#sidebar-plan-tree button{width:100%;padding:7px 6px;background:transparent;color:#dce8f1;text-align:left;font-size:12px}#sidebar-plan-tree button:hover,#sidebar-plan-tree button[aria-current="true"]{background:#274154}#sidebar-plan-tree button[aria-current="true"]{border-left:3px solid #79c9ac}
@@ -1561,10 +1511,6 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
  #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 }'''
 PRESENTER_CSS = '''
-.presentation-panel #presentation-slide{margin-top:12px;padding:28px 24px;min-height:150px;background:#162638;color:#f6faf8;border-radius:10px}
-.presentation-panel #presentation-slide h3{font-size:28px;color:#79c9ac;margin:0 0 14px}.presentation-panel #presentation-slide p{font-size:18px;line-height:1.5;margin:0}
-.presentation-panel #presentation-slide:fullscreen{display:flex;flex-direction:column;justify-content:center;padding:8vw;background:#10222f;border-radius:0}
-.presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
 .presenter-header{font-size:1.5em;min-height:52px;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:6px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.presenter-header-main{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}.presenter-header-main h1{font-size:24px;color:#162638;margin:0;flex:none}.presenter-header-main p{font-size:12px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.presenter-header-state{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}.presenter-header-state strong{color:#176b60;font-size:12px}.presenter-header-state span{font-size:12px;color:#627183}#presenter-view{height:100%;min-height:0;display:flex;flex-direction:column;gap:8px}.presenter-layout{display:grid;grid-template-columns:15% 25% minmax(0,1fr);gap:14px;min-height:0;flex:1}.presenter-layout>nav,.presenter-layout>section,.presenter-layout>aside{min-width:0;min-height:0}body.presenter-active main{padding-left:22px;padding-right:22px}
 .presenter-header + #presenter-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .presenter-deck,.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:10px;overflow:auto;height:100%}.presenter-speaker{width:100%;align-self:stretch;display:flex;flex-direction:column}.presenter-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.presenter-panel-head h2{font-size:16px;margin:0}.presenter-panel-head p{font-size:11px;margin:0}.presenter-tab-row{display:flex;align-items:center;gap:6px;margin:4px 0}.presenter-next-selector{flex:0 0 auto;border-bottom:1px solid #dce3e9;padding:4px 0 8px}.presenter-next-selector h3{font-size:12px;margin:0 0 4px}.presenter-next-selector #presenter-next-preview{width:100%;text-align:left;background:#f4f7fa;color:#304657;border:1px solid #dce3e9;padding:8px;border-radius:8px}.presenter-next-selector #presenter-next-preview h2{font-size:14px;color:#176b60;margin:0 0 4px}.presenter-next-selector #presenter-next-preview p{font-size:12px;margin:0}.presenter-tab-content{flex:1;min-height:0;overflow:auto}.presenter-selection-preview{flex:0 0 auto;border-top:1px solid #dce3e9;margin-top:6px;padding-top:6px}.presenter-deck h2{margin-top:0;font-size:16px}.presenter-deck ol{padding-left:24px;margin:0}.presenter-deck li{padding:9px 6px;color:#456276;cursor:pointer;border-radius:6px}.presenter-deck li:hover,.presenter-deck li[aria-current="true"]{background:#e0efe9;color:#176b60}.presenter-deck li.presenter-live{font-weight:700;border-left:3px solid #176b60}.presenter-deck li.presenter-visited{color:#82909d}.presenter-deck button{background:transparent;color:inherit;padding:0;text-align:left;font-weight:inherit;width:100%}.presenter-return-anchor{border-top:1px solid #dce3e9;padding-top:14px;font-size:12px}
@@ -1611,82 +1557,6 @@ button.addEventListener('click',async()=>{
  finally{button.disabled=false;}
 });'''
 JS += """
-const gamepadScanButton=document.querySelector('#gamepad-scan');
-const gamepadStatus=document.querySelector('#gamepad-status');
-const gamepadList=document.querySelector('#gamepad-list');
-gamepadScanButton.addEventListener('click',async()=>{
- gamepadScanButton.disabled=true;
- gamepadStatus.textContent='Skenuji vstupní zařízení…';
- gamepadList.replaceChildren();
- try{
-  const response=await fetch('/v1/gamepad/status',{method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({action:'scan'}),signal:AbortSignal.timeout(4000)});
-  const result=await response.json();
-  if(!response.ok) throw new Error(result.error || 'Gamepad není dostupný.');
-  gamepadStatus.textContent=result.message || 'Gamepad demo hotovo.';
-  if(!result.devices || !result.devices.length){
-   const item=document.createElement('li');item.textContent='Žádné joystick/gamepad zařízení nebylo detekováno.';gamepadList.append(item);return;
-  }
-  for(const device of result.devices){
-   const item=document.createElement('li');item.textContent=`${device.name} — ${device.path}`;gamepadList.append(item);
-  }
- }catch(error){
-  gamepadStatus.textContent=error.message || 'Gamepad demo nebylo možné spustit.';
-  const item=document.createElement('li');item.textContent='Demo vyžaduje Linux /dev/input a dostupné udev metadata.';gamepadList.append(item);
- }finally{gamepadScanButton.disabled=false;}
-});"""
-JS += """
-const presentationStartButton=document.querySelector('#presentation-start');
-const presentationPrevButton=document.querySelector('#presentation-prev');
-const presentationNextButton=document.querySelector('#presentation-next');
-const presentationFullscreenButton=document.querySelector('#presentation-fullscreen');
-const presentationStatus=document.querySelector('#presentation-status');
-const presentationSlide=document.querySelector('#presentation-slide');
-const presentationMode=document.querySelector('#presentation-mode');
-let presentationSlides=[];
-let presentationIndex=0;
-function renderPresentationSlide(slide){
- renderSlideVisual(presentationSlide,slide,'h3');
- presentationPrevButton.disabled=presentationIndex===0;
- presentationNextButton.disabled=presentationIndex>=presentationSlides.length-1;
- presentationStatus.textContent=`Promítám slide ${presentationIndex+1} z ${presentationSlides.length}.`;
-}
-presentationStartButton.addEventListener('click',async()=>{
- presentationStartButton.disabled=true;
- presentationStatus.textContent='Načítám prezentaci…';
- try{
-  const response=await fetch('/v1/presentation/status',{method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({action:'start'}),signal:AbortSignal.timeout(4000)});
-  const result=await response.json();
-  if(!response.ok) throw new Error(result.error || 'Prezentaci nebylo možné připravit.');
-    presentationSlides=Array.isArray(result.slides) ? result.slides : [];
-    presentationIndex=Math.min(result.current_slide ?? 0,Math.max(0,presentationSlides.length-1));
-    presentationPrevButton.disabled=false;presentationNextButton.disabled=false;
-    presentationFullscreenButton.disabled=!presentationSlides.length;
-    presentationStartButton.textContent='Restartovat prezentaci';
-    renderPresentationSlide(presentationSlides[presentationIndex]);
- }catch(error){
-  presentationStatus.textContent=error.message || 'Prezentace nebylo možné spustit.';
-  presentationSlide.textContent='Demo promítání vyžaduje běžící desktop app a validní prezentaci.';
- }finally{presentationStartButton.disabled=false;}
-});
-function movePresentation(offset){
- if(!presentationSlides.length)return;
- presentationIndex=Math.max(0,Math.min(presentationSlides.length-1,presentationIndex+offset));
- renderPresentationSlide(presentationSlides[presentationIndex]);
-}
-presentationPrevButton.addEventListener('click',()=>movePresentation(-1));
-presentationNextButton.addEventListener('click',()=>movePresentation(1));
-presentationFullscreenButton.addEventListener('click',async()=>{
- try{await presentationSlide.requestFullscreen();presentationSlide.focus();}
- catch(error){presentationStatus.textContent='Celou obrazovku se nepodařilo spustit.';}
-});
-presentationMode.addEventListener('keydown',event=>{
- if(event.key==='ArrowLeft'){event.preventDefault();movePresentation(-1);}
- if(event.key==='ArrowRight'){event.preventDefault();movePresentation(1);}
-});
-const presentationOpenButton=document.querySelector('#presentation-open');
-document.querySelector('#presentation-editor').addEventListener('click',()=>openPresentationEditor());
 const presenterView=document.querySelector('#presenter-view');
 const presenterScreen=document.querySelector('#presenter-screen');
 const presenterPreview=document.querySelector('#presenter-preview');
@@ -2014,7 +1884,6 @@ async function closePresenter(){
  else{document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));}
  return true;
 }
-presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
 presenterPrevButton.addEventListener('click',()=>movePresenter(-1));
 presenterNextButton.addEventListener('click',()=>movePresenter(1));
@@ -2671,7 +2540,10 @@ document.querySelector('#google-drive-run').addEventListener('click',async event
 });
 document.querySelector('#open-source-import').addEventListener('click',openSourceImport);
 document.querySelector('#google-drive-open-settings').addEventListener('click',async()=>{
- await openSettings();document.querySelector('#google-drive-config-form input[name="client_id"]').focus();
+ await openSettings();
+ if(settingsView.hidden)return;
+ openBackendSettings({backend_id:'google-drive',display_name:'Google Drive',detail:''});
+ document.querySelector('#google-drive-config-form input[name="client_id"]').focus();
 });
 sourceImportForm.elements.file.addEventListener('change',event=>{
  const file=event.currentTarget.files[0];if(file&&!sourceImportForm.elements.title.value)sourceImportForm.elements.title.value=file.name.replace(/\\.[^.]+$/,'');
@@ -4279,18 +4151,6 @@ applicationAccessSave.addEventListener('click',async()=>{if(!applicationAccessPl
 });
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
-const backendSettingsForms={
- 'ollama':['settings-backend-status','chat-backend-form'],
- 'openai-responses':['settings-external-status','external-backend-form',
-                     'settings-openai-image-status','openai-image-form'],
- 'atlascloud-text':['settings-atlascloud-status','atlascloud-backend-form'],
- 'anthropic-messages':['settings-anthropic-messages-status','anthropic-messages-backend-form'],
- 'gemini-generate':['settings-gemini-generate-status','gemini-generate-backend-form'],
- 'xai-responses':['settings-xai-responses-status','xai-responses-backend-form'],
- 'comfyui':['settings-comfy-status','comfy-backend-form'],
- 'searxng':['settings-search-status','search-backend-form'],
- 'google-drive':['settings-google-drive-status','google-drive-config-form']
-};
 const backendSettingsDialog=document.querySelector('#backend-settings-dialog');
 const backendSettingsBody=document.querySelector('#backend-settings-dialog-body');
 let backendFormPlaces=[];
@@ -4302,9 +4162,10 @@ function openBackendSettings(backend){
  restoreBackendForms();
  document.querySelector('#backend-settings-dialog-title').textContent=`Nastavit · ${backend.display_name}`;
  document.querySelector('#backend-settings-dialog-status').textContent=backend.detail||'';
- for(const id of backendSettingsForms[backend.backend_id]||[]){
-  const form=document.getElementById(id),place=document.createComment('backend-form-place');
-  form.replaceWith(place);backendFormPlaces.push([form,place]);backendSettingsBody.append(form);
+ for(const group of document.querySelectorAll('#backend-settings-forms [data-backend-settings]')){
+  if(group.dataset.backendSettings!==backend.backend_id)continue;
+  const place=document.createComment('backend-form-place');
+  group.replaceWith(place);backendFormPlaces.push([group,place]);backendSettingsBody.append(group);
  }
  backendSettingsDialog.showModal();backendSettingsBody.querySelector('input,select,textarea,button')?.focus();
 }
@@ -8520,7 +8381,7 @@ class DesktopHandler(Handler):
         '/v1/chat/send', '/v1/chat/send-stream',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
-        '/v1/gamepad/status', '/v1/presentation/status',
+        '/v1/presentation/status',
         '/v1/gamepad/settings', '/v1/user-profile',
         '/v1/presentations/open', '/v1/presentations/save', '/v1/presentations/use',
         '/v1/outputs/definitions',
@@ -8677,6 +8538,13 @@ class DesktopHandler(Handler):
         else:
             raise ValueError('Unsupported backend reset target')
         return self.backend_catalog_status()
+
+    # Media and workflow scope (AUDIT-B6-T1). The desktop acts as the local node;
+    # the web handler binds the authenticated account and refuses local-only content.
+    allow_local_only = True
+
+    def request_owner_id(self):
+        return None
 
     def dispatch(self, request):
         if self.path.startswith('/v1/x-sources/'):
@@ -9059,8 +8927,6 @@ class DesktopHandler(Handler):
                 return self.send_error(400)
             except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
-        if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
-            return self.reply(200, scan_gamepads())
         if self.path == '/v1/gamepad/settings' and isinstance(request, dict):
             service = getattr(self.server, 'gamepad_settings', None)
             if service is None:
@@ -9148,37 +9014,32 @@ class DesktopHandler(Handler):
                     result = service.recover(actor_id)
                     return self.reply(200, {'receipt': result})
                 return self.send_error(400)
-            if (self.path == '/v1/workflows/status' and isinstance(request, dict)
-                    and set(request) == {'project_id'}):
-                result = self.server.role_workflow_service.status()
-                result['workflows'] = [item for item in result['workflows']
-                                       if item['project_id'] == request['project_id']]
-                return self.reply(200, result)
-            if self.path == '/v1/workflows/prepare' and isinstance(request, dict):
-                return self.reply(200, self.server.role_workflow_service.prepare(request))
-            if (self.path == '/v1/workflows/creator/dispatch' and isinstance(request, dict)
-                    and set(request) == {'workflow_id', 'project_id', 'approval_digest'}):
-                owned = self.server.role_workflow_service.get(request['workflow_id'])
-                if owned['project_id'] != request['project_id']: return self.send_error(400)
-                result = self.server.role_workflow_service.dispatch_creator(
-                    request['workflow_id'], request['approval_digest'])
-                return self.reply(200, result)
-            if (self.path == '/v1/workflows/opponent/prepare' and isinstance(request, dict)
-                    and set(request) == {'workflow_id', 'project_id'}):
-                owned = self.server.role_workflow_service.get(request['workflow_id'])
-                if owned['project_id'] != request['project_id']: return self.send_error(400)
-                result = self.server.role_workflow_service.prepare_opponent(
-                    request['workflow_id'])
-                return self.reply(200, result)
-            if (self.path == '/v1/workflows/opponent/dispatch' and isinstance(request, dict)
-                    and set(request) == {'workflow_id', 'project_id', 'approval_digest'}):
-                owned = self.server.role_workflow_service.get(request['workflow_id'])
-                if owned['project_id'] != request['project_id']: return self.send_error(400)
-                result = self.server.role_workflow_service.dispatch_opponent(
-                    request['workflow_id'], request['approval_digest'])
-                return self.reply(200, result)
-            if self.path == '/v1/workflows/publish' and isinstance(request, dict):
-                return self.reply(200, self.server.role_workflow_service.publish(request))
+            if self.path.startswith('/v1/workflows/') and isinstance(request, dict):
+                # Shared by desktop and web (AUDIT-B6-T1); the handler supplies the
+                # owning account and whether local-only content may be used.
+                service = self.server.role_workflow_service
+                scope = dict(owner_id=self.request_owner_id(), allow_local_only=self.allow_local_only)
+                if self.path == '/v1/workflows/status' and set(request) == {'project_id'}:
+                    result = service.status(**scope)
+                    result['workflows'] = [item for item in result['workflows']
+                                           if item['project_id'] == request['project_id']]
+                    return self.reply(200, result)
+                if self.path == '/v1/workflows/prepare':
+                    return self.reply(200, service.prepare(request, **scope))
+                if self.path == '/v1/workflows/publish':
+                    return self.reply(200, service.publish(request, **scope))
+                steps = {('/v1/workflows/creator/dispatch', True): service.dispatch_creator,
+                         ('/v1/workflows/opponent/dispatch', True): service.dispatch_opponent,
+                         ('/v1/workflows/opponent/prepare', False): service.prepare_opponent}
+                digest = 'approval_digest' in request
+                step = steps.get((self.path, digest))
+                fields = {'workflow_id', 'project_id'} | ({'approval_digest'} if digest else set())
+                if step is None or set(request) != fields:
+                    return self.send_error(400)
+                owned = service.get(request['workflow_id'], **scope)
+                if owned['project_id'] != request['project_id']: return self.send_error(403)
+                arguments = (request['workflow_id'], request['approval_digest']) if digest else (request['workflow_id'],)
+                return self.reply(200, step(*arguments, **scope))
             if self.path.startswith('/v1/autonomy/') and isinstance(request, dict):
                 service = getattr(self.server, 'autonomy_service', None)
                 if service is None:
@@ -9239,17 +9100,20 @@ class DesktopHandler(Handler):
                     return self.reply(200, service.resume_all())
                 return self.send_error(400)
             if self.path == '/v1/media/status' and request == {}:
-                return self.reply(200, self.server.media_service.status())
+                return self.reply(200, self.server.media_service.status(owner_id=self.request_owner_id()))
             if self.path == '/v1/media/comfyui/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.media_service.configure_comfy(request))
             if self.path == '/v1/media/openai/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.media_service.configure_openai(request))
             if self.path == '/v1/media/preview' and isinstance(request, dict):
-                return self.reply(200, self.server.media_service.preview(request))
+                return self.reply(200, self.server.media_service.preview(
+                    request, owner_id=self.request_owner_id()))
             if self.path == '/v1/media/confirm' and isinstance(request, dict):
-                return self.reply(200, self.server.media_service.confirm(request))
+                return self.reply(200, self.server.media_service.confirm(
+                    request, owner_id=self.request_owner_id()))
             if self.path == '/v1/media/publish' and isinstance(request, dict):
-                return self.reply(200, self.server.media_service.publish(request))
+                return self.reply(200, self.server.media_service.publish(
+                    request, owner_id=self.request_owner_id()))
             if self.path == '/v1/publication-cms/status' and request == {}:
                 return self.reply(200, self.server.publication_cms.status())
             if self.path == '/v1/publication-cms/configure' and isinstance(request, dict):
@@ -9769,6 +9633,8 @@ class DesktopHandler(Handler):
         except BackendResponseError as exc:
             if self.path.startswith(('/v1/external/', '/v1/tasks/')):
                 return self.reply(502, external_response_failure(exc))
+            if self.path.startswith('/v1/workflows/'):
+                return self.reply(502, {'error': 'Workflow backend nevrátil platný výsledek.'})
             message = ('Obrazový backend nevrátil bezpečně použitelný PNG výsledek. '
                        'Běh byl ukončen bez automatického opakování.')
             return self.reply(502, {'error': message})
@@ -9817,6 +9683,12 @@ class DesktopHandler(Handler):
                                        'stejného tlačítka zachová identitu operace.'})
             if self.path == '/v1/artifacts/editor/validate-plan' or self.path.startswith('/v1/artifacts/editor/plan-item/'):
                 return self.reply(422, {'error': str(exc) or 'Plán nelze bezpečně materializovat.'})
+            if self.path.startswith('/v1/workflows/'):
+                return self.reply(422, {'error': 'Workflow požadavek nelze provést. Ověřte '
+                                       'projekt, oprávnění, backend, privacy a lokální stav.'})
+            if self.path in {'/v1/media/status', '/v1/media/preview', '/v1/media/confirm', '/v1/media/publish'}:
+                return self.reply(422, {'error': 'Obrazový požadavek nelze provést. Ověřte '
+                                       'projekt, oprávnění, backend a lokální stav.'})
             if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/node-telemetry/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '

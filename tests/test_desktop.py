@@ -884,13 +884,21 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px;overflow:visible}', CSS)
         self.assertIn('.project-overview-tasks ul{flex:none;overflow:visible', CSS)
 
-    def test_gamepad_demo_ui_and_backend_are_exposed(self):
+    def test_hidden_demo_widgets_are_removed_and_smoke_hook_remains(self):
+        # AUDIT-B6-T1 (B-ODD-07): unreachable gamepad demo and mini presentation
+        # player are gone; the hidden counter stays as the desktop --smoke hook.
         from spikes.desktop_ui import HTML, JS
-        self.assertIn('id="gamepad-scan"', HTML)
-        self.assertIn('/v1/gamepad/status', JS)
-        self.assertIn('Gamepad demo', HTML)
-        self.assertIn('id="gamepad-list"', HTML)
-        self.assertIn('id="legacy-home-diagnostics" hidden aria-hidden="true"', HTML)
+        from spikes.http_admission_policy import NODE_PREFERENCE_ROUTES
+        for removed in ('id="gamepad-scan"', 'id="legacy-home-diagnostics"', 'id="presentation-mode"',
+                        'id="presentation-start"', 'id="presentation-open"', 'id="presentation-slide"'):
+            self.assertNotIn(removed, HTML)
+        self.assertNotIn('/v1/gamepad/status', JS)
+        self.assertNotIn('/v1/gamepad/status', NODE_PREFERENCE_ROUTES)
+        self.assertIn('id="smoke-diagnostics" hidden aria-hidden="true"', HTML)
+        self.assertIn('id="increment"', HTML)
+        self.assertIn("fetch('/v1/counter'", JS)
+        self.assertIn("document.querySelector('#increment').click()",
+                      Path('spikes/desktop.py').read_text())
 
     def test_gamepad_settings_endpoint_loads_without_write_and_saves_explicitly(self):
         driver = test_local_api.LocalAPITests()
@@ -958,16 +966,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         from types import SimpleNamespace
         from spikes.desktop_ui import presentation_deck
         deck = presentation_deck()
-        self.assertIn('id="presentation-start"', HTML)
         self.assertIn('id="presentation-tab"', HTML)
-        self.assertIn('id="presentation-slide"', HTML)
         self.assertIn('/v1/presentation/status', JS)
-        self.assertIn('Promítání prezentace', HTML)
-        self.assertIn('presentation-mode', JS)
-        self.assertIn('id="presentation-prev"', HTML)
-        self.assertIn('id="presentation-next"', HTML)
-        self.assertIn('id="presentation-fullscreen"', HTML)
-        self.assertIn('requestFullscreen()', JS)
         self.assertIn("event.key==='ArrowRight'", JS)
         self.assertIn('id="presenter-view"', HTML)
         self.assertIn('id="presenter-screen"', HTML)
@@ -2004,6 +2004,94 @@ with running_api('http', handler=DesktopHandler) as server:
                                 text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('capability provenance verified', result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_webengine_backend_dialog_moves_whole_settings_groups(self):
+        # AUDIT-B6-T1 (B-ODD-07): every part of a backend's settings, including
+        # help text, the OAuth guide and OpenAI usage metrics, reaches the dialog.
+        script = r'''
+import json
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from spikes.desktop import request_policy
+from spikes.desktop_ui import DesktopHandler
+from spikes.local_api import running_api
+app = QApplication([])
+with running_api('http', handler=DesktopHandler) as server:
+    class Interceptor(QWebEngineUrlRequestInterceptor):
+        def interceptRequest(self, info):
+            policy = request_policy(info.requestUrl().toString(), info.initiator().toString(),
+                                    bytes(info.requestMethod()).decode(), server.origin)
+            if policy == 'block': info.block(True)
+            elif policy == 'authenticate':
+                info.setHttpHeader(b'Authorization', ('Bearer ' + server.token).encode())
+    profile = QWebEngineProfile(app); interceptor = Interceptor(profile)
+    profile.setUrlRequestInterceptor(interceptor); page = QWebEnginePage(profile, app)
+    probe = r"""(async()=>{try{
+      await openSettings();
+      const body=document.querySelector('#backend-settings-dialog-body');
+      const dialog=document.querySelector('#backend-settings-dialog');
+      const inside=selector=>Boolean(body.querySelector(selector));
+      const home=selector=>Boolean(document.querySelector('#backend-settings-forms '+selector));
+      // Offscreen WebEngine without a shown view never fires the dialog close
+      // event; deliver it explicitly so the real close listener runs.
+      const close=()=>{dialog.close();dialog.dispatchEvent(new Event('close'));};
+      openBackendSettings({backend_id:'openai-responses',display_name:'OpenAI',detail:''});
+      const openai={open:dialog.open,
+        form:inside('#external-backend-form'),images:inside('#openai-image-form'),
+        metrics:inside('#backend-metrics'),catalog:inside('#model-catalog-status'),
+        help:[...body.querySelectorAll('.backend-settings-group>small')].length,
+        visible:document.querySelector('#external-backend-form').checkVisibility(),
+        others:inside('#chat-backend-form')||inside('#google-drive-config-form')};
+      openBackendSettings({backend_id:'google-drive',display_name:'Google Drive',detail:''});
+      const google={guide:inside('.oauth-setup-guide'),
+        visible:body.querySelector('.oauth-setup-guide').checkVisibility(),form:inside('#google-drive-config-form'),
+        openaiBack:home('#external-backend-form')&&home('#backend-metrics')&&!inside('#external-backend-form')};
+      close();
+      const restored={empty:body.children.length===0,home:home('#google-drive-config-form')};
+      openBackendSettings({backend_id:'atlascloud-text',display_name:'AtlasCloud',detail:''});
+      const atlas=[...body.querySelectorAll('small')].some(x=>x.textContent.includes('AtlasCloud katalogu'));
+      close();
+      document.querySelector('#google-drive-open-settings').click();
+      await new Promise(resolve=>setTimeout(resolve,500));
+      const shortcut={open:dialog.open,form:inside('#google-drive-config-form'),
+        focused:document.activeElement?.name==='client_id'};
+      close();
+      window.backendDialogProbe=JSON.stringify({openai,google,restored,atlas,shortcut});
+      }catch(error){window.backendDialogProbe=JSON.stringify({error:String(error.stack||error)});}})()"""
+    def received(value):
+        if not value:
+            return QTimer.singleShot(100, lambda: page.runJavaScript('window.backendDialogProbe', 0, checked))
+        result = json.loads(value)
+        if 'error' in result:
+            print(result['error'], flush=True); return app.exit(4)
+        openai = result['openai']
+        assert openai['open'] and openai['form'] and openai['images'] and openai['metrics'], result
+        assert openai['catalog'] and openai['visible'] and openai['help'] >= 2, result
+        assert not openai['others'], result
+        assert result['google'] == {'guide': True, 'visible': True, 'form': True, 'openaiBack': True}, result
+        assert result['restored'] == {'empty': True, 'home': True}, result
+        assert result['atlas'], result
+        assert result['shortcut'] == {'open': True, 'form': True, 'focused': True}, result
+        print('backend dialog: whole settings groups moved and restored', flush=True)
+        app.exit(0)
+    def checked(value):
+        try:
+            received(value)
+        except AssertionError as error:
+            print('assertion failed:', error, flush=True); app.exit(5)
+    def loaded(ok):
+        if not ok: return app.exit(3)
+        page.runJavaScript(probe, 0, lambda _: checked(None))
+    page.loadFinished.connect(loaded); page.setUrl(QUrl(server.origin + '/'))
+    QTimer.singleShot(15000, lambda: app.exit(2)); raise SystemExit(app.exec())
+'''
+        result = subprocess.run([sys.executable, '-c', script],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('whole settings groups moved and restored', result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_webengine_aggregates_models_and_populates_chat_selectors(self):
