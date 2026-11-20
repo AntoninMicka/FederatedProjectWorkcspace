@@ -8459,19 +8459,24 @@ document.querySelector('#federation-tab').hidden=false;
 from spikes.http_ui_admission import HTTP_UI_ADMISSION_JS
 JS = HTTP_UI_ADMISSION_JS + JS
 JS = f'const EXTERNAL_CLIENT_TIMEOUT_MS={EXTERNAL_CLIENT_TIMEOUT_MS};\n' + JS
-PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
+PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}.link-status{position:fixed;left:2vw;bottom:2vh;margin:0;padding:.4em .8em;border-radius:6px;background:#3a1d12;color:#ffd7c7;font-size:clamp(12px,1.2vw,20px)}.link-status[hidden]{display:none}'''
 PUBLIC_JS = HTTP_UI_ADMISSION_JS + SLIDE_JS + '''
 const screen=document.querySelector('#screen');
 function render(result){renderSlideVisual(screen,result.visible?result.content:null,'h1');if(!result.visible){screen.replaceChildren();const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}screen.style.aspectRatio=result.ratio==='4:3'?'4 / 3':'16 / 9';}
 let publicPollRunning=false;
-async function poll(){if(document.hidden||publicPollRunning)return;publicPollRunning=true;try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok)render(await response.json());}catch(error){}finally{publicPollRunning=false;}}
-async function reportDisplayRatio(){if(document.hidden)return;const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});}catch(error){}}
+const linkStatus=document.querySelector('#link-status');
+// AUDIT-B4-T1 (B-ODD-10): a failed poll keeps the last slide but is visible;
+// the console logs only on a state change, never every 300 ms.
+function publicLink(ok,error){if(linkStatus.hidden===ok)return;linkStatus.hidden=ok;document.body.dataset.link=ok?'ok':'lost';if(!ok)console.warn('presentation_public_poll_failed',error);}
+async function poll(){if(document.hidden||publicPollRunning)return;publicPollRunning=true;try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(!response.ok)throw new Error('HTTP '+response.status);render(await response.json());publicLink(true);}catch(error){publicLink(false,error);}finally{publicPollRunning=false;}}
+let ratioFailed=false;
+async function reportDisplayRatio(){if(document.hidden)return;const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{const response=await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});if(!response.ok)throw new Error('HTTP '+response.status);ratioFailed=false;}catch(error){if(!ratioFailed)console.warn('presentation_display_ratio_failed',error);ratioFailed=true;}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){reportDisplayRatio();poll();}});
 reportDisplayRatio();addEventListener('resize',reportDisplayRatio);poll();setInterval(poll,300);
 '''
 PUBLIC_HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Veřejné promítání</title>
 <link rel="stylesheet" href="/presentation-screen.css">
-<main id="screen" class="screen"><p class="neutral">Veřejné okno čeká na schválený slide.</p></main><script src="/presentation-screen.js"></script></html>'''
+<main id="screen" class="screen"><p class="neutral">Veřejné okno čeká na schválený slide.</p></main><p id="link-status" class="link-status" role="status" hidden>Spojení s promítáním je přerušené. Zobrazuje se poslední známý stav.</p><script src="/presentation-screen.js"></script></html>'''
 ASSETS = {'/manuals.json': ('application/json; charset=utf-8', json.dumps(manual_catalog(), ensure_ascii=False)),
           '/presentation-screen.css': ('text/css; charset=utf-8', PUBLIC_CSS),
           '/presentation-screen.js': ('text/javascript; charset=utf-8', PUBLIC_JS),
@@ -9775,15 +9780,10 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt právě používá jiná zapisující operace. '
                                    'Po jejím dokončení spusťte novou kontrolu.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
-            if (isinstance(exc, ValidationError)
-                    and self.path == '/v1/tasks/search/confirm'
-                    and str(exc) in {
-                        'Ollama returned an invalid iterative search evaluation',
-                        'Ollama cited an unavailable search source',
-                        'Ollama returned invalid search limitations',
-                        'Ollama returned invalid follow-up search queries',
-                        'Ollama returned duplicate follow-up search queries',
-                        'Final search evaluation cannot request another query'}):
+            from spikes.chat_service import InvalidSearchEvaluation
+            from spikes.presentation_proposals import InvalidPresentationProposal
+            if (isinstance(exc, InvalidSearchEvaluation)
+                    and self.path == '/v1/tasks/search/confirm'):
                 return self.reply(422, {'error':
                     'Ollama vrátila neplatné hodnocení výsledků hledání. '
                     'Uložené výsledky nebyly změněny ani automaticky zopakovány. '
@@ -9791,7 +9791,7 @@ class DesktopHandler(Handler):
             if isinstance(exc, ValidationError) and self.path in {
                     '/v1/chat/send', '/v1/chat/send-stream', '/v1/tasks/route'}:
                 if (self.path == '/v1/tasks/route'
-                        and str(exc) == 'Ollama returned invalid presentation proposal'):
+                        and isinstance(exc, InvalidPresentationProposal)):
                     return self.reply(422, {'error':
                         'Ollama vytvořila návrh prezentace, ale ten nesplnil povinný formát '
                         'nebo povolené vazby na zdroje a layouty. '

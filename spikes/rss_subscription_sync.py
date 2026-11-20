@@ -10,6 +10,7 @@ import subprocess
 from urllib.parse import urlsplit
 
 from spikes.administration import Administration,AccessDenied
+from spikes.background_workers import report_failure
 from spikes.federation_accounts import canonical
 from spikes.federation_catalog import _authority
 from spikes.http_deadline import DeadlineHTTPSConnection
@@ -104,8 +105,8 @@ def exchange(node,peer,envelope,ca=None):
 
 def synchronize(node,peer_id,*,deployment='desktop',ca=None,full=False,transport=None):
     service=Administration(node,deployment=deployment)
-    request,peer=prepare(service,peer_id,full=full)
     try:
+        request,peer=prepare(service,peer_id,full=full)
         response=(transport(peer,request) if transport else exchange(node,peer,request,ca))
         p,current=verified(service,response)
         require(current['fingerprint']==peer['fingerprint'] and p['source']==peer_id,'RSS peer changed')
@@ -126,7 +127,7 @@ def run_automatic(node,*,deployment):
     for p in state.view(node)['peers']:
         if p['enabled']:
             try:synchronize(node,p['id'],deployment=deployment)
-            except Exception:pass
+            except Exception as exc:report_failure('rss-preference-sync',exc,target=p['id'])  # state recorded by synchronize()
 
 
 def reply(handler):

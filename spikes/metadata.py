@@ -40,9 +40,18 @@ class ValidationError(ValueError):
     pass
 
 
-def require(condition, message):
+def require(condition, message, error=None):
     if not condition:
-        raise ValidationError(message)
+        raise (error or ValidationError)(message)
+
+
+class OwnerUnavailable(ValidationError):
+    """The owned record is missing or belongs to another owner (B-ODD-03).
+
+    Callers that treat a missing record as "create new" branch on this type,
+    never on the message text.
+    """
+    code = 'owner_unavailable'
 
 
 # Version compatibility contract K1 (docs/version-compatibility.md): an

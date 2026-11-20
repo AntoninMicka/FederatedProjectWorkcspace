@@ -67,6 +67,9 @@ Od verze 0.2.2 se přechodná odpověď `503 server busy` opakuje nejvýše tři
 s odstupem 250, 500 a 1000 ms. Trvalé vytížení se zobrazí jako chyba;
 jiné HTTP chyby ani nejasné síťové selhání se automaticky neopakují.
 
+Od verze 0.5.11 se selhání hlášení nedostupnosti do Workspace zapíše do
+výstupu Workspace bridge; původní chyba spojení se zobrazí jako dosud.
+
 Od verze 0.5.10 rozšíření posílá protokolovou verzi
 (`X-Workspace-Bridge-Protocol: 1`). Vytížení, zastaralý report a čekání na
 review rozpoznává podle strojového kódu odpovědi. U staršího backendu, který

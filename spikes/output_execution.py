@@ -12,7 +12,7 @@ import sqlite3
 import stat
 import tempfile
 
-from spikes.metadata import MAX_METADATA, parse_json, require, safe_path, timestamp, uuid
+from spikes.metadata import MAX_METADATA, parse_json, require, safe_path, timestamp, uuid, OwnerUnavailable
 from spikes.sqlite_ownership import readonly_refused, store_connection
 from spikes.output_capabilities import canonical_output_capability
 from spikes.output_plans import (canonical_output_plan, canonical_output_policy,
@@ -129,7 +129,7 @@ class OutputExecutionStore:
     @staticmethod
     def _owner(row, node_id, user_id):
         require(row is not None and row[0] == node_id and row[1] == user_id,
-                'Output execution is unavailable to this owner')
+                'Output execution is unavailable to this owner', OwnerUnavailable)
 
     def prepare(self, request, preview, approval_digest, node_id, user_id):
         operation_id = request['operation_id']

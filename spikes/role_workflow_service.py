@@ -13,7 +13,7 @@ from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     PreparedContext, ProjectInput, TaskInstruction)
-from spikes.metadata import (MAX_FILE, ValidationError, require, timestamp, uuid,
+from spikes.metadata import (MAX_FILE, OwnerUnavailable, ValidationError, require, timestamp, uuid,
                              validate_snapshot)
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
@@ -201,9 +201,7 @@ class RoleWorkflowService:
         node_id, user_id = self._identity(owner_id); workflows, adapter = self._stores()
         try:
             existing = workflows.get(request['workflow_id'], node_id, user_id)
-        except ValidationError as exc:
-            if 'unavailable to this owner' not in str(exc):
-                raise
+        except OwnerUnavailable:
             existing = None
         if existing is not None:
             require(existing['request_digest'] == digest(canonical(request)),

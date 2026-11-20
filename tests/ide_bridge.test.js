@@ -287,7 +287,8 @@ test('plugin settings map multiple projects and restore them after restart', asy
   let mappings = [], folderPick = 0, selection = 'both';
   const synchronizations = [], notices = [], statusItems = [];
   let syncMode = 'ok', failSidebar = false, missingInbox = false;
-  let loseMapResponse = false, loseBindResponse = false, mapCalls = 0, failStore = '';
+  let loseMapResponse = false, loseBindResponse = false, mapCalls = 0, failStore = '', failSecrets = false;
+  const outputLines = [];
   const originalRequest = bridge.connectionRequest, originalSync = bridge.sync;
   bridge.connectionRequest = async (_pairing, request) => {
     if (request.action === 'status') return {connection_id: pairing.connection_id, name: pairing.name, projects, mappings};
@@ -325,7 +326,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
     commands: {registerCommand: (name, callback) => {commands.set(name, callback);return {dispose(){}};}},
     workspace: {isTrusted: true, workspaceFolders: [first, second].map((f, index) => ({name: 'Local '+index, uri: {fsPath: f.repo}})),
       getConfiguration: () => ({get: () => false})},
-    window: {createOutputChannel: () => ({appendLine(){},dispose(){}}),
+    window: {createOutputChannel: () => ({appendLine(line){outputLines.push(line);},dispose(){}}),
       createStatusBarItem: () => {const item={show(){},dispose(){}};statusItems.push(item);return item;},
       showInformationMessage: async message => { notices.push({kind: 'info', message}); },
       showErrorMessage: message => {throw new Error(message);},
@@ -347,7 +348,7 @@ test('plugin settings map multiple projects and restore them after restart', asy
   function context() {
     const result = {subscriptions: [], globalStorageUri: {fsPath: path.join(first.base, 'storage')},
       globalState: {get: key => state.get(key), update: async (key,value) => state.set(key,value)},
-      secrets: {get: async key => secrets.get(key), store: async (key,value) => {
+      secrets: {get: async key => { if (failSecrets) throw new Error('SecretStorage read failed'); return secrets.get(key); }, store: async (key,value) => {
         const pending = Object.values(JSON.parse(value).mappings).some(local => local.refresh);
         if ((failStore === 'intent' && pending) || (failStore === 'final' && !pending)) {
           failStore = ''; throw new Error('SecretStorage unavailable');
@@ -395,6 +396,11 @@ test('plugin settings map multiple projects and restore them after restart', asy
       assert.equal(status.error,undefined);
     }
   }
+  // B-ODD-10: a failed unavailability report is logged, not silently swallowed.
+  failSecrets = true; outputLines.length = 0;
+  await assert.rejects(commands.get('workspaceBridge.sync')(), /SecretStorage read failed/);
+  failSecrets = false;
+  assert.ok(outputLines.some(line => line === 'Hlášení nedostupnosti do Workspace selhalo: SecretStorage read failed'), outputLines.join('\n'));
   syncMode = 'ok'; notices.length = 0;
   await commands.get('workspaceBridge.sync')();
   assert.equal(notices[0].kind, 'info');

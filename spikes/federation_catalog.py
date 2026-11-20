@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Signed exchange of project existence without project content or Git history."""
+from spikes.background_workers import report_failure
 from spikes.http_request_budget import RequestReadTimeout
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -309,6 +310,10 @@ class CatalogControl:
         except (ValueError, sqlite3.Error, subprocess.SubprocessError) as exc:
             self.store.runtime(peer_id, 'error', str(exc))
             raise
+        except Exception as exc:
+            # Unknown class: record a generic durable error, never only vanish.
+            self.store.runtime(peer_id, 'error', type(exc).__name__)
+            raise
         return result
 
     def run_automatic(self):
@@ -320,8 +325,9 @@ class CatalogControl:
                     and peer.get('endpoint')):
                 try:
                     self.synchronize(peer['id'])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Durable peer status is recorded by synchronize().
+                    report_failure('federation-catalog', exc, target=peer['id'])
 
 
 class CatalogScheduler:
@@ -346,10 +352,11 @@ class CatalogScheduler:
                 from spikes.rss_subscription_sync import run_automatic
                 run_automatic(self.control.node,deployment=self.control.deployment)
                 delay = self.interval
-            except Exception:
+            except Exception as exc:
                 # Node registry reads share the node writer lock with project
                 # operations. A transient lock conflict must not permanently
                 # terminate catalog synchronization for this process.
+                report_failure(self.NAME, exc)
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 

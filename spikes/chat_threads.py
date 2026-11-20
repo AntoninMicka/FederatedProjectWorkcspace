@@ -8,7 +8,7 @@ from pathlib import Path
 import sqlite3
 import stat
 
-from spikes.metadata import require, timestamp, uuid
+from spikes.metadata import require, timestamp, uuid, OwnerUnavailable
 from spikes.sqlite_ownership import bounded_connect, readonly_refused, store_connection
 from spikes.response_language import LANGUAGE_SOURCES, language_tag
 
@@ -196,7 +196,7 @@ class ChatThreads:
                          'FROM threads WHERE thread_id=?',
                          (thread_id,)).fetchone()
         require(row is not None and row[0] == node_id and row[1] == user_id,
-                'Chat thread is unavailable to this owner')
+                'Chat thread is unavailable to this owner', OwnerUnavailable)
         require(row[2] in {'active', 'archived'} and row[3] in {'brainstorming', 'orchestration'},
                 'Invalid stored chat thread')
         timestamp(row[4])

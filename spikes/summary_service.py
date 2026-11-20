@@ -13,7 +13,7 @@ from spikes.backend_contract import (BackendResponseError, BackendUnknown, ROLES
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
     ConversationSelection, DispatchHandoff, ProjectInput, TaskInstruction)
-from spikes.metadata import MAX_FILE, ValidationError, require, timestamp, uuid, validate_snapshot
+from spikes.metadata import MAX_FILE, ValidationError, require, timestamp, uuid, validate_snapshot, OwnerUnavailable
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
 from spikes.project_creation import ProjectCreation
@@ -185,9 +185,7 @@ class SummaryService:
 
         try:
             existing = tasks.get(request['task_id'], node_id, user_id)
-        except ValidationError as exc:
-            if 'unavailable to this owner' not in str(exc):
-                raise
+        except OwnerUnavailable:
             existing = None
         if existing is not None:
             canonical = json.dumps(request, ensure_ascii=False, sort_keys=True,

@@ -325,19 +325,41 @@ raise SystemExit(app.exec())
         self.assertIn('Nastavení', payload['error'])
 
     def test_invalid_search_evaluation_has_actionable_diagnostic(self):
+        from spikes.chat_service import InvalidSearchEvaluation
+        raised = []
         class Service:
             def task_search_confirm(self, _request):
-                raise ValidationError(
-                    'Ollama returned an invalid iterative search evaluation')
+                raise raised[-1]
         driver = test_local_api.LocalAPITests()
         with running_api('http', handler=DesktopHandler) as server:
             server.chat_service = Service()
+            # The type decides (B-ODD-03): a changed message keeps the diagnostic.
+            raised.append(InvalidSearchEvaluation('Model evaluation changed wording'))
             response = driver.request(server, path='/v1/tasks/search/confirm', body=b'{}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 422 ', head)
+            message = json.loads(body)['error']
+            self.assertIn('neplatné hodnocení výsledků hledání', message)
+            self.assertIn('Zahoďte tento návrh', message)
+            # The old text on an untyped error no longer selects the branch.
+            raised.append(ValidationError('Ollama returned an invalid iterative search evaluation'))
+            response = driver.request(server, path='/v1/tasks/search/confirm', body=b'{}')
+            self.assertNotIn('neplatné hodnocení výsledků hledání',
+                             json.loads(response.split(b'\r\n\r\n', 1)[1])['error'])
+
+    def test_invalid_presentation_proposal_has_specific_diagnostic(self):
+        from spikes.presentation_proposals import InvalidPresentationProposal
+        class Service:
+            def task_route(self, _request):
+                raise InvalidPresentationProposal('Invalid presentation slide proposal')
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.chat_service = Service()
+            response = driver.request(server, path='/v1/tasks/route', body=b'{}')
         head, body = response.split(b'\r\n\r\n', 1)
         self.assertIn(b' 422 ', head)
-        message = json.loads(body)['error']
-        self.assertIn('neplatné hodnocení výsledků hledání', message)
-        self.assertIn('Zahoďte tento návrh', message)
+        self.assertIn('Ollama vytvořila návrh prezentace, ale ten nesplnil povinný formát',
+                      json.loads(body)['error'])
 
     def test_notebooklm_desktop_uses_shared_page_and_exact_native_capabilities(self):
         desktop = Path('spikes/desktop.py').read_text()

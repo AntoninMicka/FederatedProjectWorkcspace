@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock, safe_busy_resource
+from spikes.background_workers import report_failure
 import re
 import sqlite3
 import ssl
@@ -1369,6 +1370,9 @@ class ContentSyncControl:
             state = 'offline'; detail = type(exc).__name__; error = exc
         except (ValueError, sqlite3.Error, subprocess.SubprocessError) as exc:
             state = 'error'; detail = str(exc); error = exc
+        except Exception as exc:
+            # Unknown class: record a generic durable error, never only vanish.
+            state = 'error'; detail = type(exc).__name__; error = exc
         with _database(self.node) as db:
             previous = db.execute(
                 'SELECT last_sent,last_remote FROM runtime '
@@ -1541,10 +1545,11 @@ class ManualSyncTasks:
                                  'Content synchronization is running')
                     self._run(task['node'], task['deployment'], key[1], key[2],
                               task['stopping'], key)
-            except Exception:
+            except Exception as exc:
                 # A failed status write must not strand the volatile node queue.
                 # Native journal recovery remains authoritative; never resend.
-                pass
+                report_failure('manual-content-sync', exc, target=f'{key[1]}/{key[2]}',
+                               expected=(SyncBusy, SyncCancelled))
             finally:
                 with self.lock:
                     if self.tasks.get(key) is task:
@@ -1578,8 +1583,10 @@ class ManualSyncTasks:
             ContentSyncControl(node, deployment=deployment).synchronize(
                 peer_id, project_id, cancelled=stopping.is_set, owner_wait=NETWORK_TIMEOUT)
             completed = True
-        except Exception:
-            pass
+        except Exception as exc:
+            # synchronize() already recorded the durable runtime state.
+            report_failure('manual-content-sync', exc, target=f'{peer_id}/{project_id}',
+                           expected=(SyncBusy, SyncCancelled))
         finally:
             if completed and stopping.is_set():
                 self._status(node, peer_id, project_id, 'idle',
@@ -1607,10 +1614,11 @@ class ContentSyncScheduler:
             try:
                 self.control.run_automatic()
                 delay = self.interval
-            except Exception:
+            except Exception as exc:
                 # Registry/catalog startup can race another scheduler. A
                 # transient read failure must not permanently kill content
                 # synchronization for the rest of the process lifetime.
+                report_failure(self.NAME, exc)
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 
