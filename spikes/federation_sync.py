@@ -3,7 +3,6 @@
 """Bidirectional, policy-scoped native Git bundle synchronization."""
 from spikes.http_request_budget import RequestReadTimeout
 import hashlib
-import ipaddress
 import json
 import os
 import fcntl
@@ -13,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock, safe_busy_resource
 from spikes.background_workers import report_failure
+from spikes.peer_transport import CONTENT_SYNC_TIMEOUT, private_peer_endpoint, stop_timeout
 import re
 import sqlite3
 import ssl
@@ -22,7 +22,6 @@ import subprocess
 import tempfile
 import threading
 import time
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from spikes.administration import (
@@ -53,7 +52,6 @@ from spikes.storage import Git
 from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic, current_phase, safe_peer_phase
 
 
-NETWORK_TIMEOUT = 60
 
 PATH = '/v1/federation/content-sync'
 CONTENT_TYPE = 'application/vnd.federated-workspace.content-sync-v2'
@@ -1093,20 +1091,14 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         raise SyncCancelled('Content sync cancelled before transport')
     if not peer.get('endpoint'):
         raise AccessDenied('Peer can synchronize content only when it connects')
-    parsed = urlsplit(peer['endpoint'])
-    require(parsed.scheme == 'https' and not parsed.path.strip('/')
-            and not parsed.username and not parsed.password
-            and not parsed.query and not parsed.fragment,
-            'Invalid content sync peer endpoint')
-    address = ipaddress.ip_address(parsed.hostname)
-    require(address.version == 4 and not address.is_unspecified
-            and (address.is_private or address.is_loopback),
-            'Content sync peer must use a private IPv4 address')
+    parsed, address = private_peer_endpoint(
+        peer['endpoint'], invalid='Invalid content sync peer endpoint',
+        private='Content sync peer must use a private IPv4 address')
     ca = Path(ca) if ca else private_root(node) / (peer_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     connection = DeadlineHTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+        str(address), parsed.port or 443, context=context, timeout=CONTENT_SYNC_TIMEOUT)
     response = None
     try:
         phase('upload')
@@ -1319,7 +1311,7 @@ class ContentSyncControl:
     def synchronize(self, peer_id, project_id, *, cancelled=None, owner_wait=0, state_manifest=False):
         try:
             identifier(peer_id); identifier(project_id)
-            require(type(owner_wait) in (int, float) and 0 <= owner_wait <= NETWORK_TIMEOUT,
+            require(type(owner_wait) in (int, float) and 0 <= owner_wait <= CONTENT_SYNC_TIMEOUT,
                     'Invalid synchronization admission wait')
             if cancelled is not None and cancelled():
                 raise SyncCancelled('Content sync cancelled before ownership')
@@ -1581,7 +1573,7 @@ class ManualSyncTasks:
         completed = False
         try:
             ContentSyncControl(node, deployment=deployment).synchronize(
-                peer_id, project_id, cancelled=stopping.is_set, owner_wait=NETWORK_TIMEOUT)
+                peer_id, project_id, cancelled=stopping.is_set, owner_wait=CONTENT_SYNC_TIMEOUT)
             completed = True
         except Exception as exc:
             # synchronize() already recorded the durable runtime state.
@@ -1597,7 +1589,7 @@ _MANUAL_SYNCS = ManualSyncTasks()
 
 
 class ContentSyncScheduler:
-    NAME, STOP_TIMEOUT = 'federation-content-sync', 65
+    NAME, STOP_TIMEOUT = 'federation-content-sync', stop_timeout(CONTENT_SYNC_TIMEOUT)
 
     def __init__(self, node, *, deployment, interval=60):
         self.control = ContentSyncControl(node, deployment=deployment)

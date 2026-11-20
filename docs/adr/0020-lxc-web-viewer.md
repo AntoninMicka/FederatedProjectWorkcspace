@@ -79,3 +79,12 @@ Crash boundaries se nemění: TLS vzniká před aplikačním release/current
 snapshotem a není jeho součástí. Přerušené nebo neúplné TLS podklady se nesmějí
 vydávat za úspěšnou instalaci; další běžný deploy je ověří a znovu vytvoří.
 `--recover` vrací aplikační current, unit a stav služby, nikoli předchozí CA.
+
+## Doplnění 2026-11-20: IPv4 jako výslovné rozhodnutí (AUDIT-B5-T1)
+
+Dosavadní předpoklad „jen IPv4“ pro bind webového serveru, podsíť klientů,
+adresu kontejneru a federační peer je výslovné rozhodnutí. Adresa IPv6 se
+odmítá viditelnou chybou a nikdy se tiše nepoužije jiná adresa. Peer politika
+a pojmenované síťové rozpočty jsou na jednom místě
+(`spikes/peer_transport.py`). Důvody a podmínky budoucí podpory IPv6:
+[síťové rozpočty a adresa peeru](../network-limits.md#rozhodnutí-o-ipv6).

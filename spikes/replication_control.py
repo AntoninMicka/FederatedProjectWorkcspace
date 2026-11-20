@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Shared web/desktop control plane for one-shot personal replication."""
 from spikes.background_workers import report_failure
+from spikes.peer_transport import REPLICATION_TIMEOUT, stop_timeout
 from spikes.request_ownership import bounded_flock
 import fcntl
 import os
@@ -121,7 +122,7 @@ class ReplicationControl:
 
 class ReplicationScheduler:
     """Periodically reconcile enabled primary grants without blocking the UI."""
-    NAME, STOP_TIMEOUT = 'project-replication', 35
+    NAME, STOP_TIMEOUT = 'project-replication', stop_timeout(REPLICATION_TIMEOUT)
 
     def __init__(self, node, *, deployment, interval=60):
         self.control = ReplicationControl(node, deployment=deployment)

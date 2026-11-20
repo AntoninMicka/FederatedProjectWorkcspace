@@ -739,7 +739,11 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     network = ipaddress.ip_network(lan)
     if network.version != 4 or network.prefixlen < 8 or not network.is_private:
         raise ValueError('Specify a private IPv4 LAN subnet')
-    ipaddress.IPv4Address(bind)
+    try:
+        ipaddress.IPv4Address(bind)
+    except ValueError:
+        # IPv4 only is a documented decision (docs/network-limits.md).
+        raise ValueError('Specify a literal IPv4 bind address; IPv6 is not supported') from None
     hostname = validate_hostname(hostname)
     token = secret(token_file)
     creator = ProjectCreation(node)

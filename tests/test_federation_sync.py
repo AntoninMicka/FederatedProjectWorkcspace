@@ -1082,7 +1082,7 @@ class FederationSyncTests(unittest.TestCase):
             return result
         try:
             with patch.object(SyncReceiver, 'receive', delayed_receive), \
-                    patch('spikes.federation_sync.NETWORK_TIMEOUT', 1.5):
+                    patch('spikes.federation_sync.CONTENT_SYNC_TIMEOUT', 1.5):
                 with self.assertRaises(TimeoutError):
                     synchronize(self.nodes[0], self.node_ids[1], self.project_id,
                                 deployment='web')

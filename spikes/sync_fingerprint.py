@@ -5,14 +5,12 @@ from collections import OrderedDict
 import threading
 import time
 import hashlib
-import ipaddress
 import json
 from pathlib import Path
 import re
 import sqlite3
 import ssl
 import subprocess
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from spikes.administration import AccessDenied, identifier
@@ -21,6 +19,7 @@ from spikes.git_budget import git_budget
 from spikes.http_deadline import DeadlineHTTPSConnection
 from spikes.http_request_budget import RequestReadTimeout
 from spikes.metadata import require
+from spikes.peer_transport import CONTENT_STATE_TIMEOUT, private_peer_endpoint
 from spikes.project_replication import _signature, _verify
 from spikes.request_ownership import ProjectBusy, bounded_project_requests
 
@@ -163,19 +162,15 @@ def probe(service, peer_id, *, ca=None, projects=()):
     authority = _authority(service, peer_id)
     local, peer, _, _ = authority
     require(peer.get('endpoint'), 'Content state peer endpoint is unavailable')
-    parsed = urlsplit(peer['endpoint'])
-    require(parsed.scheme == 'https' and not parsed.path.strip('/') and not parsed.username
-            and not parsed.password and not parsed.query and not parsed.fragment,
-            'Invalid content state endpoint')
-    address = ipaddress.ip_address(parsed.hostname)
-    require(address.version == 4 and not address.is_unspecified
-            and (address.is_private or address.is_loopback), 'Content state requires private IPv4')
+    parsed, address = private_peer_endpoint(
+        peer['endpoint'], invalid='Invalid content state endpoint',
+        private='Content state requires private IPv4')
     request = dict(schema_version=1, source_node_id=local, recipient_node_id=peer_id, nonce=str(uuid4()), projects=sorted(set(projects)))
     validate(request, response=False)
     raw = canonical(_signature(service.root, request, local, 'state_request'))
     context = ssl.create_default_context(cafile=str(ca or private_root(service.node)/(peer_id+'-ca.pem')))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    connection = DeadlineHTTPSConnection(str(address), parsed.port or 443, context=context, timeout=15)
+    connection = DeadlineHTTPSConnection(str(address), parsed.port or 443, context=context, timeout=CONTENT_STATE_TIMEOUT)
     response = None
     try:
         connection.request('POST', PATH, body=raw, headers={'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc})

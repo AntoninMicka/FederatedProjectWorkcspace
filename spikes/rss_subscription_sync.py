@@ -1,16 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Explicit, signed node-to-node RSS preference exchange; no article fetches."""
-import ipaddress
 import json
 from pathlib import Path
 import ssl
 import sqlite3
 import subprocess
-from urllib.parse import urlsplit
 
 from spikes.administration import Administration,AccessDenied
 from spikes.background_workers import report_failure
+from spikes.peer_transport import RSS_EXCHANGE_TIMEOUT,private_peer_endpoint
 from spikes.federation_accounts import canonical
 from spikes.federation_catalog import _authority
 from spikes.http_deadline import DeadlineHTTPSConnection
@@ -82,14 +81,11 @@ def receive(service,envelope,*,checkpoint=lambda stage:None):
 
 
 def exchange(node,peer,envelope,ca=None):
-    parsed=urlsplit(peer['endpoint'])
-    require(parsed.scheme=='https' and not parsed.path.strip('/') and not parsed.query and not parsed.fragment
-            and not parsed.username and not parsed.password,'Invalid RSS peer endpoint')
-    address=ipaddress.ip_address(parsed.hostname)
-    require(address.version==4 and not address.is_unspecified and (address.is_private or address.is_loopback),'RSS peer requires private IPv4')
+    parsed,address=private_peer_endpoint(peer['endpoint'],invalid='Invalid RSS peer endpoint',
+                                         private='RSS peer requires private IPv4')
     context=ssl.create_default_context(cafile=str(ca or private_root(node)/(peer['id']+'-ca.pem')))
     context.minimum_version=ssl.TLSVersion.TLSv1_2
-    connection=DeadlineHTTPSConnection(str(address),parsed.port or 443,context=context,timeout=15)
+    connection=DeadlineHTTPSConnection(str(address),parsed.port or 443,context=context,timeout=RSS_EXCHANGE_TIMEOUT)
     response=None
     try:
         raw=canonical(envelope);require(len(raw)<=MAX_BODY,'RSS exchange exceeds limit')
