@@ -164,7 +164,7 @@ def probe(service, peer_id, *, ca=None, projects=()):
     require(peer.get('endpoint'), 'Content state peer endpoint is unavailable')
     parsed, address = private_peer_endpoint(
         peer['endpoint'], invalid='Invalid content state endpoint',
-        private='Content state requires private IPv4')
+        private='Content state requires a private IP address')
     request = dict(schema_version=1, source_node_id=local, recipient_node_id=peer_id, nonce=str(uuid4()), projects=sorted(set(projects)))
     validate(request, response=False)
     raw = canonical(_signature(service.root, request, local, 'state_request'))

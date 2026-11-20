@@ -229,7 +229,7 @@ def synchronize(node, peer_id, *, deployment='desktop', ca=None):
         raise AccessDenied('Peer can synchronize only when it connects')
     parsed, address = private_peer_endpoint(
         peer['endpoint'], invalid='Invalid catalog peer endpoint',
-        private='Catalog peer must use a private IPv4 address')
+        private='Catalog peer must use a private IP address')
     ca = Path(ca) if ca else private_root(node) / (peer_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2

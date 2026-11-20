@@ -3,6 +3,7 @@
 """HTTPS LAN workspace with project creation and local user/peer administration."""
 import argparse
 import ipaddress
+import socket
 import hmac
 import os
 from pathlib import Path
@@ -16,6 +17,7 @@ from urllib.parse import urlsplit
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import BoundedHTTPServer
+from spikes.peer_transport import canonical_address, origin, private_lan
 from spikes.http_admission_policy import validate_route_ownership
 from spikes.chat_service import ChatService
 from spikes.project_creation import ProjectCreation
@@ -181,7 +183,8 @@ class WebHandler(DesktopHandler):
         # Pin authority to this connection, never to shared mutable server state
         # or untrusted Host/X-Forwarded-* headers.
         ip, port = self.connection.getsockname()[:2]
-        self.local_authority = f'{ip}:{port}'
+        # Browsers send an IPv6 authority in brackets: [fd00::1]:8443.
+        self.local_authority = origin(ip, port).removeprefix('https://')
 
     def request_authority(self):
         authority = self.single('Host')
@@ -704,10 +707,16 @@ class WebHandler(DesktopHandler):
 
 
 class WebServer(BoundedHTTPServer):
+    def __init__(self, server_address, handler, **kwargs):
+        # The listener family follows the literal bind address (IPv4 or IPv6).
+        if ipaddress.ip_address(server_address[0]).version == 6:
+            self.address_family = socket.AF_INET6
+        super().__init__(server_address, handler, **kwargs)
+
     def get_request(self):
         connection, address = super().get_request()
         try:
-            peer = ipaddress.ip_address(address[0])
+            peer = canonical_address(address[0])
             if not self.application_access.allows(peer):
                 raise OSError('Client outside configured application access policy')
             connection.settimeout(2)
@@ -737,13 +746,16 @@ def validate_hostname(hostname):
 def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     validate_route_ownership(WebHandler.post_paths)
     network = ipaddress.ip_network(lan)
-    if network.version != 4 or network.prefixlen < 8 or not network.is_private:
-        raise ValueError('Specify a private IPv4 LAN subnet')
+    if not private_lan(network):
+        raise ValueError('Specify a private LAN subnet: IPv4 /8 or narrower, or IPv6 unique local fc00::/7')
+    if bind is None:
+        bind = '0.0.0.0' if network.version == 4 else '::'
     try:
-        ipaddress.IPv4Address(bind)
+        address = ipaddress.ip_address(bind)
     except ValueError:
-        # IPv4 only is a documented decision (docs/network-limits.md).
-        raise ValueError('Specify a literal IPv4 bind address; IPv6 is not supported') from None
+        raise ValueError('Specify a literal IPv4 or IPv6 bind address') from None
+    if address.version != network.version:
+        raise ValueError('Bind address and LAN subnet must use the same IP version')
     hostname = validate_hostname(hostname)
     token = secret(token_file)
     creator = ProjectCreation(node)
@@ -799,7 +811,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bind', default='0.0.0.0')
+    parser.add_argument('--bind', help='literal IP address; default 0.0.0.0 or :: by the LAN version')
     parser.add_argument('--port', type=int, default=8443)
     for option in ('lan', 'cert', 'key', 'token-file', 'node'):
         parser.add_argument('--' + option, required=True)

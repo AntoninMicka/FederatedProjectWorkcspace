@@ -82,7 +82,7 @@ def receive(service,envelope,*,checkpoint=lambda stage:None):
 
 def exchange(node,peer,envelope,ca=None):
     parsed,address=private_peer_endpoint(peer['endpoint'],invalid='Invalid RSS peer endpoint',
-                                         private='RSS peer requires private IPv4')
+                                         private='RSS peer requires a private IP address')
     context=ssl.create_default_context(cafile=str(ca or private_root(node)/(peer['id']+'-ca.pem')))
     context.minimum_version=ssl.TLSVersion.TLSv1_2
     connection=DeadlineHTTPSConnection(str(address),parsed.port or 443,context=context,timeout=RSS_EXCHANGE_TIMEOUT)

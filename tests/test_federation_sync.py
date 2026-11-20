@@ -8,6 +8,7 @@ import hashlib
 import json
 import secrets
 import ssl
+import socket
 import subprocess
 import sys
 import tempfile
@@ -1047,6 +1048,33 @@ class FederationSyncTests(unittest.TestCase):
         refs, payload = _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'})
         self.assertEqual(len(refs), 2)
         self.assertTrue(payload)
+
+    def test_pinned_https_endpoint_exchanges_bundle_over_ipv6(self):
+        # AUDIT-B5-T1: IPv6 is supported; a non-canonical spelling of the peer
+        # address still matches the receiver's socket authority.
+        self.map_users()
+        tls = NetworkBackend(self.nodes[1]).generate('::1', 8443, 'fd00::/64')
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(tls['cert'], tls['key'])
+        server = WebServer(('::1', 0), ProbeHandler)
+        self.assertEqual(server.socket.family, socket.AF_INET6)
+        server.tls = context; server.hostname = None
+        server.application_access = AllowLoopback()
+        server.node = self.nodes[1]; server.administration = self.services[1]
+        thread = threading.Thread(target=server.serve_forever); thread.start()
+        self.addCleanup(server.server_close); self.addCleanup(thread.join)
+        self.addCleanup(server.shutdown)
+        endpoint = 'https://[0:0:0:0:0:0:0:1]:' + str(server.server_port)
+        self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
+                    endpoint=endpoint, trust='approved', sharing_level='same-team')
+        trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+        result = synchronize(self.nodes[0], self.node_ids[1], self.project_id,
+                             deployment='web')
+        self.assertEqual(result['state'], 'idle')
+        from spikes.federation_sync import _database
+        with _database(self.nodes[1]) as db:
+            self.assertGreaterEqual(db.execute('SELECT COUNT(*) FROM inbound').fetchone()[0], 1)
 
     def test_pinned_https_endpoint_exchanges_native_bundle(self):
         self.map_users()

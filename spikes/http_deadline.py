@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""One monotonic transport budget for pinned, literal-IPv4 HTTPS peers.
+"""One monotonic transport budget for pinned HTTPS peers on a literal IPv4 or IPv6 address.
 
 Socket inactivity timeouts alone do not bound a trickling HTTP status/header/body.
 Keep stdlib HTTP parsing and TLS verification; update the remaining budget at
@@ -95,15 +95,18 @@ class _Socket:
 class DeadlineHTTPSConnection(http.client.HTTPSConnection):
     def __init__(self, host, port=None, *, context, timeout):
         # Callers retain their own private-address policy and pinned CA checks.
-        # Literal IPv4 lets connect avoid an unbounded system DNS resolver.
-        self.address = str(ipaddress.IPv4Address(host))
+        # A literal address (IPv4 or IPv6) lets connect avoid an unbounded
+        # system DNS resolver; host names are refused here.
+        address = ipaddress.ip_address(host)
+        self.address = str(address)
+        self.family = socket.AF_INET if address.version == 4 else socket.AF_INET6
         self.deadline = _Deadline(timeout)
         super().__init__(host, port, context=context, timeout=timeout)
 
     def connect(self):
         if self._tunnel_host is not None:
             raise ValueError('Peer transport does not support proxy tunnels')
-        transport = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        transport = socket.socket(self.family, socket.SOCK_STREAM)
         try:
             transport.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             transport.settimeout(self.deadline.remaining())

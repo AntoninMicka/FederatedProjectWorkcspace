@@ -564,7 +564,7 @@ def send(node, replication_id, operation_id, expected_base, *, ca=None,
     peer = authority['peer']
     parsed, address = private_peer_endpoint(
         peer['endpoint'], invalid='Invalid replication peer endpoint',
-        private='Replication peer must use a private IPv4 address')
+        private='Replication peer must use a private IP address')
     ca = Path(ca) if ca else private_root(node) / (peer['id'] + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2

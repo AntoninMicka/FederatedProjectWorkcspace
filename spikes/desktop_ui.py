@@ -474,7 +474,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <form id="federation-network-form">
 <fieldset><legend>HTTPS backend desktopu</legend>
 <label class="confirm"><input name="enabled" type="checkbox"> Povolit HTTPS backend při běhu desktopu</label>
-<label>Naslouchací privátní IPv4 <input name="bind" type="text" list="federation-network-addresses" maxlength="45" required autocomplete="off"></label>
+<label>Naslouchací privátní IP adresa (IPv4 nebo IPv6) <input name="bind" type="text" list="federation-network-addresses" maxlength="45" required autocomplete="off"></label>
 <datalist id="federation-network-addresses"></datalist>
 <label>Port <input name="port" type="number" min="1024" max="65535" required></label>
 <label>Povolená LAN klientů <input name="lan" type="text" maxlength="64" required autocomplete="off"></label>
