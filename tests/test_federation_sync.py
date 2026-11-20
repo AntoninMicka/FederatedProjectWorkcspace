@@ -625,6 +625,85 @@ class FederationSyncTests(unittest.TestCase):
                         message=name)
         return workspace.git.head()
 
+    def test_receiver_validates_only_history_it_does_not_hold(self):
+        # AUDIT-B7-T1: re-validating the whole history on every receive did not
+        # fit the git budget on the router, so large projects never synchronized.
+        import spikes.federation_sync as sync
+        from spikes.git_budget import effective_deadline
+        self.commit_marker(0, 'shared')
+        self.exchange(0, 1)
+        held = Projects(self.nodes[1]).workspace(self.project_id).git.head()
+        self.commit_marker(0, 'new on the sender')
+        calls = []
+        original = sync.validate_histories
+        original_receive = sync.SyncReceiver.receive
+        def spy(git, heads, project_id, privacy, trusted=()):
+            calls.append((list(trusted), effective_deadline(None) - time.monotonic()))
+            return original(git, heads, project_id, privacy, trusted=trusted)
+        with patch('spikes.federation_sync.SyncReceiver.receive', autospec=True,
+                   side_effect=lambda receiver, *args, **kwargs: (
+                       calls.append('receive'), original_receive(receiver, *args, **kwargs))[1]), \
+                patch('spikes.federation_sync.validate_histories', side_effect=spy):
+            self.exchange(0, 1)
+        # Export validation precedes the receive; take the receiver's own call.
+        receiver_trusted, budget = calls[calls.index('receive') + 1]
+        self.assertEqual(receiver_trusted, [held])
+        self.assertLessEqual(budget, sync.CONTENT_RECEIVE_BUDGET)
+        self.assertLess(sync.CONTENT_RECEIVE_BUDGET, sync.CONTENT_SYNC_TIMEOUT)
+        self.assertEqual(Projects(self.nodes[1]).workspace(self.project_id).git.head(),
+                         Projects(self.nodes[0]).workspace(self.project_id).git.head())
+
+    def test_initial_share_still_validates_the_whole_history(self):
+        import spikes.federation_sync as sync
+        self.commit_marker(0, 'first')
+        calls = []
+        original = sync.validate_histories
+        def spy(git, heads, project_id, privacy, trusted=()):
+            calls.append(list(trusted))
+            return original(git, heads, project_id, privacy, trusted=trusted)
+        original_receive = sync.SyncReceiver.receive
+        with patch('spikes.federation_sync.SyncReceiver.receive', autospec=True,
+                   side_effect=lambda receiver, *args, **kwargs: (
+                       calls.append('receive'), original_receive(receiver, *args, **kwargs))[1]), \
+                patch('spikes.federation_sync.validate_histories', side_effect=spy):
+            self.exchange(0, 1)
+        self.assertEqual(calls[calls.index('receive') + 1], [],
+                         'A receiver without the project trusts no history')
+
+    def test_peer_that_accepts_but_never_answers_is_unanswered_not_offline(self):
+        from spikes.federation_sync import ContentSyncControl, PeerTimeout, _database
+        tls = NetworkBackend(self.nodes[1]).generate('127.0.0.1', 8443, '127.0.0.0/8')
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(tls['cert'], tls['key'])
+        listener = socket.create_server(('127.0.0.1', 0))
+        self.addCleanup(listener.close)
+        held = []
+        def accept():
+            try:
+                connection, _ = listener.accept()
+                held.append(context.wrap_socket(connection, server_side=True))  # handshake, then silence
+            except OSError:
+                pass
+        threading.Thread(target=accept, daemon=True).start()
+        port = listener.getsockname()[1]
+        self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
+                    endpoint=f'https://127.0.0.1:{port}', trust='approved', sharing_level='same-team')
+        trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+        with patch('spikes.federation_sync.CONTENT_SYNC_TIMEOUT', 1.5):
+            with self.assertRaises(PeerTimeout):
+                ContentSyncControl(self.nodes[0], deployment='web').synchronize(self.node_ids[1], self.project_id)
+        for item in held: item.close()
+        with _database(self.nodes[0]) as db:
+            self.assertEqual(db.execute('SELECT state FROM runtime WHERE project_id=?',
+                                        (self.project_id,)).fetchone()[0], 'unanswered')
+        listener.close()
+        with self.assertRaises(OSError) as unreachable:
+            ContentSyncControl(self.nodes[0], deployment='web').synchronize(self.node_ids[1], self.project_id)
+        self.assertNotIsInstance(unreachable.exception, PeerTimeout)
+        with _database(self.nodes[0]) as db:
+            self.assertEqual(db.execute('SELECT state FROM runtime WHERE project_id=?',
+                                        (self.project_id,)).fetchone()[0], 'offline')
+
     def test_initial_import_and_fast_forward_work_in_both_directions(self):
         first = self.commit_marker(0, 'first')
         self.exchange(0, 1)

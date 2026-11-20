@@ -26,6 +26,7 @@ i čtení odpovědi. Nejde o timeout jedné operace soketu.
 | `ENROLLMENT_TIMEOUT` | 10 s | jeden požadavek enrollmentu |
 | `PROBE_TIMEOUT` | 5 s | interaktivní test spojení s peerem |
 | `SHUTDOWN_MARGIN` | 5 s | rezerva při ukončení plánovače nad rámec rozběhnuté výměny |
+| `CONTENT_RECEIVE_BUDGET` | 45 s | ověření historie přijatého balíku synchronizace obsahu; o `RESPONSE_MARGIN` (15 s) kratší než lhůta odesílatele, aby přetížený příjemce stihl odpovědět „busy“ |
 
 Lhůta pro ukončení plánovače (`STOP_TIMEOUT`) se počítá jako
 `stop_timeout(rozpočet)`, tedy rozpočet plus `SHUTDOWN_MARGIN`. Dřív šlo
@@ -36,6 +37,12 @@ a literály 10 s a 5 s v enrollmentu a testu spojení.
 Mimo rozsah zůstávají ostatní číselné `timeout=` (audit jich napočítal 91).
 Většina z nich patří SQLite, které řešil B-LOCK-08 v AUDIT-B2. Zbytek tvoří
 lokální subprocesy s vlastní hodnotou přímo u volání.
+
+Když peer spojení přijme, ale do konce rozpočtu neodpoví, synchronizace
+obsahu skončí stavem `unanswered` („neodpověděl včas“), ne `offline`. Peer
+je dosažitelný a další pokus zopakuje stejnou uloženou operaci. Stav
+`offline` zůstává pro nedostupný peer (spojení se nenavázalo). Podrobnosti
+k ověřování na příjmu jsou v [ADR 0042](adr/0042-bidirectional-native-git-sharing-sync.md).
 
 ## IPv4 a IPv6
 

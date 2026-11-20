@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock, safe_busy_resource
 from spikes.background_workers import report_failure
-from spikes.peer_transport import CONTENT_SYNC_TIMEOUT, private_peer_endpoint, stop_timeout
+from spikes.peer_transport import (CONTENT_RECEIVE_BUDGET, CONTENT_SYNC_TIMEOUT,
+                                   private_peer_endpoint, stop_timeout)
 import re
 import sqlite3
 import ssl
@@ -86,6 +87,14 @@ class SyncRejected(ValueError):
 
 class SyncCancelled(Exception):
     pass
+
+
+class PeerTimeout(TimeoutError):
+    """The peer accepted the connection but did not answer within the budget.
+
+    Not "offline" (AUDIT-B7-T1): the peer is reachable and may still be
+    working on the same saved operation, which the next attempt replays.
+    """
 
 
 class SyncBusy(Exception):
@@ -434,9 +443,33 @@ def _pool_payload(exchange, payload):
     return payload[-size:] if size else b''
 
 
+def _trusted_heads(node, project_id):
+    """Branch heads of the receiver's own project history (AUDIT-B7-T1).
+
+    Commits reachable from them were validated when they entered this
+    repository, by the local writer or by an earlier verified receive, so an
+    incoming bundle needs no second validation of them. Only refs/heads count;
+    staging refs of unfinished receives never become trusted. No local project
+    (an initial share) means no trusted history.
+    """
+    binding = _binding(node, project_id)
+    if binding is None:
+        return []
+    try:
+        raw = git_run(Git(Path(binding['root'])), 'for-each-ref', '--format=%(objectname)',
+                      'refs/heads/').stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return sorted(set(raw))[:64]
+
+
 @git_budget()
-def _validate_git_bundle(payload, refs, project_id, repo):
-    """Check the complete native bundle in an isolated object store."""
+def _validate_git_bundle(payload, refs, project_id, repo, trusted=()):
+    """Check the native bundle in an isolated object store.
+
+    Every commit not reachable from ``trusted`` (the receiver's own validated
+    heads that the bundle also contains) is validated; see _trusted_heads.
+    """
     repo.mkdir(mode=0o700)
     git=Git(repo);git_run(git,'init','--bare','--template=')
     bundle=repo.parent/('verify-'+str(uuid4())+'.bundle');bundle.write_bytes(payload)
@@ -446,7 +479,9 @@ def _validate_git_bundle(payload, refs, project_id, repo):
         require(actual==refs,'Git bundle refs differ from signed inventory')
         git_run(git,'-c','protocol.file.allow=always','fetch','--no-tags',str(bundle),
                 *[row['ref']+':'+row['ref'] for row in actual])
-        validate_histories(git, [row['head'] for row in actual], project_id, PRIVACY)
+        present = [head for head in trusted
+                   if git_run(git, 'cat-file', '-e', head + '^{commit}', check=False).returncode == 0]
+        validate_histories(git, [row['head'] for row in actual], project_id, PRIVACY, trusted=present)
     finally:
         bundle.unlink(missing_ok=True)
 
@@ -486,7 +521,8 @@ def _verify_bundle(node, exchange, payload, service=None):
         root = private_root(node)
         with tempfile.TemporaryDirectory(prefix='sharing-verify-', dir=root) as directory:
             directory = Path(directory)
-            _validate_git_bundle(bundle_payload,exchange['refs'],exchange['project_id'],directory/'repo.git')
+            _validate_git_bundle(bundle_payload,exchange['refs'],exchange['project_id'],directory/'repo.git',
+                                 trusted=_trusted_heads(node, exchange['project_id']))
     return bundle_payload, chats
 
 
@@ -921,7 +957,8 @@ class SyncReceiver:
                         '--untracked-files=all').stdout:
                     raise SyncConflict('Destination has local changes; review project conflicts')
         phase('receive-verify-history')
-        bundle, _ = _verify_bundle(self.node, exchange, payload, self.service)
+        with git_budget(CONTENT_RECEIVE_BUDGET):
+            bundle, _ = _verify_bundle(self.node, exchange, payload, self.service)
         verified = _VerifiedInboundBundle(
             exchange['operation_id'], exchange['project_id'], peer['id'], local_id, peer['fingerprint'],
             canonical(exchange['scope']),
@@ -1127,6 +1164,10 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
             typed = peer_unsupported_version(body, subject=peer_id)
             raise SyncRejected('Peer rejected content sync' + (f': {typed}' if typed else ''))
         response_envelope, response_payload = decode_body(body)
+    except TimeoutError as exc:
+        if connection.sock is None:
+            raise  # never connected: the peer is unreachable
+        raise PeerTimeout('Peer did not answer content sync in time') from exc
     finally:
         if response is not None:
             response.close()
@@ -1358,6 +1399,8 @@ class ContentSyncControl:
             state = 'busy'; detail = 'Synchronization deferred; saved operation retained'; error = exc
         except (AccessDenied, SyncRejected) as exc:
             state = 'rejected'; detail = str(exc); error = exc
+        except PeerTimeout as exc:
+            state = 'unanswered'; detail = str(exc); error = exc
         except (ConnectionError, TimeoutError, ssl.SSLError, OSError) as exc:
             state = 'offline'; detail = type(exc).__name__; error = exc
         except (ValueError, sqlite3.Error, subprocess.SubprocessError) as exc:

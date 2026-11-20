@@ -31,6 +31,17 @@ class HistoryValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unclassified historical file'):
             self.validate()
 
+    def test_worker_skips_trusted_history_and_rejects_malformed_trusted_heads(self):
+        trusted = self.git.head()
+        (self.git.root / 'unclassified.txt').write_text('Not transferable')
+        self.git.commit('Unexpected file')
+        with self.assertRaisesRegex(ValueError, 'Unclassified historical file'):
+            validate_histories(self.git, [self.git.head()], self.project, {'public'}, trusted=[trusted])
+        self.assertIsNone(validate_histories(self.git, [trusted], self.project, {'public'}, trusted=[trusted]))
+        with self.assertRaisesRegex(ValueError, 'Invalid trusted validation heads'):
+            _validate({'repo': str(self.git.root), 'heads': [trusted], 'trusted': ['HEAD'],
+                       'project_id': self.project, 'privacy': ['public'], 'deadline': time.monotonic() + 30})
+
     def test_capacity_rejects_without_waiting_and_is_reusable(self):
         self.assertTrue(_capacity.acquire(blocking=False))
         try:
@@ -103,9 +114,9 @@ class HistoryValidationTests(unittest.TestCase):
 
     def test_all_heads_share_one_absolute_worker_deadline(self):
         now = time.monotonic(); clock = [now]
-        def validation(*args):
+        def validation(*args, **kwargs):
             clock[0] += 35
-        request = dict(repo=str(self.git.root), heads=[self.git.head()] * 2,
+        request = dict(repo=str(self.git.root), heads=[self.git.head()] * 2, trusted=[],
                        project_id=self.project, privacy=['public'], deadline=now + 60)
         with patch('spikes.git_budget.time.monotonic', side_effect=lambda: clock[0]), \
              patch('spikes.git_transfer.validate_history', side_effect=validation) as native:

@@ -28,6 +28,11 @@ CONTENT_SYNC_TIMEOUT = 60         # one content sync bundle transfer
 ENROLLMENT_TIMEOUT = 10           # one enrollment request/response
 PROBE_TIMEOUT = 5                 # interactive peer connection test
 SHUTDOWN_MARGIN = 5               # join slack beyond the in-flight exchange
+RESPONSE_MARGIN = 15              # receiver work ends this long before the sender gives up
+# History verification of one received content sync bundle. Shorter than the
+# sender's exchange budget, so an overloaded receiver still answers "busy"
+# (git-budget) instead of the sender timing out (AUDIT-B7-T1).
+CONTENT_RECEIVE_BUDGET = CONTENT_SYNC_TIMEOUT - RESPONSE_MARGIN
 
 UNIQUE_LOCAL = ipaddress.ip_network('fc00::/7')
 MIN_IPV4_LAN_PREFIX = 8

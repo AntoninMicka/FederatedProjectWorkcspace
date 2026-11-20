@@ -139,3 +139,33 @@ Stejná hranice platí pro normalizovaný export počátečního přenosu/replik
 Dočasný export před durable intentem lze zahodit. Po publikaci platí původní
 ID, přesný payload, CAS/index recovery a immutable replay odpovědi podle
 ADR 0003 a 0081. Nejde o oslabení validace ani o nový retry protokol.
+
+### Doplnění 2026-11-20: ověření jen nové historie na příjmu (AUDIT-B7-T1)
+
+Příjemce dosud při každé synchronizaci znovu ověřoval celou historii balíku
+(až 500 commitů s úplným snímkem každého). Na routeru s LXC to pro projekt
+s 217 commity trvalo přes 60 s, příjem skončil `GitDeadlineExceeded`
+a každý další pokus začal od nuly. Velký projekt se tak nesynchronizoval
+nikdy.
+
+Rozhodnutí: příjemce nadále ověřuje každý commit, který ještě nemá ve
+vlastní historii projektu. Commity dosažitelné z jeho větví (`refs/heads/*`)
+už ověřil, když do repozitáře vstoupily: zapsal je lokální writer, nebo
+prošly dřívějším ověřeným příjmem. ID commitu určuje jeho obsah, proto je
+podruhé neověřuje. Platí:
+
+- důvěryhodné jsou jen hlavy větví, které balík také obsahuje, nikdy
+  staging refy nedokončených příjmů;
+- první nový commit se ověří jako přechod ze snímku svého důvěryhodného
+  rodiče;
+- bez lokálního projektu (počáteční sdílení) se ověřuje celá historie jako
+  dřív;
+- limit 500 commitů platí pro neověřenou část;
+- ověřování na příjmu má rozpočet `CONTENT_RECEIVE_BUDGET` (45 s), kratší
+  než lhůta odesílatele (60 s). Přetížený příjemce tak odpoví `busy`
+  (`git-budget`) a odesílatel uloženou operaci zopakuje.
+
+Hranice pádu se nemění: ověření proběhne před jakýmkoli trvalým záměrem
+a před publikací do projektu, jako dosud. Výsledek ověření se mezi příjmy
+neukládá, důvěra vychází jen z aktuálních větví příjemce. Export odesílatele
+a ověření odpovědi zůstávají beze změny.
