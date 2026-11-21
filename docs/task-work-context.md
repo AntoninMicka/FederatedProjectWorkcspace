@@ -110,20 +110,6 @@ na chybu vyzývající k opakování. Výslovný replay stejné nativní operace
 receipt bez druhého commitu; evidence nic sama neopakuje. Neznámý placený
 běh se řeší původním run journalem, nikdy novým automatickým pokusem.
 
-## Automatické záznamy uložených výstupů
-
-Po úspěšném uložení výstupu při práci v aktivním úkolu se automaticky uloží
-stručný záznam s odkazy na původní verzi výstupu. Další potvrzení není potřeba.
-Záznam najdete u původního úkolu v části **Plnění úkolu a výsledky**, i když
-mezitím přepnete na jiný úkol. Obsah dokumentu se do zadání nekopíruje a úkol
-se tím nedokončí. Neúspěšné a nepotvrzené operace ani neuložené návrhy takový
-záznam nevytvářejí. Komentář automatického záznamu lze později opravit;
-původní text zůstane v historii.
-
-Při přerušeném zápisu obnovení pracovního panelu dokončí pouze evidenci.
-Původní uložení ani placený běh neopakuje. Zápis při odebraných právech nebo
-změněném připraveném HEAD zůstává čekající na řešení původní operace.
-
 ## Přidání komentovaného záznamu
 
 V pravém panelu pod **Přidat záznam k úkolu** vyberte jednu nebo více
@@ -133,7 +119,7 @@ uchovají nabídku lokálně bez projektového commitu. **Otevřít nabídku** j
 znovu načte; pravidelné obnovení panelu neotevírá žádný modal a nepřepisuje
 právě psaný komentář. Neuložený editor podkladu zůstává samostatný.
 
-**Potvrdit a připojit** vytvoří verzovaný projektový artefakt s komentářem,
+**Potvrdit a připojit** uloží stručný komentář a odkazy přímo do textu původního úkolu a současně vytvoří verzovaný projektový artefakt s komentářem,
 původními event/operation/run referencemi a připnutými souborovými výsledky.
 Výsledky určuje nativní receipt a změněné artefakty v jeho Git commitu;
 vstupní podklady se samy nestávají výsledky.
@@ -180,7 +166,7 @@ ani do request payloadů lokálního journalu; v DB je pouze jeho hash.
 | `history` | Pouze `action`, bez window capability; readonly výpis nejvýše 50 vlastních relací s aktuální kontrolou oprávnění. |
 | `reclaim` | Capability nového prázdného okna, `operation_id`, `context_revision`, `work_session_id`, `session_revision`, `target_context_revision`, `confirmed: true`; vrátí rotovanou capability původního okna. |
 | `complete` | `operation_id`, `context_revision`, `work_session_id`, `session_revision`, `expected_head`, `confirmed: true`. |
-| `status` | Žádná; vrací ověřený stav a obnoví nejvýše deset vlastních čekajících automatických záznamů. |
+| `status` | Žádná; čte ověřený stav a případný pending záměr. |
 | `inspect` | `project_id`, `task_id`, `expected_head`; vrátí aktuální digest fragmentu pro start. |
 | `start` | `operation_id`, `context_revision`, `project_id`, `task_id`, `expected_head`, `fragment_sha256`, `selected_checklist` (`null` nebo platný index). |
 | `switch` | Pole startu a `work_session_id`, `session_revision` původní aktivní relace. |

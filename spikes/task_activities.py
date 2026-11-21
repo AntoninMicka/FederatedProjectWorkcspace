@@ -136,7 +136,7 @@ class TaskActivities:
                            (identifier, self.work.user_id, handle['window_id'], fingerprint, canonical(doc)))
         return identifier
 
-    def finish(self, identifier, code, payload, *, auto_record=False, checkpoint=lambda stage: None):
+    def finish(self, identifier, code, payload):
         require(type(code) is int, 'Invalid activity response')
         payload = payload if isinstance(payload, dict) else {}
         outcome = payload.get('outcome')
@@ -156,22 +156,15 @@ class TaskActivities:
             doc = json.loads(row['doc'])
             require(doc.get('record_type') == 'task-activity', 'Not an activity')
             # A rejected concurrent/replayed attempt cannot erase a confirmed native receipt.
-            if doc['outcome'] != 'succeeded':
-                if doc['outcome']!=outcome or doc['result_references']!=references(payload):
-                    from spikes.task_records import offer
-                    state=offer(doc);doc['offer']=dict(state,revision=state['revision']+1)
-                doc['privacy']=privacy_of([{'privacy':doc.get('privacy','local-only')},payload])
-                doc.update(outcome=outcome, response_code=code, updated_at=time.time(),
-                           result_references=references(payload))
-            if auto_record and doc['outcome']=='succeeded' and doc['kind'] in {
-                    'artifact-save','artifact-publish','source-import','file-edit','file-save',
-                    'file-commit','conversation-output','conversation-snapshot'}:
-                doc['auto_record_requested']=True
+            if doc['outcome'] == 'succeeded':
+                return
+            if doc['outcome']!=outcome or doc['result_references']!=references(payload):
+                from spikes.task_records import offer
+                state=offer(doc);doc['offer']=dict(state,revision=state['revision']+1)
+            doc['privacy']=privacy_of([{'privacy':doc.get('privacy','local-only')},payload])
+            doc.update(outcome=outcome, response_code=code, updated_at=time.time(),
+                       result_references=references(payload))
             self.work._save_operation(db, identifier, doc)
-        checkpoint('task-activity-before-auto-record')
-        if doc.get('auto_record_requested'):
-            from spikes.task_records import TaskRecords
-            TaskRecords(self.work).publish_automatic(identifier, checkpoint=checkpoint)
 
     def _readable(self, pid):
         if not self.work.can_read(pid):

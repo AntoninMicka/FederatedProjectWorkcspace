@@ -39,76 +39,48 @@ class TaskRecordTests(unittest.TestCase):
     def record(self):
         return self.service.for_session(self.handle,self.sid)[0][0]
 
-    def test_automatic_saved_output_is_pinned_once_without_confirmation_or_completion(self):
-        event=self.events[0]
-        self.activity.finish(event,200,{},auto_record=True)
-        record=self.record();head=self.work.projects.repository(self.f.f.pid).head()
-        self.assertEqual(record['context']['task_id'],'TASK-A')
-        self.assertEqual(record['outputs'][0]['artifact_id'],self.aid)
-        self.assertEqual(record['revisions'][0]['comment'],'Automaticky zaznamenáno: Uložení dokumentu')
+    def test_confirmation_writes_task_text_atomically_and_keeps_context_usable(self):
+        from spikes.markdown_documents import document,main_todo_id
+        git=self.work.projects.repository(self.f.f.pid)
+        before=git.snapshot(git.head())
+        self.assertEqual(self.service.for_session(self.handle,self.sid)[0],[])
+        request=self.request();result=self.service.execute(request)
+        current=git.snapshot(git.head());entities=validate_snapshot(current)
+        body=document(current,entities,main_todo_id(self.f.f.pid))['body']
+        self.assertIn('Inventář je připraven ke kontrole.',body)
+        self.assertIn('artifacts/'+self.aid+'/content.md',body)
+        self.assertNotIn('Original inventory',body)
+        self.assertFalse(self.f.active()['blocked'])
         self.assertFalse(self.f.active()['current_task']['checked'])
-        self.activity.finish(event,200,{},auto_record=True)
-        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
-        self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
+        record=self.record();marker='<!-- fpw-task-record:'+record['id']+' -->'
+        self.assertEqual(body.count(marker),1)
+        head=git.head();self.service.execute(request);self.assertEqual(git.head(),head)
+        self.assertEqual(set(before)-set(current),set())
+        changed=[path for path in before if before[path]!=current[path]]
+        self.assertEqual(changed,['artifacts/'+main_todo_id(self.f.f.pid)+'/content.md'])
+        amend=dict(self.handle,action='record-amend',operation_id=str(uuid4()),work_session_id=self.sid,
+            record_id=record['id'],record_revision=1,comment='Upravený komentář',selected_checklist=None,expected_head=head)
+        self.service.execute(amend)
+        body=document(git.snapshot(git.head()),validate_snapshot(git.snapshot(git.head())),main_todo_id(self.f.f.pid))['body']
+        self.assertEqual(body.count(marker),1);self.assertIn('Upravený komentář',body)
+        self.assertFalse(self.f.active()['blocked'])
+        self.saved('# Next saved output\n')
+        self.assertEqual(len(self.activity.for_session(self.handle,self.sid)),2)
 
-    def test_automatic_recovery_after_save_and_native_record_commit_never_repeats_output(self):
-        from spikes.task_work import TaskWork
-        for boundary in ['task-activity-before-auto-record','task-record-intent-prepared','task-record-after-project']:
-            with self.subTest(boundary=boundary):
-                fixture=TaskRecordTests();fixture.setUp()
-                try:
-                    import subprocess,sys
-                    script="""import os,sys
-from spikes.task_work import TaskWork
-from spikes.task_activities import TaskActivities
-service=TaskActivities(TaskWork(sys.argv[1]))
-def stop(stage):
- if stage==sys.argv[3]:os._exit(79)
-service.finish(sys.argv[2],200,{},auto_record=True,checkpoint=stop)
-"""
-                    child=subprocess.run([sys.executable,'-c',script,str(fixture.f.f.node),fixture.events[0],boundary],capture_output=True,text=True)
-                    self.assertEqual(child.returncode,79,child.stdout+child.stderr)
-                    restarted=TaskWork(fixture.f.f.node)
-                    first=restarted.status(fixture.handle)
-                    records=TaskRecords(restarted).for_session(fixture.handle,fixture.sid)[0]
-                    self.assertEqual(len(records),1)
-                    self.assertEqual(records[0]['outputs'][0]['artifact_id'],fixture.aid)
-                    git=restarted.projects.repository(fixture.f.f.pid);head=git.head()
-                    restarted.status(fixture.handle)
-                    self.assertEqual(git.head(),head)
-                    self.assertFalse(first['sessions'][0]['current_task']['checked'])
-                finally:fixture.doCleanups()
-
-    def test_automatic_late_result_keeps_original_task(self):
-        event=self.events[0]
-        self.work.execute(self.f.start_request('TASK-X','switch'))
-        self.activity.finish(event,200,{},auto_record=True)
-        self.assertEqual(self.record()['context']['task_id'],'TASK-A')
-        self.assertEqual(self.service.for_session(self.handle,self.f.active()['work_session_id'])[0],[])
-
-    def test_automatic_revocation_retains_event_and_recovers_when_permission_returns(self):
-        self.work.can_write=lambda pid:False
-        with self.assertRaises(ValueError):self.activity.finish(self.events[0],200,{},auto_record=True)
-        self.work.can_write=lambda pid:True
-        self.work.status(self.handle)
-        self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
-
-    def test_network_refresh_does_not_publish_desktop_activity(self):
-        event=self.events[0]
-        self.work.network=True
-        self.activity.finish(event,200,{},auto_record=True)
-        self.assertEqual(self.service.for_session(self.handle,self.sid)[0],[])
-        self.work.network=False
-        self.work.status(self.handle)
-        self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
-
-    def test_automatic_unknown_failure_and_no_written_output_create_no_record(self):
-        from uuid import uuid4
-        for code in [409,502,200]:
-            identifier=self.activity.begin(self.handle,self.work.status(self.handle)['context_revision'],
-                '/v1/artifacts/editor/save',dict(operation_id=str(uuid4()),project_id=self.f.f.pid))
-            self.activity.finish(identifier,code,{},auto_record=True)
-        self.assertEqual(self.service.for_session(self.handle,self.sid)[0],[])
+    def test_task_text_does_not_disclose_more_private_comment_and_fake_marker_cannot_hide_edits(self):
+        from spikes.markdown_documents import document,main_todo_id
+        self.service.execute(self.request(privacy='confidential',comment='SECRET PRIVATE COMMENT'))
+        git=self.work.projects.repository(self.f.f.pid);head=git.head()
+        files=git.snapshot(head);entities=validate_snapshot(files)
+        doc=document(files,entities,main_todo_id(self.f.f.pid))
+        self.assertNotIn('SECRET PRIVATE COMMENT',doc['body'])
+        self.assertIn('Připojen záznam práce',doc['body'])
+        self.assertFalse(self.f.active()['blocked'])
+        edited=doc['body'].replace('  - status: in progress','  - status: in progress\n  - Changed requirements <!-- fpw-task-record:'+str(uuid4())+' -->',1)
+        self.assertNotEqual(edited,doc['body'])
+        Artifacts(self.f.f.node).save(dict(project_id=self.f.f.pid,artifact_id=doc['id'],base_head=head,
+            title=doc['title'],body=edited,new=False),str(uuid4()))
+        self.assertTrue(self.f.active()['blocked'])
 
     def test_confirm_group_exact_outputs_replay_amend_and_immutable_history(self):
         first=self.work.projects.repository(self.f.f.pid).head();self.saved('# Revised inventory\n')

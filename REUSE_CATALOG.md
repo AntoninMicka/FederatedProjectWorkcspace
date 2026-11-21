@@ -166,11 +166,11 @@ Záznamy D adaptují tentýž lokální store, operation flock, sidecar artefakt
 používá existující snapshot/transition validaci a zachovává historii revizí.
 Nový projektový writer, kopie výsledků do roadmapy a druhý task store jsou
 odmítnuté. Nabídka zůstává oddělená od potvrzeného Git artefaktu i task acceptance.
-Automatický záznam úspěšně uloženého výstupu **adaptuje** stejný HTTP activity
-wrapper, `TaskRecords.run`, rezervace eventů a Workspace journal. Deterministické
-ID a trvalý příznak umožňují obnovit evidenci bez zopakování ukládání výstupu.
-**Reject:** kopírování obsahu do zadání, druhý writer a automatická akceptace
-úkolu. Recovery a hranice jsou doplněné v ADR 0088.
+Potvrzený zápis do textu úkolu **adaptuje** stejný `TaskRecords.run`, scoped
+`item_span` a jedinou Workspace transakci pro text, sidecar a record JSON.
+**Reject:** zápis bez potvrzení, kopírování obsahu výsledků a samostatný writer.
+Přesná projekce validovaného záznamu nemění pracovní signature zadání;
+ručně přidaný marker tuto výjimku nezískává. Recovery popisuje ADR 0088.
 Oprava restartu adaptuje existující vlastněné relace a autentizaci pomocí
 readonly historie a explicitního CAS převzetí; neukládá další plaintext
 credential ani nezavádí persistentní browser profil. Přímé lidské dokončení

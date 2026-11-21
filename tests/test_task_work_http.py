@@ -110,9 +110,8 @@ class TaskWorkHTTPTests(unittest.TestCase):
         active=next(s for s in current['sessions'] if s['work_session_id']==current['active_session_id'])
         self.assertEqual(active['activities'][0]['kind'],'source-import')
         self.assertTrue(any(ref.get('artifact_id')==source['artifact_id'] for ref in active['activities'][0]['request_references']))
-        self.assertEqual(len(active['task_records']),1)
-        self.assertEqual(active['task_records'][0]['outputs'][0]['commit_id'],json.loads(data)['commit_id'])
-        head=active['validated_head']
+        self.assertEqual(active['task_records'],[])
+        head=json.loads(data)['commit_id']
         code,data,_=self.f.request(path='/v1/artifacts/delete/preview',body=json.dumps(dict(project_id=self.pid,artifact_id=artifact,expected_head=head)))
         self.assertEqual(code,200,data);preview=json.loads(data)
         code,data,_=self.f.request(path='/v1/artifacts/delete/confirm',body=json.dumps(dict(project_id=self.pid,artifact_id=artifact,
@@ -186,23 +185,29 @@ class TaskWorkHTTPTests(unittest.TestCase):
         code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=view['context_revision']))})
         self.assertEqual(code,200,data)
         state=self.post(dict(handle,action='status'));session=state['sessions'][0];event=session['activities'][0]
-        self.assertEqual(event['offer']['state'],'confirmed')
-        record=session['task_records'][0]
-        self.assertEqual(record['revisions'][0]['comment'],'Automaticky zaznamenáno: Uložení dokumentu')
-        self.assertEqual(record['outputs'][0]['artifact_id'],artifact)
-        self.assertFalse(session['current_task']['checked'])
-        head=self.f.server.projects.plan_view(self.pid)['commit_id']
-        code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=view['context_revision']))})
-        self.assertEqual(code,200,data)
-        self.assertEqual(self.f.server.projects.plan_view(self.pid)['commit_id'],head)
+        publish=dict(handle,action='record-publish',operation_id=str(uuid4()),work_session_id=sid,
+            event_ids=[event['event_id']],offer_revisions=[event['offer']['revision']],comment='Verified inventory',
+            selected_checklist=None,expected_head=session['validated_head'],privacy='project')
+        self.assertEqual(session['task_records'],[])
+        self.assertNotEqual(event['offer']['state'],'confirmed')
+        confirmed=self.post(publish);record=confirmed['sessions'][0]['task_records'][0]
+        git=self.f.server.projects.repository(self.pid)
+        body=git.snapshot(git.head())['artifacts/'+main_todo_id(self.pid)+'/content.md'].decode()
+        self.assertIn('Verified inventory',body)
+        self.assertIn('artifacts/'+artifact+'/content.md',body)
+        self.assertNotIn('Original inventory',body)
+
+        self.assertEqual(record['revisions'][0]['comment'],'Verified inventory')
+        self.assertFalse(confirmed['sessions'][0]['current_task']['checked'])
+        self.assertEqual(self.post(publish)['operation']['result'],confirmed['operation']['result'])
         result=self.post(dict(handle,action='record-output',project_id=self.pid,record_id=record['id'],output_index=0,version='original',page=1))
         self.assertIn('Original inventory',result['text'])
         amended=self.post(dict(handle,action='record-amend',operation_id=str(uuid4()),work_session_id=sid,
             record_id=record['id'],record_revision=1,comment='Corrected note',selected_checklist=None,expected_head=record['validated_head']))
         history=amended['sessions'][0]['task_records'][0]['revisions']
-        self.assertEqual([r['comment'] for r in history],['Automaticky zaznamenáno: Uložení dokumentu','Corrected note'])
+        self.assertEqual([r['comment'] for r in history],['Verified inventory','Corrected note'])
         other={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
-        self.post(dict(handle,**other,action='record-amend',operation_id=str(uuid4()),work_session_id=sid,record_id=record['id'],record_revision=2,comment='Wrong window',selected_checklist=None,expected_head=record['validated_head']),code=422)
+        self.post(dict(publish,**other),code=422)
 
     def test_saved_work_reclaim_and_human_completion_use_authenticated_owner(self):
         handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}

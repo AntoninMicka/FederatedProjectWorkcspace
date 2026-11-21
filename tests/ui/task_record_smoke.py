@@ -2,14 +2,12 @@
 # SPDX-License-Identifier: MPL-2.0
 """Review, defer, publish and amend a task record without losing the editor draft."""
 import json
-from unittest.mock import patch
 from uuid import uuid4
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from spikes.artifacts import Artifacts
-from spikes.task_activities import TaskActivities
 from spikes.local_api import running_api
 from spikes.desktop_ui import DesktopHandler
 from spikes.projects import Projects
@@ -20,11 +18,7 @@ app=QApplication([]);fixture=fixtures.TaskQueueTests();fixture.setUp()
 try:
  doc=str(uuid4())
  Artifacts(fixture.node).save(dict(project_id=fixture.pid,artifact_id=doc,base_head=fixture.head,title='Inventory',body='# Original\n',new=True),str(uuid4()))
- # Exercise legacy pending offers; current saves are covered by task_activity_smoke.
- original_finish=TaskActivities.finish
- def legacy_finish(service,identifier,code,payload,**kwargs):
-  return original_finish(service,identifier,code,payload,auto_record=False)
- with patch.object(TaskActivities,'finish',legacy_finish), running_api('http',handler=DesktopHandler,projects=Projects(fixture.node)) as server:
+ with running_api('http',handler=DesktopHandler,projects=Projects(fixture.node)) as server:
   server.chat_service=ChatService(fixture.node,server.projects)
   profile=QWebEngineProfile(app);page=QWebEnginePage(profile,app);view=QWebEngineView();view.setPage(page);view.resize(1400,900);view.show()
   phase=0;busy=False
@@ -39,7 +33,8 @@ try:
    8:"submitTaskRecord('publish').then(()=>window.published=true)",
    9:"[...document.querySelectorAll('#task-record-list button')].find(b=>b.textContent==='Původní verze').click()",
    10:"window.prompt=()=> 'Corrected inventory note';[...document.querySelectorAll('#task-record-list button')].find(b=>b.textContent==='Upravit komentář').click()",
-
+   11:"openPlanItemEditor(taskPlanProjection.nodes.find(n=>n.id==='TASK-A')).then(()=>window.taskTextOpened=true)",
+   12:"document.querySelector('#editor-leave-dialog [data-leave-choice=discard]').click()",
   }
   checks={
    0:"typeof taskWorkActivityHeaders==='function'&&document.body.dataset.runtime==='desktop'",
@@ -53,13 +48,15 @@ try:
    8:"window.published&&!taskWorkBusy&&document.querySelector('#task-record-list').textContent.includes('Inventory verified')&&document.querySelector('#task-record-list').textContent.includes('Inventory')&&artifactEditorDirty&&artifactEditorForm.elements.body.value==='UNSAVED EDITOR'&&taskWorkView.sessions.find(s=>s.work_session_id===taskWorkView.active_session_id).task_records.length===1",
    9:"document.querySelector('#task-record-preview').textContent.includes('Saved inventory')&&artifactEditorDirty",
    10:"!taskWorkBusy&&document.querySelector('#task-record-list').textContent.includes('Corrected inventory note')&&taskWorkView.sessions.find(s=>s.work_session_id===taskWorkView.active_session_id).task_records[0].revisions.length===2&&artifactEditorDirty&&artifactEditorForm.elements.body.value==='UNSAVED EDITOR'",
+   11:"document.querySelector('#editor-leave-dialog').open",
+   12:"window.taskTextOpened&&!artifactEditorView.hidden&&artifactEditorForm.elements.body.value.includes('Corrected inventory note')&&artifactEditorForm.elements.body.value.includes('Inventory')&&!artifactEditorForm.elements.body.value.includes('# Saved inventory')&&(artifactEditorForm.elements.body.value.match(/fpw-task-record:/g)||[]).length===1",
   }
   def received(value):
    global phase,busy
    busy=False
    if value!='ready':return
    phase+=1
-   if phase==11:print('task record browser OK',flush=True);app.exit(0);return
+   if phase==13:print('task record browser OK',flush=True);app.exit(0);return
    page.runJavaScript(commands[phase])
   def poll():
    global busy

@@ -20,7 +20,7 @@ function renderTaskRecords(){
  if(taskRecordPreviewId&&!session.task_records?.some(record=>record.id===taskRecordPreviewId))clearTaskRecordPreview();
  const draft=taskRecordDrafts.get(session.work_session_id),selected=new Set(draft?.ids||[]);
  const heading=document.createElement('h3');heading.textContent='Přidat záznam k úkolu';editor.append(heading);
- const info=document.createElement('p');info.textContent='Uložené výstupy se připojují automaticky. Další činnosti můžete vybrat a okomentovat. Záznam ani příloha nepotvrzují splnění úkolu.';editor.append(info);
+ const info=document.createElement('p');info.textContent='Vyberte související činnosti. Záznam ani příloha nepotvrzují splnění úkolu.';editor.append(info);
  const stateNames={pending:'K připojení',draft:'Rozepsané',deferred:'Odložené',dismissed:'Odmítnuté',confirmed:'Připojeno'};
  for(const event of session.activities||[]){
   const row=document.createElement('label'),check=document.createElement('input'),caption=document.createElement('span');check.type='checkbox';check.dataset.recordEvent=event.event_id;check.checked=selected.has(event.event_id);check.disabled=taskWorkBusy||event.offer.state==='confirmed'||!!event.offer.pending_operation_id;

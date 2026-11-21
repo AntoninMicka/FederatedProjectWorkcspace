@@ -459,32 +459,26 @@ ověřují čtení bez capability a bez zápisového práva, oddělení lokáln�
 stale HEAD, jiný task, revokaci, výpadek lokálního store a Qt průchod roadmapou
 včetně původní/aktuální verze a pozdní odpovědi po přepnutí detailu.
 
-## Automatický záznam uloženého výstupu
+## Potvrzený záznam přímo v textu úkolu
 
-Na výslovný požadavek uživatele se úspěšné uložení výstupu v aktivním
-pracovním kontextu přes společný HTTP wrapper připojuje k původnímu úkolu
-bez dalšího potvrzení. Nejde o akceptaci úkolu. Writer `TaskRecords` se znovu
-používá pro stručný provozní komentář a přesné odkazy na výstupy; jejich
-obsah se do popisu úkolu nekopíruje. Uložený záznam je dostupný v části
-„Plnění úkolu a výsledky“. Ruční seskupení a komentování ostatních činností
-zůstává dostupné. Unknown, failed, pouhý draft ani úspěch bez doloženého
-souborového výsledku takový záznam nevytváří.
+Uložení výstupu vytváří pouze nabídku činnosti. Na následný výslovný požadavek
+uživatele se obnovuje povinné **Potvrdit a připojit**; při čtení stavu ani při
+uložení výstupu se záznam sám nepublikuje. Dříve uložené záznamy se nemažou.
 
-Automatický intent je vlastněný původním uživatelem a oknem a má
-operation ID deterministicky odvozené od event ID. Před publikací se znovu
-ověřují práva, privacy a původní task; přepnutí aktivního úkolu výsledek
-nepřesměruje. Komentář vyjadřuje automatický původ, nikoli lidské review.
+Potvrzení ukládá ve stejné nativní transakci Workspace jak `task-work.json`,
+tak stručný komentář a odkazy do vlastního Markdown bloku původního úkolu.
+Oprava komentáře aktualizuje stejný řádek podle stabilního record ID; původní
+revize zůstávají v Git historii a v záznamu. Obsah výstupních dokumentů se
+nekopíruje. Komentář a názvy výsledků s vyšší privacy než zdrojový plán se
+nepropagují; místo nich se použije obecný popis a pouze přípustné místní odkazy.
 
-| Hranice | Recovery |
-| --- | --- |
-| Uložení výstupu a activity receipt, před intentem záznamu | Activity nese trvalý příznak; další obnovení vlastního pracovního panelu připraví jen záznam. |
-| Lokální intent připraven, před nativním zápisem | Původní rezervace eventu a operation ID; změněný HEAD se tiše nepřebazuje. |
-| Nativní writer až Git/index | Stejná recovery Workspace jako u ručního D, bez druhého writeru. |
-| Git/index hotov, lokální finalizace chybí | Dohledá se původní receipt; nevzniká další artefakt ani další commit. |
-| Odpověď ztracena nebo save znovu doručen | Event i záznam zachovají původní ID a výstupový commit. |
+Reuse zůstává na writeru a crash boundaries řezu D: před commitem intentu
+nevznikne žádný projektový zápis; po něm rezervace drží stejný record ID.
+Změna task textu, sidecar a JSON patří do téhož Git commitu a journal recovery.
+Po commitu a před lokální finalizací se obnoví původní receipt bez druhého
+řádku či commitu. Stale HEAD se nepřebazuje a původní ukládání se neopakuje.
 
-Obnovení stavu vlastního pracovního okna zpracuje nejvýše deset čekajících
-automatických záznamů. Odebraná práva a stale intent zůstávají blokované;
-uložení původního výstupu se neopakuje. Chyba evidence nezmění úspěšnou
-odpověď původní operace na pobídku k jejímu opakování. Automatická evidence
-nemění definici úkolu, checklist ani completion gate.
+Pracovní signature ignoruje pouze přesný text projekce odpovídající skutečnému
+validovanému záznamu daného úkolu. Samotný HTML marker tak zadání neskrývá.
+Původní definition pin a checklist zůstávají zachované; změny ostatního textu
+nadále vyžadují reconciliaci. Úprava evidence nepotvrzuje dokončení úkolu.

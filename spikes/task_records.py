@@ -32,80 +32,6 @@ class TaskRecords:
     def __init__(self,work):
         self.work=work;self.activities=TaskActivities(work)
 
-    def publish_automatic(self, identifier, *, checkpoint=lambda stage: None):
-        """Publish a saved output under its original context; never replay its save."""
-        operation_id=str(uuid5(UUID(identifier),'automatic-task-record'))
-        with self.work._operation_lock(operation_id):
-            with self.work._db() as db:
-                row=db.execute('SELECT * FROM operations WHERE id=? AND user_id=?',
-                    (identifier,self.work.user_id)).fetchone()
-                require(row is not None,'Unknown activity')
-                event=json.loads(row['doc']);window_id=row['window_id']
-                prior=self.work._operation(db,operation_id,window_id)
-            require(event.get('record_type')=='task-activity','Not an activity')
-            if self.work.network and (event.get('local_capture',True) or event.get('privacy','local-only')=='local-only'):
-                return
-            if prior:
-                op=json.loads(prior['doc'])
-                require(op.get('automatic') is True,'Operation belongs to another action')
-                if op['state']!='prepared':return
-            else:
-                if not event.get('auto_record_requested') or event['outcome']!='succeeded':return
-                state=offer(event)
-                if state['state']!='pending' or state.get('pending_operation_id'):return
-                pid=event['context']['project_id']
-                _,head,_,entities=self.snapshot(pid)
-                referenced={ref['project_id'] for ref in event['request_references']+event['result_references'] if 'project_id' in ref}
-                referenced.add(event.get('target_project_id') or pid)
-                require(all(self.activities._readable(project) for project in referenced),'Výsledek již není dostupný.')
-                outputs=self.outputs([event])
-                if not outputs:
-                    with self.work._db(write=True) as db:
-                        current=json.loads(self.work._operation(db,identifier,window_id)['doc'])
-                        current['auto_record_requested']=False
-                        self.work._save_operation(db,identifier,current)
-                    return
-                privacy=max([m['privacy'] for m in entities.values()]+
-                    [o['privacy'] for o in outputs]+[event.get('privacy','local-only')],key=PRIVACY.get)
-                require(not self.work.network or privacy!='local-only','Local-only record')
-                record_id=str(uuid5(UUID(operation_id),'task-record'))
-                comment='Automaticky zaznamenáno: '+offer({k:v for k,v in event.items() if k!='offer'})['comment']
-                record=dict(schema=SCHEMA,id=record_id,context=deepcopy(event['context']),
-                    events=[dict({k:event[k] for k in ('event_id','operation_id','kind','outcome','author_id','created_at','request_references','result_references')},selected_checklist=event['context']['selected_checklist'])],
-                    outputs=outputs,privacy=privacy,revisions=[dict(comment=comment,
-                        selected_checklist=event['context']['selected_checklist'],author_id=self.work.user_id,created_at=now())])
-                validate(record)
-                meta=dict(schema_version=1,id=record_id,title='Záznam práce · '+event['context']['task_id'],
-                    kind='document',file='task-work.json',tags=[SCHEMA],privacy=privacy,provenance='user',
-                    author_id=self.work.user_id,created_at=record['revisions'][0]['created_at'])
-                op=dict(record_type='task-record-publish',automatic=True,state='prepared',record=record,
-                    metadata=meta,base_head=head,native_operation_id=str(uuid5(UUID(operation_id),'task-record-project')),
-                    events=[identifier],body=dict(action='automatic-task-record',event_id=identifier))
-                with self.work._db(write=True) as db:
-                    current=json.loads(self.work._operation(db,identifier,window_id)['doc'])
-                    require(offer(current)==state,'Nabídka se mezitím změnila.')
-                    current['offer']=dict(state,revision=state['revision']+1,pending_operation_id=operation_id)
-                    self.work._save_operation(db,identifier,current)
-                    db.execute('INSERT INTO operations VALUES(?,?,?,?,?)',
-                        (operation_id,self.work.user_id,window_id,canonical(op['body']),canonical(op)))
-                    checkpoint('task-record-before-intent-commit')
-                checkpoint('task-record-intent-prepared')
-            self.run(dict(window_id=window_id,operation_id=operation_id),op,checkpoint)
-
-    def recover_automatic(self, handle):
-        with self.work._db() as db:
-            self.work._window(db,handle)
-            rows=db.execute('SELECT id,doc FROM operations WHERE user_id=? AND window_id=? ORDER BY rowid DESC',
-                (self.work.user_id,handle['window_id'])).fetchall()
-        pending=[row['id'] for row in rows if (lambda event:
-            event.get('record_type')=='task-activity' and event.get('auto_record_requested')
-            and offer(event)['state']!='confirmed')(json.loads(row['doc']))]
-        for identifier in pending[:10]:
-            try:self.publish_automatic(identifier)
-            except (ValueError,OSError,sqlite3.Error,subprocess.SubprocessError):
-                # The durable activity/intent remains visible for recovery; never redo the output.
-                continue
-
     def snapshot(self,pid,*,write=True):
         if write:self.work._authorize(pid)
         else:require(self.work.can_read(pid),'Právo číst výsledek bylo odebráno.')
@@ -320,12 +246,15 @@ class TaskRecords:
             require(workspace.git.head()==op['base_head'],'Projekt se změnil; obnovte kontext.')
             for output in record['outputs']:require(self.activities._readable(output['project_id']),'Výsledek již není dostupný.')
             prefix='artifacts/'+record['id']+'/'
-            return {prefix+'metadata.json':encoded(op['metadata']),prefix+'task-work.json':encoded(record)},'Workspace user',self.work.user_id+'@local.invalid','Record work on '+record['context']['task_id']
+            from spikes.task_record_notes import changes as note_changes
+            changes=note_changes(workspace.git.snapshot(workspace.git.head()),pid,workspace.git.head(),record)
+            changes.update({prefix+'metadata.json':encoded(op['metadata']),prefix+'task-work.json':encoded(record)})
+            return changes,'Workspace user',self.work.user_id+'@local.invalid','Record work on '+record['context']['task_id']
         receipt=ws.transact(op['native_operation_id'],dict(action='task-record-publish',record=record,base_head=op['base_head']),prepare,
             expected_head=op['base_head'],checkpoint=checkpoint)
         checkpoint('task-record-after-project')
         with self.work._db(write=True) as db:
-            if not op.get('automatic'):self.work._window(db,handle)
+            self.work._window(db,handle)
             for identifier in op['events']:
                 event=json.loads(self.work._operation(db,identifier,handle['window_id'])['doc'])
                 state=event['offer'];require(state.get('pending_operation_id')==handle['operation_id'],'Offer reservation changed')

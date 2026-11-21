@@ -192,8 +192,9 @@ class TaskWork:
         start, end = item_span(doc['body'], task_id)
         pin = dict(project_commit=head, plan_revision=graph['revision'], source=task['source'],
                    fragment_sha256=hashlib.sha256(doc['body'][start:end].encode()).hexdigest())
+        from spikes.task_record_notes import definition_description
         signature = digest(dict(id=task_id, type=task['type'], parent_id=task['parent_id'], title=task['title'],
-            description=task['description'], source=task['source'], depends_on=task['depends_on'],
+            description=definition_description(files,entities,task,pid), source=task['source'], depends_on=task['depends_on'],
             checklist=[p['text'] for p in task['checklist']]))
         return dict(pin=pin, signature=signature, task=task,
                     blockers=dependency_start_blockers(task['depends_on'], nodes), title=task['title'])
@@ -222,8 +223,6 @@ class TaskWork:
             return dict(safe, blocked=str(exc), title=None)
 
     def status(self, handle):
-        from spikes.task_records import TaskRecords
-        TaskRecords(self).recover_automatic(handle)
         with self._db() as db:
             state = self._window(db, handle)
             rows = db.execute('SELECT doc FROM sessions WHERE window_id=? AND user_id=? ORDER BY rowid DESC LIMIT 50',

@@ -8731,7 +8731,7 @@ class DesktopHandler(Handler):
             self._task_activity = None
             service, identifier = activity
             try:
-                service.finish(identifier, code, payload, auto_record=True)
+                service.finish(identifier, code, payload)
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 # The native receipt remains authoritative; its successful response
                 # must not become a retry invitation because bookkeeping failed.
