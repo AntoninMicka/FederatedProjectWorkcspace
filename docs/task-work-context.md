@@ -110,6 +110,18 @@ na chybu vyzývající k opakování. Výslovný replay stejné nativní operace
 receipt bez druhého commitu; evidence nic sama neopakuje. Neznámý placený
 běh se řeší původním run journalem, nikdy novým automatickým pokusem.
 
+## Připojení už existujícího souboru
+
+V pracovním panelu vybraného úkolu zvolte **Připojit existující soubor /
+artefakt**, vyberte položku projektu a doplňte komentář. Teprve **Potvrdit a
+připojit** uloží připnutou verzi výsledku a stručný záznam s odkazem přímo do
+textu úkolu. Výstup není nutné znovu ukládat ani vytvářet novou činnost.
+Obsah souboru se nekopíruje a úkol se nedokončí.
+
+**Obnovit výběr** načte aktuální seznam a zachová komentář. Při přerušeném
+zápisu použijte původní **Obnovit zápis**; opakování stejné operace nevytvoří
+další přílohu. Soubor uložený jen mimo projekt nejprve přidejte mezi podklady.
+
 ## Přidání komentovaného záznamu
 
 V pravém panelu pod **Přidat záznam k úkolu** vyberte jednu nebo více
@@ -178,6 +190,8 @@ ani do request payloadů lokálního journalu; v DB je pouze jeho hash.
 | `record-list` | Bez window capability: `project_id`, `task_id`, `expected_head`; projektové záznamy a oddělené vlastní lokální činnosti. |
 | `record-preview` | Bez window capability: `project_id`, `task_id`, `expected_head`, `record_id`, `output_index`, `version`, `page`. |
 | `record-activity-preview` | Stejná čtecí pole, místo `record_id` vlastní `event_id`. |
+| `record-attachment-options` | `work_session_id`; dostupné existující soubory aktuálního projektu a jejich aktuální HEAD. |
+| `record-attach` | `operation_id`, `work_session_id`, `artifact_id`, `comment`, `selected_checklist`, `expected_head`, `privacy`; výslovně potvrzené připojení. |
 | `record-offer` | `operation_id`, `work_session_id`, `event_ids`, `offer_revisions`, `comment`, `selected_checklist`, `state` (`draft`/`deferred`/`dismissed`). |
 | `record-publish` | Pole nabídky bez `state`, navíc `expected_head`, `privacy`. |
 | `record-amend` | `operation_id`, `work_session_id`, `record_id`, `record_revision`, `comment`, `selected_checklist`, `expected_head`. |

@@ -171,6 +171,11 @@ Potvrzený zápis do textu úkolu **adaptuje** stejný `TaskRecords.run`, scoped
 **Reject:** zápis bez potvrzení, kopírování obsahu výsledků a samostatný writer.
 Přesná projekce validovaného záznamu nemění pracovní signature zadání;
 ručně přidaný marker tuto výjimku nezískává. Recovery popisuje ADR 0088.
+Připojení existujícího artefaktu **adaptuje** validovaný projektový snapshot,
+`TaskRecords.run`, stejný potvrzovací tok a `artifact_preview`. Server odvozuje
+output pin z uložených bajtů; událost má vlastní druh `artifact-attach`.
+**Reject:** falešná save činnost, kopie souboru a druhý writer příloh. Hranice
+pádu zůstávají v původním D a jsou upřesněné v ADR 0088.
 Oprava restartu adaptuje existující vlastněné relace a autentizaci pomocí
 readonly historie a explicitního CAS převzetí; neukládá další plaintext
 credential ani nezavádí persistentní browser profil. Přímé lidské dokončení

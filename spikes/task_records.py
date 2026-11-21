@@ -32,6 +32,18 @@ class TaskRecords:
     def __init__(self,work):
         self.work=work;self.activities=TaskActivities(work)
 
+    def attachment_options(self,request):
+        fields(request,'action window_id window_token work_session_id')
+        with self.work._db() as db:
+            self.work._window(db,request)
+            session=self.work._session(db,request['work_session_id'],request['window_id'])
+        _,head,files,entities=self.snapshot(session['project_id'])
+        items=[dict(id=meta['id'],title=meta['title'],privacy=meta['privacy']) for meta in entities.values()
+            if 'file' in meta and 'artifacts/'+meta['id']+'/'+meta['file'] in files
+            and meta.get('file')!='task-work.json']
+        return dict(expected_head=head,items=sorted(items,key=lambda item:(item['title'],item['id'])),
+            privacy=max([meta['privacy'] for meta in entities.values()],key=PRIVACY.get))
+
     def snapshot(self,pid,*,write=True):
         if write:self.work._authorize(pid)
         else:require(self.work.can_read(pid),'Právo číst výsledek bylo odebráno.')
@@ -159,6 +171,7 @@ class TaskRecords:
     def execute(self,request,*,checkpoint=lambda stage:None):
         require(isinstance(request,dict),'Invalid record request')
         common='action window_id window_token';action=request.get('action')
+        if action=='record-attachment-options':return self.attachment_options(request)
         if action=='record-list':return self.for_task(request)
         if action=='record-preview':
             fields(request,'action project_id task_id expected_head record_id output_index version page')
@@ -172,6 +185,7 @@ class TaskRecords:
         extra={
             'record-offer':'operation_id work_session_id event_ids offer_revisions comment selected_checklist state',
             'record-publish':'operation_id work_session_id event_ids offer_revisions comment selected_checklist expected_head privacy',
+            'record-attach':'operation_id work_session_id artifact_id comment selected_checklist expected_head privacy',
             'record-amend':'operation_id work_session_id record_id record_revision comment selected_checklist expected_head',
             'record-recover':'operation_id','record-cancel':'operation_id',
             'record-output':'project_id record_id output_index version page'}
@@ -209,12 +223,25 @@ class TaskRecords:
             record['revisions'].append(dict(comment=request['comment'],selected_checklist=request['selected_checklist'],author_id=self.work.user_id,created_at=now()))
             meta=dict(entities[record['id']])
         else:
-            events=self.events(request)
+            attachment=request['action']=='record-attach'
+            if attachment:
+                uuid(request['artifact_id']);meta=entities.get(request['artifact_id'])
+                require(meta and 'file' in meta and meta['file']!='task-work.json','Artefakt není dostupný k připojení.')
+                path='artifacts/'+meta['id']+'/'+meta['file'];require(path in files,'Soubor artefaktu není dostupný.')
+                context={k:session[k] for k in ('work_session_id','definition_pin','project_id','task_id','node_id','user_id','selected_checklist')}
+                output=dict(project_id=pid,artifact_id=meta['id'],commit_id=head,path=path,
+                    sha256=hashlib.sha256(files[path]).hexdigest(),privacy=meta['privacy'],title=meta['title'])
+                events=[dict(event_id=str(uuid5(UUID(request['operation_id']),'attachment-event')),
+                    operation_id=request['operation_id'],kind='artifact-attach',outcome='succeeded',
+                    author_id=self.work.user_id,created_at=datetime.now(timezone.utc).timestamp(),
+                    request_references=[],result_references=[dict(project_id=pid,artifact_id=meta['id'],commit_id=head)],
+                    context=context,privacy=meta['privacy'])]
+            else:events=self.events(request)
             if request['action']=='record-offer':
                 require(isinstance(request['state'],str) and request['state'] in {'draft','deferred','dismissed'},'Invalid offer state')
                 op=dict(record_type='task-record-offer',state='completed')
             else:
-                outputs=self.outputs(events);privacy=request['privacy']
+                outputs=[output] if attachment else self.outputs(events);privacy=request['privacy']
                 require(isinstance(privacy,str) and privacy in PRIVACY,'Invalid annotation privacy')
                 minimum=max([PRIVACY[m['privacy']] for m in entities.values()]+[PRIVACY[o['privacy']] for o in outputs]+[PRIVACY[e.get('privacy','local-only')] for e in events])
                 require(PRIVACY[privacy]>=minimum and (not self.work.network or privacy!='local-only'),'Záznam vyžaduje vyšší privacy.')
@@ -224,6 +251,7 @@ class TaskRecords:
                     outputs=outputs,privacy=privacy,revisions=[dict(comment=request['comment'],selected_checklist=request['selected_checklist'],author_id=self.work.user_id,created_at=now())])
                 meta=dict(schema_version=1,id=identifier,title='Záznam práce · '+session['task_id'],kind='document',file='task-work.json',
                     tags=[SCHEMA],privacy=privacy,provenance='user',author_id=self.work.user_id,created_at=record['revisions'][0]['created_at'])
+                if attachment:events=[]
         if request['action']!='record-offer':
             require(head==request['expected_head'],'Projekt se změnil; obnovte kontext a zachovejte komentář.')
             validate(record)

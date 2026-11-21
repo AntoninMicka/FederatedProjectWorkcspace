@@ -175,6 +175,28 @@ class TaskWorkHTTPTests(unittest.TestCase):
         self.assertEqual(code,200,data);self.assertEqual(json.loads(data)['commit_id'],committed)
         current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')
 
+    def test_existing_artifact_can_be_attached_with_explicit_confirmation(self):
+        handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
+        pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))
+        view=self.post(dict(handle,action='start',operation_id=str(uuid4()),context_revision=0,
+            project_id=self.pid,task_id='TASK-A',selected_checklist=None,**pin));sid=view['active_session_id']
+        artifact=str(uuid4())
+        receipt=Artifacts(self.node).save(dict(project_id=self.pid,artifact_id=artifact,
+            base_head=view['sessions'][0]['validated_head'],title='Existing inventory',body='# Existing bytes\n',new=True),str(uuid4()))
+        options=self.post(dict(handle,action='record-attachment-options',work_session_id=sid))
+        self.assertIn(artifact,[item['id'] for item in options['items']])
+        self.assertEqual(self.post(dict(handle,action='status'))['sessions'][0]['task_records'],[])
+        request=dict(handle,action='record-attach',operation_id=str(uuid4()),work_session_id=sid,
+            artifact_id=artifact,comment='Attached earlier inventory',selected_checklist=None,
+            expected_head=options['expected_head'],privacy=options['privacy'])
+        result=self.post(request);record=result['sessions'][0]['task_records'][0]
+        self.assertEqual(record['events'][0]['kind'],'artifact-attach')
+        self.assertEqual(record['outputs'][0]['commit_id'],receipt['commit_id'])
+        self.assertEqual(result['sessions'][0]['activities'],[])
+        self.assertEqual(self.post(request)['operation']['result'],result['operation']['result'])
+        self.post(dict(request,artifact_id=str(uuid4())),code=422)
+        self.assertFalse(result['sessions'][0]['current_task']['checked'])
+
     def test_reviewed_record_http_preserves_pin_history_privacy_and_human_acceptance(self):
         handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
         pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))

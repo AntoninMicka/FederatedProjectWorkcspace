@@ -482,3 +482,25 @@ Pracovní signature ignoruje pouze přesný text projekce odpovídající skute�
 validovanému záznamu daného úkolu. Samotný HTML marker tak zadání neskrývá.
 Původní definition pin a checklist zůstávají zachované; změny ostatního textu
 nadále vyžadují reconciliaci. Úprava evidence nepotvrzuje dokončení úkolu.
+
+## Připojení existujícího artefaktu
+
+Pracovní panel nabízí existující soubory/artefakty aktuálního projektu přes
+`record-attachment-options`. Výběr není zápis. `record-attach` po explicitním
+**Potvrdit a připojit** znovu ověří vlastníka okna/relace, zápisové oprávnění,
+projektový HEAD, existenci souboru a minimální privacy. Identitu výsledku,
+cestu, commit i SHA-256 odvozuje server z validovaného snapshotu; klient neposílá
+filesystem cestu ani obsah. Nepřipojují se interní `task-work.json` záznamy.
+
+Reuse/adaptuje se existující publish intent, `TaskRecords.run`, projekce do
+textu úkolu i náhled původní/aktuální verze. Událost `artifact-attach` pravdivě
+zachycuje připojení existujícího výsledku, nikoli jeho nové vytvoření nebo
+uložení. Nemění původní soubor ani nabídku dřívější činnosti a nedokončuje task.
+Připnutý výsledek si zachová původní verzi i po pozdější editaci souboru.
+
+Hranice pádu jsou shodné s potvrzeným D: před intent commitem žádný projektový
+účinek; po něm stejná neměnná příloha a deterministický event/record ID.
+Text úkolu a záznam vznikají jednou Workspace transakcí. Po Git commitu před
+lokální finalizací recover dohledá receipt bez druhé přílohy či řádku. Stale
+HEAD se nepřebazuje; obnovení výběru zachová komentář a načte aktuální seznam.
+Soubor pouze na disku mimo projekt se nejprve přidá stávajícím importem.

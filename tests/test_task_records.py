@@ -82,6 +82,50 @@ class TaskRecordTests(unittest.TestCase):
             title=doc['title'],body=edited,new=False),str(uuid4()))
         self.assertTrue(self.f.active()['blocked'])
 
+    def attachment_request(self,**extra):
+        options=self.service.execute(dict(self.handle,action='record-attachment-options',work_session_id=self.sid))
+        request=dict(self.handle,action='record-attach',operation_id=str(uuid4()),work_session_id=self.sid,
+            artifact_id=self.aid,comment='Připojen existující inventář',selected_checklist=None,
+            expected_head=options['expected_head'],privacy=options['privacy'])
+        request.update(extra);return request
+
+    def test_attach_existing_pins_bytes_writes_task_text_and_replays_without_native_save(self):
+        git=self.work.projects.repository(self.f.f.pid);head=git.head();path='artifacts/'+self.aid+'/content.md'
+        original=git.snapshot(head)[path];request=self.attachment_request()
+        self.service.execute(request);record=self.record()
+        self.assertEqual(record['events'][0]['kind'],'artifact-attach')
+        self.assertEqual(record['outputs'][0]['commit_id'],head)
+        self.assertEqual(record['outputs'][0]['artifact_id'],self.aid)
+        self.assertEqual(git.snapshot(git.head())[path],original)
+        self.assertEqual(self.activity.for_session(self.handle,self.sid)[0]['offer']['state'],'pending')
+        from spikes.markdown_documents import main_todo_id
+        body=git.snapshot(git.head())['artifacts/'+main_todo_id(self.f.f.pid)+'/content.md'].decode()
+        self.assertIn(request['comment'],body);self.assertIn(path,body);self.assertNotIn('Original inventory',body)
+        self.assertFalse(self.f.active()['current_task']['checked']);self.assertFalse(self.f.active()['blocked'])
+        committed=git.head();self.service.execute(request);self.assertEqual(git.head(),committed)
+        preview=self.service.execute(dict(self.handle,action='record-output',project_id=self.f.f.pid,record_id=record['id'],output_index=0,version='original',page=1))
+        self.assertIn('Original inventory',preview['text'])
+
+    def test_existing_attachment_rejects_stale_deleted_private_and_wrong_window(self):
+        request=self.attachment_request();head=self.work.projects.repository(self.f.f.pid).head()
+        for change in [dict(expected_head='a'*40),dict(artifact_id=str(uuid4())),dict(privacy='public')]:
+            with self.subTest(change=change),self.assertRaises(ValueError):self.service.execute(dict(request,**change))
+        other={k:v for k,v in self.work.create_window().items() if k.startswith('window_')}
+        with self.assertRaises(ValueError):self.service.execute(dict(request,**other))
+        self.work.can_write=lambda pid:False
+        with self.assertRaises(ValueError):self.service.execute(request)
+        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
+
+    def test_attachment_recovery_after_project_commit_has_one_text_entry_and_record(self):
+        request=self.attachment_request()
+        def stop(stage):
+            if stage=='task-record-after-project':raise RuntimeError('crash')
+        with self.assertRaises(RuntimeError):self.service.execute(request,checkpoint=stop)
+        head=self.work.projects.repository(self.f.f.pid).head()
+        self.service.execute(dict(self.handle,action='record-recover',operation_id=request['operation_id']))
+        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
+        self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
+
     def test_confirm_group_exact_outputs_replay_amend_and_immutable_history(self):
         first=self.work.projects.repository(self.f.f.pid).head();self.saved('# Revised inventory\n')
         request=self.request();view=self.service.execute(request)

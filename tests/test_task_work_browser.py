@@ -55,3 +55,11 @@ class TaskWorkBrowserTests(unittest.TestCase):
             cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=80)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('roadmap task records browser OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_existing_artifact_attachment_requires_confirmation_and_reaches_task_text(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/task_attachment_smoke.py')],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=65)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('existing task attachment browser OK',result.stdout)

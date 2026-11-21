@@ -3,6 +3,39 @@
 """Inline, explicitly confirmed task records; editor drafts stay independent."""
 JS = r'''
 const taskRecordDrafts=new Map();
+const taskAttachmentDrafts=new Map();
+async function loadTaskAttachment(){
+ const session=selectedTaskWorkSession();if(!session||taskWorkBusy||session.record_pending?.length)return;
+ const previous=taskAttachmentDrafts.get(session.work_session_id);
+ try{
+  const options=await projectRequest('/v1/task-work',{action:'record-attachment-options',...taskWorkHandle,work_session_id:session.work_session_id});
+  if(selectedTaskWorkSession()?.work_session_id!==session.work_session_id)return;
+  taskAttachmentDrafts.set(session.work_session_id,{...options,selected:options.items.some(item=>item.id===previous?.selected)?previous.selected:options.items[0]?.id||'',comment:previous?.comment??'Připojen existující artefakt',attempt:null});
+  renderTaskRecords();
+ }catch(error){taskWorkMessage=error.message;renderTaskWork();}
+}
+function renderTaskAttachment(editor,session){
+ editor.append(taskRecordButton('Připojit existující soubor / artefakt',loadTaskAttachment,taskWorkBusy||!!session.record_pending?.length));
+ const draft=taskAttachmentDrafts.get(session.work_session_id);if(!draft)return;
+ const form=document.createElement('form');form.id='task-attachment-form';
+ const label=document.createElement('label');label.textContent='Existující soubor / artefakt v projektu';
+ const select=document.createElement('select');select.id='task-attachment-artifact';
+ for(const item of draft.items){const option=document.createElement('option');option.value=item.id;option.textContent=item.title;select.append(option);}
+ select.value=draft.selected;select.disabled=taskWorkBusy||!!draft.attempt;
+ select.addEventListener('change',()=>{draft.selected=select.value;});label.append(select);
+ const commentLabel=document.createElement('label');commentLabel.textContent='Komentář k připojení';
+ const comment=document.createElement('textarea');comment.id='task-attachment-comment';comment.maxLength=4000;comment.value=draft.comment;comment.disabled=taskWorkBusy||!!draft.attempt;
+ comment.addEventListener('input',()=>{draft.comment=comment.value;});commentLabel.append(comment);
+ const status=document.createElement('p');status.textContent=draft.items.length?'Připojí se odkaz na vybranou uloženou verzi. Obsah souboru se nekopíruje.':'V projektu není dostupný žádný soubor k připojení. Nejprve jej přidejte mezi podklady.';
+ const submit=async()=>{
+  if(taskWorkBusy||!draft.selected)return;
+  if(!draft.attempt)draft.attempt={action:'record-attach',...taskWorkHandle,operation_id:crypto.randomUUID(),work_session_id:session.work_session_id,artifact_id:draft.selected,comment:draft.comment,selected_checklist:session.selected_checklist,expected_head:draft.expected_head,privacy:draft.privacy};
+  await sendTaskWork(draft.attempt);
+  if(!taskWorkAttempt){taskAttachmentDrafts.delete(session.work_session_id);renderTaskRecords();}
+ };
+ form.addEventListener('submit',event=>{event.preventDefault();submit();});
+ form.append(label,commentLabel,status,taskRecordButton('Potvrdit a připojit',submit,taskWorkBusy||!draft.selected),taskRecordButton('Obnovit výběr',loadTaskAttachment,taskWorkBusy||!!session.record_pending?.length));editor.append(form);
+}
 let taskRecordPreviewId=null,taskRecordPreviewGeneration=0;
 function clearTaskRecordPreview(){taskRecordPreviewId=null;taskRecordPreviewGeneration++;document.querySelector('#task-record-preview').replaceChildren();}
 function taskRecordButton(label,action,disabled=false){const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.addEventListener('click',action);return button;}
@@ -21,6 +54,7 @@ function renderTaskRecords(){
  const draft=taskRecordDrafts.get(session.work_session_id),selected=new Set(draft?.ids||[]);
  const heading=document.createElement('h3');heading.textContent='Přidat záznam k úkolu';editor.append(heading);
  const info=document.createElement('p');info.textContent='Vyberte související činnosti. Záznam ani příloha nepotvrzují splnění úkolu.';editor.append(info);
+ renderTaskAttachment(editor,session);
  const stateNames={pending:'K připojení',draft:'Rozepsané',deferred:'Odložené',dismissed:'Odmítnuté',confirmed:'Připojeno'};
  for(const event of session.activities||[]){
   const row=document.createElement('label'),check=document.createElement('input'),caption=document.createElement('span');check.type='checkbox';check.dataset.recordEvent=event.event_id;check.checked=selected.has(event.event_id);check.disabled=taskWorkBusy||event.offer.state==='confirmed'||!!event.offer.pending_operation_id;
