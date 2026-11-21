@@ -112,6 +112,17 @@ def provider_key_url(url):
     return url if url in PROVIDER_KEY_URLS else None
 
 
+def external_link_url(url, user_initiated):
+    """Only a user-clicked HTTP(S) link may leave the shell for the system browser."""
+    if not user_initiated or not isinstance(url,str) or any(ord(c)<32 for c in url):return None
+    try:
+        parsed=urlsplit(url)
+        if parsed.scheme in {'http','https'} and parsed.hostname and not parsed.username and not parsed.password:
+            return url
+    except ValueError:pass
+    return None
+
+
 def google_authorization_url(url, origin):
     """Allow only the bounded OAuth/One Picker URL produced by the backend."""
     parsed = urlsplit(url)
@@ -342,6 +353,14 @@ def main():
                 info.setHttpHeader(b'Authorization', ('Bearer ' + server.token).encode())
 
     class Page(QWebEnginePage):
+        def __init__(self,*args):
+            super().__init__(*args)
+            self.newWindowRequested.connect(self.open_external_link)
+
+        def open_external_link(self,request):
+            external=external_link_url(request.requestedUrl().toString(),request.isUserInitiated())
+            if external:QDesktopServices.openUrl(QUrl(external))
+
         def acceptNavigationRequest(self, url, kind, main_frame):
             requested = url.toString()
             external = provider_key_url(requested) or google_authorization_url(requested, server.origin)
@@ -351,9 +370,6 @@ def main():
             return main_frame and (
                 requested in {server.origin + '/', server.origin + '/presentation-screen'}
                 or native_action_name(requested, server.origin) is not None)
-
-        def createWindow(self, kind):
-            return None
 
     class View(QWebEngineView):
         closing = False

@@ -63,3 +63,19 @@ class TaskWorkBrowserTests(unittest.TestCase):
             cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=65)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('existing task attachment browser OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_cross_project_attachment_links_open_in_source_without_switching_task(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/task_attachment_smoke.py'),'--cross-project'],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=70)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('existing task attachment browser OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_shared_offer_can_be_selected_from_task_and_attached_after_both_confirmations(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/task_attachment_smoke.py'),'--offer-flow'],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=75)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('existing task attachment browser OK',result.stdout)

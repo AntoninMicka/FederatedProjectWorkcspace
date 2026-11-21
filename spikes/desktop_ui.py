@@ -5000,14 +5000,25 @@ document.querySelector('#artifact-git-confirm').addEventListener('click',commitP
 document.querySelector('#artifact-git-close').addEventListener('click',()=>document.querySelector('#artifact-git-dialog').close());
 artifactEditorForm.addEventListener('input',syncArtifactGitButtons);
 function addConflictLineClasses(element,lineClasses,index){for(const name of lineClasses?.get(index)||[])element.classList.add(name);}
-function appendProjectArtifactLinks(target,text){
- const links=/\\[([^\\]\\n]+)\\]\\((artifacts\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\/[^\\s()?#]+)\\)/g;
+function appendProjectArtifactLinks(target,text,projectId=activeProject?.id){
+ const links=/\\[((?:\\\\.|[^\\]\\\\\\n])+)\\]\\((artifacts\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\/[^()\\n]+|https?:\\/\\/[^\\s()]+)\\)/g;
  let offset=0;for(const match of String(text).matchAll(links)){
   target.append(document.createTextNode(text.slice(offset,match.index)));
-  const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=match[1];button.title='Otevřít projektový podklad';button.addEventListener('click',()=>openPreview(match[3]));target.append(button);offset=match.index+match[0].length;
+  const label=match[1].replace(/\\\\([\\\\`*_{}\\[\\]()<>!|])/g,'$1');
+  if(match[3]){
+   const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=label;button.title='Otevřít podklad ve zdrojovém projektu';button.addEventListener('click',()=>openLinkedProjectArtifact(projectId,match[3]));target.append(button);
+  }else{
+   const link=document.createElement('a');link.textContent=label;link.href=match[2];link.target='_blank';link.rel='noopener noreferrer';target.append(link);
+  }
+  offset=match.index+match[0].length;
  }target.append(document.createTextNode(text.slice(offset)));
 }
-function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false){
+async function openLinkedProjectArtifact(projectId,artifactId){
+ if(!projectId||activeProject?.id===projectId)return openPreview(artifactId);
+ await openRegisteredProject(projectId);
+ if(activeProject?.id===projectId)return openPreview(artifactId);
+}
+function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false,linkProjectId=activeProject?.id){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
  let fence=null,code=null,lists=[],lineIndex=0;
  for(const line of text.split('\\n')){
@@ -5027,13 +5038,13 @@ function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLink
    if(!lists.length||lists.at(-1).indent<indent){
     const list=document.createElement('ul');(lists.at(-1)?.item||target).append(list);lists.push({indent,list,item:null});
    }
-   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2]);else item.textContent=bullet[2];
+   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2],linkProjectId);else item.textContent=bullet[2];
    addConflictLineClasses(item,lineClasses,lineIndex);lists.at(-1).list.append(item);lists.at(-1).item=item;lineIndex++;continue;
   }
   // A blank line separates list paragraphs, not the batch from its children.
   if(!line.trim()){lineIndex++;continue;}
   lists=[];const element=document.createElement(heading?'h'+heading[1].length:'p');
-  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
+  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line,linkProjectId);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
  }
 }
 const projectConflicts=document.querySelector('#project-conflicts');

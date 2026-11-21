@@ -122,6 +122,22 @@ Obsah souboru se nekopíruje a úkol se nedokončí.
 zápisu použijte původní **Obnovit zápis**; opakování stejné operace nevytvoří
 další přílohu. Soubor uložený jen mimo projekt nejprve přidejte mezi podklady.
 
+### Odkaz do jiného projektu
+
+Použijte **Připojit odkaz z jiného projektu**. Existující sdílecí dialog nabídne
+podklady výslovně sdílené do projektu úkolu. Po potvrzení se odkaz objeví ve
+výběru přílohy; záznam do úkolu opět uloží až **Potvrdit a připojit**. Stejným
+výběrem lze připojit již existující projektovou referenci. Zdrojový soubor se
+nekopíruje a jeho projekt, identita a připnutá revize zůstávají zachované.
+
+**Původní verze** otevře skutečný obsah zdroje v původně připnuté revizi,
+nikoli JSON soubor odkazu. Pozdější explicitní aktualizace reference jej
+nepřepíše. **Aktuální artefakt** používá nynější revizi reference. Odvolané
+sdílení nebo odebraná práva zabrání otevření obsahu i novému připojení.
+Odkazy uvnitř náhledu se otevírají ve zdrojovém projektu, aniž se tím přepne
+pracovní úkol. HTTP(S) odkazy lze otevřít v prohlížeči; desktop je po kliknutí
+předá systémovému prohlížeči.
+
 ## Přidání komentovaného záznamu
 
 V pravém panelu pod **Přidat záznam k úkolu** vyberte jednu nebo více

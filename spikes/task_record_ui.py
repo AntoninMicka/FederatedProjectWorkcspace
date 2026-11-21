@@ -4,23 +4,29 @@
 JS = r'''
 const taskRecordDrafts=new Map();
 const taskAttachmentDrafts=new Map();
-async function loadTaskAttachment(){
- const session=selectedTaskWorkSession();if(!session||taskWorkBusy||session.record_pending?.length)return;
+async function loadTaskAttachment(options={}){
+ const session=selectedTaskWorkSession();if(!session||(taskWorkBusy&&options.allowBusy!==true)||session.record_pending?.length)return;
  const previous=taskAttachmentDrafts.get(session.work_session_id);
  try{
   const options=await projectRequest('/v1/task-work',{action:'record-attachment-options',...taskWorkHandle,work_session_id:session.work_session_id});
   if(selectedTaskWorkSession()?.work_session_id!==session.work_session_id)return;
-  taskAttachmentDrafts.set(session.work_session_id,{...options,selected:options.items.some(item=>item.id===previous?.selected)?previous.selected:options.items[0]?.id||'',comment:previous?.comment??'Připojen existující artefakt',attempt:null});
+  taskAttachmentDrafts.set(session.work_session_id,{...options,selected:options.items.some(item=>item.id===previous?.selected&&item.available!==false)?previous.selected:options.items.find(item=>item.available!==false)?.id||'',comment:previous?.comment??'Připojen existující artefakt',attempt:null});
   renderTaskRecords();
  }catch(error){taskWorkMessage=error.message;renderTaskWork();}
 }
 function renderTaskAttachment(editor,session){
  editor.append(taskRecordButton('Připojit existující soubor / artefakt',loadTaskAttachment,taskWorkBusy||!!session.record_pending?.length));
+ editor.append(taskRecordButton('Připojit odkaz z jiného projektu',async()=>{
+  if(activeProject?.id!==session.project_id)await openRegisteredProject(session.project_id);
+  if(activeProject?.id===session.project_id)await openAttachDialog(async()=>{
+   await refreshTaskWork();if(selectedTaskWorkSession()?.work_session_id===session.work_session_id)await loadTaskAttachment({allowBusy:true});
+  });
+ },taskWorkBusy||!!session.record_pending?.length));
  const draft=taskAttachmentDrafts.get(session.work_session_id);if(!draft)return;
  const form=document.createElement('form');form.id='task-attachment-form';
  const label=document.createElement('label');label.textContent='Existující soubor / artefakt v projektu';
  const select=document.createElement('select');select.id='task-attachment-artifact';
- for(const item of draft.items){const option=document.createElement('option');option.value=item.id;option.textContent=item.title;select.append(option);}
+ for(const item of draft.items){const option=document.createElement('option');option.value=item.id;option.textContent=item.title+(item.source_project_id?' · odkaz z projektu '+item.source_project_id:'')+(item.available===false?' · nedostupný odkaz':'');option.disabled=item.available===false;select.append(option);}
  select.value=draft.selected;select.disabled=taskWorkBusy||!!draft.attempt;
  select.addEventListener('change',()=>{draft.selected=select.value;});label.append(select);
  const commentLabel=document.createElement('label');commentLabel.textContent='Komentář k připojení';
@@ -113,7 +119,7 @@ async function openTaskRecordOutput(record,index,version,page=1){
  try{const result=await projectRequest('/v1/task-work',{action:'record-output',...taskWorkHandle,project_id:record.context.project_id,record_id:record.id,output_index:index,version,page});
   if(generation!==taskRecordPreviewGeneration)return;
   target.replaceChildren();target.append(taskRecordButton('Zavřít náhled',clearTaskRecordPreview));const heading=document.createElement('h3');heading.textContent=(version==='original'?'Původní verze':'Aktuální artefakt')+' · '+result.commit_id.slice(0,12);target.append(heading);
-  if(result.format==='markdown'){const content=document.createElement('div');renderMarkdown(result.text,content,null,false);target.append(content);}
+  if(result.format==='markdown'){const content=document.createElement('div');renderMarkdown(result.text,content,null,true,result.link_project_id);target.append(content);}
   else if(['image','pdf'].includes(result.format)){const image=document.createElement('img');image.alt=result.metadata.title;image.src=result.image;target.append(image);}
   else{const text=document.createElement('pre');text.textContent=result.text||result.message||'Náhled není dostupný.';target.append(text);}
   if(result.pages>1){if(page>1)target.append(taskRecordButton('Předchozí strana',()=>openTaskRecordOutput(record,index,version,page-1)));if(page<result.pages)target.append(taskRecordButton('Další strana',()=>openTaskRecordOutput(record,index,version,page+1)));}

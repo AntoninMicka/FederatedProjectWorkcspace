@@ -17,7 +17,7 @@ async function appendTaskPlanRecords(detail,item){
    previewHost.replaceChildren();previewHost.append(taskRecordButton('Zavřít náhled',()=>{previewGeneration++;previewHost.replaceChildren();}));
    const title=document.createElement('h4');title.textContent=result.metadata.title+' · '+(version==='original'?'původní verze':'aktuální verze')+' · '+result.commit_id.slice(0,12);previewHost.append(title);
    const content=document.createElement('div');previewHost.append(content);
-   if(result.format==='markdown')renderMarkdown(result.text,content,null,false);
+   if(result.format==='markdown')renderMarkdown(result.text,content,null,true,result.link_project_id);
    else if(['image','pdf'].includes(result.format)){const image=document.createElement('img');image.alt=result.metadata.title;image.src=result.image;image.style.maxWidth='100%';content.append(image);}
    else{const pre=document.createElement('pre');pre.textContent=result.text||result.message||'Náhled není dostupný.';content.append(pre);}
    if(page>1)previewHost.append(taskRecordButton('Předchozí strana',()=>openOutput(id,index,version,page-1,activity)));

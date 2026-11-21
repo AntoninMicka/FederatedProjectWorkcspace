@@ -70,7 +70,7 @@ function sharingConfirmStep(display,pairs,run,extra=[]){
   // A retried confirmation keeps its operation ID so a lost response cannot duplicate the write.
   flow.attempt=flow.attempt||crypto.randomUUID();
   try{await run(flow.attempt);if(sharingFlow!==flow)return;sharingStatus.textContent='Uloženo.';sharingConfirm.hidden=true;
-   const projectId=activeProject.id;await openRegisteredProject(projectId);}
+   const projectId=activeProject.id;await openRegisteredProject(projectId);if(flow.onAttached&&activeProject?.id===projectId){sharingDialog.close();await flow.onAttached();}}
   catch(error){if(sharingFlow===flow){sharingStatus.textContent=error.message;sharingConfirm.disabled=!box.checked;}}
  };
 }
@@ -120,9 +120,9 @@ async function openShareDialog(item){
   }catch(error){if(sharingFlow===flow){sharingStatus.textContent=error.message;sharingPrimary.disabled=false;}}
  };
 }
-async function openAttachDialog(){
+async function openAttachDialog(onAttached=null){
  if(!activeProject||activeProject.readOnly)return;
- sharingReset('Připojit podklad z jiného projektu');const flow=sharingFlow;sharingStatus.textContent='Načítám nabídky…';sharingDialog.showModal();
+ sharingReset('Připojit podklad z jiného projektu');const flow=sharingFlow;flow.onAttached=typeof onAttached==='function'?onAttached:null;sharingStatus.textContent='Načítám nabídky…';sharingDialog.showModal();
  let overview;try{overview=await sharingOverview();}catch(error){if(sharingFlow===flow)sharingStatus.textContent=error.message;return;}
  if(sharingFlow!==flow)return;sharingStatus.textContent='';
  const offers=sharingNode('fieldset');offers.append(sharingNode('legend','Podklady sdílené do tohoto projektu'));
@@ -224,7 +224,7 @@ async function openSharedReference(id){
    previewContent.append(actions);
   }
   const preview=view.preview;
-  if(preview?.format==='markdown')renderMarkdown(preview.text);
+  if(preview?.format==='markdown')renderMarkdown(preview.text,previewContent,null,true,view.source.project_id);
   else if(preview?.format==='json'){previewContent.append(sharingNode('pre',preview.text));}
   else if(preview&&(preview.format==='image'||preview.format==='pdf')){const image=document.createElement('img');image.alt=view.title;image.src=preview.image;previewContent.append(image);}
   previewStatus.textContent=preview?.message||'';

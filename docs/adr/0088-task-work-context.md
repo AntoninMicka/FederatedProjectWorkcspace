@@ -504,3 +504,32 @@ Text úkolu a záznam vznikají jednou Workspace transakcí. Po Git commitu pře
 lokální finalizací recover dohledá receipt bez druhé přílohy či řádku. Stale
 HEAD se nepřebazuje; obnovení výběru zachová komentář a načte aktuální seznam.
 Soubor pouze na disku mimo projekt se nejprve přidá stávajícím importem.
+
+## Odkazy mezi projekty a kontext náhledu
+
+Příloha úkolu může být připnutý odkaz do jiného projektu podle ADR 0070/0086.
+Panel nabízí **Připojit odkaz z jiného projektu** přes existující sdílecí
+workflow. První potvrzení vytvoří místní deskriptor sdíleného podkladu, vrátí
+uživatele do výběru přílohy a druhé **Potvrdit a připojit** uloží záznam do úkolu.
+Jde o dvě samostatně potvrzené transakce s vlastní recovery; zrušení druhého
+kroku neodstraňuje již schválenou projektovou referenci. Zdroj se nemění.
+
+Výběr, publish/recover i původní/aktuální náhled používají `CrossReferences`
+s requestovým uživatelem a omezením na nyní čitelné/zapisovatelné projekty.
+Resolver ověřuje živé sdílení, zdrojové granty, přesný pin a efektivní privacy.
+Nedostupný či odvolaný odkaz se nenabízí jako použitelný. Náhled nikdy nepadá
+zpět na cizí bajty z neověřené cache. Záznam připíná místní descriptor, takže
+po explicitním repinu projektové reference původní záznam dál používá původní
+zdrojovou revizi; aktuální náhled používá aktuální descriptor.
+
+Relativní odkazy v obsahu se vyhodnocují vůči skutečnému zdrojovému projektu,
+nikoli právě otevřenému projektu úkolu. Navigace zachová původní pracovní
+kontext a respektuje guard neuložených editorů. Sdílený hlavní náhled, panel
+úkolu i roadmapa předávají rendereru zdrojové project ID. Přenosnou identitu
+cizího podkladu nadále nese reference, nevzniká konkurenční URI schéma.
+
+Markdown náhledy rozpoznávají i HTTP(S) odkazy, escapované názvy a místní
+cesty s mezerami. HTML zůstává inertní a javascript/data/file schémata nejsou
+aktivní odkazy. Qt předá HTTP(S) odkaz systémovému prohlížeči pouze při uživatelské
+události `newWindowRequested`; nepovoluje obecnou navigaci uvnitř shellu ani
+nepřenáší lokální Authorization hlavičku do externího prohlížeče.

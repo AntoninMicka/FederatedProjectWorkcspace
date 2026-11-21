@@ -176,6 +176,12 @@ Připojení existujícího artefaktu **adaptuje** validovaný projektový snapsh
 output pin z uložených bajtů; událost má vlastní druh `artifact-attach`.
 **Reject:** falešná save činnost, kopie souboru a druhý writer příloh. Hranice
 pádu zůstávají v původním D a jsou upřesněné v ADR 0088.
+Odkazy příloh mezi projekty **reuse/adaptují** `CrossReferences.resolve_input`,
+živé granty ADR 0086 a existující `openAttachDialog`. Záznam drží původní pin
+místního deskriptoru; skutečný obsah a efektivní privacy určuje resolver.
+Renderer přebírá source project ID. **Reject:** druhé URI schéma, prosté cizí
+UUID interpretované v cílovém projektu, kopie podkladu a obcházení sdílení.
+HTTP(S) odkazy používají inertní DOM a uživatelskou Qt navigační událost.
 Oprava restartu adaptuje existující vlastněné relace a autentizaci pomocí
 readonly historie a explicitního CAS převzetí; neukládá další plaintext
 credential ani nezavádí persistentní browser profil. Přímé lidské dokončení

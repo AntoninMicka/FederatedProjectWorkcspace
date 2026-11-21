@@ -126,6 +126,57 @@ class TaskRecordTests(unittest.TestCase):
         self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
         self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
 
+    def shared_reference(self):
+        from spikes.project_creation import ProjectCreation
+        from spikes.cross_references import CrossReferences
+        from spikes.reporting_schema import digest,encoded
+        source=ProjectCreation(self.f.f.node).create('Foreign source',self.f.f.root/('source-'+str(uuid4())),str(uuid4()))['id']
+        service=CrossReferences(self.f.f.node);git=service.artifacts.workspace(source).git
+        artifact=str(uuid4());service.artifacts.save(dict(project_id=source,artifact_id=artifact,base_head=git.head(),title='Foreign content',body='Original foreign bytes\n',new=True),str(uuid4()))
+        share=str(uuid4());proposal=service.share_preview(source,share,artifact,[self.f.f.pid],'Task evidence')
+        service.share_write(proposal,str(uuid4()),digest(encoded(proposal)),confirm=True)
+        reference=str(uuid4());proposal=service.preview(self.f.f.pid,reference,service.source_pin(source,artifact),'Foreign link',share_id=share,reason_text='Attach to task')
+        service.write(proposal,str(uuid4()),digest(encoded(proposal)),confirm=True)
+        return service,source,artifact,reference,share
+
+    def test_cross_project_reference_preview_keeps_original_pin_and_honors_revocation(self):
+        from spikes.reporting_schema import digest,encoded
+        service,source,artifact,reference,share=self.shared_reference()
+        self.aid=reference;options=self.service.attachment_options(dict(self.handle,action='record-attachment-options',work_session_id=self.sid))
+        item=next(item for item in options['items'] if item['id']==reference)
+        self.assertEqual(item['source_project_id'],source);self.assertTrue(item['available'])
+        self.service.execute(self.attachment_request());record=self.record()
+        request=dict(self.handle,action='record-output',project_id=self.f.f.pid,record_id=record['id'],output_index=0,version='original',page=1)
+        view=self.service.execute(request);self.assertIn('Original foreign bytes',view['text']);self.assertEqual(view['link_project_id'],source)
+        git=service.artifacts.workspace(source).git
+        service.artifacts.save(dict(project_id=source,artifact_id=artifact,base_head=git.head(),title='Foreign content',body='New foreign bytes\n',new=False),str(uuid4()))
+        proposal=service.preview(self.f.f.pid,reference,service.source_pin(source,artifact),'Foreign link',update=True)
+        service.write(proposal,str(uuid4()),digest(encoded(proposal)),confirm=True)
+        self.assertIn('Original foreign bytes',self.service.execute(request)['text'])
+        self.assertIn('New foreign bytes',self.service.execute(dict(request,version='current'))['text'])
+        proposal=service.revoke_preview(source,share);service.revoke(proposal,str(uuid4()),digest(encoded(proposal)),confirm=True)
+        with self.assertRaises(ValueError):self.service.execute(request)
+        options=self.service.attachment_options(dict(self.handle,action='record-attachment-options',work_session_id=self.sid))
+        self.assertFalse(next(item for item in options['items'] if item['id']==reference)['available'])
+        with self.assertRaises(ValueError):self.service.execute(self.attachment_request())
+
+    def test_cross_project_attachment_checks_source_rights_and_live_share_before_commit(self):
+        from spikes.reporting_schema import digest,encoded
+        service,source,artifact,reference,share=self.shared_reference();self.aid=reference
+        request=self.attachment_request();self.work.can_read=lambda pid:pid!=source
+        options=self.service.attachment_options(dict(self.handle,action='record-attachment-options',work_session_id=self.sid))
+        self.assertFalse(next(item for item in options['items'] if item['id']==reference)['available'])
+        with self.assertRaises(ValueError):self.service.execute(request)
+        self.work.can_read=lambda pid:True
+        def stop(stage):
+            if stage=='task-record-intent-prepared':raise RuntimeError('crash')
+        with self.assertRaises(RuntimeError):self.service.execute(request,checkpoint=stop)
+        head=self.work.projects.repository(self.f.f.pid).head()
+        proposal=service.revoke_preview(source,share);service.revoke(proposal,str(uuid4()),digest(encoded(proposal)),confirm=True)
+        with self.assertRaises(ValueError):self.service.execute(dict(self.handle,action='record-recover',operation_id=request['operation_id']))
+        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
+        self.assertEqual(self.service.for_session(self.handle,self.sid)[0],[])
+
     def test_confirm_group_exact_outputs_replay_amend_and_immutable_history(self):
         first=self.work.projects.repository(self.f.f.pid).head();self.saved('# Revised inventory\n')
         request=self.request();view=self.service.execute(request)

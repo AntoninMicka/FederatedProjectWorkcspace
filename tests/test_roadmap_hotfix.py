@@ -37,7 +37,7 @@ const document={createElement:tag=>new Element(tag),createTextNode:text=>({textC
 const openPreview=id=>opened.push(id),addConflictLineClasses=()=>{};
 const taskPlanProjection=null;
 const taskQueueMessage='';
-const taskQueueBusy=false,queueIsCurrent=()=>false,taskQueueView=null,activeProject=null;
+const taskQueueBusy=false,queueIsCurrent=()=>false,taskQueueView=null;let activeProject=null;const switched=[];async function openRegisteredProject(id){switched.push(id);activeProject={id};}
 const changeTaskQueue=()=>assert.fail('Unloaded queue must not mutate');
 const buttons=el=>[...(el.tag==='button'?[el]:[]),...el.children?.flatMap(buttons)||[]];
 ''' + PLAN_STATUS_JS + helper + detail + r'''
@@ -52,11 +52,18 @@ assert.deepEqual(opened,[id,id]);
 renderMarkdown('- '+link,previewContent);
 assert.equal(buttons(previewContent).length,1);buttons(previewContent)[0].listeners.click();
 assert.equal(opened.length,3);
-for(const value of ['[x](javascript:alert(1))','[x](https://example.com)', '<img src=x onerror=alert(1)>',
+for(const value of ['[x](javascript:alert(1))','[x](data:text/html,bad)', '<img src=x onerror=alert(1)>',
  '[x](../../secret)','[x](artifacts/not-an-id/content.md)']){
  const target=new Element('p');appendProjectArtifactLinks(target,value);
  assert.equal(buttons(target).length,0);assert.equal(target.children.map(x=>x.textContent).join(''),value);
 }
+const escaped=new Element('p');appendProjectArtifactLinks(escaped,'[\\[Odd\\]](artifacts/'+id+'/file with spaces.md)');
+assert.equal(buttons(escaped).length,1);assert.equal(buttons(escaped)[0].textContent,'[Odd]');
+const web=new Element('p');appendProjectArtifactLinks(web,'[Web](https://example.com/path)');
+const anchor=web.children.find(child=>child.tag==='a');assert(anchor);assert.equal(anchor.href,'https://example.com/path');assert.equal(anchor.rel,'noopener noreferrer');
+const foreign='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',foreignView=new Element('foreign');
+renderMarkdown(link,foreignView,null,true,foreign);
+buttons(foreignView)[0].listeners.click().then(()=>{assert.deepEqual(switched,[foreign]);assert.equal(opened.at(-1),id);}).catch(error=>{console.error(error);process.exit(1);});
 previewContent.replaceChildren();renderMarkdown('```\n'+link+'\n```',previewContent);
 assert.equal(buttons(previewContent).length,0);
 const conflict=new Element('conflict');renderMarkdown(link,conflict);

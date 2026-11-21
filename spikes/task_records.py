@@ -32,17 +32,37 @@ class TaskRecords:
     def __init__(self,work):
         self.work=work;self.activities=TaskActivities(work)
 
+    def reference(self,pid,aid,files,entities):
+        from spikes.reference_schema import references
+        value=references(files,entities).get(aid)
+        if value is None:return None
+        from spikes.cross_references import CrossReferences
+        allowed={row['id'] for row in self.work.projects.list() if self.work.can_read(row['id'])}
+        writable={project for project in allowed if self.work.can_write(project)}
+        resolver=CrossReferences(self.work.node,user_id=self.work.user_id,
+            allowed_projects=allowed,writable_projects=writable)
+        result=resolver.resolve_input(pid,aid,files,entities,boundary='network' if self.work.network else 'same-node')
+        return value,result
+
     def attachment_options(self,request):
         fields(request,'action window_id window_token work_session_id')
         with self.work._db() as db:
             self.work._window(db,request)
             session=self.work._session(db,request['work_session_id'],request['window_id'])
         _,head,files,entities=self.snapshot(session['project_id'])
-        items=[dict(id=meta['id'],title=meta['title'],privacy=meta['privacy']) for meta in entities.values()
-            if 'file' in meta and 'artifacts/'+meta['id']+'/'+meta['file'] in files
-            and meta.get('file')!='task-work.json']
+        items=[]
+        for meta in entities.values():
+            if 'file' not in meta or 'artifacts/'+meta['id']+'/'+meta['file'] not in files or meta['file']=='task-work.json':continue
+            item=dict(id=meta['id'],title=meta['title'],privacy=meta['privacy'],available=True)
+            try:
+                resolved=self.reference(session['project_id'],meta['id'],files,entities)
+                if resolved:
+                    value,result=resolved
+                    item.update(source_project_id=value['source']['project_id'],source_artifact_id=value['source']['artifact_id'],privacy=result['privacy'])
+            except (ValueError,OSError,sqlite3.Error,subprocess.SubprocessError):item['available']=False
+            items.append(item)
         return dict(expected_head=head,items=sorted(items,key=lambda item:(item['title'],item['id'])),
-            privacy=max([meta['privacy'] for meta in entities.values()],key=PRIVACY.get))
+            privacy=max([meta['privacy'] for meta in entities.values()]+[item['privacy'] for item in items if item['available']],key=PRIVACY.get))
 
     def snapshot(self,pid,*,write=True):
         if write:self.work._authorize(pid)
@@ -229,13 +249,15 @@ class TaskRecords:
                 require(meta and 'file' in meta and meta['file']!='task-work.json','Artefakt není dostupný k připojení.')
                 path='artifacts/'+meta['id']+'/'+meta['file'];require(path in files,'Soubor artefaktu není dostupný.')
                 context={k:session[k] for k in ('work_session_id','definition_pin','project_id','task_id','node_id','user_id','selected_checklist')}
+                resolved=self.reference(pid,meta['id'],files,entities)
+                privacy=resolved[1]['privacy'] if resolved else meta['privacy']
                 output=dict(project_id=pid,artifact_id=meta['id'],commit_id=head,path=path,
-                    sha256=hashlib.sha256(files[path]).hexdigest(),privacy=meta['privacy'],title=meta['title'])
+                    sha256=hashlib.sha256(files[path]).hexdigest(),privacy=privacy,title=meta['title'])
                 events=[dict(event_id=str(uuid5(UUID(request['operation_id']),'attachment-event')),
                     operation_id=request['operation_id'],kind='artifact-attach',outcome='succeeded',
                     author_id=self.work.user_id,created_at=datetime.now(timezone.utc).timestamp(),
                     request_references=[],result_references=[dict(project_id=pid,artifact_id=meta['id'],commit_id=head)],
-                    context=context,privacy=meta['privacy'])]
+                    context=context,privacy=privacy)]
             else:events=self.events(request)
             if request['action']=='record-offer':
                 require(isinstance(request['state'],str) and request['state'] in {'draft','deferred','dismissed'},'Invalid offer state')
@@ -272,7 +294,12 @@ class TaskRecords:
             self.work._authorize(pid)
             self.work._pin(workspace.git.snapshot(workspace.git.head()),pid,record['context']['task_id'],workspace.git.head())
             require(workspace.git.head()==op['base_head'],'Projekt se změnil; obnovte kontext.')
-            for output in record['outputs']:require(self.activities._readable(output['project_id']),'Výsledek již není dostupný.')
+            for output in record['outputs']:
+                require(self.activities._readable(output['project_id']),'Výsledek již není dostupný.')
+                if output['project_id']==pid:source_git=workspace.git
+                else:source_git,_,_,_=self.snapshot(output['project_id'],write=False)
+                pinned=source_git.snapshot(output['commit_id']);resolved=self.reference(output['project_id'],output['artifact_id'],pinned,validate_snapshot(pinned))
+                if resolved:require(PRIVACY[record['privacy']]>=PRIVACY[resolved[1]['privacy']],'Soukromí zdroje se změnilo; obnovte výběr.')
             prefix='artifacts/'+record['id']+'/'
             from spikes.task_record_notes import changes as note_changes
             changes=note_changes(workspace.git.snapshot(workspace.git.head()),pid,workspace.git.head(),record)
@@ -325,4 +352,10 @@ class TaskRecords:
         prefix='artifacts/'+output['artifact_id']+'/'
         sidecar=prefix+'metadata.json' in files;path=prefix+meta['file'] if sidecar else next(p for p in files if p.startswith(prefix))
         if request['version']=='original':require(path==output['path'] and hashlib.sha256(files[path]).hexdigest()==output['sha256'],'Output pin differs')
-        return preview(dict(id=output['artifact_id'],commit_id=commit,metadata=meta,path=path,raw=files[path],sidecar=sidecar),request['page'])
+        resolved=self.reference(pid,output['artifact_id'],files,entities)
+        if resolved:
+            value,result=resolved;source=value['source']
+            require(PRIVACY[result['privacy']]<=PRIVACY[output['privacy']],'Soukromí zdroje se změnilo; původní náhled již není dostupný.')
+            rendered=preview(dict(id=source['artifact_id'],commit_id=source['commit_id'],metadata=result['metadata'],path=source['path'],raw=result['raw'],sidecar=True),request['page'])
+            return dict(rendered,link_project_id=source['project_id'],reference_project_id=pid,reference_id=output['artifact_id'],source=source)
+        return dict(preview(dict(id=output['artifact_id'],commit_id=commit,metadata=meta,path=path,raw=files[path],sidecar=sidecar),request['page']),link_project_id=pid)
