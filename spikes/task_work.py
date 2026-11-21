@@ -231,6 +231,14 @@ class TaskWork:
                 sessions.insert(0, self._session(db, state['active'], handle['window_id']))
             pending = self._operation(db, state['pending'], handle['window_id']) if state['pending'] else None
         items = [self._projection(s) for s in sessions]
+        from spikes.task_activities import TaskActivities
+        for item in items:
+            if 'current_task' in item:
+                try:
+                    item['activities'] = TaskActivities(self).for_session(handle, item['work_session_id'])
+                except AccessDenied:
+                    replacement = self._projection(next(s for s in sessions if s['work_session_id'] == item['work_session_id']))
+                    item.clear(); item.update(replacement)
         return dict(context_revision=state['revision'], active_session_id=state['active'],
                     sessions=items, pending=None if not pending else dict(operation_id=pending['id'], **json.loads(pending['doc'])))
 

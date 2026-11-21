@@ -23,3 +23,11 @@ class TaskWorkBrowserTests(unittest.TestCase):
             cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=80)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('task panel browser OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_native_editor_save_automatically_appears_as_task_activity(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/task_activity_smoke.py')],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=60)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('task activity browser OK',result.stdout)

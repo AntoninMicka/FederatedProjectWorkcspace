@@ -72,3 +72,104 @@ class TaskWorkHTTPTests(unittest.TestCase):
         self.assertEqual(recovered['context_revision'],again['context_revision'])
         self.post(dict(handle,action='status'),code=422)
         self.assertEqual(self.post(dict(again['window'],action='status'))['context_revision'],again['context_revision'])
+
+    def test_native_save_import_delete_receipts_and_replay_keep_original_task(self):
+        from spikes.source_import import request_from_bytes
+        handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
+        def start(task, switch=False):
+            view=self.post(dict(handle,action='status'))
+            head=self.f.server.projects.plan_view(self.pid)['commit_id']
+            pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id=task,expected_head=head))
+            request=dict(handle,action='switch' if switch else 'start',operation_id=str(uuid4()),
+                context_revision=view['context_revision'],project_id=self.pid,task_id=task,selected_checklist=None,**pin)
+            if switch:
+                session=next(s for s in view['sessions'] if s['work_session_id']==view['active_session_id'])
+                request.update(work_session_id=session['work_session_id'],session_revision=session['revision'])
+            return self.post(request)
+        view=start('TASK-A');original=view['active_session_id']
+        headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=view['context_revision']))}
+        artifact=str(uuid4());operation=str(uuid4())
+        document=dict(project_id=self.pid,artifact_id=artifact,base_head=self.f.server.projects.plan_view(self.pid)['commit_id'],
+                      title='Inventory',body='# SECRET inventory\n',new=True)
+        request=dict(operation_id=operation,document=document)
+        code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
+        self.assertEqual(code,200,data);receipt=json.loads(data)
+        view=start('TASK-X',True)
+        code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
+        self.assertEqual(code,200,data);self.assertEqual(json.loads(data)['commit_id'],receipt['commit_id'])
+        view=self.post(dict(handle,action='status'));old=next(s for s in view['sessions'] if s['work_session_id']==original)
+        self.assertEqual(len(old['activities']),1);event=old['activities'][0]
+        self.assertEqual(event['outcome'],'succeeded');self.assertNotIn('SECRET',json.dumps(event))
+        self.assertTrue(any(ref.get('commit_id')==receipt['commit_id'] for ref in event['result_references']))
+        self.assertFalse(old['current_task']['checked'])
+        headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=view['context_revision']))}
+        source=request_from_bytes(self.pid,self.f.server.projects.plan_view(self.pid)['commit_id'],'source.md',b'# source\n','Source','',[],'project')
+        code,data,_=self.f.request(path='/v1/sources/import',body=json.dumps(dict(operation_id=str(uuid4()),source=source)),headers=headers)
+        self.assertEqual(code,200,data)
+        current=self.post(dict(handle,action='status'))
+        active=next(s for s in current['sessions'] if s['work_session_id']==current['active_session_id'])
+        self.assertEqual(active['activities'][0]['kind'],'source-import')
+        self.assertTrue(any(ref.get('artifact_id')==source['artifact_id'] for ref in active['activities'][0]['request_references']))
+        head=json.loads(data)['commit_id']
+        code,data,_=self.f.request(path='/v1/artifacts/delete/preview',body=json.dumps(dict(project_id=self.pid,artifact_id=artifact,expected_head=head)))
+        self.assertEqual(code,200,data);preview=json.loads(data)
+        code,data,_=self.f.request(path='/v1/artifacts/delete/confirm',body=json.dumps(dict(project_id=self.pid,artifact_id=artifact,
+            base_head=head,preview_sha256=preview['preview_sha256'],operation_id=str(uuid4()))),headers=headers)
+        self.assertEqual(code,200,data)
+        current=self.post(dict(handle,action='status'))
+        active=next(s for s in current['sessions'] if s['work_session_id']==current['active_session_id'])
+        self.assertEqual([e['kind'] for e in active['activities']],['source-import','artifact-delete'])
+        # A stale pinned context rejects before entering the native writer.
+        before=self.f.server.projects.plan_view(self.pid)['commit_id']
+        bad=dict(request,operation_id=str(uuid4()),document=dict(document,base_head=before,artifact_id=str(uuid4())))
+        code,_,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(bad),headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=-1))})
+        self.assertEqual(code,422)
+        self.assertEqual(self.f.server.projects.plan_view(self.pid)['commit_id'],before)
+
+    def test_stream_terminal_receipt_is_recorded_before_delivery_after_task_switch(self):
+        from unittest.mock import patch
+        from spikes.task_work import TaskWork
+        handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
+        pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))
+        view=self.post(dict(handle,action='start',operation_id=str(uuid4()),context_revision=0,
+            project_id=self.pid,task_id='TASK-A',selected_checklist=None,**pin))
+        original=view['active_session_id'];headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=view['context_revision']))}
+        request=dict(project_id=self.pid,expected_head=self.f.server.projects.plan_view(self.pid)['commit_id'],
+            **{k:str(uuid4()) for k in ['thread_id','turn_id','message_id','run_id','manifest_id','assistant_message_id']},
+            selected_message_ids=[],content='SECRET PROMPT',privacy='project',created_at='2026-11-21T15:00:00Z')
+        def send(payload,delta,status):
+            # Another user action switches the context while the native run is in flight.
+            work=TaskWork(self.node);current=work.status(handle)
+            head=work.projects.plan_view(self.pid)['commit_id'];pin=work.inspect(handle,self.pid,'TASK-X',head)
+            session=next(s for s in current['sessions'] if s['work_session_id']==original)
+            work.execute(dict(handle,action='switch',operation_id=str(uuid4()),context_revision=current['context_revision'],
+                project_id=self.pid,task_id='TASK-X',selected_checklist=None,work_session_id=original,session_revision=session['revision'],**pin))
+            delta('SECRET RESPONSE')
+            return {'turn':{'turn_id':payload['turn_id'],'run_id':payload['run_id'],'state':'completed'},'content':'SECRET RESPONSE'}
+        with patch.object(self.f.server.chat_service,'send_stream',side_effect=send) as native:
+            code,data,_=self.f.request(path='/v1/chat/send-stream',body=json.dumps(request),headers=headers)
+            self.assertEqual(code,200,data);self.assertIn(b'"type":"result"',data);self.assertEqual(native.call_count,1)
+        current=self.post(dict(handle,action='status'));old=next(s for s in current['sessions'] if s['work_session_id']==original)
+        event=old['activities'][0];self.assertEqual(event['outcome'],'succeeded')
+        self.assertTrue(any(ref.get('run_id')==request['run_id'] for ref in event['result_references']))
+        self.assertNotIn('SECRET',json.dumps(event))
+        new=next(s for s in current['sessions'] if s['work_session_id']==current['active_session_id'])
+        self.assertEqual(new['task_id'],'TASK-X');self.assertEqual(new['activities'],[])
+
+    def test_failed_activity_finalization_preserves_native_success_and_unknown_intent(self):
+        from unittest.mock import patch
+        handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
+        pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))
+        view=self.post(dict(handle,action='start',operation_id=str(uuid4()),context_revision=0,
+            project_id=self.pid,task_id='TASK-A',selected_checklist=None,**pin))
+        request=dict(operation_id=str(uuid4()),document=dict(project_id=self.pid,artifact_id=str(uuid4()),
+            base_head=self.f.server.projects.plan_view(self.pid)['commit_id'],title='Inventory',body='# Inventory\n',new=True))
+        headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=view['context_revision']))}
+        with patch('spikes.task_activities.TaskActivities.finish',side_effect=OSError('disk unavailable')):
+            code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
+            self.assertEqual(code,200,data)
+        committed=json.loads(data)['commit_id']
+        current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'unknown')
+        code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
+        self.assertEqual(code,200,data);self.assertEqual(json.loads(data)['commit_id'],committed)
+        current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')

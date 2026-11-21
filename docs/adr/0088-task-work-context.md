@@ -6,9 +6,9 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0088 — Pracovní kontext zahájeného úkolu ve Workspace
 
 - Datum: 2026-11-21.
-- Stav: **kontrakt s implementovanými řezy A/B a cíleným ověřením** pro
-  `PLAN-TASK-WORK-01-A/B`. Zdroj obsahuje službu relací, pravý panel a testy.
-  Akceptace celé dávky, zachytávání činností a přijetí záznamů
+- Stav: **kontrakt s implementovanými řezy A/B/C a cíleným ověřením** pro
+  `PLAN-TASK-WORK-01-A/B/C`. Zdroj obsahuje službu relací, pravý panel, evidenci činností a testy.
+  Akceptace celé dávky a přijetí komentovaných záznamů
   zůstávají samostatné navazující části; tento stav je neprohlašuje za hotové.
 - Autorita zadání: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,
   snapshot `c7b61487c2ef842c272fa45ce74216c0b9667dea`, exportní revize
@@ -26,7 +26,7 @@ položky roadmapy, pořadí fronty ani posledního projektu.
 
 Kontrakt stanovuje model a lifecycle pro navazující implementaci. Pravý panel
 řeší B, zachycení činností C, komentované záznamy D, LLM integraci E a společnou
-persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Implementace A/B není důkazem splnění celé dávky.
+persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Implementace A/B/C není důkazem splnění celé dávky.
 
 ## Reuse a současný stav
 
@@ -241,7 +241,7 @@ panelu nebo test mock služby nenahradí crash/souběhové testy a oba živé
 uživatelské scénáře celé dávky.
 
 
-## Implementační řezy A/B
+## Implementační řezy A/B/C
 
 Zadání implementace bylo ověřeno nad snapshotem
 `5e715a57728a0483fb784b090e03f7cbaeea47ef`, exportní revizí
@@ -283,9 +283,8 @@ ani lidská akceptace běžného profilu.
 
 Návrh dokončení je v A lokální položka relace se stavem pending. Nepublikuje se
 zatím jako komentovaný Git artefakt ani nabídka jinému reviewerovi a nepoužívá
-se jako důkaz akceptace tasku. To patří do D/F. Automatické zachycení reálných
-souborových/chat/LLM činností a připojení výsledků zatím implementované není;
-`capture` dodává pouze základ pro C/E. Žádný LLM účinek není součástí startu.
+se jako důkaz akceptace tasku. To patří do D/F. Evidence nativních souborových/chat/LLM činností je implementovaná v C;
+komentované připojení výstupů a vstupní kontext modelu patří do D/E. Žádný LLM účinek není součástí startu.
 
 
 Řez B navazuje na zdrojový HEAD `94ab3ac` při stejném ověřeném exportu výše.
@@ -296,5 +295,45 @@ nevzniká nová hranice mezi persistentními vrstvami. Capture zmrazí i vybran�
 Testy B ověřují přesný replay, stale/revokaci/změnu zadání, uzavřenou relaci,
 nezměněný Git a původní capture. Qt průchod ověřuje trvalý panel u podkladu,
 dirty editoru a chatu, bezpečné vykreslení, mobilní fokus/Tab/Escape,
-zrušenou navigaci a vyčištění obsahu při ztrátě oprávnění. Připojené činnosti
-a výstupy zůstávají prázdné do C/D; lokální návrhy jsou oddělené.
+zrušenou navigaci a vyčištění obsahu při ztrátě oprávnění. Řez C doplňuje evidenci činností; komentované přílohy patří do D.
+Lokální návrhy dokončení jsou oddělené.
+
+
+## Implementační řez C
+
+Navazuje na zdrojový HEAD `0776ba5` při stejném ověřeném exportu výše.
+`TaskActivities` adaptuje existující vlastněný TaskWork store a jeho tabulku
+operací: `record_type=task-activity` odděluje záznamy od lifecycle intentů.
+Event UUID má vlastní namespace a otisk nativního requestu; credential ani
+request body se neukládají. Verze schématu 1 i umístění DB zůstávají stejné.
+Nejde o projektový index ani nový plán. Publikované projektové záznamy budou D/F.
+
+Sdílený HTTP dispatcher zachytí ověřený kontext před nativní akcí; webový
+import používá stejný wrapper se svými původními kontrolami autora/privacy.
+Streamové adaptéry doplní výsledek před zápisem terminálního rámce na socket.
+Task/run/writer ID a jejich vlastní journal se nemění. Reuse registr nativních
+akcí se sdílí s UI; náhledy, drafty a klávesy se nezaznamenávají.
+
+Crash boundaries rozšiřují tabulku výše o evidenci činnosti: před lokálním
+intentem žádný účinek; po něm a před potvrzeným native receipt je stav unknown;
+po nativním účinku bez finalizace zůstane unknown; explicitní replay původního
+ID dohledá nativní výsledek; po finalizaci ztráta odpovědi nevytvoří druhý event.
+Lokální DB transakce se nedrží přes nativní writer, index, síť ani provider.
+Žádná obnova evidence automaticky neopakuje nativní či placenou operaci.
+
+Reference obsahují pouze identifikátory a revize z nativních struktur, nikoli
+modelový `outcome`, texty nebo credential. Projekce znovu ověřuje práva a web
+nepublikuje desktopové záznamy ani reference do projektu s local-only daty.
+Původní context pin se nemění při změně aktivního úkolu, uzavření relace ani
+ztrátě oprávnění během běhu. Zápis receipt nevyžaduje znovu zpřístupnit obsah.
+
+
+Cílené důkazy C zahrnují pád procesu před nativním účinkem a po skutečném
+Git commitu před finalizací, přesný replay bez druhého commitu, stale/CAS,
+cizí okno, změnu tasku za běhu, revokaci, oddělení web/desktop hranice a
+nepovýšení modelového návrhu na důkaz uloženého artefaktu. HTTPS průchod
+ověřuje skutečné save/import/delete, terminální NDJSON po přepnutí a chybu
+finálního zápisu evidence: nativní úspěch zůstane úspěchem a evidence unknown,
+dokud explicitní původní replay nedoplní receipt. Qt ověřuje, že dirty draft
+nevytvoří event a uložený dokument se sám zobrazí v panelu. Test streamu používá
+řízenou náhradu modelového volání; nedokládá placený ani živý Ollama běh.

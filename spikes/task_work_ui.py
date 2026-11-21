@@ -42,7 +42,19 @@ TASK_WORK_CSS = '''
 @media print{#task-work-controls,#task-work-panel-toggle,#task-work-panel-backdrop{display:none!important}}
 '''
 
-TASK_WORK_JS = r'''
+import json
+
+from spikes.task_activities import ROUTES
+
+TASK_WORK_JS = 'const taskActivityRoutes=new Set('+json.dumps(list(ROUTES))+');\n' + r'''
+function taskWorkActivityFinished(path){
+ if(taskActivityRoutes.has(path)&&taskWorkHandle)setTimeout(()=>{if(!taskWorkBusy)refreshTaskWork();},0);
+}
+function taskWorkActivityHeaders(path,request){
+ if(!taskActivityRoutes.has(path)||!taskWorkHandle||!taskWorkView?.active_session_id)return {};
+ if(taskWorkBusy||taskWorkView.pending)throw new Error('Nejprve obnovte pracovní kontext úkolu.');
+ return {'X-FPW-Task-Work':JSON.stringify({...taskWorkHandle,context_revision:taskWorkView.context_revision})};
+}
 let taskWorkHandle=null,taskWorkView=null,taskWorkBusy=false,taskWorkMessage='',taskWorkSelection=null,taskWorkAttempt=null,taskWorkProposalDraft='';
 const taskWorkStorageKey='fpw-task-work-window-v1',taskWorkRestoreKey='fpw-task-work-restore-v1';
 function readTaskWorkStorage(key){try{return JSON.parse(sessionStorage.getItem(key)||'null');}catch{return null;}}
@@ -194,8 +206,18 @@ function scheduleTaskWorkRefresh(){
 function renderTaskWorkDetails(){
  const target=document.querySelector('#task-work-details'),proposals=document.querySelector('#task-work-proposals'),list=document.querySelector('#task-work-proposal-list');
  const session=selectedTaskWorkSession(),task=session?.current_task;
- target.replaceChildren();list.replaceChildren();proposals.hidden=!session?.completion_proposals?.length;
+ target.replaceChildren();list.replaceChildren();
+ const related=document.querySelector('#task-work-related-list');related.replaceChildren();proposals.hidden=!session?.completion_proposals?.length;
  const empty=document.querySelector('#task-work-related-empty');empty.textContent=session?'K této relaci zatím nejsou připojené činnosti ani výstupy.':'Vyberte pracovní relaci.';
+ empty.hidden=!!session?.activities?.length;
+ for(const activity of session?.activities||[]){
+  const row=document.createElement('li');
+  const outcomes={succeeded:'Uloženo / dokončeno',failed:'Neúspěšné',unknown:'Výsledek není potvrzen'};
+  const kinds={'artifact-save':'Uložení dokumentu','artifact-delete':'Odstranění dokumentu','source-import':'Import podkladu','artifact-publish':'Uložení výstupu','conversation-turn':'Konverzace','conversation-snapshot':'Uložení konverzace','conversation-output':'Uložení odpovědi','llm-run':'Modelový běh','llm-task':'Modelová úloha','search-run':'Vyhledávání','file-edit':'Úprava souboru','file-save':'Uložení souboru','file-delete':'Odstranění souboru','file-stage':'Rozpracovaná změna souboru','file-commit':'Commit souboru','plan-save':'Úprava plánu','plan-create':'Vytvoření položky plánu','plan-relations':'Úprava vazeb plánu','plan-delete':'Odstranění položky plánu','media-run':'Tvorba média'};
+  row.textContent=`${kinds[activity.kind]||activity.kind} · ${outcomes[activity.outcome]||activity.outcome} · ${new Date(activity.created_at*1000).toLocaleString()}`;
+  for(const ref of activity.result_references||[]){if(ref.commit_id){const pin=document.createElement('small');pin.className='task-work-pin';pin.textContent='Commit '+ref.commit_id;row.append(pin);}}
+  related.append(row);
+ }
  if(!session)return;
  const heading=document.createElement('h3');heading.textContent=`${session.task_id} · ${session.title||'Nedostupné zadání'}`;target.append(heading);
  if(!task){const reason=document.createElement('p');reason.textContent=session.blocked||'Zadání nelze načíst.';target.append(reason);return;}

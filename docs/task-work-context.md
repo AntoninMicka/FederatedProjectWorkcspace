@@ -1,6 +1,6 @@
 <!-- SPDX-FileCopyrightText: 2026 Antonín Mička -->
 <!-- SPDX-License-Identifier: MPL-2.0 -->
-# Pracovní kontext úkolu — PLAN-TASK-WORK-01-A/B
+# Pracovní kontext úkolu — PLAN-TASK-WORK-01-A/B/C
 
 V roadmapě otevřete detail konkrétního nedokončeného úkolu a použijte
 **Zahájit úkol**. Start ověří projektová oprávnění a předpoklady a označí task
@@ -42,20 +42,58 @@ Panel lze sbalit a znovu otevřít při čtení podkladu, editaci, hledání i c
 V úzkém okně se otevírá jako dialog s návratem fokusu, klávesou Escape
 a omezením Tab na jeho ovladače. Neuložený editor zůstává zachován; navigace
 používá jeho běžné potvrzení. Prezentační režim panel skryje.
-Po ztrátě oprávnění se vyčistí zadání i checklist. Činnosti a výstupy mají
-zatím explicitní prázdný stav; lokální návrhy dokončení se zobrazují zvlášť.
+Po ztrátě oprávnění se vyčistí zadání i checklist. Činnosti ukazují druh, čas, výsledek a dostupný commit; lokální návrhy
+dokončení se zobrazují zvlášť. Komentované přílohy doplní část D.
 
 ## Rozsah tohoto řezu
 
-Implementované jsou pracovní relace (A) a pravý panel se zadáním/checklistem
-(B). Automatická evidence činností (C), komentované
+Implementované jsou pracovní relace (A), pravý panel se zadáním/checklistem
+(B) a evidence nativních činností (C). Komentované
 projektové záznamy (D), propojení LLM běhů (E) a jejich společné recovery (F)
 zůstávají navazujícími úkoly stejné dávky. Celou dávku tímto nelze akceptovat.
 
-`capture` vrací neměnnou identitu původní relace a jejího zadání pro budoucí
-C/E včetně vybraného bodu `selected_checklist`. Existující importy, editace a modelové běhy ji zatím samy nepoužívají.
+`capture` vrací neměnnou identitu původní relace a jejího zadání pro evidenci C
+a navazující E včetně vybraného bodu `selected_checklist`. Evidence C ji zachytí před
+operací; předání zadání jako vstupu modelu zůstává součástí E.
 Nabídka obsahuje nejvýše 50 posledních relací okna plus jeho aktivní relaci;
 starší uložené relace se tím nemažou. Historický index nedostává novou autoritu.
+
+## Evidence činností
+
+Při aktivní relaci se skutečné uložení, import, odstranění, konverzační turn,
+vyhledávání či modelový běh evidují pod kontextem zachyceným před operací.
+Sbalení panelu evidenci nevypíná. Neuložený draft, náhled nebo jednotlivé
+klávesy nevytvářejí záznam. Evidence nepřidává vstupy do Context Manifestu,
+nespouští poskytovatele a nepotvrzuje splnění úkolu.
+
+Sdílené desktop/web UI přidává ověřený header `X-FPW-Task-Work` pouze
+k podporovaným nativním akcím. Jeho JSON obsahuje `window_id`, `window_token`
+a `context_revision`. API klient bez pracovního okna jej nepřidává; backend
+neodhaduje kontext podle posledního projektu ani cizího okna. Přesný seznam
+akcí drží `spikes/task_activities.py:ROUTES`: dokumenty, zdroje včetně Drive,
+plán, Julia/prezentace, stage/commit artefaktu, uložené chatové výstupy,
+vyhledávání, chat a modelové úlohy. Běžné přímé volání Python služby bez
+pracovního okna se za uživatelskou činnost automaticky nevydává.
+
+Záznam má stabilní event ID odvozené z autora, nativní akce a operation/run ID,
+původní relaci, pin zadání a checklistový kontext, autora, časy, hash requestu,
+reference vstupů a nativního výsledku a stav `succeeded`, `failed` či `unknown`.
+Stejný request/ID seskupí replay do jedné činnosti; jiné tělo pod stejným ID
+se odmítne. Streamové delty nejsou samostatné činnosti. Pozdní výsledek se
+připíše původní relaci i po přepnutí či pozastavení.
+
+Do evidence se nekopírují texty, prompty, tajné hodnoty ani modelové návrhy.
+Čtení znovu ověřuje aktuální práva. Web nezobrazuje lokálně zachycené události
+ani reference do projektu s local-only obsahem; nedostupný podklad se tím
+nezpřístupní. Komentovaný a verzovaný projektový záznam patří do D/F.
+
+Záznam před účinkem je trvale `unknown`. Nativní writer nebo run journal
+zůstává autoritou účinku; před odesláním terminální odpovědi se doplní receipt.
+Pád po nativním commitu před doplněním evidence ponechá `unknown`, nikoli
+falešný úspěch. Chyba finalizace evidence nezmění úspěšnou nativní odpověď
+na chybu vyzývající k opakování. Výslovný replay stejné nativní operace může doplnit původní
+receipt bez druhého commitu; evidence nic sama neopakuje. Neznámý placený
+běh se řeší původním run journalem, nikdy novým automatickým pokusem.
 
 ## API, úložiště a ověření
 
@@ -96,7 +134,7 @@ výsledek. Nemění Git ani index a nepřidává migraci či další crash bound
 Cílené ověření:
 
 ```sh
-python3 -m unittest tests.test_task_work tests.test_task_work_http tests.test_ide_bridge_panel -v
+python3 -m unittest tests.test_task_activities tests.test_task_work tests.test_task_work_http tests.test_ide_bridge_panel -v
 M0_DESKTOP_TEST=1 QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS='--no-sandbox --disable-gpu' python3 -m unittest tests.test_task_work_browser -v
 ```
 

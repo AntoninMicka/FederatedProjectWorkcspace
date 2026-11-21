@@ -512,7 +512,7 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
                 return self.send_error(403)
             return super().dispatch(request)
         if self.path == '/v1/sources/import':
-            return self._import_source(request)
+            return self.dispatch_task_activity(request, self._import_source)
         # Desktop calls retain the node-local author. Network requests bind the
         # authenticated account only for this request, including streamed chat.
         project_ids = ({item['id'] for item in self.server.projects.catalog()}

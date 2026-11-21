@@ -2388,7 +2388,7 @@ async function projectRequest(path,body,timeout=60000){
   path==='/v1/google-drive/status' || path.startsWith('/v1/backend-metrics/');
  try{
   let response,result;
-  try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+  try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(typeof taskWorkActivityHeaders==='function'?taskWorkActivityHeaders(path,body):{})},
    body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
    result=await response.json();
   }catch(error){if(error?.phase==='admission'||error?.phase==='transport')throw error;
@@ -2402,7 +2402,7 @@ async function projectRequest(path,body,timeout=60000){
    error.status=response.status;error.diagnostic=result.diagnostic;
    error.outcome=result.outcome;error.retry=result.retry;throw error;}
   return result;
- }finally{if(!monitorRequest)scheduleBackendStateRefresh();}
+ }finally{if(!monitorRequest)scheduleBackendStateRefresh();if(typeof taskWorkActivityFinished==='function')taskWorkActivityFinished(path);}
 }
 const sourceImportForm=document.querySelector('#source-import-form');
 const sourceImportStatus=document.querySelector('#source-import-status');
@@ -5609,7 +5609,7 @@ function threadWritable(){return !activeThread || (activeThread.status==='active
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
 async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=>{}){
  const response=await fetch(path,{method:'POST',
-  headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
+  headers:{'Content-Type':'application/json',...(typeof taskWorkActivityHeaders==='function'?taskWorkActivityHeaders(path,request):{})},body:JSON.stringify(request)});
  if(!response.ok){let value;try{value=await response.json();}catch(error){throw Object.assign(new Error('Odpověď streamu nelze potvrdit; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});}
   throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,phase:'response'});}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
@@ -5626,7 +5626,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
  }catch(error){if(error.status!==undefined)throw error;
   throw Object.assign(new Error('Stream skončil bez potvrzeného výsledku; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});
- }finally{reader.releaseLock();}
+ }finally{reader.releaseLock();if(typeof taskWorkActivityFinished==='function')taskWorkActivityFinished(path);}
 }
 async function externalStreamRequest(request,onDelta){
  return streamRequest('/v1/external/send-stream',request,onDelta);
@@ -8706,7 +8706,61 @@ class DesktopHandler(Handler):
     def request_owner_id(self):
         return None
 
+    def task_work_service(self):
+        from spikes.task_work import TaskWork
+        network = getattr(self.server.projects, 'network', False)
+        actor = getattr(self, 'actor', {}) or {}
+        return TaskWork(self.server.projects.node_path, actor.get('id'), network=network,
+            can_read=(lambda pid: self.server.administration.allowed(self.actor, pid)) if network else None,
+            can_write=self._can_write if network else None)
+
+    def finish_task_activity(self, code, payload):
+        activity = getattr(self, '_task_activity', None)
+        if activity:
+            # Clear before finalization: an error reply must not re-enter the recorder.
+            self._task_activity = None
+            service, identifier = activity
+            try:
+                service.finish(identifier, code, payload)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                # The native receipt remains authoritative; its successful response
+                # must not become a retry invitation because bookkeeping failed.
+                import logging
+                logging.getLogger(__name__).warning('task_activity_finalization_unknown event_id=%s', identifier)
+
+    def send_error(self, code, message=None, explain=None):
+        self.finish_task_activity(code, {'outcome': 'unknown' if code == 409 else 'failed'})
+        return super().send_error(code, message, explain)
+
+    def reply(self, code, payload):
+        self.finish_task_activity(code, payload)
+        return super().reply(code, payload)
+
     def dispatch(self, request):
+        return self.dispatch_task_activity(request, self.dispatch_workspace)
+
+    def dispatch_task_activity(self, request, dispatch):
+        from spikes.task_activities import TaskActivities, ROUTES
+        self._task_activity = None
+        header = self.single('X-FPW-Task-Work')
+        if header and self.path in ROUTES:
+            try:
+                envelope = json.loads(header)
+                if not isinstance(envelope, dict) or set(envelope) != {'window_id', 'window_token', 'context_revision'}:
+                    raise ValueError('Invalid task activity context')
+                service = TaskActivities(self.task_work_service())
+                handle = {k: envelope[k] for k in ('window_id', 'window_token')}
+                identifier = service.begin(handle, envelope['context_revision'], self.path, request)
+                self._task_activity = (service, identifier)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, PendingOperation) as exc:
+                return self.reply(422, {'error': str(exc), 'outcome': 'not-started', 'retry': 'read-context'})
+        try:
+            return dispatch(request)
+        finally:
+            # A crash/uncaught exception/stream disconnect leaves the durable unknown intent.
+            self._task_activity = None
+
+    def dispatch_workspace(self, request):
         if self.path.startswith('/v1/x-sources/'):
             if hasattr(self,'actor') and not self.server.administration.is_admin(self.actor):return self.send_error(403)
             from spikes.x_connector import XService
@@ -8944,14 +8998,8 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/task-work':
             try:
-                from spikes.task_work import TaskWork
                 from spikes.administration import AccessDenied
-                node = self.server.projects.node_path
-                network = getattr(self.server.projects, 'network', False)
-                actor = getattr(self, 'actor', {}) or {}
-                can_read = (lambda pid: self.server.administration.allowed(self.actor, pid)) if network else (lambda pid: True)
-                can_write = self._can_write if network else (lambda pid: True)
-                service = TaskWork(node, actor.get('id'), network=network, can_read=can_read, can_write=can_write)
+                service = self.task_work_service()
                 return self.reply(200, service.execute(request))
             except AccessDenied as exc:
                 return self.reply(403, {'error': str(exc)})
@@ -9414,6 +9462,10 @@ class DesktopHandler(Handler):
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 def emit(value):
+                    if value.get('type') == 'result':
+                        self.finish_task_activity(200, value.get('result'))
+                    elif value.get('type') == 'error':
+                        self.finish_task_activity(value.get('status', 500), dict(value, outcome='unknown') if value.get('status') == 409 else value)
                     self.wfile.write(json.dumps(value, ensure_ascii=False,
                         separators=(',', ':')).encode() + b'\n'); self.wfile.flush()
                 def emit_error(status, message):
@@ -9528,6 +9580,10 @@ class DesktopHandler(Handler):
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 def emit(value):
+                    if value.get('type') == 'result':
+                        self.finish_task_activity(200, value.get('result'))
+                    elif value.get('type') == 'error':
+                        self.finish_task_activity(value.get('status', 500), dict(value, outcome='unknown') if value.get('status') == 409 else value)
                     self.wfile.write(json.dumps(value, ensure_ascii=False,
                         separators=(',', ':')).encode() + b'\n'); self.wfile.flush()
                 def emit_error(status, message):
