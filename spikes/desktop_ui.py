@@ -5261,6 +5261,7 @@ async function saveConflictEditor(navigate=true){
 }
 projectConflictPublish.addEventListener('click',()=>{if(projectConflictConfirm.checked)saveConflictEditor();});
 async function openPreview(id,page=1){
+ if(activeProject&&currentArtifacts.some(item=>item.id===id&&item.sharing==='reference'))return openSharedReference(id);
  if(!activeProject||!await canLeaveWorkspaceEditors())return;
  showWorkspacePage(projectView);
  const project=activeProject;
@@ -5271,6 +5272,8 @@ async function openPreview(id,page=1){
  try{
   const result=await projectRequest('/v1/artifacts/preview',{
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
+  if(request!==previewRequest||activeProject!==project)return;
+  if(result.metadata.tags?.some(tag=>/^fpw-artifact-reference-v[0-9]+$/.test(tag)))return openSharedReference(id);
   const gitState=await loadArtifactGitState(project,id,page);if(gitState?.working_preview)Object.assign(result,gitState.working_preview);if(gitState?.notice)result.message=(result.message||'')+' '+gitState.notice;if(gitState?.can_commit&&gitState.working_after_stage)result.message=(result.message||'')+' Stage obsahuje jinou verzi než soubor na disku; Commit použije staged verzi.';
   if(request!==previewRequest || activeProject!==project)return;
   selectedPreviewMetadata={...result.metadata,id};document.querySelector('#preview-title').textContent=result.metadata.title;document.querySelector('#preview-panel').dataset.fileFormat=result.format;

@@ -134,6 +134,9 @@ nekopíruje a jeho projekt, identita a připnutá revize zůstávají zachované
 nikoli JSON soubor odkazu. Pozdější explicitní aktualizace reference jej
 nepřepíše. **Aktuální artefakt** používá nynější revizi reference. Odvolané
 sdílení nebo odebraná práva zabrání otevření obsahu i novému připojení.
+Také dříve uložený odkaz v textu úkolu či podkladu otevře sdílený obsah
+přes stejný resolver jako položka v postranním seznamu. Záznam není potřeba
+připojovat znovu; jeho původní identita a připnutá verze se nemění.
 Odkazy uvnitř náhledu se otevírají ve zdrojovém projektu, aniž se tím přepne
 pracovní úkol. HTTP(S) odkazy lze otevřít v prohlížeči; desktop je po kliknutí
 předá systémovému prohlížeči.
