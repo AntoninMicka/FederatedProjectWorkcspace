@@ -554,8 +554,9 @@ def _validate_snapshot(files, *, metadata_cache=None):
             require(relation['target_id'] in entities, 'Dangling relation')
     from spikes.reporting_schema import records
     records(files, entities, _record_cache=metadata_cache)
-    from spikes.reference_schema import references
+    from spikes.reference_schema import references, shares
     references(files, entities)
+    shares(files, entities)
     return entities
 
 

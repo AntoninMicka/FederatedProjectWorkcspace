@@ -7,6 +7,10 @@ SPDX-License-Identifier: MPL-2.0
 
 Datum: 2026-11-04. Stav: implementovaný PoC XREF-01 k review.
 
+Doplněno 21. 11. 2026: nová reference vyžaduje explicitní sdílení ve zdroji
+(`fpw-artifact-reference-v2`) podle [ADR 0086](0086-cross-project-artifact-sharing.md).
+Reference v1 zůstávají čitelné; ostatní pravidla tohoto ADR platí dál.
+
 ## Rozhodnutí
 
 `fpw-artifact-reference-v1` je dokument s kanonickým `reference.json`.

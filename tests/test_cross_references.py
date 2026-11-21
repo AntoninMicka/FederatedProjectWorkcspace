@@ -15,9 +15,9 @@ from spikes.administration import Administration, AccessDenied
 from spikes.artifacts import Artifacts
 from spikes.context_builder import Authority, ContextBuilder, ProjectInput, Target
 from spikes.cross_references import CrossReferences, ReferenceUnavailable
-from spikes.metadata import ValidationError, validate_snapshot
+from spikes.metadata import UnsupportedVersion, ValidationError, validate_snapshot, validate_transition
 from spikes.project_creation import ProjectCreation
-from spikes.reference_schema import SCHEMA, FORK, references
+from spikes.reference_schema import SCHEMA, SCHEMA_V1, FORK, SHARE, references, shares
 from spikes.reporting_schema import digest, encoded
 
 
@@ -34,10 +34,19 @@ class ReferenceTests(unittest.TestCase):
         self.artifacts.save(dict(project_id=self.source,base_head=self.source_ws.git.head(),artifact_id=self.source_id,
             title='Original source title',body='Přesné původní bajty.\n',new=True),str(uuid4()))
         self.service=CrossReferences(self.node)
+        self.share_id=self.share()
         self.pin=self.service.source_pin(self.source,self.source_id)
-        self.preview=self.service.preview(self.target,self.reference_id,self.pin,'Local reference label')
+        self.preview=self.service.preview(self.target,self.reference_id,self.pin,'Local reference label',
+                                          share_id=self.share_id,reason_text='Podklad pro cílový projekt')
         self.operation=str(uuid4())
         self.receipt=self.service.write(self.preview,self.operation,digest(encoded(self.preview)),confirm=True)
+
+    def share(self, *, service=None, targets=None, artifact_id=None):
+        service=service or self.service; share_id=str(uuid4())
+        value=service.share_preview(self.source,share_id,artifact_id or self.source_id,
+                                    targets or [self.target],'Sdílení pro cílový projekt')
+        service.share_write(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        return share_id
 
     def change_source(self,body='New source revision\n',title='New source title'):
         return self.artifacts.save(dict(project_id=self.source,base_head=self.source_ws.git.head(),artifact_id=self.source_id,
@@ -67,7 +76,8 @@ class ReferenceTests(unittest.TestCase):
     def test_reference_stores_only_pointer_and_view_renders_exact_pinned_revision(self):
         files=self.target_ws.git.snapshot(self.target_ws.git.head())
         pointer=files[f'artifacts/{self.reference_id}/reference.json']
-        self.assertEqual(json.loads(pointer),dict(schema=SCHEMA,source=self.pin))
+        self.assertEqual(json.loads(pointer),dict(schema=SCHEMA,source=self.pin,share=dict(
+            share_id=self.share_id,originator_id=self.author,attached_by=self.author,reason='Podklad pro cílový projekt')))
         self.assertNotIn('Přesné'.encode(),b''.join(files.values()))
         view=self.service.view(self.target,self.reference_id)
         self.assertTrue(view['read_only']);self.assertFalse(view['stale'])
@@ -172,9 +182,13 @@ class ReferenceTests(unittest.TestCase):
 
     def test_tampered_pin_unknown_version_and_cache_symlink_are_rejected(self):
         bad=dict(self.pin,sha256='0'*64)
-        with self.assertRaisesRegex(ValidationError,'differs'):self.service.preview(self.target,str(uuid4()),bad,'Bad pin')
+        with self.assertRaisesRegex(ValidationError,'differs'):
+            self.service.preview(self.target,str(uuid4()),bad,'Bad pin',share_id=self.share_id,reason_text='Důvod')
         files=self.target_ws.git.snapshot(self.target_ws.git.head());path=f'artifacts/{self.reference_id}/reference.json'
-        changed=json.loads(files[path]);changed['schema']='fpw-artifact-reference-v2';files[path]=encoded(changed)
+        changed=json.loads(files[path]);changed['schema']='fpw-artifact-reference-v3';files[path]=encoded(changed)
+        with self.assertRaises(UnsupportedVersion) as caught:validate_snapshot(files)
+        self.assertEqual((caught.exception.found,caught.exception.update),(3,'this-node'))
+        changed['schema']=SCHEMA;del changed['share'];files[path]=encoded(changed)
         with self.assertRaises(ValidationError):validate_snapshot(files)
         cache=self.service._cache_path(self.pin);cache.unlink();cache.symlink_to(self.node)
         root=self.source_ws.git.root;offline=root.with_name('source-offline');root.rename(offline)
@@ -278,6 +292,125 @@ CrossReferences(sys.argv[1]).write(request,sys.argv[3],digest(encoded(request)),
         payload=json.loads((destination/'context-payload.json').read_bytes())
         self.assertEqual(base64.b64decode(payload['inputs'][0]['content_b64']),'První připnutá revize.\n'.encode())
         self.assertTrue((destination/'update-preview.json').is_file())
+
+    # XREF-02-A: explicit source share contract (ADR 0086).
+    def test_new_reference_requires_live_share_listing_the_target(self):
+        with self.assertRaises(ValidationError):
+            self.service.preview(self.target,str(uuid4()),self.pin,'Bez sdílení')
+        with self.assertRaises(ReferenceUnavailable) as caught:
+            self.service.preview(self.target,str(uuid4()),self.pin,'Cizí ID',share_id=str(uuid4()),reason_text='Důvod')
+        self.assertEqual(caught.exception.state,'not-shared')
+        third=ProjectCreation(self.node).create('Third project',self.base/'third',str(uuid4()))['id']
+        with self.assertRaises(ReferenceUnavailable) as caught:
+            self.service.preview(third,str(uuid4()),self.pin,'Jiný cíl',share_id=self.share_id,reason_text='Důvod')
+        self.assertEqual(caught.exception.state,'not-shared')
+        other=self.share(targets=[third])
+        view_id=str(uuid4())
+        value=self.service.preview(third,view_id,self.pin,'Povolený cíl',share_id=other,reason_text='Důvod')
+        self.service.write(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        self.assertEqual(self.service.view(third,view_id)['share']['share_id'],other)
+
+    def test_share_record_is_canonical_audited_and_cannot_be_deleted(self):
+        files=self.source_ws.git.snapshot(self.source_ws.git.head())
+        record=json.loads(files[f'artifacts/{self.share_id}/share.json'])
+        self.assertEqual((record['schema'],record['artifact_id'],record['targets'],record['originator_id'],record['revoked']),
+                         (SHARE,self.source_id,[self.target],self.author,None))
+        self.assertEqual(shares(files,validate_snapshot(files))[self.share_id],record)
+        self.assertNotIn(b'Original source title',files[f'artifacts/{self.share_id}/metadata.json'])
+        removed={k:v for k,v in files.items() if not k.startswith(f'artifacts/{self.share_id}/')}
+        with self.assertRaisesRegex(ValidationError,'revoke'):validate_transition(files,removed)
+        for change in (dict(originator_id=str(uuid4())),dict(artifact_id=str(uuid4())),dict(targets=[self.target,self.target])):
+            changed=dict(files);changed[f'artifacts/{self.share_id}/share.json']=encoded(dict(record,**change))
+            with self.assertRaises(ValidationError):validate_transition(files,changed)
+        revoked=dict(record,revoked=dict(at='2026-11-21T00:00:00Z',by=self.author))
+        final=dict(files);final[f'artifacts/{self.share_id}/share.json']=encoded(revoked)
+        validate_transition(files,final)
+        again=dict(final);again[f'artifacts/{self.share_id}/share.json']=encoded(record)
+        with self.assertRaisesRegex(ValidationError,'final'):validate_transition(final,again)
+
+    def test_forged_share_originator_or_artifact_is_not_a_grant(self):
+        files=self.target_ws.git.snapshot(self.target_ws.git.head());path=f'artifacts/{self.reference_id}/reference.json'
+        value=json.loads(files[path])
+        for share in (dict(value['share'],originator_id=str(uuid4())),):
+            with self.assertRaises(ReferenceUnavailable) as caught:
+                self.service.live(value['source'],share=share,target=self.target)
+            self.assertEqual(caught.exception.state,'not-shared')
+        other=str(uuid4())
+        self.artifacts.save(dict(project_id=self.source,base_head=self.source_ws.git.head(),artifact_id=other,
+            title='Jiný',body='Jiný podklad.\n',new=True),str(uuid4()))
+        with self.assertRaises(ReferenceUnavailable):
+            self.service.preview(self.target,str(uuid4()),self.service.source_pin(self.source,other),'Jiný',
+                                 share_id=self.share_id,reason_text='Důvod')
+
+    def test_share_needs_source_write_and_visible_targets_and_attach_needs_source_read(self):
+        reader,change,uid=self.user()
+        with self.assertRaises(AccessDenied):
+            reader.share_preview(self.source,str(uuid4()),self.source_id,[self.target],'Bez práva zápisu')
+        third=ProjectCreation(self.node).create('Hidden project',self.base/'hidden',str(uuid4()))['id']
+        change(action='update-user',user_id=uid,active=True,node_role='member',
+               memberships={self.source:'editor',self.target:'editor'})
+        with self.assertRaises(AccessDenied):
+            reader.share_preview(self.source,str(uuid4()),self.source_id,[third],'Nepřístupný cíl')
+        with self.assertRaisesRegex(ValidationError,'itself'):
+            reader.share_preview(self.source,str(uuid4()),self.source_id,[self.source],'Sám do sebe')
+        change(action='update-user',user_id=uid,active=True,node_role='member',memberships={self.target:'editor'})
+        with self.assertRaises(AccessDenied):reader.view(self.target,self.reference_id)
+        with self.assertRaises(AccessDenied):
+            reader.preview(self.target,str(uuid4()),self.pin,'Bez zdroje',share_id=self.share_id,reason_text='Důvod')
+
+    def test_reference_and_share_records_cannot_be_shared_again(self):
+        with self.assertRaisesRegex(ValidationError,'shared'):
+            self.service.share_preview(self.source,str(uuid4()),self.share_id,[self.target],'Řetěz')
+        with self.assertRaises(ValidationError):
+            self.service.share_preview(self.target,str(uuid4()),self.reference_id,[self.source],'Řetěz reference')
+
+    def test_repin_keeps_share_provenance_and_shared_deletion_stays_valid(self):
+        self.change_source()
+        newer=self.service.view(self.target,self.reference_id)['newer']
+        with self.assertRaises(ValidationError):
+            self.service.preview(self.target,self.reference_id,newer,'Label',update=True,share_id=self.share_id,reason_text='Jiný důvod')
+        value=self.service.preview(self.target,self.reference_id,newer,'Label',update=True)
+        self.service.write(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        files=self.target_ws.git.snapshot(self.target_ws.git.head())
+        self.assertEqual(json.loads(files[f'artifacts/{self.reference_id}/reference.json'])['share']['reason'],'Podklad pro cílový projekt')
+        before=dict(files);path=f'artifacts/{self.reference_id}/reference.json'
+        changed=dict(files);changed[path]=encoded(dict(json.loads(files[path]),share=dict(json.loads(files[path])['share'],reason='Přepsáno')))
+        with self.assertRaisesRegex(ValidationError,'share provenance'):validate_transition(before,changed)
+        source=self.source_ws.git.snapshot(self.source_ws.git.head())
+        deleted={k:v for k,v in source.items() if not k.startswith(f'artifacts/{self.source_id}/')}
+        self.assertIn(self.share_id,shares(deleted,validate_snapshot(deleted)))
+
+    def test_legacy_v1_reference_still_resolves_and_repins_without_share(self):
+        legacy=str(uuid4());ws=self.target_ws;head=ws.git.head()
+        meta=dict(schema_version=1,id=legacy,title='Legacy',kind='document',created_at='2026-11-04T00:00:00Z',
+                  author_id=self.author,privacy='project',provenance='user',file='reference.json',tags=[SCHEMA_V1])
+        def prepare(workspace):
+            return ({f'artifacts/{legacy}/metadata.json':encoded(meta),
+                     f'artifacts/{legacy}/reference.json':encoded(dict(schema=SCHEMA_V1,source=self.pin))},
+                    'Legacy','legacy@local.invalid','Legacy XREF-01 reference')
+        ws.transact(str(uuid4()),dict(action='legacy-test'),prepare,expected_head=head)
+        view=self.service.view(self.target,legacy)
+        self.assertEqual((view['schema'],view['share'],view['state']),(SCHEMA_V1,None,'current'))
+        self.change_source()
+        value=self.service.preview(self.target,legacy,self.service.view(self.target,legacy)['newer'],'Legacy',update=True)
+        self.service.write(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        files=ws.git.snapshot(ws.git.head())
+        self.assertEqual(json.loads(files[f'artifacts/{legacy}/reference.json'])['schema'],SCHEMA_V1)
+
+    def test_cli_creates_share_and_attaches_reference(self):
+        def run(*args):
+            child=subprocess.run([sys.executable,'-m','spikes.cross_references','--node',str(self.node),*args],
+                                 capture_output=True,text=True,timeout=60)
+            self.assertEqual(child.returncode,0,child.stderr);return json.loads(child.stdout)
+        share_id,ref=str(uuid4()),str(uuid4())
+        share=run('share-preview',self.source,share_id,self.source_id,'CLI důvod','--target',self.target)
+        path=self.base/'share.json';path.write_text(json.dumps(share))
+        run('share-write',str(path),'--operation-id',str(uuid4()),'--sha256',share['sha256'],'--confirm')
+        pin=run('pin',self.source,self.source_id);pin_path=self.base/'pin.json';pin_path.write_text(json.dumps(pin))
+        preview=run('preview',self.target,ref,str(pin_path),'CLI odkaz','--share',share_id,'--reason','CLI použití')
+        prev=self.base/'prev.json';prev.write_text(json.dumps(preview))
+        run('write',str(prev),'--operation-id',str(uuid4()),'--sha256',preview['sha256'],'--confirm')
+        self.assertEqual(run('view',self.target,ref)['value']['share']['reason'],'CLI použití')
 
 
 if __name__=='__main__':unittest.main()

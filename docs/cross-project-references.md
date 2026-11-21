@@ -10,6 +10,24 @@ Reference zobrazuje konkrétní revizi zdrojového artefaktu read-only. Novějš
 obsah nabídne, ale nepřevezme bez potvrzeného repinu. Nový GUI formulář tento
 řez nepřidává; generický prohlížeč dokumentů může zobrazit JSON deskriptor.
 
+## Sdílení podkladu — XREF-02
+
+Od XREF-02-A vyžaduje nová reference explicitní sdílení ve zdrojovém
+projektu ([ADR 0086](adr/0086-cross-project-artifact-sharing.md)). Editor
+zdroje vytvoří záznam sdílení jednoho artefaktu. Záznam určuje povolené cílové
+projekty, původce a důvod. Připojení v cíli pak uvede ID sdílení a vlastní
+důvod použití. Resolver při každém použití ověří, že sdílení trvá a uvádí
+právě tento cíl. Oprávnění uživatele k oběma projektům tím nenahrazuje.
+Reference v1 vytvořené před XREF-02 zůstávají čitelné jako `share: null`.
+
+```sh
+python3 -m spikes.cross_references --node NODE share-preview SOURCE_PROJECT SHARE_ID ARTIFACT 'Důvod sdílení' --target TARGET_PROJECT > share.json
+python3 -m spikes.cross_references --node NODE share-write share.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
+```
+
+Sdílení a připojení jsou dvě samostatné potvrzené operace ve dvou
+repozitářích. Sdílení bez připojené reference je platný mezistav.
+
 ## Vyzkoušení bez zásahu do existujících projektů
 
 Z kořene checkoutu spusť ukázku s novým, dosud neexistujícím adresářem:
@@ -18,8 +36,8 @@ Z kořene checkoutu spusť ukázku s novým, dosud neexistujícím adresářem:
 python3 -m scripts.reference_demo /tmp/fpw-reference-demo
 ```
 
-Vzniknou dva syntetické projekty a samostatný node config. Ukázka vytvoří
-referenci, změní zdroj a vypíše `state: newer-available` spolu s původním
+Vzniknou dva syntetické projekty a samostatný node config. Ukázka sdílí
+podklad do příjemce, vytvoří referenci, změní zdroj a vypíše `state: newer-available` spolu s původním
 `pinned_text: První připnutá revize.`. Nic neposílá modelu ani do Workspace.
 
 Prohlédni soubory:
@@ -39,7 +57,7 @@ revizi. Nejde o test normálního profilu ani lidskou akceptaci úkolu.
 
 ```sh
 python3 -m spikes.cross_references --node NODE pin SOURCE_PROJECT ARTIFACT > pin.json
-python3 -m spikes.cross_references --node NODE preview TARGET_PROJECT NEW_REFERENCE_ID pin.json 'Název odkazu' > preview.json
+python3 -m spikes.cross_references --node NODE preview TARGET_PROJECT NEW_REFERENCE_ID pin.json 'Název odkazu' --share SHARE_ID --reason 'Důvod použití' > preview.json
 python3 -m spikes.cross_references --node NODE write preview.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
 python3 -m spikes.cross_references --node NODE view TARGET_PROJECT REFERENCE_ID
 python3 -m spikes.cross_references --node NODE index TARGET_PROJECT
