@@ -1188,7 +1188,16 @@ class FederationSyncTests(unittest.TestCase):
             return result
         def progress(name):
             seen.append(name)
+        from spikes import federation_sync as module
+        def in_git_phase(original):
+            # Long enough for several heartbeats to sample the Git phase.
+            def run(*args, **kwargs):
+                time.sleep(.35)
+                return original(*args, **kwargs)
+            return run
         with patch.object(SyncReceiver, 'receive', slow_receive), \
+                patch.object(module, '_apply_existing', in_git_phase(module._apply_existing)), \
+                patch.object(module, '_apply_initial', in_git_phase(module._apply_initial)), \
                 patch('spikes.federation_sync.CONTENT_SYNC_TIMEOUT', .6), \
                 patch('spikes.content_receive_jobs.HEARTBEAT_INTERVAL', .1), \
                 patch('spikes.federation_sync.HEARTBEAT_IDLE_TIMEOUT', .5), \

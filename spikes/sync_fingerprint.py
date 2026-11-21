@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Cheap, signed per-peer content inventories; never a substitute for publication."""
 from collections import OrderedDict
+import logging
 import threading
 import time
 import hashlib
@@ -22,6 +23,11 @@ from spikes.metadata import require
 from spikes.peer_transport import CONTENT_STATE_TIMEOUT, private_peer_endpoint
 from spikes.project_replication import _signature, _verify
 from spikes.request_ownership import ProjectBusy, bounded_project_requests
+
+_log = logging.getLogger(__name__)
+# A content state answer slower than this is logged: the sender gives up at
+# CONTENT_STATE_TIMEOUT, and without timing a router cannot be diagnosed.
+SLOW_STATE_MS = 5000
 
 PATH = '/v1/federation/content-state'
 CONTENT_TYPE = 'application/vnd.federated-workspace.content-state-v1+json'
@@ -80,12 +86,15 @@ def snapshot(authority, project_id, refs, chats, pool):
 
 @bounded_project_requests()
 @git_budget(15)
-def collect(service, peer_id, project_id):
+def collect(service, peer_id, project_id, *, authority=None):
+    """Fingerprint one project; ``authority`` lets a caller that already read
+    it (and re-checks it after all projects) skip two registry reads."""
     from spikes.federation_sync import _authority, _binding, _inventory, _policy
     from spikes.projects import Projects
     from spikes.project_chat_sync import export_project
     from spikes.pool_sync import export
-    authority = _authority(service, peer_id)
+    verify = authority is None
+    authority = _authority(service, peer_id) if verify else authority
     scope = _policy(authority[1], authority[2], project_id)
     refs, chats, pool = [], [], b''
     if scope is not None and _binding(service.node, project_id) is not None:
@@ -93,7 +102,7 @@ def collect(service, peer_id, project_id):
         chats, _ = export_project(service.node, service, peer_id, project_id, read_only=True)
         if scope == {'mode': 'all'} and authority[1]['sharing_level'] == 'same-team':
             pool = export(service.node, project_id, read_only=True)
-    require(_authority(service, peer_id) == authority, 'Content state authority changed')
+    require(not verify or _authority(service, peer_id) == authority, 'Content state authority changed')
     return snapshot(authority, project_id, refs, chats, pool)
 
 
@@ -141,13 +150,21 @@ def receive(service, envelope):
                       if _policy(peer, shares, row['project_id']) is not None})
     require(len(projects) <= MAX_PROJECTS, 'Content state exceeds project limit')
     rows = []
+    started = time.monotonic(); slowest = 0
     for project in projects:
+        begun = time.monotonic()
         try:
-            current = collect(service, peer['id'], project)
+            current = collect(service, peer['id'], project, authority=authority)
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, ProjectBusy):
             # One damaged/unavailable project must not block healthy projects.
             current = {'fingerprint': None, 'policy': None}
+        slowest = max(slowest, time.monotonic() - begun)
         rows.append(dict(id=project, **current))
+    elapsed = round((time.monotonic() - started) * 1000)
+    if elapsed >= SLOW_STATE_MS:
+        _log.warning('content_state_slow elapsed_ms=%d projects=%d slowest_project_ms=%d '
+                     'unavailable=%d', elapsed, len(rows), round(slowest * 1000),
+                     sum(row['fingerprint'] is None for row in rows))
     require(_authority(service, peer['id']) == authority, 'Content state authority changed')
     value = dict(schema_version=1, source_node_id=local, recipient_node_id=peer['id'],
                  nonce=request['nonce'], projects=rows)

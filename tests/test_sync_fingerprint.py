@@ -84,10 +84,10 @@ class SyncFingerprintTests(unittest.TestCase):
         self.server()
         other = ProjectCreation(self.nodes[0]).create('Another', self.nodes[0].parent/'another', str(uuid4()))['id']
         original = state.collect
-        def partial(service, peer_id, project):
+        def partial(service, peer_id, project, **kwargs):
             if service.node == self.nodes[1] and project == self.project_id:
                 raise OSError('private path must not leave node')
-            return original(service, peer_id, project)
+            return original(service, peer_id, project, **kwargs)
         control = ContentSyncControl(self.nodes[0], deployment='web')
         with patch('spikes.sync_fingerprint.collect', partial):
             self.assertEqual(control.run_automatic()['attempted'], 1)
@@ -162,6 +162,38 @@ class SyncFingerprintTests(unittest.TestCase):
              patch.object(control, 'synchronize') as run:
             self.assertEqual(control.run_automatic()['attempted'], 0)
             run.assert_not_called()
+
+    def test_probe_failure_is_logged_with_type_and_duration_only(self):
+        """AUDIT-B7-T1: a failing automatic check must be visible in the log."""
+        control = ContentSyncControl(self.nodes[0], deployment='web')
+        with patch('spikes.sync_fingerprint.probe', side_effect=TimeoutError('https://10.0.0.1 secret')), \
+             patch.object(control, 'synchronize'), \
+             self.assertLogs('spikes.federation_sync', 'WARNING') as logs:
+            control.run_automatic()
+        line = next(line for line in logs.output if 'content_state_failed' in line)
+        self.assertIn('error_type=TimeoutError elapsed_ms=', line)
+        self.assertNotIn('secret', line); self.assertNotIn('10.0.0.1', line)
+
+    def test_state_answer_reads_authority_once_and_logs_when_slow(self):
+        from spikes import federation_sync
+        request = dict(schema_version=1, source_node_id=self.node_ids[0],
+                       recipient_node_id=self.node_ids[1], nonce=str(uuid4()), projects=[self.project_id])
+        envelope = _signature(self.services[0].root, request, self.node_ids[0], 'state_request')
+        with patch.object(federation_sync, '_authority', wraps=federation_sync._authority) as read, \
+             self.assertNoLogs('spikes.sync_fingerprint', 'WARNING'):
+            fast = state.receive(self.services[1], envelope)
+        # Once before and once after all projects, never per project.
+        self.assertEqual(read.call_count, 2)
+        self.assertTrue(fast['state_manifest']['projects'])
+        envelope = _signature(self.services[0].root, dict(request, nonce=str(uuid4())),
+                              self.node_ids[0], 'state_request')
+        with patch.object(state, 'SLOW_STATE_MS', 0), \
+             self.assertLogs('spikes.sync_fingerprint', 'WARNING') as logs:
+            slow = state.receive(self.services[1], envelope)
+        self.assertEqual([row['fingerprint'] for row in slow['state_manifest']['projects']],
+                         [row['fingerprint'] for row in fast['state_manifest']['projects']])
+        self.assertRegex(logs.output[0], r'content_state_slow elapsed_ms=\d+ projects=\d+ '
+                                         r'slowest_project_ms=\d+ unavailable=0')
 
     def test_final_ack_failure_rolls_back_confirmation_and_replays_exact_intent(self):
         import sqlite3

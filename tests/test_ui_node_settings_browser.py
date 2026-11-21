@@ -114,6 +114,20 @@ class SettingsNavigationTests(UiFlowCase):
         self.assertTrue(page.evaluate("document.querySelector('#administration').classList.contains('settings-card')"))
         self.assertIn('/v1/administration', [item['path'] for item in page.api.requests])
 
+    def test_finished_sync_is_not_shown_as_a_running_phase(self):
+        """AUDIT-B7-T1: the last phase of a successful sync is history."""
+        page = self.start(configure_search=False)
+        lines = lambda value: page.evaluate(f'contentSyncDiagnosticLines({json.dumps(value)})')
+        base = {'phase': 'local-publication-pool-apply', 'elapsed_ms': 24300,
+                'peer_phase': 'receive-prepare-response', 'error_type': None}
+        self.assertEqual(lines(dict(base, state='finished')),
+                         ['Poslední synchronizace: dokončena za 24.3 s', None])
+        self.assertEqual(lines(dict(base, state='running')),
+                         ['Diagnostika: místní uložení: pooly · 24.3 s',
+                          'Protistrana: příprava odpovědi'])
+        self.assertEqual(lines(dict(base, state='failed', error_type='TimeoutError'))[0],
+                         'Diagnostika: místní uložení: pooly · 24.3 s · TimeoutError')
+
     def test_ollama_binding_is_saved_from_its_dialog(self):
         page = self.start(configure_ollama=False, configure_search=False)
         page.evaluate('openSettings()')

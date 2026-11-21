@@ -46,6 +46,13 @@ rámce. Rozpočet `CONTENT_SYNC_TIMEOUT` pak platí jen do přijetí hlaviček
 odpovědi. Dál rozhodují `HEARTBEAT_IDLE_TIMEOUT` a `CONTENT_SYNC_MAX_WAIT`
 (podrobnosti a hranice pádu v [ADR 0042](adr/0042-bidirectional-native-git-sharing-sync.md)).
 
+Dotaz na stav obsahu (`content-state`, automatická kontrola změn) musí
+protistrana zodpovědět do `CONTENT_STATE_TIMEOUT` (15 s) pro všechny sdílené
+projekty najednou. Odesílatel při selhání zapíše `content_state_failed
+error_type=… elapsed_ms=…`. Příjemce zapíše `content_state_slow`, když odpověď
+trvá 5 s a déle, s počtem projektů a nejpomalejším projektem. Registr
+oprávnění čte jednou před výpočtem a jednou po něm, ne u každého projektu.
+
 Když peer spojení přijme, ale do konce rozpočtu neodpoví, synchronizace
 obsahu skončí stavem `unanswered` („neodpověděl včas“), ne `offline`. Peer
 je dosažitelný a další pokus zopakuje stejnou uloženou operaci. Stav

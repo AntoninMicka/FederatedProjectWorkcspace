@@ -24,6 +24,7 @@ import struct
 import subprocess
 import tempfile
 import threading
+import logging
 import time
 from uuid import uuid4
 
@@ -1490,12 +1491,17 @@ class ContentSyncControl:
             key = (str(self.node), peer_id, project_id)
             if not automatic_retry.ready(key): continue
             if peer_id not in manifests:
+                probe_started = time.monotonic()
                 try:
                     manifests[peer_id] = probe(self.service, peer_id, projects=sorted({
                         row['project_id'] for row in candidates
                         if row['peer_id'] == peer_id and row['eligible']}))
                 except Exception as exc:
                     probe_errors[peer_id] = exc
+                    # Type and duration only: no endpoint, path or exception text.
+                    logging.getLogger(__name__).warning(
+                        'content_state_failed error_type=%s elapsed_ms=%d',
+                        type(exc).__name__, round((time.monotonic() - probe_started) * 1000))
                     # Unknown/offline is not permission to start expensive fallback.
                     manifests[peer_id] = False
             manifest = manifests[peer_id]
