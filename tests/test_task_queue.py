@@ -541,7 +541,7 @@ async function projectRequest(path,body){calls.push({path,body});return path==='
         prelude = '''
 const assert=require('assert');
 const elements=new Map();
-function element(){return {children:[],dataset:{},disabled:false,textContent:'',replaceChildren(){this.children=[];},append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
+function element(){return {children:[],dataset:{},hidden:true,disabled:false,textContent:'',replaceChildren(){this.children=[];},append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
 const document={querySelector(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},createElement:element};
 let activeProject={id:'project',head:'head',readOnly:false};
 let calls=[],response=null,reject=false,confirm=false,confirmationText='';

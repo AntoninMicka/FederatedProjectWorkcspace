@@ -111,10 +111,20 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #sidebar-page-tools>summary{font-size:12px;color:#c8d4df;padding:8px 0}
 #sidebar-page-tools #main-tabs{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;padding:8px 0;border:0;overflow:visible}
 #sidebar-page-tools #main-tabs button{min-width:0;white-space:normal;text-align:left;padding:9px;font-size:12px}
-#sidebar-plan #open-task-queue{flex:none;width:100%;margin-top:14px;padding:9px 7px;text-align:left;color:#dce8f1;background:transparent}
-#sidebar-plan #open-task-queue:hover,#sidebar-plan #open-task-queue[aria-current=true]{background:#274154}
+#sidebar-assigned-queue #open-task-queue{flex:none;width:100%;margin-top:14px;padding:9px 7px;text-align:left;color:#dce8f1;background:transparent}
+#sidebar-assigned-queue #open-task-queue:hover,#sidebar-assigned-queue #open-task-queue[aria-current=true]{background:#274154}
 #plan-subgraphs #sidebar-plan-list{flex:none;max-height:none;overflow:visible}
 #plan-subgraphs #sidebar-plan-list button{color:#213746;background:#f3f7f8}
+#assigned-queue-view #owner-queue-list{max-height:none;overflow:visible;padding:0;list-style:none}
+#owner-queue-list>li{padding:10px;border:1px solid #dce3e9;border-radius:8px;background:#f7fafb;gap:8px}
+#owner-queue-list .owner-queue-task{flex:1;min-width:min(260px,100%);text-align:left}
+#owner-queue-list .owner-queue-project{max-width:100%;font-size:12px;overflow-wrap:anywhere}
+#owner-queue-list .task-queue-order-controls{display:flex;gap:4px}
+#owner-queue-list>li[draggable=true]{cursor:grab}
+#owner-queue-list>li.queue-dragging{opacity:.5}
+#owner-queue-list>li[data-drop=before]{border-top:3px solid #176b60}
+#owner-queue-list>li[data-drop=after]{border-bottom:3px solid #176b60}
+#owner-queue-project-tools{margin-top:20px}
 #task-queue-panel .task-queue-list{max-height:none;overflow:visible;margin:0;padding-left:22px}
 #task-queue-panel .task-queue-list li{flex-wrap:wrap}
 #task-queue-panel .task-queue-list li button:first-child{flex:1;min-width:0}
@@ -258,8 +268,8 @@ function syncPageLayout(){
  if(typeof syncArtifactGitButtons==='function')syncArtifactGitButtons();
  const modeSwitch=document.querySelector('.task-plan-mode');if(modeSwitch&&modeSwitch.hidden!==taskPlanEditor.hidden)modeSwitch.hidden=taskPlanEditor.hidden;
  const layout=workspacePageLayouts.get(root);
- document.querySelector('#open-task-queue').setAttribute('aria-current',String(root?.id==='task-queue-panel'));
- if(root?.id==='task-queue-panel'||root?.id==='plan-panel')updateTaskPlanTreeSelection(root.id==='task-queue-panel');
+ document.querySelector('#open-task-queue').setAttribute('aria-current',String(root?.id==='assigned-queue-view'));
+ if(root?.id==='plan-panel')updateTaskPlanTreeSelection();
  if(!layout){setPageChatMode('hidden');return;}
  if(!layout.titleNode.textContent.trim())layout.titleNode.textContent=layout.title;
  let chat=root.dataset.chatDefault||'hidden';
@@ -302,7 +312,7 @@ function initializeWorkspacePageLayout(){
  // Keep the existing controller/tab IDs, but put tools navigation in the sidebar.
  get('#main-tabs').setAttribute('aria-orientation','vertical');
  const tools=document.createElement('details'),summary=document.createElement('summary');tools.id='sidebar-page-tools';summary.textContent='Další nástroje';tools.append(summary,get('#main-tabs'));get('#sidebar-tools').append(tools);
- const primaryTabs=new Set(['project-overview-tab','preview-tab','chat-tab','tools-main-tab','outputs-overview-tab','plan-main-tab','task-queue-tab','presentation-tab']);
+ const primaryTabs=new Set(['project-overview-tab','preview-tab','chat-tab','tools-main-tab','outputs-overview-tab','plan-main-tab','presentation-tab']);
  for(const tab of mainTabs)if(primaryTabs.has(tab.id))tab.hidden=true;
  get('#settings-tabs').hidden=true;
  const prompt=get('#prompt-widget');document.querySelector('main').append(prompt);
@@ -346,8 +356,8 @@ const toolsList=document.createElement('ul');toolsList.id='tools-overview-list';
  }
  for(const root of [...document.querySelectorAll('main>div')]){
   if(root===projectView||root===artifactEditorView||root===presenterView)continue;
-  const heading=root.querySelector('h1,h2'),actions=[];
-  mountWorkspacePage(root,{title:heading?.textContent||'Stránka',heading,actions,close:root.id!=='project-home',kind:root.id==='project-home'?'list':'page',section:({'settings-view':'settings-sidebar-tab','federation-view':'federation-tab','federation-network-view':'federation-tab','federation-deployment-view':'federation-tab','source-import-view':'artifacts-tab','history-view':'artifacts-tab'})[root.id]||'projects-tab'});
+  const heading=root.querySelector('h1,h2'),actions=root.id==='assigned-queue-view'?take(root,['#owner-queue-refresh']):[];
+  mountWorkspacePage(root,{title:heading?.textContent||'Stránka',heading,actions,close:!['project-home','assigned-queue-view'].includes(root.id),kind:['project-home','assigned-queue-view'].includes(root.id)?'list':'page',section:({'settings-view':'settings-sidebar-tab','federation-view':'federation-tab','federation-network-view':'federation-tab','federation-deployment-view':'federation-tab','source-import-view':'artifacts-tab','history-view':'artifacts-tab','assigned-queue-view':'assigned-queue-tab'})[root.id]||'projects-tab'});
  }
  for(const label of document.querySelectorAll('.eyebrow,.badge,.dashboard-kicker,#artifact-editor-mode'))if(label.closest('.workspace-page')&&!label.closest('#preview-content'))label.classList.add('layout-label');
  for(const heading of document.querySelectorAll('.page-heading,.home-heading,.project-overview-heading,.outputs-overview-heading,.presentation-editor-head,.julia-editor-heading')){

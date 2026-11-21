@@ -491,6 +491,34 @@ class WebTests(unittest.TestCase):
         self.assertEqual(json.loads(data)['task_ids'],['TASK-X','TASK-A'])
         self.assertEqual(json.loads(queue('status',headers=headers)[1])['revision'],3)
 
+        def owner_queue(body, user_headers=headers):
+            code, data, _ = self.request(path='/v1/task-queue', body=json.dumps(body), headers=user_headers)
+            return code, json.loads(data)
+        code, global_view = owner_queue({'action':'owner-status'})
+        self.assertEqual(code,200,global_view)
+        self.assertEqual([i['id'] for i in global_view['items']],['TASK-X','TASK-A'])
+        self.assertTrue(all(i['project_id']==pid for i in global_view['items']))
+        self.assertEqual(owner_queue({'action':'owner-status','owner_id':user['id']})[0],422)
+        code, moved = owner_queue(dict(action='owner-move',project_id=pid,task_id='TASK-A',
+            target_index=1,revision=global_view['revision'],view_revision=global_view['view_revision'],expected_head=head))
+        self.assertEqual(code,200,moved)
+        self.assertEqual([i['id'] for i in moved['items']],['TASK-X','TASK-A'])
+        self.assertEqual(json.loads(queue('status',headers=headers)[1])['task_ids'],['TASK-X','TASK-A'])
+        self.assertEqual([i['id'] for i in owner_queue({'action':'owner-status'},None)[1]['items']],['TASK-X','TASK-A'])
+        state = admin({'action':'update-user','expected_commit':state['commit_id'],
+            'user_id':user['id'],'active':True,'node_role':'member','memberships':{pid:'reader'}})
+        code, readonly = owner_queue({'action':'owner-status'})
+        self.assertEqual(code,200,readonly)
+        self.assertTrue(all(i['read_only'] for i in readonly['items']))
+        self.assertEqual(owner_queue(dict(action='owner-move',project_id=pid,task_id='TASK-X',
+            target_index=0,revision=readonly['revision'],view_revision=readonly['view_revision'],expected_head=head))[0],403)
+        state = admin({'action':'update-user','expected_commit':state['commit_id'],
+            'user_id':user['id'],'active':True,'node_role':'member','memberships':{}})
+        code, hidden = owner_queue({'action':'owner-status'})
+        self.assertEqual(code,200,hidden)
+        self.assertEqual(hidden['items'],[])
+        self.assertEqual(hidden['projects'],[])
+
     def test_roadmap_graph_projection_and_revision_pinned_svg_export(self):
         code, data, _ = self.request(path='/v1/roadmap/graph',
                                      body=json.dumps({'format': 'json'}))
