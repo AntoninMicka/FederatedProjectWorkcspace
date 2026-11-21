@@ -978,7 +978,7 @@ class FederationSyncTests(unittest.TestCase):
         with patch('spikes.sync_fingerprint.probe', return_value=None), \
              patch.object(control, 'synchronize', return_value={'state': 'idle'}) as run:
             self.assertEqual(control.run_automatic(), {'enabled': True, 'attempted': 1})
-        run.assert_called_once_with(self.node_ids[0], self.project_id)
+        run.assert_called_once_with(self.node_ids[0], self.project_id, defer_when_busy=True)
         # A project present both locally and remotely remains one candidate.
         self.exchange(0, 1)
         self.assertEqual(control.candidates(), expected)

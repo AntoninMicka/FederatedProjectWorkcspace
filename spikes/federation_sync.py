@@ -102,6 +102,16 @@ class PeerTimeout(TimeoutError):
     """
 
 
+class OutboundDeferred(Exception):
+    """Another outbound sync of this node owns the send lane (AUDIT-B7-T1).
+
+    Raised only for a caller that asked to skip instead of wait (automatic
+    checks). Nothing was started: no runtime state, diagnostic or journal
+    entry is written, so the visible state stays that of the last real run.
+    """
+    not_started = True
+
+
 class SyncBusy(Exception):
     """Transient refusal; diagnostic codes never authorize recovery/retry."""
     def __init__(self, message='Content sync is busy', *, resource='unknown', peer_phase=None):
@@ -1379,10 +1389,13 @@ class ContentSyncControl:
 
     @observed
     @bounded_project_requests()
-    def synchronize(self, peer_id, project_id, *, cancelled=None, owner_wait=0, state_manifest=False):
+    def synchronize(self, peer_id, project_id, *, cancelled=None, owner_wait=0, state_manifest=False,
+                    defer_when_busy=False):
         try:
             identifier(peer_id); identifier(project_id)
-            require(type(owner_wait) in (int, float) and 0 <= owner_wait <= CONTENT_SYNC_TIMEOUT,
+            # A streamed exchange may own the send lane for minutes; the manual
+            # worker (a background thread, cancellable) waits up to that cap.
+            require(type(owner_wait) in (int, float) and 0 <= owner_wait <= CONTENT_SYNC_MAX_WAIT,
                     'Invalid synchronization admission wait')
             if cancelled is not None and cancelled():
                 raise SyncCancelled('Content sync cancelled before ownership')
@@ -1405,6 +1418,8 @@ class ContentSyncControl:
                         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                         break
                     except BlockingIOError:
+                        if defer_when_busy:
+                            raise OutboundDeferred('Another outbound content sync is running')
                         remaining = deadline - time.monotonic()
                         if remaining <= 0:
                             raise
@@ -1416,6 +1431,8 @@ class ContentSyncControl:
                                      **({'state_manifest': True} if state_manifest else {}))
                 automatic_retry.succeeded((str(self.node), peer_id, project_id))
                 return result
+        except OutboundDeferred:
+            raise  # nothing started; keep the last real runtime state
         except SyncCancelled as exc:
             state = 'cancelled'; detail = str(exc); error = exc
         except SyncConflict as exc:
@@ -1524,11 +1541,20 @@ class ContentSyncControl:
                                 and json.loads(confirmed[1]) == manifest.get(project_id)):
                             note(self.node, peer_id, project_id, 'unchanged')
                             continue
-                note(self.node, peer_id, project_id, 'legacy' if manifest is None else 'changed')
+                # The state check can wait on a working peer for minutes; a
+                # manual sync started meanwhile owns the send lane first.
+                if _MANUAL_SYNCS.any_active(self.node): break
                 attempted += 1
-                self.synchronize(peer_id, project_id,
-                                 **({'cancelled': cancelled} if cancelled is not None else {}),
-                                 **({'state_manifest': True} if manifest is not None else {}))
+                try:
+                    self.synchronize(peer_id, project_id, defer_when_busy=True,
+                                     **({'cancelled': cancelled} if cancelled is not None else {}),
+                                     **({'state_manifest': True} if manifest is not None else {}))
+                except OutboundDeferred:
+                    # Not a failure and not a retry backoff: another outbound
+                    # sync of this node is running. The next round checks again.
+                    attempted -= 1
+                    break
+                note(self.node, peer_id, project_id, 'legacy' if manifest is None else 'changed')
                 automatic_retry.succeeded(key)
             except (TimeoutError, SyncBusy, ProjectBusy) as exc:
                 note(self.node, peer_id, project_id, 'unavailable', exc)
@@ -1653,7 +1679,7 @@ class ManualSyncTasks:
         completed = False
         try:
             ContentSyncControl(node, deployment=deployment).synchronize(
-                peer_id, project_id, cancelled=stopping.is_set, owner_wait=CONTENT_SYNC_TIMEOUT)
+                peer_id, project_id, cancelled=stopping.is_set, owner_wait=CONTENT_SYNC_MAX_WAIT)
             completed = True
         except Exception as exc:
             # synchronize() already recorded the durable runtime state.

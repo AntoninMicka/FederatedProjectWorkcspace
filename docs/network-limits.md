@@ -22,13 +22,13 @@ i čtení odpovědi. Nejde o timeout jedné operace soketu.
 | `CONTENT_STATE_TIMEOUT` | 15 s | dotaz na manifest stavu obsahu |
 | `RSS_EXCHANGE_TIMEOUT` | 15 s | výměna předvoleb RSS |
 | `REPLICATION_TIMEOUT` | 30 s | přenos jednoho replikačního balíku |
-| `CONTENT_SYNC_TIMEOUT` | 60 s | přenos jednoho balíku synchronizace obsahu; zároveň nejdelší čekání ručního workeru na vlastnictví zámku odesílání |
+| `CONTENT_SYNC_TIMEOUT` | 60 s | přenos jednoho balíku synchronizace obsahu; u streamovaného peeru jen do hlaviček odpovědi |
 | `ENROLLMENT_TIMEOUT` | 10 s | jeden požadavek enrollmentu |
 | `PROBE_TIMEOUT` | 5 s | interaktivní test spojení s peerem |
 | `SHUTDOWN_MARGIN` | 5 s | rezerva při ukončení plánovače nad rámec rozběhnuté výměny |
 | `CONTENT_RECEIVE_BUDGET` | 45 s | ověření historie přijatého balíku při synchronní výměně (starší peer); o `RESPONSE_MARGIN` (15 s) kratší než lhůta odesílatele, aby přetížený příjemce stihl odpovědět „busy“ |
 | `HEARTBEAT_IDLE_TIMEOUT` | 20 s | streamovaná synchronizace obsahu: nejdelší pauza mezi heartbeat rámci příjemce (posílá je každých 5 s) |
-| `CONTENT_SYNC_MAX_WAIT` | 15 min | streamovaná synchronizace obsahu: celkový strop čekání na příjemce, který pracuje na pozadí |
+| `CONTENT_SYNC_MAX_WAIT` | 15 min | streamovaná synchronizace obsahu: celkový strop čekání na příjemce, který pracuje na pozadí; zároveň nejdelší čekání ručního workeru na zámek odesílání |
 | `BACKGROUND_RECEIVE_BUDGET` | 10 min | ověření historie v úloze příjmu na pozadí |
 | `CONTENT_STATE_MAX_WAIT` | 5 min | streamovaná kontrola stavu obsahu: celkový strop čekání na protistranu, která počítá stav na pozadí |
 | `BACKGROUND_STATE_BUDGET` | 4,5 min | rozpočet Gitu pro výpočet stavu všech projektů v úloze na pozadí |

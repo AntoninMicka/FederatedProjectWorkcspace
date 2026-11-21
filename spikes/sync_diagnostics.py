@@ -114,6 +114,7 @@ def observed(function=None, *, direction='outbound'):
         record = dict(phase='prepare', state='running', started=now, phase_started=now,
                       direction=direction, _key=key)
         with _lock:
+            previous = _latest.get(key)
             _latest[key] = record
             _latest.move_to_end(key)
             while len(_latest) > LIMIT:
@@ -122,6 +123,16 @@ def observed(function=None, *, direction='outbound'):
         try:
             result = function(first, peer_id, project_id, *args, **kwargs)
         except Exception as exc:
+            if getattr(exc, 'not_started', False) is True:
+                # Nothing started (a deferred automatic attempt): keep showing
+                # the last real run instead of an empty failure.
+                with _lock:
+                    if _latest.get(key) is record:
+                        if previous is None:
+                            del _latest[key]
+                        else:
+                            _latest[key] = previous
+                raise
             resource = safe_busy_resource(getattr(exc, 'busy_resource', None))
             peer_phase = safe_peer_phase(getattr(exc, 'peer_phase', None))
             with _lock:

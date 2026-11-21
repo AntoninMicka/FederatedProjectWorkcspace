@@ -285,3 +285,28 @@ se zeptá znovu s novým nonce. Výsledek kontroly se dál nikdy nevykládá jak
 
 Omezení: po dobu výpočtu drží příjemce jeden HTTP worker a linku
 `peer_state`.
+
+### Doplnění 2026-11-21: automatika ustoupí běžící odchozí synchronizaci (AUDIT-B7-T1)
+
+Odchozí synchronizace uzlu sdílejí jeden zámek odesílání. Automatika na něj
+nečekala a ruční worker čekal nejvýš 60 s. Se streamem ale jedna výměna drží
+zámek i několik minut a kontrola stavu před ní také může trvat minuty. Když
+uživatel mezitím spustil ruční synchronizaci, automatika narazila na zámek
+a zapsala `busy` (`BlockingIOError`, „odchozí linka uzlu“) jako chybu
+projektu. Ruční synchronizace za dlouhou automatickou výměnou zase po 60 s
+skončila jako `busy`.
+
+Rozhodnutí:
+
+- Automatika bere zámek s `defer_when_busy`. Obsazený zámek vyvolá
+  `OutboundDeferred` a pokus se nepočítá jako spuštěný: nezapíše stav
+  `runtime`, diagnostiku, odklad opakování ani výsledek kontroly. Kolo
+  automatiky skončí a další kolo to zkusí znovu.
+- Těsně před výměnou automatika znovu ověří, že neběží ruční synchronizace.
+  Kontrola stavu mezi tím mohla trvat dlouho.
+- Ruční worker čeká na zámek až `CONTENT_SYNC_MAX_WAIT`, tedy celkový strop
+  jedné streamované výměny. Čeká jen jeho vlákno na pozadí a zrušení se
+  projeví do 50 ms.
+
+Hranice pádu se nemění: odložený pokus nezapsal nic, uložená operace
+v `outbound` zůstává autoritou pro další pokus.

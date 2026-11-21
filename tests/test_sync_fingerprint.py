@@ -159,7 +159,7 @@ class SyncFingerprintTests(unittest.TestCase):
         with patch('spikes.sync_fingerprint.probe', return_value=None), \
              patch.object(control, 'synchronize', return_value={'state':'idle'}) as run:
             self.assertEqual(control.run_automatic()['attempted'], 1)
-            run.assert_called_once_with(self.node_ids[1], self.project_id)
+            run.assert_called_once_with(self.node_ids[1], self.project_id, defer_when_busy=True)
         with patch('spikes.sync_fingerprint.probe', side_effect=TimeoutError), \
              patch.object(control, 'synchronize') as run:
             self.assertEqual(control.run_automatic()['attempted'], 0)
@@ -269,7 +269,7 @@ class SyncFingerprintTests(unittest.TestCase):
              patch('spikes.sync_fingerprint.collect', side_effect=AssertionError('rebuild')), \
              patch.object(control, 'synchronize', return_value={'state':'idle'}) as run:
             self.assertEqual(control.run_automatic()['attempted'], 1)
-            run.assert_called_once_with(self.node_ids[1], self.project_id, state_manifest=True)
+            run.assert_called_once_with(self.node_ids[1], self.project_id, defer_when_busy=True, state_manifest=True)
 
     def test_probe_rejects_stale_nonce_and_only_explicit_legacy_statuses_fallback(self):
         self.server()

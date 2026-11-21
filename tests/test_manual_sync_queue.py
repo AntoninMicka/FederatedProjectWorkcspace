@@ -153,6 +153,50 @@ class ManualSyncQueueTests(unittest.TestCase):
                              (operation, b'exact saved payload'))
 
 
+    def test_automatic_attempt_defers_to_a_running_outbound_sync_without_recording_failure(self):
+        """AUDIT-B7-T1: lane contention is not an error, a retry backoff or a new state."""
+        from spikes.federation_sync import OutboundDeferred, automatic_retry
+        from spikes.sync_fingerprint import observation
+        peer = str(uuid4()); self.pending(peer, self.id)
+        control = ContentSyncControl(self.node, deployment='desktop')
+        with patch('spikes.federation_sync.synchronize', return_value={'state': 'idle'}):
+            control.synchronize(peer, self.id)  # the last real run
+        before = diagnostic(self.node, peer, self.id)
+        with _database(self.node) as db:
+            db.execute("INSERT OR REPLACE INTO runtime VALUES (?,?,'idle','Content synchronized','[]','[]')",
+                       (peer, self.id))
+        owner = private_root(self.node) / 'federation-content-sync.lock'
+        candidate = {'peer_id': peer, 'project_id': self.id, 'eligible': True, 'reason': None}
+        with owner.open('a+b') as handle, \
+                patch('spikes.federation_sync.synchronize', side_effect=AssertionError('dispatch')), \
+                patch.object(control, 'candidates', return_value=[candidate]), \
+                patch('spikes.sync_fingerprint.probe', return_value=None):
+            owner.chmod(0o600); fcntl.flock(handle, fcntl.LOCK_EX)
+            with self.assertRaises(OutboundDeferred):
+                control.synchronize(peer, self.id, defer_when_busy=True)
+            self.assertEqual(control.run_automatic(), {'enabled': True, 'attempted': 0})
+        with _database(self.node) as db:
+            self.assertEqual(db.execute('SELECT state,detail FROM runtime').fetchone(),
+                             ('idle', 'Content synchronized'))
+        after = diagnostic(self.node, peer, self.id)
+        self.assertEqual((after['state'], after['phase']), (before['state'], before['phase']))
+        self.assertIsNone(after['error_type'])
+        self.assertTrue(automatic_retry.ready((str(self.node.absolute()), peer, self.id)))
+        self.assertNotEqual((observation(self.node, peer, self.id) or {}).get('state'), 'unavailable')
+
+    def test_manual_worker_waits_for_a_streamed_owner_up_to_the_stream_cap(self):
+        from spikes.peer_transport import CONTENT_SYNC_MAX_WAIT
+        tasks = ManualSyncTasks(); peer = str(uuid4()); seen = []
+        def run(control, peer_id, project_id, **options):
+            seen.append(options['owner_wait'])
+        with patch.object(ContentSyncControl, 'synchronize', run):
+            tasks.start(self.node, 'desktop', peer, self.id)
+            for row in list(tasks.tasks.values()): row['thread'].join(5)
+        self.assertEqual(seen, [CONTENT_SYNC_MAX_WAIT])
+        with self.assertRaises(ValueError):
+            ContentSyncControl(self.node, deployment='desktop').synchronize(
+                peer, self.id, owner_wait=CONTENT_SYNC_MAX_WAIT + 1)
+
 @unittest.skipUnless(shutil.which('node'), 'Requires Node.js')
 class SyncQueueUITests(unittest.TestCase):
     def test_queued_work_is_polled_and_busy_summary_never_claims_success(self):
