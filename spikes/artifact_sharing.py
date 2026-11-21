@@ -6,6 +6,7 @@ Only CrossReferences resolves sources and writes; this module composes its
 authorized views into preview/confirm envelopes. Projects the actor cannot see
 are skipped without revealing their IDs, titles or existence.
 """
+import difflib
 from uuid import uuid4
 
 from spikes.administration import AccessDenied
@@ -13,6 +14,9 @@ from spikes.cross_references import CrossReferences, ReferenceUnavailable
 from spikes.metadata import require, uuid
 from spikes.reference_schema import PURPOSES, active, reason as valid_reason, single_line
 from spikes.reporting_schema import digest, encoded
+
+
+MAX_DIFF_LINES = 400
 
 
 def envelope(value, display):
@@ -121,6 +125,65 @@ class ArtifactSharing:
 
     def attach_confirm(self, preview, sha256, operation_id):
         return self.references.write(preview, operation_id, sha256, confirm=True)
+
+    @staticmethod
+    def _text(raw):
+        try:
+            return raw.decode('utf-8')
+        except UnicodeDecodeError:
+            return None
+
+    def repin_preview(self, project_id, reference_id):
+        """Compare the pinned revision with the current source; only a confirmed repin moves the pin."""
+        head, value, meta = self.references.local(project_id, reference_id)
+        share = value.get('share')
+        old = self.references.live(value['source'], share=share, target=project_id)
+        require(old['newer'] is not None, 'Reference already pins the current source revision')
+        new = self.references.live(old['newer'], share=share, target=project_id)
+        update = self.references.preview(project_id, reference_id, old['newer'], meta['title'], update=True)
+        before, after = self._text(old['raw']), self._text(new['raw'])
+        diff = None
+        if before is not None and after is not None:
+            lines = list(difflib.unified_diff(before.splitlines(), after.splitlines(), 'připnutá revize',
+                                              'aktuální revize', lineterm='', n=2))
+            diff = dict(lines=lines[:MAX_DIFF_LINES], truncated=len(lines) > MAX_DIFF_LINES)
+        side = lambda pin, result: dict(commit_id=pin['commit_id'], path=pin['path'], sha256=pin['sha256'],
+                                        size=len(result['raw']), title=result['metadata']['title'],
+                                        privacy=result['metadata']['privacy'])
+        return envelope(update, dict(title=meta['title'], before=side(value['source'], old),
+                                     after=side(old['newer'], new), diff=diff, privacy=update['privacy']))
+
+    def repin_confirm(self, preview, sha256, operation_id):
+        return self.references.write(preview, operation_id, sha256, confirm=True)
+
+    def fork_preview(self, project_id, reference_id):
+        value = self.references.fork_preview(project_id, reference_id, str(uuid4()))
+        head, _, meta = self.references.local(project_id, reference_id)
+        return envelope(value, dict(title=meta['title'], commit_id=value['source']['commit_id'],
+                                    path=value['source']['path'], privacy=value['privacy']))
+
+    def fork_confirm(self, preview, sha256, operation_id):
+        return self.references.fork(preview, operation_id, sha256, confirm=True)
+
+    def revoke_preview(self, project_id, share_id):
+        value = self.references.revoke_preview(project_id, share_id)
+        state = self.references.project_state(project_id)
+        titles = {row['project_id']: row['title'] for row in self._visible(exclude={project_id})}
+        row = self._share_row(share_id, value['record'], state, titles)
+        return envelope(value, dict(artifact_title=row['artifact_title'], purpose=row['purpose'],
+                                    reason=row['reason'], targets=row['targets']))
+
+    def revoke_confirm(self, preview, sha256, operation_id):
+        return self.references.revoke(preview, operation_id, sha256, confirm=True)
+
+    def detach_preview(self, project_id, reference_id):
+        value = self.references.detach_preview(project_id, reference_id)
+        _, descriptor, meta = self.references.local(project_id, reference_id)
+        return envelope(value, dict(title=meta['title'], commit_id=descriptor['source']['commit_id'],
+                                    path=descriptor['source']['path']))
+
+    def detach_confirm(self, preview, sha256, operation_id):
+        return self.references.detach(preview, operation_id, sha256, confirm=True)
 
     def reference_view(self, project_id, reference_id):
         """Read-only pinned view; an unavailable source is a visible state, not an error page."""

@@ -5804,7 +5804,7 @@ function renderTaskArtifactSources(){
  for(const item of currentArtifacts){
   const label=document.createElement('label'),check=document.createElement('input');
   check.type='checkbox';check.value=item.id;
-  label.append(check,document.createTextNode(` ${item.title}`));list.append(label);
+  label.append(check,document.createTextNode(` ${item.title}`+(item.sharing==='reference'?' · sdílené, jen ke čtení':'')));list.append(label);
  }
  if(!currentArtifacts.length)list.textContent='Projekt zatím nemá podklady.';
  updatePromptInputSummary();
@@ -8368,6 +8368,14 @@ SHARING_ROUTES = {
     '/v1/sharing/attach/preview': {'project_id', 'source_project_id', 'share_id', 'title', 'reason'},
     '/v1/sharing/attach/confirm': {'preview', 'sha256', 'operation_id'},
     '/v1/sharing/reference/view': {'project_id', 'reference_id'},
+    '/v1/sharing/repin/preview': {'project_id', 'reference_id'},
+    '/v1/sharing/repin/confirm': {'preview', 'sha256', 'operation_id'},
+    '/v1/sharing/fork/preview': {'project_id', 'reference_id'},
+    '/v1/sharing/fork/confirm': {'preview', 'sha256', 'operation_id'},
+    '/v1/sharing/detach/preview': {'project_id', 'reference_id'},
+    '/v1/sharing/detach/confirm': {'preview', 'sha256', 'operation_id'},
+    '/v1/sharing/revoke/preview': {'project_id', 'share_id'},
+    '/v1/sharing/revoke/confirm': {'preview', 'sha256', 'operation_id'},
 }
 SHARING_STATES = {
     'not-shared': 'Podklad není do tohoto projektu sdílený.',
@@ -8504,7 +8512,7 @@ class DesktopHandler(Handler):
         try:
             sharing = ArtifactSharing(self.server.chat_service.cross_references())
             action = self.path.removeprefix('/v1/sharing/').replace('/', '_')
-            if action in {'share_confirm', 'attach_confirm'}:
+            if action.endswith('_confirm'):
                 result = getattr(sharing, action)(request['preview'], request['sha256'], request['operation_id'])
             else:
                 result = getattr(sharing, action)(**request)

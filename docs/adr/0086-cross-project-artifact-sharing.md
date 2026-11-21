@@ -63,6 +63,32 @@ Synchronizace cíle na jiný uzel přenese jen deskriptor. Bez registrovaného
 zdroje a živého oprávnění na tom uzlu reference zůstane nedostupná a nikomu
 nepřidá přístup ke zdroji.
 
+**Aktualizace, ukončení a použití (XREF-02-C).** Novější revize zdroje se
+v cíli pouze nabídne. Repin ukáže porovnání připnuté a aktuální revize
+(unified diff textu, jinak velikost a SHA-256) a uloží se až po potvrzení
+přesného náhledu. Mění jen tuto referenci. Manifesty a evidence dřívějších
+úkolů a zpráv odkazují na commit cílového projektu, v němž deskriptor nese
+původní pin, takže je repin nepřepíše. Připravený, ale neodeslaný manifest se
+po repinu odmítne a neodešle se s novými bajty. Vlastní kopie (fork) a
+odebrání reference jsou potvrzené operace cílového projektu. Odebrání smaže
+jen ukazatel; zdroj, sdílení i historie reference zůstávají v Gitu.
+
+Ukončení sdílení (`revoked: {at, by}`) smí provést editor nebo správce zdroje.
+Platí pro všechny cíle záznamu, je konečné a záznam zůstává v historii.
+Brání budoucímu připojení, zobrazení, forku i přípravě kontextu
+(`share-revoked`). Neruší kopie, které cíl legitimně vytvořil před ukončením,
+ani bajty už předané v dřívějších bězích. Ty nelze zpětně odvolat.
+Reference v cíli zůstává jako viditelný stav, dokud ji cíl neodebere.
+Zúžení cílů jednoho záznamu UI zatím nenabízí; místo toho se sdílení ukončí
+a vytvoří nové.
+
+Sdílený podklad se do úkolu nebo konverzace vybírá jako jiné podklady
+projektu (`selected_artifact_ids`). Context Builder jej podle ADR 0070 vyřeší
+pro aktuálního uživatele a rozsah requestu, zapíše do manifestu důkaz
+s pinem a `share` a před dispatch jej ověří znovu. Evidence úkolu obsahuje ID
+reference a commit projektu, nikoli tichou kopii textu bez původu.
+Připojení podkladu k plánovacímu úkolu Workspace patří k PLAN-TASK-WORK-01.
+
 **Hierarchie projektů mimo rozsah.** Viditelnost nadřazeného projektu do
 podprojektů odvozená ze samotné vazby projektů ani výběr výstupů pravidlem
 (včetně později vzniklých souborů) toto ADR nezavádí. Vyžadují samostatný
@@ -83,6 +109,9 @@ projekty se nepředstírá.
 | Sdílení commitnuté, reference ne | Aktivní sdílení bez použití je přípustný stav. Je vidět ve zdroji a lze ho připojit později nebo odvolat. Nic nedělá automaticky. |
 | Příprava reference | Zdroj se čte neblokujícím sdíleným zámkem; journal cíle drží přesné schválené bajty deskriptoru (ADR 0070). |
 | Odvolání po připravené referenci | Připravený intent se dokončí bez nového čtení zdroje. Každé další čtení, fork či kontext pak skončí `share-revoked`. |
+| Ukončení sdílení | Jedna transakce zdroje: preview nese přesný dosavadní záznam, zápis jej ověří proti `base_head` a změní jen `revoked`. Pád před commitem nic nezmění; stejné operation ID vrátí receipt. Změněný záznam vyžaduje nový náhled. |
+| Odebrání reference | Jedna transakce cíle; preview nese digest deskriptoru. Po repinu mezi náhledem a potvrzením se zápis odmítne. Zdroj se nečte ani nemění. |
+| Repin a fork | Beze změny podle ADR 0070: zdroj se čte znovu ve `prepare`, cíl drží schválené bajty v journalu. |
 
 Reálný výpadek napájení se nesimuluje. Procesové pády na hranách transakce
 pokrývají stávající testy ADR 0070; jejich fixture nyní používá sdílení v2.
@@ -102,4 +131,15 @@ skrytí nepřístupných projektů, přesný digest, smazaný zdroj),
 sdílet, připojit, otevřít jen ke čtení). HTTP cesty patří do konzervativní
 aplikační fronty, protože čtou dva projekty
 ([vlastnictví HTTP](../http-concurrency-ownership.md#xref-02-sharing-routes-2026-11-21)).
-Správa odvolání a použití v úkolu či konverzaci patří k XREF-02-C až E.
+XREF-02-C: `tests.test_cross_references` (nyní 34 testů) přidává ukončení
+sdílení s auditem, replay, oprávněním a zachovaným forkem, zastaralý náhled
+ukončení, odebrání reference se zachovaným zdrojem a historií a neměnnost již
+připraveného manifestu při repinu. `tests.test_artifact_sharing` (6) pokrývá
+porovnání revizí, fork, odebrání a ukončení bez prozrazení skrytých cílů.
+HTTP test cest ověřuje repin, odmítnuté ukončení členem bez práva ke zdroji,
+fork po ukončení (`409 share-revoked`) a odebrání. Prohlížečový test projde
+porovnání a aktualizaci, vlastní kopii, ukončení a odebrání.
+`ChatServiceTests.test_routed_task_uses_shared_reference_with_exact_pin_and_fails_after_revocation`
+ověřuje úkol se sdíleným vstupem a jeho odmítnutí po ukončení sdílení.
+Offline stav, opakované ověření a recovery přes obě hranice patří k XREF-02-D,
+živá akceptace k XREF-02-E.

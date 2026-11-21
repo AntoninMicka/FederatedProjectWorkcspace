@@ -1448,6 +1448,30 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('Zdroj sdílení', json.dumps(view, ensure_ascii=False))
         code, value = post('/v1/sharing/reference/view', dict(project_id=target, reference_id=ref), key)
         self.assertEqual(403, code, value)
+        # XREF-02-C: the member edits only the target, so source revocation is refused.
+        self.assertEqual(403, post('/v1/sharing/revoke/preview', dict(project_id=source, share_id=share_id), key)[0])
+        artifacts.save(dict(project_id=source, artifact_id=artifact, base_head=Projects(node).open(source)['commit_id'],
+                            title='Zadání', body='Text zadání v2\n', new=False), str(uuid4()))
+        code, update = post('/v1/sharing/repin/preview', dict(project_id=target, reference_id=ref))
+        self.assertEqual(200, code, update); self.assertIn('+Text zadání v2', update['display']['diff']['lines'])
+        code, value = post('/v1/sharing/repin/confirm', dict(preview=update['preview'], sha256=update['sha256'],
+                                                            operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        code, revoke = post('/v1/sharing/revoke/preview', dict(project_id=source, share_id=share_id))
+        self.assertEqual(200, code, revoke)
+        code, value = post('/v1/sharing/revoke/confirm', dict(preview=revoke['preview'], sha256=revoke['sha256'],
+                                                             operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        code, opened = post('/v1/sharing/reference/view', dict(project_id=target, reference_id=ref))
+        self.assertEqual((200, 'share-revoked', None), (code, opened['state'], opened['preview']))
+        code, value = post('/v1/sharing/fork/preview', dict(project_id=target, reference_id=ref))
+        self.assertEqual((409, 'share-revoked'), (code, value['state']))
+        code, detach = post('/v1/sharing/detach/preview', dict(project_id=target, reference_id=ref))
+        self.assertEqual(200, code, detach)
+        code, value = post('/v1/sharing/detach/confirm', dict(preview=detach['preview'], sha256=detach['sha256'],
+                                                             operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        self.assertNotIn(ref, {row['id'] for row in Projects(node).open(target)['artifacts']})
 
     def test_shared_conflict_routes_preview_and_publish_two_parent_merge(self):
         _, data, _ = self.create_project('Conflict')

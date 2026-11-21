@@ -404,6 +404,41 @@ class ChatServiceTests(unittest.TestCase):
                 transport=lambda *_: self.fail('must not resend')))
         self.assertEqual(restarted.task_route(request), result)
 
+    def test_routed_task_uses_shared_reference_with_exact_pin_and_fails_after_revocation(self):
+        from spikes.artifact_sharing import ArtifactSharing
+        from spikes.cross_references import CrossReferences, ReferenceUnavailable
+        from spikes.project_creation import ProjectCreation
+        from spikes.metadata import validate_snapshot
+        from spikes.reference_schema import references
+        source = ProjectCreation(self.node_path).create('Zdroj', self.base / 'source', str(uuid4()))['id']
+        artifacts = Artifacts(self.node_path); shared = str(uuid4())
+        artifacts.save(dict(project_id=source, artifact_id=shared, title='Zadání',
+            base_head=artifacts.workspace(source).git.head(), body='sdílené zadání v1', new=True), str(uuid4()))
+        sharing = ArtifactSharing(CrossReferences(self.node_path))
+        offer = sharing.share_preview(source, shared, [ENTITY], 'share', 'Pro úkoly')
+        sharing.share_confirm(offer['preview'], offer['sha256'], str(uuid4()))
+        attach = sharing.attach_preview(ENTITY, source, offer['preview']['share_id'], 'Zadání', 'Vstup úkolu')
+        sharing.attach_confirm(attach['preview'], attach['sha256'], str(uuid4()))
+        ref = attach['preview']['reference_id']
+        outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'answer'}
+        calls = []
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=lambda binding, raw:
+                calls.append(json.loads(raw)) or {'model': binding.model, 'response': json.dumps(outcome)}))
+        route = lambda: service.task_route(self.route_request(expected_head=self.git.head(),
+            selected_artifact_ids=[ref], run_choice={'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
+        result = route()
+        self.assertIn('sdílené zadání v1', calls[0]['prompt'])
+        # Task evidence names the local reference at its commit; that descriptor holds the exact source pin.
+        pinned = references(*(lambda f: (f, validate_snapshot(f)))(self.git.snapshot(result['project_commit'])))[ref]
+        self.assertEqual((pinned['source'], pinned['share']['share_id']),
+                         (attach['preview']['source'], offer['preview']['share_id']))
+        revoke = sharing.revoke_preview(source, offer['preview']['share_id'])
+        sharing.revoke_confirm(revoke['preview'], revoke['sha256'], str(uuid4()))
+        with self.assertRaises(ReferenceUnavailable):
+            route()
+        self.assertEqual(len(calls), 1)
+
     def test_routed_modes_enforce_artifact_boundary_and_local_model_choice(self):
         artifact_id = str(uuid4())
         request = self.route_request(selected_artifact_ids=[artifact_id], run_choice={

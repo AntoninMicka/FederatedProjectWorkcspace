@@ -49,8 +49,32 @@ V běžném Workspace UI (XREF-02-B):
 - Záznamy sdílení se v seznamu podkladů nezobrazují; jsou vidět v dialogu
   sdílení u konkrétního podkladu.
 
+Správa a použití (XREF-02-C):
+
+- Pokud ve zdroji vznikne novější revize, otevřený sdílený podklad dál
+  ukazuje původní připnutou verzi a nabídne **Porovnat a aktualizovat**.
+  Náhled ukáže rozdíl obou revizí. Aktualizace platí jen pro tuto referenci,
+  dřívější úkoly a manifesty nemění.
+- **Vytvořit vlastní kopii** vytvoří upravitelný podklad s trvalým původem.
+- **Odebrat z projektu** smaže jen odkaz v cíli; zdroj a sdílení zůstávají.
+- Ve zdroji v dialogu **Sdílet do projektu** tlačítko **Ukončit sdílení**
+  ukončí sdílení pro všechny jeho cíle. Ukončení je konečné. Zabrání dalšímu
+  zobrazení, kopii i použití v AI kontextu, ale už vytvořené kopie v cílech
+  zpětně neodstraní.
+- Sdílený podklad lze vybrat mezi podklady úkolu či konverzace (označení
+  „sdílené, jen ke čtení“). Manifest nese přesný pin a sdílení; po ukončení
+  sdílení se úkol s tímto vstupem odmítne.
+
+```sh
+python3 -m spikes.cross_references --node NODE revoke-preview SOURCE_PROJECT SHARE_ID > revoke.json
+python3 -m spikes.cross_references --node NODE revoke revoke.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
+python3 -m spikes.cross_references --node NODE detach-preview TARGET_PROJECT REFERENCE_ID > detach.json
+python3 -m spikes.cross_references --node NODE detach detach.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
+```
+
 HTTP: `/v1/sharing/overview`, `/v1/sharing/share/preview|confirm`,
-`/v1/sharing/attach/preview|confirm`, `/v1/sharing/reference/view`. Každý
+`/v1/sharing/attach/preview|confirm`, `/v1/sharing/reference/view`,
+`/v1/sharing/repin|fork|detach|revoke/preview|confirm`. Každý
 požadavek běží s identitou a rozsahem přihlášeného uživatele.
 
 ## Vyzkoušení bez zásahu do existujících projektů

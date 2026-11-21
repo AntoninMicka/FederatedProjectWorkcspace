@@ -368,6 +368,69 @@ class CrossReferences:
         return ws.transact(operation_id, dict(preview, action='write-share-v1'), prepare,
                            expected_head=preview['base_head'], checkpoint=checkpoint)
 
+    def revoke_preview(self, project_id, share_id):
+        """End future access through one share; legitimately made forks stay (ADR 0086)."""
+        self.authorize(project_id, write=True); uuid(share_id)
+        ws = self.artifacts.workspace(project_id); ws.recover()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            head = ws.git.head(); ws._read_shared(db); committed_project(ws.git, head, project_id)
+            files = ws.git.snapshot(head); record = shares(files, validate_snapshot(files)).get(share_id)
+            require(record is not None, 'Share record unavailable')
+            require(record['revoked'] is None, 'Share is already revoked')
+            require(ws.git.head() == head, 'Source changed while previewing revocation')
+        return dict(schema='fpw-share-revoke-v1', project_id=project_id, base_head=head, share_id=share_id,
+                    record=record, revoked=dict(at=self.now(), by=self.user_id), user_id=self.user_id)
+
+    def revoke(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
+        require(confirm is True and digest(encoded(preview)) == sha256, 'Exact revocation preview must be confirmed')
+        fields(preview, 'schema project_id base_head share_id record revoked user_id')
+        require(preview['schema'] == 'fpw-share-revoke-v1' and preview['user_id'] == self.user_id
+                and preview['revoked'].get('by') == self.user_id, 'Invalid revocation request')
+        uuid(preview['share_id']); revoked = share_record(dict(preview['record'], revoked=preview['revoked']))
+        self.authorize(preview['project_id'], write=True)
+        ws = self.artifacts.workspace(preview['project_id'])
+        def prepare(workspace):
+            require(workspace.git.head() == preview['base_head'], 'Share source changed')
+            committed_project(workspace.git, preview['base_head'], preview['project_id'])
+            self.authorize(preview['project_id'], write=True)
+            files = workspace.git.snapshot(preview['base_head']); entities = validate_snapshot(files)
+            require(shares(files, entities).get(preview['share_id']) == preview['record'],
+                    'Share changed; review a fresh revocation preview')
+            return ({f'artifacts/{preview["share_id"]}/share.json': encoded(revoked)},
+                    'Local workspace author', self.user_id + '@local.invalid', 'Revoke artifact share')
+        return ws.transact(operation_id, dict(preview, action='revoke-share-v1'), prepare,
+                           expected_head=preview['base_head'], checkpoint=checkpoint)
+
+    def detach_preview(self, project_id, reference_id):
+        """Remove a pointer from the target; the source and its Git history stay untouched."""
+        self.authorize(project_id, write=True)
+        head, value, meta = self.local(project_id, reference_id)
+        return dict(schema='fpw-reference-detach-v1', project_id=project_id, base_head=head,
+                    reference_id=reference_id, descriptor_sha256=digest(encoded(value)), user_id=self.user_id)
+
+    def detach(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
+        require(confirm is True and digest(encoded(preview)) == sha256, 'Exact detach preview must be confirmed')
+        fields(preview, 'schema project_id base_head reference_id descriptor_sha256 user_id')
+        require(preview['schema'] == 'fpw-reference-detach-v1' and preview['user_id'] == self.user_id,
+                'Invalid detach request')
+        uuid(preview['reference_id']); self.authorize(preview['project_id'], write=True)
+        ws = self.artifacts.workspace(preview['project_id'])
+        def prepare(workspace):
+            require(workspace.git.head() == preview['base_head'], 'Reference target changed')
+            committed_project(workspace.git, preview['base_head'], preview['project_id'])
+            self.authorize(preview['project_id'], write=True)
+            files = workspace.git.snapshot(preview['base_head']); entities = validate_snapshot(files)
+            id_ = preview['reference_id']; value = references(files, entities).get(id_)
+            require(value is not None and digest(encoded(value)) == preview['descriptor_sha256'],
+                    'Reference changed; review a fresh preview')
+            require(not any(other != id_ and any(r.get('target_id') == id_ for r in item.get('relations', []))
+                            for other, item in entities.items()), 'Other artifacts still relate to this reference')
+            changes = {path: None for path in files if path.startswith(f'artifacts/{id_}/')}
+            validate_snapshot({path: data for path, data in files.items() if path not in changes})
+            return changes, 'Local workspace author', self.user_id + '@local.invalid', 'Detach pinned artifact reference'
+        return ws.transact(operation_id, dict(preview, action='detach-reference-v1'), prepare,
+                           expected_head=preview['base_head'], checkpoint=checkpoint)
+
     def write(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
         require(confirm is True and digest(encoded(preview)) == sha256, 'Exact reference preview must be confirmed')
         require(isinstance(preview, dict), 'Invalid reference request')
@@ -476,7 +539,9 @@ def main():
     p=sub.add_parser('view');p.add_argument('project_id');p.add_argument('reference_id');p.add_argument('--online-only',action='store_true')
     p=sub.add_parser('index');p.add_argument('project_id')
     p=sub.add_parser('fork-preview');p.add_argument('project_id');p.add_argument('reference_id');p.add_argument('new_id')
-    for name in ('write','fork','share-write'):
+    p=sub.add_parser('revoke-preview');p.add_argument('project_id');p.add_argument('share_id')
+    p=sub.add_parser('detach-preview');p.add_argument('project_id');p.add_argument('reference_id')
+    for name in ('write','fork','share-write','revoke','detach'):
         p=sub.add_parser(name);p.add_argument('preview',type=Path);p.add_argument('--operation-id',required=True);p.add_argument('--sha256',required=True);p.add_argument('--confirm',action='store_true')
     args=parser.parse_args();service=CrossReferences(args.node)
     def read(path):
@@ -491,6 +556,8 @@ def main():
     elif args.command=='view':result=service.view(args.project_id,args.reference_id,offline=not args.online_only)
     elif args.command=='index':result=service.index(args.project_id)
     elif args.command=='fork-preview':result=service.fork_preview(args.project_id,args.reference_id,args.new_id)
+    elif args.command=='revoke-preview':result=service.revoke_preview(args.project_id,args.share_id)
+    elif args.command=='detach-preview':result=service.detach_preview(args.project_id,args.reference_id)
     else:result=getattr(service,args.command.replace('-','_'))(read(args.preview),args.operation_id,args.sha256,confirm=args.confirm)
     print(json.dumps(dict(value=result,sha256=digest(encoded(result))),ensure_ascii=False,indent=2))
 

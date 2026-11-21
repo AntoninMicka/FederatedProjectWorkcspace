@@ -100,5 +100,54 @@ class SharingFacadeTests(unittest.TestCase):
         self.assertEqual((view['state'], view['preview'], view['title']), ('deleted', None, 'Zadání'))
         self.assertFalse(self.sharing.overview(self.parent)['shares'][0]['available'])
 
+    def test_repin_preview_compares_pinned_and_current_revision(self):
+        share_id, ref = self.share_and_attach()
+        with self.assertRaisesRegex(ValidationError, 'current source revision'):
+            self.sharing.repin_preview(self.child, ref)
+        ws = self.artifacts.workspace(self.parent)
+        self.artifacts.save(dict(project_id=self.parent, base_head=ws.git.head(), artifact_id=self.assignment,
+                                 title='Zadání podprojektu', body='Zadání v2.\n', new=False), str(uuid4()))
+        self.assertEqual(self.sharing.reference_view(self.child, ref)['state'], 'newer-available')
+        update = self.sharing.repin_preview(self.child, ref)
+        diff = update['display']['diff']['lines']
+        self.assertIn('-Zadání v1.', diff); self.assertIn('+Zadání v2.', diff)
+        self.assertNotEqual(update['display']['before']['commit_id'], update['display']['after']['commit_id'])
+        self.assertEqual(self.sharing.reference_view(self.child, ref)['preview']['text'], 'Zadání v1.\n')
+        self.sharing.repin_confirm(update['preview'], update['sha256'], str(uuid4()))
+        view = self.sharing.reference_view(self.child, ref)
+        self.assertEqual((view['state'], view['preview']['text'], view['share']['share_id']), ('current', 'Zadání v2.\n', share_id))
+
+    def test_fork_detach_and_revoke_from_the_facade(self):
+        share_id, ref = self.share_and_attach()
+        fork = self.sharing.fork_preview(self.child, ref)
+        self.assertEqual(fork['display']['title'], 'Zadání')
+        self.sharing.fork_confirm(fork['preview'], fork['sha256'], str(uuid4()))
+        hidden = self.sharing.share_preview(self.parent, self.assignment, [self.hidden, self.child], 'share', 'Dva cíle')
+        self.sharing.share_confirm(hidden['preview'], hidden['sha256'], str(uuid4()))
+        admin = Administration(self.node); actor = dict(id=None, node_role='federation-admin', memberships={})
+        current = admin.request(actor, dict(action='list'))
+        uid = admin.request(actor, dict(expected_commit=current['commit_id'], action='create-user', name='Člen',
+                                        node_role='member'))['users'][0]['id']
+        current = admin.request(actor, dict(action='list'))
+        admin.request(actor, dict(expected_commit=current['commit_id'], action='update-user', user_id=uid, active=True,
+                                  node_role='member', memberships={self.parent: 'editor', self.child: 'editor'}))
+        member = ArtifactSharing(CrossReferences(self.node, user_id=uid))
+        revoke = member.revoke_preview(self.parent, hidden['preview']['share_id'])
+        self.assertEqual(revoke['display']['targets'], [dict(id=self.child, title='Podprojekt')])
+        self.assertNotIn('Skrytý projekt', repr(revoke['display']))
+        member.revoke_confirm(revoke['preview'], revoke['sha256'], str(uuid4()))
+        revoke = self.sharing.revoke_preview(self.parent, share_id)
+        self.sharing.revoke_confirm(revoke['preview'], revoke['sha256'], str(uuid4()))
+        self.assertEqual(self.sharing.overview(self.child)['offers'], [])
+        self.assertTrue(all(row['revoked'] for row in self.sharing.overview(self.parent)['shares']))
+        view = self.sharing.reference_view(self.child, ref)
+        self.assertEqual((view['state'], view['preview']), ('share-revoked', None))
+        detach = self.sharing.detach_preview(self.child, ref)
+        self.sharing.detach_confirm(detach['preview'], detach['sha256'], str(uuid4()))
+        child = self.sharing.overview(self.child)
+        self.assertEqual(child['references'], [])
+        state = CrossReferences(self.node).project_state(self.child, extra_ids=(fork['preview']['new_id'],))
+        self.assertEqual(state['artifacts'][fork['preview']['new_id']]['title'], 'Zadání podprojektu')
+
 
 if __name__ == '__main__': unittest.main()

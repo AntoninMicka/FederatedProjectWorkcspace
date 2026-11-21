@@ -425,6 +425,87 @@ CrossReferences(sys.argv[1]).write(request,sys.argv[3],digest(encoded(request)),
         prev=self.base/'prev.json';prev.write_text(json.dumps(preview))
         run('write',str(prev),'--operation-id',str(uuid4()),'--sha256',preview['sha256'],'--confirm')
         self.assertEqual(run('view',self.target,ref)['value']['share']['reason'],'CLI použití')
+        revoke=run('revoke-preview',self.source,share_id);rev=self.base/'revoke.json';rev.write_text(json.dumps(revoke))
+        run('revoke',str(rev),'--operation-id',str(uuid4()),'--sha256',revoke['sha256'],'--confirm')
+        with self.assertRaises(ReferenceUnavailable) as caught:self.service.view(self.target,ref,offline=False)
+        self.assertEqual(caught.exception.state,'share-revoked')
+        detach=run('detach-preview',self.target,ref);det=self.base/'detach.json';det.write_text(json.dumps(detach))
+        run('detach',str(det),'--operation-id',str(uuid4()),'--sha256',detach['sha256'],'--confirm')
+        self.assertNotIn(ref,references(*self.target_files()))
+
+    def target_files(self):
+        files=self.target_ws.git.snapshot(self.target_ws.git.head());return files,validate_snapshot(files)
+
+    def test_revocation_ends_future_access_but_keeps_audit_and_legitimate_fork(self):
+        fork_id=str(uuid4());fork=self.service.fork_preview(self.target,self.reference_id,fork_id)
+        self.service.fork(fork,str(uuid4()),digest(encoded(fork)),confirm=True)
+        reader,change,uid=self.user()
+        with self.assertRaises(AccessDenied):reader.revoke_preview(self.source,self.share_id)
+        value=self.service.revoke_preview(self.source,self.share_id);sha=digest(encoded(value))
+        with self.assertRaises(ValidationError):self.service.revoke(value,str(uuid4()),'0'*64,confirm=True)
+        forged=dict(value,revoked=dict(value['revoked'],by=uid))
+        with self.assertRaises(ValidationError):self.service.revoke(forged,str(uuid4()),digest(encoded(forged)),confirm=True)
+        operation=str(uuid4());receipt=self.service.revoke(value,operation,sha,confirm=True)
+        self.assertEqual(self.service.revoke(value,operation,sha,confirm=True),receipt)  # Lost response replays.
+        files=self.source_ws.git.snapshot(self.source_ws.git.head())
+        record=shares(files,validate_snapshot(files))[self.share_id]
+        self.assertEqual(record['revoked'],dict(at=value['revoked']['at'],by=self.author))
+        self.assertEqual({k:record[k] for k in ('artifact_id','targets','reason')},
+                         {k:value['record'][k] for k in ('artifact_id','targets','reason')})
+        with self.assertRaisesRegex(ValidationError,'already revoked'):self.service.revoke_preview(self.source,self.share_id)
+        for attempt in (lambda:self.service.view(self.target,self.reference_id,offline=False),
+                        lambda:self.service.view(self.target,self.reference_id),
+                        lambda:self.service.fork_preview(self.target,self.reference_id,str(uuid4())),
+                        lambda:self.context(),
+                        lambda:self.service.preview(self.target,str(uuid4()),self.pin,'Znovu',share_id=self.share_id,reason_text='Znovu')):
+            with self.assertRaises(ReferenceUnavailable) as caught:attempt()
+            self.assertEqual(caught.exception.state,'share-revoked')
+        target,entities=self.target_files()
+        self.assertIn(self.reference_id,references(target,entities))  # The pointer stays as a visible state.
+        self.assertEqual(target[f'artifacts/{fork_id}/{self.pin["path"].split("/")[-1]}'],'Přesné původní bajty.\n'.encode())
+        self.assertIn(FORK,entities[fork_id]['tags'])
+
+    def test_stale_revocation_preview_is_rejected(self):
+        value=self.service.revoke_preview(self.source,self.share_id)
+        self.share()
+        with self.assertRaises(ValidationError):self.service.revoke(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        self.assertIsNone(shares(*(lambda f:(f,validate_snapshot(f)))(self.source_ws.git.snapshot(self.source_ws.git.head())))[self.share_id]['revoked'])
+
+    def test_detach_removes_only_the_pointer_and_keeps_source_share_and_history(self):
+        old_head=self.target_ws.git.head()
+        reader,change,uid=self.user()
+        change(action='update-user',user_id=uid,active=True,node_role='member',
+               memberships={self.source:'reader',self.target:'reader'})
+        with self.assertRaises(AccessDenied):reader.detach_preview(self.target,self.reference_id)
+        value=self.service.detach_preview(self.target,self.reference_id)
+        self.change_source();newer=self.service.view(self.target,self.reference_id)['newer']
+        repin=self.service.preview(self.target,self.reference_id,newer,'Local reference label',update=True)
+        self.service.write(repin,str(uuid4()),digest(encoded(repin)),confirm=True)
+        with self.assertRaises(ValidationError):  # The reviewed pointer changed meanwhile.
+            self.service.detach(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        value=self.service.detach_preview(self.target,self.reference_id);operation=str(uuid4())
+        receipt=self.service.detach(value,operation,digest(encoded(value)),confirm=True)
+        self.assertEqual(self.service.detach(value,operation,digest(encoded(value)),confirm=True),receipt)
+        files,entities=self.target_files();self.assertNotIn(self.reference_id,entities)
+        source=self.source_ws.git.snapshot(self.source_ws.git.head())
+        self.assertIsNone(shares(source,validate_snapshot(source))[self.share_id]['revoked'])
+        self.assertIn(self.source_id,validate_snapshot(source))
+        self.assertIn('Podklad pro cílový'.encode(),self.target_ws.git.snapshot(old_head)[f'artifacts/{self.reference_id}/reference.json'])
+
+    def test_repin_never_rewrites_an_already_prepared_manifest(self):
+        builder,prepared,authority,target=self.context()
+        pinned=deepcopy(prepared.manifest['inputs'][0])
+        self.assertEqual(pinned['reference']['share']['share_id'],self.share_id)
+        self.change_source();newer=self.service.view(self.target,self.reference_id)['newer']
+        repin=self.service.preview(self.target,self.reference_id,newer,'Local reference label',update=True)
+        self.service.write(repin,str(uuid4()),digest(encoded(repin)),confirm=True)
+        self.assertEqual(prepared.manifest['inputs'][0],pinned)
+        self.assertEqual(pinned['reference']['source'],self.pin)
+        with self.assertRaises(ValidationError):  # Old evidence is never re-sent with new bytes.
+            builder.authorize_for_dispatch(prepared,authority=authority,target=target)
+        fresh=self.context()[1].manifest['inputs'][0]
+        self.assertEqual(fresh['reference']['source'],newer)
+        self.assertEqual(base64.b64decode(json.loads(self.context()[1].payload)['inputs'][0]['content_b64']),b'New source revision\n')
 
 
 if __name__=='__main__':unittest.main()
