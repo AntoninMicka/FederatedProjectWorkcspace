@@ -147,11 +147,13 @@ náhled odebrání referencí i `progress` review. Čistý sdílený výpočet o
 zahájení od potvrzení dokončení. **Reject:** vlastní pravidla jen v IDE,
 automatické zaškrtávání vyřešených předpokladů a druhé úložiště stavů.
 
-Pracovní kontext úkolu (`PLAN-TASK-WORK-01-A`, zatím **designed**) plánuje
-**reuse/adapt** `Projects.plan_view`, `dependency_start_blockers`, scoped
+Pracovní kontext úkolu (`PLAN-TASK-WORK-01-A`, implementovaný základ)
+**reuse/adaptuje** `Projects.plan_view`, `dependency_start_blockers`, scoped
 `PlanItems`, nativní Workspace journal a stejnou sémantiku progress zápisu
-z `ide_bridge_panel._changes`. Lokální identita okna/relace je oddělená od
-projektového stavu; persistence má použít existující SQLite ownership helpery.
+původně v `ide_bridge_panel._changes`. Lokální identita okna/relace je oddělená od
+projektového stavu. `TaskWork` používá existující SQLite ownership helpery
+a nativní transakci; `plan_progress.mark_in_progress` sdílí přesnou úpravu
+bloku s IDE bridge, bez kopírování writeru či falešné IDE session.
 Pro C/E/F se přebírají ContextBuilder, chat/run journal a TaskOutcomes jako
 autority jednotlivých účinků. **Reject:** druhý plán/stav dokončení, falešná
 IDE session pro přímý UI start, připsání pozdního výsledku aktuálně vybranému

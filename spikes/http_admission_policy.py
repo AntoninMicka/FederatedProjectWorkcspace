@@ -218,6 +218,7 @@ ACTION_LANES = {
     # Projection only: native project/index/journal and queue-file locks still
     # guard reads. Mutations retain the bridge publication/review owner.
     '/v1/task-queue': {'status': 'task_queue_status', 'owner-status': 'task_queue_status'},
+    '/v1/task-work': {'status': 'task_work_status', 'inspect': 'task_work_status', 'capture': 'task_work_status'},
     # Catalog discovery and immutable extension packages do not own queue
     # publication/review state. Project/index and SQLite owners still apply.
     '/v1/ide-bridge/connection/exchange': {
@@ -376,7 +377,7 @@ FEDERATION_TRANSFER_LANES = {
 SERVICE_ROUTES = (PROVIDER_ROUTES | JULIA_ROUTES | MONITORING_ROUTES | RSS_SOURCE_ROUTES | X_SOURCE_ROUTES
                   | IDE_QUEUE_ROUTES | REFINEMENT_ROUTES | REFERENCE_ROUTES
                   | NODE_PREFERENCE_ROUTES | FEDERATION_CONTROL_ROUTES
-                  | frozenset(FEDERATION_TRANSFER_LANES))
+                  | frozenset({'/v1/task-work'}) | frozenset(FEDERATION_TRANSFER_LANES))
 
 # Admission priority only; authentication/role/native ownership still apply.
 RESERVED_ROUTES = (PROVIDER_CONTROL_ROUTES | MONITORING_CONTROL_ROUTES | frozenset({
@@ -446,6 +447,7 @@ ROUTE_LANES = {
     **dict.fromkeys(MONITORING_CONTROL_ROUTES, 'monitoring_control'),
     # Peer protocols validate their own authentication/body before native writes.
     # Give each protocol bounded capacity without owning unrelated UI domains.
+    '/v1/task-work': 'task_work',
     '/v1/federation/probe': 'peer_probe',
     '/v1/federation/catalog': 'peer_catalog',
     '/v1/federation/rss-subscriptions': 'peer_catalog',

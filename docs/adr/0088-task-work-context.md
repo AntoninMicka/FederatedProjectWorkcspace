@@ -6,9 +6,10 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0088 — Pracovní kontext zahájeného úkolu ve Workspace
 
 - Datum: 2026-11-21.
-- Stav: **návrh kontraktu k review / designed** pro `PLAN-TASK-WORK-01-A`.
-  Tento dokument neimplementuje pracovní relace, tlačítko Zahájit, panel,
-  zachytávání činností ani přijetí výsledku.
+- Stav: **kontrakt s implementovaným řezem A a cíleným ověřením** pro
+  `PLAN-TASK-WORK-01-A`. Zdroj obsahuje službu relací, základní ovladače a testy.
+  Akceptace celé dávky, pravý panel, zachytávání činností a přijetí záznamů
+  zůstávají samostatné navazující části; tento stav je neprohlašuje za hotové.
 - Autorita zadání: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,
   snapshot `c7b61487c2ef842c272fa45ce74216c0b9667dea`, exportní revize
   `3bff4cffeed97f1e5bcc9b5a1ec7f6ffcffeb25fa710a2a4f3cfa96e67d868e8`.
@@ -25,8 +26,7 @@ položky roadmapy, pořadí fronty ani posledního projektu.
 
 Kontrakt stanovuje model a lifecycle pro navazující implementaci. Pravý panel
 řeší B, zachycení činností C, komentované záznamy D, LLM integraci E a společnou
-persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Stav
-`designed` tohoto dokumentu není důkazem jejich implementace či splnění.
+persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Implementace A není důkazem jejich implementace či splnění.
 
 ## Reuse a současný stav
 
@@ -60,7 +60,7 @@ Základ záznamu:
 | `node_id`, `user_id` | Serverem ověřená identita uzlu a aktuálního uživatele, nikoli důvěryhodná pole klientského requestu. |
 | `window_id` | Ověřené připoutání ke konkrétnímu pracovnímu oknu/tabu; součást vlastnictví lokálního kontextu. |
 | `definition_pin` | Project commit, plan revision, source artifact/path a SHA-256 přesného vlastního bloku, ověřeného postupem `PlanItems.open`. |
-| `definition_signature` | Digest obsahového zadání: ID/typ, název, popis, zdroj, závislosti a uspořádané texty checklistu; bez pracovních stavů a checked příznaků. |
+| `definition_signature` | Digest obsahového zadání: ID/typ, rodič, název, popis, zdroj, závislosti a uspořádané texty checklistu; bez pracovních stavů a checked příznaků. |
 | `state`, `revision` | Lokální `active`, `paused` nebo `closed` a monotonní CAS revize relace. |
 | `created_at`, `updated_at`, `closed_reason` | Časové a kauzální údaje lifecycle; čas sám nerozhoduje o pořadí souběžných zápisů. |
 | `previous_work_session_id` | Volitelná návaznost na předchozí úsek, například po přijetí nové verze zadání. |
@@ -140,8 +140,8 @@ přijetím cizího záznamu, otevřením aplikace nebo obnovením run journalu.
 Mutace nese `operation_id`, aktuální `context_revision` a podle akce vlastní
 session/revizi, cílové project/task ID, `expected_head` a digest definice.
 Server odvozuje user/node/window binding z ověřené autority. Pole klienta
-nemohou přepnout uživatele nebo převzít cizí okno. Toto je logický kontrakt;
-nový veřejný HTTP endpoint zatím není implementovaný ani vyhlášený.
+nemohou přepnout uživatele nebo převzít cizí okno. Implementační řez zpřístupňuje toto rozhraní na `POST /v1/task-work`;
+konkrétní akce a omezení popisuje [návod](../task-work-context.md).
 
 Stejné operation ID se shodným kanonickým requestem vrátí původní výsledek
 nebo umožní dokončit původní záměr. Jiné bajty pod stejným ID jsou konflikt.
@@ -152,10 +152,13 @@ nikoli nové operation ID a slepé zopakování.
 
 Lokální metadata a nedokončené záměry patří do privátního node-local
 operačního úložiště mimo projektový Git. Jde o autoritativní lokální stav,
-nikoli obnovitelný projektový index. Pro implementaci F je navržena jedna
-lokální databáze v privátním namespace task-work u node konfigurace, s použitím
-stávajících SQLite ownership helperů; nekopíruje task definice ani run journal.
-Volba fyzického úložiště a jeho migrace musí být doložena implementací F.
+nikoli obnovitelný projektový index. Implementace A používá databázi
+`.<node-filename>.task-work/contexts.sqlite` s `user_version=1`, privátními
+právy a stávajícími SQLite ownership helpery. Byla potřebná již pro bezpečný
+start přes lokální intent a projektový writer. Její tabulky ukládají identitu
+uzlu, vlastněná okna, relace a idempotentní operace; nekopírují text zadání,
+task stav dokončení ani run journal. F má rozšířit společnou reconciliaci
+o činnosti a potvrzené projektové záznamy, nikoli duplikovat tuto autoritu.
 Projektové záznamy a komentované přílohy naproti tomu používají Git writer.
 
 ## Crash boundaries před implementací
@@ -236,3 +239,49 @@ Implementační ověření navazujících částí musí zahrnout:
 Tyto případy zde mají úroveň specifikace. Budoucí úspěšný happy-path, existence
 panelu nebo test mock služby nenahradí crash/souběhové testy a oba živé
 uživatelské scénáře celé dávky.
+
+
+## Implementační řez A
+
+Zadání implementace bylo ověřeno nad snapshotem
+`5e715a57728a0483fb784b090e03f7cbaeea47ef`, exportní revizí
+`f51f66a23da1858c6d2804cff31a15187588145252182fca2e7a370e3bdddae1` a zdrojovým
+HEAD `e4d7683` obsahujícím původní kontrakt. Jde o další provenance, ne změnu
+historického základu návrhu výše.
+
+- `spikes/task_work.py`: lokální store, CAS relací/okna, start/switch/resume,
+  pause/close, lokální návrh dokončení, snapshot kontextu a recovery/cancel.
+- `spikes/plan_progress.py`: sdílený čistý builder Probíhá, použitý i původním
+  IDE progress writerem. Existující IDE pravidla pro checklist a SUM se nemění.
+- `spikes/task_work_ui.py`: Zahájit úkol v detailu a základní ovladače v pásu
+  nad obsahem. Není to pravý doplňkový panel B.
+- `POST /v1/task-work`: ověřená identita uživatele, capability konkrétního okna
+  a znovu ověřovaná projektová oprávnění; readonly status/inspect/capture mají
+  vlastní HTTP read lane. Native project a lokální DB/flock zůstávají autority.
+
+Každý rozpracovaný start drží neblokující flock podle operation ID, aby se
+replay a cancel téhož intentu nemohly předběhnout. Pořadí je operation owner →
+krátká lokální transakce nebo projektový writer; lokální DB se nedrží přes Git.
+Přepnutí a následný lokální ukazatel se finalizují jednou transakcí. Přijetí
+nové definice stejného tasku uzavře předchozí úsek s `definition-updated`.
+
+Server ukládá pouze hash window capability. Explicitní obnovení po reloadu
+ji rotuje pomocí původního důkazu a stabilního restore operation ID; staré okno
+už nemůže kontext číst nebo měnit. Přesný replay ztracené restore odpovědi
+vrátí stejnou novou capability, dokud okno nepřevezme další operace. Klient
+uchovává pending restore request pro tento replay a nikdy se k předchozímu
+oknu nepřipojuje automaticky. Aktivní relace se při převzetí pozastaví.
+
+Testy A ověřují stavové přechody, task bez checklistu, dvě okna a uživatele,
+HTTP role/revokaci, checklist bez změny definice, různé projekty se stejným ID,
+immutable capture, přijetí změněné definice, stale/cancel/replay, neplatnou
+verzi/unsafe store a ukončení procesu před/po native publikaci i finalizaci.
+Qt průchod ověřuje také dirty editor, ztracenou odpověď, explicitní recovery,
+reload a ovládání v úzké šířce. Cílené testy nejsou plná závěrečná brána dávky
+ani lidská akceptace běžného profilu.
+
+Návrh dokončení je v A lokální položka relace se stavem pending. Nepublikuje se
+zatím jako komentovaný Git artefakt ani nabídka jinému reviewerovi a nepoužívá
+se jako důkaz akceptace tasku. To patří do D/F. Automatické zachycení reálných
+souborových/chat/LLM činností a připojení výsledků zatím implementované není;
+`capture` dodává pouze základ pro C/E. Žádný LLM účinek není součástí startu.

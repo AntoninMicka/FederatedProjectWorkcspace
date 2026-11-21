@@ -255,6 +255,10 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
         if self.path == '/v1/ide-queue/publish':
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')): return self.send_error(403)
             return super().dispatch(request)
+        if self.path == '/v1/task-work':
+            # Window ownership is authenticated here; project rights are checked
+            # from the stored session as well as the requested target by TaskWork.
+            return super().dispatch(request)
         if self.path == '/v1/task-queue':
             if not isinstance(request, dict): return self.send_error(400)
             if request.get('action') == 'owner-status':

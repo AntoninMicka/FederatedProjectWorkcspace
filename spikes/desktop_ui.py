@@ -4514,6 +4514,7 @@ function showTaskPlanDetail(item){
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
  const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;planDetailId=null;document.querySelector('#plan-graph').focus();});detail.append(close);
  if(!item.checked){const add=document.createElement('button'),message=document.createElement('p'),reason=planQueueAddBlocker(item);add.type='button';add.textContent='Přidat do fronty';add.dataset.planAdd=item.id;add.disabled=Boolean(reason);add.title=reason;message.id='plan-queue-add-reason';message.setAttribute('role','status');message.textContent=reason;add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add,message);}
+ if(typeof appendTaskWorkStart==='function')appendTaskWorkStart(detail,item);
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title,planStatusBadge(item));
  if(taskPlanProjection?.profile==='software-development/v1'&&['batch','milestone'].includes(item.type)){const children=taskPlanProjection.nodes.filter(node=>node.parent_id===item.id),open=document.createElement('button');open.type='button';open.dataset.planOpenChildren=item.id;open.textContent=(item.type==='batch'?'Zobrazit úkoly':'Zobrazit dávky')+' ('+children.length+')';open.addEventListener('click',()=>openTaskPlan({kind:item.type,id:item.id,parent_id:item.parent_id,title:item.title}));detail.append(open);}
  if(item.parent_id){const up=document.createElement('button');up.type='button';up.dataset.planParent=item.parent_id;up.textContent='O úroveň výš · '+item.parent_id;up.addEventListener('click',()=>openTaskPlan(planParentSelection(item)));detail.append(up);}
@@ -8411,7 +8412,10 @@ HTML = HTML.replace('<div id="sidebar-projects"', '<div id="sidebar-sources" rol
 HTML = HTML.replace('<main>', '<main>'+SOURCES_HTML, 1)
 CSS += SOURCES_CSS
 JS = SOURCES_JS + JS
-JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
+from spikes.task_work_ui import TASK_WORK_HTML, TASK_WORK_CSS, TASK_WORK_JS
+HTML = HTML.replace('<main>', '<main>'+TASK_WORK_HTML, 1)
+CSS += TASK_WORK_CSS
+JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
@@ -8527,7 +8531,7 @@ class DesktopHandler(Handler):
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
         '/v1/document-patterns',
-        '/v1/roadmap/graph', '/v1/task-queue', '/v1/ide-queue/publish',
+        '/v1/roadmap/graph', '/v1/task-queue', '/v1/task-work', '/v1/ide-queue/publish',
         '/v1/roadmap-refinement/list', '/v1/roadmap-refinement/detail',
         '/v1/roadmap-refinement/decide', '/v1/roadmap-refinement/decide-all',
         '/v1/roadmap-refinement/reconcile/preview', '/v1/roadmap-refinement/apply',
@@ -8938,6 +8942,21 @@ class DesktopHandler(Handler):
                 return self.reply(200, publish(IdeBridge(self.server.projects.node_path, network=getattr(self.server.projects, 'network', False)), getattr(self, 'actor', None), request, automatic=True))
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
                 return self.reply(422, {'error': str(exc)})
+        if self.path == '/v1/task-work':
+            try:
+                from spikes.task_work import TaskWork
+                from spikes.administration import AccessDenied
+                node = self.server.projects.node_path
+                network = getattr(self.server.projects, 'network', False)
+                actor = getattr(self, 'actor', {}) or {}
+                can_read = (lambda pid: self.server.administration.allowed(self.actor, pid)) if network else (lambda pid: True)
+                can_write = self._can_write if network else (lambda pid: True)
+                service = TaskWork(node, actor.get('id'), network=network, can_read=can_read, can_write=can_write)
+                return self.reply(200, service.execute(request))
+            except AccessDenied as exc:
+                return self.reply(403, {'error': str(exc)})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, PendingOperation) as exc:
+                return self.reply(422, {'error': str(exc), 'retry': 'read-context'})
         if self.path == '/v1/task-queue':
             try:
                 from spikes.task_queue import TaskQueue
