@@ -4671,7 +4671,7 @@ function updateTaskPlanTreeSelection(queueOpen=false){for(const button of docume
 async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');installTaskPlanViews(view);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();loadTaskQueue();return true;}
 async function openTaskQueue(){if(!await canLeaveWorkspaceEditors())return;selectSidebarTab(document.querySelector('#assigned-queue-tab'));showWorkspacePage(document.querySelector('#assigned-queue-view'));closeMobileSidebar();closeCompactSidebarMenu();await loadOwnerQueue();if(activeProject)await loadTaskQueue();}
 document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
-function installTaskPlanViews(result,options){renderTaskPlanSidebar(result.plan,options);}
+function installTaskPlanViews(result,options){renderTaskPlanSidebar(result.plan,options);if(typeof scheduleTaskWorkRefresh==='function')scheduleTaskWorkRefresh();}
 function renderTaskPlanSidebar(value,{loadQueue=true,renderGraph=true}={}){
  if(loadQueue){taskQueueView=null;loadTaskQueue();}
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
@@ -8413,7 +8413,7 @@ HTML = HTML.replace('<main>', '<main>'+SOURCES_HTML, 1)
 CSS += SOURCES_CSS
 JS = SOURCES_JS + JS
 from spikes.task_work_ui import TASK_WORK_HTML, TASK_WORK_CSS, TASK_WORK_JS
-HTML = HTML.replace('<main>', '<main>'+TASK_WORK_HTML, 1)
+HTML = HTML.replace('</main>', '</main>'+TASK_WORK_HTML, 1)
 CSS += TASK_WORK_CSS
 JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';

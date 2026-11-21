@@ -6,9 +6,9 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0088 — Pracovní kontext zahájeného úkolu ve Workspace
 
 - Datum: 2026-11-21.
-- Stav: **kontrakt s implementovaným řezem A a cíleným ověřením** pro
-  `PLAN-TASK-WORK-01-A`. Zdroj obsahuje službu relací, základní ovladače a testy.
-  Akceptace celé dávky, pravý panel, zachytávání činností a přijetí záznamů
+- Stav: **kontrakt s implementovanými řezy A/B a cíleným ověřením** pro
+  `PLAN-TASK-WORK-01-A/B`. Zdroj obsahuje službu relací, pravý panel a testy.
+  Akceptace celé dávky, zachytávání činností a přijetí záznamů
   zůstávají samostatné navazující části; tento stav je neprohlašuje za hotové.
 - Autorita zadání: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,
   snapshot `c7b61487c2ef842c272fa45ce74216c0b9667dea`, exportní revize
@@ -26,7 +26,7 @@ položky roadmapy, pořadí fronty ani posledního projektu.
 
 Kontrakt stanovuje model a lifecycle pro navazující implementaci. Pravý panel
 řeší B, zachycení činností C, komentované záznamy D, LLM integraci E a společnou
-persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Implementace A není důkazem jejich implementace či splnění.
+persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Implementace A/B není důkazem splnění celé dávky.
 
 ## Reuse a současný stav
 
@@ -241,7 +241,7 @@ panelu nebo test mock služby nenahradí crash/souběhové testy a oba živé
 uživatelské scénáře celé dávky.
 
 
-## Implementační řez A
+## Implementační řezy A/B
 
 Zadání implementace bylo ověřeno nad snapshotem
 `5e715a57728a0483fb784b090e03f7cbaeea47ef`, exportní revizí
@@ -253,8 +253,9 @@ historického základu návrhu výše.
   pause/close, lokální návrh dokončení, snapshot kontextu a recovery/cancel.
 - `spikes/plan_progress.py`: sdílený čistý builder Probíhá, použitý i původním
   IDE progress writerem. Existující IDE pravidla pro checklist a SUM se nemění.
-- `spikes/task_work_ui.py`: Zahájit úkol v detailu a základní ovladače v pásu
-  nad obsahem. Není to pravý doplňkový panel B.
+- `spikes/task_work_ui.py`: Zahájit úkol v detailu a trvalý pravý panel B
+  se zadáním, postupem, výběrem checklistového kontextu a lifecycle ovladači.
+  V úzkém okně používá přístupný dialog; editor a jeho draft jsou oddělené.
 - `POST /v1/task-work`: ověřená identita uživatele, capability konkrétního okna
   a znovu ověřovaná projektová oprávnění; readonly status/inspect/capture mají
   vlastní HTTP read lane. Native project a lokální DB/flock zůstávají autority.
@@ -285,3 +286,15 @@ zatím jako komentovaný Git artefakt ani nabídka jinému reviewerovi a nepouž
 se jako důkaz akceptace tasku. To patří do D/F. Automatické zachycení reálných
 souborových/chat/LLM činností a připojení výsledků zatím implementované není;
 `capture` dodává pouze základ pro C/E. Žádný LLM účinek není součástí startu.
+
+
+Řez B navazuje na zdrojový HEAD `94ab3ac` při stejném ověřeném exportu výše.
+Výběr checklistu je lokální CAS operace `select-checklist` nad existující DB
+verze 1. Zachovává původní pin a nemění splnění ani projektový Git/index.
+Commit a replay jediné SQLite transakce používají výše uvedené recovery;
+nevzniká nová hranice mezi persistentními vrstvami. Capture zmrazí i vybraný bod.
+Testy B ověřují přesný replay, stale/revokaci/změnu zadání, uzavřenou relaci,
+nezměněný Git a původní capture. Qt průchod ověřuje trvalý panel u podkladu,
+dirty editoru a chatu, bezpečné vykreslení, mobilní fokus/Tab/Escape,
+zrušenou navigaci a vyčištění obsahu při ztrátě oprávnění. Připojené činnosti
+a výstupy zůstávají prázdné do C/D; lokální návrhy jsou oddělené.

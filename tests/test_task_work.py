@@ -319,3 +319,40 @@ TaskWork(sys.argv[1]).execute(request,checkpoint=stop)
         network=TaskWork(self.f.node,self.user,network=True)
         with self.assertRaises(ValueError):network.inspect(self.handle,self.f.pid,'TASK-A',self.f.head)
         self.assertEqual(Projects(self.f.node).repository(self.f.pid).head(),self.f.head)
+
+    def test_checklist_context_selection_replays_without_changing_git_or_completion(self):
+        self.f.save('- [ ] [TASK-A] A\n  - type: task\n  - [ ] First condition\n  - [x] Second condition\n')
+        view=self.service.execute(self.start_request());session=self.active(view)
+        before=Projects(self.f.node).repository(self.f.pid).head()
+        original=self.service.capture(self.handle,context_revision=view['context_revision'])
+        request=dict(self.handle,action='select-checklist',operation_id=str(uuid4()),context_revision=view['context_revision'],
+            work_session_id=session['work_session_id'],session_revision=session['revision'],selected_checklist=1)
+        selected=self.service.execute(request);active=self.active(selected)
+        self.assertEqual(active['selected_checklist'],1)
+        self.assertEqual(active['project_title'],'Queue')
+        captured=self.service.capture(self.handle,context_revision=selected['context_revision'])
+        self.assertEqual(captured['selected_checklist'],1);self.assertIsNone(original['selected_checklist'])
+        self.assertEqual([p['checked'] for p in active['current_task']['checklist']],[False,True])
+        self.assertFalse(active['current_task']['checked'])
+        self.assertEqual(before,Projects(self.f.node).repository(self.f.pid).head())
+        self.assertEqual(self.service.execute(request)['context_revision'],selected['context_revision'])
+        with self.assertRaises(ValueError):self.service.execute(dict(request,operation_id=str(uuid4()),selected_checklist=0))
+        clear=dict(request,operation_id=str(uuid4()),context_revision=selected['context_revision'],session_revision=active['revision'],selected_checklist=None)
+        cleared=self.service.execute(clear);self.assertIsNone(self.active(cleared)['selected_checklist'])
+
+    def test_checklist_selection_rejects_wrong_type_closed_stale_definition_and_revoked_rights(self):
+        self.f.save('- [ ] [TASK-A] A\n  - type: task\n  - [ ] First\n')
+        view=self.service.execute(self.start_request());session=self.active(view)
+        request=dict(self.handle,action='select-checklist',operation_id=str(uuid4()),context_revision=view['context_revision'],
+            work_session_id=session['work_session_id'],session_revision=session['revision'],selected_checklist=0)
+        for value in [True,-1,1,'0']:
+            with self.subTest(value=value),self.assertRaises(ValueError):self.service.execute(dict(request,selected_checklist=value))
+        self.service.can_write=lambda pid:False
+        with self.assertRaises(ValueError):self.service.execute(request)
+        self.assertNotIn('project_title',self.active())
+        self.service.can_write=lambda pid:True
+        self.f.save('- [ ] [TASK-A] A\n  - type: task\n  - status: in progress\n  - [ ] Changed\n')
+        with self.assertRaises(ValueError):self.service.execute(request)
+        self.f.save('- [ ] [TASK-A] A\n  - type: task\n  - status: in progress\n  - [ ] First\n')
+        closed=self.change('close');session=closed['sessions'][0]
+        with self.assertRaises(ValueError):self.service.execute(dict(request,context_revision=closed['context_revision'],session_revision=session['revision']))

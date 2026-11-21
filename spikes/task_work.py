@@ -174,6 +174,7 @@ class TaskWork:
         git = self.projects.repository(pid)
         require(git.head() == view['commit_id'], 'Projekt se změnil; obnovte kontext.')
         model = self._pin(git.snapshot(view['commit_id']), pid, task_id, view['commit_id'])
+        model['project_title'] = view['title']
         require(git.head() == view['commit_id'], 'Projekt se změnil; obnovte kontext.')
         return model
 
@@ -214,7 +215,7 @@ class TaskWork:
                 reason = 'Zahájení blokují předpoklady: ' + ', '.join(model['blockers'])
             else:
                 reason = ''
-            return dict(session, title=model['title'], current_task=model['task'],
+            return dict(session, title=model['title'], project_title=model['project_title'], current_task=model['task'],
                         validated_head=model['pin']['project_commit'], blocked=reason)
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, PendingOperation) as exc:
             # Never expose a cached title/body after access or privacy changes.
@@ -249,7 +250,7 @@ class TaskWork:
             session = self._session(db, window['active'], handle['window_id'])
         projection = self._projection(session)
         require(not projection['blocked'], projection['blocked'])
-        return {k: session[k] for k in ('work_session_id', 'definition_pin', 'project_id', 'task_id', 'node_id', 'user_id')}
+        return {k: session[k] for k in ('work_session_id', 'definition_pin', 'project_id', 'task_id', 'node_id', 'user_id', 'selected_checklist')}
 
     def execute(self, request, *, checkpoint=lambda stage: None):
         require(isinstance(request, dict), 'Invalid task work request')
@@ -265,6 +266,7 @@ class TaskWork:
                      resume={'operation_id','context_revision','work_session_id','session_revision'},
                      pause={'operation_id','context_revision','work_session_id','session_revision'},
                      close={'operation_id','context_revision','work_session_id','session_revision'},
+                     **{'select-checklist': {'operation_id','context_revision','work_session_id','session_revision','selected_checklist'}},
                      restore={'operation_id','context_revision'},
                      **{'propose-completion': {'operation_id','context_revision','work_session_id','session_revision','comment'}})
         require(isinstance(action, str) and action in extra and set(request) == common | extra[action], 'Invalid task work action/fields')
@@ -322,11 +324,14 @@ class TaskWork:
                     and model['pin']['fragment_sha256'] == request['fragment_sha256'], 'Zadání se změnilo; obnovte plán.')
             selected = request['selected_checklist']
             require(selected is None or type(selected) is int and 0 <= selected < len(model['task']['checklist']), 'Invalid checklist selection')
-        elif action in {'resume','propose-completion'}:
+        elif action in {'resume','propose-completion','select-checklist'}:
             with self._db() as db:
                 session = self._session(db, request['work_session_id'], request['window_id'])
             model = self._model(session['project_id'], session['task_id']); self._startable(model)
             require(model['signature'] == session['definition_signature'], 'Zadání se změnilo; zahajte nový pracovní úsek.')
+        if action == 'select-checklist':
+            selected = request['selected_checklist']
+            require(selected is None or type(selected) is int and 0 <= selected < len(model['task']['checklist']), 'Invalid checklist selection')
         if action == 'propose-completion':
             require(isinstance(request['comment'], str) and len(request['comment']) <= 4000 and '\0' not in request['comment'], 'Invalid proposal comment')
         with self._db(write=True) as db:
@@ -344,6 +349,8 @@ class TaskWork:
                 require(session['state'] == 'paused', 'Pokračovat lze pouze v pozastavené relaci.')
             if action == 'close':
                 require(session['state'] != 'closed', 'Relace už je ukončená.')
+            if action == 'select-checklist':
+                require(session['state'] in {'active','paused'}, 'Kontext ukončené relace nelze měnit.')
             if action in {'start','switch','resume'}:
                 target = dict(project_id=session['project_id'] if action == 'resume' else request['project_id'],
                               task_id=session['task_id'] if action == 'resume' else request['task_id'],
@@ -361,6 +368,9 @@ class TaskWork:
                     if action == 'close': session['closed_reason'] = 'user-ended'
                     self._save_session(db, session)
                     if window['active'] == session['work_session_id']: window['active'] = None
+                elif action == 'select-checklist':
+                    session.update(selected_checklist=request['selected_checklist'], revision=session['revision']+1, updated_at=time.time())
+                    self._save_session(db, session)
                 elif action == 'propose-completion':
                     proposal = dict(id=request['operation_id'], state='pending', comment=request['comment'],
                                     definition_pin=model['pin'], completion_ready=model['task']['completion_ready'])
