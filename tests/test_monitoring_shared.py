@@ -195,6 +195,30 @@ class SharedMonitoringTests(unittest.TestCase):
             apply(self.f.nodes[1],self.pid,encoded([entry(self.pid,'report-outcome',bad)]))
         self.assertFalse(any(r['kind']=='report-outcome' for r in self.rows(1)))
 
+    def test_held_entries_are_not_revalidated_but_new_entries_still_are(self):
+        """AUDIT-B7-T1: repeated syncs skip provenance work for rows already held."""
+        from spikes.pool_sync import apply
+        from spikes.reporting import Reporting
+        from spikes.reporting_schema import encoded
+        a,b=self.services;a.configure(self.pid,self.specs[0]['id'],True,confirm=True)
+        a.process(self.pid,self.specs[3]['id'],str(uuid4()));self.f.exchange(0,1)
+        held=a.pools.export(self.pid,transferable=True)
+        self.assertTrue(any(r['kind']=='report-outcome' for r in held))
+        self.assertEqual(b.pools.export(self.pid,transferable=True),held)
+        with patch.object(Reporting,'read',side_effect=AssertionError('revalidated')) as read, \
+                patch.object(Reporting,'pin',side_effect=AssertionError('revalidated')):
+            apply(self.f.nodes[1],self.pid,encoded(held),operation_id=str(uuid4()))
+        self.assertFalse(read.called)
+        self.assertEqual(b.pools.export(self.pid,transferable=True),held)
+        # A new row next to held ones keeps the full provenance check.
+        row=next(r for r in held if r['kind']=='report-outcome')
+        bad=deepcopy(row['value']);bad['run_id']=str(uuid4())
+        bad['block_ref']['sha256']='0'*64;bad['intent']['block']['ref']['sha256']='0'*64
+        with self.assertRaisesRegex(ValidationError,'pin differs'):
+            apply(self.f.nodes[1],self.pid,encoded(held+[entry(self.pid,'report-outcome',bad)]),
+                  operation_id=str(uuid4()))
+        self.assertEqual(b.pools.export(self.pid,transferable=True),held)
+
     def test_local_only_shared_records_stay_local_and_invalid_operational_payload_is_rejected(self):
         a=self.services[0];a.configure(self.pid,self.specs[0]['id'],True,confirm=True)
         rows=a.pools.export(self.pid);activation=next(r for r in rows if r['kind']=='activation')

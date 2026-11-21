@@ -225,3 +225,30 @@ a projektový journal (ADR 0003).
 
 Omezení: po dobu streamu drží spojení jeden HTTP worker příjemce a linku
 `content_sync`. Velikost těla a limity balíku se nemění.
+
+### Doplnění 2026-11-21: ověření jen nových řádků poolu (AUDIT-B7-T1)
+
+Po přechodu na příjem na pozadí synchronizace prošla, ale na routeru stála
+přes 100 s ve fázi `*-pool-apply`. Každá výměna posílá celý přenosný pool
+projektu a příjemce u každého řádku znovu ověřoval provenance: úplné čtení
+reportingu a validaci celého snímku pro každý připnutý commit. Pro projekt
+s 568 řádky a 21 piny to i na desktopu trvalo 4,9 s (561 volání Gitu).
+Během té doby router nestíhal ani otevření projektu ve webu a automatická
+kontrola stavu končila `TimeoutError`.
+
+Rozhodnutí: ověřují se jen řádky, které uzel ještě nemá uložené se stejným
+obsahem. Uložený řádek prošel ověřením, když vstoupil: vytvořil ho lokální
+uzel, nebo přišel z dřívějšího ověřeného příjmu. Řádky poolu jsou neměnné
+a piny ukazují na neměnné commity, stejně jako u historie výše. Platí:
+
+- čtení reportingu proběhne jen tehdy, když nový řádek odkazuje na
+  definici (`activation`, `report-outcome`, `membership`);
+- `_merge` dál v jedné transakci kontroluje vazby, neměnnost a blokované
+  vstupy nad celým payloadem;
+- řádek se stejným ID, ale jiným obsahem se ověřuje jako nový a `_merge`
+  ho jako konflikt neměnného záznamu odmítne.
+
+Opakovaná výměna téhož poolu trvá na desktopu 0,1 s místo 4,9 s. První
+přenos nového poolu ověřuje vše jako dřív. Hranice pádu se nemění: záměr
+(`prepare`) i zápis (`_merge`) zůstávají, změnil se jen rozsah ověření před
+zápisem.
