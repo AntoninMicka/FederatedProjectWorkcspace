@@ -102,3 +102,8 @@ def private_peer_endpoint(endpoint, *, invalid, private):
     host = f'[{address}]' if address.version == 6 else str(address)
     netloc = host if parsed.port is None else f'{host}:{parsed.port}'
     return parsed._replace(netloc=netloc), address
+# A streamed content state answer (automatic change check) is computed in a
+# background job on the peer: CONTENT_STATE_TIMEOUT then bounds only the
+# response head, heartbeats bound silence, and this caps the whole answer.
+CONTENT_STATE_MAX_WAIT = 5 * 60
+BACKGROUND_STATE_BUDGET = CONTENT_STATE_MAX_WAIT - 30

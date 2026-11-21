@@ -242,8 +242,11 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         probe_clean = self.backend_availability.close(deadline - time.monotonic())
         # Background content receive jobs outlive their HTTP stream; an
         # unfinished one ends with the process like a killed receiver.
-        from spikes.content_receive_jobs import JOBS
+        from spikes.content_receive_jobs import JOBS, STATE_JOBS
         jobs_clean = JOBS.drain(deadline - time.monotonic())
+        # Read-only state answers hold nothing to recover; still wait so no
+        # job thread outlives the server that owns its administration.
+        jobs_clean = STATE_JOBS.drain(deadline - time.monotonic()) and jobs_clean
         self.shutdown_clean = (clean and probe_clean and monitoring_clean and ingress_clean
                                and jobs_clean)
         if not clean:

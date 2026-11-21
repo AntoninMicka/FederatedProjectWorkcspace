@@ -30,6 +30,8 @@ i čtení odpovědi. Nejde o timeout jedné operace soketu.
 | `HEARTBEAT_IDLE_TIMEOUT` | 20 s | streamovaná synchronizace obsahu: nejdelší pauza mezi heartbeat rámci příjemce (posílá je každých 5 s) |
 | `CONTENT_SYNC_MAX_WAIT` | 15 min | streamovaná synchronizace obsahu: celkový strop čekání na příjemce, který pracuje na pozadí |
 | `BACKGROUND_RECEIVE_BUDGET` | 10 min | ověření historie v úloze příjmu na pozadí |
+| `CONTENT_STATE_MAX_WAIT` | 5 min | streamovaná kontrola stavu obsahu: celkový strop čekání na protistranu, která počítá stav na pozadí |
+| `BACKGROUND_STATE_BUDGET` | 4,5 min | rozpočet Gitu pro výpočet stavu všech projektů v úloze na pozadí |
 
 Lhůta pro ukončení plánovače (`STOP_TIMEOUT`) se počítá jako
 `stop_timeout(rozpočet)`, tedy rozpočet plus `SHUTDOWN_MARGIN`. Dřív šlo
@@ -46,12 +48,15 @@ rámce. Rozpočet `CONTENT_SYNC_TIMEOUT` pak platí jen do přijetí hlaviček
 odpovědi. Dál rozhodují `HEARTBEAT_IDLE_TIMEOUT` a `CONTENT_SYNC_MAX_WAIT`
 (podrobnosti a hranice pádu v [ADR 0042](adr/0042-bidirectional-native-git-sharing-sync.md)).
 
-Dotaz na stav obsahu (`content-state`, automatická kontrola změn) musí
-protistrana zodpovědět do `CONTENT_STATE_TIMEOUT` (15 s) pro všechny sdílené
-projekty najednou. Odesílatel při selhání zapíše `content_state_failed
-error_type=… elapsed_ms=…`. Příjemce zapíše `content_state_slow`, když odpověď
-trvá 5 s a déle, s počtem projektů a nejpomalejším projektem. Registr
-oprávnění čte jednou před výpočtem a jednou po něm, ne u každého projektu.
+Dotaz na stav obsahu (`content-state`, automatická kontrola změn) používá
+stejný stream. Protistrana spočítá stav všech sdílených projektů na pozadí
+a posílá heartbeat. `CONTENT_STATE_TIMEOUT` (15 s) pak platí jen do hlaviček
+odpovědi, dál rozhodují `HEARTBEAT_IDLE_TIMEOUT` a `CONTENT_STATE_MAX_WAIT`.
+Starší peer odpoví přímo v limitu 15 s jako dřív. Odesílatel při selhání
+zapíše `content_state_failed error_type=… elapsed_ms=…`. Příjemce zapíše
+`content_state_slow`, když výpočet trvá 5 s a déle, s počtem projektů
+a nejpomalejším projektem. Registr oprávnění čte jednou před výpočtem
+a jednou po něm, ne u každého projektu.
 
 Když peer spojení přijme, ale do konce rozpočtu neodpoví, synchronizace
 obsahu skončí stavem `unanswered` („neodpověděl včas“), ne `offline`. Peer

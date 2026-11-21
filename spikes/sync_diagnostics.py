@@ -16,7 +16,7 @@ PUBLICATION_PHASES = ('receive-publication-pools', 'receive-publication-git',
                       'receive-publication-chats', 'receive-publication-pool-apply')
 PEER_PHASES = frozenset({'receive-verify', 'receive-replay', 'receive-check-destination',
     'receive-verify-history', 'receive-publication', 'receive-prepare-response',
-    *PUBLICATION_PHASES})
+    'content-state', *PUBLICATION_PHASES})
 
 
 def safe_peer_phase(value):

@@ -1495,7 +1495,8 @@ class ContentSyncControl:
                 try:
                     manifests[peer_id] = probe(self.service, peer_id, projects=sorted({
                         row['project_id'] for row in candidates
-                        if row['peer_id'] == peer_id and row['eligible']}))
+                        if row['peer_id'] == peer_id and row['eligible']}),
+                        **({'cancelled': cancelled} if cancelled is not None else {}))
                 except Exception as exc:
                     probe_errors[peer_id] = exc
                     # Type and duration only: no endpoint, path or exception text.

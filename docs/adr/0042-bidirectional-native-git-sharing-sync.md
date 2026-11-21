@@ -252,3 +252,36 @@ Opakovaná výměna téhož poolu trvá na desktopu 0,1 s místo 4,9 s. První
 přenos nového poolu ověřuje vše jako dřív. Hranice pádu se nemění: záměr
 (`prepare`) i zápis (`_merge`) zůstávají, změnil se jen rozsah ověření před
 zápisem.
+
+### Doplnění 2026-11-21: kontrola stavu obsahu na pozadí (AUDIT-B7-T1)
+
+Automatická kontrola změn se ptá protistrany na otisk všech sdílených
+projektů najednou a odpověď musela přijít do `CONTENT_STATE_TIMEOUT` (15 s).
+Router s jedenácti projekty to pod zátěží nestíhal. Kontrola pak končila
+`TimeoutError`, automatika nic nespustila a karta zůstávala ve stavu
+„Stav neověřen“, i když ruční synchronizace procházela.
+
+Rozhodnutí: odpověď na kontrolu používá stejný heartbeat stream jako příjem
+obsahu, s vlastním typem `content-state-stream-v1` a vlastním registrem
+úloh (`STATE_JOBS`). Kontrola tak nesoupeří o kapacitu se synchronizací
+obsahu. Platí:
+
+- odesílatel ohlásí stream hlavičkou `Accept`. Příjemce spustí výpočet
+  na pozadí s nativním čekáním SQLite a zámků a jedním rozpočtem Gitu
+  `BACKGROUND_STATE_BUDGET` pro všechny projekty. Heartbeat nese fázi
+  `content-state`;
+- odesílatel čeká, dokud chodí heartbeat (`HEARTBEAT_IDLE_TIMEOUT`), nejvýš
+  `CONTENT_STATE_MAX_WAIT`. Zrušení plánovače se projeví na nejbližším
+  heartbeatu;
+- starší peer odpoví synchronně a platí pro něj původní limit 15 s;
+- nedostupný nebo poškozený projekt dál vrací prázdný otisk jen pro sebe;
+- selhání a pomalý výpočet zapisují logy `content_state_failed`
+  a `content_state_slow` bez adres a textu výjimek.
+
+Hranice pádu: odpověď je jen pro čtení. Nezapisuje journal, index ani
+registr. Ztráta spojení nebo pád procesu ztratí jen odpověď. Další kontrola
+se zeptá znovu s novým nonce. Výsledek kontroly se dál nikdy nevykládá jako
+„beze změn“, pokud nepřišel celý a podepsaný.
+
+Omezení: po dobu výpočtu drží příjemce jeden HTTP worker a linku
+`peer_state`.

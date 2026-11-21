@@ -28,6 +28,8 @@ from spikes.request_ownership import safe_busy_resource
 from spikes.sync_diagnostics import safe_peer_phase
 
 STREAM_TYPE = 'application/vnd.federated-workspace.content-sync-stream-v1'
+# The same frames carry the content state answer (automatic change check).
+STATE_STREAM_TYPE = 'application/vnd.federated-workspace.content-state-stream-v1'
 HEARTBEAT_INTERVAL = 5          # seconds between heartbeat frames
 FINISHED_TTL = 120              # a successful job's result stays attachable this long
 MAX_FRAME = 4096                # every JSON frame line, terminal result header included
@@ -116,6 +118,9 @@ class ReceiveJobs:
 
 
 JOBS = ReceiveJobs()
+# A separate registry: a running content receive must not make the state
+# answer busy, and the reverse. One state answer per node at a time.
+STATE_JOBS = ReceiveJobs()
 
 
 def error_frame(exc):
