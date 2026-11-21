@@ -44,6 +44,15 @@ def observations(node):
             if (value := snapshot(node, peer, project, direction=direction)) is not None]
 
 
+def peer_progress(name):
+    """Record the peer's phase reported by a heartbeat (fixed names only)."""
+    record = _current.get()
+    value = safe_peer_phase(name)
+    if record is not None and value is not None:
+        with _lock:
+            record['peer_phase'] = value
+
+
 SLOW_MS = 30000   # half the sender's content sync deadline
 
 

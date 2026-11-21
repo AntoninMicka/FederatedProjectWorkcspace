@@ -26,7 +26,10 @@ i čtení odpovědi. Nejde o timeout jedné operace soketu.
 | `ENROLLMENT_TIMEOUT` | 10 s | jeden požadavek enrollmentu |
 | `PROBE_TIMEOUT` | 5 s | interaktivní test spojení s peerem |
 | `SHUTDOWN_MARGIN` | 5 s | rezerva při ukončení plánovače nad rámec rozběhnuté výměny |
-| `CONTENT_RECEIVE_BUDGET` | 45 s | ověření historie přijatého balíku synchronizace obsahu; o `RESPONSE_MARGIN` (15 s) kratší než lhůta odesílatele, aby přetížený příjemce stihl odpovědět „busy“ |
+| `CONTENT_RECEIVE_BUDGET` | 45 s | ověření historie přijatého balíku při synchronní výměně (starší peer); o `RESPONSE_MARGIN` (15 s) kratší než lhůta odesílatele, aby přetížený příjemce stihl odpovědět „busy“ |
+| `HEARTBEAT_IDLE_TIMEOUT` | 20 s | streamovaná synchronizace obsahu: nejdelší pauza mezi heartbeat rámci příjemce (posílá je každých 5 s) |
+| `CONTENT_SYNC_MAX_WAIT` | 15 min | streamovaná synchronizace obsahu: celkový strop čekání na příjemce, který pracuje na pozadí |
+| `BACKGROUND_RECEIVE_BUDGET` | 10 min | ověření historie v úloze příjmu na pozadí |
 
 Lhůta pro ukončení plánovače (`STOP_TIMEOUT`) se počítá jako
 `stop_timeout(rozpočet)`, tedy rozpočet plus `SHUTDOWN_MARGIN`. Dřív šlo
@@ -37,6 +40,11 @@ a literály 10 s a 5 s v enrollmentu a testu spojení.
 Mimo rozsah zůstávají ostatní číselné `timeout=` (audit jich napočítal 91).
 Většina z nich patří SQLite, které řešil B-LOCK-08 v AUDIT-B2. Zbytek tvoří
 lokální subprocesy s vlastní hodnotou přímo u volání.
+
+Peer, který streamování zná, zpracuje příjem na pozadí a posílá heartbeat
+rámce. Rozpočet `CONTENT_SYNC_TIMEOUT` pak platí jen do přijetí hlaviček
+odpovědi. Dál rozhodují `HEARTBEAT_IDLE_TIMEOUT` a `CONTENT_SYNC_MAX_WAIT`
+(podrobnosti a hranice pádu v [ADR 0042](adr/0042-bidirectional-native-git-sharing-sync.md)).
 
 Když peer spojení přijme, ale do konce rozpočtu neodpoví, synchronizace
 obsahu skončí stavem `unanswered` („neodpověděl včas“), ne `offline`. Peer

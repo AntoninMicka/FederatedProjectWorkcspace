@@ -83,6 +83,48 @@ class HTTPDeadlineTests(unittest.TestCase):
             connection.check_deadline()
         self.assertLess(time.monotonic() - start, 1.5)
 
+    def test_extended_deadline_follows_liveness_frames_after_http10_head(self):
+        # A streaming peer keeps an HTTP/1.0 response alive past the original
+        # budget as long as every frame arrives within the idle limit.
+        def serve(conn, stop):
+            conn.sendall(b'HTTP/1.0 200 OK\r\n\r\n')
+            for _ in range(8):
+                conn.sendall(b'beat\n')
+                if stop.wait(.1):
+                    return
+            conn.sendall(b'done\n')
+        connection = self.peer(serve, budget=.35)
+        connection.request('GET', '/')
+        response = connection.getresponse()
+        self.assertIsNone(connection.sock)  # detached by http.client for HTTP/1.0
+        self.assertTrue(connection.connected)
+        connection.extend_deadline(5, idle=.3)
+        with response:
+            lines = [response.readline() for _ in range(9)]
+        self.assertEqual(lines[-1], b'done\n')
+        connection.check_deadline()
+
+    def test_extended_deadline_still_ends_a_silent_peer(self):
+        def serve(conn, stop):
+            conn.sendall(b'HTTP/1.0 200 OK\r\n\r\nbeat\n')
+            stop.wait(2)
+        connection = self.peer(serve, budget=1)
+        connection.request('GET', '/')
+        response = connection.getresponse()
+        connection.extend_deadline(5, idle=.2)
+        start = time.monotonic()
+        with response, self.assertRaises(TimeoutError):
+            self.assertEqual(response.readline(), b'beat\n')
+            response.readline()
+        self.assertLess(time.monotonic() - start, 1)
+
+    def test_extending_requires_a_connection_and_a_valid_idle_budget(self):
+        connection = DeadlineHTTPSConnection('127.0.0.1', 9, context=ssl.create_default_context(),
+                                            timeout=1)
+        self.assertFalse(connection.connected)
+        with self.assertRaisesRegex(ValueError, 'unconnected'):
+            connection.extend_deadline(5, idle=1)
+
     def test_trickling_headers_cannot_extend_budget(self):
         def serve(conn, stop):
             for byte in b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n':

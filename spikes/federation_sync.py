@@ -7,13 +7,15 @@ import json
 import os
 import fcntl
 from collections import deque
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock, safe_busy_resource
 from spikes.background_workers import report_failure
-from spikes.peer_transport import (CONTENT_RECEIVE_BUDGET, CONTENT_SYNC_TIMEOUT,
-                                   private_peer_endpoint, stop_timeout)
+from spikes.peer_transport import (BACKGROUND_RECEIVE_BUDGET, CONTENT_RECEIVE_BUDGET,
+                                   CONTENT_SYNC_MAX_WAIT, CONTENT_SYNC_TIMEOUT,
+                                   HEARTBEAT_IDLE_TIMEOUT, private_peer_endpoint,
+                                   stop_timeout)
 import re
 import sqlite3
 import ssl
@@ -50,7 +52,9 @@ from spikes.project_chat_sync import (
 from spikes.projects import Projects
 from spikes.sqlite_ownership import sqlite_connection
 from spikes.storage import Git
-from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic, current_phase, safe_peer_phase
+from spikes.sync_diagnostics import (observed, received, phase, peer_progress,
+                                     snapshot as sync_diagnostic, current_phase, safe_peer_phase)
+from spikes.content_receive_jobs import STREAM_TYPE, read_frames
 
 
 
@@ -857,10 +861,15 @@ class SyncReceiver:
         self.service = administration or Administration(self.node)
 
     @received
-    def receive(self, envelope, payload, checkpoint=lambda stage: None):
+    def receive(self, envelope, payload, checkpoint=lambda stage: None, *, background=False):
+        # A background receive job (content_receive_jobs) is not an HTTP worker:
+        # SQLite keeps its native waits there and history verification gets the
+        # longer background budget. Flock owners stay non-blocking either way.
+        owner = nullcontext() if background else bounded_project_requests()
+        budget = BACKGROUND_RECEIVE_BUDGET if background else CONTENT_RECEIVE_BUDGET
         try:
-            with bounded_project_requests(), _inbound_lock(self.node):
-                return self._receive(envelope, payload, checkpoint)
+            with owner, _inbound_lock(self.node):
+                return self._receive(envelope, payload, checkpoint, budget=budget)
         except (BlockingIOError, ProjectBusy) as exc:
             raise SyncBusy('Content project is busy', resource=getattr(exc, 'busy_resource', 'native-owner')) from exc
         except GitDeadlineExceeded as exc:
@@ -922,7 +931,7 @@ class SyncReceiver:
                 'Project registration changed during replay')
         return response, response_payload
 
-    def _receive(self, envelope, payload, checkpoint):
+    def _receive(self, envelope, payload, checkpoint, *, budget=CONTENT_RECEIVE_BUDGET):
         require(isinstance(envelope, dict) and isinstance(envelope.get('exchange'), dict),
                 'Missing content sync exchange')
         exchange = validate_exchange(envelope['exchange'])
@@ -963,7 +972,7 @@ class SyncReceiver:
                         '--untracked-files=all').stdout:
                     raise SyncConflict('Destination has local changes; review project conflicts')
         phase('receive-verify-history')
-        with git_budget(CONTENT_RECEIVE_BUDGET):
+        with git_budget(budget):
             bundle, _ = _verify_bundle(self.node, exchange, payload, self.service)
         verified = _VerifiedInboundBundle(
             exchange['operation_id'], exchange['project_id'], peer['id'], local_id, peer['fingerprint'],
@@ -1146,17 +1155,31 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
     try:
         phase('upload')
         connection.request('POST', PATH, body=encode_body(envelope, payload), headers={
-            'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc,
+            'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc, 'Accept': STREAM_TYPE,
             **({'X-FPW-State-Receipt': '1'} if state_manifest else {})})
         phase('wait-response')
         response = connection.getresponse()
-        phase('download')
-        body = response.read(MAX_BODY + 1)
+        if response.status == 200 and response.getheader('Content-Type') == STREAM_TYPE:
+            # The peer works in the background and proves liveness with
+            # heartbeats: wait per frame, not for one fixed exchange budget.
+            connection.extend_deadline(CONTENT_SYNC_MAX_WAIT, idle=HEARTBEAT_IDLE_TIMEOUT)
+            phase('peer-working')
+            kind, outcome = read_frames(
+                response.readline, response.read, cancelled=cancelled,
+                on_heartbeat=lambda value: peer_progress(value.get('peer_phase')))
+            phase('download')
+            if kind == 'error':
+                status, body = outcome['status'], canonical(outcome)
+            else:
+                status, body = 200, outcome
+        else:
+            phase('download')
+            status, body = response.status, response.read(MAX_BODY + 1)
         connection.check_deadline()
         require(len(body) <= MAX_BODY, 'Content sync response exceeds limit')
-        if response.status == 409:
+        if status == 409:
             raise SyncConflict('Peer reported a content conflict')
-        if response.status == 503:
+        if status == 503:
             diagnostic = {}
             if len(body) <= 4096:
                 try:
@@ -1166,12 +1189,12 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
             raise SyncBusy('Peer is temporarily busy; retry the same operation',
                 resource=safe_busy_resource(diagnostic.get('busy_resource')),
                 peer_phase=safe_peer_phase(diagnostic.get('peer_phase')))
-        if response.status != 200:
+        if status != 200:
             typed = peer_unsupported_version(body, subject=peer_id)
             raise SyncRejected('Peer rejected content sync' + (f': {typed}' if typed else ''))
         response_envelope, response_payload = decode_body(body)
     except TimeoutError as exc:
-        if connection.sock is None:
+        if not connection.connected:
             raise  # never connected: the peer is unreachable
         raise PeerTimeout('Peer did not answer content sync in time') from exc
     finally:
@@ -1450,7 +1473,7 @@ class ContentSyncControl:
         return _MANUAL_SYNCS.cancel(self.node, peer_id, project_id)
 
     @bounded_project_requests()
-    def run_automatic(self):
+    def run_automatic(self, cancelled=None):
         if not self.settings()['automatic_enabled']:
             return {'enabled': False, 'attempted': 0}
         attempted = 0
@@ -1497,6 +1520,7 @@ class ContentSyncControl:
                 note(self.node, peer_id, project_id, 'legacy' if manifest is None else 'changed')
                 attempted += 1
                 self.synchronize(peer_id, project_id,
+                                 **({'cancelled': cancelled} if cancelled is not None else {}),
                                  **({'state_manifest': True} if manifest is not None else {}))
                 automatic_retry.succeeded(key)
             except (TimeoutError, SyncBusy, ProjectBusy) as exc:
@@ -1653,7 +1677,9 @@ class ContentSyncScheduler:
     def _run(self):
         while not self.stopping.is_set():
             try:
-                self.control.run_automatic()
+                # A streamed exchange can wait on a working peer for minutes;
+                # stopping cancels it at the next heartbeat.
+                self.control.run_automatic(cancelled=self.stopping.is_set)
                 delay = self.interval
             except Exception as exc:
                 # Registry/catalog startup can race another scheduler. A
@@ -1684,6 +1710,9 @@ def reply(handler):
             or len(length) > len(str(MAX_BODY))
             or not 4 < int(length) <= MAX_BODY):
         return handler.send_error(413)
+    from spikes.content_receive_jobs import STREAM_TYPE
+    if handler.single('Accept') == STREAM_TYPE:
+        return _reply_streamed(handler, int(length))
     try:
         body = handler.rfile.read(int(length))
         require(len(body) == int(length), 'Incomplete content sync body')
@@ -1710,3 +1739,60 @@ def reply(handler):
         return handler.reply(409, {'error': 'Content sync requires a conflict decision'})
     except (ValueError, AccessDenied, OSError, sqlite3.Error, subprocess.SubprocessError):
         return handler.reply(422, {'error': 'Content sync request rejected'})
+
+
+def _receive_job(node, administration, envelope, payload, state_receipt):
+    def run():
+        response, response_payload = SyncReceiver(node, administration).receive(
+            envelope, payload, background=True)
+        if state_receipt:
+            from spikes.sync_fingerprint import receipt
+            signed_receipt = receipt(administration, response)
+            if signed_receipt is not None:
+                response = dict(response, state_receipt=signed_receipt)
+        return encode_body(response, response_payload)
+    return run
+
+
+def _reply_streamed(handler, length):
+    """Receive in a background job and stream heartbeats until its outcome.
+
+    Crash boundaries are those of the synchronous receiver: the job runs the
+    same SyncReceiver.receive, whose inbound journal and project journal own
+    recovery. Losing the connection only stops the heartbeat stream.
+    """
+    from spikes.content_receive_jobs import JOBS, STREAM_TYPE, error_frame, stream
+    try:
+        body = handler.rfile.read(length)
+        require(len(body) == length, 'Incomplete content sync body')
+        envelope, payload = decode_body(body)
+        exchange = envelope.get('exchange') if isinstance(envelope, dict) else None
+        require(isinstance(exchange, dict), 'Missing content sync exchange')
+        operation_id = identifier(exchange.get('operation_id'))
+        peer_id = identifier(exchange.get('source_node_id'))
+        project_id = identifier(exchange.get('project_id'))
+        node = handler.server.node
+        job = JOBS.start_or_attach(
+            Path(node).absolute(), operation_id, body,
+            _receive_job(node, handler.server.administration, envelope, payload,
+                         handler.single('X-FPW-State-Receipt') == '1'),
+            phase_source=lambda: (sync_diagnostic(node, peer_id, project_id,
+                                                  direction='inbound') or {}).get('phase'))
+    except RequestReadTimeout:
+        raise
+    except Exception as exc:  # noqa: BLE001 - mapped to the same typed statuses
+        frame = error_frame(exc)
+        return handler.reply(frame['status'], {key: value for key, value in frame.items()
+                                               if key not in {'type', 'status'}})
+    handler.close_connection = True
+    handler.send_response_only(200)
+    handler.send_header('Content-Type', STREAM_TYPE)
+    handler.send_header('Cache-Control', 'no-store')
+    handler.send_header('Connection', 'close')
+    handler.end_headers()
+    def write(raw):
+        handler.wfile.write(raw); handler.wfile.flush()
+    try:
+        stream(job, write)
+    except OSError:
+        pass  # the sender went away; the job continues and stays attachable

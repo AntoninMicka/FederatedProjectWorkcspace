@@ -33,6 +33,13 @@ RESPONSE_MARGIN = 15              # receiver work ends this long before the send
 # sender's exchange budget, so an overloaded receiver still answers "busy"
 # (git-budget) instead of the sender timing out (AUDIT-B7-T1).
 CONTENT_RECEIVE_BUDGET = CONTENT_SYNC_TIMEOUT - RESPONSE_MARGIN
+# Streamed content sync (receiver works in the background and sends heartbeat
+# frames): the sender gives up after HEARTBEAT_IDLE_TIMEOUT without a frame, or
+# after CONTENT_SYNC_MAX_WAIT in total. The background receive job verifies
+# history within BACKGROUND_RECEIVE_BUDGET (AUDIT-B7-T1).
+HEARTBEAT_IDLE_TIMEOUT = 20
+CONTENT_SYNC_MAX_WAIT = 900
+BACKGROUND_RECEIVE_BUDGET = CONTENT_SYNC_MAX_WAIT - 5 * 60
 
 UNIQUE_LOCAL = ipaddress.ip_network('fc00::/7')
 MIN_IPV4_LAN_PREFIX = 8

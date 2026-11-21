@@ -240,7 +240,12 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
                 timeout=self.shutdown_timeout)
             active = tuple(self._active_requests)
         probe_clean = self.backend_availability.close(deadline - time.monotonic())
-        self.shutdown_clean = clean and probe_clean and monitoring_clean and ingress_clean
+        # Background content receive jobs outlive their HTTP stream; an
+        # unfinished one ends with the process like a killed receiver.
+        from spikes.content_receive_jobs import JOBS
+        jobs_clean = JOBS.drain(deadline - time.monotonic())
+        self.shutdown_clean = (clean and probe_clean and monitoring_clean and ingress_clean
+                               and jobs_clean)
         if not clean:
             for request in active:
                 try:

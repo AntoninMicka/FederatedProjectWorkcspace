@@ -101,7 +101,27 @@ class DeadlineHTTPSConnection(http.client.HTTPSConnection):
         self.address = str(address)
         self.family = socket.AF_INET if address.version == 4 else socket.AF_INET6
         self.deadline = _Deadline(timeout)
+        # True once TLS completed. http.client clears ``sock`` after reading an
+        # HTTP/1.0 response head, so ``sock is None`` does not mean unreachable.
+        self.connected = False
+        self._budgeted = None
         super().__init__(host, port, context=context, timeout=timeout)
+
+    def extend_deadline(self, seconds, *, idle):
+        """Replace the exchange budget by a new total and a per-read idle limit.
+
+        For a peer that streams liveness frames: every raw read must arrive
+        within ``idle`` seconds, and the whole remaining exchange within
+        ``seconds``. The response reader shares the same socket wrapper, so this
+        also applies after http.client detached ``sock``.
+        """
+        if self._budgeted is None:
+            raise ValueError('Cannot extend the deadline of an unconnected peer')
+        if (isinstance(idle, bool) or not isinstance(idle, (int, float))
+                or not math.isfinite(idle) or idle <= 0):
+            raise ValueError('Expected a positive finite idle budget')
+        self.deadline.end = _Deadline(seconds).end
+        self._budgeted.timeout = idle
 
     def connect(self):
         if self._tunnel_host is not None:
@@ -116,7 +136,8 @@ class DeadlineHTTPSConnection(http.client.HTTPSConnection):
             transport.settimeout(self.deadline.remaining())
             transport.do_handshake()
             self.deadline.remaining()
-            self.sock = _Socket(transport, self.deadline)
+            self.sock = self._budgeted = _Socket(transport, self.deadline)
+            self.connected = True
         except BaseException:
             transport.close()
             raise
