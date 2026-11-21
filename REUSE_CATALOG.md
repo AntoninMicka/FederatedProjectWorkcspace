@@ -166,6 +166,22 @@ Záznamy D adaptují tentýž lokální store, operation flock, sidecar artefakt
 používá existující snapshot/transition validaci a zachovává historii revizí.
 Nový projektový writer, kopie výsledků do roadmapy a druhý task store jsou
 odmítnuté. Nabídka zůstává oddělená od potvrzeného Git artefaktu i task acceptance.
+Automatický záznam úspěšně uloženého výstupu **adaptuje** stejný HTTP activity
+wrapper, `TaskRecords.run`, rezervace eventů a Workspace journal. Deterministické
+ID a trvalý příznak umožňují obnovit evidenci bez zopakování ukládání výstupu.
+**Reject:** kopírování obsahu do zadání, druhý writer a automatická akceptace
+úkolu. Recovery a hranice jsou doplněné v ADR 0088.
+Oprava restartu adaptuje existující vlastněné relace a autentizaci pomocí
+readonly historie a explicitního CAS převzetí; neukládá další plaintext
+credential ani nezavádí persistentní browser profil. Přímé lidské dokončení
+reuse/adaptuje čistý formatter `ide_bridge_panel._changes` a stejný TaskWork
+intent/native writer/recovery. Fake IDE report a automatické zaškrtnutí
+checklistu jsou odmítnuté.
+Roadmapa reuse/adaptuje stejný renderer potvrzených záznamů, validovaný Git
+kontrakt, native receipt/diff piny a `artifact_preview`. Read-only projekce podle
+projektu/tasku nevyžaduje aktivní relaci; vlastní lokální evidence zůstává
+oddělená a její nedostupnost nezakrývá Git záznamy. Nové kopie souborů, task
+store, zápisové API nebo automatické převzetí okna jsou odmítnuté.
 Pro E/F se přebírají ContextBuilder, chat/run journal a TaskOutcomes jako
 autority jednotlivých účinků. **Reject:** druhý plán/stav dokončení, falešná
 IDE session pro přímý UI start, připsání pozdního výsledku aktuálně vybranému

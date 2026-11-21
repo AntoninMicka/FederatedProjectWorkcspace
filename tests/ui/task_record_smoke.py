@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: MPL-2.0
 """Review, defer, publish and amend a task record without losing the editor draft."""
 import json
+from unittest.mock import patch
 from uuid import uuid4
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from spikes.artifacts import Artifacts
+from spikes.task_activities import TaskActivities
 from spikes.local_api import running_api
 from spikes.desktop_ui import DesktopHandler
 from spikes.projects import Projects
@@ -18,7 +20,11 @@ app=QApplication([]);fixture=fixtures.TaskQueueTests();fixture.setUp()
 try:
  doc=str(uuid4())
  Artifacts(fixture.node).save(dict(project_id=fixture.pid,artifact_id=doc,base_head=fixture.head,title='Inventory',body='# Original\n',new=True),str(uuid4()))
- with running_api('http',handler=DesktopHandler,projects=Projects(fixture.node)) as server:
+ # Exercise legacy pending offers; current saves are covered by task_activity_smoke.
+ original_finish=TaskActivities.finish
+ def legacy_finish(service,identifier,code,payload,**kwargs):
+  return original_finish(service,identifier,code,payload,auto_record=False)
+ with patch.object(TaskActivities,'finish',legacy_finish), running_api('http',handler=DesktopHandler,projects=Projects(fixture.node)) as server:
   server.chat_service=ChatService(fixture.node,server.projects)
   profile=QWebEngineProfile(app);page=QWebEnginePage(profile,app);view=QWebEngineView();view.setPage(page);view.resize(1400,900);view.show()
   phase=0;busy=False

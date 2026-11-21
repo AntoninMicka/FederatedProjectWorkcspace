@@ -218,7 +218,7 @@ ACTION_LANES = {
     # Projection only: native project/index/journal and queue-file locks still
     # guard reads. Mutations retain the bridge publication/review owner.
     '/v1/task-queue': {'status': 'task_queue_status', 'owner-status': 'task_queue_status'},
-    '/v1/task-work': {'status': 'task_work_status', 'inspect': 'task_work_status', 'capture': 'task_work_status', 'record-output': 'task_work_status'},
+    '/v1/task-work': {'status': 'task_work_status', 'inspect': 'task_work_status', 'capture': 'task_work_status', 'history': 'task_work_status', 'record-output': 'task_work_status', 'record-list': 'task_work_status', 'record-preview': 'task_work_status', 'record-activity-preview': 'task_work_status'},
     # Catalog discovery and immutable extension packages do not own queue
     # publication/review state. Project/index and SQLite owners still apply.
     '/v1/ide-bridge/connection/exchange': {

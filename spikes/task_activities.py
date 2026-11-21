@@ -136,7 +136,7 @@ class TaskActivities:
                            (identifier, self.work.user_id, handle['window_id'], fingerprint, canonical(doc)))
         return identifier
 
-    def finish(self, identifier, code, payload):
+    def finish(self, identifier, code, payload, *, auto_record=False, checkpoint=lambda stage: None):
         require(type(code) is int, 'Invalid activity response')
         payload = payload if isinstance(payload, dict) else {}
         outcome = payload.get('outcome')
@@ -156,15 +156,22 @@ class TaskActivities:
             doc = json.loads(row['doc'])
             require(doc.get('record_type') == 'task-activity', 'Not an activity')
             # A rejected concurrent/replayed attempt cannot erase a confirmed native receipt.
-            if doc['outcome'] == 'succeeded':
-                return
-            if doc['outcome']!=outcome or doc['result_references']!=references(payload):
-                from spikes.task_records import offer
-                state=offer(doc);doc['offer']=dict(state,revision=state['revision']+1)
-            doc['privacy']=privacy_of([{'privacy':doc.get('privacy','local-only')},payload])
-            doc.update(outcome=outcome, response_code=code, updated_at=time.time(),
-                       result_references=references(payload))
+            if doc['outcome'] != 'succeeded':
+                if doc['outcome']!=outcome or doc['result_references']!=references(payload):
+                    from spikes.task_records import offer
+                    state=offer(doc);doc['offer']=dict(state,revision=state['revision']+1)
+                doc['privacy']=privacy_of([{'privacy':doc.get('privacy','local-only')},payload])
+                doc.update(outcome=outcome, response_code=code, updated_at=time.time(),
+                           result_references=references(payload))
+            if auto_record and doc['outcome']=='succeeded' and doc['kind'] in {
+                    'artifact-save','artifact-publish','source-import','file-edit','file-save',
+                    'file-commit','conversation-output','conversation-snapshot'}:
+                doc['auto_record_requested']=True
             self.work._save_operation(db, identifier, doc)
+        checkpoint('task-activity-before-auto-record')
+        if doc.get('auto_record_requested'):
+            from spikes.task_records import TaskRecords
+            TaskRecords(self.work).publish_automatic(identifier, checkpoint=checkpoint)
 
     def _readable(self, pid):
         if not self.work.can_read(pid):
@@ -207,4 +214,21 @@ class TaskActivities:
             from spikes.task_records import offer
             doc['offer']=offer(doc)
             result.append(doc)
+        return result
+
+
+    def for_task(self,pid,task_id):
+        require(self.work.can_read(pid),'Právo číst úkol bylo odebráno.')
+        with self.work._db() as db:
+            if db is None:return []
+            rows=db.execute('SELECT doc FROM operations WHERE user_id=? ORDER BY rowid DESC',(self.work.user_id,)).fetchall()
+        result=[]
+        for row in rows:
+            event=json.loads(row[0])
+            if event.get('record_type')!='task-activity' or event['context']['project_id']!=pid or event['context']['task_id']!=task_id:continue
+            if self.work.network and (event.get('local_capture',True) or event.get('privacy','local-only')=='local-only'):continue
+            projects={r['project_id'] for r in event['request_references']+event['result_references'] if 'project_id' in r}
+            if event.get('target_project_id'):projects.add(event['target_project_id'])
+            if not all(self._readable(project) for project in projects):continue
+            result.append(event)
         return result

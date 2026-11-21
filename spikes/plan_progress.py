@@ -51,3 +51,19 @@ def progress_changes(files, project_id, head, task_id):
     require(project_task_graph(candidate, validate_snapshot(candidate), project_id, head)['status'] == 'ready',
             'Start produces invalid task graph')
     return {doc['path']: candidate[doc['path']]}
+
+
+def completion_changes(files, project_id, head, task_id):
+    """Reuse the native human-review formatter without creating an IDE report."""
+    graph=project_task_graph(files,validate_snapshot(files),project_id,head)
+    require(graph['status']=='ready','Invalid project task graph')
+    nodes={n['id']:n for n in graph['nodes']};task=nodes.get(task_id)
+    require(task and task['type'] in {None,'task'} and not any(n['parent_id']==task_id for n in nodes.values()),'Dokončete konkrétní úkol.')
+    require(not task['checked'],'Úkol již byl dokončen.')
+    require(task.get('status_mode')!='sum','Souhrnný stav dokončete prostřednictvím jeho dílčích úkolů.')
+    require(all(nodes[d]['checked'] for d in task['depends_on']),'Dokončení vyžaduje potvrzené dokončení všech závislostí.')
+    require(all(point['checked'] for point in task['checklist']),'Nejprve potvrďte zbývající body checklistu v zadání úkolu.')
+    from spikes.ide_bridge_panel import _changes
+    changes=_changes(files,project_id,head,dict(kind='completed',task_id=task_id))
+    validate_transition(files,dict(files,**changes))
+    return changes

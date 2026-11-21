@@ -39,6 +39,77 @@ class TaskRecordTests(unittest.TestCase):
     def record(self):
         return self.service.for_session(self.handle,self.sid)[0][0]
 
+    def test_automatic_saved_output_is_pinned_once_without_confirmation_or_completion(self):
+        event=self.events[0]
+        self.activity.finish(event,200,{},auto_record=True)
+        record=self.record();head=self.work.projects.repository(self.f.f.pid).head()
+        self.assertEqual(record['context']['task_id'],'TASK-A')
+        self.assertEqual(record['outputs'][0]['artifact_id'],self.aid)
+        self.assertEqual(record['revisions'][0]['comment'],'Automaticky zaznamenáno: Uložení dokumentu')
+        self.assertFalse(self.f.active()['current_task']['checked'])
+        self.activity.finish(event,200,{},auto_record=True)
+        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
+        self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
+
+    def test_automatic_recovery_after_save_and_native_record_commit_never_repeats_output(self):
+        from spikes.task_work import TaskWork
+        for boundary in ['task-activity-before-auto-record','task-record-intent-prepared','task-record-after-project']:
+            with self.subTest(boundary=boundary):
+                fixture=TaskRecordTests();fixture.setUp()
+                try:
+                    import subprocess,sys
+                    script="""import os,sys
+from spikes.task_work import TaskWork
+from spikes.task_activities import TaskActivities
+service=TaskActivities(TaskWork(sys.argv[1]))
+def stop(stage):
+ if stage==sys.argv[3]:os._exit(79)
+service.finish(sys.argv[2],200,{},auto_record=True,checkpoint=stop)
+"""
+                    child=subprocess.run([sys.executable,'-c',script,str(fixture.f.f.node),fixture.events[0],boundary],capture_output=True,text=True)
+                    self.assertEqual(child.returncode,79,child.stdout+child.stderr)
+                    restarted=TaskWork(fixture.f.f.node)
+                    first=restarted.status(fixture.handle)
+                    records=TaskRecords(restarted).for_session(fixture.handle,fixture.sid)[0]
+                    self.assertEqual(len(records),1)
+                    self.assertEqual(records[0]['outputs'][0]['artifact_id'],fixture.aid)
+                    git=restarted.projects.repository(fixture.f.f.pid);head=git.head()
+                    restarted.status(fixture.handle)
+                    self.assertEqual(git.head(),head)
+                    self.assertFalse(first['sessions'][0]['current_task']['checked'])
+                finally:fixture.doCleanups()
+
+    def test_automatic_late_result_keeps_original_task(self):
+        event=self.events[0]
+        self.work.execute(self.f.start_request('TASK-X','switch'))
+        self.activity.finish(event,200,{},auto_record=True)
+        self.assertEqual(self.record()['context']['task_id'],'TASK-A')
+        self.assertEqual(self.service.for_session(self.handle,self.f.active()['work_session_id'])[0],[])
+
+    def test_automatic_revocation_retains_event_and_recovers_when_permission_returns(self):
+        self.work.can_write=lambda pid:False
+        with self.assertRaises(ValueError):self.activity.finish(self.events[0],200,{},auto_record=True)
+        self.work.can_write=lambda pid:True
+        self.work.status(self.handle)
+        self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
+
+    def test_network_refresh_does_not_publish_desktop_activity(self):
+        event=self.events[0]
+        self.work.network=True
+        self.activity.finish(event,200,{},auto_record=True)
+        self.assertEqual(self.service.for_session(self.handle,self.sid)[0],[])
+        self.work.network=False
+        self.work.status(self.handle)
+        self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
+
+    def test_automatic_unknown_failure_and_no_written_output_create_no_record(self):
+        from uuid import uuid4
+        for code in [409,502,200]:
+            identifier=self.activity.begin(self.handle,self.work.status(self.handle)['context_revision'],
+                '/v1/artifacts/editor/save',dict(operation_id=str(uuid4()),project_id=self.f.f.pid))
+            self.activity.finish(identifier,code,{},auto_record=True)
+        self.assertEqual(self.service.for_session(self.handle,self.sid)[0],[])
+
     def test_confirm_group_exact_outputs_replay_amend_and_immutable_history(self):
         first=self.work.projects.repository(self.f.f.pid).head();self.saved('# Revised inventory\n')
         request=self.request();view=self.service.execute(request)
@@ -176,3 +247,46 @@ service.execute(json.loads(sys.argv[2]),checkpoint=stop)
         event['kind']='artifact-publish'
         outputs=self.service.outputs([event])
         self.assertEqual([o['artifact_id'] for o in outputs],[self.aid])
+
+    def test_roadmap_reads_git_records_without_window_and_separates_own_local_activity(self):
+        self.service.execute(self.request());head=self.work.projects.repository(self.f.f.pid).head()
+        query=dict(action='record-list',project_id=self.f.f.pid,task_id='TASK-A',expected_head=head)
+        own=self.service.execute(query);self.assertEqual(len(own['records']),1);self.assertEqual(len(own['activities']),1)
+        from spikes.task_work import TaskWork
+        reader=TaskWork(self.f.f.node,str(uuid4()),can_read=lambda pid:True,can_write=lambda pid:False)
+        service=TaskRecords(reader)
+        with self.work._db() as db:windows=db.execute('SELECT count(*) FROM windows').fetchone()[0]
+        result=service.execute(query);self.assertEqual(len(result['records']),1);self.assertEqual(result['activities'],[])
+        record=result['records'][0]
+        preview=service.execute(dict(action='record-preview',project_id=self.f.f.pid,task_id='TASK-A',expected_head=head,
+            record_id=record['id'],output_index=0,version='original',page=1))
+        self.assertIn('Original inventory',preview['text'])
+        with self.work._db() as db:self.assertEqual(db.execute('SELECT count(*) FROM windows').fetchone()[0],windows)
+        with self.assertRaises(ValueError):service.execute(dict(query,expected_head='a'*40))
+        with self.assertRaises(ValueError):service.execute(dict(action='record-preview',project_id=self.f.f.pid,task_id='TASK-X',expected_head=head,
+            record_id=record['id'],output_index=0,version='original',page=1))
+        reader.can_read=lambda pid:False
+        with self.assertRaises(ValueError):service.execute(query)
+
+    def test_roadmap_exposes_unconfirmed_native_files_and_draft_without_changing_offer(self):
+        request=self.request(action='record-offer',state='deferred',comment='Saved draft for roadmap')
+        request.pop('privacy');request.pop('expected_head');self.service.execute(request)
+        head=self.work.projects.repository(self.f.f.pid).head()
+        query=dict(action='record-list',project_id=self.f.f.pid,task_id='TASK-A',expected_head=head)
+        result=self.service.execute(query)
+        self.assertEqual(result['records'],[]);event=result['activities'][0]
+        self.assertEqual(event['offer']['state'],'deferred');self.assertEqual(event['offer']['comment'],'Saved draft for roadmap')
+        self.assertEqual(event['outputs'][0]['artifact_id'],self.aid)
+        preview=self.service.execute(dict(action='record-activity-preview',project_id=self.f.f.pid,task_id='TASK-A',expected_head=head,
+            event_id=event['event_id'],output_index=0,version='original',page=1))
+        self.assertIn('Original inventory',preview['text'])
+        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
+        self.assertEqual(self.activity.for_session(self.handle,self.sid)[0]['offer'],event['offer'])
+
+    def test_roadmap_keeps_git_records_visible_when_local_activity_store_is_unavailable(self):
+        from unittest.mock import patch
+        self.service.execute(self.request());head=self.work.projects.repository(self.f.f.pid).head()
+        with patch.object(self.service.activities,'for_task',side_effect=OSError('local store unavailable')):
+            result=self.service.execute(dict(action='record-list',project_id=self.f.f.pid,task_id='TASK-A',expected_head=head))
+        self.assertEqual(len(result['records']),1);self.assertTrue(result['activities_unavailable'])
+        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)

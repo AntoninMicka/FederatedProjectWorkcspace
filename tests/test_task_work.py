@@ -356,3 +356,82 @@ TaskWork(sys.argv[1]).execute(request,checkpoint=stop)
         self.f.save('- [ ] [TASK-A] A\n  - type: task\n  - status: in progress\n  - [ ] First\n')
         closed=self.change('close');session=closed['sessions'][0]
         with self.assertRaises(ValueError):self.service.execute(dict(request,context_revision=closed['context_revision'],session_revision=session['revision']))
+
+    def test_complete_marks_native_task_and_closes_session_without_checking_other_work(self):
+        view=self.service.execute(self.start_request());session=self.active(view)
+        request=dict(self.handle,action='complete',operation_id=str(uuid4()),context_revision=view['context_revision'],
+            work_session_id=session['work_session_id'],session_revision=session['revision'],expected_head=session['validated_head'],confirmed=True)
+        completed=self.service.execute(request);self.assertIsNone(completed['active_session_id'])
+        self.assertTrue(completed['sessions'][0]['current_task']['checked'])
+        self.assertEqual(completed['sessions'][0]['closed_reason'],'task-completed')
+        head=Projects(self.f.node).repository(self.f.pid).head();self.service.execute(request)
+        self.assertEqual(Projects(self.f.node).repository(self.f.pid).head(),head)
+
+    def test_complete_blocks_unreviewed_checklist_and_running_dependencies(self):
+        self.f.save('- [ ] [TASK-A] A\n  - type: task\n  - [ ] Pending point\n')
+        view=self.service.execute(self.start_request());session=self.active(view)
+        request=dict(self.handle,action='complete',operation_id=str(uuid4()),context_revision=view['context_revision'],
+            work_session_id=session['work_session_id'],session_revision=session['revision'],expected_head=session['validated_head'],confirmed=True)
+        with self.assertRaisesRegex(ValueError,'checklistu'):self.service.execute(request)
+        self.assertEqual(self.active()['state'],'active');self.assertIsNone(self.status()['pending'])
+
+    def test_history_after_restart_reclaims_same_session_with_explicit_owner_proof(self):
+        view=self.service.execute(self.start_request());sid=view['active_session_id']
+        restarted=TaskWork(self.f.node,self.user)
+        saved=restarted.execute({'action':'history'})['sessions'][0]
+        self.assertEqual(saved['work_session_id'],sid)
+        fresh={k:v for k,v in restarted.create_window().items() if k.startswith('window_')}
+        request=dict(fresh,action='reclaim',operation_id=str(uuid4()),context_revision=0,work_session_id=sid,
+            session_revision=saved['revision'],target_context_revision=saved['target_context_revision'],confirmed=True)
+        recovered=restarted.execute(request);self.assertIsNone(recovered['active_session_id'])
+        self.assertEqual(recovered['sessions'][0]['state'],'paused')
+        self.assertEqual(restarted.execute(request)['window'],recovered['window'])
+        with self.assertRaises(ValueError):self.service.status(self.handle)
+        resumed=restarted.execute(dict(recovered['window'],action='resume',operation_id=str(uuid4()),context_revision=recovered['context_revision'],
+            work_session_id=sid,session_revision=recovered['sessions'][0]['revision']))
+        self.assertEqual(resumed['active_session_id'],sid)
+        self.assertEqual(resumed['sessions'][0]['definition_pin'],self.active(view)['definition_pin'])
+
+    def test_complete_paused_task_keeps_another_active_task_and_recovery_survives_process_death(self):
+        first=self.service.execute(self.start_request());aid=first['active_session_id']
+        other=self.service.execute(self.start_request('TASK-X','switch'));bid=other['active_session_id']
+        selected=next(s for s in other['sessions'] if s['work_session_id']==aid)
+        request=dict(self.handle,action='complete',operation_id=str(uuid4()),context_revision=other['context_revision'],
+            work_session_id=aid,session_revision=selected['revision'],expected_head=selected['validated_head'],confirmed=True)
+        script='''import json,os,sys
+from spikes.task_work import TaskWork
+def stop(stage):
+ if stage=='task-work-after-project':os._exit(78)
+TaskWork(sys.argv[1]).execute(json.loads(sys.argv[2]),checkpoint=stop)
+'''
+        result=subprocess.run([sys.executable,'-c',script,str(self.f.node),json.dumps(request)])
+        self.assertEqual(result.returncode,78)
+        head=Projects(self.f.node).repository(self.f.pid).head()
+        self.service.execute(dict(self.handle,action='recover',operation_id=request['operation_id']))
+        final=self.status();self.assertEqual(final['active_session_id'],bid)
+        self.assertEqual(next(s for s in final['sessions'] if s['work_session_id']==aid)['closed_reason'],'task-completed')
+        self.assertFalse(self.active(final)['current_task']['checked'])
+        self.assertEqual(Projects(self.f.node).repository(self.f.pid).head(),head)
+
+    def test_completion_requires_finished_dependencies_and_explicit_confirmation(self):
+        self.f.save('- [ ] [PRE-A] Prerequisite\n  - status: in progress\n- [ ] [TASK-A] A\n  - depends_on: PRE-A\n')
+        view=self.service.execute(self.start_request());session=self.active(view)
+        request=dict(self.handle,action='complete',operation_id=str(uuid4()),context_revision=view['context_revision'],
+            work_session_id=session['work_session_id'],session_revision=session['revision'],expected_head=session['validated_head'],confirmed=True)
+        with self.assertRaisesRegex(ValueError,'závislostí'):self.service.execute(request)
+        with self.assertRaises(ValueError):self.service.execute(dict(request,confirmed=False))
+        self.assertEqual(self.active()['state'],'active')
+
+    def test_reclaim_cannot_cross_users_or_overwrite_newer_context(self):
+        view=self.service.execute(self.start_request());saved=self.service.history()['sessions'][0]
+        fresh={k:v for k,v in self.service.create_window().items() if k.startswith('window_')}
+        request=dict(fresh,action='reclaim',operation_id=str(uuid4()),context_revision=0,work_session_id=saved['work_session_id'],
+            session_revision=saved['revision'],target_context_revision=saved['target_context_revision'],confirmed=True)
+        outsider=TaskWork(self.f.node,str(uuid4()));self.assertEqual(outsider.history()['sessions'],[])
+        other={k:v for k,v in outsider.create_window().items() if k.startswith('window_')}
+        with self.assertRaises(ValueError):outsider.execute(dict(request,**other))
+        with self.assertRaises(ValueError):self.service.execute(dict(request,target_context_revision=999))
+        self.assertEqual(self.status()['active_session_id'],view['active_session_id'])
+        self.service.can_write=lambda pid:False
+        self.assertEqual(self.service.history()['sessions'],[])
+        with self.assertRaises(ValueError):self.service.execute(request)

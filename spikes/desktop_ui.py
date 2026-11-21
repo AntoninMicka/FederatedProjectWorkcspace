@@ -2795,6 +2795,13 @@ async function openPlanItemEditor(task){
  planEditorReturn=capturePlanPosition();
  const project=activeProject,item={id:task.source.artifact_id,kind:'document',planItem:true};artifactEditorItem=item;
  try{
+  const view=await projectRequest('/v1/projects/open',{project_id:project.id,scope:'plan'});
+  if(activeProject!==project||artifactEditorItem!==item)return;
+  if(view.read_only)throw Error('Projekt je pouze pro čtení.');
+  project.head=view.commit_id;installTaskPlanViews(view);
+  const current=taskPlanProjection?.nodes.find(node=>node.id===task.id);
+  if(!current?.source?.artifact_id)throw Error('Položka již není v aktuálním plánu.');
+  task=current;item.id=current.source.artifact_id;
   const result=await projectRequest('/v1/artifacts/editor/plan-item/open',{project_id:project.id,artifact_id:item.id,task_id:task.id,expected_head:project.head});
   if(activeProject!==project||artifactEditorItem!==item)return;
   item.planItem=result;hideArtifactDeletion();fillArtifactEditor({title:result.title,body:result.body},false,{rawOnly:true});
@@ -4523,6 +4530,7 @@ function showTaskPlanDetail(item){
  for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',(item.status_mode==='sum'?'SUM · ':'')+planStatusLabels[planStatus(item)]],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;if(name==='Popis')renderPlanDescription(description,item);else appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);appendPlanChildren(detail,item);
  if(activeProject&&!activeProject.readOnly&&item.source?.artifact_id){const edit=document.createElement('button');edit.type='button';edit.textContent='Upravit tuto položku';edit.addEventListener('click',()=>openPlanItemEditor(item));detail.append(edit);appendPlanItemActions(detail,item);}
  if(item.source?.artifact_id){const open=document.createElement('button');open.type='button';open.textContent='Otevřít zdrojový seznam';open.addEventListener('click',()=>openPreview(item.source.artifact_id));detail.append(open);}
+ if(typeof appendTaskPlanRecords==='function')appendTaskPlanRecords(detail,item);
 }
 function planDependencyPicker(selected,excluded){
  const root=document.createElement('fieldset'),legend=document.createElement('legend'),filter=document.createElement('input'),list=document.createElement('select');
@@ -8415,6 +8423,8 @@ JS = SOURCES_JS + JS
 from spikes.task_work_ui import TASK_WORK_HTML, TASK_WORK_CSS, TASK_WORK_JS
 HTML = HTML.replace('</main>', '</main>'+TASK_WORK_HTML, 1)
 CSS += TASK_WORK_CSS
+from spikes.task_record_roadmap_ui import JS as TASK_RECORD_ROADMAP_JS
+JS += TASK_RECORD_ROADMAP_JS
 JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
@@ -8721,7 +8731,7 @@ class DesktopHandler(Handler):
             self._task_activity = None
             service, identifier = activity
             try:
-                service.finish(identifier, code, payload)
+                service.finish(identifier, code, payload, auto_record=True)
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 # The native receipt remains authoritative; its successful response
                 # must not become a retry invitation because bookkeeping failed.

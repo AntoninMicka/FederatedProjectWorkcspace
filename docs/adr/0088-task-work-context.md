@@ -389,3 +389,102 @@ i vícesouborový import a nativní publikace s `project_commit` místo `commit_
 Odstraněný artefakt se připne k verzi před odstraněním. C zachovává také
 `project_commit` reference nativních výsledků; samostatný vstupní project pin
 bez uloženého výsledku se za output nepovažuje.
+
+
+## Oprava restartu desktopu a přímé dokončení — 21. 11. 2026
+
+Uživatelské ověření po `66eec2c` odhalilo ztrátu dostupnosti pracovního kontextu
+po restartu. Desktop používá unnamed/off-the-record Qt profil a náhodný port
+lokálního API: sessionStorage ani origin nepřetrvají. Relace v TaskWork DB se
+přitom neztrácely. Není důvod zavádět persistentní browser profil nebo kopii
+plánu. Ověřený export má snapshot `b17262862d92d70af5cf01167f3127bcdc39f320`,
+revizi `5a4fe648da95d54c128c5fc693c4bdabfd55475ca10142c329e2e402f35b35ad`.
+
+Autentizovaný readonly `history` zpřístupní pouze vlastní uložené relace.
+Obsah zadání a oprávnění se znovu posuzují; nejistý kontext je pouze redigovaný
+odkaz, nikoli cachovaný text. Uživatelská akce Obnovit a pokračovat použije
+`reclaim`: ověří čerstvou capability prázdného nového okna, vlastníka vybrané
+relace a CAS obou oken/relace. Jedinou lokální transakcí pozastaví původní
+aktivní kontext a rotuje capability původního okna. Zachová jeho ID i všechny
+původní session/event/record reference. Teprve po výslovném potvrzení uživatele
+se případně zavolá běžné resume. Jiný účet ani znalost session UUID nestačí.
+
+Reclaim používá deterministickou novou capability odvozenou od čerstvého
+ověřeného důkazu a operation ID; do DB patří pouze její hash, nikoli credential
+v requestu. Replay ztracené odpovědi vrátí tentýž výsledek, pokud jej nenahradilo
+novější převzetí. Pád před lokálním commitem nic nezmění, po commitu se dohledá
+původní operace. Po úplné ztrátě browser stavu lze uloženou relaci znovu vypsat
+pod ověřenou identitou. Nedokončené native účinky se automaticky neopakují.
+
+`complete` je explicitní lidská mutace, oddělená od close i lokálního návrhu.
+Adaptuje pure formatter existujícího IDE human review přes
+`plan_progress.completion_changes`, bez vytváření IDE zprávy či falešné relace.
+Ověří původní obsahový podpis, aktuální HEAD, oprávnění, leaf/SUM pravidla,
+dokončené závislosti a již splněný checklist. Poté použije stávající TaskWork
+intent → native Workspace/Git/index → lokální finalizaci. Po nativním receiptu
+uzavře vybranou relaci s `task-completed`; pokud je aktivní jiný úkol, jeho
+ukazatel zachová. Piny ani rozpracované editory se nemění.
+
+Crash boundaries jsou stejné jako pro start: před intentem žádný účinek,
+po něm původní reservation, po Git commitu před finalizací stejné operation ID
+pro recover, po finalizaci přesný replay bez druhého commitu. Source Git zůstává
+autoritou dokončení, lokální DB pouze relace. Test skutečně ukončeného procesu
+ověřuje obnovu po commitu i zachování jiného aktivního úkolu. HTTPS ověřuje
+vlastnictví, cizí účet a explicitní lidské potvrzení. Qt průchod používá nový
+server origin a nový dočasný profil bez sessionStorage, zachová uložený bod,
+činnosti/komentář a dokončí úkol při ponechání dirty editoru.
+
+
+## Projekce záznamů do detailu roadmapy — 21. 11. 2026
+
+Na přímé uživatelské zadání doplňuje detail úkolu sekci Plnění úkolu a výsledky.
+`record-list` čte Git záznamy podle `(project_id, task_id, expected_head)` bez
+pracovní capability. Stejný potvrzený záznam je proto dostupný i po ukončení
+relace a jinému oprávněnému čtenáři projektu. Read-only role tím nezískává zápis.
+API zvlášť vrací nejvýše 50 vlastních lokálních činností: jejich stav, komentář
+a přesné nativní výstupy. Nedostupnost této SQLite evidence neblokuje Git záznamy
+a není vydávána za prázdnou historii. Neprobíhá migrace, publikace ani nový zápis;
+crash boundaries persistujících operací se nemění.
+
+`record-preview` a `record-activity-preview` znovu kontrolují práva, task scope,
+aktuální projektový HEAD, původní pin i nynější dostupnost cílového projektu.
+První nevyžaduje vlastnictví relace autora; druhý je omezený na vlastní lokální
+událost. Lokální či local-only evidence se nevydává cizímu účtu nebo webu.
+
+Roadmapa adaptuje stejný DOM renderer potvrzeného záznamu jako pracovní panel
+a stejný omezený náhled souborů. Opožděná odpověď po změně úkolu, projektu,
+HEAD nebo zavření detailu se nevykreslí. Náhled nevytváří pracovní okno,
+nepřebírá relaci, neukládá editor a neoznačuje úkol za splněný. Cílené testy
+ověřují čtení bez capability a bez zápisového práva, oddělení lokálních událostí,
+stale HEAD, jiný task, revokaci, výpadek lokálního store a Qt průchod roadmapou
+včetně původní/aktuální verze a pozdní odpovědi po přepnutí detailu.
+
+## Automatický záznam uloženého výstupu
+
+Na výslovný požadavek uživatele se úspěšné uložení výstupu v aktivním
+pracovním kontextu přes společný HTTP wrapper připojuje k původnímu úkolu
+bez dalšího potvrzení. Nejde o akceptaci úkolu. Writer `TaskRecords` se znovu
+používá pro stručný provozní komentář a přesné odkazy na výstupy; jejich
+obsah se do popisu úkolu nekopíruje. Uložený záznam je dostupný v části
+„Plnění úkolu a výsledky“. Ruční seskupení a komentování ostatních činností
+zůstává dostupné. Unknown, failed, pouhý draft ani úspěch bez doloženého
+souborového výsledku takový záznam nevytváří.
+
+Automatický intent je vlastněný původním uživatelem a oknem a má
+operation ID deterministicky odvozené od event ID. Před publikací se znovu
+ověřují práva, privacy a původní task; přepnutí aktivního úkolu výsledek
+nepřesměruje. Komentář vyjadřuje automatický původ, nikoli lidské review.
+
+| Hranice | Recovery |
+| --- | --- |
+| Uložení výstupu a activity receipt, před intentem záznamu | Activity nese trvalý příznak; další obnovení vlastního pracovního panelu připraví jen záznam. |
+| Lokální intent připraven, před nativním zápisem | Původní rezervace eventu a operation ID; změněný HEAD se tiše nepřebazuje. |
+| Nativní writer až Git/index | Stejná recovery Workspace jako u ručního D, bez druhého writeru. |
+| Git/index hotov, lokální finalizace chybí | Dohledá se původní receipt; nevzniká další artefakt ani další commit. |
+| Odpověď ztracena nebo save znovu doručen | Event i záznam zachovají původní ID a výstupový commit. |
+
+Obnovení stavu vlastního pracovního okna zpracuje nejvýše deset čekajících
+automatických záznamů. Odebraná práva a stale intent zůstávají blokované;
+uložení původního výstupu se neopakuje. Chyba evidence nezmění úspěšnou
+odpověď původní operace na pobídku k jejímu opakování. Automatická evidence
+nemění definici úkolu, checklist ani completion gate.

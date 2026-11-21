@@ -20,7 +20,7 @@ function renderTaskRecords(){
  if(taskRecordPreviewId&&!session.task_records?.some(record=>record.id===taskRecordPreviewId))clearTaskRecordPreview();
  const draft=taskRecordDrafts.get(session.work_session_id),selected=new Set(draft?.ids||[]);
  const heading=document.createElement('h3');heading.textContent='Přidat záznam k úkolu';editor.append(heading);
- const info=document.createElement('p');info.textContent='Vyberte související činnosti. Záznam ani příloha nepotvrzují splnění úkolu.';editor.append(info);
+ const info=document.createElement('p');info.textContent='Uložené výstupy se připojují automaticky. Další činnosti můžete vybrat a okomentovat. Záznam ani příloha nepotvrzují splnění úkolu.';editor.append(info);
  const stateNames={pending:'K připojení',draft:'Rozepsané',deferred:'Odložené',dismissed:'Odmítnuté',confirmed:'Připojeno'};
  for(const event of session.activities||[]){
   const row=document.createElement('label'),check=document.createElement('input'),caption=document.createElement('span');check.type='checkbox';check.dataset.recordEvent=event.event_id;check.checked=selected.has(event.event_id);check.disabled=taskWorkBusy||event.offer.state==='confirmed'||!!event.offer.pending_operation_id;
@@ -51,18 +51,19 @@ function renderTaskRecords(){
  }
  const title=document.createElement('h3');title.textContent='Potvrzené záznamy';list.append(title);
  if(!session.task_records?.length){const empty=document.createElement('p');empty.textContent='Žádné potvrzené záznamy.';list.append(empty);}
- for(const record of session.task_records||[]){
+ for(const record of session.task_records||[])appendConfirmedTaskRecord(list,record,openTaskRecordOutput,async record=>{const last=record.revisions.at(-1),value=window.prompt('Oprava komentáře (původní text zůstane v historii):',last.comment);if(value===null)return;await sendTaskWork({action:'record-amend',...taskWorkHandle,operation_id:crypto.randomUUID(),work_session_id:session.work_session_id,record_id:record.id,record_revision:record.record_revision,comment:value,selected_checklist:last.selected_checklist,expected_head:record.validated_head});});
+}
+function appendConfirmedTaskRecord(list,record,openOutput,amend=null){
   const article=document.createElement('article');article.dataset.taskRecord=record.id;const last=record.revisions.at(-1);
   const when=document.createElement('small');when.textContent=`${record.context.task_id} · ${new Date(record.revisions[0].created_at).toLocaleString()} · ${record.events.length} činností`;const comment=document.createElement('p');comment.textContent=last.comment||'Bez komentáře';article.append(when,comment);
   if(last.selected_checklist!==null){const point=document.createElement('p');point.textContent='Bod původního checklistu: '+(last.selected_checklist+1);article.append(point);}
   for(const [index,output] of record.outputs.entries()){
-   const row=document.createElement('p');row.textContent=output.title+' · '+output.artifact_id.slice(0,8)+' · '+output.commit_id.slice(0,12);row.append(taskRecordButton('Původní verze',()=>openTaskRecordOutput(record,index,'original')),taskRecordButton('Aktuální artefakt',()=>openTaskRecordOutput(record,index,'current')));article.append(row);
+   const row=document.createElement('p');row.textContent=output.title+' · '+output.artifact_id.slice(0,8)+' · '+output.commit_id.slice(0,12);row.append(taskRecordButton('Původní verze',()=>openOutput(record,index,'original')),taskRecordButton('Aktuální artefakt',()=>openOutput(record,index,'current')));article.append(row);
   }
   if(!record.outputs.length){const warning=document.createElement('p');warning.textContent='Záznam odkazuje na činnosti či běhy; neobsahuje potvrzený souborový výsledek.';article.append(warning);}
-  article.append(taskRecordButton('Upravit komentář',async()=>{const value=window.prompt('Oprava komentáře (původní text zůstane v historii):',last.comment);if(value===null)return;await sendTaskWork({action:'record-amend',...taskWorkHandle,operation_id:crypto.randomUUID(),work_session_id:session.work_session_id,record_id:record.id,record_revision:record.record_revision,comment:value,selected_checklist:last.selected_checklist,expected_head:record.validated_head});},taskWorkBusy));
+  if(amend)article.append(taskRecordButton('Upravit komentář',()=>amend(record),taskWorkBusy));
   const history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Historie komentáře ('+record.revisions.length+')';history.append(summary);
   for(const revision of record.revisions){const row=document.createElement('p');row.textContent=`${new Date(revision.created_at).toLocaleString()} · ${revision.comment}`;history.append(row);}article.append(history);list.append(article);
- }
 }
 async function submitTaskRecord(state){
  const session=selectedTaskWorkSession(),draft=taskRecordDrafts.get(session?.work_session_id);if(!draft||taskWorkBusy)return;

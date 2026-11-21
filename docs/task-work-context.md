@@ -11,15 +11,30 @@ Vpravo se zobrazí trvalý panel pracovního kontextu a ovladače:
 - **Pozastavit** uvolní aktivní kontext tohoto okna; task nepřepne na Odloženo.
 - **Pokračovat** znovu ověří oprávnění a zadání vybrané pozastavené relace.
 - **Ukončit relaci** uzavře pracovní úsek, nikoli úkol v roadmapě.
+- **Dokončit úkol** po výslovném lidském potvrzení zapíše dokončení do roadmapy
+  a uzavře vybranou relaci. Vyžaduje dokončené závislosti a již potvrzený
+  checklist; jeho body se automaticky nezaškrtnou. Při nesplněných podmínkách
+  panel ukáže důvod a nabídne **Otevřít zadání úkolu**.
 - **Navrhnout dokončení** uloží komentář jako lokální pending návrh relace.
-  Task ani checklist se nezaškrtnou. Projektová publikace/přijetí návrhu bude
-  navazující část D/F; tento ovladač je nyní nezajišťuje.
+  Task ani checklist se nezaškrtnou. Skutečné lidské dokončení zajišťuje
+  samostatná akce **Dokončit úkol**; návrh ji sám nevyvolá.
 - Jiný úkol zahájíte z jeho detailu. Potvrzené přepnutí pozastaví původní
   relaci. Nové zadání stejného tasku uzavře starý úsek a zachová oba piny.
 
 Výběr projektu nebo dokumentu sám pracovní kontext nepřepne. Relace jiného
 projektu si uchová původ a vlastní identitu; shodná task ID různých projektů
 se nezamění. Samotný start ani pokračování nevolá model nebo hledání.
+
+Po restartu desktopu se uložená práce nabídne přímo z backendu, i když nový
+prohlížeč nemá žádné sessionStorage a server používá jinou lokální adresu.
+Vyberte původní úkol a **Obnovit a pokračovat**. Po potvrzení se převezme jeho
+původní okno, zneplatní stará capability a pokračuje se ve stejné relaci:
+pin zadání, checklistový kontext, činnosti a uložené nabídky zůstávají stejné.
+Pokud není otevřený jiný projekt, otevře se projekt obnoveného úkolu.
+Výpis uložené práce sám nic neaktivuje. Převzetí vyžaduje autentizovaného
+vlastníka, čerstvou capability nového okna a přesné CAS revize; znalost UUID
+nestačí. Cizí účet nemůže relaci vypsat ani převzít. Rozpracovaná nativní
+operace se místo automatického pokračování nabídne k původní obnově.
 
 Po reloadu použijte **Obnovit pracovní okno**. Převzetí vyžaduje původní
 ověření uložené v tomto tabu, pozastaví jeho aktivní relaci a zneplatní token
@@ -95,6 +110,20 @@ na chybu vyzývající k opakování. Výslovný replay stejné nativní operace
 receipt bez druhého commitu; evidence nic sama neopakuje. Neznámý placený
 běh se řeší původním run journalem, nikdy novým automatickým pokusem.
 
+## Automatické záznamy uložených výstupů
+
+Po úspěšném uložení výstupu při práci v aktivním úkolu se automaticky uloží
+stručný záznam s odkazy na původní verzi výstupu. Další potvrzení není potřeba.
+Záznam najdete u původního úkolu v části **Plnění úkolu a výsledky**, i když
+mezitím přepnete na jiný úkol. Obsah dokumentu se do zadání nekopíruje a úkol
+se tím nedokončí. Neúspěšné a nepotvrzené operace ani neuložené návrhy takový
+záznam nevytvářejí. Komentář automatického záznamu lze později opravit;
+původní text zůstane v historii.
+
+Při přerušeném zápisu obnovení pracovního panelu dokončí pouze evidenci.
+Původní uložení ani placený běh neopakuje. Zápis při odebraných právech nebo
+změněném připraveném HEAD zůstává čekající na řešení původní operace.
+
 ## Přidání komentovaného záznamu
 
 V pravém panelu pod **Přidat záznam k úkolu** vyberte jednu nebo více
@@ -111,6 +140,17 @@ vstupní podklady se samy nestávají výsledky.
 Obsah inventáře či analýzy se do roadmapy nekopíruje. Bod checklistu zůstává
 pouze kontextem; jeho splnění, akceptace úkolu i dávky vyžadují samostatné kroky.
 Záznam failed/unknown události neobsahuje smyšlený uložený výsledek.
+
+Záznamy jsou dostupné také přímo v **Úkoly / roadmapa → detail úkolu →
+Plnění úkolu a výsledky**. Tento pohled nevyžaduje zahájenou relaci ani
+převzetí pracovního okna. Čte potvrzené záznamy z projektového Gitu, včetně
+záznamů jiných autorů při současném právu číst projekt. Pod nimi je oddělená
+**Automatická evidence na tomto uzlu** s vlastními nepřipojenými činnostmi,
+rozepsanými/odloženými komentáři a odkazy na vzniklé soubory. Lokální evidence
+se tím nepublikuje ani nesynchronizuje. Čtenář projektu má přístup k potvrzeným
+záznamům, nikoli k lokální činnosti jiného účtu. **Obnovit záznamy** provede
+nové čtení. Není-li lokální store dostupný, Git záznamy zůstanou zobrazené
+s výslovnou informací o nedostupné lokální evidenci.
 
 Potvrzené záznamy jsou chronologické. **Původní verze** otevře přesné uložené
 bajty a commit výsledku, **Aktuální artefakt** jeho nynější verzi. Při odstranění
@@ -137,7 +177,10 @@ ani do request payloadů lokálního journalu; v DB je pouze jeho hash.
 
 | Akce | Další pole vedle `action`, `window_id`, `window_token` |
 | --- | --- |
-| `status` | Žádná; čte ověřený stav a případný pending záměr. |
+| `history` | Pouze `action`, bez window capability; readonly výpis nejvýše 50 vlastních relací s aktuální kontrolou oprávnění. |
+| `reclaim` | Capability nového prázdného okna, `operation_id`, `context_revision`, `work_session_id`, `session_revision`, `target_context_revision`, `confirmed: true`; vrátí rotovanou capability původního okna. |
+| `complete` | `operation_id`, `context_revision`, `work_session_id`, `session_revision`, `expected_head`, `confirmed: true`. |
+| `status` | Žádná; vrací ověřený stav a obnoví nejvýše deset vlastních čekajících automatických záznamů. |
 | `inspect` | `project_id`, `task_id`, `expected_head`; vrátí aktuální digest fragmentu pro start. |
 | `start` | `operation_id`, `context_revision`, `project_id`, `task_id`, `expected_head`, `fragment_sha256`, `selected_checklist` (`null` nebo platný index). |
 | `switch` | Pole startu a `work_session_id`, `session_revision` původní aktivní relace. |
@@ -146,6 +189,9 @@ ani do request payloadů lokálního journalu; v DB je pouze jeho hash.
 | `propose-completion` | Pole lokální změny relace a textový `comment` (max. 4 000 znaků). |
 | `recover`, `cancel` | Původní `operation_id`; request se načte z lokálního intentu. |
 | `restore` | `operation_id`, `context_revision`; vrátí novou window capability a pauzu. |
+| `record-list` | Bez window capability: `project_id`, `task_id`, `expected_head`; projektové záznamy a oddělené vlastní lokální činnosti. |
+| `record-preview` | Bez window capability: `project_id`, `task_id`, `expected_head`, `record_id`, `output_index`, `version`, `page`. |
+| `record-activity-preview` | Stejná čtecí pole, místo `record_id` vlastní `event_id`. |
 | `record-offer` | `operation_id`, `work_session_id`, `event_ids`, `offer_revisions`, `comment`, `selected_checklist`, `state` (`draft`/`deferred`/`dismissed`). |
 | `record-publish` | Pole nabídky bez `state`, navíc `expected_head`, `privacy`. |
 | `record-amend` | `operation_id`, `work_session_id`, `record_id`, `record_revision`, `comment`, `selected_checklist`, `expected_head`. |

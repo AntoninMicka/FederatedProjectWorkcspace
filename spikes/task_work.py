@@ -22,7 +22,7 @@ from spikes.local_api import private_directory
 from spikes.markdown_documents import document
 from spikes.metadata import require, uuid, validate_snapshot
 from spikes.plan_item_editor import item_span
-from spikes.plan_progress import progress_changes
+from spikes.plan_progress import progress_changes, completion_changes
 from spikes.request_ownership import bounded_flock
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
@@ -222,6 +222,8 @@ class TaskWork:
             return dict(safe, blocked=str(exc), title=None)
 
     def status(self, handle):
+        from spikes.task_records import TaskRecords
+        TaskRecords(self).recover_automatic(handle)
         with self._db() as db:
             state = self._window(db, handle)
             rows = db.execute('SELECT doc FROM sessions WHERE window_id=? AND user_id=? ORDER BY rowid DESC LIMIT 50',
@@ -270,6 +272,11 @@ class TaskWork:
     def execute(self, request, *, checkpoint=lambda stage: None):
         require(isinstance(request, dict), 'Invalid task work request')
         action = request.get('action')
+        if action == 'history':
+            require(set(request)=={'action'},'Invalid history request')
+            return self.history()
+        if action == 'reclaim':
+            return self.reclaim(request)
         if action == 'window':
             require(set(request) == {'action'}, 'Invalid window request')
             return self.create_window()
@@ -281,6 +288,7 @@ class TaskWork:
                      resume={'operation_id','context_revision','work_session_id','session_revision'},
                      pause={'operation_id','context_revision','work_session_id','session_revision'},
                      close={'operation_id','context_revision','work_session_id','session_revision'},
+                     complete={'operation_id','context_revision','work_session_id','session_revision','expected_head','confirmed'},
                      **{'select-checklist': {'operation_id','context_revision','work_session_id','session_revision','selected_checklist'}},
                      restore={'operation_id','context_revision'},
                      **{'propose-completion': {'operation_id','context_revision','work_session_id','session_revision','comment'}})
@@ -339,11 +347,15 @@ class TaskWork:
                     and model['pin']['fragment_sha256'] == request['fragment_sha256'], 'Zadání se změnilo; obnovte plán.')
             selected = request['selected_checklist']
             require(selected is None or type(selected) is int and 0 <= selected < len(model['task']['checklist']), 'Invalid checklist selection')
-        elif action in {'resume','propose-completion','select-checklist'}:
+        elif action in {'resume','propose-completion','select-checklist','complete'}:
             with self._db() as db:
                 session = self._session(db, request['work_session_id'], request['window_id'])
             model = self._model(session['project_id'], session['task_id']); self._startable(model)
             require(model['signature'] == session['definition_signature'], 'Zadání se změnilo; zahajte nový pracovní úsek.')
+        if action == 'complete':
+            require(request['confirmed'] is True,'Dokončení musí potvrdit uživatel.')
+            require(request['expected_head']==model['pin']['project_commit'],'Projekt se změnil; obnovte kontext.')
+            completion_changes(self.projects.repository(session['project_id']).snapshot(request['expected_head']),session['project_id'],request['expected_head'],session['task_id'])
         if action == 'select-checklist':
             selected = request['selected_checklist']
             require(selected is None or type(selected) is int and 0 <= selected < len(model['task']['checklist']), 'Invalid checklist selection')
@@ -366,13 +378,13 @@ class TaskWork:
                 require(session['state'] != 'closed', 'Relace už je ukončená.')
             if action == 'select-checklist':
                 require(session['state'] in {'active','paused'}, 'Kontext ukončené relace nelze měnit.')
-            if action in {'start','switch','resume'}:
-                target = dict(project_id=session['project_id'] if action == 'resume' else request['project_id'],
-                              task_id=session['task_id'] if action == 'resume' else request['task_id'],
-                              model=model, selected_checklist=session.get('selected_checklist') if action == 'resume' else request['selected_checklist'])
+            if action in {'start','switch','resume','complete'}:
+                target = dict(project_id=session['project_id'] if action in {'resume','complete'} else request['project_id'],
+                              task_id=session['task_id'] if action in {'resume','complete'} else request['task_id'],
+                              model=model, selected_checklist=session.get('selected_checklist') if action in {'resume','complete'} else request['selected_checklist'])
                 op = dict(state='prepared', target=target, old_active=window['active'],
-                          work_session_id=session['work_session_id'] if action == 'resume' else str(uuid5(UUID(request['operation_id']), 'task-work-session-v1')),
-                          project_operation_id=str(uuid5(UUID(request['operation_id']), 'task-work-progress-v1')))
+                          work_session_id=session['work_session_id'] if action in {'resume','complete'} else str(uuid5(UUID(request['operation_id']), 'task-work-session-v1')),
+                          project_operation_id=str(uuid5(UUID(request['operation_id']), 'task-work-complete-v1' if action=='complete' else 'task-work-progress-v1')))
                 # Keep definitions out of the local operational store.
                 op['target']['model'] = {k:model[k] for k in ('pin','signature')}
                 window['pending'] = request['operation_id']
@@ -401,6 +413,58 @@ class TaskWork:
         if op['state'] == 'prepared':
             self._run(body, op, request, checkpoint)
         return self._response(request)
+
+    def history(self):
+        """Discover this authenticated owner's persisted work, without claiming a window."""
+        with self._db() as db:
+            if db is None:return {'sessions':[]}
+            rows=db.execute('SELECT s.doc,w.doc FROM sessions s JOIN windows w ON w.id=s.window_id WHERE s.user_id=? ORDER BY s.rowid DESC LIMIT 50',(self.user_id,)).fetchall()
+        result=[]
+        for row in rows:
+            session=json.loads(row[0]);window=json.loads(row[1]);view=self._projection(session)
+            if 'current_task' not in view:
+                try:self._authorize(session['project_id'])
+                except AccessDenied:continue
+            view=dict(view,title=view.get('title') or 'Nedostupné zadání',project_title=view.get('project_title') or session['project_id'])
+            result.append({**{k:view[k] for k in ('work_session_id','project_id','task_id','state','revision','title','project_title','blocked')},'target_context_revision':window['revision']})
+        result.sort(key=lambda s:s['state']!='active')
+        return {'sessions':result}
+
+    def reclaim(self,request):
+        require(isinstance(request,dict) and set(request)=={'action','window_id','window_token','operation_id','context_revision',
+            'work_session_id','session_revision','target_context_revision','confirmed'},'Invalid saved-work recovery request')
+        require(request['confirmed'] is True,'Obnovení uložené práce musí potvrdit uživatel.')
+        for key in ('operation_id','work_session_id'):uuid(request[key])
+        for key in ('context_revision','session_revision','target_context_revision'):require(type(request[key]) is int and request[key]>=0,'Invalid saved-work revision')
+        body={k:v for k,v in request.items() if k!='window_token'}
+        require(isinstance(request['window_token'],str) and 20<=len(request['window_token'])<=256,'Pracovní okno není ověřené.')
+        token=hmac.new(request['window_token'].encode(),('task-work-reclaim-v1/'+request['operation_id']).encode(),hashlib.sha256).hexdigest()
+        with self._db() as db:
+            source=self._window(db,request)
+            row=db.execute('SELECT doc,window_id FROM sessions WHERE id=? AND user_id=?',(request['work_session_id'],self.user_id)).fetchone()
+            require(row is not None,'Uložená práce není dostupná tomuto uživateli.')
+            selected=json.loads(row['doc']);target_id=row['window_id']
+        self._authorize(selected['project_id'])
+        with self._db(write=True) as db:
+            source=self._window(db,request);prior=self._operation(db,request['operation_id'],request['window_id'])
+            row=db.execute('SELECT doc,secret FROM windows WHERE id=? AND user_id=?',(target_id,self.user_id)).fetchone()
+            require(row is not None and target_id!=request['window_id'],'Použijte obnovení stávajícího okna.')
+            target=json.loads(row['doc'])
+            if prior:
+                op=json.loads(prior['doc'])
+                require(prior['request']==canonical(body) and op.get('record_type')=='task-work-reclaim' and row['secret']==digest(token),'Obnovení již nahradila jiná operace.')
+            else:
+                selected=self._session(db,request['work_session_id'],target_id)
+                require(source['active'] is None and source['pending'] is None and source['revision']==request['context_revision'],'Aktuální okno již pracuje na jiném úkolu.')
+                require(target['revision']==request['target_context_revision'] and selected['revision']==request['session_revision'],'Uložená práce se změnila; načtěte ji znovu.')
+                if target['active']:
+                    active=self._session(db,target['active'],target_id)
+                    active.update(state='paused',revision=active['revision']+1,updated_at=time.time());self._save_session(db,active)
+                target.update(active=None,revision=target['revision']+1)
+                db.execute('UPDATE windows SET secret=?,doc=? WHERE id=?',(digest(token),canonical(target),target_id))
+                db.execute('INSERT INTO operations VALUES(?,?,?,?,?)',(request['operation_id'],self.user_id,request['window_id'],canonical(body),canonical(dict(record_type='task-work-reclaim',state='completed'))))
+        handle=dict(window_id=target_id,window_token=token)
+        return dict(self.status(handle),window=handle,selected_session_id=request['work_session_id'],operation=dict(operation_id=request['operation_id'],state='completed'))
 
     def _restore(self, request):
         """Explicitly reclaim a window; rotate its capability, with lost-reply replay."""
@@ -467,27 +531,29 @@ class TaskWork:
     def _run_owned(self, body, op, handle, checkpoint):
         target = op['target']; pid, task_id = target['project_id'], target['task_id']
         ws = self.projects.workspace(pid, blocking=False)
+        complete=body['action']=='complete'
+        builder=completion_changes if complete else progress_changes
         try:
             self._authorize(pid)
             require(not self.projects.replication(pid) or self.projects.replication(pid)['role'] != 'read-only-replica', 'Projekt je pouze pro čtení.')
             if not op.get('project_result'):
                 base = target['model']['pin']['project_commit']
-                project_request = dict(action='task-work-start', user_id=self.user_id,
+                project_request = dict(action='task-work-complete' if complete else 'task-work-start', user_id=self.user_id,
                     window_id=handle['window_id'], task_id=task_id, expected_head=base,
                     fragment_sha256=target['model']['pin']['fragment_sha256'])
                 def prepare(workspace):
                     head = workspace.git.head(); require(head == base, 'Roadmapa se změnila; obnovte plán.')
                     files = workspace.git.snapshot(head); model = self._pin(files, pid, task_id, head)
                     require(model['pin'] == target['model']['pin'], 'Zadání se změnilo.')
-                    changes = progress_changes(files, pid, head, task_id)
-                    return changes, 'Local workspace author', self.user_id+'@local.invalid', 'Start task '+task_id
+                    changes = builder(files, pid, head, task_id)
+                    return changes, 'Local workspace author', self.user_id+'@local.invalid', ('Complete task ' if complete else 'Start task ')+task_id
                 with ws.journal.lock(shared=True), ws.journal.connect() as db:
                     native = db.execute('SELECT 1 FROM operations WHERE id=?', (op['project_operation_id'],)).fetchone()
                     no_op = False
                     if not native:
                         require(not ws._active(db) and not db.execute('SELECT 1 FROM pending').fetchone(), 'Projekt má nedokončenou operaci.')
                         require(ws.git.head() == base, 'Roadmapa se změnila; obnovte plán.')
-                        no_op = not progress_changes(ws.git.snapshot(base), pid, base, task_id)
+                        no_op = not builder(ws.git.snapshot(base), pid, base, task_id)
                 if no_op:
                     head = base
                 else:
@@ -509,35 +575,44 @@ class TaskWork:
                     return
                 require(window['pending'] == body['operation_id'], 'Pracovní rezervace se změnila.')
                 now = time.time()
-                if op['old_active']:
-                    previous = self._session(db, op['old_active'], handle['window_id'])
-                    revised = (previous['project_id'] == pid and previous['task_id'] == task_id
-                               and previous['definition_signature'] != target['model']['signature'])
-                    previous.update(state='closed' if revised else 'paused', revision=previous['revision']+1, updated_at=now)
-                    if revised:
-                        previous['closed_reason'] = 'definition-updated'
-                    self._save_session(db, previous)
-                if body['action'] == 'resume':
-                    session = self._session(db, op['work_session_id'], handle['window_id'])
-                    session.update(state='active', revision=session['revision']+1, updated_at=now)
+                if complete:
+                    session=self._session(db,op['work_session_id'],handle['window_id'])
+                    session.update(state='closed',closed_reason='task-completed',revision=session['revision']+1,updated_at=now)
+                    self._save_session(db,session)
+                    window.update(active=None if window['active']==session['work_session_id'] else window['active'],pending=None,revision=window['revision']+1)
+                    self._save_window(db,handle,window)
+                    op.update(state='completed',result=dict(work_session_id=session['work_session_id'],project_commit=op['project_result']['project_commit']))
+                    self._save_operation(db,body['operation_id'],op)
                 else:
-                    prior_session = op['old_active']
-                    if prior_session is None:
-                        for prior in db.execute('SELECT doc FROM sessions WHERE window_id=? AND user_id=? ORDER BY rowid DESC', (handle['window_id'], self.user_id)):
-                            candidate = json.loads(prior[0])
-                            if candidate['project_id'] == pid and candidate['task_id'] == task_id:
-                                prior_session = candidate['work_session_id']
-                                break
-                    session = dict(schema_version=1, work_session_id=op['work_session_id'], user_id=self.user_id, node_id=self.node_id,
-                        window_id=handle['window_id'], project_id=pid, task_id=task_id, definition_pin=op['project_result'],
-                        requested_pin=target['model']['pin'], definition_signature=target['model']['signature'],
-                        state='active', revision=1, created_at=now, updated_at=now, closed_reason=None,
-                        selected_checklist=target['selected_checklist'], previous_work_session_id=prior_session)
-                self._save_session(db, session)
-                window.update(active=op['work_session_id'], pending=None, revision=window['revision']+1)
-                self._save_window(db, handle, window)
-                op.update(state='completed', result=dict(work_session_id=op['work_session_id'], project_commit=op['project_result']['project_commit']))
-                self._save_operation(db, body['operation_id'], op)
+                    if op['old_active']:
+                        previous = self._session(db, op['old_active'], handle['window_id'])
+                        revised = (previous['project_id'] == pid and previous['task_id'] == task_id
+                                   and previous['definition_signature'] != target['model']['signature'])
+                        previous.update(state='closed' if revised else 'paused', revision=previous['revision']+1, updated_at=now)
+                        if revised:
+                            previous['closed_reason'] = 'definition-updated'
+                        self._save_session(db, previous)
+                    if body['action'] == 'resume':
+                        session = self._session(db, op['work_session_id'], handle['window_id'])
+                        session.update(state='active', revision=session['revision']+1, updated_at=now)
+                    else:
+                        prior_session = op['old_active']
+                        if prior_session is None:
+                            for prior in db.execute('SELECT doc FROM sessions WHERE window_id=? AND user_id=? ORDER BY rowid DESC', (handle['window_id'], self.user_id)):
+                                candidate = json.loads(prior[0])
+                                if candidate['project_id'] == pid and candidate['task_id'] == task_id:
+                                    prior_session = candidate['work_session_id']
+                                    break
+                        session = dict(schema_version=1, work_session_id=op['work_session_id'], user_id=self.user_id, node_id=self.node_id,
+                            window_id=handle['window_id'], project_id=pid, task_id=task_id, definition_pin=op['project_result'],
+                            requested_pin=target['model']['pin'], definition_signature=target['model']['signature'],
+                            state='active', revision=1, created_at=now, updated_at=now, closed_reason=None,
+                            selected_checklist=target['selected_checklist'], previous_work_session_id=prior_session)
+                    self._save_session(db, session)
+                    window.update(active=op['work_session_id'], pending=None, revision=window['revision']+1)
+                    self._save_window(db, handle, window)
+                    op.update(state='completed', result=dict(work_session_id=op['work_session_id'], project_commit=op['project_result']['project_commit']))
+                    self._save_operation(db, body['operation_id'], op)
                 checkpoint('task-work-before-finalize')
             checkpoint('task-work-after-finalize')
         except ValueError as exc:

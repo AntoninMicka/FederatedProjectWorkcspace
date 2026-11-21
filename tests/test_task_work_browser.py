@@ -39,3 +39,19 @@ class TaskWorkBrowserTests(unittest.TestCase):
             cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=80)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('task record browser OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_backend_restart_fresh_profile_recovers_saved_task_and_human_completes_it(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/task_work_restart_smoke.py')],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=80)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('task work restart and completion browser OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_roadmap_records_and_exact_current_outputs_without_claiming_work_context(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/task_record_roadmap_smoke.py')],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=80)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('roadmap task records browser OK',result.stdout)

@@ -27,20 +27,25 @@ try:
    2:"openTaskPlan().then(()=>{showTaskPlanDetail(taskPlanProjection.nodes.find(n=>n.id==='TASK-A'));document.querySelector('[data-task-work-start=\"TASK-A\"]').click()})",
    3:'openArtifactEditor({id:'+json.dumps(doc)+',kind:"document"}).then(()=>{artifactEditorForm.elements.body.value="# Saved inventory";artifactEditorForm.dispatchEvent(new Event("input",{bubbles:true}));window.draftPrepared=true;})',
    4:'saveArtifactEditor({navigate:false}).then(value=>window.saved=value)',
+   5:"openTaskPlan().then(()=>showTaskPlanDetail(taskPlanProjection.nodes.find(n=>n.id==='TASK-A')))",
+   6:"[...document.querySelectorAll('#plan-detail [data-task-record] button')].find(b=>b.textContent==='Původní verze').click()",
+
   }
   checks={
    0:"typeof taskWorkActivityHeaders==='function'&&document.body.dataset.runtime==='desktop'",
    1:'window.opened&&activeProject',
    2:"!taskWorkBusy&&taskWorkView?.active_session_id",
    3:"window.draftPrepared&&artifactEditorDirty&&document.querySelector('#task-work-related-list').children.length===0",
-   4:"window.saved&&!taskWorkBusy&&document.querySelector('#task-work-related-list').textContent.includes('Uložení dokumentu')&&document.querySelector('#task-work-related-list').textContent.includes('Commit')&&!document.querySelector('#task-work-related-list').textContent.includes('Saved inventory')&&taskWorkView.sessions.find(s=>s.work_session_id===taskWorkView.active_session_id).activities.length===1",
+   4:"window.saved&&!taskWorkBusy&&document.querySelector('#task-work-related-list').textContent.includes('Uložení dokumentu')&&document.querySelector('#task-work-related-list').textContent.includes('Commit')&&!document.querySelector('#task-work-related-list').textContent.includes('Saved inventory')&&taskWorkView.sessions.find(s=>s.work_session_id===taskWorkView.active_session_id).activities.length===1&&document.querySelector('#task-record-list').textContent.includes('Automaticky zaznamenáno')&&taskWorkView.sessions.find(s=>s.work_session_id===taskWorkView.active_session_id).task_records.length===1",
+   5:"document.querySelectorAll('#plan-detail [data-task-record]').length===1&&document.querySelector('#plan-detail').textContent.includes('Automaticky zaznamenáno')&&document.querySelector('#plan-detail [data-task-record]').textContent.includes('Inventory')&&!taskWorkView.sessions.find(s=>s.work_session_id===taskWorkView.active_session_id).current_task.checked",
+   6:"document.querySelector('#plan-detail [aria-label=\"Náhled výsledku úkolu\"]').textContent.includes('Saved inventory')",
   }
   def received(value):
    global phase,busy
    busy=False
    if value!='ready':return
    phase+=1
-   if phase==5:print('task activity browser OK',flush=True);app.exit(0);return
+   if phase==7:print('task activity browser OK',flush=True);app.exit(0);return
    page.runJavaScript(commands[phase])
   def poll():
    global busy

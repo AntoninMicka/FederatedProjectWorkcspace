@@ -12,12 +12,15 @@ TASK_WORK_HTML = '''<button id="task-work-panel-toggle" type="button" aria-contr
 <button id="task-work-resume" type="button">Pokračovat</button>
 <button id="task-work-switch" type="button">Vybrat jiný úkol</button>
 <button id="task-work-close" type="button">Ukončit relaci</button>
+<button id="task-work-complete" type="button">Dokončit úkol</button>
 <button id="task-work-propose" type="button">Navrhnout dokončení</button>
 <button id="task-work-refresh" type="button">Obnovit kontext</button>
 <button id="task-work-recover" type="button">Dokončit obnovu</button>
 <button id="task-work-cancel" type="button">Zrušit zahájení</button>
 <button id="task-work-restore" type="button">Obnovit pracovní okno</button>
 </div>
+<p id="task-work-completion-hint"></p><button id="task-work-open-definition" type="button" hidden>Otevřít zadání úkolu</button>
+<div id="task-work-saved" hidden><label for="task-work-saved-session">Uložená práce z předchozích oken</label><select id="task-work-saved-session"></select><button id="task-work-saved-resume" type="button">Obnovit a pokračovat</button><button id="task-work-history-refresh" type="button">Načíst uloženou práci</button></div>
 <div id="task-work-details" aria-label="Zadání a průběh zobrazené relace"></div>
 <section class="task-work-related" aria-labelledby="task-work-related-title"><h3 id="task-work-related-title">Činnosti a výstupy</h3><p id="task-work-related-empty">K této relaci zatím nejsou připojené činnosti ani výstupy.</p><ul id="task-work-related-list"></ul></section>
 <div id="task-record-editor"></div><section id="task-record-list" aria-label="Potvrzené záznamy úkolu"></section><section id="task-record-preview" aria-label="Náhled připnutého výsledku" aria-live="polite"></section>
@@ -63,12 +66,12 @@ function readTaskWorkStorage(key){try{return JSON.parse(sessionStorage.getItem(k
 let taskWorkPrevious=readTaskWorkStorage(taskWorkStorageKey),taskWorkRestoreAttempt=readTaskWorkStorage(taskWorkRestoreKey);
 let taskWorkPanelOpen=true,taskWorkPanelReturnFocus=null,taskWorkChecklistFocus=null;
 const taskWorkPanelNarrow=window.matchMedia('(max-width:1050px)');
-let taskWorkInertRestore=null,taskWorkPanelExternalState='';
+let taskWorkInertRestore=null,taskWorkPanelExternalState='',taskWorkSavedSessions=[],taskWorkHistoryLoading=false,taskWorkHistoryGeneration=0;
 function storeTaskWorkHandle(handle){taskWorkHandle={window_id:handle.window_id,window_token:handle.window_token};try{sessionStorage.setItem(taskWorkStorageKey,JSON.stringify(taskWorkHandle));}catch{taskWorkMessage='Pracovní okno nelze uložit pro obnovení po reloadu.';}}
 function selectedTaskWorkSession(){return taskWorkView?.sessions.find(s=>s.work_session_id===taskWorkSelection);}
 function renderTaskWork(){
  const root=document.querySelector('#task-work-controls'),select=document.querySelector('#task-work-session');
- root.hidden=!taskWorkHandle&&!taskWorkPrevious;
+ root.hidden=!taskWorkHandle&&!taskWorkPrevious&&!taskWorkSavedSessions.length;
  const sessions=taskWorkView?.sessions||[],active=sessions.find(s=>s.work_session_id===taskWorkView?.active_session_id);
  if(!sessions.some(s=>s.work_session_id===taskWorkSelection))taskWorkSelection=active?.work_session_id||sessions[0]?.work_session_id||null;
  select.replaceChildren();
@@ -76,7 +79,16 @@ function renderTaskWork(){
  for(const session of sessions){const option=document.createElement('option');option.value=session.work_session_id;option.textContent=`${session.task_id} · ${session.title||'Nedostupné zadání'} · ${states[session.state]||session.state}`;select.append(option);}
  select.value=taskWorkSelection||'';select.disabled=taskWorkBusy||!sessions.length;
  const selected=selectedTaskWorkSession(),pending=taskWorkView?.pending;
- document.querySelector('#task-work-status').textContent=taskWorkMessage||(pending?'Zahájení čeká na obnovu.':active?`Pracuji na ${active.task_id} · ${active.title||'Nedostupné zadání'}${active.blocked?' · '+active.blocked:''}`:taskWorkHandle?'Žádný aktivní úkol.':'Je dostupné předchozí pracovní okno. Obnovení je pozastaví a vyžádá nové pokračování.');
+ const saved=document.querySelector('#task-work-saved'),savedSelect=document.querySelector('#task-work-saved-session'),priorSaved=savedSelect.value;
+ saved.hidden=!taskWorkSavedSessions.length||!!active||!!pending; savedSelect.replaceChildren();
+ for(const item of taskWorkSavedSessions){const option=document.createElement('option');option.value=item.work_session_id;option.textContent=`${item.project_title} · ${item.task_id} · ${item.title} · ${states[item.state]}`;savedSelect.append(option);}
+ if(taskWorkSavedSessions.some(s=>s.work_session_id===priorSaved))savedSelect.value=priorSaved;
+ savedSelect.disabled=taskWorkBusy;document.querySelector('#task-work-saved-resume').disabled=taskWorkBusy;
+ const task=selected?.current_task,unchecked=task?.checklist?.some(point=>!point.checked);
+ const completionReason=task&&!task.checked?(unchecked?'Nejprve potvrďte zbývající body checklistu v zadání úkolu.':!task.completion_ready?'Dokončení vyžaduje potvrzené dokončení všech závislostí.':''):'';
+ document.querySelector('#task-work-completion-hint').textContent=completionReason;document.querySelector('#task-work-open-definition').hidden=!completionReason;document.querySelector('#task-work-open-definition').disabled=taskWorkBusy||!taskWorkHandle;
+ document.querySelector('#task-work-complete').disabled=taskWorkBusy||!taskWorkHandle||!!pending||!selected||!!selected.blocked||!!task?.checked||!!completionReason;
+ document.querySelector('#task-work-status').textContent=taskWorkMessage||(pending?'Zahájení čeká na obnovu.':active?`Pracuji na ${active.task_id} · ${active.title||'Nedostupné zadání'}${active.blocked?' · '+active.blocked:''}`:taskWorkHandle?'Žádný aktivní úkol.':taskWorkPrevious?'Je dostupné předchozí pracovní okno. Obnovení je pozastaví a vyžádá nové pokračování.':taskWorkSavedSessions.length?'Je dostupná uložená práce. Vyberte úkol a pokračujte.':'Žádný aktivní úkol.');
  document.querySelector('#task-work-pause').disabled=taskWorkBusy||!!pending||!selected||selected.state!=='active';
  document.querySelector('#task-work-resume').disabled=taskWorkBusy||!!pending||!selected||selected.state!=='paused'||!!active||!!selected.blocked;
  document.querySelector('#task-work-close').disabled=taskWorkBusy||!!pending||!selected||selected.state==='closed';
@@ -116,7 +128,7 @@ async function restoreTaskWorkWindow(){
    sessionStorage.setItem(taskWorkRestoreKey,JSON.stringify(taskWorkRestoreAttempt));
   }
   const result=await projectRequest('/v1/task-work',taskWorkRestoreAttempt);
-  storeTaskWorkHandle(result.window);taskWorkView=result;taskWorkPrevious=null;taskWorkRestoreAttempt=null;
+  storeTaskWorkHandle(result.window);taskWorkView=result;if(result.selected_session_id)taskWorkSelection=result.selected_session_id;taskWorkPrevious=null;taskWorkRestoreAttempt=null;
   try{sessionStorage.removeItem(taskWorkRestoreKey);}catch{}
   taskWorkMessage='Pracovní okno obnoveno. Vyberte relaci a použijte Pokračovat.';return true;
  }catch(error){taskWorkMessage=error.message+' Opakování obnovy použije původní operaci.';return false;}
@@ -135,7 +147,7 @@ async function sendTaskWork(request){
   const result=await projectRequest('/v1/task-work',request,120000);taskWorkView=result;
   if(result.operation?.state!=='completed')throw Error(result.operation?.error||'Operace vyžaduje obnovu.');
   if(result.active_session_id&&['start','switch','resume','recover'].includes(request.action))taskWorkSelection=result.active_session_id;
-  taskWorkMessage=request.action==='propose-completion'?'Návrh uložen k pracovní relaci. Dokončení úkolu se nezměnilo.':'';
+  taskWorkMessage=request.action==='complete'?'Úkol byl dokončen a pracovní relace ukončena.':request.action==='propose-completion'?'Návrh uložen k pracovní relaci. Dokončení úkolu se nezměnilo.':'';
   taskWorkAttempt=null;await taskWorkRefreshPlan();
  }catch(error){
   taskWorkMessage=error.message+' Obnovte kontext před další změnou.';
@@ -170,6 +182,10 @@ function appendTaskWorkStart(detail,item){
 async function changeTaskWork(action){
  const session=selectedTaskWorkSession();if(taskWorkBusy||!taskWorkView||!session)return;
  const request={action,...taskWorkHandle,operation_id:crypto.randomUUID(),context_revision:taskWorkView.context_revision,work_session_id:session.work_session_id,session_revision:session.revision};
+ if(action==='complete'){
+  if(!window.confirm(`Dokončit úkol ${session.task_id}? Potvrdíte tím jeho splnění ve Workspace a ukončíte tuto pracovní relaci. Závislosti i checklist se ověří; žádné body se automaticky nezaškrtnou.`))return;
+  Object.assign(request,{expected_head:session.validated_head,confirmed:true});
+ }
  if(action==='close'&&!window.confirm('Ukončit pracovní relaci? Dokončení úkolu se tím nepotvrzuje.'))return;
  if(action==='propose-completion'){
   const comment=window.prompt('Komentář k návrhu dokončení (úkol se nezaškrtne):',taskWorkProposalDraft);if(comment===null)return;
@@ -177,7 +193,7 @@ async function changeTaskWork(action){
  }
  await sendTaskWork(request);
 }
-function taskWorkPanelAvailable(){return Boolean(taskWorkHandle||taskWorkPrevious)&&(document.body.dataset.runtime==='desktop'||document.body.classList.contains('authenticated'))&&!document.body.classList.contains('presenter-active');}
+function taskWorkPanelAvailable(){return Boolean(taskWorkHandle||taskWorkPrevious||taskWorkSavedSessions.length)&&(document.body.dataset.runtime==='desktop'||document.body.classList.contains('authenticated'))&&!document.body.classList.contains('presenter-active');}
 function syncTaskWorkPanel(){
  const root=document.querySelector('#task-work-controls'),toggle=document.querySelector('#task-work-panel-toggle'),backdrop=document.querySelector('#task-work-panel-backdrop');
  const available=taskWorkPanelAvailable(),open=available&&taskWorkPanelOpen,modal=open&&taskWorkPanelNarrow.matches;
@@ -252,16 +268,16 @@ async function selectTaskWorkChecklist(index){
  const session=selectedTaskWorkSession();if(taskWorkBusy||!session||!taskWorkView||session.blocked)return;
  await sendTaskWork({action:'select-checklist',...taskWorkHandle,operation_id:crypto.randomUUID(),context_revision:taskWorkView.context_revision,work_session_id:session.work_session_id,session_revision:session.revision,selected_checklist:index});
 }
-async function navigateTaskWorkPlan(){
+async function navigateTaskWorkPlan(showDefinition=false){
  const session=selectedTaskWorkSession();if(taskWorkBusy||!session||!await canLeaveWorkspaceEditors())return;
  if(activeProject?.id!==session.project_id)await openRegisteredProject(session.project_id);
  if(activeProject?.id!==session.project_id)return;
- if(await openTaskPlan()){setTaskWorkPanel(false);document.querySelector('#plan-graph').focus();}
+ if(await openTaskPlan()){if(showDefinition){const task=taskPlanProjection.nodes.find(n=>n.id===session.task_id);if(task)showTaskPlanDetail(task);}setTaskWorkPanel(false);document.querySelector('#plan-graph').focus();}
 }
 document.querySelector('#task-work-panel-toggle').addEventListener('click',()=>setTaskWorkPanel(true));
 document.querySelector('#task-work-panel-collapse').addEventListener('click',()=>setTaskWorkPanel(false));
 document.querySelector('#task-work-panel-backdrop').addEventListener('click',()=>setTaskWorkPanel(false));
-document.querySelector('#task-work-switch').addEventListener('click',navigateTaskWorkPlan);
+document.querySelector('#task-work-switch').addEventListener('click',()=>navigateTaskWorkPlan());
 document.querySelector('#task-work-controls').addEventListener('keydown',event=>{
  if(!taskWorkPanelNarrow.matches||!taskWorkPanelOpen||event.key!=='Tab')return;
  const focusable=[...event.currentTarget.querySelectorAll('button:not([disabled]),select:not([disabled]),input:not([disabled]),textarea:not([disabled]),summary,[href]')].filter(el=>el.getClientRects().length&&!el.closest('[hidden]'));
@@ -270,16 +286,44 @@ document.querySelector('#task-work-controls').addEventListener('keydown',event=>
 });
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&taskWorkPanelNarrow.matches&&taskWorkPanelOpen&&!document.querySelector('#task-work-controls').hidden&&!document.querySelector('dialog[open]')){event.preventDefault();event.stopPropagation();setTaskWorkPanel(false);}},true);
 taskWorkPanelNarrow.addEventListener('change',syncTaskWorkPanel);
-new MutationObserver(()=>{const key=[document.body.dataset.runtime,document.body.classList.contains('authenticated'),document.body.classList.contains('presenter-active')].join('|');if(key!==taskWorkPanelExternalState){taskWorkPanelExternalState=key;syncTaskWorkPanel();}}).observe(document.body,{attributes:true,attributeFilter:['class','data-runtime']});
+new MutationObserver(()=>{const key=[document.body.dataset.runtime,document.body.classList.contains('authenticated'),document.body.classList.contains('presenter-active')].join('|');if(key!==taskWorkPanelExternalState){taskWorkPanelExternalState=key;taskWorkHistoryGeneration++;if(document.body.dataset.runtime!=='desktop'&&!document.body.classList.contains('authenticated')){taskWorkSavedSessions=[];taskWorkView=null;}syncTaskWorkPanel();if((document.body.dataset.runtime==='desktop'||document.body.classList.contains('authenticated'))&&!taskWorkHandle&&!taskWorkPrevious)loadSavedTaskWork();}}).observe(document.body,{attributes:true,attributeFilter:['class','data-runtime']});
 
 document.querySelector('#task-work-session').addEventListener('change',event=>{taskWorkSelection=event.target.value;renderTaskWork();});
-for(const [id,action] of [['pause','pause'],['resume','resume'],['close','close'],['propose','propose-completion']])document.querySelector('#task-work-'+id).addEventListener('click',()=>changeTaskWork(action));
+for(const [id,action] of [['pause','pause'],['resume','resume'],['close','close'],['complete','complete'],['propose','propose-completion']])document.querySelector('#task-work-'+id).addEventListener('click',()=>changeTaskWork(action));
 document.querySelector('#task-work-refresh').addEventListener('click',refreshTaskWork);
 document.querySelector('#task-work-restore').addEventListener('click',restoreTaskWorkWindow);
 for(const [id,action] of [['recover','recover'],['cancel','cancel']])document.querySelector('#task-work-'+id).addEventListener('click',()=>{if(taskWorkView?.pending)sendTaskWork({action,...taskWorkHandle,operation_id:taskWorkView.pending.operation_id});});
+async function loadSavedTaskWork(){
+ if(taskWorkHistoryLoading||taskWorkBusy)return;taskWorkHistoryLoading=true;const generation=taskWorkHistoryGeneration;
+ try{const result=await projectRequest('/v1/task-work',{action:'history'});if(generation===taskWorkHistoryGeneration)taskWorkSavedSessions=result.sessions;}
+ catch(error){if(generation===taskWorkHistoryGeneration)taskWorkMessage=error.message;}
+ finally{taskWorkHistoryLoading=false;renderTaskWork();if(generation!==taskWorkHistoryGeneration&&(document.body.dataset.runtime==='desktop'||document.body.classList.contains('authenticated'))&&!taskWorkHandle&&!taskWorkPrevious)queueMicrotask(loadSavedTaskWork);}
+}
+async function recoverSavedTaskWork(){
+ if(taskWorkBusy)return;
+ const selected=taskWorkSavedSessions.find(s=>s.work_session_id===document.querySelector('#task-work-saved-session').value);if(!selected)return;
+ if(!window.confirm(`Obnovit uloženou práci na ${selected.task_id}? Původní okno ztratí ovládání této relace. Uložené činnosti a výsledky zůstanou zachovány.`))return;
+ taskWorkBusy=true;renderTaskWork();let resume=null;
+ try{
+  if(!taskWorkHandle){storeTaskWorkHandle(await projectRequest('/v1/task-work',{action:'window'}));taskWorkView=await projectRequest('/v1/task-work',{action:'status',...taskWorkHandle});}
+  if(!taskWorkRestoreAttempt){taskWorkRestoreAttempt={action:'reclaim',...taskWorkHandle,operation_id:crypto.randomUUID(),context_revision:taskWorkView.context_revision,work_session_id:selected.work_session_id,session_revision:selected.revision,target_context_revision:selected.target_context_revision,confirmed:true};sessionStorage.setItem(taskWorkRestoreKey,JSON.stringify(taskWorkRestoreAttempt));}
+  const result=await projectRequest('/v1/task-work',taskWorkRestoreAttempt);
+  storeTaskWorkHandle(result.window);taskWorkView=result;taskWorkSelection=result.selected_session_id;taskWorkPrevious=null;taskWorkRestoreAttempt=null;sessionStorage.removeItem(taskWorkRestoreKey);taskWorkSavedSessions=[];
+  const session=selectedTaskWorkSession();
+  if(session?.state==='paused'&&!session.blocked&&!result.pending)resume={action:'resume',...taskWorkHandle,operation_id:crypto.randomUUID(),context_revision:result.context_revision,work_session_id:session.work_session_id,session_revision:session.revision};
+  taskWorkMessage='Uložená práce obnovena.';
+ }catch(error){taskWorkMessage=error.message+' Obnovení lze zopakovat pod původním ID.';}
+ finally{taskWorkBusy=false;renderTaskWork();}
+ if(resume)await sendTaskWork(resume);
+ if(!activeProject&&taskWorkHandle&&!taskWorkView?.pending)await openRegisteredProject(selected.project_id);
+}
+document.querySelector('#task-work-open-definition').addEventListener('click',()=>navigateTaskWorkPlan(true));
+document.querySelector('#task-work-saved-resume').addEventListener('click',recoverSavedTaskWork);
+document.querySelector('#task-work-history-refresh').addEventListener('click',async()=>{taskWorkRestoreAttempt=null;try{sessionStorage.removeItem(taskWorkRestoreKey);}catch{}await loadSavedTaskWork();});
 window.addEventListener('focus',()=>{if(taskWorkHandle&&!taskWorkBusy)refreshTaskWork();});
 renderTaskWork();
 '''
 
 from spikes.task_record_ui import JS as TASK_RECORD_JS
 TASK_WORK_JS = TASK_WORK_JS.rsplit('renderTaskWork();',1)[0] + TASK_RECORD_JS + '\nrenderTaskWork();\n'
+TASK_WORK_JS += "\nqueueMicrotask(()=>{if((document.body.dataset.runtime==='desktop'||document.body.classList.contains('authenticated'))&&!taskWorkHandle&&!taskWorkPrevious)loadSavedTaskWork();});\n"
