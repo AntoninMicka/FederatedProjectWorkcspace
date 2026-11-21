@@ -236,6 +236,13 @@ class TaskWork:
             if 'current_task' in item:
                 try:
                     item['activities'] = TaskActivities(self).for_session(handle, item['work_session_id'])
+                    from spikes.task_records import TaskRecords
+                    item['task_records'],item['record_pending'] = TaskRecords(self).for_session(handle,item['work_session_id'])
+                    original=self._pin(self.projects.repository(item['project_id']).snapshot(item['definition_pin']['project_commit']),item['project_id'],item['task_id'],item['definition_pin']['project_commit'])
+                    item['record_checklist']=[point['text'] for point in original['task']['checklist']]
+                    from spikes.task_record_schema import PRIVACY
+                    _,_,_,entities=TaskRecords(self).snapshot(item['project_id'])
+                    item['record_minimum_privacy']=max(['project']+[meta['privacy'] for meta in entities.values()],key=PRIVACY.get)
                 except AccessDenied:
                     replacement = self._projection(next(s for s in sessions if s['work_session_id'] == item['work_session_id']))
                     item.clear(); item.update(replacement)

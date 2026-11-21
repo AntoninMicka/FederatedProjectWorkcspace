@@ -9000,6 +9000,9 @@ class DesktopHandler(Handler):
             try:
                 from spikes.administration import AccessDenied
                 service = self.task_work_service()
+                if isinstance(request,dict) and str(request.get('action','')).startswith('record-'):
+                    from spikes.task_records import TaskRecords
+                    return self.reply(200,TaskRecords(service).execute(request))
                 return self.reply(200, service.execute(request))
             except AccessDenied as exc:
                 return self.reply(403, {'error': str(exc)})

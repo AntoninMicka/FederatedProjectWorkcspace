@@ -147,7 +147,7 @@ náhled odebrání referencí i `progress` review. Čistý sdílený výpočet o
 zahájení od potvrzení dokončení. **Reject:** vlastní pravidla jen v IDE,
 automatické zaškrtávání vyřešených předpokladů a druhé úložiště stavů.
 
-Pracovní kontext úkolu (`PLAN-TASK-WORK-01-A/B/C`, implementované řezy)
+Pracovní kontext úkolu (`PLAN-TASK-WORK-01-A/B/C/D`, implementované řezy)
 **reuse/adaptuje** `Projects.plan_view`, `dependency_start_blockers`, scoped
 `PlanItems`, nativní Workspace journal a stejnou sémantiku progress zápisu
 původně v `ide_bridge_panel._changes`. Lokální identita okna/relace je oddělená od
@@ -161,6 +161,11 @@ Evidence C adaptuje tabulku operací TaskWork pomocí typovaných záznamů,
 stabilních event UUID a původních nativních receiptů. Sdílený HTTP wrapper
 připojuje kontext před účinkem; NDJSON zachovává jeden event pro celý běh.
 Nový writer artefaktů, druhý run journal a ukládání kopií textů jsou odmítnuté.
+Záznamy D adaptují tentýž lokální store, operation flock, sidecar artefakty,
+`Workspace.transact` a omezený `artifact_preview`. Samostatný JSON kontrakt
+používá existující snapshot/transition validaci a zachovává historii revizí.
+Nový projektový writer, kopie výsledků do roadmapy a druhý task store jsou
+odmítnuté. Nabídka zůstává oddělená od potvrzeného Git artefaktu i task acceptance.
 Pro E/F se přebírají ContextBuilder, chat/run journal a TaskOutcomes jako
 autority jednotlivých účinků. **Reject:** druhý plán/stav dokončení, falešná
 IDE session pro přímý UI start, připsání pozdního výsledku aktuálně vybranému

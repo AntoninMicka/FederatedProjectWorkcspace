@@ -46,7 +46,7 @@ ROUTES = {
 }
 NAMESPACE = UUID('b977b3ea-958e-4d4a-a661-a23ede4ea6ce')
 # No text, filenames, URLs, prompt, manifest content or credential copies.
-REF_FIELDS = {'definition_path', 'script_path', 'sha256', 'staged_sha256', 'expected_head', 'base_head', 'project_id', 'artifact_id', 'commit_id', 'revision', 'thread_id',
+REF_FIELDS = {'definition_path', 'script_path', 'sha256', 'staged_sha256', 'expected_head', 'base_head', 'project_commit', 'project_id', 'artifact_id', 'commit_id', 'revision', 'thread_id',
               'turn_id', 'run_id', 'search_id', 'approval_id', 'message_id', 'assistant_message_id', 'manifest_id'}
 
 
@@ -70,6 +70,21 @@ def references(value):
                 visit(child, depth + 1)
     visit(value, 0)
     return found
+
+
+def privacy_of(value):
+    levels={'public':0,'project':1,'confidential':2,'local-only':3}
+    found=['project']
+    def visit(item,depth):
+        if depth>6:return
+        if isinstance(item,dict):
+            if isinstance(item.get('privacy'),str) and item['privacy'] in levels:found.append(item['privacy'])
+            for key,child in item.items():
+                if key not in {'body','content','prompt','text','response','outcome'}:visit(child,depth+1)
+        elif isinstance(item,list):
+            for child in item[:100]:visit(child,depth+1)
+    visit(value,0)
+    return max(found,key=levels.get)
 
 
 class TaskActivities:
@@ -107,7 +122,7 @@ class TaskActivities:
         doc = dict(record_type='task-activity', event_id=identifier, operation_id=native,
                    context=context, request_sha256=fingerprint, target_project_id=pid, kind=ROUTES[route], route=route,
                    author_id=self.work.user_id, created_at=time.time(), updated_at=time.time(),
-                   outcome='unknown', local_capture=not self.work.network, request_references=references(request), result_references=[])
+                   outcome='unknown', privacy=privacy_of(request), local_capture=not self.work.network, request_references=references(request), result_references=[])
         # Recheck CAS under the writer: a simultaneous task switch cannot redirect dispatch.
         with self.work._db(write=True) as db:
             window = self.work._window(db, handle)
@@ -143,6 +158,10 @@ class TaskActivities:
             # A rejected concurrent/replayed attempt cannot erase a confirmed native receipt.
             if doc['outcome'] == 'succeeded':
                 return
+            if doc['outcome']!=outcome or doc['result_references']!=references(payload):
+                from spikes.task_records import offer
+                state=offer(doc);doc['offer']=dict(state,revision=state['revision']+1)
+            doc['privacy']=privacy_of([{'privacy':doc.get('privacy','local-only')},payload])
             doc.update(outcome=outcome, response_code=code, updated_at=time.time(),
                        result_references=references(payload))
             self.work._save_operation(db, identifier, doc)
@@ -185,5 +204,7 @@ class TaskActivities:
             # disclosure is available, web never projects desktop-captured receipts.
             if self.work.network and doc.get('local_capture', True):
                 continue
+            from spikes.task_records import offer
+            doc['offer']=offer(doc)
             result.append(doc)
         return result

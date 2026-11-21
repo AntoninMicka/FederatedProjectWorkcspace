@@ -173,3 +173,29 @@ class TaskWorkHTTPTests(unittest.TestCase):
         code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
         self.assertEqual(code,200,data);self.assertEqual(json.loads(data)['commit_id'],committed)
         current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')
+
+    def test_reviewed_record_http_preserves_pin_history_privacy_and_human_acceptance(self):
+        handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
+        pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))
+        view=self.post(dict(handle,action='start',operation_id=str(uuid4()),context_revision=0,
+            project_id=self.pid,task_id='TASK-A',selected_checklist=None,**pin));sid=view['active_session_id']
+        artifact=str(uuid4());request=dict(operation_id=str(uuid4()),document=dict(project_id=self.pid,artifact_id=artifact,
+            base_head=view['sessions'][0]['validated_head'],title='Inventory',body='# Original inventory\n',new=True))
+        code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers={'X-FPW-Task-Work':json.dumps(dict(handle,context_revision=view['context_revision']))})
+        self.assertEqual(code,200,data)
+        state=self.post(dict(handle,action='status'));session=state['sessions'][0];event=session['activities'][0]
+        publish=dict(handle,action='record-publish',operation_id=str(uuid4()),work_session_id=sid,
+            event_ids=[event['event_id']],offer_revisions=[event['offer']['revision']],comment='Verified inventory',
+            selected_checklist=None,expected_head=session['validated_head'],privacy='project')
+        confirmed=self.post(publish);record=confirmed['sessions'][0]['task_records'][0]
+        self.assertEqual(record['revisions'][0]['comment'],'Verified inventory')
+        self.assertFalse(confirmed['sessions'][0]['current_task']['checked'])
+        self.assertEqual(self.post(publish)['operation']['result'],confirmed['operation']['result'])
+        result=self.post(dict(handle,action='record-output',project_id=self.pid,record_id=record['id'],output_index=0,version='original',page=1))
+        self.assertIn('Original inventory',result['text'])
+        amended=self.post(dict(handle,action='record-amend',operation_id=str(uuid4()),work_session_id=sid,
+            record_id=record['id'],record_revision=1,comment='Corrected note',selected_checklist=None,expected_head=record['validated_head']))
+        history=amended['sessions'][0]['task_records'][0]['revisions']
+        self.assertEqual([r['comment'] for r in history],['Verified inventory','Corrected note'])
+        other={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
+        self.post(dict(publish,**other),code=422)

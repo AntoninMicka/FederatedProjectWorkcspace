@@ -6,9 +6,9 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0088 — Pracovní kontext zahájeného úkolu ve Workspace
 
 - Datum: 2026-11-21.
-- Stav: **kontrakt s implementovanými řezy A/B/C a cíleným ověřením** pro
-  `PLAN-TASK-WORK-01-A/B/C`. Zdroj obsahuje službu relací, pravý panel, evidenci činností a testy.
-  Akceptace celé dávky a přijetí komentovaných záznamů
+- Stav: **kontrakt s implementovanými řezy A/B/C/D a cíleným ověřením** pro
+  `PLAN-TASK-WORK-01-A/B/C/D`. Zdroj obsahuje službu relací, pravý panel, evidenci činností a testy.
+  Akceptace celé dávky a navazující LLM/recovery integrace
   zůstávají samostatné navazující části; tento stav je neprohlašuje za hotové.
 - Autorita zadání: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,
   snapshot `c7b61487c2ef842c272fa45ce74216c0b9667dea`, exportní revize
@@ -26,7 +26,7 @@ položky roadmapy, pořadí fronty ani posledního projektu.
 
 Kontrakt stanovuje model a lifecycle pro navazující implementaci. Pravý panel
 řeší B, zachycení činností C, komentované záznamy D, LLM integraci E a společnou
-persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Implementace A/B/C není důkazem splnění celé dávky.
+persistenci/recovery F. Akceptační scénáře celé dávky drží Workspace. Implementace A/B/C/D není důkazem splnění celé dávky.
 
 ## Reuse a současný stav
 
@@ -241,7 +241,7 @@ panelu nebo test mock služby nenahradí crash/souběhové testy a oba živé
 uživatelské scénáře celé dávky.
 
 
-## Implementační řezy A/B/C
+## Implementační řezy A/B/C/D
 
 Zadání implementace bylo ověřeno nad snapshotem
 `5e715a57728a0483fb784b090e03f7cbaeea47ef`, exportní revizí
@@ -284,7 +284,7 @@ ani lidská akceptace běžného profilu.
 Návrh dokončení je v A lokální položka relace se stavem pending. Nepublikuje se
 zatím jako komentovaný Git artefakt ani nabídka jinému reviewerovi a nepoužívá
 se jako důkaz akceptace tasku. To patří do D/F. Evidence nativních souborových/chat/LLM činností je implementovaná v C;
-komentované připojení výstupů a vstupní kontext modelu patří do D/E. Žádný LLM účinek není součástí startu.
+komentované připojení výstupů je implementované v D a vstupní kontext modelu patří do E. Žádný LLM účinek není součástí startu.
 
 
 Řez B navazuje na zdrojový HEAD `94ab3ac` při stejném ověřeném exportu výše.
@@ -306,7 +306,7 @@ Navazuje na zdrojový HEAD `0776ba5` při stejném ověřeném exportu výše.
 operací: `record_type=task-activity` odděluje záznamy od lifecycle intentů.
 Event UUID má vlastní namespace a otisk nativního requestu; credential ani
 request body se neukládají. Verze schématu 1 i umístění DB zůstávají stejné.
-Nejde o projektový index ani nový plán. Publikované projektové záznamy budou D/F.
+Nejde o projektový index ani nový plán. Publikované projektové záznamy doplňuje D.
 
 Sdílený HTTP dispatcher zachytí ověřený kontext před nativní akcí; webový
 import používá stejný wrapper se svými původními kontrolami autora/privacy.
@@ -337,3 +337,55 @@ finálního zápisu evidence: nativní úspěch zůstane úspěchem a evidence u
 dokud explicitní původní replay nedoplní receipt. Qt ověřuje, že dirty draft
 nevytvoří event a uložený dokument se sám zobrazí v panelu. Test streamu používá
 řízenou náhradu modelového volání; nedokládá placený ani živý Ollama běh.
+
+
+## Implementační řez D
+
+Zdrojový základ je `b95eb7a`. Při zahájení byl ověřen stejný export jako u C;
+následná kontrola živého kanonického projektu má HEAD
+`a1555ecfc6a78888e3f3af4590bbcb8a68692645`: B completed, C in progress,
+D planned a startable. Export byl zadržen doručeným reportem C; tento stav
+ani explicitní pokračování uživatele nejsou automatickým review reportu.
+Oprava oddělení obnovy fronty a review je popsána v ADR 0062.
+
+`TaskRecords` adaptuje TaskWork operations, operation flock a nativní
+`Workspace.transact`. Nabídky jsou CAS lokální metadata eventů. Potvrzení
+seskupených událostí rezervuje eventy a připraví neměnný intent bez credential.
+Eventy mají shodný původní projekt/task/session/definition pin; jednotlivé
+checklistové kontexty zůstávají v provenance. Komentář má vlastní volitelný
+bod původního checklistu. Unknown/failed událost nedokládá souborový výsledek.
+
+Projektový artefakt s běžnou sidecar obsahuje `task-work.json` a schéma
+`fpw-task-record-v1`. `task_record_schema` je součástí validace snapshotu
+a sémantického přechodu: jedno event ID patří nejvýše jednomu záznamu,
+provenance a výsledkové piny jsou neměnné, opravy připojují revize a nepřepisují
+historii. Není zde stav splnění úkolu. Privacy nesmí být nižší než původní
+podklady, výsledky a evidence; staré události bez klasifikace jsou local-only.
+Náhled původní verze kontroluje nynější oprávnění, historii commitu i SHA-256
+přesných bajtů. Nynější verze může být odstraněná, aniž zmizí původní pin.
+
+| Hranice zápisu D | Recovery |
+| --- | --- |
+| Před lokálním intent commitem | Projekt ani nabídka se nezmění; request lze znovu explicitně odeslat. |
+| Po intentu před native writerem | Rezervace eventů brání dvojímu potvrzení; recover použije původní obsah, cancel pouze při absenci nativní operace. |
+| Nativní prepared až index | Původní Workspace journal a stejný deterministický operation ID. |
+| Po commitu/indexu před lokální finalizací | Recover dohledá původní receipt a potvrdí lokální nabídku bez druhého commitu. |
+| Po lokální finalizaci, ztracená odpověď | Stejný request/ID vrací původní výsledek. |
+
+Operation flock se drží přes konkrétní publish/recover/cancel, ale SQLite
+transakce se nedrží přes projektový writer ani síť. Změna HEAD nepřebazuje
+připravený záměr. Ztráta oprávnění blokuje čtení/publikaci, neodstraňuje draft
+a nespouští jiný účinek. Události po přepnutí relace zůstávají u původního tasku.
+Cílené důkazy zahrnují skutečné ukončení procesu před intent commitem, po
+intentu, po projektovém commitu a před lokální finalizací; dále CAS, replay,
+seskupení, immutable historii, exact/current/deleted náhled, privacy a HTTPS.
+Qt průchod ověřuje rozepsaný komentář při refreshi, odložení, znovuotevření,
+potvrzení, náhled a opravu při zachování neuloženého editoru.
+
+
+Souborové výsledky D se odvozují z nativního journal receipt a Git diffu
+příslušného commitu, nikoli výčtem vstupních artifact referencí. Tím se zachytí
+i vícesouborový import a nativní publikace s `project_commit` místo `commit_id`.
+Odstraněný artefakt se připne k verzi před odstraněním. C zachovává také
+`project_commit` reference nativních výsledků; samostatný vstupní project pin
+bez uloženého výsledku se za output nepovažuje.

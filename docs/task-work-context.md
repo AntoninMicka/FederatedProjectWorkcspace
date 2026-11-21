@@ -1,6 +1,6 @@
 <!-- SPDX-FileCopyrightText: 2026 Antonín Mička -->
 <!-- SPDX-License-Identifier: MPL-2.0 -->
-# Pracovní kontext úkolu — PLAN-TASK-WORK-01-A/B/C
+# Pracovní kontext úkolu — PLAN-TASK-WORK-01-A/B/C/D
 
 V roadmapě otevřete detail konkrétního nedokončeného úkolu a použijte
 **Zahájit úkol**. Start ověří projektová oprávnění a předpoklady a označí task
@@ -43,13 +43,13 @@ V úzkém okně se otevírá jako dialog s návratem fokusu, klávesou Escape
 a omezením Tab na jeho ovladače. Neuložený editor zůstává zachován; navigace
 používá jeho běžné potvrzení. Prezentační režim panel skryje.
 Po ztrátě oprávnění se vyčistí zadání i checklist. Činnosti ukazují druh, čas, výsledek a dostupný commit; lokální návrhy
-dokončení se zobrazují zvlášť. Komentované přílohy doplní část D.
+dokončení se zobrazují zvlášť. Komentované přílohy nabízí část D níže.
 
 ## Rozsah tohoto řezu
 
 Implementované jsou pracovní relace (A), pravý panel se zadáním/checklistem
-(B) a evidence nativních činností (C). Komentované
-projektové záznamy (D), propojení LLM běhů (E) a jejich společné recovery (F)
+(B), evidence nativních činností (C) a potvrzené komentované záznamy (D).
+Propojení zadání s LLM běhy (E) a společné recovery celé dávky (F)
 zůstávají navazujícími úkoly stejné dávky. Celou dávku tímto nelze akceptovat.
 
 `capture` vrací neměnnou identitu původní relace a jejího zadání pro evidenci C
@@ -85,7 +85,7 @@ připíše původní relaci i po přepnutí či pozastavení.
 Do evidence se nekopírují texty, prompty, tajné hodnoty ani modelové návrhy.
 Čtení znovu ověřuje aktuální práva. Web nezobrazuje lokálně zachycené události
 ani reference do projektu s local-only obsahem; nedostupný podklad se tím
-nezpřístupní. Komentovaný a verzovaný projektový záznam patří do D/F.
+nezpřístupní. Komentovaný a verzovaný projektový záznam zajišťuje D; společné recovery celé dávky patří do F.
 
 Záznam před účinkem je trvale `unknown`. Nativní writer nebo run journal
 zůstává autoritou účinku; před odesláním terminální odpovědi se doplní receipt.
@@ -94,6 +94,39 @@ falešný úspěch. Chyba finalizace evidence nezmění úspěšnou nativní odp
 na chybu vyzývající k opakování. Výslovný replay stejné nativní operace může doplnit původní
 receipt bez druhého commitu; evidence nic sama neopakuje. Neznámý placený
 běh se řeší původním run journalem, nikdy novým automatickým pokusem.
+
+## Přidání komentovaného záznamu
+
+V pravém panelu pod **Přidat záznam k úkolu** vyberte jednu nebo více
+činností stejné původní relace. Upravte předvyplněný komentář, případný bod
+původního checklistu a privacy. **Uložit rozepsané**, **Odložit** a **Odmítnout**
+uchovají nabídku lokálně bez projektového commitu. **Otevřít nabídku** ji
+znovu načte; pravidelné obnovení panelu neotevírá žádný modal a nepřepisuje
+právě psaný komentář. Neuložený editor podkladu zůstává samostatný.
+
+**Potvrdit a připojit** vytvoří verzovaný projektový artefakt s komentářem,
+původními event/operation/run referencemi a připnutými souborovými výsledky.
+Výsledky určuje nativní receipt a změněné artefakty v jeho Git commitu;
+vstupní podklady se samy nestávají výsledky.
+Obsah inventáře či analýzy se do roadmapy nekopíruje. Bod checklistu zůstává
+pouze kontextem; jeho splnění, akceptace úkolu i dávky vyžadují samostatné kroky.
+Záznam failed/unknown události neobsahuje smyšlený uložený výsledek.
+
+Potvrzené záznamy jsou chronologické. **Původní verze** otevře přesné uložené
+bajty a commit výsledku, **Aktuální artefakt** jeho nynější verzi. Při odstranění
+artefaktu zůstává původní verze dostupná z historie. Náhled je uvnitř panelu,
+bez uložení nebo zavření rozpracovaného editoru. Změna oprávnění náhled vyčistí.
+**Upravit komentář** přidá revizi a zachová předchozí komentáře i původní piny.
+
+Zápis čekající na obnovu nabízí **Obnovit zápis** pod původním operation ID.
+**Zrušit před zápisem** je dostupné pouze před zahájením nativního writeru;
+po commitu se dokončí původní receipt, nevytváří se nový záznam. Při změně HEAD
+zachovejte text a použijte **Obnovit nabídku**; připravený intent se nepřebazuje.
+
+Projektový formát je `artifacts/<record-id>/task-work.json` s běžnou metadata
+sidecar a schématem `fpw-task-record-v1`. Validator kontroluje unikátní eventy,
+privacy a historii oprav; sémantický přechod nepovoluje přepsání provenance
+ani odstranění dřívějších revizí. Není to druhé úložiště stavu úkolů.
 
 ## API, úložiště a ověření
 
@@ -113,6 +146,11 @@ ani do request payloadů lokálního journalu; v DB je pouze jeho hash.
 | `propose-completion` | Pole lokální změny relace a textový `comment` (max. 4 000 znaků). |
 | `recover`, `cancel` | Původní `operation_id`; request se načte z lokálního intentu. |
 | `restore` | `operation_id`, `context_revision`; vrátí novou window capability a pauzu. |
+| `record-offer` | `operation_id`, `work_session_id`, `event_ids`, `offer_revisions`, `comment`, `selected_checklist`, `state` (`draft`/`deferred`/`dismissed`). |
+| `record-publish` | Pole nabídky bez `state`, navíc `expected_head`, `privacy`. |
+| `record-amend` | `operation_id`, `work_session_id`, `record_id`, `record_revision`, `comment`, `selected_checklist`, `expected_head`. |
+| `record-recover`, `record-cancel` | Původní `operation_id`; obnoví nebo před nativním zápisem zruší uložený intent. |
+| `record-output` | `project_id`, `record_id`, `output_index`, `version` (`original`/`current`), `page`; readonly náhled. |
 | `capture` | `context_revision`; vyžaduje aktivní, aktuálně oprávněnou relaci bez pending záměru. |
 
 Mutace vrací také `operation.state`; replay odmítnuté operace se nesmí
@@ -134,7 +172,7 @@ výsledek. Nemění Git ani index a nepřidává migraci či další crash bound
 Cílené ověření:
 
 ```sh
-python3 -m unittest tests.test_task_activities tests.test_task_work tests.test_task_work_http tests.test_ide_bridge_panel -v
+python3 -m unittest tests.test_task_records tests.test_task_activities tests.test_task_work tests.test_task_work_http tests.test_ide_bridge_panel -v
 M0_DESKTOP_TEST=1 QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS='--no-sandbox --disable-gpu' python3 -m unittest tests.test_task_work_browser -v
 ```
 

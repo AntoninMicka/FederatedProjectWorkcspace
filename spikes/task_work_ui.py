@@ -20,6 +20,7 @@ TASK_WORK_HTML = '''<button id="task-work-panel-toggle" type="button" aria-contr
 </div>
 <div id="task-work-details" aria-label="Zadání a průběh zobrazené relace"></div>
 <section class="task-work-related" aria-labelledby="task-work-related-title"><h3 id="task-work-related-title">Činnosti a výstupy</h3><p id="task-work-related-empty">K této relaci zatím nejsou připojené činnosti ani výstupy.</p><ul id="task-work-related-list"></ul></section>
+<div id="task-record-editor"></div><section id="task-record-list" aria-label="Potvrzené záznamy úkolu"></section><section id="task-record-preview" aria-label="Náhled připnutého výsledku" aria-live="polite"></section>
 <section id="task-work-proposals" aria-labelledby="task-work-proposals-title" hidden><h3 id="task-work-proposals-title">Návrhy dokončení</h3><ul id="task-work-proposal-list"></ul></section>
 </section>'''
 
@@ -37,6 +38,7 @@ TASK_WORK_CSS = '''
 #task-work-checklist{min-width:0;margin:14px 0 0;padding:10px;border:1px solid #c8d5dc;border-radius:8px}
 #task-work-checklist label{display:flex;align-items:flex-start;gap:7px;padding:5px 0;margin:0;overflow-wrap:anywhere}#task-work-checklist input{flex:none;margin:3px 0 0}
 #task-work-checklist small{display:block;font-size:12px;margin:4px 0 7px;color:#627183}.task-work-progress{width:100%;height:10px;accent-color:#176b60}
+#task-record-editor textarea{box-sizing:border-box;width:100%;resize:vertical}#task-record-editor button,#task-record-list button,#task-record-preview button{margin:4px 4px 4px 0;padding:7px 9px;font-size:12px}#task-record-list article{border-top:1px solid #c8d5dc;padding:12px 0}#task-record-preview img{max-width:100%}#task-record-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .task-work-related ul,#task-work-proposals ul{padding-left:18px}#task-work-proposal-list li{padding:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:1050px){#task-work-controls{position:fixed;inset:0 0 0 auto;width:min(88vw,360px);max-width:100vw;height:100vh;height:100dvh;box-shadow:-8px 0 30px #07131f44;padding:14px}#task-work-controls:focus{outline:none}}
 @media print{#task-work-controls,#task-work-panel-toggle,#task-work-panel-backdrop{display:none!important}}
@@ -85,7 +87,7 @@ function renderTaskWork(){
  for(const id of ['task-work-recover','task-work-cancel']){document.getElementById(id).hidden=!pending;document.getElementById(id).disabled=taskWorkBusy;}
  for(const button of document.querySelectorAll('[data-task-work-start]'))button.disabled=taskWorkBusy||!!pending||!!activeProject?.readOnly||button.dataset.blocked==='true';
  document.querySelector('#task-work-switch').disabled=taskWorkBusy||!!pending||!selected;
- renderTaskWorkDetails();syncTaskWorkPanel();
+ renderTaskWorkDetails();renderTaskRecords();syncTaskWorkPanel();
 }
 async function taskWorkRefreshPlan(){
  const project=activeProject;if(!project)return;
@@ -262,7 +264,7 @@ document.querySelector('#task-work-panel-backdrop').addEventListener('click',()=
 document.querySelector('#task-work-switch').addEventListener('click',navigateTaskWorkPlan);
 document.querySelector('#task-work-controls').addEventListener('keydown',event=>{
  if(!taskWorkPanelNarrow.matches||!taskWorkPanelOpen||event.key!=='Tab')return;
- const focusable=[...event.currentTarget.querySelectorAll('button:not([disabled]),select:not([disabled]),input:not([disabled]),[href]')].filter(el=>el.getClientRects().length&&!el.closest('[hidden]'));
+ const focusable=[...event.currentTarget.querySelectorAll('button:not([disabled]),select:not([disabled]),input:not([disabled]),textarea:not([disabled]),summary,[href]')].filter(el=>el.getClientRects().length&&!el.closest('[hidden]'));
  const first=focusable[0],last=focusable.at(-1);if(!first){event.preventDefault();return;}
  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
 });
@@ -278,3 +280,6 @@ for(const [id,action] of [['recover','recover'],['cancel','cancel']])document.qu
 window.addEventListener('focus',()=>{if(taskWorkHandle&&!taskWorkBusy)refreshTaskWork();});
 renderTaskWork();
 '''
+
+from spikes.task_record_ui import JS as TASK_RECORD_JS
+TASK_WORK_JS = TASK_WORK_JS.rsplit('renderTaskWork();',1)[0] + TASK_RECORD_JS + '\nrenderTaskWork();\n'

@@ -133,7 +133,7 @@ def publish(service, actor, request, *, checkpoint=lambda stage: None, automatic
                     and parent and not parent['revoked'], 'Mapping changed before publication')
             require(not any(json.loads(r[0]).get('state') == 'prepared' for r in db.execute('SELECT record FROM reviews WHERE session=?', (record['session_id'],))), 'Finish prepared review before publishing')
             if automatic:
-                require(not (reason := waiting_review(db, record['session_id'], graph)), reason)
+                require(not (reason := waiting_review(db, record['session_id'], graph, prepared_only=True)), reason)
                 db.execute('UPDATE sessions SET record=? WHERE id=?', (canonical(record), record['session_id']))
                 checkpoint('queue-snapshot-updated')
             require(git.head() == head, 'Project changed before queue publication')
@@ -183,7 +183,7 @@ class StaleReport(ValidationError):
 STALE_BLOCKERS = ('Packet superseded', 'Working queue changed; publish a new packet')
 
 
-def waiting_review(db, session_id, graph):
+def waiting_review(db, session_id, graph, *, prepared_only=False):
     completed = {n['id'] for n in graph['nodes'] if n['checked']}
     for message, review in db.execute('SELECT m.record,r.record FROM messages m LEFT JOIN reviews r '
                                     'ON r.session=m.session AND r.id=m.id WHERE m.session=?', (session_id,)):
@@ -193,7 +193,7 @@ def waiting_review(db, session_id, graph):
         if review and review['state'] != 'completed':
             return ReviewWait('Queue refresh waits for human review: '
                     f"{message['task_id']} / {message['message_id']} (prepared review; resume it in Workspace)")
-        if (message['kind'] in {'completed', 'progress'} and not review
+        if (not prepared_only and message['kind'] in {'completed', 'progress'} and not review
                 and message['task_id'] not in completed):
             return ReviewWait('Queue refresh waits for human review: '
                     f"{message['task_id']} / {message['message_id']} (review the report in Workspace)")
@@ -221,7 +221,7 @@ def refresh(service, record, *, checkpoint=lambda stage: None):
                 and state['task_ids'] == [t['id'] for t in packet['manifest']['tasks']]):
             return record, '; '.join(value['blockers'])
     with service.database() as db:
-        if reason := waiting_review(db, record['session_id'], view['plan']):
+        if reason := waiting_review(db, record['session_id'], view['plan'], prepared_only=True):
             return record, reason
     try:
         publish(service, service.connection_actor(record), dict(project_id=record['project_id'], session_id=record['session_id'],
@@ -235,14 +235,15 @@ def refresh(service, record, *, checkpoint=lambda stage: None):
 
 
 def lineage(service, record, packet, view):
-    """Advance only through this packet's exact accepted native receipts, never arbitrary HEADs."""
+    """Advance through exact accepted native receipts of this mapping, never arbitrary HEADs."""
     with service.database() as db:
         rows = list(db.execute('SELECT m.record,r.record FROM messages m JOIN reviews r ON r.session=m.session AND r.id=m.id '
                                'WHERE m.session=?', (record['session_id'],)))
     reviews = []
     for raw_message, raw_review in rows:
         message, review = json.loads(raw_message), json.loads(raw_review)
-        if message.get('queue_packet_id') == packet['packet_id'] and review.get('state') == 'completed' and review.get('outcome') == 'accepted':
+        if message.get('queue_packet_id') and review.get('state') == 'completed' and review.get('outcome') == 'accepted':
+            require(load(service,record['session_id'],message['queue_packet_id']) is not None,'Original accepted packet is unavailable')
             reviews.append((message, review))
     head = packet['manifest']['project_head']; accepted = set()
     workspace = service.projects.workspace(record['project_id'])
@@ -269,7 +270,7 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
     blockers = list(packet['manifest']['blockers'])
     if not record.get('export_documents'): blockers.append('Document export is disabled')
     if not current: blockers.append('Roadmap changed outside accepted packet results')
-    if latest['packet_id'] != packet['packet_id']: blockers.append('Packet superseded')
+    if check_queue and latest['packet_id'] != packet['packet_id']: blockers.append('Packet superseded')
     if check_queue:
         queue = TaskQueue(service.node, network=service.network)
         with queue._lock(record['project_id'], packet['manifest']['owner_id']) as path:
@@ -277,10 +278,13 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
         if state['revision'] != packet['manifest']['queue_revision'] or state['task_ids'] != [t['id'] for t in packet['manifest']['tasks']]:
             blockers.append('Working queue changed; publish a new packet')
     nodes = {n['id']: n for n in view['plan']['nodes']}
+    pending_reports = {}
     reported = {'agent': set(), 'user': set()}
     with service.database() as db:
-        for r in db.execute('SELECT record FROM messages WHERE session=?', (record['session_id'],)):
-            message = json.loads(r[0])
+        for r in db.execute('SELECT m.record,r.record FROM messages m LEFT JOIN reviews r ON r.session=m.session AND r.id=m.id WHERE m.session=?', (record['session_id'],)):
+            message = json.loads(r[0]); review = json.loads(r[1]) if r[1] else None
+            if message['kind'] in {'completed','progress'} and (not review or review.get('state')!='completed'):
+                pending_reports.setdefault(message['task_id'],[]).append({k:message[k] for k in ('message_id','kind','queue_packet_id') if k in message})
             if message['kind'] == 'completed' and message.get('queue_packet_id') == packet['packet_id'] and message.get('reported_by') in reported:
                 reported[message['reported_by']].add(message['task_id'])
     held = set(packet['manifest'].get('held_task_ids', ()))
@@ -296,7 +300,7 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
         open_children = [] if n is None else [c['id'] for c in nodes.values()
                                                if c['parent_id'] == identifier and not c['checked']]
         ready = bool(not blockers and not blocked_by)
-        return dict(id=identifier, title=original['title'], type=original.get('type'),
+        return dict(id=identifier, title=original['title'], type=original.get('type'),pending_review=pending_reports.get(identifier,[]),
                     status=n.get('status') if n else None, status_mode=n.get('status_mode') if n else None,
                     status_counts=n.get('status_counts', {}) if n else {},
                     parent_id=original.get('parent_id'),
@@ -390,7 +394,7 @@ def queue_projection(node, project_id, actor_id, view):
     return None
 
 
-def completion_reports(node, project_id, actor_id, *, per_task=5):
+def completion_reports(node, project_id, actor_id, *, per_task=5, view=None):
     """Read completion messages per task, newest first; review state stays in the bridge."""
     from spikes.ide_bridge import IdeBridge
     service = IdeBridge(node, network=True)
@@ -398,16 +402,28 @@ def completion_reports(node, project_id, actor_id, *, per_task=5):
     with service.database() as db:
         rows = list(db.execute('SELECT m.record,s.record,r.record FROM messages m JOIN sessions s ON s.id=m.session '
                                'LEFT JOIN reviews r ON r.session=m.session AND r.id=m.id ORDER BY m.rowid DESC LIMIT 500'))
-    reports = {}
+    reports = {}; assessments={}
     for raw_message, raw_record, raw_review in rows:
         message, record = json.loads(raw_message), json.loads(raw_record)
         if (record['project_id'] != project_id or message['kind'] not in {'completed', 'progress'}
                 or owner(record, node) != actor_id):
             continue
         review = json.loads(raw_review) if raw_review else None
+        reviewable=False
+        if review is None and message.get('queue_packet_id'):
+            key=(record['session_id'],message['queue_packet_id'])
+            try:
+                authorize(service,record)
+                if key not in assessments:
+                    pinned_packet=load(service,*key)
+                    require(pinned_packet is not None,'Original report packet is unavailable')
+                    assessments[key]=(pinned_packet,status(service,record,pinned_packet,view=view,check_queue=False))
+                pinned_packet,value=assessments[key];item=scoped_item(value,message['task_id'])
+                reviewable=not value['blockers'] and message['revision']==pinned_packet['manifest']['revision'] and item['startable' if message['kind']=='progress' else 'eligible']
+            except (ValueError,OSError):pass
         entries = reports.setdefault(message['task_id'], [])
         if len(entries) < per_task:
-            entries.append(dict(message_id=message['message_id'], task_id=message['task_id'],
+            entries.append(dict(reviewable=bool(reviewable),message_id=message['message_id'], task_id=message['task_id'],
                                 session_id=record['session_id'], kind=message['kind'], body=message['body'][:2000],
                                 reported_by=message.get('reported_by'), queue_packet_id=message.get('queue_packet_id'),
                                 evidence=message.get('evidence'), repository_commit=message['repository_commit'],
@@ -422,7 +438,6 @@ def completion_reports(node, project_id, actor_id, *, per_task=5):
 def validate_prepared(service, record, message):
     if not message.get('queue_packet_id'): return
     packet = load(service, record['session_id'], message['queue_packet_id'])
-    latest = load(service, record['session_id'])
-    require(packet and latest['packet_id'] == packet['packet_id'], 'Queue packet superseded before native write')
+    require(packet is not None and message['revision']==packet['manifest']['revision'], 'Original queue packet is unavailable')
     # A durable report refers to its immutable packet, not the mutable working
     # selection. Native HEAD/CAS and task prerequisites are checked by the writer.

@@ -360,8 +360,11 @@ def review(service, actor, request, *, checkpoint=lambda stage: None):
             authorize(service, record)
             from spikes.ide_queue import validate_completion
             validate_completion(service, record, message, current_head=view['commit_id'])
+            from spikes.ide_queue import load as load_packet
+            packet=load_packet(service,record['session_id'],message['queue_packet_id']) if message.get('queue_packet_id') else None
+            review_revision=packet['manifest']['revision'] if packet else record['snapshot']['revision']
             require((message.get('queue_packet_id') or record['snapshot']['commit_id'] == view['commit_id'])
-                    and message['revision'] == record['snapshot']['revision'],
+                    and message['revision'] == review_revision,
                     'Stale proposal must be reviewed again')
             require(_changes(workspace.git.snapshot(view['commit_id']), request['project_id'],
                              view['commit_id'], message), 'Proposal produces no project change')
