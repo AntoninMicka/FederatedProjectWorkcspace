@@ -149,5 +149,35 @@ class SharingFacadeTests(unittest.TestCase):
         state = CrossReferences(self.node).project_state(self.child, extra_ids=(fork['preview']['new_id'],))
         self.assertEqual(state['artifacts'][fork['preview']['new_id']]['title'], 'Zadání podprojektu')
 
+    def test_synced_descriptor_without_registered_source_is_inaccessible_and_grants_nothing(self):
+        import json
+        share_id, ref = self.share_and_attach()
+        self.sharing.reference_view(self.child, ref)  # Leaves a verified cache entry behind.
+        node = json.loads(self.node.read_bytes())
+        node['projects'] = [p for p in node['projects'] if p['project_id'] != self.parent]
+        self.node.write_bytes(json.dumps(node).encode())  # As on a node that only received the child.
+        view = self.sharing.reference_view(self.child, ref)
+        self.assertEqual((view['state'], view['preview'], view['source_title']), ('source-inaccessible', None, None))
+        self.assertEqual(view['source']['project_id'], self.parent)
+        overview = self.sharing.overview(self.child)
+        self.assertEqual((overview['candidates'], overview['offers']), ([dict(id=self.hidden, title='Skrytý projekt')], []))
+        with self.assertRaises(AccessDenied):
+            self.sharing.fork_preview(self.child, ref)
+
+    def test_offline_source_is_stale_with_cache_and_unavailable_without_it(self):
+        share_id, ref = self.share_and_attach()
+        root = Path(self.temp.name) / 'parent'; moved = root.with_name('parent-offline')
+        self.sharing.reference_view(self.child, ref)
+        root.rename(moved); self.addCleanup(lambda: moved.rename(root) if moved.exists() else None)
+        view = self.sharing.reference_view(self.child, ref)
+        self.assertEqual((view['state'], view['privacy_unverified'], view['preview']['text']), ('offline-stale', True, 'Zadání v1.\n'))
+        self.assertIsNotNone(view['verified_at'])
+        with self.assertRaises((OSError, ValueError)):
+            self.sharing.fork_preview(self.child, ref)
+        for path in CrossReferences(self.node).cache.glob('*.json'):
+            path.unlink()
+        view = self.sharing.reference_view(self.child, ref)
+        self.assertEqual((view['state'], view['preview'], view['privacy_unverified']), ('source-offline', None, True))
+
 
 if __name__ == '__main__': unittest.main()

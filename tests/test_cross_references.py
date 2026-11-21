@@ -507,5 +507,101 @@ CrossReferences(sys.argv[1]).write(request,sys.argv[3],digest(encoded(request)),
         self.assertEqual(fresh['reference']['source'],newer)
         self.assertEqual(base64.b64decode(json.loads(self.context()[1].payload)['inputs'][0]['content_b64']),b'New source revision\n')
 
+    def offline(self):
+        root=self.source_ws.git.root;offline=root.with_name('source-offline');root.rename(offline)
+        self.addCleanup(lambda:offline.rename(root) if offline.exists() else None)
+        return lambda:offline.rename(root)
+
+    def test_known_revocation_is_not_bypassed_by_any_users_offline_cache(self):
+        member,change,uid=self.user()
+        member.view(self.target,self.reference_id);self.service.view(self.target,self.reference_id)
+        value=self.service.revoke_preview(self.source,self.share_id)
+        self.service.revoke(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        with self.assertRaises(ReferenceUnavailable):self.service.view(self.target,self.reference_id)
+        self.offline()
+        for service in (self.service,member):  # Node owner included; the member never saw it live.
+            with self.assertRaises(ReferenceUnavailable) as caught:service.view(self.target,self.reference_id)
+            self.assertEqual(caught.exception.state,'share-revoked')
+
+    def test_known_deletion_is_not_bypassed_by_offline_cache(self):
+        member,change,uid=self.user();member.view(self.target,self.reference_id)
+        self.service.view(self.target,self.reference_id)
+        self.artifacts.delete(dict(project_id=self.source,artifact_id=self.source_id,base_head=self.source_ws.git.head()),str(uuid4()))
+        with self.assertRaises(ReferenceUnavailable):member.view(self.target,self.reference_id)
+        self.offline()
+        with self.assertRaisesRegex(ReferenceUnavailable,'deleted'):self.service.view(self.target,self.reference_id)
+        with self.assertRaises((OSError,ValueError)):self.context()  # Context never falls back to a cache.
+
+    def test_target_specific_loss_does_not_hide_other_targets_and_live_success_clears_it(self):
+        self.service.view(self.target,self.reference_id)
+        self.service.forget(self.pin,self.service.local(self.target,self.reference_id)[1]['share'],'not-shared',str(uuid4()))
+        self.service.view(self.target,self.reference_id)  # Other target only: cache is rebuilt and stays usable.
+        share=self.service.local(self.target,self.reference_id)[1]['share']
+        self.service.forget(self.pin,share,'not-shared',self.target)
+        restore=self.offline()
+        with self.assertRaisesRegex(ReferenceUnavailable,'not-shared'):self.service.view(self.target,self.reference_id)
+        restore();self.assertEqual(self.service.view(self.target,self.reference_id)['state'],'current')
+        self.offline();self.assertEqual(self.service.view(self.target,self.reference_id)['state'],'offline-stale')
+
+    def run_crashing(self, method, preview, stage, operation):
+        script='''
+import json,os,sys
+from spikes.cross_references import CrossReferences
+from spikes.reporting_schema import encoded,digest
+request=json.load(open(sys.argv[2]))
+def checkpoint(stage):
+ if stage==sys.argv[4]:os._exit(73)
+getattr(CrossReferences(sys.argv[1]),sys.argv[5])(request,sys.argv[3],digest(encoded(request)),confirm=True,checkpoint=checkpoint)
+'''
+        path=self.base/f'{method}.json';path.write_bytes(encoded(preview))
+        child=subprocess.run([sys.executable,'-c',script,str(self.node),str(path),operation,stage,method],
+                             capture_output=True,text=True,timeout=25)
+        self.assertEqual(child.returncode,73,child.stderr)
+
+    def test_real_process_crashes_of_share_revoke_and_detach_recover_without_duplicates(self):
+        stages=['prepared','files-applied','before-ref','committed','completed']
+        cases=[('share_write',self.source_ws,lambda:self.service.share_preview(self.source,str(uuid4()),self.source_id,[self.target],'Pád')),
+               ('revoke',self.source_ws,lambda:self.service.revoke_preview(self.source,self.share())),
+               ('detach',self.target_ws,lambda:self.attach_new())]
+        for method,ws,make in cases:
+            for stage in stages:
+                with self.subTest(method=method,stage=stage):
+                    preview=make();operation=str(uuid4())
+                    count=int(ws.git.run('rev-list','--count','HEAD').stdout)
+                    self.run_crashing(method,preview,stage,operation)
+                    ws.recover()  # Lost response: the same confirmation replays the receipt.
+                    result=getattr(self.service,method)(preview,operation,digest(encoded(preview)),confirm=True)
+                    self.assertEqual(result['commit_id'],ws.git.head())
+                    self.assertEqual(int(ws.git.run('rev-list','--count','HEAD').stdout),count+1)
+                    self.assertEqual(ws.git.run('status','--porcelain').stdout,'')
+
+    def attach_new(self):
+        ref=str(uuid4());value=self.service.preview(self.target,ref,self.service.source_pin(self.source,self.source_id),
+                                                     'Další odkaz',share_id=self.share_id,reason_text='Pád')
+        self.service.write(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        return self.service.detach_preview(self.target,ref)
+
+    def test_attach_crash_after_source_read_completes_and_later_revocation_wins(self):
+        ref=str(uuid4());value=self.service.preview(self.target,ref,self.pin,'Po pádu',share_id=self.share_id,reason_text='Pád')
+        operation=str(uuid4());self.run_crashing('write',value,'prepared',operation)
+        revoke=self.service.revoke_preview(self.source,self.share_id)
+        self.service.revoke(revoke,str(uuid4()),digest(encoded(revoke)),confirm=True)
+        self.target_ws.recover()  # The journal holds the approved descriptor; no new source read is needed.
+        receipt=self.service.write(value,operation,digest(encoded(value)),confirm=True)
+        self.assertEqual(receipt['commit_id'],self.target_ws.git.head())
+        self.assertIn(ref,references(*self.target_files()))
+        with self.assertRaisesRegex(ReferenceUnavailable,'share-revoked'):self.service.view(self.target,ref)
+
+    def test_project_export_carries_only_the_descriptor_never_source_bytes(self):
+        from spikes.git_transfer import export_bundle
+        payload,head,count=export_bundle(self.node,self.target,frozenset({'public','project','confidential'}))
+        bundle=self.base/'target.bundle';bundle.write_bytes(payload);clone=self.base/'clone'
+        subprocess.run(['git','clone','-q',str(bundle),str(clone)],check=True,capture_output=True)
+        revs=subprocess.run(['git','-C',str(clone),'rev-list','--all'],check=True,capture_output=True,text=True).stdout.split()
+        found=subprocess.run(['git','-C',str(clone),'grep','-l','Přesné původní bajty',*revs],capture_output=True,text=True)
+        self.assertEqual(found.stdout,'')
+        names=subprocess.run(['git','-C',str(clone),'ls-tree','-r','--name-only',head],capture_output=True,text=True,check=True).stdout
+        self.assertIn(f'artifacts/{self.reference_id}/reference.json',names)
+
 
 if __name__=='__main__':unittest.main()

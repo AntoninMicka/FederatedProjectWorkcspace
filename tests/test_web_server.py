@@ -1447,7 +1447,10 @@ class WebTests(unittest.TestCase):
         self.assertEqual(([], []), (view['candidates'], view['offers']))
         self.assertNotIn('Zdroj sdílení', json.dumps(view, ensure_ascii=False))
         code, value = post('/v1/sharing/reference/view', dict(project_id=target, reference_id=ref), key)
-        self.assertEqual(403, code, value)
+        # XREF-02-D: the target descriptor stays visible; the source grants nothing to this member.
+        self.assertEqual((200, 'source-inaccessible', None, None),
+                         (code, value['state'], value['preview'], value['source_title']), value)
+        self.assertNotIn('Text zadání', json.dumps(value, ensure_ascii=False))
         # XREF-02-C: the member edits only the target, so source revocation is refused.
         self.assertEqual(403, post('/v1/sharing/revoke/preview', dict(project_id=source, share_id=share_id), key)[0])
         artifacts.save(dict(project_id=source, artifact_id=artifact, base_head=Projects(node).open(source)['commit_id'],

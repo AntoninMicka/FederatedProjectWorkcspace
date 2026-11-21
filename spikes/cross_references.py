@@ -122,6 +122,15 @@ class CrossReferences:
         return record
 
     def live(self, source, *, boundary='same-node', share=None, target=None):
+        try:
+            result = self._live(source, boundary=boundary, share=share, target=target)
+        except ReferenceUnavailable as exc:
+            self.forget(source, share, exc.state, target)  # Known loss of access outlives any cached copy.
+            raise
+        self._clear_tombstones(source, share, target)
+        return result
+
+    def _live(self, source, *, boundary='same-node', share=None, target=None):
         pin(source)
         access = self.authorize(source['project_id'])
         ws = self.artifacts.workspace(source['project_id']); ws.repair_index()
@@ -161,18 +170,50 @@ class CrossReferences:
         require(not any(overlap(self.cache, Path(p[key])) for p in node['projects'] for key in ('root','state_dir')),
                 'Reference cache must remain outside project Git and authoritative state')
 
-    def save_cache(self, source, result):
+    def _tombstone_path(self, source, share_id=None, target=None):
+        # Not user-scoped: a revocation or deletion seen by anyone binds every cache on this node.
+        return self.cache / ('gone-' + digest(encoded(dict(project_id=source['project_id'],
+            artifact_id=source['artifact_id'], share_id=share_id, target=target))) + '.json')
+
+    def _tombstones(self, source, share, target):
+        paths = [self._tombstone_path(source)]  # deleted: every pin and share of the artifact
+        if share:
+            paths += [self._tombstone_path(source, share['share_id']),  # share-revoked: every target
+                      self._tombstone_path(source, share['share_id'], target)]  # not-shared: this target
+        return paths
+
+    def forget(self, source, share, state, target=None):
+        """Record a known deletion/revocation and drop this user's cached bytes for the pin."""
         self.cache_location()
-        self.cache.mkdir(mode=0o700, exist_ok=True); directory(self.cache, private=True)
+        if state != 'invalid-pin':  # An unreadable pin concerns only that pin's cache entry.
+            share_id = share['share_id'] if share and state in {'share-revoked', 'not-shared'} else None
+            self._write_private(self._tombstone_path(source, share_id, target if state == 'not-shared' else None),
+                                encoded(dict(schema='fpw-reference-tombstone-v1', state=state, at=self.now())))
+        try:
+            os.unlink(self._cache_path(source))
+        except FileNotFoundError:
+            pass
+
+    def _clear_tombstones(self, source, share, target):
+        for path in self._tombstones(source, share, target):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+
+    def save_cache(self, source, result):
         value = dict(schema='fpw-reference-cache-v1', user_id=self.user_id, source=source,
                      raw=base64.b64encode(result['raw']).decode(), metadata=result['metadata'],
                      privacy=result['privacy'], source_head=result['source_head'],
                      access_revision=result['access_revision'], verified_at=self.now())
-        destination = self._cache_path(source)
+        self.cache_location(); self._write_private(self._cache_path(source), encoded(value))
+
+    def _write_private(self, destination, data):
+        self.cache.mkdir(mode=0o700, exist_ok=True); directory(self.cache, private=True)
         fd, temporary = tempfile.mkstemp(prefix='.reference-', dir=self.cache)
         try:
             with os.fdopen(fd, 'wb') as stream:
-                stream.write(encoded(value)); stream.flush(); os.fsync(stream.fileno())
+                stream.write(data); stream.flush(); os.fsync(stream.fileno())
             os.replace(temporary, destination)
             fd = os.open(self.cache, os.O_RDONLY | os.O_DIRECTORY)
             try: os.fsync(fd)
@@ -180,10 +221,14 @@ class CrossReferences:
         finally:
             if os.path.exists(temporary): os.unlink(temporary)
 
-    def load_cache(self, source):
+    def load_cache(self, source, share=None, target=None):
         self.cache_location()
         access = self.authorize(source['project_id'])
         directory(self.cache, private=True)
+        for path in self._tombstones(source, share, target):
+            if os.path.lexists(path):
+                state = parse_json(path.read_bytes(), maximum=4096).get('state', 'deleted')
+                raise ReferenceUnavailable(state if state in {'deleted', 'share-revoked', 'not-shared', 'invalid-pin'} else 'deleted')
         fd = os.open(self._cache_path(source), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd, 'rb') as stream:
             info = os.fstat(stream.fileno())
@@ -238,7 +283,7 @@ class CrossReferences:
             result = self.live(source, boundary=boundary, share=value.get('share'), target=project_id)
         except (FileNotFoundError, TimeoutError):
             require(offline and boundary == 'same-node', 'Offline reference is display-only on the same node')
-            result = self.load_cache(source); state = 'offline-stale'
+            result = self.load_cache(source, value.get('share'), project_id); state = 'offline-stale'
         else:
             self.save_cache(source, result)
             state = 'newer-available' if result['newer'] else 'current'
@@ -252,7 +297,7 @@ class CrossReferences:
         return dict(project_id=project_id, reference_id=reference_id, commit_id=head, read_only=True,
                     schema=value['schema'], share=value.get('share'), state=state, stale=state == 'offline-stale', privacy_unverified=state == 'offline-stale',
                     source=source, newer=result['newer'], privacy=privacy, title=result['metadata']['title'],
-                    preview=presentation,
+                    preview=presentation, verified_at=result.get('verified_at'),
                     content_b64=base64.b64encode(result['raw']).decode())
 
     def preview(self, project_id, reference_id, source, title, *, update=False, share_id=None, reason_text=None):

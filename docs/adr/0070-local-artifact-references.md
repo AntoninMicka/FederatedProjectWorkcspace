@@ -29,6 +29,9 @@ pending source operace neposkytují fallback do cache. Neregistrovaný zdroj
 se odmítne. Offline cache vyžaduje stále platnou místní autorizaci; při
 nedostupném registrovaném repozitáři smí sloužit jen pro same-node zobrazení
 s `offline-stale` a `privacy_unverified`. Nenahrazuje kontrolu aktuální privacy.
+Zjištěné smazání či ukončení sdílení se od XREF-02-D zapisuje jako náhrobek cache
+platný pro všechny účty uzlu ([ADR 0086](0086-cross-project-artifact-sharing.md)),
+takže pozdější výpadek zdroje už uloženou kopii neodhalí.
 
 SQLite projektový index drží pouze místní deskriptor. Autorizovaný přehled
 resolveru doplní dostupnost bez ukládání cizích bajtů do indexu. ContextBuilder

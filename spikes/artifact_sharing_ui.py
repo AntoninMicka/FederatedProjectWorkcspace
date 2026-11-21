@@ -28,8 +28,8 @@ SHARING_CSS = '''
 .shared-reference-actions{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
 .sidebar-shared-badge{display:inline-block;margin-left:6px;padding:0 6px;border-radius:8px;background:#27455a;color:#cfe3f1;font-size:11px}
 .shared-reference-banner{border:1px solid #9fb9c9;background:#eef5f9;color:#213746;border-radius:10px;padding:10px 12px;margin:0 0 10px}
-.shared-reference-banner[data-state="deleted"],.shared-reference-banner[data-state="share-revoked"],.shared-reference-banner[data-state="not-shared"],.shared-reference-banner[data-state="invalid-pin"]{border-color:#c98f8f;background:#fbf0f0}
-.shared-reference-banner[data-state="offline-stale"],.shared-reference-banner[data-state="newer-available"]{border-color:#d6b56b;background:#fdf7e8}
+.shared-reference-banner[data-state="source-inaccessible"],.shared-reference-banner[data-state="deleted"],.shared-reference-banner[data-state="share-revoked"],.shared-reference-banner[data-state="not-shared"],.shared-reference-banner[data-state="invalid-pin"]{border-color:#c98f8f;background:#fbf0f0}
+.shared-reference-banner[data-state="source-offline"],.shared-reference-banner[data-state="offline-stale"],.shared-reference-banner[data-state="newer-available"]{border-color:#d6b56b;background:#fdf7e8}
 '''
 
 SHARING_JS = r'''
@@ -44,7 +44,9 @@ const SHARED_STATE={current:'Aktuální připnutá revize.',
  deleted:'Zdrojový podklad byl odstraněn. Původní obsah už nelze načíst.',
  'share-revoked':'Sdílení bylo ve zdrojovém projektu ukončeno. Obsah už nelze načíst; dříve vytvořené vlastní kopie zůstávají.',
  'not-shared':'Podklad už není do tohoto projektu sdílený.',
- 'invalid-pin':'Připnutá revize zdroje není dostupná.'};
+ 'invalid-pin':'Připnutá revize zdroje není dostupná.',
+ 'source-offline':'Zdrojový projekt je nedostupný a ověřená uložená kopie neexistuje. Obsah nelze zobrazit.',
+ 'source-inaccessible':'Zdrojový projekt není na tomto uzlu dostupný nebo k němu nemáte oprávnění. Samotný odkaz přístup nepřidává.'};
 let sharingFlow=null;
 function sharingNode(tag,text,cls){const node=document.createElement(tag);if(text!==undefined&&text!==null)node.textContent=text;if(cls)node.className=cls;return node;}
 function sharingList(pairs){const dl=document.createElement('dl');for(const [k,v] of pairs){if(v===undefined||v===null||v==='')continue;dl.append(sharingNode('dt',k),sharingNode('dd',v));}return dl;}
@@ -209,7 +211,8 @@ async function openSharedReference(id){
   const share=view.share||{};
   const provenance=sharingList([['Zdrojový projekt',view.source_title||'nedostupný'],['Podklad ve zdroji',view.source.artifact_id],
    ['Připnutá revize',view.source.commit_id],['Soubor',view.source.path],['SHA-256 obsahu',view.source.sha256],
-   ['Soukromí',SHARING_PRIVACY[view.privacy]||view.privacy],['Důvod použití',share.reason],['Připojil',share.attached_by],['Sdílel',share.originator_id],
+   ['Soukromí',view.privacy_unverified?`${SHARING_PRIVACY[view.privacy]||view.privacy} (neověřeno)`:SHARING_PRIVACY[view.privacy]||view.privacy],
+   ['Naposledy ověřeno',view.state==='offline-stale'?view.verified_at:null],['Důvod použití',share.reason],['Připojil',share.attached_by],['Sdílel',share.originator_id],
    ['Formát reference',view.share?null:'starší reference bez záznamu sdílení']]);
   provenance.className='shared-reference-provenance';previewContent.append(banner,provenance);
   if(!project.readOnly){

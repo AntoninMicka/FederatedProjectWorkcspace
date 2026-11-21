@@ -186,15 +186,27 @@ class ArtifactSharing:
         return self.references.detach(preview, operation_id, sha256, confirm=True)
 
     def reference_view(self, project_id, reference_id):
-        """Read-only pinned view; an unavailable source is a visible state, not an error page."""
+        """Read-only pinned view; an unavailable source is a visible state, not an error page.
+
+        The target descriptor is checked first, so AccessDenied for the target still
+        propagates. A synced descriptor whose source is unregistered or not granted on
+        this node shows only `source-inaccessible`: the pointer itself grants nothing.
+        """
+        head, value, meta = self.references.local(project_id, reference_id)
+        def unavailable(state):
+            return dict(project_id=project_id, reference_id=reference_id, commit_id=head, read_only=True,
+                        schema=value['schema'], share=value.get('share'), state=state, stale=False,
+                        privacy_unverified=state == 'source-offline', source=value['source'], newer=None,
+                        privacy=meta['privacy'], title=meta['title'], preview=None, source_title=None,
+                        verified_at=None)
         try:
             view = self.references.view(project_id, reference_id)
         except ReferenceUnavailable as exc:
-            head, value, meta = self.references.local(project_id, reference_id)
-            return dict(project_id=project_id, reference_id=reference_id, commit_id=head, read_only=True,
-                        schema=value['schema'], share=value.get('share'), state=exc.state, stale=False,
-                        privacy_unverified=False, source=value['source'], newer=None, privacy=meta['privacy'],
-                        title=meta['title'], preview=None, source_title=None)
+            return unavailable(exc.state)
+        except AccessDenied:
+            return unavailable('source-inaccessible')
+        except (FileNotFoundError, TimeoutError):
+            return unavailable('source-offline')  # Source unreachable and no verified cached copy.
         view.pop('content_b64', None)  # The inert preview carries what the UI renders.
         try:
             view['source_title'] = self.references.project_state(view['source']['project_id'])['title']

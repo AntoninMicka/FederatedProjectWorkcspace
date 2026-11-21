@@ -8383,6 +8383,8 @@ SHARING_STATES = {
     'deleted': 'Zdrojový podklad byl odstraněn.',
     'invalid-pin': 'Připnutá revize zdroje není dostupná.',
 }
+SHARED_INPUT_REFUSED = ('Sdílený podklad nelze použít jako vstup: {} Nic nebylo odesláno; '
+                        'odeberte jej z výběru nebo jej v projektu aktualizujte či odeberte.')
 
 
 class DesktopHandler(Handler):
@@ -9716,6 +9718,10 @@ class DesktopHandler(Handler):
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
             from spikes.chat_service import InvalidSearchEvaluation
             from spikes.presentation_proposals import InvalidPresentationProposal
+            from spikes.cross_references import ReferenceUnavailable
+            if isinstance(exc, ReferenceUnavailable) and self.path.startswith(('/v1/chat/', '/v1/tasks/', '/v1/external/')):
+                return self.reply(409, {'error': SHARED_INPUT_REFUSED.format(
+                    SHARING_STATES.get(exc.state, 'Zdroj sdíleného podkladu není dostupný.')), 'state': exc.state})
             if (isinstance(exc, InvalidSearchEvaluation)
                     and self.path == '/v1/tasks/search/confirm'):
                 return self.reply(422, {'error':

@@ -273,6 +273,22 @@ raise SystemExit(app.exec())
         self.assertIn('Ollama vytvořila návrh prezentace, ale ten nesplnil povinný formát',
                       json.loads(body)['error'])
 
+    def test_refused_shared_input_names_the_sharing_state_not_a_model_error(self):
+        from spikes.cross_references import ReferenceUnavailable
+        class Service:
+            def task_route(self, _request):
+                raise ReferenceUnavailable('share-revoked')
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.chat_service = Service()
+            response = driver.request(server, path='/v1/tasks/route', body=b'{}')
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 409 ', head)
+        value = json.loads(body)
+        self.assertEqual(value['state'], 'share-revoked')
+        self.assertIn('Sdílení podkladu bylo ukončeno.', value['error'])
+        self.assertIn('Nic nebylo odesláno', value['error']); self.assertNotIn('Ollama', value['error'])
+
     def test_notebooklm_desktop_uses_shared_page_and_exact_native_capabilities(self):
         desktop = Path('spikes/desktop.py').read_text()
         self.assertNotIn('NotebookLMImportDialog', desktop)

@@ -136,6 +136,24 @@ class SharingBrowserTests(UiFlowCase):
         self.assertEqual(page.evaluate("document.querySelectorAll('#sidebar-artifact-list .sidebar-artifact-title').length"), 1)
         self.assert_no_page_errors()
 
+    def test_unregistered_source_shows_inaccessible_state_without_content_or_copy(self):
+        import json
+        sharing = ArtifactSharing(CrossReferences(self.node))
+        offer = sharing.share_preview(self.project_id, self.artifact, [self.target], 'share', 'Zadání')
+        sharing.share_confirm(offer['preview'], offer['sha256'], str(uuid4()))
+        attach = sharing.attach_preview(self.target, self.project_id, offer['preview']['share_id'], 'Zadání', 'Úkoly')
+        sharing.attach_confirm(attach['preview'], attach['sha256'], str(uuid4()))
+        page = self.start(configure_search=False)
+        self.open(self.target)
+        node = json.loads(self.node.read_bytes())
+        node['projects'] = [p for p in node['projects'] if p['project_id'] != self.project_id]
+        self.node.write_bytes(json.dumps(node).encode())
+        self.open_reference('source-inaccessible')
+        text = page.evaluate("document.querySelector('#preview-content').textContent")
+        self.assertIn('Samotný odkaz přístup nepřidává', text); self.assertNotIn('Postavit most.', text)
+        self.assertEqual(self.buttons('#preview-content'), ['Odebrat z projektu'])
+        self.assert_no_page_errors()
+
 
 if __name__ == '__main__':
     import unittest; unittest.main()

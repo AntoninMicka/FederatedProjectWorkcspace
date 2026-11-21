@@ -89,6 +89,42 @@ s pinem a `share` a před dispatch jej ověří znovu. Evidence úkolu obsahuje 
 reference a commit projektu, nikoli tichou kopii textu bez původu.
 Připojení podkladu k plánovacímu úkolu Workspace patří k PLAN-TASK-WORK-01.
 
+**Známá ztráta přístupu a offline stav (XREF-02-D).** Před XREF-02-D
+platilo pravidlo ADR 0070 „známé smazání ani revokace neposkytují fallback do
+cache“ jen tehdy, když byl zdroj dostupný. Kdyby pak zdroj vypadl, uložená
+kopie se znovu zobrazila jako `offline-stale`. Nyní, když resolver zjistí
+`deleted`, `share-revoked` nebo `not-shared`, zapíše do privátní cache uzlu
+náhrobek a smaže uloženou kopii daného pinu. Náhrobek není vázaný na
+uživatele, takže platí pro všechny účty uzlu včetně vlastníka uzlu.
+Rozsah náhrobku:
+
+- `deleted`: všechny piny a sdílení podkladu.
+- `share-revoked`: všechny cíle sdílení.
+- `not-shared`: jen daný cíl.
+- `invalid-pin`: jen smaže cache daného pinu.
+
+Offline čtení náhrobek respektuje. Úspěšné živé ověření smaže jen náhrobky,
+které ověření vyvrátilo; ukončené sdílení je konečné, takže jeho náhrobek
+nezmizí. Ztrátu přístupu, ke které došlo, zatímco byl zdroj na tomto uzlu
+nedostupný, uzel zjistit nemůže. Proto offline obsah zůstává jen
+k zobrazení, s označenou neověřenou privacy a časem posledního ověření.
+
+UI odlišuje tyto stavy:
+
+- `current`: aktuální ověřená revize.
+- `newer-available`: zdroj má novější revizi.
+- `offline-stale`: neověřená uložená kopie.
+- `source-offline`: zdroj je nedostupný a ověřená kopie neexistuje.
+- `source-inaccessible`: zdroj je neregistrovaný nebo bez oprávnění. Jde
+  např. o deskriptor synchronizovaný na uzel bez zdroje. Stav neprozrazuje,
+  která z obou příčin nastala.
+- `deleted`, `share-revoked`, `not-shared` a `invalid-pin`.
+
+Kontext pro LLM, fork ani repin cache nikdy nepoužijí. Export projektu
+(bundle) nese jen deskriptor reference, nikdy bajty zdroje. Odmítnutý úkol
+či zpráva se sdíleným vstupem vrací `409` se stavem sdílení a sdělením, že nic
+nebylo odesláno.
+
 **Hierarchie projektů mimo rozsah.** Viditelnost nadřazeného projektu do
 podprojektů odvozená ze samotné vazby projektů ani výběr výstupů pravidlem
 (včetně později vzniklých souborů) toto ADR nezavádí. Vyžadují samostatný
@@ -112,6 +148,8 @@ projekty se nepředstírá.
 | Ukončení sdílení | Jedna transakce zdroje: preview nese přesný dosavadní záznam, zápis jej ověří proti `base_head` a změní jen `revoked`. Pád před commitem nic nezmění; stejné operation ID vrátí receipt. Změněný záznam vyžaduje nový náhled. |
 | Odebrání reference | Jedna transakce cíle; preview nese digest deskriptoru. Po repinu mezi náhledem a potvrzením se zápis odmítne. Zdroj se nečte ani nemění. |
 | Repin a fork | Beze změny podle ADR 0070: zdroj se čte znovu ve `prepare`, cíl drží schválené bajty v journalu. |
+| Pád po čtení zdroje při připojení | Intent připravený v journalu cíle se po recovery dokončí se schváleným deskriptorem i tehdy, když zdroj mezitím sdílení ukončil. Každé další čtení pak vrátí `share-revoked`. Atomicita přes oba projekty se nepředstírá. |
+| Náhrobek cache | Leží mimo Git a journal, zapisuje se atomicky s fsync. Pád před zápisem jen odloží jeho vznik do dalšího živého ověření; cache sama nikdy nerozšíří přístup. Ztráta celé cache vede k `source-offline`, ne k obsahu. |
 
 Reálný výpadek napájení se nesimuluje. Procesové pády na hranách transakce
 pokrývají stávající testy ADR 0070; jejich fixture nyní používá sdílení v2.
@@ -141,5 +179,17 @@ fork po ukončení (`409 share-revoked`) a odebrání. Prohlížečový test pro
 porovnání a aktualizaci, vlastní kopii, ukončení a odebrání.
 `ChatServiceTests.test_routed_task_uses_shared_reference_with_exact_pin_and_fails_after_revocation`
 ověřuje úkol se sdíleným vstupem a jeho odmítnutí po ukončení sdílení.
-Offline stav, opakované ověření a recovery přes obě hranice patří k XREF-02-D,
-živá akceptace k XREF-02-E.
+XREF-02-D: `tests.test_cross_references` (40) přidává:
+
+- náhrobky po ukončení sdílení a po smazání, platné i pro vlastníka uzlu
+  a pro účet, který ztrátu nezjistil;
+- rozsah náhrobku `not-shared` na jeden cíl a jeho zrušení živým ověřením;
+- skutečné pády procesu u sdílení, ukončení a odebrání v pěti fázích
+  transakce, každý s jediným commitem po recovery a opakovaném potvrzení;
+- pád připojení po čtení zdroje s ukončením sdílení před recovery;
+- export bundle bez bajtů zdroje.
+
+`tests.test_artifact_sharing` (8) pokrývá nesynchronizovaný zdroj
+a offline stav s cache i bez ní. `tests.test_desktop` ověřuje hlášku `409`
+u odmítnutého sdíleného vstupu a prohlížečový test stav `source-inaccessible`.
+Živá akceptace patří k XREF-02-E.

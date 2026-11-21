@@ -147,7 +147,16 @@ cache, pokud místní oprávnění stále platí. Výsledek je `offline-stale`,
 `stale: true`, `privacy_unverified: true`; aktuální source privacy tehdy
 nelze potvrdit. Tento obsah se nesmí použít pro Context Manifest, fork ani
 externí boundary. Cache se ukládá mimo projektový Git a jeho autoritativní
-state; ztráta cache nepoškodí referenci.
+state; ztráta cache nepoškodí referenci. Zjištěné smazání nebo ukončení
+sdílení zanechá v cache náhrobek pro všechny účty uzlu. Při pozdějším výpadku
+zdroje se pak uložená kopie nezobrazí (XREF-02-D, ADR 0086).
+
+V UI se offline kopie zobrazí s časem posledního ověření a privacy označenou
+„neověřeno“. Bez ověřené kopie se ukáže stav `source-offline`. Pokud zdroj
+na uzlu není registrovaný nebo k němu uživatel nemá přístup, například po
+synchronizaci samotného cílového projektu, ukáže se `source-inaccessible`
+bez obsahu. Zůstává jen volba odebrat odkaz. Úkol nebo zpráva se
+nedostupným sdíleným vstupem se odmítne hláškou se stavem sdílení.
 
 Index obsahuje pouze místní deskriptor. `index` živě doplní autorizovanou
 dostupnost; nepovolený zdroj vrátí jen jako unavailable. ContextBuilder při
