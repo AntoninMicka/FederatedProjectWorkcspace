@@ -20,6 +20,7 @@ from spikes.manuals import manual_catalog
 from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
 from spikes.task_stream_ui import TASK_STREAM_JS
 from spikes.task_file_edit_ui import FILE_EDIT_HTML, FILE_EDIT_CSS, FILE_EDIT_JS
+from spikes.artifact_sharing_ui import SHARING_ATTACH_BUTTON, SHARING_CSS, SHARING_HTML, SHARING_JS
 from spikes.artifact_history import ArtifactHistory
 from spikes.conflict_resolution import ConflictResolution
 from spikes.local_change_resolution import LocalChangeResolution
@@ -2207,14 +2208,19 @@ function renderSidebarArtifacts(items){
   const row=document.createElement('li');row.className='sidebar-list-row sidebar-artifact-row';
   const title=document.createElement('button'),name=document.createElement('span');title.className='sidebar-list-main sidebar-artifact-title';name.className='sidebar-item-title';name.textContent=item.title;
   title.dataset.id=item.id;title.setAttribute('aria-current','false');
-  title.addEventListener('click',()=>openPreview(item.id));
+  // XREF-02: a pinned cross-project reference is read-only and opens its resolved source.
+  const shared=item.sharing==='reference',open=()=>shared?openSharedReference(item.id):openPreview(item.id);
+  title.addEventListener('click',open);
+  if(shared){const badge=document.createElement('span');badge.className='sidebar-shared-badge';badge.textContent='Sdílené · jen ke čtení';name.append(badge);}
   const id=document.createElement('small');id.className='sidebar-item-id sidebar-artifact-id';id.textContent=item.id;title.append(name,id);
-  const actions=[{label:'Zobrazit',run:()=>openPreview(item.id)}];
-  if(item.kind==='document'&&!activeProject?.readOnly)actions.push(
+  const actions=[{label:'Zobrazit',run:open}];
+  if(item.kind==='document'&&!shared&&!activeProject?.readOnly)actions.push(
    {label:'Upravit / přejmenovat',run:()=>openArtifactEditor(item)},
    {label:'Připravit smazání',run:()=>openArtifactEditor(item,true)});
+  if(!shared&&!activeProject?.readOnly)actions.push({label:'Sdílet do projektu',run:()=>openShareDialog(item)});
+  if(!shared)actions.push(
+   {label:'Zobrazit historii',run:async()=>{await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();}});
   actions.push(
-   {label:'Zobrazit historii',run:async()=>{await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();}},
    {label:'Kopírovat ID',run:async()=>{try{await navigator.clipboard.writeText(item.id);sidebarArtifactStatus.textContent='ID položky bylo zkopírováno.';}catch(error){sidebarArtifactStatus.textContent=`ID položky: ${item.id}`;}}});
   row.append(title,sidebarItemMenu(item.title,actions,'sidebar-artifact-menu'));
   sidebarArtifacts.append(row);
@@ -8295,8 +8301,10 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
 refreshImageAdapter();
 if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
-HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + '<script src="/app.js"></script>')
-CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS
+HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + SHARING_HTML + '<script src="/app.js"></script>')
+HTML = HTML.replace('<button id="open-source-import" type="button">Importovat zdroj</button></div>',
+                    '<button id="open-source-import" type="button">Importovat zdroj</button>' + SHARING_ATTACH_BUTTON + '</div>', 1)
+CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS + SHARING_CSS
 HTML = HTML.replace('<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul>', TOOL_TREE, 1)
 HTML = HTML.replace('<button id="julia-editor-new" type="button">Nový Julia model</button>', '<button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button>'+TOOL_NEW_ACTIONS, 1)
 CSS += TOOL_TREE_CSS + SIDEBAR_MENU_CSS
@@ -8315,7 +8323,7 @@ HTML = HTML.replace('<div id="sidebar-projects"', '<div id="sidebar-sources" rol
 HTML = HTML.replace('<main>', '<main>'+SOURCES_HTML, 1)
 CSS += SOURCES_CSS
 JS = SOURCES_JS + JS
-JS += ADMIN_JS + FILE_EDIT_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
+JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
@@ -8352,6 +8360,23 @@ ASSETS = {'/manuals.json': ('application/json; charset=utf-8', json.dumps(manual
           '/app.js': ('text/javascript; charset=utf-8', DESKTOP_BOOTSTRAP + JS)}
 
 
+SHARING_ROUTES = {
+    # XREF-02 (ADR 0086): request -> exact fields; CrossReferences re-checks access.
+    '/v1/sharing/overview': {'project_id'},
+    '/v1/sharing/share/preview': {'project_id', 'artifact_id', 'targets', 'purpose', 'reason'},
+    '/v1/sharing/share/confirm': {'preview', 'sha256', 'operation_id'},
+    '/v1/sharing/attach/preview': {'project_id', 'source_project_id', 'share_id', 'title', 'reason'},
+    '/v1/sharing/attach/confirm': {'preview', 'sha256', 'operation_id'},
+    '/v1/sharing/reference/view': {'project_id', 'reference_id'},
+}
+SHARING_STATES = {
+    'not-shared': 'Podklad není do tohoto projektu sdílený.',
+    'share-revoked': 'Sdílení podkladu bylo ukončeno.',
+    'deleted': 'Zdrojový podklad byl odstraněn.',
+    'invalid-pin': 'Připnutá revize zdroje není dostupná.',
+}
+
+
 class DesktopHandler(Handler):
     assets = ASSETS
     google_drive_callback_path = '/'
@@ -8377,6 +8402,7 @@ class DesktopHandler(Handler):
         '/v1/artifacts/editor/plan-item/create', '/v1/artifacts/editor/plan-item/dependencies',
         '/v1/artifacts/editor/plan-item/delete/preview', '/v1/artifacts/editor/plan-item/delete',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
+        *SHARING_ROUTES,
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
@@ -8468,6 +8494,31 @@ class DesktopHandler(Handler):
             except (ValueError, OSError, sqlite3.Error):
                 return False
         return super().authorized(auth)
+
+    def dispatch_sharing(self, request):
+        from spikes.administration import AccessDenied
+        from spikes.artifact_sharing import ArtifactSharing
+        from spikes.cross_references import ReferenceUnavailable
+        if not isinstance(request, dict) or set(request) != SHARING_ROUTES[self.path]:
+            return self.send_error(400)
+        try:
+            sharing = ArtifactSharing(self.server.chat_service.cross_references())
+            action = self.path.removeprefix('/v1/sharing/').replace('/', '_')
+            if action in {'share_confirm', 'attach_confirm'}:
+                result = getattr(sharing, action)(request['preview'], request['sha256'], request['operation_id'])
+            else:
+                result = getattr(sharing, action)(**request)
+            return self.reply(200, result)
+        except ReferenceUnavailable as exc:
+            return self.reply(409, {'error': SHARING_STATES.get(exc.state, 'Zdroj sdíleného podkladu není dostupný.'),
+                                    'state': exc.state})
+        except AccessDenied:
+            return self.reply(403, {'error': 'K projektu nebo podkladu nemáte potřebné oprávnění.'})
+        except (PendingOperation, StaleIndex, BlockingIOError):
+            raise
+        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            return self.reply(422, {'error': 'Sdílení nelze provést. Obnovte náhled a ověřte '
+                                    'aktuální verzi obou projektů, oprávnění a privacy.'})
 
     def dispatch_ide_bridge(self, request):
         try:
@@ -9507,6 +9558,8 @@ class DesktopHandler(Handler):
                     return self.send_error(400)
                 history = ArtifactHistory(node, network=getattr(projects, 'network', False))
                 return self.reply(200, history.compare(**request))
+            if self.path in SHARING_ROUTES:
+                return self.dispatch_sharing(request)
             if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
                 node = getattr(projects, 'node_path', None)
                 if node is None:

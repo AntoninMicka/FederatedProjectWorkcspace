@@ -504,12 +504,15 @@ class ChatService:
         return (node['id'], self._request_user_id.get()
                 or ProjectCreation(self.node_path).author_id())
 
-    def _context_builder(self, workspace, project_id):
+    def cross_references(self):
+        """Reference service bound to this request's user and delegated project scope."""
         from spikes.cross_references import CrossReferences
-        return ContextBuilder(workspace, project_id,
-                              references=CrossReferences(self.node_path, user_id=self._identity()[1],
-                                  allowed_projects=self._request_project_ids.get(),
-                                  writable_projects=self._request_writable_project_ids.get()))
+        return CrossReferences(self.node_path, user_id=self._identity()[1],
+                               allowed_projects=self._request_project_ids.get(),
+                               writable_projects=self._request_writable_project_ids.get())
+
+    def _context_builder(self, workspace, project_id):
+        return ContextBuilder(workspace, project_id, references=self.cross_references())
 
     def _root(self):
         if not os.path.lexists(self.state_dir):

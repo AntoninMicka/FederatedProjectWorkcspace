@@ -21,14 +21,18 @@ původce, důvod, povolené cíle a odvolání.
 
 **Záznam sdílení ve zdroji.** Sdílení je artefakt zdrojového projektu
 s kanonickým `share.json` (`fpw-artifact-share-v1`) a tagem stejného jména.
-Obsahuje `artifact_id`, seřazený seznam 1–64 cílových project UUID,
+Obsahuje `artifact_id`, účel `purpose`, seřazený seznam 1–64 cílových project UUID,
 `originator_id`, důvod (nejvýše 1 000 znaků), `created_at` a `revoked`
 (`null` nebo `{at, by}`). Jeden záznam se týká jednoho vlastního artefaktu,
 nikoli celého projektu. Sdílet nelze referenci ani jiný záznam sdílení.
-Titulek záznamu neobsahuje titulek artefaktu, aby pozdější zpřísnění privacy
+Účel `share` je běžné nabídnutí podkladu (např. zadání z nadřazeného projektu
+do podprojektu). Účel `output` prohlašuje artefakt za výstup projektu pro jeho
+odběratele (např. výsledek podprojektu pro nadřazený projekt). Oba účely mají
+stejná pravidla oprávnění; liší se zobrazením a tím, že výstupy lze v cíli
+nabídnout bez ručního hledání. Titulek záznamu neobsahuje titulek artefaktu, aby pozdější zpřísnění privacy
 podkladu nevyzradil starý záznam.
 
-Invarianty přechodu: záznam nelze smazat, pouze odvolat; artefakt, původce
+Invarianty přechodu: záznam nelze smazat, pouze odvolat; artefakt, účel, původce
 a čas vzniku se nemění; odvolání je konečné a nové sdílení dostane nové ID.
 Dokud záznam platí, lze měnit cíle a důvod. Smazání nebo zpřísnění privacy
 sdíleného artefaktu zůstává povolené. Záznam tím nezaniká a reference v cíli
@@ -59,6 +63,12 @@ Synchronizace cíle na jiný uzel přenese jen deskriptor. Bez registrovaného
 zdroje a živého oprávnění na tom uzlu reference zůstane nedostupná a nikomu
 nepřidá přístup ke zdroji.
 
+**Hierarchie projektů mimo rozsah.** Viditelnost nadřazeného projektu do
+podprojektů odvozená ze samotné vazby projektů ani výběr výstupů pravidlem
+(včetně později vzniklých souborů) toto ADR nezavádí. Vyžadují samostatný
+záznam hierarchie a vlastní rozhodnutí; tento kontrakt s nimi počítá jako
+s dalším zdrojem oprávnění, nikoli jako s náhradou záznamu sdílení.
+
 ## Crash boundaries a recovery
 
 Vytvoření sdílení i připojení reference jsou dvě samostatné operace
@@ -79,9 +89,17 @@ pokrývají stávající testy ADR 0070; jejich fixture nyní používá sdílen
 
 ## Ověření
 
-`tests.test_cross_references` (29 testů): povinné aktivní sdílení
+`tests.test_cross_references` (30 testů): povinné aktivní sdílení, účel výstupu
 a povolený cíl, kanonický a nesmazatelný záznam, konečné odvolání, podvržený
 původce či artefakt, práva zápisu ke zdroji a viditelnost cílů, zákaz řetězení,
 neměnná provenance při repinu, platnost po smazání podkladu, legacy v1, CLI
-a původní scénáře XREF-01. Uživatelské rozhraní, správa odvolání a použití
-v úkolu či konverzaci patří k XREF-02-B až E.
+a původní scénáře XREF-01.
+
+XREF-02-B (UI): `tests.test_artifact_sharing` (fasáda: nabídky, použití,
+skrytí nepřístupných projektů, přesný digest, smazaný zdroj),
+`WebTests.test_sharing_routes_share_attach_and_open_with_member_scope`
+(HTTP a rozsah člena) a `tests.test_ui_sharing_browser` (skutečný prohlížeč:
+sdílet, připojit, otevřít jen ke čtení). HTTP cesty patří do konzervativní
+aplikační fronty, protože čtou dva projekty
+([vlastnictví HTTP](../http-concurrency-ownership.md#xref-02-sharing-routes-2026-11-21)).
+Správa odvolání a použití v úkolu či konverzaci patří k XREF-02-C až E.

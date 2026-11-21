@@ -301,7 +301,25 @@ class CrossReferences:
                 raise ReferenceUnavailable('not-shared')
             return record
 
-    def share_preview(self, project_id, share_id, artifact_id, targets, reason_text):
+    def registered_projects(self):
+        return [p['project_id'] for p in parse_node(read_config(self.node), location=self.node)['projects']]
+
+    def project_state(self, project_id, extra_ids=()):
+        """Authorized committed sharing state of one project; never foreign bytes."""
+        self.authorize(project_id)
+        ws = self.artifacts.workspace(project_id); ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            ws._read_shared(db); head = ws.git.head(); meta = committed_project(ws.git, head, project_id)
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            granted, refs = shares(files, entities), references(files, entities)
+            wanted = {r['artifact_id'] for r in granted.values()} | set(refs) | set(extra_ids)
+            artifacts = {id_: dict(title=entities[id_]['title'], privacy=entities[id_]['privacy'],
+                                   kind=entities[id_]['kind']) for id_ in wanted if id_ in entities}
+            require(ws.git.head() == head, 'Project changed while reading sharing state')
+        return dict(project_id=project_id, title=meta['title'], commit_id=head,
+                    shares=granted, references=refs, artifacts=artifacts)
+
+    def share_preview(self, project_id, share_id, artifact_id, targets, reason_text, *, purpose='share'):
         """Offer one own source artifact to explicitly listed, authorized target projects."""
         self.authorize(project_id, write=True); uuid(share_id); uuid(artifact_id); reason(reason_text)
         require(isinstance(targets, (list, tuple)) and all(isinstance(t, str) for t in targets), 'Invalid share targets')
@@ -317,11 +335,11 @@ class CrossReferences:
             self.content(files, entities, artifact_id)
             require(artifact_id not in shares(files, entities), 'A share record cannot be shared')
             meta = entities[artifact_id]
-            record = share_record(dict(schema=SHARE, artifact_id=artifact_id, targets=targets,
+            record = share_record(dict(schema=SHARE, artifact_id=artifact_id, purpose=purpose, targets=targets,
                 originator_id=self.user_id, reason=reason_text, created_at=self.now(), revoked=None))
             require(ws.git.head() == head, 'Source changed while previewing share')
         return dict(schema='fpw-share-write-v1', project_id=project_id, base_head=head, share_id=share_id,
-                    record=record, title='Sdílení podkladu',
+                    record=record, title='Výstup projektu' if purpose == 'output' else 'Sdílení podkladu',
                     privacy=meta['privacy'], user_id=self.user_id)
 
     def share_write(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
@@ -452,6 +470,7 @@ def main():
     sub=parser.add_subparsers(dest='command',required=True)
     p=sub.add_parser('pin');p.add_argument('project_id');p.add_argument('artifact_id');p.add_argument('--commit')
     p=sub.add_parser('share-preview');p.add_argument('project_id');p.add_argument('share_id');p.add_argument('artifact_id');p.add_argument('reason');p.add_argument('--target',action='append',required=True)
+    p.add_argument('--purpose',choices=('share','output'),default='share')
     p=sub.add_parser('preview');p.add_argument('project_id');p.add_argument('reference_id');p.add_argument('source',type=Path);p.add_argument('title');p.add_argument('--update',action='store_true')
     p.add_argument('--share');p.add_argument('--reason')
     p=sub.add_parser('view');p.add_argument('project_id');p.add_argument('reference_id');p.add_argument('--online-only',action='store_true')
@@ -466,7 +485,7 @@ def main():
             require(digest(encoded(value['value']))==value['sha256'],'Saved reference envelope changed');return value['value']
         return value
     if args.command=='pin':result=service.source_pin(args.project_id,args.artifact_id,args.commit)
-    elif args.command=='share-preview':result=service.share_preview(args.project_id,args.share_id,args.artifact_id,args.target,args.reason)
+    elif args.command=='share-preview':result=service.share_preview(args.project_id,args.share_id,args.artifact_id,args.target,args.reason,purpose=args.purpose)
     elif args.command=='preview':result=service.preview(args.project_id,args.reference_id,read(args.source),args.title,update=args.update,
                                                         share_id=args.share,reason_text=args.reason)
     elif args.command=='view':result=service.view(args.project_id,args.reference_id,offline=not args.online_only)

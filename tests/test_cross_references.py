@@ -313,13 +313,14 @@ CrossReferences(sys.argv[1]).write(request,sys.argv[3],digest(encoded(request)),
     def test_share_record_is_canonical_audited_and_cannot_be_deleted(self):
         files=self.source_ws.git.snapshot(self.source_ws.git.head())
         record=json.loads(files[f'artifacts/{self.share_id}/share.json'])
-        self.assertEqual((record['schema'],record['artifact_id'],record['targets'],record['originator_id'],record['revoked']),
-                         (SHARE,self.source_id,[self.target],self.author,None))
+        self.assertEqual((record['schema'],record['artifact_id'],record['purpose'],record['targets'],record['originator_id'],record['revoked']),
+                         (SHARE,self.source_id,'share',[self.target],self.author,None))
         self.assertEqual(shares(files,validate_snapshot(files))[self.share_id],record)
         self.assertNotIn(b'Original source title',files[f'artifacts/{self.share_id}/metadata.json'])
         removed={k:v for k,v in files.items() if not k.startswith(f'artifacts/{self.share_id}/')}
         with self.assertRaisesRegex(ValidationError,'revoke'):validate_transition(files,removed)
-        for change in (dict(originator_id=str(uuid4())),dict(artifact_id=str(uuid4())),dict(targets=[self.target,self.target])):
+        for change in (dict(originator_id=str(uuid4())),dict(artifact_id=str(uuid4())),dict(targets=[self.target,self.target]),
+                       dict(purpose='output'),dict(purpose='unknown')):
             changed=dict(files);changed[f'artifacts/{self.share_id}/share.json']=encoded(dict(record,**change))
             with self.assertRaises(ValidationError):validate_transition(files,changed)
         revoked=dict(record,revoked=dict(at='2026-11-21T00:00:00Z',by=self.author))
@@ -327,6 +328,18 @@ CrossReferences(sys.argv[1]).write(request,sys.argv[3],digest(encoded(request)),
         validate_transition(files,final)
         again=dict(final);again[f'artifacts/{self.share_id}/share.json']=encoded(record)
         with self.assertRaisesRegex(ValidationError,'final'):validate_transition(final,again)
+
+    def test_output_purpose_is_a_share_from_producer_to_consumer(self):
+        share_id=str(uuid4())
+        value=self.service.share_preview(self.source,share_id,self.source_id,[self.target],'Výsledek pro nadřazený projekt',purpose='output')
+        self.assertEqual((value['record']['purpose'],value['title']),('output','Výstup projektu'))
+        self.service.share_write(value,str(uuid4()),digest(encoded(value)),confirm=True)
+        ref=str(uuid4())
+        attach=self.service.preview(self.target,ref,self.pin,'Výstup',share_id=share_id,reason_text='Použití výstupu')
+        self.service.write(attach,str(uuid4()),digest(encoded(attach)),confirm=True)
+        self.assertEqual(self.service.view(self.target,ref)['state'],'current')
+        with self.assertRaises(ValidationError):
+            self.service.share_preview(self.source,str(uuid4()),self.source_id,[self.target],'Špatně',purpose='mirror')
 
     def test_forged_share_originator_or_artifact_is_not_a_grant(self):
         files=self.target_ws.git.snapshot(self.target_ws.git.head());path=f'artifacts/{self.reference_id}/reference.json'
@@ -403,7 +416,8 @@ CrossReferences(sys.argv[1]).write(request,sys.argv[3],digest(encoded(request)),
                                  capture_output=True,text=True,timeout=60)
             self.assertEqual(child.returncode,0,child.stderr);return json.loads(child.stdout)
         share_id,ref=str(uuid4()),str(uuid4())
-        share=run('share-preview',self.source,share_id,self.source_id,'CLI důvod','--target',self.target)
+        share=run('share-preview',self.source,share_id,self.source_id,'CLI důvod','--target',self.target,'--purpose','output')
+        self.assertEqual(share['value']['record']['purpose'],'output')
         path=self.base/'share.json';path.write_text(json.dumps(share))
         run('share-write',str(path),'--operation-id',str(uuid4()),'--sha256',share['sha256'],'--confirm')
         pin=run('pin',self.source,self.source_id);pin_path=self.base/'pin.json';pin_path.write_text(json.dumps(pin))

@@ -17,6 +17,7 @@ SCHEMAS = (SCHEMA_V1, SCHEMA)
 FORK = 'fpw-artifact-fork-v1'
 SHARE = 'fpw-artifact-share-v1'
 MAX_TARGETS = 64
+PURPOSES = ('share', 'output')  # output: a project result offered to its consumers.
 MAX_REASON = 1000
 
 
@@ -77,8 +78,9 @@ def share_record(value):
     """Source-side grant: one artifact, explicit allowed targets, originator, reason."""
     require(isinstance(value, dict), 'Invalid share record')
     _version(value.get('schema'), 'fpw-artifact-share-', (1,), 'artifact-share')
-    fields(value, 'schema artifact_id targets originator_id reason created_at revoked')
+    fields(value, 'schema artifact_id purpose targets originator_id reason created_at revoked')
     uuid(value['artifact_id']); uuid(value['originator_id']); reason(value['reason'])
+    require(value['purpose'] in PURPOSES, 'Invalid share purpose')
     timestamp(value['created_at'])
     targets = value['targets']
     require(isinstance(targets, list) and 1 <= len(targets) <= MAX_TARGETS, 'Share needs 1-64 targets')
@@ -170,7 +172,7 @@ def transition(before_files, after_files, before_entities, after_entities):
         # Revocation keeps the audited record; Git history keeps earlier grants.
         require(id_ in regranted, 'Share record cannot be deleted; revoke it instead')
         after = regranted[id_]
-        require(all(after[k] == value[k] for k in ('artifact_id', 'originator_id', 'created_at')),
+        require(all(after[k] == value[k] for k in ('artifact_id', 'purpose', 'originator_id', 'created_at')),
                 'Share identity is immutable')
         if value['revoked'] is not None:
             require(after == value, 'Revoked share is final')

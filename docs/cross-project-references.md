@@ -19,6 +19,8 @@ projekty, původce a důvod. Připojení v cíli pak uvede ID sdílení a vlastn
 důvod použití. Resolver při každém použití ověří, že sdílení trvá a uvádí
 právě tento cíl. Oprávnění uživatele k oběma projektům tím nenahrazuje.
 Reference v1 vytvořené před XREF-02 zůstávají čitelné jako `share: null`.
+Volba `--purpose output` označí artefakt jako výstup projektu pro jeho
+odběratele, výchozí `share` je běžné sdílení podkladu.
 
 ```sh
 python3 -m spikes.cross_references --node NODE share-preview SOURCE_PROJECT SHARE_ID ARTIFACT 'Důvod sdílení' --target TARGET_PROJECT > share.json
@@ -27,6 +29,29 @@ python3 -m spikes.cross_references --node NODE share-write share.json --operatio
 
 Sdílení a připojení jsou dvě samostatné potvrzené operace ve dvou
 repozitářích. Sdílení bez připojené reference je platný mezistav.
+
+V běžném Workspace UI (XREF-02-B):
+
+- **Sdílet do projektu** v menu podkladu nabídne jen projekty, které
+  přihlášený uživatel vidí. Zvolíte účel (sdílení nebo výstup projektu)
+  a důvod. Dialog ukáže i dosavadní sdílení tohoto podkladu a jeho použití
+  v dostupných projektech.
+- **Připojit z jiného projektu** v Podkladech ukáže podklady sdílené do
+  otevřeného projektu, včetně výstupů. Po výběru zadáte název a důvod použití.
+- Oba kroky nejdřív ukážou přesný serverový náhled (cíle, revize, SHA-256,
+  privacy) a uloží se až po zaškrtnutí potvrzení. Opakované potvrzení
+  používá stejné operation ID.
+- Připojený podklad je v seznamu označený **Sdílené · jen ke čtení**.
+  Otevře se připnutá revize s původem (zdrojový projekt, revize, soubor,
+  důvod, kdo sdílel a připojil) a stavem zdroje. Nedostupný, smazaný nebo
+  odvolaný zdroj se ukáže jako stav, ne jako chyba. Úpravy a mazání
+  reference nabídka nenabízí.
+- Záznamy sdílení se v seznamu podkladů nezobrazují; jsou vidět v dialogu
+  sdílení u konkrétního podkladu.
+
+HTTP: `/v1/sharing/overview`, `/v1/sharing/share/preview|confirm`,
+`/v1/sharing/attach/preview|confirm`, `/v1/sharing/reference/view`. Každý
+požadavek běží s identitou a rozsahem přihlášeného uživatele.
 
 ## Vyzkoušení bez zásahu do existujících projektů
 
