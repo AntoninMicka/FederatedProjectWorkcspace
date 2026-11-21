@@ -257,6 +257,9 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
             return super().dispatch(request)
         if self.path == '/v1/task-queue':
             if not isinstance(request, dict): return self.send_error(400)
+            if request.get('action') == 'owner-status':
+                # The shared dispatcher filters every scope before reading it.
+                return super().dispatch(request)
             allowed = (self.server.administration.allowed(self.actor, request.get('project_id'))
                        if request.get('action') == 'status' else self._can_write(request.get('project_id')))
             if not allowed: return self.send_error(403)

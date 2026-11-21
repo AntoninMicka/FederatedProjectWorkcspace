@@ -112,7 +112,8 @@ class TaskQueue:
 
     @contextmanager
     def _lock(self, project_id, actor_id, *, shared=False):
-        uuid(project_id)
+        if project_id is not None:
+            uuid(project_id)
         require(isinstance(actor_id, str) and 0 < len(actor_id) <= 256, 'Queue owner required')
         require(self.root.parent.resolve() == self.root.parent, 'Symlink queue parent')
         try:
@@ -125,7 +126,7 @@ class TaskQueue:
         outside = subprocess.run(['git', '-C', str(self.root), 'rev-parse', '--show-toplevel'],
                                  capture_output=True, timeout=5)
         require(outside.returncode == 128, 'Queue storage must be outside Git')
-        key = hashlib.sha256(canonical([project_id, actor_id])).hexdigest()
+        key = hashlib.sha256(canonical(['owner', actor_id])).hexdigest()
         path = self.root / (key + '.json')
         fd = os.open(self.root / (key + '.lock'), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
@@ -140,7 +141,7 @@ class TaskQueue:
         finally:
             os.close(fd)
 
-    def _read(self, path, project_id, actor_id):
+    def _read_legacy(self, path, project_id, actor_id):
         if not os.path.lexists(path):
             return dict(schema=1, project_id=project_id, owner_id=actor_id, revision=0,
                         project_head=None, task_ids=[], held_task_ids=[], flag_audit=[])
@@ -152,6 +153,9 @@ class TaskQueue:
                     'Unsafe queue file')
             from spikes.metadata import pairs
             data = json.loads(stream.read(1024 * 1024 + 1), object_pairs_hook=pairs)
+        return self._validate_project(data, project_id, actor_id)
+
+    def _validate_project(self, data, project_id, actor_id):
         # Queues written before IDE-QUEUE-UX-01 have no flag fields.
         require(isinstance(data, dict) and {
             'schema', 'project_id', 'owner_id', 'revision', 'project_head', 'task_ids'} <= set(data)
@@ -171,13 +175,83 @@ class TaskQueue:
                 and len(data['flag_audit']) <= MAX_FLAG_AUDIT, 'Invalid queue flags')
         return data
 
+    def _bundle(self, path, actor_id):
+        """Read the owner queue, or project legacy files without modifying them."""
+        if not os.path.lexists(path):
+            projects = {}
+            for binding in self.projects._bindings():
+                pid = binding['project_id']
+                legacy = self.root / (hashlib.sha256(canonical([pid, actor_id])).hexdigest() + '.json')
+                if os.path.lexists(legacy):
+                    projects[pid] = self._read_legacy(legacy, pid, actor_id)
+            return dict(schema=2, owner_id=actor_id, revision=0, projects=projects,
+                        order=[[pid, task] for pid, state in projects.items() for task in state['task_ids']])
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as stream:
+            info = os.fstat(stream.fileno())
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                    and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= 8 * 1024 * 1024,
+                    'Unsafe owner queue file')
+            from spikes.metadata import pairs
+            data = json.loads(stream.read(8 * 1024 * 1024 + 1), object_pairs_hook=pairs)
+        require(isinstance(data, dict) and set(data) == {'schema', 'owner_id', 'revision', 'projects', 'order'}
+                and data['schema'] == 2 and data['owner_id'] == actor_id
+                and type(data['revision']) is int and data['revision'] >= 0
+                and isinstance(data['projects'], dict) and isinstance(data['order'], list)
+                and len(data['order']) <= 10000, 'Invalid owner queue scope')
+        for pid, state in data['projects'].items():
+            uuid(pid)
+            self._validate_project(state, pid, actor_id)
+        require(all(isinstance(ref, list) and len(ref) == 2
+                    and all(isinstance(v, str) for v in ref) for ref in data['order']), 'Invalid queue references')
+        refs = [tuple(ref) for ref in data['order']]
+        require(len(refs) == len(set(refs)) and set(refs) == {
+            (pid, task) for pid, state in data['projects'].items() for task in state['task_ids']},
+            'Queue order differs from project references')
+        for pid, state in data['projects'].items():
+            require([task for project, task in refs if project == pid] == state['task_ids'],
+                    'Project projection order differs')
+        return data
+
+    def _read(self, path, project_id, actor_id):
+        bundle = self._bundle(path, actor_id)
+        return bundle['projects'].get(project_id, dict(
+            schema=1, project_id=project_id, owner_id=actor_id, revision=0,
+            project_head=None, task_ids=[], held_task_ids=[], flag_audit=[]))
+
     def _write(self, path, state, checkpoint):
+        # A single replace publishes project projection and owner order together.
+        bundle = self._bundle(path, state['owner_id'])
+        pid = state['project_id']
+        old_refs = {task for project, task in bundle['order'] if project == pid}
+        retained = iter(task for task in state['task_ids'] if task in old_refs)
+        order = []
+        for project, task in bundle['order']:
+            if project != pid:
+                order.append([project, task])
+            else:
+                replacement = next(retained, None)
+                if replacement is not None:
+                    order.append([pid, replacement])
+        order += [[pid, task] for task in state['task_ids'] if task not in old_refs]
+        # Repair may insert prerequisites before existing tasks, rather than append.
+        positions = [i for i, ref in enumerate(order) if ref[0] == pid]
+        for position, task in zip(positions, state['task_ids']):
+            order[position] = [pid, task]
+        bundle['projects'][pid] = state
+        bundle['order'] = order
+        bundle['revision'] += 1
+        self._atomic_write(path, bundle, checkpoint)
+
+    def _atomic_write(self, path, state, checkpoint):
         temporary = self.root / ('.' + str(uuid4()) + '.tmp')
         replaced = False
         try:
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             with os.fdopen(fd, 'wb') as stream:
-                stream.write(canonical(state)); stream.flush(); os.fsync(stream.fileno())
+                payload = canonical(state)
+                require(len(payload) <= 8 * 1024 * 1024 and len(state.get('order', [])) <= 10000, 'Queue size limit exceeded')
+                stream.write(payload); stream.flush(); os.fsync(stream.fileno())
             checkpoint('queue-before-replace')
             os.replace(temporary, path); replaced = True
             checkpoint('queue-after-replace')

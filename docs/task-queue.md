@@ -2,10 +2,14 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 # Fronta odkazů na úkoly — PLAN-QUEUE-01
 
-Fronta je lokální pracovní výběr pro jeden projekt a jednoho uživatele.
+Fronta je lokální pracovní výběr aktuálního vlastníka napříč projekty.
+Má vlastní sekci **Fronta úloh** v levém panelu a otevřete ji i bez vybraného
+projektu. Každá položka zachovává vazbu na svůj projekt. Přiřazování jiným
+uživatelům se v tomto řezu nezavádí.
 Kanonické definice, dokončení a závislosti drží Workspace; fronta je nemění.
-Implementace je v `spikes/task_queue.py`, ovládání ve sdílené desktop/web
-roadmapě. Rozsah první dávky nezahrnuje transport do IDE ani spouštění agenta.
+Implementace je v `spikes/task_queue.py`, globální pohled v
+`spikes/owner_task_queue.py` a ovládání ve sdíleném desktop/web UI. Rozsah první
+dávky nezahrnoval transport do IDE ani spouštění agenta.
 
 ## Ovládání
 
@@ -20,7 +24,11 @@ Filtr **Navazující** ukazuje nedokončené položky, které ještě mají nesp
 závislosti, ale všechny tyto přímé předpoklady už jsou ve frontě. Úkol bez
 nesplněných závislostí patří mezi Připravené. Přidává se na konec; předpoklady
 které stále blokují zahájení, proto předcházejí závislým položkám. Pořadí lze upravit tlačítky
-**Posunout nahoru / Posunout dolů** na stránce Fronta úloh. Filtr respektuje
+**Posunout nahoru / Posunout dolů** nebo přetažením řádku na stránce Fronta úloh.
+Seznam zobrazuje všechny oprávněné projekty v jednom pořadí. Tlačítko projektu
+nebo **Správa a zprávy** otevře projektovou správu ve stejné sekci; zde zůstává
+předání projektového výřezu do IDE, příznaky, přijetí výsledků a oprava fronty.
+Filtr respektuje
 vybranou úroveň roadmapy jako ostatní pohledy; dávky vidíte na úrovni milníků,
 jejich tasky po otevření dávky.
 
@@ -79,7 +87,8 @@ zmizelo, staré vztahy se nevymýšlejí; případné zbývající chyby jsou v�
 uvedené a fronta zůstává neplatná, dokud nejsou vyřešené.
 
 Po chybě či timeoutu mutace nejprve obnovte stav. Klient mutaci automaticky
-neopakuje. Při změně projektu se předchozí fronta nesmí zobrazovat jako aktuální.
+neopakuje. Při změně projektu globální fronta zůstává stejná; projektová správa nesmí
+zobrazovat výřez předchozího projektu jako aktuální.
 
 ## Úložiště, oprávnění a recovery
 
@@ -89,9 +98,15 @@ privátních souborů z [ADR 0060](adr/0060-local-file-ide-bridge.md).
 Nepřidává se další projektový index, broker ani databáze plánu.
 
 Fronta leží vedle node konfigurace v privátním adresáři
-`.<node-filename>.task-queues/`, mimo libovolný Git worktree. Názvy souborů jsou
-SHA-256 dvojice project ID / owner ID. JSON obsahuje scope, revizi, připnutý
-project HEAD a uspořádaná task ID; neobsahuje kopie definic ani stav dokončení.
+`.<node-filename>.task-queues/`, mimo libovolný Git worktree. Jeden soubor
+vlastníka má název
+SHA-256 kanonické dvojice `['owner', owner_id]`. Schema 2 ukládá celkové pořadí
+dvojic project/task ID a projektové výřezy se zachovanými revizemi a příznaky.
+Neobsahuje kopie definic ani stav dokončení. Původní projektové soubory se
+beze změny načtou, pokud nový owner soubor ještě neexistuje; první mutace
+zveřejní celý převod jediným replace. Potom je autoritou jen nový soubor.
+Podrobnosti a omezení souběhu se starým backendem popisuje
+[ADR 0087](adr/0087-owner-task-queue.md).
 Desktop používá lokálního autora uzlu; web přihlášený účet, bootstrap admin
 lokálního autora. Tyto scope se nesmějí zaměňovat. Při každém API přístupu
 web znovu ověří účet a projektové oprávnění. Reader může svou frontu číst,
@@ -116,7 +131,8 @@ nezapíše a nezvýší revizi; skutečný přesun zvýší revizi právě jedno
 Owner se nikdy nepřebírá z requestu. Nepodporované akce a další pole se odmítají.
 Status může inicializovat prázdný lokální adresář a lock, nikoli projektový Git.
 
-Zámek fronty je neblokující `flock`; současně je držen nativní zámek projektu,
+Zámek fronty je neblokující `flock` společný pro vlastníka napříč projekty;
+současně je držen nativní zámek projektu,
 aby plán neměnily jiné nativní zápisy. Pracuje se s platným commit/index
 snapshotem a kontroluje HEAD. Externí Git proces není účastníkem tohoto zámku;
 zjištěná změna po zápisu znamená neznámý výsledek a nutnost nového načtení.
@@ -136,8 +152,9 @@ Crash boundaries:
    zopakování úspěšné mutace. Přidání/odebrání nemění Git, index ani journal;
    journal se používá pouze pro projektový zámek a kontrolu rozpracované operace.
 
-Tyto hranice platí také pro `move`; nepřidává se nový journal ani formát
-fronty. Přesun nemění projektový Git a index ani již zveřejněné IDE balíčky.
+Tyto hranice platí také pro projektový `move` a globální `owner-move`;
+formát fronty rozšiřuje ADR 0087, nový journal se nepřidává. Přesun nemění
+projektový Git a index ani již zveřejněné IDE balíčky.
 Stejné hranice platí pro `repair` a `remove-single`: všechny kontroly i celý
 nový obsah se dokončí pod původním zámkem, pak se publikuje jediným původním
 atomickým replace. Pád před replace zachová původní frontu, pád po něm
@@ -152,7 +169,20 @@ ztrátě napájení závisí na filesystemu a zařízení; fault-injection test 
 nezávislý důkaz chování konkrétního disku. Windows a produkční víceprocesový
 provoz nejsou tímto implementačním řezem prohlášeny za ověřené.
 
+Nové akce `owner-status` a `owner-move`, jejich revizní kontrakt a atomickou
+migraci specifikuje [ADR 0087](adr/0087-owner-task-queue.md). Globální přesun
+zachovává projektové předpoklady a aktualizuje příslušnou IDE projekci.
+
 ## Ověření a předání
+
+Pro globální frontu: `python3 -m unittest tests.test_owner_task_queue -v`.
+Regrese zahrnuje dvě projektová ID se stejným task ID, proložení pořadí,
+projektový výřez pro IDE, migraci starých souborů, stale rozsah/oprávnění,
+nepřístupný projekt, souběh a chyby před/po replace i při fsync.
+`tests.test_task_queue_browser.OwnerQueueBrowserTests` je opt-in Qt/WebEngine
+průchod bez otevřeného projektu: skutečné drag/drop eventy proti izolovanému
+API, šipky/fokus, projektová správa, chyba bez retry, reload a mobilní šířka.
+Živá lidská akceptace běžného profilu zůstává samostatná.
 
 Cílené testy: `python3 -m unittest tests.test_task_queue
  tests.test_web_server.WebTests.test_task_queue_roles_owner_isolation_and_confirmation -v`

@@ -1084,6 +1084,15 @@ plán nebo index. Vlastní malá služba doplňuje kontrolu revize a kaskádové
 nová databáze či broker by duplikovaly existující hranice. Recovery a omezení:
 [fronta úkolů](docs/task-queue.md).
 
+Globální fronta podle přímého zadání 21. 11. 2026 **reuse/adaptuje**
+`TaskQueue`, jeho atomic replace/fsync a owner lock, `queue_faults`, projektové
+výřezy a `IdeBridge` lifecycle. `OwnerTaskQueue` doplňuje oprávněný pohled napříč
+projekty a přesun dvojice project/task ID; samostatná sekce sdíleného UI
+používá HTML drag/drop a přístupné šipky. Projektový výřez i globální pořadí
+jsou v jednom owner JSON; samostatné autoritativní fronty, druhý writer/journal,
+DB nebo přiřazování jiným uživatelům jsou mimo tento řez. Migrace a recovery:
+[ADR 0087](docs/adr/0087-owner-task-queue.md).
+
 PLAN-QUEUE-03 **adaptuje** stejný `TaskQueue.execute`, `assess` a atomický
 JSON writer se zámkem fronty i projektu; přidává revizně kontrolovaný přesun
 jediného ID a ovladače ve stávající stránce fronty. Reuse `IdeBridge` idle

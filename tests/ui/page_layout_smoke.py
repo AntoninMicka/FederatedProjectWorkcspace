@@ -38,6 +38,7 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  let writes=0,queueItems=[{id:'TASK-1',title:'Queued task'}],queueRevision=1,queueMoves=0,rejectQueueMove=false;
  projectRequest=async(path,request)=>{
   if(path==='/v1/task-queue'){
+   if(request.action==='owner-status')return {revision:queueRevision,view_revision:'scope',issues:[],projects:[],items:queueItems.map(item=>({...item,project_id:activeProject.id,project_title:activeProject.title,expected_head:activeProject.head,read_only:!!activeProject.readOnly}))};
    if(request.action==='move'){
     queueMoves++;check(request.revision===queueRevision&&request.expected_head===activeProject.head,'Move lacks current revision/head');
     if(rejectQueueMove)throw Error('Queue changed during move');
@@ -62,8 +63,8 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  const queueNode={id:'TASK-1',title:'Queued task',type:'task',depth:0,checked:false,ready:true,depends_on:[],relations:{},checklist:[]};
  const plan={status:'ready',nodes:[queueNode],subgraphs:[],ready:['TASK-1'],blocked:[],revision:'head',svg:''};
  renderTaskPlanSidebar(plan);await tick();await openTaskQueue();await tick();
- const queuePanel=document.querySelector('#task-queue-panel'),queueLayout=workspacePageLayouts.get(queuePanel);
- check(!queuePanel.hidden&&queueLayout.header.contains(document.querySelector('#task-queue-publish'))&&queueLayout.header.contains(document.querySelector('#task-queue-refresh')),'Queue has no independent page with actions');
+ const queuePanel=document.querySelector('#assigned-queue-view'),queueLayout=workspacePageLayouts.get(queuePanel);document.querySelector('#owner-queue-project-tools').open=true;
+ check(!queuePanel.hidden&&queueLayout.header.contains(document.querySelector('#owner-queue-refresh'))&&!projectView.contains(queuePanel),'Queue has no independent page with actions');
  check(!document.querySelector('#plan-panel').contains(document.querySelector('#task-queue-list'))&&document.querySelector('#task-queue-list li'),'Queue remains in roadmap or has no items');
  check(!document.querySelector('#sidebar-plan').textContent.includes('Podgrafy')&&document.querySelector('#plan-subgraphs').hidden,'Obsolete sidebar subgraphs remain');
  document.querySelector('#task-queue-list li button').click();await tick();check(!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-detail').textContent.includes('Queued task'),'Queue item did not open roadmap detail');
@@ -79,7 +80,7 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  detail.querySelector('button').click();await tick();check(detail.hidden&&document.activeElement===graph,'Closing detail does not return focus to graph');
  check(graph.getBoundingClientRect().height>=document.querySelector('.plan-layout').clientHeight-1,'Closing detail does not return space to graph');
  taskPlanProjection=plan;renderTaskPlan();
- await openTaskQueue();queueLayout.closeButton.click();await tick();check(!document.querySelector('#plan-panel').hidden,'Queue close did not return to roadmap');
+ await openTaskQueue();check(queueLayout.closeButton===null,'Independent queue section has a project-bound close action');await openTaskPlan();
  activeProject.readOnly=true;await openTaskQueue();check(document.querySelector('#task-queue-publish').disabled&&document.querySelector('#task-queue-list li button:last-child').disabled,'Read-only queue exposes write actions');activeProject.readOnly=false;
  queueItems=[{id:'TASK-1',title:'Queued task'},{id:'TASK-FREE',title:'Independent task'}];await openTaskQueue();
  const queueList=document.querySelector('#task-queue-list'),moveDown=queueList.querySelector('.task-queue-move-down');

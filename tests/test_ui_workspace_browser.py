@@ -10,7 +10,7 @@ from uuid import uuid4
 from spikes.project_creation import ProjectCreation
 from tests.ui_flow_case import UiFlowCase, require_browser
 
-SIDEBAR_LABELS = ['Projekty', 'Chaty', 'Úkoly', 'Plán', 'Podklady', 'Zdroje', 'Nástroje', 'Výstupy',
+SIDEBAR_LABELS = ['Projekty', 'Fronta úloh', 'Chaty', 'Úkoly', 'Plán', 'Podklady', 'Zdroje', 'Nástroje', 'Výstupy',
                   'Manuály', 'Nastavení', 'Federace']
 PROJECT_TABS = ('todo-tab', 'plan-tab', 'artifacts-tab', 'tools-tab', 'presentations-tab')
 
@@ -29,7 +29,8 @@ class SidebarTests(UiFlowCase):
         self.assertEqual(page.evaluate("[...document.querySelectorAll('#sidebar-tabs .sidebar-tab-label')]"
                                        ".map(x=>x.getAttribute('role'))"), ['tooltip'] * len(SIDEBAR_LABELS))
         self.assertEqual(set(self.tab_state().values()), {True})
-        for always in ('projects-tab', 'chats-tab', 'manuals-tab', 'settings-sidebar-tab', 'federation-tab'):
+        self.assertFalse(page.evaluate("document.querySelector('#open-task-queue').disabled"))
+        for always in ('projects-tab', 'assigned-queue-tab', 'chats-tab', 'manuals-tab', 'settings-sidebar-tab', 'federation-tab'):
             self.assertFalse(page.evaluate(f"document.getElementById('{always}').disabled"), always)
         page.evaluate("[...document.querySelectorAll('#sidebar-project-list button')]"
                       ".find(b=>b.textContent==='Otevřít').click()")

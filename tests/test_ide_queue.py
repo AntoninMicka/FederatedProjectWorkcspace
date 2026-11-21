@@ -286,6 +286,7 @@ const crypto={randomUUID:()=>'op'};let confirmed=true,noted='',calls=[],fail=fal
 const window={prompt:()=>noted,confirm:()=>confirmed};
 let taskQueueBusy=false,taskQueueView={expected_head:'h1'},taskQueueMessage='';let activeProject={id:'p',head:'h1',readOnly:false};
 const queueIsCurrent=()=>true,renderTaskQueue=()=>{},renderTaskPlanSidebar=()=>{plans++;},loadTaskQueue=async()=>{loaded++;};
+const document={querySelector:()=>({hidden:true})};
 async function projectRequest(path,body){if(path==='/v1/projects/open')return {commit_id:'h2',plan:{}};calls.push(body);if(fail)throw Error('stale');return body.decision==='rejected'?{result:null}:{result:{commit_id:'h2'}};}
 """
         checks=r"""
@@ -340,7 +341,7 @@ async function projectRequest(path,body){if(path==='/v1/projects/open')return {c
 
     def test_queue_file_without_flag_fields_still_loads(self):
         view=self.qstatus();path=next(self.queue.root.glob('*.json'))
-        data=json.loads(path.read_text());data.pop('held_task_ids');data.pop('flag_audit')
+        data=json.loads(path.read_text());project=data['projects'][self.project];project.pop('held_task_ids');project.pop('flag_audit')
         path.write_text(json.dumps(data));path.chmod(0o600)
         self.assertEqual(view['task_ids'],self.qstatus()['task_ids'])
         self.assertTrue(self.act('set-flag','TASK-01',flag='held',value=True)['items'][0]['held'])
@@ -488,10 +489,24 @@ assert.ok(!q.startable(null,'A'));
         self.assertEqual(repaired['task_ids'],[t['id'] for t in replacement['manifest']['tasks']])
 
     def test_reordered_queue_refreshes_packet_without_mutating_history_or_acceptance(self):
+        self.assert_reordered_packet()
+
+    def test_owner_queue_reorder_refreshes_project_packet_and_preserves_acceptance(self):
+        self.assert_reordered_packet(owner_scope=True)
+
+    def assert_reordered_packet(self, owner_scope=False):
         original = self.packet(); message = self.message(original); self.send(message)
         accepted = self.review(message); self.poll(); self.poll()
         pinned = load(self.service, self.record['session_id']); before = self.qstatus()
-        moved = self.act('move', 'TASK-01', target_index=2)
+        if owner_scope:
+            from spikes.owner_task_queue import OwnerTaskQueue
+            queue = OwnerTaskQueue(self.node)
+            view = queue.status(self.owner)
+            queue.move(dict(action='move',project_id=self.project,task_id='TASK-01',
+                target_index=2,revision=view['revision'],view_revision=view['view_revision'],expected_head=before['expected_head']),self.owner)
+            moved = self.qstatus()
+        else:
+            moved = self.act('move', 'TASK-01', target_index=2)
         self.assertEqual(['TASK-02', 'TASK-03', 'TASK-01'], moved['task_ids'])
         self.assertEqual(before['revision']+1, moved['revision'])
         self.assertTrue(next(i for i in moved['items'] if i['id']=='TASK-01')['user_confirmed'])

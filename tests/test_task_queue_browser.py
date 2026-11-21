@@ -42,7 +42,7 @@ try:
   checks={
    0:"typeof openTaskQueue==='function'",
    1:"window.opened&&activeProject",
-   2:"!projectView.hidden&&!document.querySelector('#task-queue-panel').hidden&&taskQueueView&&!taskQueueBusy&&!taskQueueView.valid&&!document.querySelector('#task-queue-repair').disabled",
+   2:"!document.querySelector('#assigned-queue-view').hidden&&!document.querySelector('#task-queue-panel').hidden&&taskQueueView&&!taskQueueBusy&&!taskQueueView.valid&&!document.querySelector('#task-queue-repair').disabled",
    3:"!taskQueueBusy&&window.previewText.includes('TASK-X')&&window.previewText.includes('TASK-A')&&window.previewText.includes('vyřazení')&&!taskQueueView.valid&&queueCalls.filter(c=>c.action==='repair').length===0&&taskQueueView.task_ids.length===3",
    4:"!taskQueueBusy&&taskQueueView?.valid&&JSON.stringify(taskQueueView.task_ids)===JSON.stringify(['TASK-X','TASK-B','TASK-C'])&&taskQueueView.items.find(i=>i.id==='TASK-B').held&&queueCalls.filter(c=>c.action==='repair').length===1"}
   def received(value):
@@ -66,3 +66,13 @@ finally:f.doCleanups()
         result=subprocess.run([sys.executable,'-c',script],cwd=Path(__file__).resolve().parents[1],text=True,capture_output=True,timeout=60)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('queue repair browser OK',result.stdout)
+
+
+class OwnerQueueBrowserTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_cross_project_queue_drag_drop_without_open_project(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/owner_queue_smoke.py')],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},text=True,capture_output=True,timeout=75)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('owner queue browser OK',result.stdout)
