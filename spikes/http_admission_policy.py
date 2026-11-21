@@ -386,7 +386,15 @@ RESERVED_ROUTES = (PROVIDER_CONTROL_ROUTES | MONITORING_CONTROL_ROUTES | frozens
 
 # Unknown paths retain conservative admission. Every declared JSON route now
 # has an audited domain; this does not remove native serialization or recovery.
-APPLICATION_ROUTES = frozenset()
+# XREF-02 sharing reads/writes two projects per request, so no single project
+# owner covers it; it stays in the conservative serialized application domain.
+APPLICATION_ROUTES = frozenset({
+    '/v1/sharing/overview', '/v1/sharing/share/preview', '/v1/sharing/share/confirm',
+    '/v1/sharing/attach/preview', '/v1/sharing/attach/confirm', '/v1/sharing/reference/view',
+    '/v1/sharing/repin/preview', '/v1/sharing/repin/confirm', '/v1/sharing/fork/preview',
+    '/v1/sharing/fork/confirm', '/v1/sharing/detach/preview', '/v1/sharing/detach/confirm',
+    '/v1/sharing/revoke/preview', '/v1/sharing/revoke/confirm',
+})
 
 STREAM_ROUTES = frozenset({
     '/v1/chat/send-stream', '/v1/tasks/route-stream', '/v1/external/send-stream',

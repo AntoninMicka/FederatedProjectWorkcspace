@@ -1396,6 +1396,86 @@ class WebTests(unittest.TestCase):
         self.assertEqual({item['id'] for item in Projects(self.root/'node.json').open(project)['artifacts']},
                          {created})
 
+    def test_sharing_routes_share_attach_and_open_with_member_scope(self):
+        def post(path, body, key=None):
+            code, data, _ = self.request(path=path, body=json.dumps(body),
+                                         headers={'Authorization': 'Bearer ' + key} if key else None)
+            return code, json.loads(data) if data else None
+        source = json.loads(self.create_project('Zdroj sdílení')[1])['id']
+        target = json.loads(self.create_project('Cíl sdílení')[1])['id']
+        node = self.root / 'node.json'; artifacts = Artifacts(node); artifact = str(uuid4())
+        artifacts.save(dict(project_id=source, artifact_id=artifact, base_head=Projects(node).open(source)['commit_id'],
+                            title='Zadání', body='Text zadání\n', new=True), str(uuid4()))
+        code, offer = post('/v1/sharing/share/preview', dict(project_id=source, artifact_id=artifact,
+                           targets=[target], purpose='share', reason='Pro cílový tým'))
+        self.assertEqual(200, code, offer)
+        self.assertEqual(400, post('/v1/sharing/share/confirm', dict(preview=offer['preview']))[0])
+        code, value = post('/v1/sharing/share/confirm', dict(preview=offer['preview'], sha256='0' * 64,
+                                                            operation_id=str(uuid4())))
+        self.assertEqual(422, code, value)
+        code, value = post('/v1/sharing/share/confirm', dict(preview=offer['preview'], sha256=offer['sha256'],
+                                                            operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        share_id = offer['preview']['share_id']
+        code, view = post('/v1/sharing/overview', dict(project_id=target))
+        self.assertEqual(200, code, view); self.assertEqual([share_id], [o['share_id'] for o in view['offers']])
+        code, attach = post('/v1/sharing/attach/preview', dict(project_id=target, source_project_id=source,
+                            share_id=share_id, title='Zadání ze zdroje', reason='Plníme jej'))
+        self.assertEqual(200, code, attach)
+        code, value = post('/v1/sharing/attach/confirm', dict(preview=attach['preview'], sha256=attach['sha256'],
+                                                             operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        ref = attach['preview']['reference_id']
+        rows = Projects(node).open(target)['artifacts']
+        self.assertIn(dict(id=ref, title='Zadání ze zdroje', kind='document', sharing='reference'), rows)
+        self.assertNotIn(share_id, {row['id'] for row in Projects(node).open(source)['artifacts']})
+        code, opened = post('/v1/sharing/reference/view', dict(project_id=target, reference_id=ref))
+        self.assertEqual(200, code, opened)
+        self.assertEqual((opened['preview']['text'], opened['source_title']), ('Text zadání\n', 'Zdroj sdílení'))
+        code, value = post('/v1/sharing/attach/preview', dict(project_id=source, source_project_id=target,
+                           share_id=share_id, title='X', reason='Y'))
+        self.assertEqual(409, code, value); self.assertEqual('not-shared', value['state'])
+        state = post('/v1/administration', {'action': 'list'})[1]
+        state = post('/v1/administration', {'action': 'create-user', 'expected_commit': state['commit_id'],
+                                            'name': 'Člen cíle', 'node_role': 'member'})[1]
+        user, key = state['users'][0], state['access_key']
+        state = post('/v1/administration', {'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': user['id'], 'active': True, 'node_role': 'member', 'memberships': {target: 'editor'}})[1]
+        self.assertEqual(403, post('/v1/sharing/overview', dict(project_id=source), key)[0])
+        code, view = post('/v1/sharing/overview', dict(project_id=target), key)
+        self.assertEqual(200, code, view)
+        self.assertEqual(([], []), (view['candidates'], view['offers']))
+        self.assertNotIn('Zdroj sdílení', json.dumps(view, ensure_ascii=False))
+        code, value = post('/v1/sharing/reference/view', dict(project_id=target, reference_id=ref), key)
+        # XREF-02-D: the target descriptor stays visible; the source grants nothing to this member.
+        self.assertEqual((200, 'source-inaccessible', None, None),
+                         (code, value['state'], value['preview'], value['source_title']), value)
+        self.assertNotIn('Text zadání', json.dumps(value, ensure_ascii=False))
+        # XREF-02-C: the member edits only the target, so source revocation is refused.
+        self.assertEqual(403, post('/v1/sharing/revoke/preview', dict(project_id=source, share_id=share_id), key)[0])
+        artifacts.save(dict(project_id=source, artifact_id=artifact, base_head=Projects(node).open(source)['commit_id'],
+                            title='Zadání', body='Text zadání v2\n', new=False), str(uuid4()))
+        code, update = post('/v1/sharing/repin/preview', dict(project_id=target, reference_id=ref))
+        self.assertEqual(200, code, update); self.assertIn('+Text zadání v2', update['display']['diff']['lines'])
+        code, value = post('/v1/sharing/repin/confirm', dict(preview=update['preview'], sha256=update['sha256'],
+                                                            operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        code, revoke = post('/v1/sharing/revoke/preview', dict(project_id=source, share_id=share_id))
+        self.assertEqual(200, code, revoke)
+        code, value = post('/v1/sharing/revoke/confirm', dict(preview=revoke['preview'], sha256=revoke['sha256'],
+                                                             operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        code, opened = post('/v1/sharing/reference/view', dict(project_id=target, reference_id=ref))
+        self.assertEqual((200, 'share-revoked', None), (code, opened['state'], opened['preview']))
+        code, value = post('/v1/sharing/fork/preview', dict(project_id=target, reference_id=ref))
+        self.assertEqual((409, 'share-revoked'), (code, value['state']))
+        code, detach = post('/v1/sharing/detach/preview', dict(project_id=target, reference_id=ref))
+        self.assertEqual(200, code, detach)
+        code, value = post('/v1/sharing/detach/confirm', dict(preview=detach['preview'], sha256=detach['sha256'],
+                                                             operation_id=str(uuid4())))
+        self.assertEqual(200, code, value)
+        self.assertNotIn(ref, {row['id'] for row in Projects(node).open(target)['artifacts']})
+
     def test_shared_conflict_routes_preview_and_publish_two_parent_merge(self):
         _, data, _ = self.create_project('Conflict')
         project = json.loads(data)['id']; node = self.root / 'node.json'

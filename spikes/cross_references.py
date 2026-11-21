@@ -20,8 +20,9 @@ from spikes.configuration import committed_project, overlap, parse_node, read_co
 from spikes.metadata import MAX_FILE, parse_json, require, uuid, validate_snapshot
 from spikes.project_creation import ProjectCreation
 from spikes.projects import directory
-from spikes.reference_schema import SCHEMA, FORK, descriptor, pin, references
-from spikes.reporting_schema import PRIVACY, digest, encoded, fields, hex_id, text
+from spikes.reference_schema import (SCHEMA, SCHEMA_V1, FORK, SHARE, active, attachment, pin, reason,
+                                     references, share_record, shares, single_line)
+from spikes.reporting_schema import PRIVACY, digest, encoded, fields, hex_id
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
 
@@ -106,7 +107,30 @@ class CrossReferences:
             require(ws.git.head() == head, 'Source changed while pinning')
             return result
 
-    def live(self, source, *, boundary='same-node'):
+    @staticmethod
+    def grant(files, entities, attached, artifact_id, target_project_id):
+        """The live source share that must still allow this target (ADR 0086)."""
+        if attached is None:
+            return None  # XREF-01 v1 reference: user access to both projects only.
+        record = shares(files, entities).get(attached['share_id'])
+        if record is None or record['artifact_id'] != artifact_id or record['originator_id'] != attached['originator_id']:
+            raise ReferenceUnavailable('not-shared')
+        if record['revoked'] is not None:
+            raise ReferenceUnavailable('share-revoked')
+        if target_project_id is None or not active(record, target_project_id):
+            raise ReferenceUnavailable('not-shared')
+        return record
+
+    def live(self, source, *, boundary='same-node', share=None, target=None):
+        try:
+            result = self._live(source, boundary=boundary, share=share, target=target)
+        except ReferenceUnavailable as exc:
+            self.forget(source, share, exc.state, target)  # Known loss of access outlives any cached copy.
+            raise
+        self._clear_tombstones(source, share, target)
+        return result
+
+    def _live(self, source, *, boundary='same-node', share=None, target=None):
         pin(source)
         access = self.authorize(source['project_id'])
         ws = self.artifacts.workspace(source['project_id']); ws.repair_index()
@@ -117,6 +141,7 @@ class CrossReferences:
             current = ws.git.snapshot(head); current_entities = validate_snapshot(current)
             if source['artifact_id'] not in current_entities:
                 raise ReferenceUnavailable('deleted')
+            granted = self.grant(current, current_entities, share, source['artifact_id'], target)
             try:
                 require(ws.git.run('rev-parse', '--verify', source['commit_id'] + '^{commit}').stdout.strip() == source['commit_id'], 'Invalid pinned source commit')
                 committed_project(ws.git, source['commit_id'], source['project_id'], check_worktree=False)
@@ -134,7 +159,7 @@ class CrossReferences:
             require(self.authorize(source['project_id']) == access and ws.git.head() == head,
                     'Source access or HEAD changed while reading')
             return dict(raw=raw, metadata=meta, privacy=privacy, source_head=head,
-                        access_revision=access, newer=newer)
+                        access_revision=access, newer=newer, share=granted)
 
     def _cache_path(self, source):
         return self.cache / (digest(encoded(dict(user_id=self.user_id, source=source))) + '.json')
@@ -145,18 +170,50 @@ class CrossReferences:
         require(not any(overlap(self.cache, Path(p[key])) for p in node['projects'] for key in ('root','state_dir')),
                 'Reference cache must remain outside project Git and authoritative state')
 
-    def save_cache(self, source, result):
+    def _tombstone_path(self, source, share_id=None, target=None):
+        # Not user-scoped: a revocation or deletion seen by anyone binds every cache on this node.
+        return self.cache / ('gone-' + digest(encoded(dict(project_id=source['project_id'],
+            artifact_id=source['artifact_id'], share_id=share_id, target=target))) + '.json')
+
+    def _tombstones(self, source, share, target):
+        paths = [self._tombstone_path(source)]  # deleted: every pin and share of the artifact
+        if share:
+            paths += [self._tombstone_path(source, share['share_id']),  # share-revoked: every target
+                      self._tombstone_path(source, share['share_id'], target)]  # not-shared: this target
+        return paths
+
+    def forget(self, source, share, state, target=None):
+        """Record a known deletion/revocation and drop this user's cached bytes for the pin."""
         self.cache_location()
-        self.cache.mkdir(mode=0o700, exist_ok=True); directory(self.cache, private=True)
+        if state != 'invalid-pin':  # An unreadable pin concerns only that pin's cache entry.
+            share_id = share['share_id'] if share and state in {'share-revoked', 'not-shared'} else None
+            self._write_private(self._tombstone_path(source, share_id, target if state == 'not-shared' else None),
+                                encoded(dict(schema='fpw-reference-tombstone-v1', state=state, at=self.now())))
+        try:
+            os.unlink(self._cache_path(source))
+        except FileNotFoundError:
+            pass
+
+    def _clear_tombstones(self, source, share, target):
+        for path in self._tombstones(source, share, target):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+
+    def save_cache(self, source, result):
         value = dict(schema='fpw-reference-cache-v1', user_id=self.user_id, source=source,
                      raw=base64.b64encode(result['raw']).decode(), metadata=result['metadata'],
                      privacy=result['privacy'], source_head=result['source_head'],
                      access_revision=result['access_revision'], verified_at=self.now())
-        destination = self._cache_path(source)
+        self.cache_location(); self._write_private(self._cache_path(source), encoded(value))
+
+    def _write_private(self, destination, data):
+        self.cache.mkdir(mode=0o700, exist_ok=True); directory(self.cache, private=True)
         fd, temporary = tempfile.mkstemp(prefix='.reference-', dir=self.cache)
         try:
             with os.fdopen(fd, 'wb') as stream:
-                stream.write(encoded(value)); stream.flush(); os.fsync(stream.fileno())
+                stream.write(data); stream.flush(); os.fsync(stream.fileno())
             os.replace(temporary, destination)
             fd = os.open(self.cache, os.O_RDONLY | os.O_DIRECTORY)
             try: os.fsync(fd)
@@ -164,10 +221,14 @@ class CrossReferences:
         finally:
             if os.path.exists(temporary): os.unlink(temporary)
 
-    def load_cache(self, source):
+    def load_cache(self, source, share=None, target=None):
         self.cache_location()
         access = self.authorize(source['project_id'])
         directory(self.cache, private=True)
+        for path in self._tombstones(source, share, target):
+            if os.path.lexists(path):
+                state = parse_json(path.read_bytes(), maximum=4096).get('state', 'deleted')
+                raise ReferenceUnavailable(state if state in {'deleted', 'share-revoked', 'not-shared', 'invalid-pin'} else 'deleted')
         fd = os.open(self._cache_path(source), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd, 'rb') as stream:
             info = os.fstat(stream.fileno())
@@ -206,21 +267,23 @@ class CrossReferences:
         value = references(files, entities).get(reference_id)
         require(value is not None, 'Reference unavailable')
         source = value['source']; require(source['project_id'] != project_id, 'Cross-project reference requires another project')
-        result = self.live(source, boundary=boundary)
+        result = self.live(source, boundary=boundary, share=value.get('share'), target=project_id)
         result['privacy'] = max(result['privacy'], entities[reference_id]['privacy'], key=PRIVACY.get)
         require(result['privacy'] != 'local-only' or boundary == 'same-node', 'local-only requires same-node execution')
-        result['proof'] = dict(schema=SCHEMA, source=source, source_head=result['source_head'],
+        result['proof'] = dict(schema=value['schema'], source=source, source_head=result['source_head'],
                                access_revision=result['access_revision'])
+        if value['schema'] != SCHEMA_V1:
+            result['proof']['share'] = value['share']
         return result
 
     def view(self, project_id, reference_id, *, offline=True, boundary='same-node'):
         head, value, meta = self.local(project_id, reference_id)
         source = value['source']; require(source['project_id'] != project_id, 'Reference must target another project')
         try:
-            result = self.live(source, boundary=boundary)
+            result = self.live(source, boundary=boundary, share=value.get('share'), target=project_id)
         except (FileNotFoundError, TimeoutError):
             require(offline and boundary == 'same-node', 'Offline reference is display-only on the same node')
-            result = self.load_cache(source); state = 'offline-stale'
+            result = self.load_cache(source, value.get('share'), project_id); state = 'offline-stale'
         else:
             self.save_cache(source, result)
             state = 'newer-available' if result['newer'] else 'current'
@@ -232,17 +295,17 @@ class CrossReferences:
         presentation = present(dict(raw=result['raw'],path=source['path'],metadata=result['metadata'],
                                     sidecar='file' in result['metadata']))
         return dict(project_id=project_id, reference_id=reference_id, commit_id=head, read_only=True,
-                    state=state, stale=state == 'offline-stale', privacy_unverified=state == 'offline-stale',
+                    schema=value['schema'], share=value.get('share'), state=state, stale=state == 'offline-stale', privacy_unverified=state == 'offline-stale',
                     source=source, newer=result['newer'], privacy=privacy, title=result['metadata']['title'],
-                    preview=presentation,
+                    preview=presentation, verified_at=result.get('verified_at'),
                     content_b64=base64.b64encode(result['raw']).decode())
 
-    def preview(self, project_id, reference_id, source, title, *, update=False):
-        self.authorize(project_id, write=True); uuid(reference_id); pin(source); text(title)
+    def preview(self, project_id, reference_id, source, title, *, update=False, share_id=None, reason_text=None):
+        """Attach (v2, needs an active source share) or repin an existing reference."""
+        self.authorize(project_id, write=True); uuid(reference_id); pin(source); single_line(title)
         require(reference_id != source['artifact_id'], 'Reference needs a distinct local ID')
         require(source['project_id'] != project_id, 'Cross-project reference requires another project')
-        require(type(update) is bool and len(title) <= 200 and not any(c in title for c in '\r\n'), 'Invalid reference title')
-        result = self.live(source); self.save_cache(source, result)
+        require(type(update) is bool, 'Invalid reference update flag')
         ws = self.artifacts.workspace(project_id); ws.recover()
         with ws.journal.lock(), ws.journal.connect() as db:
             ws._writable(); head = ws.git.head(); ws._read_locked(db)
@@ -253,15 +316,174 @@ class CrossReferences:
                 before = references(files, entities).get(reference_id)
                 require(before is not None and all(before['source'][k] == source[k] for k in ('project_id','repository','artifact_id')),
                         'Repinning cannot change source identity')
-            privacy = max(result['privacy'], entities[reference_id]['privacy'] if update else 'public', key=PRIVACY.get)
-            return dict(schema='fpw-reference-write-v1', project_id=project_id, base_head=head,
-                        reference_id=reference_id, source=source, title=title, privacy=privacy,
-                        update=update, user_id=self.user_id)
+                require(share_id is None and reason_text is None, 'Repin keeps the original share provenance')
+                attached = before.get('share')
+                local_privacy = entities[reference_id]['privacy']
+            else:
+                uuid(share_id); reason(reason_text)
+                attached, local_privacy = None, 'public'
+        if not update:
+            # The originator is read from the live source grant, never from the caller.
+            record = self._share(source['project_id'], share_id)
+            attached = attachment(dict(share_id=share_id, originator_id=record['originator_id'],
+                                       attached_by=self.user_id, reason=reason_text))
+        result = self.live(source, share=attached, target=project_id); self.save_cache(source, result)
+        privacy = max(result['privacy'], local_privacy, key=PRIVACY.get)
+        value = dict(schema='fpw-reference-write-v1', project_id=project_id, base_head=head,
+                     reference_id=reference_id, source=source, title=title, privacy=privacy,
+                     update=update, user_id=self.user_id)
+        if attached is not None:
+            value['share'] = attached
+        return value
+
+    def _share(self, project_id, share_id):
+        self.authorize(project_id)
+        ws = self.artifacts.workspace(project_id); ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            ws._read_shared(db); head = ws.git.head(); committed_project(ws.git, head, project_id)
+            files = ws.git.snapshot(head); record = shares(files, validate_snapshot(files)).get(share_id)
+            if record is None:
+                raise ReferenceUnavailable('not-shared')
+            return record
+
+    def registered_projects(self):
+        return [p['project_id'] for p in parse_node(read_config(self.node), location=self.node)['projects']]
+
+    def project_state(self, project_id, extra_ids=()):
+        """Authorized committed sharing state of one project; never foreign bytes."""
+        self.authorize(project_id)
+        ws = self.artifacts.workspace(project_id); ws.repair_index()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            ws._read_shared(db); head = ws.git.head(); meta = committed_project(ws.git, head, project_id)
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            granted, refs = shares(files, entities), references(files, entities)
+            wanted = {r['artifact_id'] for r in granted.values()} | set(refs) | set(extra_ids)
+            artifacts = {id_: dict(title=entities[id_]['title'], privacy=entities[id_]['privacy'],
+                                   kind=entities[id_]['kind']) for id_ in wanted if id_ in entities}
+            require(ws.git.head() == head, 'Project changed while reading sharing state')
+        return dict(project_id=project_id, title=meta['title'], commit_id=head,
+                    shares=granted, references=refs, artifacts=artifacts)
+
+    def share_preview(self, project_id, share_id, artifact_id, targets, reason_text, *, purpose='share'):
+        """Offer one own source artifact to explicitly listed, authorized target projects."""
+        self.authorize(project_id, write=True); uuid(share_id); uuid(artifact_id); reason(reason_text)
+        require(isinstance(targets, (list, tuple)) and all(isinstance(t, str) for t in targets), 'Invalid share targets')
+        targets = sorted(set(targets))
+        require(project_id not in targets, 'A project cannot share into itself')
+        for target in targets:
+            self.authorize(target)  # Never offer projects the user cannot see.
+        ws = self.artifacts.workspace(project_id); ws.recover()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            head = ws.git.head(); ws._read_shared(db); committed_project(ws.git, head, project_id)
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            require(share_id not in entities, 'Share ID already exists')
+            self.content(files, entities, artifact_id)
+            require(artifact_id not in shares(files, entities), 'A share record cannot be shared')
+            meta = entities[artifact_id]
+            record = share_record(dict(schema=SHARE, artifact_id=artifact_id, purpose=purpose, targets=targets,
+                originator_id=self.user_id, reason=reason_text, created_at=self.now(), revoked=None))
+            require(ws.git.head() == head, 'Source changed while previewing share')
+        return dict(schema='fpw-share-write-v1', project_id=project_id, base_head=head, share_id=share_id,
+                    record=record, title='Výstup projektu' if purpose == 'output' else 'Sdílení podkladu',
+                    privacy=meta['privacy'], user_id=self.user_id)
+
+    def share_write(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
+        require(confirm is True and digest(encoded(preview)) == sha256, 'Exact share preview must be confirmed')
+        fields(preview, 'schema project_id base_head share_id record title privacy user_id')
+        require(preview['schema'] == 'fpw-share-write-v1' and preview['user_id'] == self.user_id
+                and preview['record']['originator_id'] == self.user_id, 'Invalid share request')
+        share_record(preview['record']); single_line(preview['title'])
+        self.authorize(preview['project_id'], write=True)
+        for target in preview['record']['targets']:
+            self.authorize(target)
+        ws = self.artifacts.workspace(preview['project_id'])
+        def prepare(workspace):
+            require(workspace.git.head() == preview['base_head'], 'Share source changed')
+            committed_project(workspace.git, preview['base_head'], preview['project_id'])
+            self.authorize(preview['project_id'], write=True)
+            files = workspace.git.snapshot(preview['base_head']); entities = validate_snapshot(files)
+            id_, artifact_id = preview['share_id'], preview['record']['artifact_id']
+            require(id_ not in entities, 'Share ID already exists')
+            self.content(files, entities, artifact_id)
+            require(entities[artifact_id]['privacy'] == preview['privacy'], 'Shared artifact privacy changed; review a fresh preview')
+            meta = dict(schema_version=1, id=id_, title=preview['title'], kind='document', created_at=preview['record']['created_at'],
+                        author_id=self.user_id, privacy=preview['privacy'], provenance='user', file='share.json', tags=[SHARE])
+            return ({f'artifacts/{id_}/metadata.json': encoded(meta), f'artifacts/{id_}/share.json': encoded(preview['record'])},
+                    'Local workspace author', self.user_id + '@local.invalid', 'Share artifact with explicit target projects')
+        return ws.transact(operation_id, dict(preview, action='write-share-v1'), prepare,
+                           expected_head=preview['base_head'], checkpoint=checkpoint)
+
+    def revoke_preview(self, project_id, share_id):
+        """End future access through one share; legitimately made forks stay (ADR 0086)."""
+        self.authorize(project_id, write=True); uuid(share_id)
+        ws = self.artifacts.workspace(project_id); ws.recover()
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            head = ws.git.head(); ws._read_shared(db); committed_project(ws.git, head, project_id)
+            files = ws.git.snapshot(head); record = shares(files, validate_snapshot(files)).get(share_id)
+            require(record is not None, 'Share record unavailable')
+            require(record['revoked'] is None, 'Share is already revoked')
+            require(ws.git.head() == head, 'Source changed while previewing revocation')
+        return dict(schema='fpw-share-revoke-v1', project_id=project_id, base_head=head, share_id=share_id,
+                    record=record, revoked=dict(at=self.now(), by=self.user_id), user_id=self.user_id)
+
+    def revoke(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
+        require(confirm is True and digest(encoded(preview)) == sha256, 'Exact revocation preview must be confirmed')
+        fields(preview, 'schema project_id base_head share_id record revoked user_id')
+        require(preview['schema'] == 'fpw-share-revoke-v1' and preview['user_id'] == self.user_id
+                and preview['revoked'].get('by') == self.user_id, 'Invalid revocation request')
+        uuid(preview['share_id']); revoked = share_record(dict(preview['record'], revoked=preview['revoked']))
+        self.authorize(preview['project_id'], write=True)
+        ws = self.artifacts.workspace(preview['project_id'])
+        def prepare(workspace):
+            require(workspace.git.head() == preview['base_head'], 'Share source changed')
+            committed_project(workspace.git, preview['base_head'], preview['project_id'])
+            self.authorize(preview['project_id'], write=True)
+            files = workspace.git.snapshot(preview['base_head']); entities = validate_snapshot(files)
+            require(shares(files, entities).get(preview['share_id']) == preview['record'],
+                    'Share changed; review a fresh revocation preview')
+            return ({f'artifacts/{preview["share_id"]}/share.json': encoded(revoked)},
+                    'Local workspace author', self.user_id + '@local.invalid', 'Revoke artifact share')
+        return ws.transact(operation_id, dict(preview, action='revoke-share-v1'), prepare,
+                           expected_head=preview['base_head'], checkpoint=checkpoint)
+
+    def detach_preview(self, project_id, reference_id):
+        """Remove a pointer from the target; the source and its Git history stay untouched."""
+        self.authorize(project_id, write=True)
+        head, value, meta = self.local(project_id, reference_id)
+        return dict(schema='fpw-reference-detach-v1', project_id=project_id, base_head=head,
+                    reference_id=reference_id, descriptor_sha256=digest(encoded(value)), user_id=self.user_id)
+
+    def detach(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
+        require(confirm is True and digest(encoded(preview)) == sha256, 'Exact detach preview must be confirmed')
+        fields(preview, 'schema project_id base_head reference_id descriptor_sha256 user_id')
+        require(preview['schema'] == 'fpw-reference-detach-v1' and preview['user_id'] == self.user_id,
+                'Invalid detach request')
+        uuid(preview['reference_id']); self.authorize(preview['project_id'], write=True)
+        ws = self.artifacts.workspace(preview['project_id'])
+        def prepare(workspace):
+            require(workspace.git.head() == preview['base_head'], 'Reference target changed')
+            committed_project(workspace.git, preview['base_head'], preview['project_id'])
+            self.authorize(preview['project_id'], write=True)
+            files = workspace.git.snapshot(preview['base_head']); entities = validate_snapshot(files)
+            id_ = preview['reference_id']; value = references(files, entities).get(id_)
+            require(value is not None and digest(encoded(value)) == preview['descriptor_sha256'],
+                    'Reference changed; review a fresh preview')
+            require(not any(other != id_ and any(r.get('target_id') == id_ for r in item.get('relations', []))
+                            for other, item in entities.items()), 'Other artifacts still relate to this reference')
+            changes = {path: None for path in files if path.startswith(f'artifacts/{id_}/')}
+            validate_snapshot({path: data for path, data in files.items() if path not in changes})
+            return changes, 'Local workspace author', self.user_id + '@local.invalid', 'Detach pinned artifact reference'
+        return ws.transact(operation_id, dict(preview, action='detach-reference-v1'), prepare,
+                           expected_head=preview['base_head'], checkpoint=checkpoint)
 
     def write(self, preview, operation_id, sha256, *, confirm=False, checkpoint=lambda stage: None):
         require(confirm is True and digest(encoded(preview)) == sha256, 'Exact reference preview must be confirmed')
-        fields(preview, 'schema project_id base_head reference_id source title privacy update user_id')
+        require(isinstance(preview, dict), 'Invalid reference request')
+        fields(preview, 'schema project_id base_head reference_id source title privacy update user_id'
+               + (' share' if 'share' in preview else ''))
         require(preview['schema'] == 'fpw-reference-write-v1' and preview['user_id'] == self.user_id, 'Invalid reference request')
+        attached = attachment(preview['share']) if 'share' in preview else None
+        require(attached is None or attached['attached_by'] == self.user_id or preview['update'], 'Invalid reference attachment')
         self.authorize(preview['project_id'], write=True)
         ws = self.artifacts.workspace(preview['project_id'])
         def prepare(workspace):
@@ -270,10 +492,13 @@ class CrossReferences:
             # preview cannot be called recursively while target lock is held.
             files = workspace.git.snapshot(preview['base_head']); entities = validate_snapshot(files)
             self.authorize(preview['project_id'], write=True)
-            result = self.live(preview['source'])
-            id_ = preview['reference_id']; uuid(id_); text(preview['title'])
-            require(len(preview['title']) <= 200 and not any(c in preview['title'] for c in '\r\n'), 'Invalid reference title')
+            result = self.live(preview['source'], share=attached, target=preview['project_id'])
+            id_ = preview['reference_id']; uuid(id_); single_line(preview['title'])
             require(type(preview['update']) is bool and (id_ in entities) == preview['update'], 'Reference create/update mismatch')
+            if preview['update']:
+                require(references(files, entities).get(id_, {}).get('share') == attached, 'Repin cannot change share provenance')
+            else:
+                require(attached is not None, 'A new reference requires an active source share')
             privacy = max(result['privacy'], entities[id_]['privacy'] if preview['update'] else 'public', key=PRIVACY.get)
             require(privacy == preview['privacy'], 'Reference privacy changed; review a fresh preview')
             if preview['update']:
@@ -283,8 +508,10 @@ class CrossReferences:
                 meta = dict(schema_version=1,id=id_,title=preview['title'],kind='document',created_at=self.now(),
                     author_id=self.user_id,privacy=privacy,provenance='user',file='reference.json',tags=[SCHEMA])
             require(preview['source']['project_id'] != preview['project_id'], 'Reference must target another project')
+            body = (dict(schema=SCHEMA, source=preview['source'], share=attached) if attached is not None
+                    else dict(schema=SCHEMA_V1, source=preview['source']))
             changes = {f'artifacts/{id_}/metadata.json': encoded(meta),
-                       f'artifacts/{id_}/reference.json': encoded(dict(schema=SCHEMA,source=preview['source']))}
+                       f'artifacts/{id_}/reference.json': encoded(body)}
             return changes,'Local workspace author',self.user_id+'@local.invalid','Write pinned artifact reference'
         return ws.transact(operation_id,dict(preview,action='write-reference-v1'),prepare,
                            expected_head=preview['base_head'],checkpoint=checkpoint)
@@ -292,7 +519,7 @@ class CrossReferences:
     def fork_preview(self, project_id, reference_id, new_id):
         uuid(new_id); self.authorize(project_id, write=True)
         head, value, meta = self.local(project_id, reference_id)
-        result = self.live(value['source'])
+        result = self.live(value['source'], share=value.get('share'), target=project_id)
         return dict(schema='fpw-reference-fork-preview-v1',project_id=project_id,base_head=head,
                     reference_id=reference_id,new_id=new_id,source=value['source'],user_id=self.user_id,
                     privacy=max(meta['privacy'],result['privacy'],key=PRIVACY.get))
@@ -350,11 +577,16 @@ def main():
     parser.add_argument('--node',required=True)
     sub=parser.add_subparsers(dest='command',required=True)
     p=sub.add_parser('pin');p.add_argument('project_id');p.add_argument('artifact_id');p.add_argument('--commit')
+    p=sub.add_parser('share-preview');p.add_argument('project_id');p.add_argument('share_id');p.add_argument('artifact_id');p.add_argument('reason');p.add_argument('--target',action='append',required=True)
+    p.add_argument('--purpose',choices=('share','output'),default='share')
     p=sub.add_parser('preview');p.add_argument('project_id');p.add_argument('reference_id');p.add_argument('source',type=Path);p.add_argument('title');p.add_argument('--update',action='store_true')
+    p.add_argument('--share');p.add_argument('--reason')
     p=sub.add_parser('view');p.add_argument('project_id');p.add_argument('reference_id');p.add_argument('--online-only',action='store_true')
     p=sub.add_parser('index');p.add_argument('project_id')
     p=sub.add_parser('fork-preview');p.add_argument('project_id');p.add_argument('reference_id');p.add_argument('new_id')
-    for name in ('write','fork'):
+    p=sub.add_parser('revoke-preview');p.add_argument('project_id');p.add_argument('share_id')
+    p=sub.add_parser('detach-preview');p.add_argument('project_id');p.add_argument('reference_id')
+    for name in ('write','fork','share-write','revoke','detach'):
         p=sub.add_parser(name);p.add_argument('preview',type=Path);p.add_argument('--operation-id',required=True);p.add_argument('--sha256',required=True);p.add_argument('--confirm',action='store_true')
     args=parser.parse_args();service=CrossReferences(args.node)
     def read(path):
@@ -363,11 +595,15 @@ def main():
             require(digest(encoded(value['value']))==value['sha256'],'Saved reference envelope changed');return value['value']
         return value
     if args.command=='pin':result=service.source_pin(args.project_id,args.artifact_id,args.commit)
-    elif args.command=='preview':result=service.preview(args.project_id,args.reference_id,read(args.source),args.title,update=args.update)
+    elif args.command=='share-preview':result=service.share_preview(args.project_id,args.share_id,args.artifact_id,args.target,args.reason,purpose=args.purpose)
+    elif args.command=='preview':result=service.preview(args.project_id,args.reference_id,read(args.source),args.title,update=args.update,
+                                                        share_id=args.share,reason_text=args.reason)
     elif args.command=='view':result=service.view(args.project_id,args.reference_id,offline=not args.online_only)
     elif args.command=='index':result=service.index(args.project_id)
     elif args.command=='fork-preview':result=service.fork_preview(args.project_id,args.reference_id,args.new_id)
-    else:result=getattr(service,args.command)(read(args.preview),args.operation_id,args.sha256,confirm=args.confirm)
+    elif args.command=='revoke-preview':result=service.revoke_preview(args.project_id,args.share_id)
+    elif args.command=='detach-preview':result=service.detach_preview(args.project_id,args.reference_id)
+    else:result=getattr(service,args.command.replace('-','_'))(read(args.preview),args.operation_id,args.sha256,confirm=args.confirm)
     print(json.dumps(dict(value=result,sha256=digest(encoded(result))),ensure_ascii=False,indent=2))
 
 

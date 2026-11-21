@@ -20,6 +20,12 @@ from spikes.metadata import MAX_METADATA, require, validate_snapshot, validate_t
 from spikes.storage import Git, Index, StaleIndex, projection
 
 
+
+def _is_reference(meta):
+    # Tags are validated against reference.json by validate_snapshot.
+    return bool(meta) and meta.get('file') == 'reference.json' and any(
+        tag.startswith('fpw-artifact-reference-v') for tag in meta.get('tags', []))
+
 class PendingOperation(RuntimeError):
     pass
 
@@ -534,7 +540,8 @@ class Workspace:
                     description=meta.get('description', ''), commit_id=commit,
                     main_todo_id=main_todo_id(project_id), main_todo=todo, plan=plan,
                     history=dict(entries=history, truncated=len(revisions) > MAX_PROJECT_HISTORY),
-                    artifacts=[dict(id=id_, title=title, kind=kind)
+                    artifacts=[dict(id=id_, title=title, kind=kind,
+                                    **({'sharing': 'reference'} if _is_reference(entities.get(id_)) else {}))
                                for id_, title, kind in rows if id_ in artifact_ids])
         if cache_key is not None:
             _project_view_put(cache_key, result, view)

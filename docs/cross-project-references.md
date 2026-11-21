@@ -10,6 +10,73 @@ Reference zobrazuje konkrétní revizi zdrojového artefaktu read-only. Novějš
 obsah nabídne, ale nepřevezme bez potvrzeného repinu. Nový GUI formulář tento
 řez nepřidává; generický prohlížeč dokumentů může zobrazit JSON deskriptor.
 
+## Sdílení podkladu — XREF-02
+
+Od XREF-02-A vyžaduje nová reference explicitní sdílení ve zdrojovém
+projektu ([ADR 0086](adr/0086-cross-project-artifact-sharing.md)). Editor
+zdroje vytvoří záznam sdílení jednoho artefaktu. Záznam určuje povolené cílové
+projekty, původce a důvod. Připojení v cíli pak uvede ID sdílení a vlastní
+důvod použití. Resolver při každém použití ověří, že sdílení trvá a uvádí
+právě tento cíl. Oprávnění uživatele k oběma projektům tím nenahrazuje.
+Reference v1 vytvořené před XREF-02 zůstávají čitelné jako `share: null`.
+Volba `--purpose output` označí artefakt jako výstup projektu pro jeho
+odběratele, výchozí `share` je běžné sdílení podkladu.
+
+```sh
+python3 -m spikes.cross_references --node NODE share-preview SOURCE_PROJECT SHARE_ID ARTIFACT 'Důvod sdílení' --target TARGET_PROJECT > share.json
+python3 -m spikes.cross_references --node NODE share-write share.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
+```
+
+Sdílení a připojení jsou dvě samostatné potvrzené operace ve dvou
+repozitářích. Sdílení bez připojené reference je platný mezistav.
+
+V běžném Workspace UI (XREF-02-B):
+
+- **Sdílet do projektu** v menu podkladu nabídne jen projekty, které
+  přihlášený uživatel vidí. Zvolíte účel (sdílení nebo výstup projektu)
+  a důvod. Dialog ukáže i dosavadní sdílení tohoto podkladu a jeho použití
+  v dostupných projektech.
+- **Připojit z jiného projektu** v Podkladech ukáže podklady sdílené do
+  otevřeného projektu, včetně výstupů. Po výběru zadáte název a důvod použití.
+- Oba kroky nejdřív ukážou přesný serverový náhled (cíle, revize, SHA-256,
+  privacy) a uloží se až po zaškrtnutí potvrzení. Opakované potvrzení
+  používá stejné operation ID.
+- Připojený podklad je v seznamu označený **Sdílené · jen ke čtení**.
+  Otevře se připnutá revize s původem (zdrojový projekt, revize, soubor,
+  důvod, kdo sdílel a připojil) a stavem zdroje. Nedostupný, smazaný nebo
+  odvolaný zdroj se ukáže jako stav, ne jako chyba. Úpravy a mazání
+  reference nabídka nenabízí.
+- Záznamy sdílení se v seznamu podkladů nezobrazují; jsou vidět v dialogu
+  sdílení u konkrétního podkladu.
+
+Správa a použití (XREF-02-C):
+
+- Pokud ve zdroji vznikne novější revize, otevřený sdílený podklad dál
+  ukazuje původní připnutou verzi a nabídne **Porovnat a aktualizovat**.
+  Náhled ukáže rozdíl obou revizí. Aktualizace platí jen pro tuto referenci,
+  dřívější úkoly a manifesty nemění.
+- **Vytvořit vlastní kopii** vytvoří upravitelný podklad s trvalým původem.
+- **Odebrat z projektu** smaže jen odkaz v cíli; zdroj a sdílení zůstávají.
+- Ve zdroji v dialogu **Sdílet do projektu** tlačítko **Ukončit sdílení**
+  ukončí sdílení pro všechny jeho cíle. Ukončení je konečné. Zabrání dalšímu
+  zobrazení, kopii i použití v AI kontextu, ale už vytvořené kopie v cílech
+  zpětně neodstraní.
+- Sdílený podklad lze vybrat mezi podklady úkolu či konverzace (označení
+  „sdílené, jen ke čtení“). Manifest nese přesný pin a sdílení; po ukončení
+  sdílení se úkol s tímto vstupem odmítne.
+
+```sh
+python3 -m spikes.cross_references --node NODE revoke-preview SOURCE_PROJECT SHARE_ID > revoke.json
+python3 -m spikes.cross_references --node NODE revoke revoke.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
+python3 -m spikes.cross_references --node NODE detach-preview TARGET_PROJECT REFERENCE_ID > detach.json
+python3 -m spikes.cross_references --node NODE detach detach.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
+```
+
+HTTP: `/v1/sharing/overview`, `/v1/sharing/share/preview|confirm`,
+`/v1/sharing/attach/preview|confirm`, `/v1/sharing/reference/view`,
+`/v1/sharing/repin|fork|detach|revoke/preview|confirm`. Každý
+požadavek běží s identitou a rozsahem přihlášeného uživatele.
+
 ## Vyzkoušení bez zásahu do existujících projektů
 
 Z kořene checkoutu spusť ukázku s novým, dosud neexistujícím adresářem:
@@ -18,8 +85,8 @@ Z kořene checkoutu spusť ukázku s novým, dosud neexistujícím adresářem:
 python3 -m scripts.reference_demo /tmp/fpw-reference-demo
 ```
 
-Vzniknou dva syntetické projekty a samostatný node config. Ukázka vytvoří
-referenci, změní zdroj a vypíše `state: newer-available` spolu s původním
+Vzniknou dva syntetické projekty a samostatný node config. Ukázka sdílí
+podklad do příjemce, vytvoří referenci, změní zdroj a vypíše `state: newer-available` spolu s původním
 `pinned_text: První připnutá revize.`. Nic neposílá modelu ani do Workspace.
 
 Prohlédni soubory:
@@ -39,7 +106,7 @@ revizi. Nejde o test normálního profilu ani lidskou akceptaci úkolu.
 
 ```sh
 python3 -m spikes.cross_references --node NODE pin SOURCE_PROJECT ARTIFACT > pin.json
-python3 -m spikes.cross_references --node NODE preview TARGET_PROJECT NEW_REFERENCE_ID pin.json 'Název odkazu' > preview.json
+python3 -m spikes.cross_references --node NODE preview TARGET_PROJECT NEW_REFERENCE_ID pin.json 'Název odkazu' --share SHARE_ID --reason 'Důvod použití' > preview.json
 python3 -m spikes.cross_references --node NODE write preview.json --operation-id OPERATION_UUID --sha256 PREVIEW_SHA256 --confirm
 python3 -m spikes.cross_references --node NODE view TARGET_PROJECT REFERENCE_ID
 python3 -m spikes.cross_references --node NODE index TARGET_PROJECT
@@ -80,7 +147,16 @@ cache, pokud místní oprávnění stále platí. Výsledek je `offline-stale`,
 `stale: true`, `privacy_unverified: true`; aktuální source privacy tehdy
 nelze potvrdit. Tento obsah se nesmí použít pro Context Manifest, fork ani
 externí boundary. Cache se ukládá mimo projektový Git a jeho autoritativní
-state; ztráta cache nepoškodí referenci.
+state; ztráta cache nepoškodí referenci. Zjištěné smazání nebo ukončení
+sdílení zanechá v cache náhrobek pro všechny účty uzlu. Při pozdějším výpadku
+zdroje se pak uložená kopie nezobrazí (XREF-02-D, ADR 0086).
+
+V UI se offline kopie zobrazí s časem posledního ověření a privacy označenou
+„neověřeno“. Bez ověřené kopie se ukáže stav `source-offline`. Pokud zdroj
+na uzlu není registrovaný nebo k němu uživatel nemá přístup, například po
+synchronizaci samotného cílového projektu, ukáže se `source-inaccessible`
+bez obsahu. Zůstává jen volba odebrat odkaz. Úkol nebo zpráva se
+nedostupným sdíleným vstupem se odmítne hláškou se stavem sdílení.
 
 Index obsahuje pouze místní deskriptor. `index` živě doplní autorizovanou
 dostupnost; nepovolený zdroj vrátí jen jako unavailable. ContextBuilder při

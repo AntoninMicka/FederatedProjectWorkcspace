@@ -491,6 +491,11 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
         if self.path == '/v1/artifacts/delete/confirm':
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
+        if self.path.startswith('/v1/sharing/'):
+            # Defence in depth; CrossReferences re-checks both projects per request.
+            scope = request.get('preview') if self.path.endswith('/confirm') and isinstance(request, dict) else request
+            if not isinstance(scope, dict) or not self.server.administration.allowed(self.actor, scope.get('project_id')):
+                return self.send_error(403)
         if self.path.startswith('/v1/projects/create/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)

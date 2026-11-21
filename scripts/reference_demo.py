@@ -25,8 +25,12 @@ def demo(destination):
     artifact_id,reference_id=str(uuid4()),str(uuid4())
     artifacts.save(dict(project_id=source,artifact_id=artifact_id,base_head=source_ws.git.head(),
         title='Syntetický podklad',body='První připnutá revize.\n',new=True),str(uuid4()))
-    service=CrossReferences(node);pin=service.source_pin(source,artifact_id)
-    preview=service.preview(target,reference_id,pin,'Odkaz na syntetický podklad')
+    service=CrossReferences(node);share_id=str(uuid4())
+    share=service.share_preview(source,share_id,artifact_id,[target],'Syntetické sdílení do příjemce')
+    service.share_write(share,str(uuid4()),digest(encoded(share)),confirm=True)
+    pin=service.source_pin(source,artifact_id)
+    preview=service.preview(target,reference_id,pin,'Odkaz na syntetický podklad',
+                            share_id=share_id,reason_text='Ukázka připnutého podkladu')
     service.write(preview,str(uuid4()),digest(encoded(preview)),confirm=True)
     (destination/'01-pinned-view.json').write_bytes(encoded(service.view(target,reference_id)))
     artifacts.save(dict(project_id=source,artifact_id=artifact_id,base_head=source_ws.git.head(),
@@ -48,7 +52,7 @@ def demo(destination):
     update_path.write_bytes(encoded(dict(value=update,sha256=update_sha)))
     command=['python3','-m','spikes.cross_references','--node',str(node),'write',str(update_path),
              '--operation-id',str(uuid4()),'--sha256',update_sha,'--confirm']
-    result=dict(node=str(node),source_project_id=source,target_project_id=target,reference_id=reference_id,
+    result=dict(node=str(node),source_project_id=source,target_project_id=target,reference_id=reference_id,share_id=share_id,
                 state=view['state'],pinned_text=view['preview'].get('text'),
                 explicit_update_command=shlex.join(command),note='Synthetic data only; no existing node or model was used.')
     (destination/'demo.json').write_bytes(encoded(result))

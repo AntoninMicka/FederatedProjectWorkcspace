@@ -1776,3 +1776,16 @@ refresh. Crash boundaries and persistent formats do not change: no journal,
 Git or index write moved. Regressions: `tests/test_lock_scopes.py`, the lane
 matrix in `tests/test_local_api.py`, `tests/test_http_ui_admission.py` and
 `tests/ide_bridge.test.js`.
+
+## XREF-02 sharing routes (2026-11-21)
+
+The `/v1/sharing/*` routes (six from XREF-02-B; XREF-02-C adds
+`repin`, `fork`, `detach` and `revoke` preview/confirm) ([ADR 0086](adr/0086-cross-project-artifact-sharing.md))
+read the source and write the target project in one request, so no single
+`project` owner covers them. They are listed in `APPLICATION_ROUTES` and keep
+the conservative serialized application lane. Native ownership is unchanged:
+the source is read under a nonblocking shared journal lock, the target write
+uses `Workspace.transact` with expected HEAD and operation ID (ADR 0070).
+`revoke` writes only the source and `detach` only the target, each as one
+transaction.
+Pending, stale and busy writer states map to the existing 409 replies.

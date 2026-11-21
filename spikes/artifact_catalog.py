@@ -11,6 +11,7 @@ def document_ids(files, entities):
         path = 'artifacts/' + id_ + '/' + meta.get('file', '')
         raw = files.get(path, b'')
         if 'rss-capture' in meta.get('tags', []): hidden.add(id_)
+        if 'fpw-artifact-share-v1' in meta.get('tags', []): hidden.add(id_)  # Shown per artifact (ADR 0086).
         if raw.startswith(b'<!-- fpw-monitoring-watch-v1 -->'):
             hidden.add(id_)
         if (meta.get('kind') not in {'document','snapshot'} or
