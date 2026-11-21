@@ -1,6 +1,6 @@
 <!-- SPDX-FileCopyrightText: 2026 Antonín Mička -->
 <!-- SPDX-License-Identifier: MPL-2.0 -->
-# Pracovní kontext úkolu — PLAN-TASK-WORK-01-A/B/C/D
+# Pracovní kontext úkolu — PLAN-TASK-WORK-01-A/B/C/D/E
 
 V roadmapě otevřete detail konkrétního nedokončeného úkolu a použijte
 **Zahájit úkol**. Start ověří projektová oprávnění a předpoklady a označí task
@@ -63,15 +63,42 @@ dokončení se zobrazují zvlášť. Komentované přílohy nabízí část D n�
 ## Rozsah tohoto řezu
 
 Implementované jsou pracovní relace (A), pravý panel se zadáním/checklistem
-(B), evidence nativních činností (C) a potvrzené komentované záznamy (D).
-Propojení zadání s LLM běhy (E) a společné recovery celé dávky (F)
-zůstávají navazujícími úkoly stejné dávky. Celou dávku tímto nelze akceptovat.
+(B), evidence nativních činností (C), potvrzené komentované záznamy (D)
+a explicitní příprava analýzy s dohledáním původního běhu (E). Společné
+recovery celé dávky (F) zůstává navazujícím úkolem. Celou dávku tímto nelze akceptovat.
 
 `capture` vrací neměnnou identitu původní relace a jejího zadání pro evidenci C
-a navazující E včetně vybraného bodu `selected_checklist`. Evidence C ji zachytí před
-operací; předání zadání jako vstupu modelu zůstává součástí E.
+a E včetně vybraného bodu `selected_checklist`. Evidence C ji zachytí před
+operací; E předává vybrané zadání až po výslovné přípravě a odeslání uživatelem.
 Nabídka obsahuje nejvýše 50 posledních relací okna plus jeho aktivní relaci;
 starší uložené relace se tím nemažou. Historický index nedostává novou autoritu.
+
+## Analýza zahájeného úkolu
+
+V pracovním panelu aktivního úkolu zvolte **Připravit analýzu úkolu**. Otevře se
+chat s připnutým zadáním, původním checklistem a vybraným bodem. Zbytek plánu
+se nepřidává a již rozepsaný požadavek zůstane zachovaný. Příprava nic neukládá
+do projektu a nespouští model ani vyhledávání. Je-li otevřený editor s úpravami,
+nejprve proběhne jeho běžné potvrzení odchodu.
+
+Zadání zkontrolujte, požadavek napište za blokem, vyberte podklady, režim
+analýzy či hledání a konkrétní backend/model. Teprve **Zpracovat** spustí běh.
+Blok zadání neupravujte ručně; při změně úkolu nebo checklistového kontextu
+použijte přípravu znovu. Server ověřuje jeho přesné bajty, projekt, původní pin
+a privacy. Zpráva nemůže snížit privacy zadání; local-only vstup odmítne
+stávající Context Manifest před opuštěním místního uzlu.
+
+Odpověď lze přes nabídku chatu **Uložit poslední odpověď** uložit do dokumentu.
+V panelu úkolu vyberte tuto činnost a použijte **Potvrdit a připojit**. Odkaz
+na soubor a komentář se uloží do textu úkolu. **Otevřít konverzaci a běh**
+vrátí původní konverzaci; pokud je odpověď dostupná, posune zobrazení na ni.
+Běh ani placený požadavek se otevřením neopakuje. Původní run/manifest vazba
+se dohledá z neměnné provenance souboru i při připojení pouze uloženého výstupu.
+Úkol ani checklist se modelovým tvrzením o dokončení neuzavírají.
+
+Implementační ověření E používá testovací model a skutečný Context Manifest,
+chat/run journal, Git writer a Qt UI. Živé přijetí obou scénářů v běžném profilu
+zůstává samostatným G; plnou dávku tyto testy neuzavírají.
 
 ## Evidence činností
 
@@ -216,6 +243,7 @@ ani do request payloadů lokálního journalu; v DB je pouze jeho hash.
 | `record-amend` | `operation_id`, `work_session_id`, `record_id`, `record_revision`, `comment`, `selected_checklist`, `expected_head`. |
 | `record-recover`, `record-cancel` | Původní `operation_id`; obnoví nebo před nativním zápisem zruší uložený intent. |
 | `record-output` | `project_id`, `record_id`, `output_index`, `version` (`original`/`current`), `page`; readonly náhled. |
+| `analysis-context` | `context_revision`; readonly návrh přesného vstupu aktivního úkolu, bez modelového účinku. |
 | `capture` | `context_revision`; vyžaduje aktivní, aktuálně oprávněnou relaci bez pending záměru. |
 
 Mutace vrací také `operation.state`; replay odmítnuté operace se nesmí

@@ -5785,6 +5785,7 @@ function buildChatTimeline(thread,projections,workflows=[]){
 }
 function renderThreadMessage(item,thread){
   const message=document.createElement('div');message.className='chat-message '+item.role;
+  message.dataset.messageId=item.message_id;
   message.textContent=item.content;
   const turn=(thread?.turns || []).find(value=>value.assistant_message_id===item.message_id);
   const languageDetail=turn?.response_language ?
@@ -8770,12 +8771,16 @@ class DesktopHandler(Handler):
         if header and self.path in ROUTES:
             try:
                 envelope = json.loads(header)
-                if not isinstance(envelope, dict) or set(envelope) != {'window_id', 'window_token', 'context_revision'}:
+                required={'window_id','window_token','context_revision'}
+                if not isinstance(envelope, dict) or not required<=set(envelope)<=required|{'task_input_sha256'}:
                     raise ValueError('Invalid task activity context')
                 service = TaskActivities(self.task_work_service())
                 handle = {k: envelope[k] for k in ('window_id', 'window_token')}
                 identifier = service.begin(handle, envelope['context_revision'], self.path, request)
                 self._task_activity = (service, identifier)
+                from spikes.task_analysis import BEGIN,validate_input
+                if 'task_input_sha256' in envelope or (isinstance(request.get('content'),str) and BEGIN in request['content']):
+                    validate_input(service,identifier,request,envelope.get('task_input_sha256'))
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, PendingOperation) as exc:
                 return self.reply(422, {'error': str(exc), 'outcome': 'not-started', 'retry': 'read-context'})
         try:

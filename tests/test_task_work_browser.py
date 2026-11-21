@@ -87,3 +87,11 @@ class TaskWorkBrowserTests(unittest.TestCase):
             cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=65)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('stored reference text link browser OK',result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_task_analysis_manifest_saved_file_and_conversation_navigation(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/task_analysis_smoke.py')],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=80)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('task analysis browser OK',result.stdout)

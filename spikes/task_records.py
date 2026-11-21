@@ -11,7 +11,7 @@ from uuid import UUID, uuid5
 
 from spikes.artifact_preview import preview
 from spikes.metadata import require, uuid, validate_snapshot
-from spikes.task_activities import TaskActivities
+from spikes.task_activities import TaskActivities, references
 from spikes.task_work import canonical, digest
 from spikes.task_record_schema import SCHEMA, PRIVACY, encoded, records, validate, fields
 
@@ -156,6 +156,26 @@ class TaskRecords:
         require(len(result)<=100,'Příliš mnoho výsledků v jednom záznamu.')
         return result
 
+    def conversation_origins(self,events,outputs):
+        """Read origin IDs from the exact native chat output, never from its editable prose."""
+        from spikes.chat_records import OUTPUT_MARKER, END
+        for event in events:
+            if event['kind']!='conversation-output' or event['outcome']!='succeeded':continue
+            threads={ref['thread_id'] for ref in event['request_references'] if 'thread_id' in ref}
+            commits={ref['commit_id'] for ref in event['result_references'] if 'commit_id' in ref}
+            for output in outputs:
+                if output['commit_id'] not in commits:continue
+                git,_,_,_=self.snapshot(output['project_id'],write=False)
+                raw=git.snapshot(output['commit_id'])[output['path']]
+                if not raw.startswith(OUTPUT_MARKER.encode()):continue
+                tail=raw[len(OUTPUT_MARKER.encode()):]
+                require(END.encode() in tail,'Uložený výstup nemá úplnou provenance.')
+                value=json.loads(tail.split(END.encode(),1)[0])
+                require(value.get('schema')=='fpw-chat-output-v1' and value.get('project_id')==output['project_id']
+                    and value.get('thread_id') in threads,'Původ uložené konverzace neodpovídá činnosti.')
+                for ref in references(value):
+                    if ref not in event['result_references']:event['result_references'].append(ref)
+
     def _save_offers(self,db,events,request,state,**extra):
         for event in events:
             row=self.work._operation(db,event['event_id'],request['window_id']);current=json.loads(row['doc'])
@@ -264,6 +284,7 @@ class TaskRecords:
                 op=dict(record_type='task-record-offer',state='completed')
             else:
                 outputs=[output] if attachment else self.outputs(events);privacy=request['privacy']
+                if not attachment:self.conversation_origins(events,outputs)
                 require(isinstance(privacy,str) and privacy in PRIVACY,'Invalid annotation privacy')
                 minimum=max([PRIVACY[m['privacy']] for m in entities.values()]+[PRIVACY[o['privacy']] for o in outputs]+[PRIVACY[e.get('privacy','local-only')] for e in events])
                 require(PRIVACY[privacy]>=minimum and (not self.work.network or privacy!='local-only'),'Záznam vyžaduje vyšší privacy.')

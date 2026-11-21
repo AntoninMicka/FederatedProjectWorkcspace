@@ -22,6 +22,7 @@ TASK_WORK_HTML = '''<button id="task-work-panel-toggle" type="button" aria-contr
 <p id="task-work-completion-hint"></p><button id="task-work-open-definition" type="button" hidden>Otevřít zadání úkolu</button>
 <div id="task-work-saved" hidden><label for="task-work-saved-session">Uložená práce z předchozích oken</label><select id="task-work-saved-session"></select><button id="task-work-saved-resume" type="button">Obnovit a pokračovat</button><button id="task-work-history-refresh" type="button">Načíst uloženou práci</button></div>
 <div id="task-work-details" aria-label="Zadání a průběh zobrazené relace"></div>
+<button id="task-work-analyze" type="button">Připravit analýzu úkolu</button>
 <section class="task-work-related" aria-labelledby="task-work-related-title"><h3 id="task-work-related-title">Činnosti a výstupy</h3><p id="task-work-related-empty">K této relaci zatím nejsou připojené činnosti ani výstupy.</p><ul id="task-work-related-list"></ul></section>
 <div id="task-record-editor"></div><section id="task-record-list" aria-label="Potvrzené záznamy úkolu"></section><section id="task-record-preview" aria-label="Náhled připnutého výsledku" aria-live="polite"></section>
 <section id="task-work-proposals" aria-labelledby="task-work-proposals-title" hidden><h3 id="task-work-proposals-title">Návrhy dokončení</h3><ul id="task-work-proposal-list"></ul></section>
@@ -58,7 +59,49 @@ function taskWorkActivityFinished(path){
 function taskWorkActivityHeaders(path,request){
  if(!taskActivityRoutes.has(path)||!taskWorkHandle||!taskWorkView?.active_session_id)return {};
  if(taskWorkBusy||taskWorkView.pending)throw new Error('Nejprve obnovte pracovní kontext úkolu.');
- return {'X-FPW-Task-Work':JSON.stringify({...taskWorkHandle,context_revision:taskWorkView.context_revision})};
+ const envelope={...taskWorkHandle,context_revision:taskWorkView.context_revision};
+ if(taskWorkPreparedInput&&typeof request?.content==='string'&&request.content.includes(taskWorkPreparedInput.text))envelope.task_input_sha256=taskWorkPreparedInput.sha256;
+ return {'X-FPW-Task-Work':JSON.stringify(envelope)};
+}
+let taskWorkPreparedInput=null;
+async function prepareTaskWorkAnalysis(){
+ const session=selectedTaskWorkSession();
+ if(taskWorkBusy||!session||session.work_session_id!==taskWorkView?.active_session_id||session.blocked||activeProject?.id!==session.project_id)return;
+ if(pendingChatRequest){taskWorkMessage='Nejprve vyřešte rozpracovaný běh; jeho požadavek zůstává zachovaný.';renderTaskWork();return;}
+ if(!await canLeaveWorkspaceEditors())return;
+ try{
+  const context=await projectRequest('/v1/task-work',{action:'analysis-context',...taskWorkHandle,context_revision:taskWorkView.context_revision});
+  if(activeProject?.id!==context.project_id||taskWorkView?.active_session_id!==context.work_session_id)return;
+  const threadBefore=activeThread?.thread_id,selectionBefore=chatSelectionRevision;
+  await loadChat();
+  if(selectionBefore!==chatSelectionRevision)return;
+  if(threadBefore&&knownThreads.some(thread=>thread.thread_id===threadBefore))await openStoredThread(threadBefore);
+  if(activeProject?.id!==context.project_id||taskWorkView?.active_session_id!==context.work_session_id)return;
+  const draft=document.querySelector('#chat-draft'),privacy=document.querySelector('#chat-privacy');
+  const value=taskWorkPreparedInput&&draft.value.includes(taskWorkPreparedInput.text)?draft.value.replace(taskWorkPreparedInput.text,context.text):context.text+'\n\n'+draft.value;
+  if(value.length>draft.maxLength)throw Error('Návrh zprávy je příliš dlouhý; zkraťte původní rozepsané zadání.');
+  draft.value=value;taskWorkPreparedInput=context;
+  const levels=['public','project','confidential','local-only'];privacy.value=levels[Math.max(levels.indexOf(privacy.value),levels.indexOf(context.privacy))];
+  showWorkspacePage(projectView);selectMainTab(document.querySelector('#chat-tab'));
+  document.querySelector('#chat-operation-status').textContent='Zadání úkolu je připravené ke kontrole. Doplňte požadavek, podklady a zvolte Zpracovat.';
+  draft.dispatchEvent(new Event('input',{bubbles:true}));draft.focus();
+ }catch(error){taskWorkMessage=error.message;renderTaskWork();}
+}
+async function openTaskWorkConversation(projectId,threadId,runId=null){
+ if(!await canLeaveWorkspaceEditors())return;
+ if(activeProject?.id!==projectId)await openRegisteredProject(projectId);
+ if(activeProject?.id!==projectId)return;
+ await loadChat();await openStoredThread(threadId);
+ if(runId&&activeThread?.thread_id===threadId){
+  const turn=activeThread.turns?.find(item=>item.run_id===runId);
+  const target=[...document.querySelectorAll('.chat-message')].find(item=>item.dataset.messageId===turn?.assistant_message_id);
+  target?.scrollIntoView({block:'center'});
+ }
+}
+function appendTaskWorkConversationLink(target,context,events){
+ const refs=events.flatMap(event=>[...(event.request_references||[]),...(event.result_references||[])]);
+ const thread=refs.find(ref=>ref.thread_id)?.thread_id,run=refs.find(ref=>ref.run_id)?.run_id;
+ if(thread)target.append(taskRecordButton(run?'Otevřít konverzaci a běh':'Otevřít konverzaci',()=>openTaskWorkConversation(context.project_id,thread,run)));
 }
 let taskWorkHandle=null,taskWorkView=null,taskWorkBusy=false,taskWorkMessage='',taskWorkSelection=null,taskWorkAttempt=null,taskWorkProposalDraft='';
 const taskWorkStorageKey='fpw-task-work-window-v1',taskWorkRestoreKey='fpw-task-work-restore-v1';
@@ -85,6 +128,7 @@ function renderTaskWork(){
  if(taskWorkSavedSessions.some(s=>s.work_session_id===priorSaved))savedSelect.value=priorSaved;
  savedSelect.disabled=taskWorkBusy;document.querySelector('#task-work-saved-resume').disabled=taskWorkBusy;
  const task=selected?.current_task,unchecked=task?.checklist?.some(point=>!point.checked);
+ document.querySelector('#task-work-analyze').disabled=taskWorkBusy||!selected||selected.work_session_id!==taskWorkView?.active_session_id||!!selected.blocked||activeProject?.id!==selected.project_id;
  const completionReason=task&&!task.checked?(unchecked?'Nejprve potvrďte zbývající body checklistu v zadání úkolu.':!task.completion_ready?'Dokončení vyžaduje potvrzené dokončení všech závislostí.':''):'';
  document.querySelector('#task-work-completion-hint').textContent=completionReason;document.querySelector('#task-work-open-definition').hidden=!completionReason;document.querySelector('#task-work-open-definition').disabled=taskWorkBusy||!taskWorkHandle;
  document.querySelector('#task-work-complete').disabled=taskWorkBusy||!taskWorkHandle||!!pending||!selected||!!selected.blocked||!!task?.checked||!!completionReason;
@@ -235,6 +279,7 @@ function renderTaskWorkDetails(){
   row.textContent=`${kinds[activity.kind]||activity.kind} · ${outcomes[activity.outcome]||activity.outcome} · ${new Date(activity.created_at*1000).toLocaleString()}`;
   for(const ref of activity.result_references||[]){if(ref.commit_id){const pin=document.createElement('small');pin.className='task-work-pin';pin.textContent='Commit '+ref.commit_id;row.append(pin);}}
   related.append(row);
+  appendTaskWorkConversationLink(row,session,[activity]);
  }
  if(!session)return;
  const heading=document.createElement('h3');heading.textContent=`${session.task_id} · ${session.title||'Nedostupné zadání'}`;target.append(heading);
@@ -318,6 +363,7 @@ async function recoverSavedTaskWork(){
  if(!activeProject&&taskWorkHandle&&!taskWorkView?.pending)await openRegisteredProject(selected.project_id);
 }
 document.querySelector('#task-work-open-definition').addEventListener('click',()=>navigateTaskWorkPlan(true));
+document.querySelector('#task-work-analyze').addEventListener('click',prepareTaskWorkAnalysis);
 document.querySelector('#task-work-saved-resume').addEventListener('click',recoverSavedTaskWork);
 document.querySelector('#task-work-history-refresh').addEventListener('click',async()=>{taskWorkRestoreAttempt=null;try{sessionStorage.removeItem(taskWorkRestoreKey);}catch{}await loadSavedTaskWork();});
 window.addEventListener('focus',()=>{if(taskWorkHandle&&!taskWorkBusy)refreshTaskWork();});

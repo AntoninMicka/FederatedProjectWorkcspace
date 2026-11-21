@@ -175,6 +175,27 @@ class TaskWorkHTTPTests(unittest.TestCase):
         self.assertEqual(code,200,data);self.assertEqual(json.loads(data)['commit_id'],committed)
         current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')
 
+    def test_explicit_task_input_checks_digest_scope_and_privacy_before_model_dispatch(self):
+        from unittest.mock import patch
+        handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
+        pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))
+        view=self.post(dict(handle,action='start',operation_id=str(uuid4()),context_revision=0,
+            project_id=self.pid,task_id='TASK-A',selected_checklist=None,**pin))
+        context=self.post(dict(handle,action='analysis-context',context_revision=view['context_revision']))
+        base=dict(project_id=self.pid,expected_head=view['sessions'][0]['validated_head'],selected_message_ids=[],
+            content=context['text']+'\nAnalyze',privacy=context['privacy'],created_at='2026-11-21T18:00:00Z')
+        with patch.object(self.f.server.chat_service,'send',return_value={'thread':{},'state':'completed'}) as native:
+            for privacy,declared,expected in [('public',context['sha256'],422),('project','0'*64,422),('project',None,422),('project',context['sha256'],200)]:
+                request=dict(base,privacy=privacy,**{k:str(uuid4()) for k in ['thread_id','turn_id','message_id','run_id','manifest_id','assistant_message_id']})
+                envelope=dict(handle,context_revision=view['context_revision'])
+                if declared is not None:envelope['task_input_sha256']=declared
+                code,data,_=self.f.request(path='/v1/chat/send',body=json.dumps(request),headers={'X-FPW-Task-Work':json.dumps(envelope)})
+                self.assertEqual(code,expected,data)
+            self.assertEqual(native.call_count,1)
+        state=self.post(dict(handle,action='status'));events=state['sessions'][0]['activities']
+        self.assertEqual(len(events),4);self.assertEqual(events[-1]['task_input']['sha256'],context['sha256'])
+        self.assertFalse(state['sessions'][0]['current_task']['checked'])
+
     def test_existing_artifact_can_be_attached_with_explicit_confirmation(self):
         handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
         pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))

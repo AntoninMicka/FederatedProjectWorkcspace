@@ -182,6 +182,13 @@ místního deskriptoru; skutečný obsah a efektivní privacy určuje resolver.
 Renderer přebírá source project ID. **Reject:** druhé URI schéma, prosté cizí
 UUID interpretované v cílovém projektu, kopie podkladu a obcházení sdílení.
 HTTP(S) odkazy používají inertní DOM a uživatelskou Qt navigační událost.
+Řez E **adaptuje** scoped `TaskWork._pin`, původní checklist a explicitní
+rozepsanou zprávu. Stávající Context Manifest zahrne přesné bajty jako ad-hoc
+vstup s privacy; HTTP activity wrapper ověří digest a zdrojové oprávnění před
+dispatchem. `ChatRecords` zůstává autoritou file/thread/turn/run/manifest
+provenance. Připojení výsledku přebírá jen doložená ID z tohoto native výstupu.
+**Reject:** automatické přidání celého plánu, druhý task/run store, spuštění
+modelu při přípravě zadání a nový pokus po unknown. Kontrakt: ADR 0088.
 Oprava restartu adaptuje existující vlastněné relace a autentizaci pomocí
 readonly historie a explicitního CAS převzetí; neukládá další plaintext
 credential ani nezavádí persistentní browser profil. Přímé lidské dokončení

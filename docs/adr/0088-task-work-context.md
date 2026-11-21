@@ -533,3 +533,45 @@ cesty s mezerami. HTML zůstává inertní a javascript/data/file schémata nejs
 aktivní odkazy. Qt předá HTTP(S) odkaz systémovému prohlížeči pouze při uživatelské
 události `newWindowRequested`; nepovoluje obecnou navigaci uvnitř shellu ani
 nepřenáší lokální Authorization hlavičku do externího prohlížeče.
+
+## Implementační řez E — explicitní zadání, konverzace a výsledek
+
+`analysis-context` ověří vlastněné aktivní okno/CAS a zpřístupní jen připnutý
+blok úkolu a původní checklist s vybraným bodem. Nezapisuje Git, neserializuje
+zbytek plánu a nevolá provider. **Připravit analýzu úkolu** vloží návrh do již
+existujícího promptu a zachová rozepsaný text, vybranou konverzaci i dirty guard.
+Uživatel zvolí podklady/backend a samostatně odešle. Nevyřešený pending chatový
+request se nepřepisuje.
+
+Přesný blok `fpw-task-work-input-v1` obsahuje task/project/session ID a původní
+definition pin. `X-FPW-Task-Work` může nést `task_input_sha256`. Backend po
+zachycení C znovu sestaví původní kontext, ověří bajty v promptu, nynější
+oprávnění, shodu zadání, projekt a dolní hranici privacy. Událost uloží jen
+schema/digest/privacy, nikoli kopii textu nebo credential. Context Manifest
+přenáší schválený prompt jako dosavadní ad-hoc message input se svým SHA-256
+a privacy; task provenance propojuje tento vstup a run přes původní event ID,
+definition pin a manifest/run ID. Nezavádí se další varianta manifestu ani
+provider-specific dispatch. Local-only kontroluje stávající ContextBuilder
+před přípravou/odesláním provideru.
+
+Zapsaný chatový výstup má stávající neměnnou `fpw-chat-output-v1` provenance.
+Při potvrzení záznamu D čte E thread/turn/run/manifest ID z přesných uložených
+bajtů původního output commitu a ověří thread/projekt vůči činnosti. Nepovažuje
+editovatelný text odpovědi za autoritu. Tato ID zůstávají u záznamu i při výběru
+pouze file-save činnosti. UI znovu používá načtení uložené konverzace a případně
+vyhledá odpověď podle run ID; pracovní úkol tím nepřepne ani znovu nespustí běh.
+
+Crash boundaries C/D zůstávají v platnosti. Před intentem C ani čistá příprava
+nevytváří modelový účinek. Po C intentu a před native/run receiptem zůstává
+výsledek unknown. Chat/run journal rozhoduje o běhu a ChatRecords/Workspace
+o publikaci souboru; D atomicky uloží provenance a task text. E z těchto
+journalů nedělá kopii, nerebasuje stale záměr a neopakuje placený účinek.
+Společná reconciliace přes všechny tyto hranice je nadále F.
+
+Důkazy: scoped zadání bez sourozenců, vybraný bod, zachování Git HEAD při
+přípravě, digest/permission/privacy guard před dispatchem, zákaz local-only
+na external-provider hranici, skutečný manifest s testovacím adaptérem,
+publikovaný soubor a potvrzený záznam s původním run ID. Qt scénář prověřuje
+přípravu bez běhu, odeslání do fake modelu, save odpovědi, potvrzení přílohy
+a návrat k původní konverzaci. Nenahrazuje živé přijetí G ani plnou závěrečnou
+bránu celé dávky.

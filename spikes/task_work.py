@@ -280,6 +280,10 @@ class TaskWork:
             require(set(request) == {'action'}, 'Invalid window request')
             return self.create_window()
         common = {'action', 'window_id', 'window_token'}
+        if action=='analysis-context':
+            require(set(request)==common|{'context_revision'},'Invalid analysis context request')
+            from spikes.task_analysis import build
+            return build(self,self.capture(request,context_revision=request['context_revision']))
         extra = dict(status=set(), capture={'context_revision'}, inspect={'project_id','task_id','expected_head'},
                      recover={'operation_id'}, cancel={'operation_id'},
                      start={'operation_id','context_revision','project_id','task_id','expected_head','fragment_sha256','selected_checklist'},

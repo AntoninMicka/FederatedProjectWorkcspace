@@ -101,6 +101,7 @@ function appendConfirmedTaskRecord(list,record,openOutput,amend=null){
    const row=document.createElement('p');row.textContent=output.title+' · '+output.artifact_id.slice(0,8)+' · '+output.commit_id.slice(0,12);row.append(taskRecordButton('Původní verze',()=>openOutput(record,index,'original')),taskRecordButton('Aktuální artefakt',()=>openOutput(record,index,'current')));article.append(row);
   }
   if(!record.outputs.length){const warning=document.createElement('p');warning.textContent='Záznam odkazuje na činnosti či běhy; neobsahuje potvrzený souborový výsledek.';article.append(warning);}
+  appendTaskWorkConversationLink(article,record.context,record.events);
   if(amend)article.append(taskRecordButton('Upravit komentář',()=>amend(record),taskWorkBusy));
   const history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Historie komentáře ('+record.revisions.length+')';history.append(summary);
   for(const revision of record.revisions){const row=document.createElement('p');row.textContent=`${new Date(revision.created_at).toLocaleString()} · ${revision.comment}`;history.append(row);}article.append(history);list.append(article);
