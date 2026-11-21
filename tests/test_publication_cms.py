@@ -73,20 +73,17 @@ class UnavailableCloudflare:
         raise CloudflareUnavailable('provider unavailable')
 
 
-class PublicationCmsTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='publication cms ')
-        self.addCleanup(self.temp.cleanup)
-        base = Path(self.temp.name)
-        self.state = base / 'state'; self.state.mkdir(mode=0o700)
-        self.module = base / 'module'; self.module.mkdir()
-        package = self.module / 'src' / 'publication_registry'; package.mkdir(parents=True)
-        (self.module / 'data').mkdir(); (self.module / 'templates').mkdir()
-        shutil.copy(ROOT / 'modules' / 'publication-experiment-registry.module.json',
-                    self.module / 'module.json')
-        (self.module / '.gitignore').write_text('dist/\n__pycache__/\n*.pyc\n', encoding='utf-8')
-        (package / '__init__.py').write_text('', encoding='utf-8')
-        (package / 'sitegen.py').write_text('''
+def cms_module(base):
+    """A reviewed publication CMS module in ``base`` (no private modules.local)."""
+    base = Path(base)
+    module = base / 'module'; module.mkdir()
+    package = module / 'src' / 'publication_registry'; package.mkdir(parents=True)
+    (module / 'data').mkdir(); (module / 'templates').mkdir()
+    shutil.copy(ROOT / 'modules' / 'publication-experiment-registry.module.json',
+                module / 'module.json')
+    (module / '.gitignore').write_text('dist/\n__pycache__/\n*.pyc\n', encoding='utf-8')
+    (package / '__init__.py').write_text('', encoding='utf-8')
+    (package / 'sitegen.py').write_text('''
 import argparse,json
 from html import escape
 from pathlib import Path
@@ -97,31 +94,41 @@ for site in sites:
  host=site['hostname'];target=Path(a.output)/host/'index.html';target.parent.mkdir(parents=True,exist_ok=True)
  target.write_text('<!doctype html><h1>'+escape(site['title'])+'</h1>',encoding='utf-8')
 ''', encoding='utf-8')
-        self.config = {'schema_version': 2, 'sites': [
-            {'hostname': 'proofofidea.cz', 'presentation': 'proof-of-idea',
-             'sections': ['profile'], 'title': 'Proof', 'description': 'Ideas',
-             'catalog': {'kind': 'sandbox', 'title': 'Sandbox'},
-             'contacts': [], 'links': [], 'cv': [], 'timeline': []},
-            {'hostname': 'antoninmicka.cz', 'presentation': 'standard',
-             'sections': ['profile', 'cv'], 'title': 'Antonín',
-             'description': 'Profile', 'catalog': {'kind': 'realized', 'title': 'Projects'},
-             'contacts': [], 'links': [], 'cv': [], 'timeline': []},
-            {'hostname': 'tonymicka.cz', 'presentation': 'standard',
-             'sections': ['timeline'], 'title': 'Timeline',
-             'description': 'Events', 'catalog': {'kind': 'realized', 'title': 'Projects'},
-             'contacts': [], 'links': [], 'cv': [], 'timeline': []},
-        ]}
-        (self.module / 'data' / 'sites.json').write_text(json.dumps(self.config), encoding='utf-8')
-        (self.module / 'data' / 'registry.json').write_text('{}', encoding='utf-8')
-        (self.module / 'templates' / 'site.html').write_text('$main', encoding='utf-8')
-        runtime = {}
-        for path in [*sorted(package.glob('*.py')),
-                     self.module / 'templates' / 'site.html']:
-            runtime[str(path.relative_to(self.module))] = hashlib.sha256(path.read_bytes()).hexdigest()
-        self.reviewed_sources = base / 'reviewed-sources.json'
-        self.reviewed_sources.write_text(json.dumps({'schema_version': 1,
-            'module_id': 'cz.proofofidea.publication-experiment-registry',
-            'runtime_files': runtime}), encoding='utf-8')
+    config = {'schema_version': 2, 'sites': [
+        {'hostname': 'proofofidea.cz', 'presentation': 'proof-of-idea',
+         'sections': ['profile'], 'title': 'Proof', 'description': 'Ideas',
+         'catalog': {'kind': 'sandbox', 'title': 'Sandbox'},
+         'contacts': [], 'links': [], 'cv': [], 'timeline': []},
+        {'hostname': 'antoninmicka.cz', 'presentation': 'standard',
+         'sections': ['profile', 'cv'], 'title': 'Antonín',
+         'description': 'Profile', 'catalog': {'kind': 'realized', 'title': 'Projects'},
+         'contacts': [], 'links': [], 'cv': [], 'timeline': []},
+        {'hostname': 'tonymicka.cz', 'presentation': 'standard',
+         'sections': ['timeline'], 'title': 'Timeline',
+         'description': 'Events', 'catalog': {'kind': 'realized', 'title': 'Projects'},
+         'contacts': [], 'links': [], 'cv': [], 'timeline': []},
+    ]}
+    (module / 'data' / 'sites.json').write_text(json.dumps(config), encoding='utf-8')
+    (module / 'data' / 'registry.json').write_text('{}', encoding='utf-8')
+    (module / 'templates' / 'site.html').write_text('$main', encoding='utf-8')
+    runtime = {}
+    for path in [*sorted(package.glob('*.py')),
+                 module / 'templates' / 'site.html']:
+        runtime[str(path.relative_to(module))] = hashlib.sha256(path.read_bytes()).hexdigest()
+    reviewed_sources = base / 'reviewed-sources.json'
+    reviewed_sources.write_text(json.dumps({'schema_version': 1,
+        'module_id': 'cz.proofofidea.publication-experiment-registry',
+        'runtime_files': runtime}), encoding='utf-8')
+    return module, reviewed_sources, config
+
+
+class PublicationCmsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='publication cms ')
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name)
+        self.state = base / 'state'; self.state.mkdir(mode=0o700)
+        self.module, self.reviewed_sources, self.config = cms_module(base)
         self.cms = self.service()
         discovered = self.cms.status()
         self.assertFalse(discovered['compatible'])

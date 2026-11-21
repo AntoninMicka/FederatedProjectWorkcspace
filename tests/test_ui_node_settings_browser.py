@@ -5,12 +5,16 @@
 Replaces the source-text assertions of
 ``test_node_settings_are_global_and_backend_form_is_not_duplicated``.
 """
+from functools import partial
 import json
 import shutil
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.project_creation import ProjectCreation
+from spikes.publication_cms import PublicationCms
 from tests.browser_harness import Reply
+from tests.test_publication_cms import cms_module
 from tests.ui_flow_case import FakeApi, UiFlowCase, require_browser
 
 
@@ -128,6 +132,14 @@ class SettingsNavigationTests(UiFlowCase):
 
 @require_browser
 class PublicationCmsTests(UiFlowCase):
+    def setUp(self):
+        super().setUp()
+        # A reviewed module in a temporary root: the default modules.local is a
+        # private, Git-ignored checkout that CI does not have.
+        module, reviewed, _ = cms_module(self.node.parent)
+        self.stack.enter_context(patch('spikes.desktop.PublicationCms', partial(
+            PublicationCms, reviewed_sources=reviewed, module_roots=(module.parent,))))
+
     def open_cms(self, api=None):
         page = self.start(configure_search=False, api=api)
         page.evaluate("openSettings('settings-cms-tab')")
