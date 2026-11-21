@@ -5,19 +5,18 @@ from spikes.http_request_budget import RequestReadTimeout
 import base64
 from contextlib import closing
 import hashlib
-import ipaddress
 import json
 import os
 from pathlib import Path
 import re
 import sqlite3
 from spikes.sqlite_ownership import bounded_connect
+from spikes.peer_transport import REPLICATION_TIMEOUT, private_peer_endpoint
 import ssl
 import stat
 import struct
 import subprocess
 import tempfile
-from urllib.parse import urlsplit
 
 from spikes.administration import Administration, identifier
 from spikes.configuration import committed_project, parse_node, read_config
@@ -34,7 +33,6 @@ from spikes.storage import Git
 from spikes.workspace import PendingOperation
 
 
-NETWORK_TIMEOUT = 30
 
 PATH = '/v1/federation/replicate'
 CONTENT_TYPE = 'application/vnd.federated-workspace.replication-v1'
@@ -563,19 +561,15 @@ def send(node, replication_id, operation_id, expected_base, *, ca=None,
          deployment='desktop'):
     envelope, payload, authority, count = prepare(
         node, replication_id, operation_id, expected_base, deployment=deployment)
-    peer = authority['peer']; parsed = urlsplit(peer['endpoint'])
-    require(parsed.scheme == 'https' and not parsed.path.strip('/')
-            and not parsed.username and not parsed.password
-            and not parsed.query and not parsed.fragment,
-            'Invalid replication peer endpoint')
-    address = ipaddress.ip_address(parsed.hostname)
-    require(address.version == 4 and address.is_private and not address.is_unspecified,
-            'Replication peer must use a private IPv4 address')
+    peer = authority['peer']
+    parsed, address = private_peer_endpoint(
+        peer['endpoint'], invalid='Invalid replication peer endpoint',
+        private='Replication peer must use a private IP address')
     ca = Path(ca) if ca else private_root(node) / (peer['id'] + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     connection = DeadlineHTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+        str(address), parsed.port or 443, context=context, timeout=REPLICATION_TIMEOUT)
     response = None
     try:
         connection.request('POST', PATH, body=encode_body(envelope, payload), headers={

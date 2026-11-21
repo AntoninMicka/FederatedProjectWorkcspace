@@ -79,3 +79,23 @@ Crash boundaries se nemění: TLS vzniká před aplikačním release/current
 snapshotem a není jeho součástí. Přerušené nebo neúplné TLS podklady se nesmějí
 vydávat za úspěšnou instalaci; další běžný deploy je ověří a znovu vytvoří.
 `--recover` vrací aplikační current, unit a stav služby, nikoli předchozí CA.
+
+## Doplnění 2026-11-20: IPv4 i IPv6 (AUDIT-B5-T1)
+
+Uživatel 20. 11. 2026 rozhodl, že IPv6 se nevyřazuje. Dřívější „jen IPv4“
+nebylo architektonické rozhodnutí, ale nedopatření. Webový server, desktopový
+síťový backend a federační přenos proto přijímají IPv4 i IPv6. Pravidla
+adres a pojmenované síťové rozpočty jsou na jednom místě
+(`spikes/peer_transport.py`):
+
+- privátní IPv4 podle `ipaddress.is_private` a unique local IPv6
+  `fc00::/7`, u peeru navíc loopback;
+- link-local IPv6 (vyžaduje zónu), IPv4-mapped adresy, jména hostitelů
+  a veřejné adresy se odmítají výslovnou chybou;
+- bind a podsíť klientů musí mít stejnou verzi IP.
+
+Výše popsaný požadavek na „privátní IPv4 subnet klientů“ tím platí pro
+IPv4 i pro unique local IPv6 subnet. Nasazení do LXC a na router zatím
+zůstává jen IPv4 a hlásí to výslovnou chybou; jde o odložený samostatný krok.
+Crash boundaries se nemění. Podrobnosti:
+[síťové rozpočty a adresy](../network-limits.md#ipv4-a-ipv6).

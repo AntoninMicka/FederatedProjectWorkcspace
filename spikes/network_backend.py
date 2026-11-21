@@ -14,6 +14,7 @@ from spikes.configuration import parse_node, read_config, overlap
 from spikes.federation_accounts import openssl
 from spikes.federation_probe import PATH, reply_probe
 from spikes.journal import sync_dir
+from spikes.peer_transport import origin, private_address, private_lan
 from spikes.project_creation import ProjectCreation
 from spikes.web_server import WebHandler, WebServer
 
@@ -88,7 +89,7 @@ class NetworkBackend:
 
     @property
     def endpoint(self):
-        return f"https://{self.config['bind']}:{self.config['port']}" if self.server else ''
+        return origin(self.config['bind'], self.config['port']) if self.server else ''
 
     def load(self):
         root = Path(self.node).absolute().parent / ('.' + Path(self.node).name + '.network')
@@ -108,11 +109,17 @@ class NetworkBackend:
     def validate(self, config):
         if not isinstance(config, dict) or set(config) != {'bind', 'port', 'lan', 'cert', 'key', 'ca', 'enabled'}:
             raise ValueError('Invalid network configuration')
-        address = ipaddress.IPv4Address(config['bind'])
-        network = ipaddress.ip_network(config['lan'])
-        if (not address.is_private or address.is_unspecified or address.is_loopback
-                or network.version != 4 or not network.is_private or network.prefixlen < 8 or address not in network):
-            raise ValueError('Vyberte konkrétní privátní IPv4 desktopu v povolené LAN.')
+        message = 'Vyberte konkrétní privátní IP adresu desktopu (IPv4 nebo IPv6) v povolené LAN.'
+        if not isinstance(config['bind'], str) or not isinstance(config['lan'], str):
+            raise ValueError(message)
+        try:
+            address = ipaddress.ip_address(config['bind'])
+            network = ipaddress.ip_network(config['lan'])
+        except (TypeError, ValueError):
+            raise ValueError(message) from None
+        if (not private_address(address) or address.is_loopback or not private_lan(network)
+                or address.version != network.version or address not in network):
+            raise ValueError(message)
         if type(config['port']) is not int or not 1024 <= config['port'] <= 65535 or type(config['enabled']) is not bool:
             raise ValueError('Port musí být 1024–65535.')
         for key in ('cert', 'key', 'ca'):
@@ -125,7 +132,7 @@ class NetworkBackend:
         (folder / 'ca.cnf').write_text('[req]\ndistinguished_name=dn\nx509_extensions=ca\nprompt=no\n[dn]\nCN=Desktop Workspace Local CA\n[ca]\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n')
         openssl('req', '-x509', '-nodes', '-newkey', 'rsa:3072', '-sha256', '-days', '3650',
                 '-config', str(folder / 'ca.cnf'), '-keyout', str(folder / 'ca.key'), '-out', str(folder / 'ca.pem'))
-        (folder / 'server.ext').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:' + str(ipaddress.IPv4Address(bind)) + ',IP:127.0.0.1\n')
+        (folder / 'server.ext').write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:' + str(ipaddress.ip_address(bind)) + ',IP:127.0.0.1,IP:::1\n')
         openssl('req', '-new', '-nodes', '-newkey', 'rsa:3072', '-keyout', str(folder / 'tls.key'),
                 '-out', str(folder / 'tls.csr'), '-subj', '/CN=Desktop Workspace')
         openssl('x509', '-req', '-in', str(folder / 'tls.csr'), '-CA', str(folder / 'ca.pem'),

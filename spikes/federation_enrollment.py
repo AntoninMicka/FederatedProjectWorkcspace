@@ -4,14 +4,13 @@
 import base64
 import hashlib
 from spikes.provider_deadline import budget_connection
+from spikes.peer_transport import ENROLLMENT_TIMEOUT, private_peer_endpoint
 import http.client
-import ipaddress
 import json
 import os
 from pathlib import Path
 import ssl
 import tempfile
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from spikes.administration import Administration, AccessDenied, identifier, label
@@ -210,20 +209,14 @@ def enroll(node, server_node_id, access_key, *, operation_id=None, ca=None):
     service = Administration(node, deployment='desktop')
     operation_id = operation_id or str(uuid4())
     request, peer = request_envelope(service, server_node_id, operation_id)
-    parsed = urlsplit(peer['endpoint'])
-    if (parsed.scheme != 'https' or not parsed.hostname
-            or parsed.path not in ('', '/') or parsed.username or parsed.password
-            or parsed.query or parsed.fragment):
-        raise ValueError('Invalid enrollment endpoint')
-    address = ipaddress.ip_address(parsed.hostname)
-    if (address.version != 4 or address.is_unspecified
-            or not (address.is_private or address.is_loopback)):
-        raise ValueError('Enrollment server must use a private IPv4 address')
+    parsed, address = private_peer_endpoint(
+        peer['endpoint'], invalid='Invalid enrollment endpoint',
+        private='Enrollment server must use a private IP address')
     ca = Path(ca) if ca else private_root(node) / (server_node_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     connection = budget_connection(http.client.HTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=10), 10)
+        str(address), parsed.port or 443, context=context, timeout=ENROLLMENT_TIMEOUT), ENROLLMENT_TIMEOUT)
     try:
         body = json.dumps(request)
         connection.request('POST', PATH, body=body, headers={

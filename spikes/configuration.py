@@ -7,7 +7,12 @@ from pathlib import Path
 import re
 import stat
 
-from spikes.metadata import MAX_METADATA, parse_json, require, timestamp, uuid
+from spikes.metadata import MAX_METADATA, ValidationError, parse_json, require, timestamp, uuid
+
+
+class DuplicateProjectRegistration(ValidationError):
+    """One project ID is registered twice in the node configuration (B-ODD-03)."""
+    code = 'duplicate_project_registration'
 
 
 def fields(value, required, optional=frozenset()):
@@ -67,7 +72,8 @@ def parse_node(data, *, location):
     for project in meta['projects']:
         fields(project, {'project_id', 'root', 'state_dir'})
         uuid(project['project_id'])
-        require(project['project_id'] not in ids, 'Duplicate registered project ID')
+        require(project['project_id'] not in ids, 'Duplicate registered project ID',
+                DuplicateProjectRegistration)
         ids.add(project['project_id'])
         root, state = local_path(project['root']), local_path(project['state_dir'])
         roots.append(root)

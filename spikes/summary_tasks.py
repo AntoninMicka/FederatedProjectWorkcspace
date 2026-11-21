@@ -9,7 +9,7 @@ from pathlib import Path
 import sqlite3
 import stat
 
-from spikes.metadata import require, uuid
+from spikes.metadata import require, uuid, OwnerUnavailable
 from spikes.sqlite_ownership import readonly_refused, store_connection
 
 
@@ -94,7 +94,7 @@ class SummaryTasks:
     @staticmethod
     def _owned(row, node_id, user_id):
         require(row is not None and row[0] == node_id and row[1] == user_id,
-                'Summary task is unavailable to this owner')
+                'Summary task is unavailable to this owner', OwnerUnavailable)
 
     def prepare(self, *, task_id, node_id, user_id, request, manifest, payload, privacy):
         for value in (task_id, node_id, user_id, manifest['run_id'], manifest['manifest_id']):

@@ -85,7 +85,7 @@ class BackendCatalogTests(unittest.TestCase):
                        'id="settings-models-table"', 'id="settings-model-detail"',
                        'id="atlascloud-run-usage"', 'id="resource-atlascloud-balance"',
                        'id="backend-settings-dialog"', 'id="backend-reset-dialog"',
-                       'id="backend-settings-legacy" hidden',
+                       'id="backend-settings-forms" hidden',
                        'id="ollama-load-models"', 'id="ollama-models"',
                        'id="chat-run-model"><option value="">Vyberte model'):
             self.assertIn(marker, HTML)

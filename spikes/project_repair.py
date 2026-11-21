@@ -14,7 +14,8 @@ import stat
 import subprocess
 import time
 
-from spikes.configuration import parse_node, parse_project, read_config
+from spikes.configuration import (DuplicateProjectRegistration, parse_node, parse_project,
+                                  read_config)
 from spikes.journal import Journal, snapshot
 from spikes.metadata import MAX_METADATA, require, safe_path, uuid, validate_snapshot
 from spikes.storage import Git, Index, projection
@@ -387,7 +388,7 @@ class ProjectDiagnostics:
             else:
                 binding = matches[0]
         except (OSError, ValueError) as exc:
-            duplicate = str(exc) == 'Duplicate registered project ID'
+            duplicate = isinstance(exc, DuplicateProjectRegistration)
             add('registration-duplicate' if duplicate else 'registration-invalid',
                 'registration', 'Registrace obsahuje duplicitní ID projektu.' if duplicate
                 else 'Registrace projektů je neplatná nebo ji nelze bezpečně přečíst.')

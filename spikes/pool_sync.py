@@ -54,16 +54,38 @@ def prepare(node,project_id,raw,*,operation_id,source_node_id=None,checkpoint=la
     checkpoint('pool-receive-prepared')
 
 
+def _not_held(node, project_id, rows):
+    """Rows this node does not already hold byte-for-byte (AUDIT-B7-T1).
+
+    A held entry passed provenance validation when it entered: local creation
+    or an earlier verified receive. Entries are immutable and their pins name
+    immutable commits, so re-validating them on every sync only repeats the
+    same Git snapshot work. _merge still checks links and immutability over
+    the whole payload inside its transaction.
+    """
+    with MessagePools(node).db() as db:
+        held = {row[0]: row[1] for row in db.execute(
+            'SELECT id,document FROM pool_entries WHERE project=?', (project_id,))}
+    return [row for row in rows
+            if row['id'] not in held or json.loads(held[row['id']]) != row]
+
+
 def apply(node, project_id, raw, *, checkpoint=lambda stage: None, operation_id=None, source_node_id=None):
     from spikes.reporting import Reporting
     rows = validate(raw, project_id)
     prepare(node,project_id,raw,operation_id=operation_id,source_node_id=source_node_id,checkpoint=checkpoint)
-    data = Reporting(node).read(project_id)
-    records = {r['revision_id']: r for r in data['records']}
+    fresh = _not_held(node, project_id, rows)
+    # Provenance needs the validated reporting snapshot only for new rows that
+    # reference definitions; it is the expensive part (every pinned commit).
+    if any(row['kind'] in {'activation', 'report-outcome', 'membership'} for row in fresh):
+        data = Reporting(node).read(project_id)
+        records = {r['revision_id']: r for r in data['records']}
+    else:
+        records = {}
     blocks = {r['entity_id']: r for r in records.values() if r['type'] == 'MonitoringBlock'}
     items = {r['id']: r['value']['item'] for r in rows if r['kind'] == 'item'}
     checked_pins={}
-    for row in rows:
+    for row in fresh:
         v = row['value']
         if row['kind'] in {'activation','report-outcome'}:
             pin=v['block_ref'];definition=records.get(pin['artifact_id'])

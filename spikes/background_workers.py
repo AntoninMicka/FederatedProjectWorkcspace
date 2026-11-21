@@ -6,8 +6,34 @@ A worker is reported unclean, and its live thread reference is retained, when
 it does not finish within the deadline. Abandoning it at process exit is a
 crash in an unknown phase; each worker's own journal or replay owns recovery.
 """
+import logging
+import sqlite3
+import subprocess
 import sys
 import time
+
+from spikes.request_ownership import ProjectBusy
+
+_log = logging.getLogger('spikes.background')
+# Failure classes that synchronization services already record as durable
+# peer or replication state (offline, rejected, conflict, busy, error).
+EXPECTED = (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, ProjectBusy)
+
+
+def report_failure(worker, exc, *, target=None, expected=()):
+    """Log a background failure instead of swallowing it (AUDIT-B4-T1, B-ODD-01).
+
+    Expected classes are logged at info: only the exception class, never its
+    message, which may carry project data. Any other class is a programming or
+    unknown error: a warning with traceback for local diagnostics (the
+    traceback includes the message; the log stays on this node).
+    """
+    known = isinstance(exc, EXPECTED + tuple(expected))
+    _log.log(logging.INFO if known else logging.WARNING,
+             'background_failed worker=%s target=%s reason=%s',
+             worker, target or '-', type(exc).__name__,
+             exc_info=None if known else exc)
+    return known
 
 
 def drain(thread, timeout):

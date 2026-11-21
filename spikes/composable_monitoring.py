@@ -20,6 +20,12 @@ from spikes.reporting_schema import PRIVACY, digest, encoded, fields, moment
 from spikes.rss_reader import fetch_response, checked_validators, RSSUnavailable
 from spikes.source_connectors import RSSConnector, SourceContext
 
+# Legacy node-local binding error from earlier RSS pilot builds that bound
+# activation to a revision (squashed into #146). No current code writes it;
+# matching the exact stored value only clears it from existing data, so the
+# wording of live messages cannot change this branch (B-ODD-03).
+LEGACY_REVISION_ERROR = 'Definition changed; activate the current revision locally'
+
 
 def processing_slot(schedule, instant):
     """Current calendar boundary; no backlog replay or elapsed-seconds calendar."""
@@ -401,7 +407,7 @@ class ComposableMonitoring:
                     # Local activation follows the stable block ID across edits
                     # and sync. Revision records the definition last observed.
                     binding['revision'] = source['ref']['artifact_id']
-                    if binding.get('error') == 'Definition changed; activate the current revision locally':
+                    if binding.get('error') == LEGACY_REVISION_ERROR:
                         binding['error'] = None
                 c = source['value']['config']
                 if source['value']['kind'] == 'processing':

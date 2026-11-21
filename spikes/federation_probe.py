@@ -5,14 +5,13 @@ from spikes.http_request_budget import RequestReadTimeout
 import base64
 import hashlib
 from spikes.provider_deadline import budget_connection
+from spikes.peer_transport import PROBE_TIMEOUT, private_peer_endpoint
 import http.client
-import ipaddress
 import json
 from pathlib import Path
 import socket
 import ssl
 import tempfile
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from spikes.administration import Administration, identifier
@@ -63,19 +62,15 @@ def reply_probe(handler):
 
 
 def check_peer(endpoint, ca, node_id, fingerprint):
-    parsed = urlsplit(endpoint)
-    if (parsed.scheme != 'https' or not parsed.hostname or parsed.path not in ('', '/')
-            or parsed.username or parsed.password or parsed.query or parsed.fragment):
-        raise ValueError('Zadejte HTTPS adresu uzlu bez cesty, credentials či parametrů.')
-    address = ipaddress.ip_address(parsed.hostname)
-    if address.version != 4 or not address.is_private or address.is_unspecified:
-        raise ValueError('Test podporuje pouze privátní IPv4 adresy uzlů.')
+    parsed, address = private_peer_endpoint(
+        endpoint, invalid='Zadejte HTTPS adresu uzlu bez cesty, credentials či parametrů.',
+        private='Test podporuje pouze privátní IP adresy uzlů (IPv4 nebo IPv6).')
     identifier(node_id)
     challenge = str(uuid4())
     try:
         context = ssl.create_default_context(cafile=str(ca))
         context.minimum_version = ssl.TLSVersion.TLSv1_2
-        connection = budget_connection(http.client.HTTPSConnection(str(address), parsed.port or 443, context=context, timeout=5), 5)
+        connection = budget_connection(http.client.HTTPSConnection(str(address), parsed.port or 443, context=context, timeout=PROBE_TIMEOUT), PROBE_TIMEOUT)
         try:
             connection.request('POST', PATH, body=json.dumps({'challenge': challenge}),
                                headers={'Content-Type': 'application/json'})

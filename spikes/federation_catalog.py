@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Signed exchange of project existence without project content or Git history."""
+from spikes.background_workers import report_failure
+from spikes.peer_transport import CATALOG_EXCHANGE_TIMEOUT, private_peer_endpoint, stop_timeout
 from spikes.http_request_budget import RequestReadTimeout
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
-import ipaddress
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,6 @@ import ssl
 import stat
 import subprocess
 import threading
-from urllib.parse import urlsplit
 
 from spikes.administration import Administration, AccessDenied, identifier, label
 from spikes.federation_accounts import canonical
@@ -25,7 +25,6 @@ from spikes.project_replication import _signature, _verify
 from spikes.projects import Projects
 
 
-NETWORK_TIMEOUT = 15
 
 PATH = '/v1/federation/catalog'
 CONTENT_TYPE = 'application/vnd.federated-workspace.catalog-v1+json'
@@ -228,20 +227,14 @@ def synchronize(node, peer_id, *, deployment='desktop', ca=None):
     envelope, peer = prepare(service, peer_id)
     if not peer.get('endpoint'):
         raise AccessDenied('Peer can synchronize only when it connects')
-    parsed = urlsplit(peer['endpoint'])
-    require(parsed.scheme == 'https' and not parsed.path.strip('/')
-            and not parsed.username and not parsed.password
-            and not parsed.query and not parsed.fragment,
-            'Invalid catalog peer endpoint')
-    address = ipaddress.ip_address(parsed.hostname)
-    require(address.version == 4 and not address.is_unspecified
-            and (address.is_private or address.is_loopback),
-            'Catalog peer must use a private IPv4 address')
+    parsed, address = private_peer_endpoint(
+        peer['endpoint'], invalid='Invalid catalog peer endpoint',
+        private='Catalog peer must use a private IP address')
     ca = Path(ca) if ca else private_root(node) / (peer_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     connection = DeadlineHTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+        str(address), parsed.port or 443, context=context, timeout=CATALOG_EXCHANGE_TIMEOUT)
     response = None
     try:
         raw = canonical(envelope)
@@ -309,6 +302,10 @@ class CatalogControl:
         except (ValueError, sqlite3.Error, subprocess.SubprocessError) as exc:
             self.store.runtime(peer_id, 'error', str(exc))
             raise
+        except Exception as exc:
+            # Unknown class: record a generic durable error, never only vanish.
+            self.store.runtime(peer_id, 'error', type(exc).__name__)
+            raise
         return result
 
     def run_automatic(self):
@@ -320,12 +317,13 @@ class CatalogControl:
                     and peer.get('endpoint')):
                 try:
                     self.synchronize(peer['id'])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Durable peer status is recorded by synchronize().
+                    report_failure('federation-catalog', exc, target=peer['id'])
 
 
 class CatalogScheduler:
-    NAME, STOP_TIMEOUT = 'federation-catalog', 20
+    NAME, STOP_TIMEOUT = 'federation-catalog', stop_timeout(CATALOG_EXCHANGE_TIMEOUT)
 
     def __init__(self, node, *, deployment, interval=60):
         self.control = CatalogControl(node, deployment=deployment)
@@ -346,10 +344,11 @@ class CatalogScheduler:
                 from spikes.rss_subscription_sync import run_automatic
                 run_automatic(self.control.node,deployment=self.control.deployment)
                 delay = self.interval
-            except Exception:
+            except Exception as exc:
                 # Node registry reads share the node writer lock with project
                 # operations. A transient lock conflict must not permanently
                 # terminate catalog synchronization for this process.
+                report_failure(self.NAME, exc)
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 

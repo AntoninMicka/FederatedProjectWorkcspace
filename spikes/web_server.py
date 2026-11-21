@@ -3,6 +3,7 @@
 """HTTPS LAN workspace with project creation and local user/peer administration."""
 import argparse
 import ipaddress
+import socket
 import hmac
 import os
 from pathlib import Path
@@ -16,6 +17,8 @@ from urllib.parse import urlsplit
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import BoundedHTTPServer
+from spikes.peer_transport import canonical_address, origin, private_lan
+from spikes.node_management_routes import ADMIN_PATHS, NodeManagementRoutes, administration_view
 from spikes.http_admission_policy import validate_route_ownership
 from spikes.chat_service import ChatService
 from spikes.project_creation import ProjectCreation
@@ -35,7 +38,6 @@ from spikes.autonomy_service import AutonomyService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
-from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
 from spikes.google_drive_import import GoogleDriveImport
 from spikes.application_access import ApplicationAccess
@@ -50,7 +52,6 @@ document.querySelector('#google-drive-local-only').disabled=true;
 document.querySelector('#notebooklm-local-only').disabled=true;
 document.querySelector('#presentation-tab').hidden=true;
 document.querySelector('#outputs-overview-tab').hidden=false;
-document.querySelector('#presentation-editor').hidden=true;
 document.querySelector('#open-federation-network').closest('li').hidden=true;
 document.querySelector('#open-federation-deployment').closest('li').hidden=true;
 let accessKey='';
@@ -116,25 +117,15 @@ def secret(path):
     return value
 
 
-class WebHandler(DesktopHandler):
+class WebHandler(NodeManagementRoutes, DesktopHandler):
     assets = ASSETS
     reserve_ui_worker = True
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     google_drive_callback_path = '/oauth/google-drive/callback'
-    post_paths = DesktopHandler.post_paths | {'/v1/diagnostics/status', '/v1/administration', '/v1/session',
-                                               '/v1/federation/enroll',
-                                               '/v1/federation/catalog/reconcile',
-                                               '/v1/federation/content/reconcile',
-                                               '/v1/federation/content/cancel',
-                                               '/v1/federation/content/start-all',
-                                               '/v1/federation/content/settings',
-                                               '/v1/replications/status', '/v1/replications/sync',
-                                               '/v1/outputs/definitions',
-                                               '/v1/application-access',
-                                               '/v1/sources/import', '/v1/backend-metrics/status',
-                                               '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
-                                               '/v1/notebooklm/preview', '/v1/notebooklm/plan',
-                                               '/v1/notebooklm/confirm'}
+    post_paths = DesktopHandler.post_paths | ADMIN_PATHS | {
+        '/v1/diagnostics/status', '/v1/administration', '/v1/session', '/v1/federation/enroll',
+        '/v1/outputs/definitions', '/v1/application-access', '/v1/sources/import',
+        '/v1/notebooklm/preview', '/v1/notebooklm/plan', '/v1/notebooklm/confirm'}
 
     def _do_POST(self):
         from spikes.sync_fingerprint import PATH as STATE_PATH, reply as reply_state
@@ -156,6 +147,13 @@ class WebHandler(DesktopHandler):
         if self.path == SYNC_PATH:
             return reply_sync(self)
         return super()._do_POST()
+
+    # Media and workflow runs belong to the authenticated account; local-only
+    # content never leaves through the network handler (AUDIT-B6-T1).
+    allow_local_only = False
+
+    def request_owner_id(self):
+        return self.actor.get('id')
 
     def authorized(self, auth):
         if self.path in {'/v1/ide-bridge/exchange', '/v1/ide-bridge/connection/exchange'}:
@@ -181,7 +179,8 @@ class WebHandler(DesktopHandler):
         # Pin authority to this connection, never to shared mutable server state
         # or untrusted Host/X-Forwarded-* headers.
         ip, port = self.connection.getsockname()[:2]
-        self.local_authority = f'{ip}:{port}'
+        # Browsers send an IPv6 authority in brackets: [fd00::1]:8443.
+        self.local_authority = origin(ip, port).removeprefix('https://')
 
     def request_authority(self):
         authority = self.single('Host')
@@ -395,100 +394,15 @@ class WebHandler(DesktopHandler):
                 return self.reply(422, {'error': 'Identitu klientského uzlu nelze ověřit nebo uložit.'})
         if self.path == '/v1/administration':
             try:
-                result = self.server.administration.request(self.actor, request)
-                result['projects'] = self.server.projects.catalog()
-                from spikes.replication_control import ReplicationControl
-                result['replication_statuses'] = ReplicationControl(
-                    self.server.node, deployment='web').statuses(
-                        result['replications'], result['node_id'])
-                from spikes.federation_catalog import CatalogControl
-                result.update(CatalogControl(
-                    self.server.node, deployment='web').view())
-                from spikes.federation_sync import ContentSyncControl
-                result['content_sync_statuses'] = ContentSyncControl(
-                    self.server.node, deployment='web').statuses()
-                result['content_sync_settings'] = ContentSyncControl(
-                    self.server.node, deployment='web').settings()
-                return self.reply(200, result)
+                return self.reply(200, administration_view(self.server, self.actor, request))
             except AccessDenied:
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 return self.reply(422, {'error': 'Změnu nelze uložit. Ověřte údaje a dostupnost úložiště uzlu.'})
-        if self.path == '/v1/federation/catalog/reconcile':
+        if self.path in ADMIN_PATHS:
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-            if not isinstance(request, dict) or set(request) != {'peer_id'}:
-                return self.send_error(400)
-            try:
-                from spikes.federation_catalog import CatalogControl
-                control = CatalogControl(self.server.node, deployment='web')
-                control.synchronize(request['peer_id'])
-                return self.reply(200, control.view())
-            except AccessDenied:
-                return self.send_error(403)
-            except ProjectBusy:
-                raise
-            except Exception:
-                return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
-        if self.path in {'/v1/federation/content/reconcile',
-                         '/v1/federation/content/cancel',
-                         '/v1/federation/content/start-all',
-                         '/v1/federation/content/settings'}:
-            if not self.server.administration.is_admin(self.actor):
-                return self.send_error(403)
-            try:
-                from spikes.federation_sync import ContentSyncControl
-                control = ContentSyncControl(self.server.node, deployment='web')
-                if self.path.endswith('/start-all'):
-                    if request != {}: return self.send_error(400)
-                    return self.reply(200, {
-                        'batch': control.start_all(),
-                        'content_sync_settings': control.settings(),
-                        'content_sync_statuses': control.statuses()})
-                if self.path.endswith('/settings'):
-                    if (not isinstance(request, dict) or set(request) != {
-                            'automatic_enabled', 'expected_revision'}):
-                        return self.send_error(400)
-                    settings = control.configure(**request)
-                    return self.reply(200, {
-                        'content_sync_settings': settings,
-                        'content_sync_statuses': control.statuses()})
-                if (not isinstance(request, dict)
-                        or set(request) != {'peer_id', 'project_id'}):
-                    return self.send_error(400)
-                changed = (control.cancel(request['peer_id'], request['project_id'])
-                           if self.path.endswith('/cancel') else
-                           control.start(request['peer_id'], request['project_id']))
-                return self.reply(200, {'changed': changed,
-                                        'content_sync_statuses': control.statuses()})
-            except AccessDenied:
-                return self.send_error(403)
-            except ProjectBusy:
-                raise
-            except Exception:
-                return self.reply(409, {'error': 'Obsah projektu se nepodařilo synchronizovat; bezpečný stav je uložen pro opakování.'})
-        if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
-            if not self.server.administration.is_admin(self.actor):
-                return self.send_error(403)
-            try:
-                from spikes.replication_control import ReplicationControl
-                control = ReplicationControl(self.server.node, deployment='web')
-                state = self.server.administration.request(self.actor, {'action': 'list'})
-                if self.path == '/v1/replications/sync':
-                    if (not isinstance(request, dict)
-                            or set(request) != {'replication_id'}):
-                        return self.send_error(400)
-                    control.synchronize(request['replication_id'])
-                    state = self.server.administration.request(self.actor, {'action': 'list'})
-                return self.reply(200, {'statuses': control.statuses(
-                    state['replications'], state['node_id'])})
-            except AccessDenied:
-                return self.send_error(403)
-            except ProjectBusy:
-                raise
-            except Exception:
-                return self.reply(409, {'error': 'Synchronizaci se nepodařilo dokončit; '
-                                               'aktuální stav je uložen pro bezpečné opakování.'})
+            return self.dispatch_node_management(request, self.actor)
         if self.path.startswith('/v1/notebooklm/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -508,91 +422,18 @@ class WebHandler(DesktopHandler):
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError,
                     PendingOperation, RecoveryConflict):
                 return self.reply(409, {'error': 'Definice výstupů nelze načíst z potvrzené verze projektu.'})
-        if self.path.startswith('/v1/backend-metrics/'):
-            if not self.server.administration.is_admin(self.actor):
-                return self.send_error(403)
-            try:
-                if self.path == '/v1/backend-metrics/status' and request == {}:
-                    return self.reply(200, self.server.chat_service.account_metrics_status())
-                if self.path == '/v1/backend-metrics/configure' and isinstance(request, dict):
-                    return self.reply(200, self.server.chat_service.configure_account_metrics(request))
-                if self.path == '/v1/backend-metrics/refresh' and isinstance(request, dict):
-                    return self.reply(200, self.server.chat_service.refresh_account_metrics(request))
-                return self.send_error(400)
-            except (ValueError, OSError, sqlite3.Error):
-                return self.reply(422, {'error': 'Účetní přehled nelze načíst nebo uložit. '
-                                       'Ověřte administrátorský klíč a lokální stav.'})
         if self.path in {'/v1/media/comfyui/configure', '/v1/media/openai/configure'}:
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-        if self.path == '/v1/media/status':
-            if request != {}: return self.send_error(400)
-            return self.reply(200, self.server.media_service.status(owner_id=self.actor['id']))
         if self.path in {'/v1/media/preview', '/v1/media/confirm', '/v1/media/publish'}:
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
-            try:
-                if self.path == '/v1/media/preview':
-                    result = self.server.media_service.preview(request, owner_id=self.actor['id'])
-                elif self.path == '/v1/media/confirm':
-                    result = self.server.media_service.confirm(request, owner_id=self.actor['id'])
-                else:
-                    result = self.server.media_service.publish(request, owner_id=self.actor['id'])
-                return self.reply(200, result)
-            except BackendUnknown:
-                return self.reply(409, {'error': 'Výsledek obrazového běhu není známý; '
-                                       'požadavek automaticky neopakujte.'})
-            except BackendResponseError:
-                return self.reply(502, {'error': 'Obrazový backend nevrátil platný PNG výsledek.'})
-            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
-                return self.reply(422, {'error': 'Obrazový požadavek nelze provést. Ověřte '
-                                       'projekt, oprávnění, backend a lokální stav.'})
+        if self.path.startswith('/v1/media/'):
+            return super().dispatch(request)
         if self.path.startswith('/v1/workflows/'):
             if not isinstance(request, dict): return self.send_error(400)
-            project_id = request.get('project_id')
-            if not self._can_write(project_id): return self.send_error(403)
-            owner_id = self.actor.get('id')
-            try:
-                if self.path == '/v1/workflows/status' and set(request) == {'project_id'}:
-                    result = self.server.role_workflow_service.status(
-                        owner_id=owner_id, allow_local_only=False)
-                    result['workflows'] = [item for item in result['workflows']
-                                           if item['project_id'] == project_id]
-                elif self.path == '/v1/workflows/prepare':
-                    result = self.server.role_workflow_service.prepare(
-                        request, owner_id=owner_id, allow_local_only=False)
-                elif (self.path in {'/v1/workflows/creator/dispatch',
-                                    '/v1/workflows/opponent/dispatch'}
-                      and set(request) == {'workflow_id', 'project_id', 'approval_digest'}):
-                    owned = self.server.role_workflow_service.get(
-                        request['workflow_id'], owner_id=owner_id, allow_local_only=False)
-                    if owned['project_id'] != project_id: return self.send_error(403)
-                    method = (self.server.role_workflow_service.dispatch_creator
-                              if self.path.endswith('/creator/dispatch') else
-                              self.server.role_workflow_service.dispatch_opponent)
-                    result = method(request['workflow_id'], request['approval_digest'],
-                        owner_id=owner_id, allow_local_only=False)
-                elif (self.path == '/v1/workflows/opponent/prepare'
-                      and set(request) == {'workflow_id', 'project_id'}):
-                    owned = self.server.role_workflow_service.get(
-                        request['workflow_id'], owner_id=owner_id, allow_local_only=False)
-                    if owned['project_id'] != project_id: return self.send_error(403)
-                    result = self.server.role_workflow_service.prepare_opponent(
-                        request['workflow_id'], owner_id=owner_id, allow_local_only=False)
-                elif self.path == '/v1/workflows/publish':
-                    result = self.server.role_workflow_service.publish(
-                        request, owner_id=owner_id, allow_local_only=False)
-                else:
-                    return self.send_error(400)
-                return self.reply(200, result)
-            except BackendUnknown:
-                return self.reply(409, {'error': 'Výsledek workflow kroku není známý; '
-                                       'požadavek automaticky neopakujte.'})
-            except BackendResponseError:
-                return self.reply(502, {'error': 'Workflow backend nevrátil platný výsledek.'})
-            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
-                return self.reply(422, {'error': 'Workflow požadavek nelze provést. Ověřte '
-                                       'projekt, oprávnění, backend, privacy a lokální stav.'})
+            if not self._can_write(request.get('project_id')): return self.send_error(403)
+            return super().dispatch(request)
         if self.path in {'/v1/external/send', '/v1/external/send-stream',
                          '/v1/external/request'}:
             # The current chat store is bound to the desktop/node identity. Do not
@@ -689,7 +530,7 @@ class WebHandler(DesktopHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('Referrer-Policy', 'no-referrer')
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
         self.send_header('Connection', 'close')
         self.end_headers()
         self.wfile.write(data)
@@ -704,10 +545,16 @@ class WebHandler(DesktopHandler):
 
 
 class WebServer(BoundedHTTPServer):
+    def __init__(self, server_address, handler, **kwargs):
+        # The listener family follows the literal bind address (IPv4 or IPv6).
+        if ipaddress.ip_address(server_address[0]).version == 6:
+            self.address_family = socket.AF_INET6
+        super().__init__(server_address, handler, **kwargs)
+
     def get_request(self):
         connection, address = super().get_request()
         try:
-            peer = ipaddress.ip_address(address[0])
+            peer = canonical_address(address[0])
             if not self.application_access.allows(peer):
                 raise OSError('Client outside configured application access policy')
             connection.settimeout(2)
@@ -737,9 +584,16 @@ def validate_hostname(hostname):
 def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     validate_route_ownership(WebHandler.post_paths)
     network = ipaddress.ip_network(lan)
-    if network.version != 4 or network.prefixlen < 8 or not network.is_private:
-        raise ValueError('Specify a private IPv4 LAN subnet')
-    ipaddress.IPv4Address(bind)
+    if not private_lan(network):
+        raise ValueError('Specify a private LAN subnet: IPv4 /8 or narrower, or IPv6 unique local fc00::/7')
+    if bind is None:
+        bind = '0.0.0.0' if network.version == 4 else '::'
+    try:
+        address = ipaddress.ip_address(bind)
+    except ValueError:
+        raise ValueError('Specify a literal IPv4 or IPv6 bind address') from None
+    if address.version != network.version:
+        raise ValueError('Bind address and LAN subnet must use the same IP version')
     hostname = validate_hostname(hostname)
     token = secret(token_file)
     creator = ProjectCreation(node)
@@ -795,7 +649,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--bind', default='0.0.0.0')
+    parser.add_argument('--bind', help='literal IP address; default 0.0.0.0 or :: by the LAN version')
     parser.add_argument('--port', type=int, default=8443)
     for option in ('lan', 'cert', 'key', 'token-file', 'node'):
         parser.add_argument('--' + option, required=True)

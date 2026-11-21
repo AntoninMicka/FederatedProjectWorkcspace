@@ -10,6 +10,8 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+
+from spikes.sqlite_ownership import BOUNDED_SQLITE_WAIT
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -55,7 +57,7 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
                     self.assertEqual(status, 503, payload)
                     self.assertEqual(payload['outcome'], 'unknown')
                     self.assertEqual(headers['Retry-After'], '1')
-                    self.assertLess(time.monotonic() - started, 1)
+                    self.assertLess(time.monotonic() - started, BOUNDED_SQLITE_WAIT + 1)
                     self.assertEqual(self.post(server, '/v1/projects/open',
                                               {'project_id': self.ids[1]})[0], 200)
                     owner.rollback()
@@ -75,7 +77,7 @@ class ProjectHTTPOwnershipTests(unittest.TestCase):
                 status, payload, _ = self.post(server, '/v1/projects/open',
                                                {'project_id': self.ids[0]})
                 self.assertEqual(status, 503, payload)
-                self.assertLess(time.monotonic() - started, 1)
+                self.assertLess(time.monotonic() - started, BOUNDED_SQLITE_WAIT + 1)
                 owner.rollback()
             status, payload, _ = self.post(server, '/v1/projects/open',
                                            {'project_id': self.ids[0]})

@@ -359,7 +359,7 @@ REFERENCE_ROUTES = frozenset({'/v1/document-patterns', '/v1/roadmap/graph'})
 # never own their control/status domain; native journals/flocks own correctness.
 NODE_PREFERENCE_ROUTES = frozenset({
     '/v1/application-access', '/v1/counter', '/v1/gamepad/settings',
-    '/v1/gamepad/status', '/v1/session', '/v1/user-profile',
+    '/v1/session', '/v1/user-profile',
 })
 FEDERATION_CONTROL_ROUTES = frozenset({
     '/v1/federation/content/cancel', '/v1/federation/content/reconcile',

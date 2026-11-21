@@ -13,7 +13,7 @@ import sqlite3
 from spikes.sqlite_ownership import bounded_connect
 import stat
 
-from spikes.metadata import ValidationError, parse_json, require, require_version, uuid
+from spikes.metadata import ValidationError, parse_json, require, require_version, uuid, OwnerUnavailable
 from spikes.research_workflow import (validate_research_input,
                                       validate_research_output)
 
@@ -877,7 +877,7 @@ class AutonomyQueue:
     def _owned(row, node_id, user_id):
         require(row is not None and row['node_id'] == node_id
                 and row['user_id'] == user_id,
-                'Autonomy workflow is unavailable to this owner')
+                'Autonomy workflow is unavailable to this owner', OwnerUnavailable)
 
     def prepare(self, plan, node_id, user_id):
         uuid(node_id); uuid(user_id)

@@ -33,12 +33,22 @@ def git_run(git, *args, env_extra=None, **kwargs):
 
 
 @git_budget()
-def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'})):
+def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'}), trusted=()):
+    """Validate every commit of ``head`` that is not reachable from ``trusted``.
+
+    ``trusted`` are commit IDs the receiver already holds in its own validated
+    project history (AUDIT-B7-T1); a commit ID fixes its content, so those
+    commits need no second validation. The first new commit is still checked
+    as a transition from its trusted parent snapshot. Without ``trusted`` the
+    whole history is validated, as for an initial transfer.
+    """
     require(isinstance(allowed_privacy, (set, frozenset)) and bool(allowed_privacy)
             and allowed_privacy <= {'public', 'project', 'confidential'},
             'Invalid transfer privacy scope')
-    commits = git_run(git, 'rev-list', '--max-count=501', head).stdout.splitlines()
-    require(0 < len(commits) <= 500, 'History exceeds initial-transfer limit of 500 commits')
+    trusted = list(trusted)
+    exclusions = ['--not', *trusted] if trusted else []
+    commits = git_run(git, 'rev-list', '--max-count=501', head, *exclusions).stdout.splitlines()
+    require(len(commits) <= 500, 'History exceeds initial-transfer limit of 500 commits')
     # A child and its parent recur in adjacent validation steps. Keep only two
     # immutable snapshots, scoped to this call; never cache authorization or
     # validation results between transfers.

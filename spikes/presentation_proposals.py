@@ -6,7 +6,7 @@ import hashlib
 import json
 from uuid import NAMESPACE_URL, uuid5
 
-from spikes.metadata import require, uuid
+from spikes.metadata import ValidationError, require, uuid
 from spikes.presentation_documents import (PresentationDocuments, encode_deck,
                                            layout_presets, new_slide, relink,
                                            validate_deck)
@@ -79,14 +79,32 @@ def _apply_content(slide, proposal, templates):
     slide['column_break'] = (len(slide['bullets']) + 1) // 2 if template['preset'] == 'two-column' else 0
 
 
+class InvalidPresentationProposal(ValidationError):
+    """The model's proposal violates the format or allowed bindings (B-ODD-03).
+
+    Project concurrency and storage failures keep their own types, so callers
+    can tell a bad model output from a changed project without reading text.
+    """
+    code = 'invalid_presentation_proposal'
+
+
+def _model_output(call, *args):
+    try:
+        return call(*args)
+    except InvalidPresentationProposal:
+        raise
+    except ValidationError as exc:
+        raise InvalidPresentationProposal(str(exc)) from exc
+
+
 def materialize_presentation_proposal(value, *, task_id, project_id, base_revision,
                                       selected_artifact_ids, node_path):
     """Return a validated durable preview; this function never saves the deck."""
-    proposal = _parse(value)
+    proposal = _model_output(_parse, value)
     uuid(task_id); uuid(project_id)
     selected = set(selected_artifact_ids)
     require(set(proposal['source_artifact_ids']) <= selected,
-            'Presentation proposal cited an unavailable source')
+            'Presentation proposal cited an unavailable source', InvalidPresentationProposal)
     if proposal['operation'] == 'create':
         templates = layout_presets()
         by_layout = {item['id']: item for item in templates}
@@ -94,7 +112,7 @@ def materialize_presentation_proposal(value, *, task_id, project_id, base_revisi
         for index, item in enumerate(proposal['slides']):
             slide = new_slide()
             slide['id'] = str(uuid5(NAMESPACE_URL, f'fpw:presentation:{task_id}:{index}'))
-            _apply_content(slide, item, by_layout)
+            _model_output(_apply_content, slide, item, by_layout)
             slides.append(slide)
         deck = {'version': 1, 'title': proposal['title'], 'templates': templates,
                 'slides': slides}
@@ -102,22 +120,25 @@ def materialize_presentation_proposal(value, *, task_id, project_id, base_revisi
     else:
         target = proposal['target_artifact_id']
         require(target in selected and target in proposal['source_artifact_ids'],
-                'Updated presentation must be an explicitly selected source')
+                'Updated presentation must be an explicitly selected source',
+                InvalidPresentationProposal)
         view = PresentationDocuments(node_path).open(project_id)
         require(view['commit_id'] == base_revision,
                 'Project changed while preparing presentation proposal')
         document = next((item for item in view['documents']
                          if item['id'] == target and 'deck' in item), None)
-        require(document is not None, 'Selected presentation is unavailable')
+        require(document is not None, 'Selected presentation is unavailable',
+                InvalidPresentationProposal)
         deck = copy.deepcopy(document['deck'])
         deck['title'] = proposal['title']
         templates = {item['id']: item for item in deck['templates']}
         main = {item['id']: item for item in deck['slides'] if item['kind'] == 'main'}
         for item in proposal['slides']:
             require(item['slide_id'] in main,
-                    'Presentation proposal references an unavailable main slide')
-            _apply_content(main[item['slide_id']], item, templates)
-    deck = validate_deck(deck)
+                    'Presentation proposal references an unavailable main slide',
+                    InvalidPresentationProposal)
+            _model_output(_apply_content, main[item['slide_id']], item, templates)
+    deck = _model_output(validate_deck, deck)
     markdown = encode_deck(deck)
     digest = hashlib.sha256(markdown.encode('utf-8')).hexdigest()
     return {'schema_version': 1, 'kind': 'presentation-draft',

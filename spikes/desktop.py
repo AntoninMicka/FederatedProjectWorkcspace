@@ -237,6 +237,51 @@ def request_policy(url, initiator, method, origin):
     return 'block'
 
 
+def attach_desktop_services(server, node_path, administration, *, chat_service=None,
+                            monitoring=True):
+    """Attach every backend service of the desktop node to its local API server.
+
+    Shared by ``main`` and the behavioural UI tests (AUDIT-B7-T1), so the tests
+    exercise the same backend wiring as the application. ``chat_service`` lets a
+    test use fake model and search transports. The caller runs the presentation
+    session recovery, because its failure is reported through the native UI.
+    """
+    from spikes.presentation_documents import PresentationDocuments
+    from spikes.presentation_sessions import PresentationSessions
+    server.administration = administration
+    server.user_profile = UserProfile(node_path)
+    server.gamepad_settings = GamepadSettings(node_path)
+    server.presentation_documents = PresentationDocuments(node_path)
+    server.presentation_sessions = PresentationSessions(node_path)
+    if monitoring:
+        from spikes.monitoring import Monitoring
+        server.monitoring = Monitoring(Path(node_path), server.projects)
+        server.monitoring.start()
+    server.chat_service = chat_service or ChatService(node_path, server.projects)
+    state_dir = server.chat_service.state_dir
+    server.media_service = MediaService(node_path, server.projects, state_dir=state_dir)
+    server.role_workflow_service = RoleWorkflowService(node_path, server.projects,
+        state_dir=state_dir)
+    server.autonomy_service = AutonomyService(node_path, server.projects,
+        state_dir=state_dir, chat_service=server.chat_service,
+        role_workflow_service=server.role_workflow_service)
+    server.summary_service = SummaryService(node_path, server.projects,
+        state_dir=state_dir, chat_state_dir=state_dir)
+    server.extraction_service = ExtractionService(node_path, server.projects,
+        state_dir=state_dir, chat_state_dir=state_dir)
+    server.metadata_suggestion_service = MetadataSuggestionService(node_path, server.projects,
+        state_dir=state_dir, chat_state_dir=state_dir)
+    from spikes.julia_workspace import JuliaWorkspaceService
+    server.julia_workspace = JuliaWorkspaceService(node_path, server.projects)
+    server.publication_cms = PublicationCms(state_dir)
+    server.project_creation_actions = ProjectCreationActions(node_path, desktop_locations=True)
+    server.project_deletion_actions = ProjectDeletionActions(node_path)
+    server.project_repair_actions = ProjectRepairActions(node_path)
+    server.notebooklm_import_actions = NotebookLMImportActions(
+        node_path, desktop_capabilities=True)
+    server.google_drive_import = GoogleDriveImport(node_path)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--node', help='Local node.json containing authorized project registrations.')
@@ -342,42 +387,11 @@ def main():
     administration = Administration(node_path, deployment='desktop')
     administration.bootstrap()
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server, desktop_bridge(node_path, server):
-        server.administration = administration
-        server.user_profile = UserProfile(node_path)
-        server.gamepad_settings = GamepadSettings(node_path)
-        server.presentation_documents = PresentationDocuments(node_path)
-        server.presentation_sessions = PresentationSessions(node_path)
+        attach_desktop_services(server, node_path, administration)
         try:
             server.presentation_sessions.recover()
         except Exception as exc:
             QMessageBox.warning(None, 'Obnova záznamu prezentace nebyla dokončena', str(exc))
-        from spikes.monitoring import Monitoring
-        server.monitoring=Monitoring(Path(node_path),server.projects)
-        server.monitoring.start()
-        server.chat_service = ChatService(node_path, server.projects)
-        server.media_service = MediaService(node_path, server.projects,
-            state_dir=server.chat_service.state_dir)
-        server.role_workflow_service = RoleWorkflowService(node_path, server.projects,
-            state_dir=server.chat_service.state_dir)
-        server.autonomy_service = AutonomyService(node_path, server.projects,
-            state_dir=server.chat_service.state_dir, chat_service=server.chat_service,
-            role_workflow_service=server.role_workflow_service)
-        server.summary_service = SummaryService(node_path, server.projects,
-            state_dir=server.chat_service.state_dir,
-            chat_state_dir=server.chat_service.state_dir)
-        server.extraction_service = ExtractionService(node_path, server.projects,
-            state_dir=server.chat_service.state_dir,
-            chat_state_dir=server.chat_service.state_dir)
-        server.metadata_suggestion_service = MetadataSuggestionService(node_path, server.projects,
-            state_dir=server.chat_service.state_dir,
-            chat_state_dir=server.chat_service.state_dir)
-        from spikes.julia_workspace import JuliaWorkspaceService
-        server.julia_workspace = JuliaWorkspaceService(node_path, server.projects)
-        server.publication_cms = PublicationCms(server.chat_service.state_dir)
-        server.project_creation_actions = ProjectCreationActions(
-            node_path, desktop_locations=True)
-        server.project_deletion_actions = ProjectDeletionActions(node_path)
-        server.project_repair_actions = ProjectRepairActions(node_path)
         if args.smoke_repair:
             # Exercise the real unavailable-project menu without letting the
             # dashboard opener eagerly rebuild this deliberately missing index.
@@ -390,9 +404,6 @@ def main():
                         for item in rows]
 
             server.projects.catalog = repair_smoke_catalog
-        server.notebooklm_import_actions = NotebookLMImportActions(
-            node_path, desktop_capabilities=True)
-        server.google_drive_import = GoogleDriveImport(node_path)
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)

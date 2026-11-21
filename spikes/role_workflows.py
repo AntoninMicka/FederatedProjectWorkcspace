@@ -10,7 +10,7 @@ from pathlib import Path
 import sqlite3
 import stat
 
-from spikes.metadata import require, timestamp, uuid
+from spikes.metadata import require, timestamp, uuid, OwnerUnavailable
 from spikes.sqlite_ownership import readonly_refused, store_connection
 
 
@@ -137,7 +137,7 @@ class RoleWorkflows:
     @staticmethod
     def _owned(row, node_id, user_id):
         require(row is not None and row[0] == node_id and row[1] == user_id,
-                'Workflow is unavailable to this owner')
+                'Workflow is unavailable to this owner', OwnerUnavailable)
 
     def prepare(self, *, request, node_id, user_id, creator):
         workflow_id = request['workflow_id']

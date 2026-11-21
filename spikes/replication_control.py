@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Shared web/desktop control plane for one-shot personal replication."""
+from spikes.background_workers import report_failure
+from spikes.peer_transport import REPLICATION_TIMEOUT, stop_timeout
 from spikes.request_ownership import bounded_flock
 import fcntl
 import os
@@ -94,6 +96,12 @@ class ReplicationControl:
                 self.node, replication_id, 'error', operation_id=operation_id,
                 last_head=previous.get('last_head'), detail=str(exc))
             raise
+        except Exception as exc:
+            # Unknown class: record a generic durable error, never only vanish.
+            set_replication_runtime(
+                self.node, replication_id, 'error', operation_id=operation_id,
+                last_head=previous.get('last_head'), detail=type(exc).__name__)
+            raise
         return set_replication_runtime(
             self.node, replication_id, 'idle', operation_id=operation_id,
             last_head=result['head'], detail='Replication completed')
@@ -106,13 +114,15 @@ class ReplicationControl:
                     and replication['local_role'] == 'primary'):
                 try:
                     self.synchronize(replication['spec']['id'])
-                except Exception:
-                    pass  # Durable status records the bounded retry outcome.
+                except Exception as exc:
+                    # Durable status records the bounded retry outcome.
+                    report_failure(ReplicationScheduler.NAME, exc,
+                                   target=replication['spec']['id'])
 
 
 class ReplicationScheduler:
     """Periodically reconcile enabled primary grants without blocking the UI."""
-    NAME, STOP_TIMEOUT = 'project-replication', 35
+    NAME, STOP_TIMEOUT = 'project-replication', stop_timeout(REPLICATION_TIMEOUT)
 
     def __init__(self, node, *, deployment, interval=60):
         self.control = ReplicationControl(node, deployment=deployment)
@@ -132,10 +142,11 @@ class ReplicationScheduler:
             try:
                 self.control.run_enabled()
                 delay = self.interval
-            except Exception:
+            except Exception as exc:
                 # Registry reads share the node writer lock with project
                 # operations. Retry transient lock/startup races without
                 # permanently terminating replication for this process.
+                report_failure(self.NAME, exc)
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 

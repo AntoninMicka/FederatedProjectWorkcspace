@@ -60,15 +60,17 @@ class DeploymentTargets:
 def address_candidates():
     """Interface addresses only; do not claim that an HTTPS backend listens there."""
     import ipaddress
+    from spikes.peer_transport import origin, private_address
     try:
-        result = subprocess.run(['ip', '-j', '-4', 'address', 'show', 'up'], capture_output=True, check=True, timeout=3)
+        result = subprocess.run(['ip', '-j', 'address', 'show', 'up'], capture_output=True, check=True, timeout=3)
         interfaces = json.loads(result.stdout)
         values = set()
         for interface in interfaces:
             for address in interface.get('addr_info', []):
                 ip = ipaddress.ip_address(address['local'])
-                if ip.version == 4 and ip.is_private and not ip.is_loopback and not ip.is_link_local:
-                    values.add(str(ip))
-        return [f'https://{ip}:8443' for ip in sorted(values, key=ipaddress.ip_address)]
+                # IPv4 private or IPv6 unique local; loopback and link-local are not offered.
+                if private_address(ip) and not ip.is_loopback and not ip.is_link_local:
+                    values.add(ip)
+        return [origin(ip, 8443) for ip in sorted(values, key=lambda ip: (ip.version, ip))]
     except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         return []

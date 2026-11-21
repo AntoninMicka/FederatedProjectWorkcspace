@@ -190,7 +190,7 @@ async function activate(context) {
         else vscode.window.showInformationMessage(summary);
       }
     } catch (error) {
-      try {const config=await configuration();for(const session of config.legacy?[config.pairing.session_id]:Object.keys(config.mappings||{}))await unavailable(session,error);}catch(_){}
+      try {const config=await configuration();for(const session of config.legacy?[config.pairing.session_id]:Object.keys(config.mappings||{}))await unavailable(session,error);}catch(reportError){output.appendLine(`Hlášení nedostupnosti do Workspace selhalo: ${reportError.message}`);}
       status.text = error.code === 'ECONNREFUSED' ? 'Workspace: čeká na spuštění' : 'Workspace: chyba spojení';
       output.appendLine(error.message);
       if (!quiet) vscode.window.showErrorMessage(error.message);

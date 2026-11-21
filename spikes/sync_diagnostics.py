@@ -12,8 +12,11 @@ from uuid import UUID
 
 from spikes.request_ownership import safe_busy_resource
 
+PUBLICATION_PHASES = ('receive-publication-pools', 'receive-publication-git',
+                      'receive-publication-chats', 'receive-publication-pool-apply')
 PEER_PHASES = frozenset({'receive-verify', 'receive-replay', 'receive-check-destination',
-    'receive-verify-history', 'receive-publication', 'receive-prepare-response'})
+    'receive-verify-history', 'receive-publication', 'receive-prepare-response',
+    'content-state', *PUBLICATION_PHASES})
 
 
 def safe_peer_phase(value):
@@ -41,12 +44,36 @@ def observations(node):
             if (value := snapshot(node, peer, project, direction=direction)) is not None]
 
 
+def peer_progress(name):
+    """Record the peer's phase reported by a heartbeat (fixed names only)."""
+    record = _current.get()
+    value = safe_peer_phase(name)
+    if record is not None and value is not None:
+        with _lock:
+            record['peer_phase'] = value
+
+
+SLOW_MS = 30000   # half the sender's content sync deadline
+
+
 def phase(name):
     record = _current.get()
     if record is not None:
         with _lock:
+            now = time.monotonic()
+            _close_phase(record, now)
             record['phase'] = name
-            record['phase_started'] = time.monotonic()
+            record['phase_started'] = now
+
+
+def _close_phase(record, now):
+    # Phase names are fixed constants; durations carry no payload data.
+    record.setdefault('durations', []).append(
+        (record['phase'], round((now - record['phase_started']) * 1000)))
+
+
+def _durations(record):
+    return ','.join(f'{name}:{ms}' for name, ms in record.get('durations', ())) or 'none'
 
 
 def snapshot(node, peer, project, *, direction=None):
@@ -87,6 +114,7 @@ def observed(function=None, *, direction='outbound'):
         record = dict(phase='prepare', state='running', started=now, phase_started=now,
                       direction=direction, _key=key)
         with _lock:
+            previous = _latest.get(key)
             _latest[key] = record
             _latest.move_to_end(key)
             while len(_latest) > LIMIT:
@@ -95,6 +123,16 @@ def observed(function=None, *, direction='outbound'):
         try:
             result = function(first, peer_id, project_id, *args, **kwargs)
         except Exception as exc:
+            if getattr(exc, 'not_started', False) is True:
+                # Nothing started (a deferred automatic attempt): keep showing
+                # the last real run instead of an empty failure.
+                with _lock:
+                    if _latest.get(key) is record:
+                        if previous is None:
+                            del _latest[key]
+                        else:
+                            _latest[key] = previous
+                raise
             resource = safe_busy_resource(getattr(exc, 'busy_resource', None))
             peer_phase = safe_peer_phase(getattr(exc, 'peer_phase', None))
             with _lock:
@@ -102,14 +140,22 @@ def observed(function=None, *, direction='outbound'):
                 if peer_phase is not None and direction == 'outbound': record['peer_phase'] = peer_phase
                 record.update(state='failed', error_type=type(exc).__name__,
                               finished=time.monotonic())
+                _close_phase(record, record['finished'])
             # Exception text, paths, endpoints, headers and payloads are excluded.
-            _log.warning('sync_failed phase=%s error_type=%s elapsed_ms=%d busy_resource=%s peer_phase=%s',
+            _log.warning('sync_failed phase=%s error_type=%s elapsed_ms=%d busy_resource=%s '
+                         'peer_phase=%s phases=%s',
                          record['phase'], record['error_type'],
-                         round((record['finished'] - now) * 1000), resource, peer_phase or 'unknown')
+                         round((record['finished'] - now) * 1000), resource,
+                         peer_phase or 'unknown', _durations(record))
             raise
         else:
             with _lock:
                 record.update(state='finished', finished=time.monotonic())
+                _close_phase(record, record['finished'])
+            elapsed = round((record['finished'] - now) * 1000)
+            if elapsed >= SLOW_MS:
+                _log.warning('sync_slow direction=%s elapsed_ms=%d phases=%s',
+                             direction, elapsed, _durations(record))
             return result
         finally:
             _current.reset(token)

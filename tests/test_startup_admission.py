@@ -87,8 +87,10 @@ class DashboardProjectionTests(unittest.TestCase):
                        (peer, self.id, operation, '{}', b'original payload', '[]'))
         creator = ProjectCreation(self.node)
         with creator._locked():
-            with self.assertRaises(CreationConflict): creator.author_id()
-            with patch('spikes.federation_sync.synchronize', side_effect=lambda *a, **k: creator.author_id()), \
+            # A real node operation under the writer lock; reading the author
+            # no longer takes that lock (AUDIT-B7-T1).
+            with self.assertRaises(CreationConflict): creator.initialize_node()
+            with patch('spikes.federation_sync.synchronize', side_effect=lambda *a, **k: creator.initialize_node()), \
                     self.assertRaises(ProjectBusy):
                 control.synchronize(peer, self.id)
         self.assertEqual(control.statuses()[peer+':'+self.id]['state'], 'busy')

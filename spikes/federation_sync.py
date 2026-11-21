@@ -3,15 +3,19 @@
 """Bidirectional, policy-scoped native Git bundle synchronization."""
 from spikes.http_request_budget import RequestReadTimeout
 import hashlib
-import ipaddress
 import json
 import os
 import fcntl
 from collections import deque
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from spikes.request_ownership import ProjectBusy, bounded_project_requests, bounded_process_lock, safe_busy_resource
+from spikes.background_workers import report_failure
+from spikes.peer_transport import (BACKGROUND_RECEIVE_BUDGET, CONTENT_RECEIVE_BUDGET,
+                                   CONTENT_SYNC_MAX_WAIT, CONTENT_SYNC_TIMEOUT,
+                                   HEARTBEAT_IDLE_TIMEOUT, private_peer_endpoint,
+                                   stop_timeout)
 import re
 import sqlite3
 import ssl
@@ -20,8 +24,8 @@ import struct
 import subprocess
 import tempfile
 import threading
+import logging
 import time
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from spikes.administration import (
@@ -49,10 +53,11 @@ from spikes.project_chat_sync import (
 from spikes.projects import Projects
 from spikes.sqlite_ownership import sqlite_connection
 from spikes.storage import Git
-from spikes.sync_diagnostics import observed, received, phase, snapshot as sync_diagnostic, current_phase, safe_peer_phase
+from spikes.sync_diagnostics import (observed, received, phase, peer_progress,
+                                     snapshot as sync_diagnostic, current_phase, safe_peer_phase)
+from spikes.content_receive_jobs import STREAM_TYPE, read_frames
 
 
-NETWORK_TIMEOUT = 60
 
 PATH = '/v1/federation/content-sync'
 CONTENT_TYPE = 'application/vnd.federated-workspace.content-sync-v2'
@@ -87,6 +92,24 @@ class SyncRejected(ValueError):
 
 class SyncCancelled(Exception):
     pass
+
+
+class PeerTimeout(TimeoutError):
+    """The peer accepted the connection but did not answer within the budget.
+
+    Not "offline" (AUDIT-B7-T1): the peer is reachable and may still be
+    working on the same saved operation, which the next attempt replays.
+    """
+
+
+class OutboundDeferred(Exception):
+    """Another outbound sync of this node owns the send lane (AUDIT-B7-T1).
+
+    Raised only for a caller that asked to skip instead of wait (automatic
+    checks). Nothing was started: no runtime state, diagnostic or journal
+    entry is written, so the visible state stays that of the last real run.
+    """
+    not_started = True
 
 
 class SyncBusy(Exception):
@@ -435,9 +458,33 @@ def _pool_payload(exchange, payload):
     return payload[-size:] if size else b''
 
 
+def _trusted_heads(node, project_id):
+    """Branch heads of the receiver's own project history (AUDIT-B7-T1).
+
+    Commits reachable from them were validated when they entered this
+    repository, by the local writer or by an earlier verified receive, so an
+    incoming bundle needs no second validation of them. Only refs/heads count;
+    staging refs of unfinished receives never become trusted. No local project
+    (an initial share) means no trusted history.
+    """
+    binding = _binding(node, project_id)
+    if binding is None:
+        return []
+    try:
+        raw = git_run(Git(Path(binding['root'])), 'for-each-ref', '--format=%(objectname)',
+                      'refs/heads/').stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return sorted(set(raw))[:64]
+
+
 @git_budget()
-def _validate_git_bundle(payload, refs, project_id, repo):
-    """Check the complete native bundle in an isolated object store."""
+def _validate_git_bundle(payload, refs, project_id, repo, trusted=()):
+    """Check the native bundle in an isolated object store.
+
+    Every commit not reachable from ``trusted`` (the receiver's own validated
+    heads that the bundle also contains) is validated; see _trusted_heads.
+    """
     repo.mkdir(mode=0o700)
     git=Git(repo);git_run(git,'init','--bare','--template=')
     bundle=repo.parent/('verify-'+str(uuid4())+'.bundle');bundle.write_bytes(payload)
@@ -447,7 +494,9 @@ def _validate_git_bundle(payload, refs, project_id, repo):
         require(actual==refs,'Git bundle refs differ from signed inventory')
         git_run(git,'-c','protocol.file.allow=always','fetch','--no-tags',str(bundle),
                 *[row['ref']+':'+row['ref'] for row in actual])
-        validate_histories(git, [row['head'] for row in actual], project_id, PRIVACY)
+        present = [head for head in trusted
+                   if git_run(git, 'cat-file', '-e', head + '^{commit}', check=False).returncode == 0]
+        validate_histories(git, [row['head'] for row in actual], project_id, PRIVACY, trusted=present)
     finally:
         bundle.unlink(missing_ok=True)
 
@@ -487,7 +536,8 @@ def _verify_bundle(node, exchange, payload, service=None):
         root = private_root(node)
         with tempfile.TemporaryDirectory(prefix='sharing-verify-', dir=root) as directory:
             directory = Path(directory)
-            _validate_git_bundle(bundle_payload,exchange['refs'],exchange['project_id'],directory/'repo.git')
+            _validate_git_bundle(bundle_payload,exchange['refs'],exchange['project_id'],directory/'repo.git',
+                                 trusted=_trusted_heads(node, exchange['project_id']))
     return bundle_payload, chats
 
 
@@ -704,10 +754,12 @@ def _apply(node, exchange, payload, checkpoint=lambda stage: None,
     if not payload:
         return False
     _verify_bundle(node, exchange, payload, service)
-    return _apply_verified_history(node, exchange, payload, checkpoint, authorize, service)
+    return _apply_verified_history(node, exchange, payload, checkpoint, authorize, service,
+                                   stage='local-publication')
 
 
-def _apply_verified_history(node, exchange, payload, checkpoint, authorize, service):
+def _apply_verified_history(node, exchange, payload, checkpoint, authorize, service,
+                            *, stage='receive-publication'):
     """Publish only the exact bytes whose Git history this call verified.
 
     Receiver admission already validated history before persisting its intent.
@@ -719,12 +771,14 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
     bundle_payload, chats = _verify_incoming_payload(exchange, payload, service)
     pools = _pool_payload(exchange,payload)
     if pools:
+        phase(stage + '-pools')
         authorize()
         from spikes.pool_sync import prepare
         prepare(node,exchange['project_id'],pools,operation_id=exchange['operation_id'],
                 source_node_id=exchange['source_node_id'],checkpoint=checkpoint)
     conflict = False
     if bundle_payload:
+        phase(stage + '-git')
         if _binding(node, exchange['project_id']) is None:
             conflict = _apply_initial(
                 node, exchange, bundle_payload, checkpoint, authorize)
@@ -735,6 +789,7 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
         # The durable inbound request is the cross-store recovery authority.
         # Retry first makes Git idempotently current, then atomically applies
         # chats; a crash between those effects rolls forward from the same bytes.
+        phase(stage + '-chats')
         authorize()
         chats = validate_chat_payload(
             canonical(chats), project_id=exchange['project_id'],
@@ -744,6 +799,7 @@ def _apply_verified_history(node, exchange, payload, checkpoint, authorize, serv
             node, chats, checkpoint=checkpoint)) or conflict
     pools = _pool_payload(exchange, payload)
     if pools and not conflict:
+        phase(stage + '-pool-apply')
         authorize()
         from spikes.pool_sync import apply
         apply(node, exchange['project_id'], pools, checkpoint=checkpoint,
@@ -816,10 +872,15 @@ class SyncReceiver:
         self.service = administration or Administration(self.node)
 
     @received
-    def receive(self, envelope, payload, checkpoint=lambda stage: None):
+    def receive(self, envelope, payload, checkpoint=lambda stage: None, *, background=False):
+        # A background receive job (content_receive_jobs) is not an HTTP worker:
+        # SQLite keeps its native waits there and history verification gets the
+        # longer background budget. Flock owners stay non-blocking either way.
+        owner = nullcontext() if background else bounded_project_requests()
+        budget = BACKGROUND_RECEIVE_BUDGET if background else CONTENT_RECEIVE_BUDGET
         try:
-            with bounded_project_requests(), _inbound_lock(self.node):
-                return self._receive(envelope, payload, checkpoint)
+            with owner, _inbound_lock(self.node):
+                return self._receive(envelope, payload, checkpoint, budget=budget)
         except (BlockingIOError, ProjectBusy) as exc:
             raise SyncBusy('Content project is busy', resource=getattr(exc, 'busy_resource', 'native-owner')) from exc
         except GitDeadlineExceeded as exc:
@@ -881,7 +942,7 @@ class SyncReceiver:
                 'Project registration changed during replay')
         return response, response_payload
 
-    def _receive(self, envelope, payload, checkpoint):
+    def _receive(self, envelope, payload, checkpoint, *, budget=CONTENT_RECEIVE_BUDGET):
         require(isinstance(envelope, dict) and isinstance(envelope.get('exchange'), dict),
                 'Missing content sync exchange')
         exchange = validate_exchange(envelope['exchange'])
@@ -922,7 +983,8 @@ class SyncReceiver:
                         '--untracked-files=all').stdout:
                     raise SyncConflict('Destination has local changes; review project conflicts')
         phase('receive-verify-history')
-        bundle, _ = _verify_bundle(self.node, exchange, payload, self.service)
+        with git_budget(budget):
+            bundle, _ = _verify_bundle(self.node, exchange, payload, self.service)
         verified = _VerifiedInboundBundle(
             exchange['operation_id'], exchange['project_id'], peer['id'], local_id, peer['fingerprint'],
             canonical(exchange['scope']),
@@ -1092,35 +1154,43 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         raise SyncCancelled('Content sync cancelled before transport')
     if not peer.get('endpoint'):
         raise AccessDenied('Peer can synchronize content only when it connects')
-    parsed = urlsplit(peer['endpoint'])
-    require(parsed.scheme == 'https' and not parsed.path.strip('/')
-            and not parsed.username and not parsed.password
-            and not parsed.query and not parsed.fragment,
-            'Invalid content sync peer endpoint')
-    address = ipaddress.ip_address(parsed.hostname)
-    require(address.version == 4 and not address.is_unspecified
-            and (address.is_private or address.is_loopback),
-            'Content sync peer must use a private IPv4 address')
+    parsed, address = private_peer_endpoint(
+        peer['endpoint'], invalid='Invalid content sync peer endpoint',
+        private='Content sync peer must use a private IP address')
     ca = Path(ca) if ca else private_root(node) / (peer_id + '-ca.pem')
     context = ssl.create_default_context(cafile=str(ca))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     connection = DeadlineHTTPSConnection(
-        str(address), parsed.port or 443, context=context, timeout=NETWORK_TIMEOUT)
+        str(address), parsed.port or 443, context=context, timeout=CONTENT_SYNC_TIMEOUT)
     response = None
     try:
         phase('upload')
         connection.request('POST', PATH, body=encode_body(envelope, payload), headers={
-            'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc,
+            'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc, 'Accept': STREAM_TYPE,
             **({'X-FPW-State-Receipt': '1'} if state_manifest else {})})
         phase('wait-response')
         response = connection.getresponse()
-        phase('download')
-        body = response.read(MAX_BODY + 1)
+        if response.status == 200 and response.getheader('Content-Type') == STREAM_TYPE:
+            # The peer works in the background and proves liveness with
+            # heartbeats: wait per frame, not for one fixed exchange budget.
+            connection.extend_deadline(CONTENT_SYNC_MAX_WAIT, idle=HEARTBEAT_IDLE_TIMEOUT)
+            phase('peer-working')
+            kind, outcome = read_frames(
+                response.readline, response.read, cancelled=cancelled,
+                on_heartbeat=lambda value: peer_progress(value.get('peer_phase')))
+            phase('download')
+            if kind == 'error':
+                status, body = outcome['status'], canonical(outcome)
+            else:
+                status, body = 200, outcome
+        else:
+            phase('download')
+            status, body = response.status, response.read(MAX_BODY + 1)
         connection.check_deadline()
         require(len(body) <= MAX_BODY, 'Content sync response exceeds limit')
-        if response.status == 409:
+        if status == 409:
             raise SyncConflict('Peer reported a content conflict')
-        if response.status == 503:
+        if status == 503:
             diagnostic = {}
             if len(body) <= 4096:
                 try:
@@ -1130,10 +1200,14 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
             raise SyncBusy('Peer is temporarily busy; retry the same operation',
                 resource=safe_busy_resource(diagnostic.get('busy_resource')),
                 peer_phase=safe_peer_phase(diagnostic.get('peer_phase')))
-        if response.status != 200:
+        if status != 200:
             typed = peer_unsupported_version(body, subject=peer_id)
             raise SyncRejected('Peer rejected content sync' + (f': {typed}' if typed else ''))
         response_envelope, response_payload = decode_body(body)
+    except TimeoutError as exc:
+        if not connection.connected:
+            raise  # never connected: the peer is unreachable
+        raise PeerTimeout('Peer did not answer content sync in time') from exc
     finally:
         if response is not None:
             response.close()
@@ -1315,10 +1389,13 @@ class ContentSyncControl:
 
     @observed
     @bounded_project_requests()
-    def synchronize(self, peer_id, project_id, *, cancelled=None, owner_wait=0, state_manifest=False):
+    def synchronize(self, peer_id, project_id, *, cancelled=None, owner_wait=0, state_manifest=False,
+                    defer_when_busy=False):
         try:
             identifier(peer_id); identifier(project_id)
-            require(type(owner_wait) in (int, float) and 0 <= owner_wait <= NETWORK_TIMEOUT,
+            # A streamed exchange may own the send lane for minutes; the manual
+            # worker (a background thread, cancellable) waits up to that cap.
+            require(type(owner_wait) in (int, float) and 0 <= owner_wait <= CONTENT_SYNC_MAX_WAIT,
                     'Invalid synchronization admission wait')
             if cancelled is not None and cancelled():
                 raise SyncCancelled('Content sync cancelled before ownership')
@@ -1341,6 +1418,8 @@ class ContentSyncControl:
                         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                         break
                     except BlockingIOError:
+                        if defer_when_busy:
+                            raise OutboundDeferred('Another outbound content sync is running')
                         remaining = deadline - time.monotonic()
                         if remaining <= 0:
                             raise
@@ -1352,6 +1431,8 @@ class ContentSyncControl:
                                      **({'state_manifest': True} if state_manifest else {}))
                 automatic_retry.succeeded((str(self.node), peer_id, project_id))
                 return result
+        except OutboundDeferred:
+            raise  # nothing started; keep the last real runtime state
         except SyncCancelled as exc:
             state = 'cancelled'; detail = str(exc); error = exc
         except SyncConflict as exc:
@@ -1365,10 +1446,15 @@ class ContentSyncControl:
             state = 'busy'; detail = 'Synchronization deferred; saved operation retained'; error = exc
         except (AccessDenied, SyncRejected) as exc:
             state = 'rejected'; detail = str(exc); error = exc
+        except PeerTimeout as exc:
+            state = 'unanswered'; detail = str(exc); error = exc
         except (ConnectionError, TimeoutError, ssl.SSLError, OSError) as exc:
             state = 'offline'; detail = type(exc).__name__; error = exc
         except (ValueError, sqlite3.Error, subprocess.SubprocessError) as exc:
             state = 'error'; detail = str(exc); error = exc
+        except Exception as exc:
+            # Unknown class: record a generic durable error, never only vanish.
+            state = 'error'; detail = type(exc).__name__; error = exc
         with _database(self.node) as db:
             previous = db.execute(
                 'SELECT last_sent,last_remote FROM runtime '
@@ -1405,7 +1491,7 @@ class ContentSyncControl:
         return _MANUAL_SYNCS.cancel(self.node, peer_id, project_id)
 
     @bounded_project_requests()
-    def run_automatic(self):
+    def run_automatic(self, cancelled=None):
         if not self.settings()['automatic_enabled']:
             return {'enabled': False, 'attempted': 0}
         attempted = 0
@@ -1422,12 +1508,18 @@ class ContentSyncControl:
             key = (str(self.node), peer_id, project_id)
             if not automatic_retry.ready(key): continue
             if peer_id not in manifests:
+                probe_started = time.monotonic()
                 try:
                     manifests[peer_id] = probe(self.service, peer_id, projects=sorted({
                         row['project_id'] for row in candidates
-                        if row['peer_id'] == peer_id and row['eligible']}))
+                        if row['peer_id'] == peer_id and row['eligible']}),
+                        **({'cancelled': cancelled} if cancelled is not None else {}))
                 except Exception as exc:
                     probe_errors[peer_id] = exc
+                    # Type and duration only: no endpoint, path or exception text.
+                    logging.getLogger(__name__).warning(
+                        'content_state_failed error_type=%s elapsed_ms=%d',
+                        type(exc).__name__, round((time.monotonic() - probe_started) * 1000))
                     # Unknown/offline is not permission to start expensive fallback.
                     manifests[peer_id] = False
             manifest = manifests[peer_id]
@@ -1449,10 +1541,20 @@ class ContentSyncControl:
                                 and json.loads(confirmed[1]) == manifest.get(project_id)):
                             note(self.node, peer_id, project_id, 'unchanged')
                             continue
-                note(self.node, peer_id, project_id, 'legacy' if manifest is None else 'changed')
+                # The state check can wait on a working peer for minutes; a
+                # manual sync started meanwhile owns the send lane first.
+                if _MANUAL_SYNCS.any_active(self.node): break
                 attempted += 1
-                self.synchronize(peer_id, project_id,
-                                 **({'state_manifest': True} if manifest is not None else {}))
+                try:
+                    self.synchronize(peer_id, project_id, defer_when_busy=True,
+                                     **({'cancelled': cancelled} if cancelled is not None else {}),
+                                     **({'state_manifest': True} if manifest is not None else {}))
+                except OutboundDeferred:
+                    # Not a failure and not a retry backoff: another outbound
+                    # sync of this node is running. The next round checks again.
+                    attempted -= 1
+                    break
+                note(self.node, peer_id, project_id, 'legacy' if manifest is None else 'changed')
                 automatic_retry.succeeded(key)
             except (TimeoutError, SyncBusy, ProjectBusy) as exc:
                 note(self.node, peer_id, project_id, 'unavailable', exc)
@@ -1541,10 +1643,11 @@ class ManualSyncTasks:
                                  'Content synchronization is running')
                     self._run(task['node'], task['deployment'], key[1], key[2],
                               task['stopping'], key)
-            except Exception:
+            except Exception as exc:
                 # A failed status write must not strand the volatile node queue.
                 # Native journal recovery remains authoritative; never resend.
-                pass
+                report_failure('manual-content-sync', exc, target=f'{key[1]}/{key[2]}',
+                               expected=(SyncBusy, SyncCancelled))
             finally:
                 with self.lock:
                     if self.tasks.get(key) is task:
@@ -1576,10 +1679,12 @@ class ManualSyncTasks:
         completed = False
         try:
             ContentSyncControl(node, deployment=deployment).synchronize(
-                peer_id, project_id, cancelled=stopping.is_set, owner_wait=NETWORK_TIMEOUT)
+                peer_id, project_id, cancelled=stopping.is_set, owner_wait=CONTENT_SYNC_MAX_WAIT)
             completed = True
-        except Exception:
-            pass
+        except Exception as exc:
+            # synchronize() already recorded the durable runtime state.
+            report_failure('manual-content-sync', exc, target=f'{peer_id}/{project_id}',
+                           expected=(SyncBusy, SyncCancelled))
         finally:
             if completed and stopping.is_set():
                 self._status(node, peer_id, project_id, 'idle',
@@ -1590,7 +1695,7 @@ _MANUAL_SYNCS = ManualSyncTasks()
 
 
 class ContentSyncScheduler:
-    NAME, STOP_TIMEOUT = 'federation-content-sync', 65
+    NAME, STOP_TIMEOUT = 'federation-content-sync', stop_timeout(CONTENT_SYNC_TIMEOUT)
 
     def __init__(self, node, *, deployment, interval=60):
         self.control = ContentSyncControl(node, deployment=deployment)
@@ -1605,12 +1710,15 @@ class ContentSyncScheduler:
     def _run(self):
         while not self.stopping.is_set():
             try:
-                self.control.run_automatic()
+                # A streamed exchange can wait on a working peer for minutes;
+                # stopping cancels it at the next heartbeat.
+                self.control.run_automatic(cancelled=self.stopping.is_set)
                 delay = self.interval
-            except Exception:
+            except Exception as exc:
                 # Registry/catalog startup can race another scheduler. A
                 # transient read failure must not permanently kill content
                 # synchronization for the rest of the process lifetime.
+                report_failure(self.NAME, exc)
                 delay = min(self.interval, 5)
             self.stopping.wait(delay)
 
@@ -1635,6 +1743,9 @@ def reply(handler):
             or len(length) > len(str(MAX_BODY))
             or not 4 < int(length) <= MAX_BODY):
         return handler.send_error(413)
+    from spikes.content_receive_jobs import STREAM_TYPE
+    if handler.single('Accept') == STREAM_TYPE:
+        return _reply_streamed(handler, int(length))
     try:
         body = handler.rfile.read(int(length))
         require(len(body) == int(length), 'Incomplete content sync body')
@@ -1661,3 +1772,60 @@ def reply(handler):
         return handler.reply(409, {'error': 'Content sync requires a conflict decision'})
     except (ValueError, AccessDenied, OSError, sqlite3.Error, subprocess.SubprocessError):
         return handler.reply(422, {'error': 'Content sync request rejected'})
+
+
+def _receive_job(node, administration, envelope, payload, state_receipt):
+    def run():
+        response, response_payload = SyncReceiver(node, administration).receive(
+            envelope, payload, background=True)
+        if state_receipt:
+            from spikes.sync_fingerprint import receipt
+            signed_receipt = receipt(administration, response)
+            if signed_receipt is not None:
+                response = dict(response, state_receipt=signed_receipt)
+        return encode_body(response, response_payload)
+    return run
+
+
+def _reply_streamed(handler, length):
+    """Receive in a background job and stream heartbeats until its outcome.
+
+    Crash boundaries are those of the synchronous receiver: the job runs the
+    same SyncReceiver.receive, whose inbound journal and project journal own
+    recovery. Losing the connection only stops the heartbeat stream.
+    """
+    from spikes.content_receive_jobs import JOBS, STREAM_TYPE, error_frame, stream
+    try:
+        body = handler.rfile.read(length)
+        require(len(body) == length, 'Incomplete content sync body')
+        envelope, payload = decode_body(body)
+        exchange = envelope.get('exchange') if isinstance(envelope, dict) else None
+        require(isinstance(exchange, dict), 'Missing content sync exchange')
+        operation_id = identifier(exchange.get('operation_id'))
+        peer_id = identifier(exchange.get('source_node_id'))
+        project_id = identifier(exchange.get('project_id'))
+        node = handler.server.node
+        job = JOBS.start_or_attach(
+            Path(node).absolute(), operation_id, body,
+            _receive_job(node, handler.server.administration, envelope, payload,
+                         handler.single('X-FPW-State-Receipt') == '1'),
+            phase_source=lambda: (sync_diagnostic(node, peer_id, project_id,
+                                                  direction='inbound') or {}).get('phase'))
+    except RequestReadTimeout:
+        raise
+    except Exception as exc:  # noqa: BLE001 - mapped to the same typed statuses
+        frame = error_frame(exc)
+        return handler.reply(frame['status'], {key: value for key, value in frame.items()
+                                               if key not in {'type', 'status'}})
+    handler.close_connection = True
+    handler.send_response_only(200)
+    handler.send_header('Content-Type', STREAM_TYPE)
+    handler.send_header('Cache-Control', 'no-store')
+    handler.send_header('Connection', 'close')
+    handler.end_headers()
+    def write(raw):
+        handler.wfile.write(raw); handler.wfile.flush()
+    try:
+        stream(job, write)
+    except OSError:
+        pass  # the sender went away; the job continues and stays attachable

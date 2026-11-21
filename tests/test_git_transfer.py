@@ -77,6 +77,34 @@ class GitTransferHistoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Immutable source'):
             validate_history(self.git, self.git.head(), self.project_id)
 
+    def test_trusted_history_is_not_validated_again_but_new_commits_are(self):
+        # AUDIT-B7-T1: a receiver already holds and validated its own history.
+        trusted = self.git.head()
+        self.git.run('commit', '--allow-empty', '-m', 'New 1')
+        self.git.run('commit', '--allow-empty', '-m', 'New 2')
+        head = self.git.head()
+        self.assertEqual(validate_history(self.git, head, self.project_id, trusted=[trusted]), 2)
+        self.assertEqual(validate_history(self.git, trusted, self.project_id, trusted=[trusted]), 0)
+        total = len(self.git.run('rev-list', head).stdout.splitlines())
+        self.assertEqual(validate_history(self.git, head, self.project_id), total)
+
+    def test_new_invalid_commit_after_trusted_history_is_still_rejected(self):
+        trusted = self.git.head()
+        (self.root / 'unclassified.txt').write_text('Not transferable')
+        self.git.commit('Unexpected file')
+        with self.assertRaisesRegex(ValueError, 'Unclassified historical file'):
+            validate_history(self.git, self.git.head(), self.project_id, trusted=[trusted])
+
+    def test_trust_covers_exactly_the_commits_reachable_from_trusted_heads(self):
+        (self.root / 'unclassified.txt').write_text('Not transferable')
+        self.git.commit('Old invalid commit already held by the receiver')
+        (self.root / 'unclassified.txt').unlink()
+        self.git.commit('Remove it again')
+        trusted = self.git.run('rev-parse', 'HEAD~1').stdout.strip()
+        self.assertEqual(validate_history(self.git, self.git.head(), self.project_id, trusted=[trusted]), 1)
+        with self.assertRaisesRegex(ValueError, 'Unclassified historical file'):
+            validate_history(self.git, self.git.head(), self.project_id)
+
     def test_changed_and_reverted_project_blob_cannot_hide_wrong_historical_identity(self):
         path = self.root / 'project.json'; original = path.read_bytes()
         value = json.loads(original); value['id'] = str(uuid4())

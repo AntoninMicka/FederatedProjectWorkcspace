@@ -87,3 +87,45 @@ class SyncDiagnosticsTests(unittest.TestCase):
         with self.assertRaises(ProjectBusy):bad('/tmp/resource-node','peer','bad')
         value=diagnostics.snapshot('/tmp/resource-node','peer','bad')
         self.assertNotIn('busy_resource',value);self.assertNotIn('peer_phase',value)
+
+    def test_failure_log_lists_how_long_each_phase_took(self):
+        now = [100.0]
+
+        @diagnostics.observed
+        def transfer(node, peer, project):
+            now[0] += 1.5
+            diagnostics.phase('receive-verify-history')
+            now[0] += 2.5
+            diagnostics.phase('receive-publication-git')
+            now[0] += .25
+            raise TimeoutError('private-payload')
+
+        with patch.object(diagnostics.time, 'monotonic', lambda: now[0]), \
+                self.assertLogs('spikes.sync_diagnostics', level='WARNING') as logs, \
+                self.assertRaises(TimeoutError):
+            transfer('/tmp/duration-node', 'peer', 'project')
+        line = logs.output[-1]
+        self.assertIn('elapsed_ms=4250', line)
+        self.assertIn('phases=prepare:1500,receive-verify-history:2500,'
+                      'receive-publication-git:250', line)
+        self.assertNotIn('private-payload', line)
+
+    def test_slow_success_is_logged_with_phases_and_fast_success_is_silent(self):
+        now = [0.0]
+
+        @diagnostics.observed(direction='inbound')
+        def receive(node, peer, project, seconds):
+            diagnostics.phase('receive-publication-chats')
+            now[0] += seconds
+
+        with patch.object(diagnostics.time, 'monotonic', lambda: now[0]):
+            with self.assertNoLogs('spikes.sync_diagnostics', level='WARNING'):
+                receive('/tmp/slow-node', 'peer', 'fast', 1)
+            with self.assertLogs('spikes.sync_diagnostics', level='WARNING') as logs:
+                receive('/tmp/slow-node', 'peer', 'slow', diagnostics.SLOW_MS / 1000)
+        self.assertIn('sync_slow direction=inbound elapsed_ms=30000', logs.output[-1])
+        self.assertIn('receive-publication-chats:30000', logs.output[-1])
+
+    def test_publication_subphases_are_safe_peer_phases(self):
+        for name in diagnostics.PUBLICATION_PHASES:
+            self.assertEqual(diagnostics.safe_peer_phase(name), name)

@@ -5,7 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 # Desktopový síťový backend a test spojení
 
 V nativní liště otevřete **Síť a test spojení…**. Vyberte konkrétní privátní
-IPv4 desktopu, port 1024–65535 a povolenou LAN klientů. Backend je opt-in,
+IP adresu desktopu (IPv4, nebo unique local IPv6 `fc00::/7`), port 1024–65535
+a povolenou LAN klientů stejné verze IP. Backend je opt-in,
 běží pouze s desktopovou aplikací, ve stejném procesu a se stejnou node identitou.
 Neinstaluje systémovou službu ani nemění firewall. Zavření desktopu jej zastaví.
 

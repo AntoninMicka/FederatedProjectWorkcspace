@@ -2,17 +2,16 @@
 # SPDX-License-Identifier: MPL-2.0
 """Cheap, signed per-peer content inventories; never a substitute for publication."""
 from collections import OrderedDict
+import logging
 import threading
 import time
 import hashlib
-import ipaddress
 import json
 from pathlib import Path
 import re
 import sqlite3
 import ssl
 import subprocess
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from spikes.administration import AccessDenied, identifier
@@ -21,8 +20,14 @@ from spikes.git_budget import git_budget
 from spikes.http_deadline import DeadlineHTTPSConnection
 from spikes.http_request_budget import RequestReadTimeout
 from spikes.metadata import require
+from spikes.peer_transport import CONTENT_STATE_TIMEOUT, private_peer_endpoint
 from spikes.project_replication import _signature, _verify
 from spikes.request_ownership import ProjectBusy, bounded_project_requests
+
+_log = logging.getLogger(__name__)
+# A content state answer slower than this is logged: the sender gives up at
+# CONTENT_STATE_TIMEOUT, and without timing a router cannot be diagnosed.
+SLOW_STATE_MS = 5000
 
 PATH = '/v1/federation/content-state'
 CONTENT_TYPE = 'application/vnd.federated-workspace.content-state-v1+json'
@@ -81,12 +86,23 @@ def snapshot(authority, project_id, refs, chats, pool):
 
 @bounded_project_requests()
 @git_budget(15)
-def collect(service, peer_id, project_id):
+def collect(service, peer_id, project_id, *, authority=None):
+    """Fingerprint one local project inside an HTTP-sized budget."""
+    return _collect(service, peer_id, project_id, authority=authority)
+
+
+def _collect(service, peer_id, project_id, *, authority=None):
+    """Fingerprint one project under the caller's ownership and Git budget.
+
+    ``authority`` lets a caller that already read it (and re-checks it after
+    all projects) skip two registry reads per project.
+    """
     from spikes.federation_sync import _authority, _binding, _inventory, _policy
     from spikes.projects import Projects
     from spikes.project_chat_sync import export_project
     from spikes.pool_sync import export
-    authority = _authority(service, peer_id)
+    verify = authority is None
+    authority = _authority(service, peer_id) if verify else authority
     scope = _policy(authority[1], authority[2], project_id)
     refs, chats, pool = [], [], b''
     if scope is not None and _binding(service.node, project_id) is not None:
@@ -94,7 +110,7 @@ def collect(service, peer_id, project_id):
         chats, _ = export_project(service.node, service, peer_id, project_id, read_only=True)
         if scope == {'mode': 'all'} and authority[1]['sharing_level'] == 'same-team':
             pool = export(service.node, project_id, read_only=True)
-    require(_authority(service, peer_id) == authority, 'Content state authority changed')
+    require(not verify or _authority(service, peer_id) == authority, 'Content state authority changed')
     return snapshot(authority, project_id, refs, chats, pool)
 
 
@@ -129,6 +145,21 @@ def validate(value, *, response):
 @bounded_project_requests()
 @git_budget(15)
 def receive(service, envelope):
+    """Synchronous answer for a sender without the state stream."""
+    return _answer(service, envelope)
+
+
+def receive_background(service, envelope):
+    """Streamed answer (AUDIT-B7-T1): runs in a background job thread, so
+    SQLite and flocks use their native waits and one budget bounds all
+    projects instead of the sender's single HTTP deadline. Read-only: no
+    journal, index or registry is written; a lost job leaves nothing behind."""
+    from spikes.peer_transport import BACKGROUND_STATE_BUDGET
+    with git_budget(BACKGROUND_STATE_BUDGET):
+        return _answer(service, envelope)
+
+
+def _answer(service, envelope):
     from spikes.federation_sync import _authority, _policy
     from spikes.configuration import parse_node, read_config
     request = validate(envelope.get('state_request') if isinstance(envelope, dict) else None, response=False)
@@ -142,13 +173,21 @@ def receive(service, envelope):
                       if _policy(peer, shares, row['project_id']) is not None})
     require(len(projects) <= MAX_PROJECTS, 'Content state exceeds project limit')
     rows = []
+    started = time.monotonic(); slowest = 0
     for project in projects:
+        begun = time.monotonic()
         try:
-            current = collect(service, peer['id'], project)
+            current = _collect(service, peer['id'], project, authority=authority)
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, ProjectBusy):
             # One damaged/unavailable project must not block healthy projects.
             current = {'fingerprint': None, 'policy': None}
+        slowest = max(slowest, time.monotonic() - begun)
         rows.append(dict(id=project, **current))
+    elapsed = round((time.monotonic() - started) * 1000)
+    if elapsed >= SLOW_STATE_MS:
+        _log.warning('content_state_slow elapsed_ms=%d projects=%d slowest_project_ms=%d '
+                     'unavailable=%d', elapsed, len(rows), round(slowest * 1000),
+                     sum(row['fingerprint'] is None for row in rows))
     require(_authority(service, peer['id']) == authority, 'Content state authority changed')
     value = dict(schema_version=1, source_node_id=local, recipient_node_id=peer['id'],
                  nonce=request['nonce'], projects=rows)
@@ -156,34 +195,48 @@ def receive(service, envelope):
 
 
 @bounded_project_requests()
-def probe(service, peer_id, *, ca=None, projects=()):
-    """None means explicit legacy endpoint; transport/auth failures never mean clean."""
+def probe(service, peer_id, *, ca=None, projects=(), cancelled=None):
+    """None means explicit legacy endpoint; transport/auth failures never mean clean.
+
+    A peer that knows the state stream computes the answer in a background
+    job and sends heartbeats, so a slow peer (many projects, a router) is
+    waited for; only silence (HEARTBEAT_IDLE_TIMEOUT) or the overall
+    CONTENT_STATE_MAX_WAIT fail the check. An older peer answers directly.
+    """
+    from spikes.content_receive_jobs import STATE_STREAM_TYPE, read_frames
+    from spikes.peer_transport import CONTENT_STATE_MAX_WAIT, HEARTBEAT_IDLE_TIMEOUT
     from spikes.federation_sync import _authority
     from spikes.network_backend import private_root
     authority = _authority(service, peer_id)
     local, peer, _, _ = authority
     require(peer.get('endpoint'), 'Content state peer endpoint is unavailable')
-    parsed = urlsplit(peer['endpoint'])
-    require(parsed.scheme == 'https' and not parsed.path.strip('/') and not parsed.username
-            and not parsed.password and not parsed.query and not parsed.fragment,
-            'Invalid content state endpoint')
-    address = ipaddress.ip_address(parsed.hostname)
-    require(address.version == 4 and not address.is_unspecified
-            and (address.is_private or address.is_loopback), 'Content state requires private IPv4')
+    parsed, address = private_peer_endpoint(
+        peer['endpoint'], invalid='Invalid content state endpoint',
+        private='Content state requires a private IP address')
     request = dict(schema_version=1, source_node_id=local, recipient_node_id=peer_id, nonce=str(uuid4()), projects=sorted(set(projects)))
     validate(request, response=False)
     raw = canonical(_signature(service.root, request, local, 'state_request'))
     context = ssl.create_default_context(cafile=str(ca or private_root(service.node)/(peer_id+'-ca.pem')))
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    connection = DeadlineHTTPSConnection(str(address), parsed.port or 443, context=context, timeout=15)
+    connection = DeadlineHTTPSConnection(str(address), parsed.port or 443, context=context, timeout=CONTENT_STATE_TIMEOUT)
     response = None
     try:
-        connection.request('POST', PATH, body=raw, headers={'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc})
-        response = connection.getresponse(); body = response.read(MAX_BODY + 1)
+        connection.request('POST', PATH, body=raw, headers={
+            'Content-Type': CONTENT_TYPE, 'Host': parsed.netloc, 'Accept': STATE_STREAM_TYPE})
+        response = connection.getresponse()
+        status = response.status
+        if status == 200 and response.getheader('Content-Type') == STATE_STREAM_TYPE:
+            connection.extend_deadline(CONTENT_STATE_MAX_WAIT, idle=HEARTBEAT_IDLE_TIMEOUT)
+            kind, body = read_frames(response.readline, response.read,
+                                     cancelled=cancelled or (lambda: False))
+            if kind == 'error':
+                status, body = body['status'], b''
+        else:
+            body = response.read(MAX_BODY + 1)
         connection.check_deadline()
         require(len(body) <= MAX_BODY, 'Content state response exceeds limit')
-        if response.status in {404, 405, 415}: return None
-        require(response.status == 200, 'Content state request rejected')
+        if status in {404, 405, 415}: return None
+        require(status == 200, 'Content state request rejected')
         envelope = json.loads(body)
         value = validate(_verify(envelope, peer['fingerprint'], 'state_manifest')['state_manifest'], response=True)
         require(envelope['signer_node_id'] == peer_id and value['source_node_id'] == peer_id
@@ -241,6 +294,9 @@ def reply(handler):
     try:
         raw = handler.rfile.read(int(length))
         require(len(raw) == int(length), 'Incomplete content state request')
+        from spikes.content_receive_jobs import STATE_STREAM_TYPE
+        if handler.single('Accept') == STATE_STREAM_TYPE:
+            return _reply_streamed(handler, raw)
         result = receive(handler.server.administration, json.loads(raw))
         require(len(canonical(result)) <= MAX_BODY, 'Content state exceeds limit')
         return handler.reply(200, result)
@@ -252,3 +308,47 @@ def reply(handler):
         return handler.reply(403, {'error': 'Content state is not authorized'})
     except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
         return handler.reply(422, {'error': 'Content state is unavailable'})
+
+
+def _answer_job(service, envelope):
+    def run():
+        body = canonical(receive_background(service, envelope))
+        require(len(body) <= MAX_BODY, 'Content state exceeds limit')
+        return body
+    return run
+
+
+def _reply_streamed(handler, raw):
+    """Compute the state answer in a background job and stream heartbeats.
+
+    The answer is read-only, so there is no crash boundary to recover: a lost
+    connection or process only loses the answer, and the sender's next check
+    asks again with a new nonce.
+    """
+    from spikes.content_receive_jobs import STATE_JOBS, STATE_STREAM_TYPE, error_frame, stream
+    service = handler.server.administration
+    try:
+        envelope = json.loads(raw)
+        request = validate(envelope.get('state_request') if isinstance(envelope, dict) else None,
+                           response=False)
+        job = STATE_JOBS.start_or_attach(Path(service.node).absolute(), request['nonce'], raw,
+                                         _answer_job(service, envelope),
+                                         phase_source=lambda: 'content-state')
+    except Exception as exc:  # noqa: BLE001 - typed statuses, never exception text
+        if isinstance(exc, AccessDenied):
+            return handler.reply(403, {'error': 'Content state is not authorized'})
+        frame = error_frame(exc)
+        return handler.reply(frame['status'], {'error': 'Content state is busy'}
+                             if frame['status'] == 503 else {'error': 'Content state is unavailable'})
+    handler.close_connection = True
+    handler.send_response_only(200)
+    handler.send_header('Content-Type', STATE_STREAM_TYPE)
+    handler.send_header('Cache-Control', 'no-store')
+    handler.send_header('Connection', 'close')
+    handler.end_headers()
+    def write(chunk):
+        handler.wfile.write(chunk); handler.wfile.flush()
+    try:
+        stream(job, write)
+    except OSError:
+        pass  # the sender went away; a read-only answer needs no recovery

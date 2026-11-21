@@ -16,7 +16,8 @@ from spikes.artifacts import Artifacts
 from spikes.atlascloud_backend import AtlasCloudCatalog, AtlasCloudRuns
 from spikes.autonomy_service import AutonomyService
 from spikes.chat_modes import ChatRunChoice
-from spikes.chat_service import ChatService, _task_turn_reply, parse_search_evaluation
+from spikes.chat_service import (ChatService, InvalidSearchEvaluation, _task_turn_reply,
+                                 parse_search_evaluation)
 from spikes.chat_threads import ChatThreads
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
@@ -34,6 +35,7 @@ from spikes.openai_backend import (OpenAIBindings, OpenAICredentials,
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.presentation_documents import PresentationDocuments, new_deck
+from spikes.presentation_proposals import InvalidPresentationProposal
 from spikes.public_source import HTTPResult, PublicSourceRuns, StaticHTMLAdapter
 from spikes.task_outcomes import TaskOutcomes
 from spikes.web_search import SearXNGAdapter, SearchResponseError, SearchRuns
@@ -1061,12 +1063,16 @@ class ChatServiceTests(unittest.TestCase):
         base = {'schema_version': 1, 'assessment': 'final', 'answer': 'Answer',
                 'rationale': 'Reason', 'used_source_ids': ['source-known'],
                 'limitations': [], 'follow_up_queries': []}
-        with self.assertRaisesRegex(ValueError, 'unavailable search source'):
+        with self.assertRaisesRegex(InvalidSearchEvaluation, 'unavailable search source'):
             parse_search_evaluation(json.dumps(base), {'source-other'})
-        with self.assertRaisesRegex(ValueError, 'cannot request another query'):
+        with self.assertRaisesRegex(InvalidSearchEvaluation, 'cannot request another query'):
             parse_search_evaluation(json.dumps(dict(base,
                 follow_up_queries=['another query'])), {'source-known'})
-        with self.assertRaisesRegex(ValueError, 'duplicate follow-up'):
+        for raw in ('not json', json.dumps(dict(base, limitations=[''])),
+                    json.dumps(dict(base, assessment='intermediate', follow_up_queries=[1]))):
+            with self.assertRaises(InvalidSearchEvaluation):
+                parse_search_evaluation(raw, {'source-known'})
+        with self.assertRaisesRegex(InvalidSearchEvaluation, 'duplicate follow-up'):
             parse_search_evaluation(json.dumps(dict(base, assessment='intermediate',
                 follow_up_queries=['same query', ' same query '])), {'source-known'})
         normalized = parse_search_evaluation(json.dumps(dict(base,
@@ -1666,7 +1672,7 @@ class ChatServiceTests(unittest.TestCase):
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=lambda binding, raw: {'model': binding.model,
                     'response': json.dumps(proposal)}))
-        with self.assertRaisesRegex(ValueError, 'unavailable layout'):
+        with self.assertRaisesRegex(InvalidPresentationProposal, 'unavailable layout'):
             invalid.task_route(request)
 
         raced_request = self.route_request(output_kind='presentation')
@@ -1678,8 +1684,10 @@ class ChatServiceTests(unittest.TestCase):
         raced = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=change_project))
-        with self.assertRaisesRegex(ValueError, 'Project changed'):
+        with self.assertRaisesRegex(ValueError, 'Project changed') as changed:
             raced.task_route(raced_request)
+        # A changed project is not a bad model output (B-ODD-03).
+        self.assertNotIsInstance(changed.exception, InvalidPresentationProposal)
         self.assertEqual(raced.task_outcomes(project_id=ENTITY), [])
 
     def test_malformed_presentation_has_specific_validation_error(self):
@@ -1700,7 +1708,7 @@ class ChatServiceTests(unittest.TestCase):
                     'response': json.dumps(malformed)}))
 
         with self.assertRaisesRegex(
-                ValidationError, '^Invalid presentation slide proposal$'):
+                InvalidPresentationProposal, '^Invalid presentation slide proposal$'):
             service.task_route(request)
         self.assertEqual(service.task_outcomes(project_id=ENTITY), [])
 

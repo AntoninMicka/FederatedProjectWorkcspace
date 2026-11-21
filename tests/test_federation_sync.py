@@ -8,6 +8,7 @@ import hashlib
 import json
 import secrets
 import ssl
+import socket
 import subprocess
 import sys
 import tempfile
@@ -624,6 +625,85 @@ class FederationSyncTests(unittest.TestCase):
                         message=name)
         return workspace.git.head()
 
+    def test_receiver_validates_only_history_it_does_not_hold(self):
+        # AUDIT-B7-T1: re-validating the whole history on every receive did not
+        # fit the git budget on the router, so large projects never synchronized.
+        import spikes.federation_sync as sync
+        from spikes.git_budget import effective_deadline
+        self.commit_marker(0, 'shared')
+        self.exchange(0, 1)
+        held = Projects(self.nodes[1]).workspace(self.project_id).git.head()
+        self.commit_marker(0, 'new on the sender')
+        calls = []
+        original = sync.validate_histories
+        original_receive = sync.SyncReceiver.receive
+        def spy(git, heads, project_id, privacy, trusted=()):
+            calls.append((list(trusted), effective_deadline(None) - time.monotonic()))
+            return original(git, heads, project_id, privacy, trusted=trusted)
+        with patch('spikes.federation_sync.SyncReceiver.receive', autospec=True,
+                   side_effect=lambda receiver, *args, **kwargs: (
+                       calls.append('receive'), original_receive(receiver, *args, **kwargs))[1]), \
+                patch('spikes.federation_sync.validate_histories', side_effect=spy):
+            self.exchange(0, 1)
+        # Export validation precedes the receive; take the receiver's own call.
+        receiver_trusted, budget = calls[calls.index('receive') + 1]
+        self.assertEqual(receiver_trusted, [held])
+        self.assertLessEqual(budget, sync.CONTENT_RECEIVE_BUDGET)
+        self.assertLess(sync.CONTENT_RECEIVE_BUDGET, sync.CONTENT_SYNC_TIMEOUT)
+        self.assertEqual(Projects(self.nodes[1]).workspace(self.project_id).git.head(),
+                         Projects(self.nodes[0]).workspace(self.project_id).git.head())
+
+    def test_initial_share_still_validates_the_whole_history(self):
+        import spikes.federation_sync as sync
+        self.commit_marker(0, 'first')
+        calls = []
+        original = sync.validate_histories
+        def spy(git, heads, project_id, privacy, trusted=()):
+            calls.append(list(trusted))
+            return original(git, heads, project_id, privacy, trusted=trusted)
+        original_receive = sync.SyncReceiver.receive
+        with patch('spikes.federation_sync.SyncReceiver.receive', autospec=True,
+                   side_effect=lambda receiver, *args, **kwargs: (
+                       calls.append('receive'), original_receive(receiver, *args, **kwargs))[1]), \
+                patch('spikes.federation_sync.validate_histories', side_effect=spy):
+            self.exchange(0, 1)
+        self.assertEqual(calls[calls.index('receive') + 1], [],
+                         'A receiver without the project trusts no history')
+
+    def test_peer_that_accepts_but_never_answers_is_unanswered_not_offline(self):
+        from spikes.federation_sync import ContentSyncControl, PeerTimeout, _database
+        tls = NetworkBackend(self.nodes[1]).generate('127.0.0.1', 8443, '127.0.0.0/8')
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(tls['cert'], tls['key'])
+        listener = socket.create_server(('127.0.0.1', 0))
+        self.addCleanup(listener.close)
+        held = []
+        def accept():
+            try:
+                connection, _ = listener.accept()
+                held.append(context.wrap_socket(connection, server_side=True))  # handshake, then silence
+            except OSError:
+                pass
+        threading.Thread(target=accept, daemon=True).start()
+        port = listener.getsockname()[1]
+        self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
+                    endpoint=f'https://127.0.0.1:{port}', trust='approved', sharing_level='same-team')
+        trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+        with patch('spikes.federation_sync.CONTENT_SYNC_TIMEOUT', 1.5):
+            with self.assertRaises(PeerTimeout):
+                ContentSyncControl(self.nodes[0], deployment='web').synchronize(self.node_ids[1], self.project_id)
+        for item in held: item.close()
+        with _database(self.nodes[0]) as db:
+            self.assertEqual(db.execute('SELECT state FROM runtime WHERE project_id=?',
+                                        (self.project_id,)).fetchone()[0], 'unanswered')
+        listener.close()
+        with self.assertRaises(OSError) as unreachable:
+            ContentSyncControl(self.nodes[0], deployment='web').synchronize(self.node_ids[1], self.project_id)
+        self.assertNotIsInstance(unreachable.exception, PeerTimeout)
+        with _database(self.nodes[0]) as db:
+            self.assertEqual(db.execute('SELECT state FROM runtime WHERE project_id=?',
+                                        (self.project_id,)).fetchone()[0], 'offline')
+
     def test_initial_import_and_fast_forward_work_in_both_directions(self):
         first = self.commit_marker(0, 'first')
         self.exchange(0, 1)
@@ -898,7 +978,7 @@ class FederationSyncTests(unittest.TestCase):
         with patch('spikes.sync_fingerprint.probe', return_value=None), \
              patch.object(control, 'synchronize', return_value={'state': 'idle'}) as run:
             self.assertEqual(control.run_automatic(), {'enabled': True, 'attempted': 1})
-        run.assert_called_once_with(self.node_ids[0], self.project_id)
+        run.assert_called_once_with(self.node_ids[0], self.project_id, defer_when_busy=True)
         # A project present both locally and remotely remains one candidate.
         self.exchange(0, 1)
         self.assertEqual(control.candidates(), expected)
@@ -953,8 +1033,9 @@ class FederationSyncTests(unittest.TestCase):
                                          interval=.01)
         recovered = threading.Event(); attempts = 0
 
-        def run():
+        def run(cancelled=None):
             nonlocal attempts
+            self.assertIs(cancelled.__self__, scheduler.stopping)
             attempts += 1
             if attempts == 1:
                 raise OSError('simulated startup race')
@@ -1048,6 +1129,118 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual(len(refs), 2)
         self.assertTrue(payload)
 
+    def test_pinned_https_endpoint_exchanges_bundle_over_ipv6(self):
+        # AUDIT-B5-T1: IPv6 is supported; a non-canonical spelling of the peer
+        # address still matches the receiver's socket authority.
+        self.map_users()
+        tls = NetworkBackend(self.nodes[1]).generate('::1', 8443, 'fd00::/64')
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(tls['cert'], tls['key'])
+        server = WebServer(('::1', 0), ProbeHandler)
+        self.assertEqual(server.socket.family, socket.AF_INET6)
+        server.tls = context; server.hostname = None
+        server.application_access = AllowLoopback()
+        server.node = self.nodes[1]; server.administration = self.services[1]
+        thread = threading.Thread(target=server.serve_forever); thread.start()
+        self.addCleanup(server.server_close); self.addCleanup(thread.join)
+        self.addCleanup(server.shutdown)
+        endpoint = 'https://[0:0:0:0:0:0:0:1]:' + str(server.server_port)
+        self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
+                    endpoint=endpoint, trust='approved', sharing_level='same-team')
+        trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+        result = synchronize(self.nodes[0], self.node_ids[1], self.project_id,
+                             deployment='web')
+        self.assertEqual(result['state'], 'idle')
+        from spikes.federation_sync import _database
+        with _database(self.nodes[1]) as db:
+            self.assertGreaterEqual(db.execute('SELECT COUNT(*) FROM inbound').fetchone()[0], 1)
+
+    def serve_peer_over_tls(self):
+        tls = NetworkBackend(self.nodes[1]).generate('127.0.0.1', 8443, '127.0.0.0/8')
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(tls['cert'], tls['key'])
+        server = WebServer(('127.0.0.1', 0), ProbeHandler)
+        server.tls = context; server.hostname = None
+        server.application_access = AllowLoopback()
+        server.node = self.nodes[1]; server.administration = self.services[1]
+        thread = threading.Thread(target=server.serve_forever); thread.start()
+        self.addCleanup(server.server_close); self.addCleanup(thread.join)
+        self.addCleanup(server.shutdown)
+        self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
+                    endpoint='https://127.0.0.1:' + str(server.server_port),
+                    trust='approved', sharing_level='same-team')
+        trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
+
+    def test_receiver_slower_than_the_exchange_budget_finishes_with_heartbeats(self):
+        # AUDIT-B7-T1: the receiver works in a background job and streams
+        # heartbeats, so its work no longer has to fit the sender's budget.
+        from spikes.sync_diagnostics import snapshot as diagnostic
+        self.map_users()
+        self.serve_peer_over_tls()
+        original_receive = SyncReceiver.receive
+        seen = []
+        def slow_receive(receiver, *args, **kwargs):
+            seen.append(kwargs.get('background'))
+            result = original_receive(receiver, *args, **kwargs)
+            time.sleep(1.2)
+            return result
+        def progress(name):
+            seen.append(name)
+        from spikes import federation_sync as module
+        def in_git_phase(original):
+            # Long enough for several heartbeats to sample the Git phase.
+            def run(*args, **kwargs):
+                time.sleep(.35)
+                return original(*args, **kwargs)
+            return run
+        with patch.object(SyncReceiver, 'receive', slow_receive), \
+                patch.object(module, '_apply_existing', in_git_phase(module._apply_existing)), \
+                patch.object(module, '_apply_initial', in_git_phase(module._apply_initial)), \
+                patch('spikes.federation_sync.CONTENT_SYNC_TIMEOUT', .6), \
+                patch('spikes.content_receive_jobs.HEARTBEAT_INTERVAL', .1), \
+                patch('spikes.federation_sync.HEARTBEAT_IDLE_TIMEOUT', .5), \
+                patch('spikes.federation_sync.peer_progress', side_effect=progress):
+            result = synchronize(self.nodes[0], self.node_ids[1], self.project_id,
+                                 deployment='web')
+        self.assertEqual(result['state'], 'idle')
+        self.assertEqual(seen[0], True, 'The receiver runs as a background job')
+        self.assertIn('receive-publication-git', seen, 'Heartbeats carry the peer phase')
+        detail = diagnostic(self.nodes[0], self.node_ids[1], self.project_id, direction='outbound')
+        self.assertEqual(detail['state'], 'finished')
+
+    def test_sender_that_leaves_reattaches_to_the_same_receive(self):
+        from spikes.content_receive_jobs import JOBS
+        from spikes.federation_sync import _database
+        self.map_users()
+        self.serve_peer_over_tls()
+        original_receive = SyncReceiver.receive
+        calls, release = [], threading.Event()
+        def gated_receive(receiver, *args, **kwargs):
+            calls.append(1)
+            result = original_receive(receiver, *args, **kwargs)
+            release.wait(5)
+            return result
+        with patch.object(SyncReceiver, 'receive', gated_receive), \
+                patch('spikes.content_receive_jobs.HEARTBEAT_INTERVAL', .05):
+            with self.assertRaises(SyncCancelled):
+                ContentSyncControl(self.nodes[0], deployment='web').synchronize(
+                    self.node_ids[1], self.project_id, cancelled=lambda: bool(calls))
+            self.assertEqual(len(JOBS.running()), 1, 'The receive continues without its sender')
+            with _database(self.nodes[0]) as db:
+                pending = db.execute('SELECT operation_id FROM outbound WHERE peer_id=? AND project_id=?',
+                                     (self.node_ids[1], self.project_id)).fetchone()
+            self.assertIsNotNone(pending, 'The sender keeps the exact operation')
+            threading.Timer(.3, release.set).start()
+            result = synchronize(self.nodes[0], self.node_ids[1], self.project_id,
+                                 deployment='web')
+        self.assertEqual(result['state'], 'idle')
+        self.assertEqual(len(calls), 1, 'The retry attached instead of receiving again')
+        with _database(self.nodes[1]) as db:
+            self.assertIsNotNone(db.execute('SELECT response_envelope FROM inbound WHERE operation_id=?',
+                                            pending).fetchone()[0])
+
     def test_pinned_https_endpoint_exchanges_native_bundle(self):
         self.map_users()
         chat_id = self.chat_turn(0, answer='Sent with project sync')
@@ -1069,8 +1262,10 @@ class FederationSyncTests(unittest.TestCase):
         self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
                     endpoint=endpoint, trust='approved', sharing_level='same-team')
         trust_ca(self.nodes[0], self.node_ids[1], Path(tls['ca']).read_bytes())
-        # The receiver durably finishes, but its HTTP response arrives after
-        # the sender deadline. Preserve the exact request for native replay.
+        # A legacy receiver (no heartbeat stream) durably finishes, but its
+        # HTTP response arrives after the sender deadline. Preserve the exact
+        # request for native replay. The receiver does not recognize the
+        # patched capability and answers synchronously, like an old peer.
         from spikes.federation_sync import _database
         received = threading.Event()
         release = threading.Event()
@@ -1082,7 +1277,8 @@ class FederationSyncTests(unittest.TestCase):
             return result
         try:
             with patch.object(SyncReceiver, 'receive', delayed_receive), \
-                    patch('spikes.federation_sync.NETWORK_TIMEOUT', 1.5):
+                    patch('spikes.federation_sync.STREAM_TYPE', 'application/x-legacy-peer'), \
+                    patch('spikes.federation_sync.CONTENT_SYNC_TIMEOUT', 1.5):
                 with self.assertRaises(TimeoutError):
                     synchronize(self.nodes[0], self.node_ids[1], self.project_id,
                                 deployment='web')

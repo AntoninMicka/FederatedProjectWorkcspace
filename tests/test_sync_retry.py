@@ -16,7 +16,7 @@ class SyncRetryTests(unittest.TestCase):
         candidates = [dict(peer_id='peer', project_id=p, eligible=True)
                       for p in ('slow', 'healthy')]
         failures = [True]; calls = []
-        def synchronize(peer, project):
+        def synchronize(peer, project, **options):
             calls.append(project)
             if project == 'slow' and failures[0]:
                 raise SyncBusy(resource='git-budget')

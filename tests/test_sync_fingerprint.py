@@ -4,7 +4,9 @@ from pathlib import Path
 import json
 import ssl
 import threading
+import time
 import unittest
+from contextlib import ExitStack
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -83,13 +85,13 @@ class SyncFingerprintTests(unittest.TestCase):
         from spikes.project_creation import ProjectCreation
         self.server()
         other = ProjectCreation(self.nodes[0]).create('Another', self.nodes[0].parent/'another', str(uuid4()))['id']
-        original = state.collect
-        def partial(service, peer_id, project):
+        original = state._collect
+        def partial(service, peer_id, project, **kwargs):
             if service.node == self.nodes[1] and project == self.project_id:
                 raise OSError('private path must not leave node')
-            return original(service, peer_id, project)
+            return original(service, peer_id, project, **kwargs)
         control = ContentSyncControl(self.nodes[0], deployment='web')
-        with patch('spikes.sync_fingerprint.collect', partial):
+        with patch('spikes.sync_fingerprint._collect', partial):
             self.assertEqual(control.run_automatic()['attempted'], 1)
         self.assertEqual(Projects(self.nodes[1]).repository(other).head(),
                          Projects(self.nodes[0]).repository(other).head())
@@ -157,11 +159,80 @@ class SyncFingerprintTests(unittest.TestCase):
         with patch('spikes.sync_fingerprint.probe', return_value=None), \
              patch.object(control, 'synchronize', return_value={'state':'idle'}) as run:
             self.assertEqual(control.run_automatic()['attempted'], 1)
-            run.assert_called_once_with(self.node_ids[1], self.project_id)
+            run.assert_called_once_with(self.node_ids[1], self.project_id, defer_when_busy=True)
         with patch('spikes.sync_fingerprint.probe', side_effect=TimeoutError), \
              patch.object(control, 'synchronize') as run:
             self.assertEqual(control.run_automatic()['attempted'], 0)
             run.assert_not_called()
+
+    def slow_peer(self, delay):
+        """Peer whose state answer takes longer than its response budget."""
+        original = state._collect
+        def slow(*args, **kwargs):
+            time.sleep(delay)
+            return original(*args, **kwargs)
+        return [patch.object(state, '_collect', slow),
+                patch.object(state, 'CONTENT_STATE_TIMEOUT', .6),
+                patch('spikes.content_receive_jobs.HEARTBEAT_INTERVAL', .1),
+                patch('spikes.peer_transport.HEARTBEAT_IDLE_TIMEOUT', .5)]
+
+    def test_slow_peer_state_answer_is_awaited_with_heartbeats(self):
+        """AUDIT-B7-T1: computing many projects on a slow peer is not a timeout."""
+        self.server()
+        expected = state.receive(self.services[1], _signature(
+            self.services[0].root, dict(schema_version=1, source_node_id=self.node_ids[0],
+            recipient_node_id=self.node_ids[1], nonce=str(uuid4()), projects=[self.project_id]),
+            self.node_ids[0], 'state_request'))['state_manifest']['projects']
+        with ExitStack() as stack:
+            for item in self.slow_peer(1.2): stack.enter_context(item)
+            started = time.monotonic()
+            manifest = state.probe(self.services[0], self.node_ids[1], projects=[self.project_id])
+        self.assertGreater(time.monotonic() - started, .6, 'longer than the response budget')
+        self.assertEqual(manifest, {row['id']: {'fingerprint': row['fingerprint'],
+                                                'policy': row['policy']} for row in expected})
+
+    def test_cancelled_check_stops_at_the_next_heartbeat(self):
+        from spikes.federation_sync import SyncCancelled
+        from spikes.content_receive_jobs import STATE_JOBS
+        self.server()
+        with ExitStack() as stack:
+            for item in self.slow_peer(1.0): stack.enter_context(item)
+            with self.assertRaises(SyncCancelled):
+                state.probe(self.services[0], self.node_ids[1], projects=[self.project_id],
+                            cancelled=lambda: True)
+        self.assertTrue(STATE_JOBS.drain(5), 'the read-only answer still ends by itself')
+
+    def test_probe_failure_is_logged_with_type_and_duration_only(self):
+        """AUDIT-B7-T1: a failing automatic check must be visible in the log."""
+        control = ContentSyncControl(self.nodes[0], deployment='web')
+        with patch('spikes.sync_fingerprint.probe', side_effect=TimeoutError('https://10.0.0.1 secret')), \
+             patch.object(control, 'synchronize'), \
+             self.assertLogs('spikes.federation_sync', 'WARNING') as logs:
+            control.run_automatic()
+        line = next(line for line in logs.output if 'content_state_failed' in line)
+        self.assertIn('error_type=TimeoutError elapsed_ms=', line)
+        self.assertNotIn('secret', line); self.assertNotIn('10.0.0.1', line)
+
+    def test_state_answer_reads_authority_once_and_logs_when_slow(self):
+        from spikes import federation_sync
+        request = dict(schema_version=1, source_node_id=self.node_ids[0],
+                       recipient_node_id=self.node_ids[1], nonce=str(uuid4()), projects=[self.project_id])
+        envelope = _signature(self.services[0].root, request, self.node_ids[0], 'state_request')
+        with patch.object(federation_sync, '_authority', wraps=federation_sync._authority) as read, \
+             self.assertNoLogs('spikes.sync_fingerprint', 'WARNING'):
+            fast = state.receive(self.services[1], envelope)
+        # Once before and once after all projects, never per project.
+        self.assertEqual(read.call_count, 2)
+        self.assertTrue(fast['state_manifest']['projects'])
+        envelope = _signature(self.services[0].root, dict(request, nonce=str(uuid4())),
+                              self.node_ids[0], 'state_request')
+        with patch.object(state, 'SLOW_STATE_MS', 0), \
+             self.assertLogs('spikes.sync_fingerprint', 'WARNING') as logs:
+            slow = state.receive(self.services[1], envelope)
+        self.assertEqual([row['fingerprint'] for row in slow['state_manifest']['projects']],
+                         [row['fingerprint'] for row in fast['state_manifest']['projects']])
+        self.assertRegex(logs.output[0], r'content_state_slow elapsed_ms=\d+ projects=\d+ '
+                                         r'slowest_project_ms=\d+ unavailable=0')
 
     def test_final_ack_failure_rolls_back_confirmation_and_replays_exact_intent(self):
         import sqlite3
@@ -198,7 +269,7 @@ class SyncFingerprintTests(unittest.TestCase):
              patch('spikes.sync_fingerprint.collect', side_effect=AssertionError('rebuild')), \
              patch.object(control, 'synchronize', return_value={'state':'idle'}) as run:
             self.assertEqual(control.run_automatic()['attempted'], 1)
-            run.assert_called_once_with(self.node_ids[1], self.project_id, state_manifest=True)
+            run.assert_called_once_with(self.node_ids[1], self.project_id, defer_when_busy=True, state_manifest=True)
 
     def test_probe_rejects_stale_nonce_and_only_explicit_legacy_statuses_fallback(self):
         self.server()
@@ -207,6 +278,7 @@ class SyncFingerprintTests(unittest.TestCase):
         class Response:
             def __init__(inner, raw): inner.raw = raw; inner.status = status[0]
             def read(inner, limit): return inner.raw[:limit]
+            def getheader(inner, name): return state.CONTENT_TYPE  # a legacy, unstreamed peer
             def close(inner): pass
         class Connection:
             def __init__(inner, *args, **kwargs): pass

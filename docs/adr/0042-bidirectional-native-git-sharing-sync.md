@@ -139,3 +139,174 @@ Stejná hranice platí pro normalizovaný export počátečního přenosu/replik
 Dočasný export před durable intentem lze zahodit. Po publikaci platí původní
 ID, přesný payload, CAS/index recovery a immutable replay odpovědi podle
 ADR 0003 a 0081. Nejde o oslabení validace ani o nový retry protokol.
+
+### Doplnění 2026-11-20: ověření jen nové historie na příjmu (AUDIT-B7-T1)
+
+Příjemce dosud při každé synchronizaci znovu ověřoval celou historii balíku
+(až 500 commitů s úplným snímkem každého). Na routeru s LXC to pro projekt
+s 217 commity trvalo přes 60 s, příjem skončil `GitDeadlineExceeded`
+a každý další pokus začal od nuly. Velký projekt se tak nesynchronizoval
+nikdy.
+
+Rozhodnutí: příjemce nadále ověřuje každý commit, který ještě nemá ve
+vlastní historii projektu. Commity dosažitelné z jeho větví (`refs/heads/*`)
+už ověřil, když do repozitáře vstoupily: zapsal je lokální writer, nebo
+prošly dřívějším ověřeným příjmem. ID commitu určuje jeho obsah, proto je
+podruhé neověřuje. Platí:
+
+- důvěryhodné jsou jen hlavy větví, které balík také obsahuje, nikdy
+  staging refy nedokončených příjmů;
+- první nový commit se ověří jako přechod ze snímku svého důvěryhodného
+  rodiče;
+- bez lokálního projektu (počáteční sdílení) se ověřuje celá historie jako
+  dřív;
+- limit 500 commitů platí pro neověřenou část;
+- ověřování na příjmu má rozpočet `CONTENT_RECEIVE_BUDGET` (45 s), kratší
+  než lhůta odesílatele (60 s). Přetížený příjemce tak odpoví `busy`
+  (`git-budget`) a odesílatel uloženou operaci zopakuje.
+
+Hranice pádu se nemění: ověření proběhne před jakýmkoli trvalým záměrem
+a před publikací do projektu, jako dosud. Výsledek ověření se mezi příjmy
+neukládá, důvěra vychází jen z aktuálních větví příjemce. Export odesílatele
+a ověření odpovědi zůstávají beze změny.
+
+### Doplnění 2026-11-20: příjem na pozadí s heartbeat streamem (AUDIT-B7-T1)
+
+Uložení příjmu na routeru trvalo pro projekt s 2 MB Git balíkem,
+45 vlákny chatu a 568 položkami poolů 127 s. Odesílatel čekal na celou
+výměnu jen 60 s (`CONTENT_SYNC_TIMEOUT`). Synchronní výměna tak nemohla
+projít. Uživatel rozhodl převést příjem na asynchronní zpracování na pozadí
+a spojení udržovat heartbeat zprávami.
+
+Rozhodnutí:
+
+- Odesílatel posílá hlavičku `Accept: application/vnd.federated-workspace.content-sync-stream-v1`.
+  Příjemce, který ji zná, přečte tělo a spustí stávající
+  `SyncReceiver.receive` jako úlohu na pozadí
+  ([`spikes/content_receive_jobs.py`](../../spikes/content_receive_jobs.py)).
+  Hned odpoví `200` s tímto typem obsahu.
+- Odpověď je proud řádků JSON. Heartbeat přichází každých
+  `HEARTBEAT_INTERVAL` (5 s) a nese jen pevný název fáze příjemce a uplynulý
+  čas. Koncový rámec je buď `result` s délkou a bajty běžné odpovědi, nebo
+  `error` se stavem 503, 409 nebo 422 a stejnými typovanými poli jako dosud.
+- Odesílatel čeká na hlavičky v původním rozpočtu 60 s. Po přijetí
+  streamu platí `HEARTBEAT_IDLE_TIMEOUT` (20 s) na každé čtení a celkový
+  strop `CONTENT_SYNC_MAX_WAIT` (15 min). Výpadek heartbeatu i předčasné
+  uzavření streamu skončí stavem `unanswered`. Fáze příjemce z heartbeatu se
+  průběžně zobrazuje v diagnostice („Protistrana: …“).
+- Úloha na pozadí není HTTP worker. SQLite v ní používá nativní čekání
+  a ověření historie má rozpočet `BACKGROUND_RECEIVE_BUDGET` (10 min).
+  Zámky `flock` se dál berou bez čekání.
+- Na jednom uzlu běží nejvýš jedna úloha příjmu. Jiná operace dostane
+  `busy` (`incoming-capacity`) jako dosud. Opakovaný požadavek se stejným
+  operation ID a stejnými bajty se připojí k běžící úloze. Úspěšný výsledek
+  zůstává k vyzvednutí 120 s. Neúspěšný pokus se nikdy znovu nepodává:
+  opakování spustí příjem znovu.
+- Ruční synchronizaci lze zrušit a plánovač ukončit na nejbližším
+  heartbeatu. Úloha příjemce přitom doběhne.
+
+Kompatibilita: starý příjemce hlavičku `Accept` nezná a odpoví synchronně
+typem `content-sync-v2`. Odesílatel pak použije původní cestu s rozpočtem
+60 s. Starý odesílatel hlavičku neposílá a dostane synchronní odpověď.
+Verze schématu výměny se nemění.
+
+Hranice pádu a recovery:
+
+| Událost | Stav | Obnova |
+|---|---|---|
+| Odesílatel ztratí spojení nebo zruší čekání | úloha příjemce pokračuje; odesílatel drží řádek `outbound` | další pokus se stejnou operací se připojí k běžící úloze, nebo dostane uloženou odpověď (replay) |
+| Pád procesu příjemce během úlohy | stejný jako pád synchronního příjmu | záměr `inbound` vzniká až po ověření; publikaci dokončí journal projektu; opakování znovu ověří a dokončí |
+| Úloha skončí, odesílatel už nečeká | odpověď je trvale v `inbound` | replay ze stejných bajtů |
+| Ukončení serveru | `server_close` čeká na úlohy do `shutdown_timeout` | nedokončená úloha skončí s procesem; obnova jako při pádu |
+
+Nové trvalé úložiště nevzniká. Registr úloh je jen popisovač běhu
+v paměti. Autoritou zůstává journal synchronizace obsahu (`inbound`)
+a projektový journal (ADR 0003).
+
+Omezení: po dobu streamu drží spojení jeden HTTP worker příjemce a linku
+`content_sync`. Velikost těla a limity balíku se nemění.
+
+### Doplnění 2026-11-21: ověření jen nových řádků poolu (AUDIT-B7-T1)
+
+Po přechodu na příjem na pozadí synchronizace prošla, ale na routeru stála
+přes 100 s ve fázi `*-pool-apply`. Každá výměna posílá celý přenosný pool
+projektu a příjemce u každého řádku znovu ověřoval provenance: úplné čtení
+reportingu a validaci celého snímku pro každý připnutý commit. Pro projekt
+s 568 řádky a 21 piny to i na desktopu trvalo 4,9 s (561 volání Gitu).
+Během té doby router nestíhal ani otevření projektu ve webu a automatická
+kontrola stavu končila `TimeoutError`.
+
+Rozhodnutí: ověřují se jen řádky, které uzel ještě nemá uložené se stejným
+obsahem. Uložený řádek prošel ověřením, když vstoupil: vytvořil ho lokální
+uzel, nebo přišel z dřívějšího ověřeného příjmu. Řádky poolu jsou neměnné
+a piny ukazují na neměnné commity, stejně jako u historie výše. Platí:
+
+- čtení reportingu proběhne jen tehdy, když nový řádek odkazuje na
+  definici (`activation`, `report-outcome`, `membership`);
+- `_merge` dál v jedné transakci kontroluje vazby, neměnnost a blokované
+  vstupy nad celým payloadem;
+- řádek se stejným ID, ale jiným obsahem se ověřuje jako nový a `_merge`
+  ho jako konflikt neměnného záznamu odmítne.
+
+Opakovaná výměna téhož poolu trvá na desktopu 0,1 s místo 4,9 s. První
+přenos nového poolu ověřuje vše jako dřív. Hranice pádu se nemění: záměr
+(`prepare`) i zápis (`_merge`) zůstávají, změnil se jen rozsah ověření před
+zápisem.
+
+### Doplnění 2026-11-21: kontrola stavu obsahu na pozadí (AUDIT-B7-T1)
+
+Automatická kontrola změn se ptá protistrany na otisk všech sdílených
+projektů najednou a odpověď musela přijít do `CONTENT_STATE_TIMEOUT` (15 s).
+Router s jedenácti projekty to pod zátěží nestíhal. Kontrola pak končila
+`TimeoutError`, automatika nic nespustila a karta zůstávala ve stavu
+„Stav neověřen“, i když ruční synchronizace procházela.
+
+Rozhodnutí: odpověď na kontrolu používá stejný heartbeat stream jako příjem
+obsahu, s vlastním typem `content-state-stream-v1` a vlastním registrem
+úloh (`STATE_JOBS`). Kontrola tak nesoupeří o kapacitu se synchronizací
+obsahu. Platí:
+
+- odesílatel ohlásí stream hlavičkou `Accept`. Příjemce spustí výpočet
+  na pozadí s nativním čekáním SQLite a zámků a jedním rozpočtem Gitu
+  `BACKGROUND_STATE_BUDGET` pro všechny projekty. Heartbeat nese fázi
+  `content-state`;
+- odesílatel čeká, dokud chodí heartbeat (`HEARTBEAT_IDLE_TIMEOUT`), nejvýš
+  `CONTENT_STATE_MAX_WAIT`. Zrušení plánovače se projeví na nejbližším
+  heartbeatu;
+- starší peer odpoví synchronně a platí pro něj původní limit 15 s;
+- nedostupný nebo poškozený projekt dál vrací prázdný otisk jen pro sebe;
+- selhání a pomalý výpočet zapisují logy `content_state_failed`
+  a `content_state_slow` bez adres a textu výjimek.
+
+Hranice pádu: odpověď je jen pro čtení. Nezapisuje journal, index ani
+registr. Ztráta spojení nebo pád procesu ztratí jen odpověď. Další kontrola
+se zeptá znovu s novým nonce. Výsledek kontroly se dál nikdy nevykládá jako
+„beze změn“, pokud nepřišel celý a podepsaný.
+
+Omezení: po dobu výpočtu drží příjemce jeden HTTP worker a linku
+`peer_state`.
+
+### Doplnění 2026-11-21: automatika ustoupí běžící odchozí synchronizaci (AUDIT-B7-T1)
+
+Odchozí synchronizace uzlu sdílejí jeden zámek odesílání. Automatika na něj
+nečekala a ruční worker čekal nejvýš 60 s. Se streamem ale jedna výměna drží
+zámek i několik minut a kontrola stavu před ní také může trvat minuty. Když
+uživatel mezitím spustil ruční synchronizaci, automatika narazila na zámek
+a zapsala `busy` (`BlockingIOError`, „odchozí linka uzlu“) jako chybu
+projektu. Ruční synchronizace za dlouhou automatickou výměnou zase po 60 s
+skončila jako `busy`.
+
+Rozhodnutí:
+
+- Automatika bere zámek s `defer_when_busy`. Obsazený zámek vyvolá
+  `OutboundDeferred` a pokus se nepočítá jako spuštěný: nezapíše stav
+  `runtime`, diagnostiku, odklad opakování ani výsledek kontroly. Kolo
+  automatiky skončí a další kolo to zkusí znovu.
+- Těsně před výměnou automatika znovu ověří, že neběží ruční synchronizace.
+  Kontrola stavu mezi tím mohla trvat dlouho.
+- Ruční worker čeká na zámek až `CONTENT_SYNC_MAX_WAIT`, tedy celkový strop
+  jedné streamované výměny. Čeká jen jeho vlákno na pozadí a zrušení se
+  projeví do 50 ms.
+
+Hranice pádu se nemění: odložený pokus nezapsal nic, uložená operace
+v `outbound` zůstává autoritou pro další pokus.

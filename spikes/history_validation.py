@@ -38,7 +38,7 @@ def _stop(process):
         process.communicate()
 
 
-def validate_histories(git, heads, project_id, allowed_privacy):
+def validate_histories(git, heads, project_id, allowed_privacy, trusted=()):
     """Keep CPU-heavy Python validation outside HTTP threads, without queueing."""
     if not _capacity.acquire(blocking=False):
         raise ProjectBusy('History validation capacity is occupied', resource='history-validation')
@@ -48,7 +48,7 @@ def validate_histories(git, heads, project_id, allowed_privacy):
         if deadline is None:
             deadline = time.monotonic() + DEFAULT_GIT_BUDGET
         check_deadline(deadline)
-        request = dict(repo=str(git.root.absolute()), heads=list(heads),
+        request = dict(repo=str(git.root.absolute()), heads=list(heads), trusted=list(trusted),
                        project_id=project_id, privacy=sorted(allowed_privacy), deadline=deadline)
         # Use the active immutable application source, independent of cwd,
         # PYTHONPATH, user site-packages or inherited Git configuration.
@@ -99,12 +99,16 @@ def _validate(request):
     from spikes.git_transfer import validate_history
     from spikes.storage import Git
     require(isinstance(request, dict) and set(request) == {
-        'repo', 'heads', 'project_id', 'privacy', 'deadline'}, 'Invalid validation request')
+        'repo', 'heads', 'trusted', 'project_id', 'privacy', 'deadline'}, 'Invalid validation request')
     identifier(request['project_id'])
     heads, deadline = request['heads'], request['deadline']
     require(isinstance(heads, list) and 0 < len(heads) <= 64
             and all(isinstance(head, str) and re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', head)
                     for head in heads), 'Invalid validation heads')
+    trusted = request['trusted']
+    require(isinstance(trusted, list) and len(trusted) <= 64
+            and all(isinstance(head, str) and re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', head)
+                    for head in trusted), 'Invalid trusted validation heads')
     require(type(deadline) in (int, float) and math.isfinite(deadline),
             'Invalid validation deadline')
     require(isinstance(request['privacy'], list)
@@ -113,10 +117,12 @@ def _validate(request):
     check_deadline(deadline)
     git = Git(Path(request['repo']), deadline=deadline)
     with git_budget(min(DEFAULT_GIT_BUDGET, deadline - time.monotonic())):
-        # Every selected branch is checked, including shared ancestors. No
-        # authorization/validation result survives this disposable process.
+        # Every selected branch is checked back to the receiver's own trusted
+        # history (all of it without trusted heads). No authorization or
+        # validation result survives this disposable process.
         for head in heads:
-            validate_history(git, head, request['project_id'], frozenset(request['privacy']))
+            validate_history(git, head, request['project_id'], frozenset(request['privacy']),
+                             trusted=trusted)
 
 
 def main():

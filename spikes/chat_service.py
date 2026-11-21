@@ -205,37 +205,42 @@ def presentation_task_requested(content):
     return bool(object_requested and action_requested)
 
 
+class InvalidSearchEvaluation(ValidationError):
+    """Model search evaluation violated its schema (B-ODD-03); the UI maps the type."""
+    code = 'invalid_search_evaluation'
+
+
 def parse_search_evaluation(raw, source_ids):
     require(isinstance(raw, str) and len(raw.encode('utf-8')) <= 64 * 1024,
-            'Ollama returned an invalid iterative search evaluation')
+            'Ollama returned an invalid iterative search evaluation', InvalidSearchEvaluation)
     try: value = json.loads(raw)
     except (UnicodeError, ValueError) as exc:
-        raise ValidationError('Ollama returned an invalid iterative search evaluation') from exc
+        raise InvalidSearchEvaluation('Ollama returned an invalid iterative search evaluation') from exc
     fields = {'schema_version', 'assessment', 'answer', 'rationale',
               'used_source_ids', 'limitations', 'follow_up_queries'}
     require(isinstance(value, dict) and set(value) == fields
             and value['schema_version'] == 1
             and value['assessment'] in {'final', 'intermediate', 'insufficient'},
-            'Ollama returned an invalid iterative search evaluation')
+            'Ollama returned an invalid iterative search evaluation', InvalidSearchEvaluation)
     for key, limit in (('answer', 32768), ('rationale', 4096)):
         require(isinstance(value[key], str) and bool(value[key].strip())
                 and '\0' not in value[key]
                 and len(value[key].encode('utf-8')) <= limit,
-                'Ollama returned an invalid iterative search evaluation')
+                'Ollama returned an invalid iterative search evaluation', InvalidSearchEvaluation)
         value[key] = value[key].strip()
     require(isinstance(value['used_source_ids'], list)
             and len(value['used_source_ids']) <= MAX_WORKFLOW_RESULTS
             and len(set(value['used_source_ids'])) == len(value['used_source_ids'])
             and all(isinstance(item, str) and item in source_ids
                     for item in value['used_source_ids']),
-            'Ollama cited an unavailable search source')
+            'Ollama cited an unavailable search source', InvalidSearchEvaluation)
     if isinstance(value['limitations'], str) and value['limitations'].strip():
         value['limitations'] = [value['limitations']]
     require(isinstance(value['limitations'], list) and len(value['limitations']) <= 8
             and all(isinstance(item, str) and bool(item.strip()) and '\0' not in item
                     and len(item.encode('utf-8')) <= 2048
                     for item in value['limitations']),
-            'Ollama returned invalid search limitations')
+            'Ollama returned invalid search limitations', InvalidSearchEvaluation)
     value['limitations'] = [item.strip() for item in value['limitations']]
     # A failed or partial result must carry its reasons. The schema requires them; if a
     # model still omits them, its rationale is the only stated reason, which beats
@@ -252,12 +257,12 @@ def parse_search_evaluation(raw, source_ids):
             and all(isinstance(item, str) and bool(item.strip()) and '\0' not in item
                     and len(item.encode('utf-8')) <= MAX_QUERY_BYTES
                     for item in value['follow_up_queries']),
-            'Ollama returned invalid follow-up search queries')
+            'Ollama returned invalid follow-up search queries', InvalidSearchEvaluation)
     value['follow_up_queries'] = [item.strip() for item in value['follow_up_queries']]
     require(len(set(value['follow_up_queries'])) == len(value['follow_up_queries']),
-            'Ollama returned duplicate follow-up search queries')
+            'Ollama returned duplicate follow-up search queries', InvalidSearchEvaluation)
     require(value['assessment'] != 'final' or not value['follow_up_queries'],
-            'Final search evaluation cannot request another query')
+            'Final search evaluation cannot request another query', InvalidSearchEvaluation)
     return value
 
 

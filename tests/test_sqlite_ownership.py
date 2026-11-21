@@ -8,7 +8,7 @@ import time
 import unittest
 
 from spikes.request_ownership import ProjectBusy, bounded_project_requests
-from spikes.sqlite_ownership import sqlite_connection
+from spikes.sqlite_ownership import BOUNDED_SQLITE_WAIT, sqlite_connection
 
 
 class SQLiteOwnershipTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class SQLiteOwnershipTests(unittest.TestCase):
             db.execute('CREATE TABLE entries (value TEXT)')
 
     def test_request_context_preserves_native_policy_after_exit(self):
-        for bounded, expected in ((False, 2000), (True, 0), (False, 2000)):
+        for bounded, expected in ((False, 2000), (True, BOUNDED_SQLITE_WAIT * 1000), (False, 2000)):
             def inspect():
                 with sqlite_connection(self.path, resource='Test', timeout=2) as db:
                     self.assertEqual(db.execute('PRAGMA busy_timeout').fetchone()[0], expected)
@@ -30,6 +30,23 @@ class SQLiteOwnershipTests(unittest.TestCase):
             else:
                 inspect()
 
+    def test_short_concurrent_writer_is_awaited_not_reported_busy(self):
+        # A background writer holding SQLite for a moment must not fail the
+        # HTTP request; only a lock held beyond the bounded wait is busy.
+        import threading
+        with closing(sqlite3.connect(self.path, check_same_thread=False)) as owner:
+            owner.execute('BEGIN EXCLUSIVE')
+            release = threading.Timer(.3, owner.rollback)
+            release.start()
+            started = time.monotonic()
+            try:
+                with bounded_project_requests():
+                    with sqlite_connection(self.path, resource='Test') as db:
+                        self.assertEqual(db.execute('SELECT * FROM entries').fetchall(), [])
+            finally:
+                release.join()
+            self.assertLess(time.monotonic() - started, BOUNDED_SQLITE_WAIT)
+
     def test_exclusive_reader_collision_is_busy_and_connection_is_released(self):
         with closing(sqlite3.connect(self.path)) as owner:
             owner.execute('BEGIN EXCLUSIVE')
@@ -37,7 +54,7 @@ class SQLiteOwnershipTests(unittest.TestCase):
             with bounded_project_requests(), self.assertRaises(ProjectBusy) as caught:
                 with sqlite_connection(self.path, resource='Test') as db:
                     db.execute('SELECT * FROM entries').fetchall()
-            self.assertLess(time.monotonic() - started, .5)
+            self.assertLess(time.monotonic() - started, BOUNDED_SQLITE_WAIT + .5)
             self.assertEqual(caught.exception.outcome, 'unknown')
             owner.rollback()
         with sqlite_connection(self.path, resource='Test') as db:

@@ -20,7 +20,7 @@ import tempfile
 import time
 import tomllib
 
-from spikes.metadata import (MAX_FILE, MAX_METADATA, parse_json, require, safe_path,
+from spikes.metadata import (OwnerUnavailable, MAX_FILE, MAX_METADATA, parse_json, require, safe_path,
                              timestamp, uuid, validate_snapshot)
 from spikes.sqlite_ownership import sqlite_connection
 from spikes.request_ownership import ProjectBusy
@@ -338,7 +338,7 @@ class JuliaRunStore:
     @staticmethod
     def _owner(row, node_id, user_id):
         require(row is not None and row[0] == node_id and row[1] == user_id,
-                'Julia run is unavailable to this owner')
+                'Julia run is unavailable to this owner', OwnerUnavailable)
 
     def prepare(self, request, preview, node_id, user_id):
         operation_id = request['operation_id']; uuid(operation_id); uuid(node_id); uuid(user_id)
@@ -386,7 +386,7 @@ class JuliaRunStore:
 
     def get(self, operation_id, node_id, user_id):
         uuid(operation_id); uuid(node_id); uuid(user_id)
-        require(os.path.lexists(self.path), 'Julia run is unavailable to this owner')
+        require(os.path.lexists(self.path), 'Julia run is unavailable to this owner', OwnerUnavailable)
         with self.connect(read_only=True) as db:
             row = db.execute('SELECT node_id,user_id,project_id,project_commit,'
                 'computation_id,request_sha256,request_json,preview_json,approval_digest,'
