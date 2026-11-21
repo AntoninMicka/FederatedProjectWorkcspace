@@ -147,6 +147,17 @@ náhled odebrání referencí i `progress` review. Čistý sdílený výpočet o
 zahájení od potvrzení dokončení. **Reject:** vlastní pravidla jen v IDE,
 automatické zaškrtávání vyřešených předpokladů a druhé úložiště stavů.
 
+Pracovní kontext úkolu (`PLAN-TASK-WORK-01-A`, zatím **designed**) plánuje
+**reuse/adapt** `Projects.plan_view`, `dependency_start_blockers`, scoped
+`PlanItems`, nativní Workspace journal a stejnou sémantiku progress zápisu
+z `ide_bridge_panel._changes`. Lokální identita okna/relace je oddělená od
+projektového stavu; persistence má použít existující SQLite ownership helpery.
+Pro C/E/F se přebírají ContextBuilder, chat/run journal a TaskOutcomes jako
+autority jednotlivých účinků. **Reject:** druhý plán/stav dokončení, falešná
+IDE session pro přímý UI start, připsání pozdního výsledku aktuálně vybranému
+tasku a automatické zahájení při synchronizaci. Kontrakt, hranice pádu a rozdíl
+návrhu od implementace: [ADR 0088](docs/adr/0088-task-work-context.md).
+
 Stavy plánu a SUM (`NEW-B7B56C4A0B-TASK-1`) **adaptují** `task_graph.py`,
 scoped `PlanItems.save`, sdílený desktop/web shell a projekce obou front.
 `plan_status_ui.py` používá stávající editor a draft, bez dalšího write
