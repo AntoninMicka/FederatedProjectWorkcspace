@@ -105,6 +105,54 @@ class FileEditTests(unittest.TestCase):
         self.assertEqual('project', validate_snapshot(files)[target]['privacy'])
         self.assertEqual('CONFIDENTIAL SOURCE', files[f'artifacts/{secret}/content.md'].decode())
 
+    def test_explicit_override_keeps_sources_and_requires_exact_privacy_and_final_approval(self):
+        target = self.create_document()
+        secret = self.create_document('PRIVATE CONTEXT', privacy='confidential')
+        service, request, calls = self.generate(target)
+        request['selected_artifact_ids'].append(secret)
+        request['task_plan']['privacy_override'] = dict(approved=True, target_privacy='project', context_privacy='local-only')
+        before = self.git.head()
+        with self.assertRaisesRegex(ValueError, 'reviewed context'):
+            service.task_route(request)
+        self.assertEqual(calls, [])
+        request['task_plan']['privacy_override']['context_privacy'] = 'confidential'
+        service.task_route(request)
+        self.assertIn('PRIVATE CONTEXT', calls[0]['prompt'])
+        self.assertEqual(before, self.git.head())
+        preview = self.preview(service, request)
+        self.assertEqual(preview['privacy_override'], request['task_plan']['privacy_override'])
+        result = service.task_confirm_file_edit(self.confirmation(preview))
+        self.assertEqual(result['state'], 'completed')
+        files = self.git.snapshot(self.git.head())
+        self.assertEqual(validate_snapshot(files)[target]['privacy'], 'project')
+        self.assertEqual(files[f'artifacts/{secret}/content.md'].decode(), 'PRIVATE CONTEXT')
+        self.assertIn('explicit context privacy override confidential -> project', self.git.run('log', '-1', '--format=%B').stdout)
+
+    def test_editor_privacy_selection_is_reviewed_pinned_and_recovered_with_content(self):
+        target = self.create_document(privacy='confidential')
+        service, request, calls = self.generate(target)
+        service.task_route(request)
+        preview_request = dict(project_id=ENTITY, task_id=request['task_id'], privacy='project')
+        with self.assertRaisesRegex(ValueError, 'výslovné potvrzení'):
+            service.task_preview_file_edit(preview_request)
+        preview = service.task_preview_file_edit(preview_request | {'authorize_privacy_relaxation': True})
+        confirmation = self.confirmation(preview)
+        with self.assertRaises(ValueError):
+            service.task_confirm_file_edit(confirmation | {'privacy': 'public'})
+        def crash(stage):
+            if stage == 'ref-updated': raise RuntimeError('lost response')
+        from spikes.task_file_edit import confirm
+        with self.assertRaises(RuntimeError): confirm(service, confirmation, checkpoint=crash)
+        pending = service.task_preview_file_edit(dict(project_id=ENTITY, task_id=request['task_id']))
+        self.assertEqual(pending['confirmation'], confirmation)
+        result = service.task_confirm_file_edit(confirmation)
+        self.assertEqual(result, service.task_confirm_file_edit(confirmation))
+        with self.assertRaises(ValueError):
+            service.task_confirm_file_edit(confirmation | {'privacy': 'public'})
+        files = self.git.snapshot(self.git.head())
+        self.assertEqual(validate_snapshot(files)[target]['privacy'], 'project')
+        self.assertEqual(len(calls), 1)
+
     def test_target_must_be_selected_supported_writable_and_not_downgrade_context(self):
         service, request, calls = self.generate()
         foreign = str(uuid4())

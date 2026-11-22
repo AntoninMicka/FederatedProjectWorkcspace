@@ -8,6 +8,12 @@ from tests.ui_flow_case import UiFlowCase, require_browser
 @require_browser
 class ChatAttemptBrowserTests(UiFlowCase):
     def test_privacy_conflict_explicit_target_only_recovery_and_reviewed_roadmap_save(self):
+        self.privacy_roadmap_flow()
+
+    def test_explicit_privacy_override_keeps_inputs_and_saves_only_after_review(self):
+        self.privacy_roadmap_flow(override=True)
+
+    def privacy_roadmap_flow(self, *, override=False):
         from spikes.artifacts import Artifacts
         from spikes.projects import Projects
         from spikes.markdown_documents import main_todo_id
@@ -47,15 +53,29 @@ class ChatAttemptBrowserTests(UiFlowCase):
         page.fill('#chat-privacy', 'project')
         self.submit_prompt(prompt)
         page.wait_js("!document.querySelector('#chat-edit-privacy').hidden", 'source-only refusal again')
-        page.click('#chat-edit-target-only'); page.wait_idle()
-        self.assertEqual(self.ollama.requests, [])
-        self.assertEqual(page.evaluate("document.querySelector('#chat-draft').value"), prompt)
-        self.assertEqual(page.evaluate("document.querySelector('#chat-privacy').value"), 'project')
-        self.assertFalse(page.evaluate("document.querySelector('#task-source-conversation').checked"))
-        self.assertEqual(page.evaluate("[...document.querySelectorAll('#task-artifact-list input:checked')].map(i=>i.value)"), [target])
-        self.submit_prompt(prompt)
-        self.assertEqual(len(self.ollama.requests), 1)
-        self.assertNotIn('PRIVATE CONTEXT', self.ollama.requests[0]['prompt'])
+        if override:
+            page.dialog_answers.append(False)
+            page.click('#chat-edit-override'); page.wait_idle()
+            self.assertEqual(self.ollama.requests, [])
+            page.evaluate("document.querySelector('#task-source-conversation').checked=false")
+            page.click('#chat-edit-override'); page.wait_idle()
+            self.assertEqual(self.ollama.requests, [])
+            self.assertIn('Vstupy se změnily', page.text('#chat-operation-status'))
+            page.evaluate("document.querySelector('#task-source-conversation').checked=true")
+            self.submit_prompt(prompt)
+            page.wait_js("!document.querySelector('#chat-edit-privacy').hidden", 'fresh privacy review')
+            page.click('#chat-edit-override'); page.wait_idle()
+        else:
+            page.click('#chat-edit-target-only'); page.wait_idle()
+        if not override:
+            self.assertEqual(self.ollama.requests, [])
+            self.assertEqual(page.evaluate("document.querySelector('#chat-draft').value"), prompt)
+            self.assertEqual(page.evaluate("document.querySelector('#chat-privacy').value"), 'project')
+            self.assertFalse(page.evaluate("document.querySelector('#task-source-conversation').checked"))
+            self.assertEqual(page.evaluate("[...document.querySelectorAll('#task-artifact-list input:checked')].map(i=>i.value)"), [target])
+            self.submit_prompt(prompt)
+        self.assertEqual(len(self.ollama.requests), 1, page.text('#chat-operation-status'))
+        self.assertEqual('PRIVATE CONTEXT' in self.ollama.requests[0]['prompt'], override)
         self.assertIn('Zkontrolovat úpravy ve společném editoru', self.buttons(),
             page.text('#chat-operation-status'))
         self.click_text('Zkontrolovat úpravy ve společném editoru')
@@ -63,6 +83,7 @@ class ChatAttemptBrowserTests(UiFlowCase):
         page.evaluate("document.querySelector('#artifact-editor-form').requestSubmit()")
         page.wait_js("document.querySelector('#task-file-edit-dialog').open", 'explicit save approval')
         self.assertEqual(before, git.head())
+        if override:self.assertIn('Výslovná výjimka',page.text('#task-file-edit-target'))
         page.click('#task-file-edit-approved'); page.click('[data-file-edit-choice=save]')
         page.wait(lambda:git.head()!=before, 'native reviewed save'); page.wait_idle()
         files = git.snapshot(git.head())

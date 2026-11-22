@@ -91,10 +91,11 @@ class Artifacts:
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
 
     def save(self, request, operation_id, *, checkpoint=lambda stage: None,
-             privacy='project', provenance='user', transformation=None, before_write=lambda: None):
+             privacy='project', provenance='user', transformation=None, before_write=lambda: None,
+             privacy_override=None):
         required = {'project_id', 'artifact_id', 'base_head', 'title', 'body', 'new'}
         require(isinstance(request, dict) and required <= request.keys() <= required | {
-                'metadata', 'filename'},
+                'metadata', 'filename', 'privacy', 'authorize_privacy_relaxation'},
                 'Invalid editor request')
         require(privacy in
                 {'public', 'project', 'confidential', 'local-only'}, 'Invalid document privacy')
@@ -125,6 +126,14 @@ class Artifacts:
         ws = self.workspace(request['project_id'])
         author = ProjectCreation(self.node_path).author_id()
         intent = dict(request, author_id=author)
+        from spikes.document_privacy import selection, audit
+        selection(request)
+        if privacy_override is not None:
+            from spikes.task_file_edit import validate_privacy_override
+            require(isinstance(privacy_override, dict), 'Invalid explicit privacy override')
+            validate_privacy_override(privacy_override, privacy_override.get('target_privacy'), privacy_override.get('context_privacy'))
+            require(transformation is not None, 'Privacy override requires a reviewed task transformation')
+            intent['privacy_override'] = privacy_override
         if transformation is not None:
             require(isinstance(transformation, dict) and set(transformation) == {
                 'task_id', 'run_id', 'manifest_id'} and request['new'] is False,
@@ -147,12 +156,17 @@ class Artifacts:
                             author_id=author, privacy=privacy,
                             provenance=provenance, file='content.md')
                 path, sidecar = prefix + 'content.md', prefix + 'metadata.json'
+                previous_privacy = request.get('privacy', privacy)
             else:
                 require(privacy == 'project' and provenance == 'user',
                         'Document privacy and provenance are immutable in the editor')
                 doc = document(files, entities, id_)
                 meta, path, sidecar = dict(doc['metadata']), doc['path'], doc['sidecar']
+                previous_privacy = meta['privacy']
                 meta['title'] = request['title']
+            meta['privacy'] = selection(request, previous_privacy)
+            if privacy_override is not None:
+                require(previous_privacy == privacy_override['target_privacy'], 'Reviewed target privacy changed')
             old_path = path
             if 'filename' in request:
                 path = f'artifacts/{id_}/' + request['filename']
@@ -182,6 +196,10 @@ class Artifacts:
                 require(plan['status'] in {'ready', 'missing'},
                         'Document transformation would leave an invalid roadmap: ' + plan.get('error', ''))
             before_write()
-            return changes, 'Local workspace author', author + '@local.invalid', 'Save Markdown document'
+            message = 'Save Markdown document' + audit(previous_privacy, meta['privacy'])
+            if privacy_override is not None:
+                message += '; explicit context privacy override '+privacy_override['context_privacy']+' -> '+meta['privacy']+'; task '+transformation['task_id']
+            return changes, 'Local workspace author', author + '@local.invalid', message
 
-        return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
+        return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint,
+                           allow_privacy_relaxation=request.get('authorize_privacy_relaxation') is True)

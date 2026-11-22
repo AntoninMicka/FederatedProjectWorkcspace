@@ -362,8 +362,9 @@ def project_deck(deck, revision, *, project_id=None, artifact_id=None):
 
 
 class PresentationDocuments:
-    def __init__(self, node_path):
+    def __init__(self, node_path, *, network=False):
         self.artifacts = Artifacts(node_path)
+        self.network = network
 
     def open(self, project_id):
         view = self.artifacts.open(project_id)
@@ -414,6 +415,10 @@ class PresentationDocuments:
         body = encode_deck(request['deck'])
         native = {key: request[key] for key in ('project_id', 'artifact_id', 'base_head', 'new')}
         native.update(title=request['deck']['title'], body=body)
+        for key in ('privacy', 'authorize_privacy_relaxation'):
+            if key in request: native[key] = request[key]
+        from spikes.document_privacy import selection
+        selection(native, network=self.network)
         return self.artifacts.save(native, operation_id, checkpoint=checkpoint,
                                    privacy=privacy, provenance=provenance)
 

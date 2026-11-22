@@ -854,6 +854,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
+<label>Ochrana souboru <select id="artifact-editor-privacy" name="privacy" data-document-privacy></select><small id="artifact-editor-privacy-hint">Platí pro celý soubor, ve všech režimech editoru.</small></label>
 <section id="task-plan-editor" class="task-plan-editor" hidden aria-label="Strukturovaný editor plánu">
 <div class="task-plan-mode" role="tablist" aria-label="Režim editoru plánu"><button id="task-plan-mode-structured" type="button" role="tab" aria-selected="true">Kostky</button><button id="task-plan-mode-raw" type="button" role="tab" aria-selected="false">Raw text</button><button id="task-plan-mode-preview" type="button" role="tab" aria-selected="false" aria-controls="task-plan-preview">Náhled</button></div>
 <p id="task-plan-editor-status" role="status" aria-live="polite"></p>
@@ -1150,6 +1151,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="presentation-panel" role="tabpanel" aria-labelledby="presentation-tab" hidden>
 <div class="presentation-editor-head"><div><h2>Prezentace</h2><p>Editor, náhled i spuštění používají stejný deck otevřeného projektu.</p></div>
 <div class="form-actions"><div class="editor-mode-switch" role="group" aria-label="Režim editoru prezentace"><button id="presentation-editor-mode-special" type="button" aria-pressed="true">Vizuální</button><button id="presentation-editor-mode-raw" class="secondary-button" type="button" aria-pressed="false">Raw</button></div><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
+<label>Ochrana souboru <select id="presentation-editor-privacy" data-document-privacy></select></label>
 <div id="presentation-editor-workspace" class="presentation-editor-workspace" hidden>
 <section class="presentation-editor-slides"><label>Název prezentace <input id="presentation-deck-title" maxlength="200"></label><h3>Slidy</h3><ol id="presentation-slide-list"></ol>
 <div class="form-actions"><button id="presentation-add-main" type="button">+ Hlavní</button><button id="presentation-add-backup" type="button">+ Backup</button><button id="presentation-delete-slide" class="danger-button" type="button">Odstranit</button></div>
@@ -1228,7 +1230,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <section id="chat-edit-privacy" hidden aria-label="Soukromí úpravy souboru">
 <p id="chat-edit-privacy-message"></p>
 <button id="chat-edit-target-only" type="button">Použít jen cílový soubor a zadání</button>
-<small>Vybrané ostatní podklady, konverzace a veřejné zdroje se odeberou ze vstupů. Model se tím nespustí.</small>
+<button id="chat-edit-override" type="button">Provést i přes omezení…</button>
+<small>Volba „Použít jen cílový soubor a zadání“ odebere ostatní vstupy a model nespustí. „Provést i přes omezení“ po potvrzení spustí nové zpracování se všemi vybranými vstupy.</small>
 </section>
 <details id="chat-failed-inputs" hidden><summary>Neúspěšná a neověřená zadání</summary>
 <p>Obnovení vrátí pouze text do formuláře; model znovu nespustí.</p><div id="chat-failed-input-list"></div></details>
@@ -2350,7 +2353,7 @@ function clearProject(){
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  resetTaskFileEditEditor();document.querySelector('#task-edit-target').value='';
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
- clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';renderChatAttempts([]);resetFilePrivacyRecovery();
+ clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';renderChatAttempts([]);resetFilePrivacyRecovery();filePrivacyOverride=null;
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();clearJulia();clearRoadmapReview();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  hideSearchRecovery();
@@ -2713,6 +2716,21 @@ document.querySelector('#task-plan-mode-preview').addEventListener('click',()=>{
 for(const button of document.querySelectorAll('[data-task-pattern]'))button.addEventListener('click',()=>{const textarea=artifactEditorForm.elements.body,parsed=parseTaskPlanDraft(textarea.value),target=document.querySelector('#task-plan-insert-position').value,task=parsed.safe?parsed.tasks.find(item=>item.parts[4]===target):null,offset=task?parsed.lines.slice(0,task.line).join('\\n').length+(task.line?1:0):textarea.value.length;document.querySelector('#artifact-raw-widget [data-raw-insertion-position]').value='cursor';textarea.setSelectionRange(offset,offset);if(artifactRawWidget.insert(button.dataset.taskPattern))renderTaskPlanEditor();});
 artifactEditorForm.elements.body.addEventListener('input',()=>{if(!taskPlanEditor.hidden&&taskPlanMode!=='raw')renderTaskPlanEditor();});
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
+const documentPrivacyLevels={'public':0,'project':1,'confidential':2,'local-only':3};
+const documentPrivacyLabels={'public':'Veřejné','project':'V rámci projektu','confidential':'Důvěrné','local-only':'Jen na tomto počítači'};
+for(const select of document.querySelectorAll('[data-document-privacy]')){
+ for(const [value,label] of Object.entries(documentPrivacyLabels)){const option=new Option(label,value);option.disabled=value==='local-only'&&document.body.dataset.runtime!=='desktop';select.append(option);}
+ select.value='project';
+}
+function editorPrivacyRequest(select,previous,isNew=false){
+ const privacy=select.value,result={privacy};
+ if(!isNew&&documentPrivacyLevels[privacy]<documentPrivacyLevels[previous]){
+  if(!confirm(`Snížit ochranu celého souboru z „${documentPrivacyLabels[previous]}“ na „${documentPrivacyLabels[privacy]}“? Změna umožní širší použití obsahu. Historie Git zůstává zachovaná.`))return null;
+  result.authorize_privacy_relaxation=true;
+ }
+ return result;
+}
+let artifactEditorOriginalPrivacy='project';
 function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
 const editorLeaveDialog=document.querySelector('#editor-leave-dialog');
 let editorLeavePending=false;
@@ -2748,7 +2766,7 @@ async function canLeaveWorkspaceEditors(){
 function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
  resetTaskFileEditEditor();document.querySelector('#plan-item-status-control')?.remove();
  for(const name of ['title','filename','description','tags']){const field=artifactEditorForm.elements[name];field.disabled=Boolean(artifactEditorItem?.planItem||doc.working_draft);const label=field.closest?.('label');if(label)label.hidden=field.disabled;}
- const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
+ const meta=doc.metadata||{};artifactEditorOriginalPrivacy=meta.privacy||'project';artifactEditorForm.elements.privacy.value=artifactEditorOriginalPrivacy;artifactEditorForm.elements.privacy.disabled=Boolean(doc.working_draft);document.querySelector('#artifact-editor-privacy-hint').textContent=artifactEditorItem?.planItem?'Ochrana platí pro celý zdrojový soubor, včetně ostatních úkolů.':'Platí pro celý soubor, ve všech režimech editoru.';document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
  document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
@@ -2811,7 +2829,7 @@ async function openPlanItemEditor(task){
   task=current;item.id=current.source.artifact_id;
   const result=await projectRequest('/v1/artifacts/editor/plan-item/open',{project_id:project.id,artifact_id:item.id,task_id:task.id,expected_head:project.head});
   if(activeProject!==project||artifactEditorItem!==item)return;
-  item.planItem=result;hideArtifactDeletion();fillArtifactEditor({title:result.title,body:result.body},false,{rawOnly:true});
+  item.planItem=result;hideArtifactDeletion();fillArtifactEditor({title:result.title,body:result.body,metadata:{privacy:result.privacy}},false,{rawOnly:true});
   configurePlanStatusEditor(task);
   showWorkspacePage(artifactEditorView);
   document.querySelector('#artifact-editor-heading').textContent=`Upravit položku ${task.id}`;
@@ -2824,6 +2842,7 @@ async function savePlanItemEditor(navigate=true){
  const item=artifactEditorItem,project=activeProject,model=item?.planItem;
  if(!project||!model||model===true||project.readOnly)return false;
  const request={project_id:model.project_id,artifact_id:model.artifact_id,task_id:model.task_id,expected_head:model.expected_head,fragment_sha256:model.fragment_sha256,body:artifactEditorForm.elements.body.value};
+ const classification=editorPrivacyRequest(artifactEditorForm.elements.privacy,artifactEditorOriginalPrivacy);if(!classification)return false;Object.assign(request,classification);
  const signature=JSON.stringify(request);
  if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),item:request};
  const attempt=artifactEditorAttempt,button=artifactEditorForm.querySelector('button[type="submit"]'),body=artifactEditorForm.elements.body;
@@ -2863,6 +2882,7 @@ async function saveArtifactEditor(navigate=true){
  if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return false;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return false;}}}
  if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return false;}const fields=new FormData(artifactEditorForm);
  const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
+ const classification=editorPrivacyRequest(artifactEditorForm.elements.privacy,artifactEditorOriginalPrivacy,Boolean(artifactEditorItem.new));if(!classification)return false;Object.assign(request,classification);
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
  try{const id=artifactEditorItem.id,projectId=activeProject.id;const result=await projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document},120000);artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem.new=false;artifactEditorItem=null;activeProject.head=result.commit_id;artifactEditorView.hidden=true;if(navigate){const position=planEditorReturn;planEditorReturn=null;await openRegisteredProject(projectId);if(!await restorePlanPosition(position)){await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}}return true;}
@@ -3678,6 +3698,7 @@ async function saveJuliaEditor(navigate=true){
  if(!activeProject||!juliaEditorModel||!juliaEditor.reportValidity())return false;const fields=new FormData(juliaEditor),button=juliaEditor.querySelector('button[type="submit"]');
  try{
   const draft={project_id:activeProject.id,base_head:juliaEditorModel.base_head,new:juliaEditorModel.new,artifact_ids:juliaEditorModel.artifact_ids,title:String(fields.get('title')).trim(),privacy:String(fields.get('privacy')),julia_code:String(fields.get('julia_code')),project_toml:String(fields.get('project_toml')),manifest_toml:String(fields.get('manifest_toml')),parameters:JSON.parse(String(fields.get('parameters'))),outputs:JSON.parse(String(fields.get('outputs'))),execution_policy:JSON.parse(String(fields.get('execution_policy')))};
+  const classification=editorPrivacyRequest(juliaEditor.elements.privacy,juliaEditorModel.privacy,juliaEditorModel.new);if(!classification)return false;Object.assign(draft,classification);
   const signature=JSON.stringify(draft);if(!juliaEditorAttempt||juliaEditorAttempt.signature!==signature)juliaEditorAttempt={signature,request:{operation_id:crypto.randomUUID(),...draft}};const request=juliaEditorAttempt.request;
   button.disabled=true;juliaEditorStatus.textContent='Ukládám atomickou revizi Julia modelu…';
   const result=await projectRequest('/v1/julia/editor/save',request,120000);juliaEditorDirty=false;juliaEditorAttempt=null;juliaEditor.hidden=true;juliaEditorModel.new=false;juliaEditorModel.definition_path=result.definition_path;juliaEditorModel=null;
@@ -3913,9 +3934,12 @@ const presentationSessionStatus=document.querySelector('#presentation-session-st
 const presentationRawPanel=document.querySelector('#presentation-raw-panel');
 let presentationEditorView=null,presentationEditorDeck=null,presentationEditorArtifact=null,presentationEditorSlide=null;
 let presentationEditorNew=false,presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorLoading=false;
-let presentationEditorMode='special',presentationEditorBaseline=null;
+let presentationEditorMode='special',presentationEditorBaseline=null,presentationOriginalPrivacy='project';
+const presentationPrivacy=document.querySelector('#presentation-editor-privacy');
+function presentationPrivacyDirty(){return presentationPrivacy.value!==presentationOriginalPrivacy;}
+presentationPrivacy.addEventListener('change',()=>{presentationEditorAttempt=null;presentationEditorDirty=true;updatePresentationEditorEnabled();});
 let presentationPrintPlan=null,presentationPrintTarget=null;
-const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=presentationRawWidget.dirty||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
+const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=presentationRawWidget.dirty||presentationPrivacyDirty()||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
 function setPresentationEditorMode(mode){
  presentationEditorMode=mode;const raw=mode==='raw';presentationEditorWorkspace.hidden=raw||!presentationEditorDeck;presentationRawPanel.hidden=!raw||!presentationEditorDeck;
  document.querySelector('#presentation-editor-mode-special').setAttribute('aria-pressed',String(!raw));document.querySelector('#presentation-editor-mode-raw').setAttribute('aria-pressed',String(raw));updatePresentationEditorEnabled();
@@ -3928,7 +3952,7 @@ async function openPresentationRawEditor(){
 async function applyPresentationRaw(){
  const result=await presentationRawWidget.validate();if(!result)return false;
  if(!result.lossless){presentationEditorStatus.textContent='Raw obsah nelze beze změny převést do vizuálního editoru. Použijte kanonický formát z validace.';return false;}
- presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
+ presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=presentationPrivacyDirty()||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
 }
 function presentationNewSlide(kind='main',layout='content'){
  const template=presentationEditorDeck?.templates?.find(item=>item.id===layout)||presentationEditorView?.layout_presets?.find(item=>item.id===layout)||{background:'#102b36',foreground:'#ffffff'};
@@ -3961,7 +3985,7 @@ function updatePresentationEditorEnabled(){
  presentationRawWidget.setDisabled(frozen||readOnly||!ready);document.querySelector('#presentation-editor-mode-special').disabled=frozen||!ready;document.querySelector('#presentation-editor-mode-raw').disabled=frozen||!ready;
 }
 function presentationEditorChanged(rerender=true){
- if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;
+ if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=presentationPrivacyDirty()||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;
  if(rerender)renderPresentationEditor();else{renderSlideVisual(document.querySelector('#presentation-editor-preview'),presentationVisualSlide(presentationCurrentSlide()));const selected=document.querySelector('#presentation-slide-list button[aria-current="true"]');if(selected)selected.textContent=(presentationCurrentSlide().kind==='backup'?'Backup · ':'')+presentationCurrentSlide().title;updatePresentationEditorEnabled();}
 }
 function renderPresentationTemplateForm(preferred=null){
@@ -4025,6 +4049,7 @@ function presentationPdfExportFinished(result){if(!presentationPrintPlan||result
 document.querySelector('#presentation-print-confirm').addEventListener('change',event=>{document.querySelector('#presentation-print-run').disabled=!(event.currentTarget.checked&&presentationPrintTarget&&presentationPrintPlan?.pages.length);});
 document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
+ presentationOriginalPrivacy=document.metadata?.privacy||'project';presentationPrivacy.value=presentationOriginalPrivacy;presentationPrivacy.disabled=Boolean(activeProject?.readOnly);
  presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
  if(typeof renderPresentationReportLink==='function')renderPresentationReportLink();
 }
@@ -4094,7 +4119,7 @@ async function openPresentationEditor(preferred=null){
 }
 async function createPresentationDocument(confirmDiscard=true){
  document.querySelector('#presentation-report-link')?.remove();
- if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
+ if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationOriginalPrivacy='project';presentationPrivacy.value='project';presentationPrivacy.disabled=false;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
 presentationEditorDocuments.addEventListener('change',async()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(await canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
 document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
@@ -4125,9 +4150,9 @@ document.querySelector('#presentation-slide-up').addEventListener('click',()=>mo
 document.querySelector('#presentation-clear-wallpaper').addEventListener('click',()=>{presentationCurrentSlide().wallpaper='';presentationEditorChanged();});
 document.querySelector('#presentation-slide-wallpaper').addEventListener('change',async event=>{const file=event.currentTarget.files[0];event.currentTarget.value='';if(!file)return;if(file.type!=='image/png'||file.size>190000){presentationEditorStatus.textContent='Vyberte PNG do 190 KiB.';return;}const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});if(String(value).length>262144){presentationEditorStatus.textContent='Zakódovaná tapeta překračuje limit 256 KiB.';return;}presentationCurrentSlide().wallpaper=String(value);presentationEditorChanged();});
 async function savePresentationEditor(navigate=true){
- if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return false;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return false;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
+ if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return false;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return false;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};const classification=editorPrivacyRequest(presentationPrivacy,presentationOriginalPrivacy,presentationEditorNew);if(!classification)return false;Object.assign(document,classification);presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
  updatePresentationEditorEnabled();presentationEditorStatus.textContent='Ukládám potvrzenou podobu prezentace do projektu…';
- try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationRawWidget.markClean();activeProject.head=result.commit_id;presentationEditorView.commit_id=result.commit_id;const saved=presentationEditorView.documents.find(item=>item.id===id);if(saved){saved.deck=structuredClone(presentationEditorDeck);saved.title=presentationEditorDeck.title;}else presentationEditorView.documents.push({id,title:presentationEditorDeck.title,deck:structuredClone(presentationEditorDeck)});if(navigate){await openRegisteredProject(projectId);await openPresentationEditor(id);}presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;return true;}
+ try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;presentationOriginalPrivacy=presentationPrivacy.value;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationRawWidget.markClean();activeProject.head=result.commit_id;presentationEditorView.commit_id=result.commit_id;const saved=presentationEditorView.documents.find(item=>item.id===id);if(saved){saved.deck=structuredClone(presentationEditorDeck);saved.title=presentationEditorDeck.title;saved.metadata={...saved.metadata,privacy:presentationPrivacy.value};}else presentationEditorView.documents.push({id,title:presentationEditorDeck.title,deck:structuredClone(presentationEditorDeck),metadata:{privacy:presentationPrivacy.value}});if(navigate){await openRegisteredProject(projectId);await openPresentationEditor(id);}presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;return true;}
  catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();return false;}
 }
 presentationEditorSave.addEventListener('click',()=>savePresentationEditor());
@@ -5582,7 +5607,11 @@ const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 const responseLanguageState=document.querySelector('#response-language-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevision=0;
-let filePrivacyRecovery=null;
+let filePrivacyRecovery=null,filePrivacyOverride=null;
+function filePrivacySignature(request){return JSON.stringify({project_id:request.project_id,expected_head:request.expected_head,
+ thread_id:request.selected_message_ids?.length?request.thread_id:null,content:request.content,privacy:request.privacy,task_plan:request.task_plan,
+ selected_artifact_ids:request.selected_artifact_ids,selected_message_ids:request.selected_message_ids,
+ run_choice:request.run_choice,response_language:request.response_language});}
 function resetFilePrivacyRecovery(){filePrivacyRecovery=null;document.querySelector('#chat-edit-privacy').hidden=true;}
 function offerFilePrivacyRecovery(error,request){
  if(error?.diagnostic!=='file-edit-privacy-conflict'||request?.project_id!==activeProject?.id||
@@ -5591,12 +5620,21 @@ function offerFilePrivacyRecovery(error,request){
  if(selectedTaskFileEditTarget()!==targetId)return;
  const targetPrivacy=error.privacyConflict?.target_privacy||currentArtifacts.find(item=>item.id===targetId)?.privacy;
  const levels={'public':0,'project':1,'confidential':2,'local-only':3};
- filePrivacyRecovery={projectId:request.project_id,targetId,prompt:request.content,targetPrivacy};
+ filePrivacyRecovery={projectId:request.project_id,targetId,prompt:request.content,targetPrivacy,
+   contextPrivacy:error.privacyConflict?.context_privacy,signature:filePrivacySignature(request)};
  document.querySelector('#chat-edit-privacy-message').textContent=error.message;
  document.querySelector('#chat-edit-target-only').disabled=!(targetPrivacy in levels)||
    !(document.querySelector('#chat-privacy').value in levels)||levels[document.querySelector('#chat-privacy').value]>levels[targetPrivacy];
  document.querySelector('#chat-edit-privacy').hidden=false;
 }
+document.querySelector('#chat-edit-override').addEventListener('click',()=>{
+ const saved=filePrivacyRecovery;
+ if(!saved||saved.projectId!==activeProject?.id||saved.prompt!==draft.value.trim()||
+    selectedTaskFileEditTarget()!==saved.targetId||!saved.contextPrivacy){resetFilePrivacyRecovery();return;}
+ if(!confirm(`Provést tuto úpravu s vybranými podklady i přes omezení ochrany? Vstupy: ${documentPrivacyLabels[saved.contextPrivacy]}. Cílový soubor: ${documentPrivacyLabels[saved.targetPrivacy]}. Výsledek může obsahovat citlivější informace. Výjimka platí jen pro toto zadání a vybrané vstupy; uložení výsledku ještě potvrdíte.`))return;
+ filePrivacyOverride={signature:saved.signature,value:{approved:true,target_privacy:saved.targetPrivacy,context_privacy:saved.contextPrivacy}};
+ pendingChatRequest=null;document.querySelector('#chat-composer').requestSubmit();
+});
 document.querySelector('#chat-edit-target-only').addEventListener('click',()=>{
  const saved=filePrivacyRecovery,levels={'public':0,'project':1,'confidential':2,'local-only':3};
  if(!saved||saved.projectId!==activeProject?.id||draft.value.trim()!==saved.prompt||
@@ -7865,6 +7903,13 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     try{const scope=selectedMarkdownEditScope();if(scope)pendingChatRequest.task_plan.edit_block_ids=scope;}
     catch(error){pendingChatRequest=null;chatOperationStatus.textContent=error.message;return;}
    }
+  }
+  if(filePrivacyOverride){
+   const reviewed=filePrivacyOverride;filePrivacyOverride=null;
+   if(reviewed.signature!==filePrivacySignature(pendingChatRequest)){
+    pendingChatRequest=null;chatOperationStatus.textContent='Vstupy se změnily. Výjimka se nepoužila; zpracování nebylo spuštěno.';return;
+   }
+   pendingChatRequest.task_plan.privacy_override=reviewed.value;
   }
  }
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';

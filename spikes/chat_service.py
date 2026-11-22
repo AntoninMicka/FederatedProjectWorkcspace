@@ -1640,7 +1640,10 @@ class ChatService:
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
         if edit_target is not None:
-            if PRIVACY_ORDER[edit_target['metadata']['privacy']] < PRIVACY_ORDER[strongest]:
+            if plan.privacy_override:
+                from spikes.task_file_edit import validate_privacy_override
+                validate_privacy_override(plan.privacy_override, edit_target['metadata']['privacy'], strongest)
+            elif PRIVACY_ORDER[edit_target['metadata']['privacy']] < PRIVACY_ORDER[strongest]:
                 raise FileEditPrivacyConflict(plan.target_artifact_id, edit_target['metadata']['privacy'], strongest)
         # Refuse before the model runs: its query could only end in a search this data forbids.
         require(not plan.search_compose or strongest != 'local-only',

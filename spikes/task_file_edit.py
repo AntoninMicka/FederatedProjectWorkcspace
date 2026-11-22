@@ -29,6 +29,17 @@ class FileEditPrivacyConflict(ValidationError):
                     diagnostic=self.code, privacy_conflict=self.details)
 
 
+def validate_privacy_override(value, target_privacy, context_privacy):
+    from spikes.document_privacy import LEVELS
+    require(isinstance(value, dict) and set(value) == {'approved', 'target_privacy', 'context_privacy'}
+        and value['approved'] is True and isinstance(value['target_privacy'], str)
+        and isinstance(value['context_privacy'], str) and value['target_privacy'] in LEVELS
+        and value['context_privacy'] in LEVELS, 'Invalid explicit privacy override')
+    require(value['target_privacy'] == target_privacy and value['context_privacy'] == context_privacy,
+            'Privacy override differs from the reviewed context')
+    require(LEVELS[context_privacy] > LEVELS[target_privacy], 'Privacy override requires a real conflict')
+
+
 def body(value):
     require(isinstance(value, str) and '\0' not in value and len(value.encode()) <= MAX_EDITOR,
             'Invalid or oversized replacement Markdown')
@@ -117,11 +128,24 @@ def _row(service, task_id):
     return store, row, plan
 
 
-def _preview(service, row, plan, replacement, *, current=True):
+def _preview(service, row, plan, replacement, *, current=True, privacy_request=None):
     replacement = body(replacement)
     doc, files, entities = target_document(service, row['project_id'], plan.target_artifact_id,
-        row['project_commit'], privacy=row['privacy'], current=current)
-    files[doc['path']] = replacement.encode()
+        row['project_commit'], current=current)
+    from spikes.document_privacy import selection, LEVELS
+    privacy_request = privacy_request or {}
+    target_privacy = selection(privacy_request, doc['metadata']['privacy'], network=service.projects.network)
+    if plan.privacy_override:
+        validate_privacy_override(plan.privacy_override, doc['metadata']['privacy'], row['privacy'])
+    elif (LEVELS[target_privacy] < LEVELS[row['privacy']] and not (
+            privacy_request.get('authorize_privacy_relaxation') is True
+            and LEVELS[target_privacy] < LEVELS[doc['metadata']['privacy']])):
+        raise FileEditPrivacyConflict(plan.target_artifact_id, target_privacy, row['privacy'])
+    if target_privacy != doc['metadata']['privacy']:
+        from spikes.document_privacy import changes
+        files.update(changes(doc, replacement, target_privacy))
+    else:
+        files[doc['path']] = replacement.encode()
     graph = project_task_graph(files, validate_snapshot(files), row['project_id'], row['project_commit'])
     require(graph['status'] in {'ready', 'missing'},
             'Replacement leaves an invalid roadmap: ' + graph.get('error', ''))
@@ -130,17 +154,21 @@ def _preview(service, row, plan, replacement, *, current=True):
                  before_sha256=hashlib.sha256(doc['body'].encode()).hexdigest(),
                  body_sha256=hashlib.sha256(replacement.encode()).hexdigest(),
                  title=doc['title'], run_id=row['run_id'], manifest_id=row['manifest_id'], privacy=row['privacy'])
+    if plan.privacy_override: proof['privacy_override'] = plan.privacy_override
+    if privacy_request: proof['privacy_selection'] = privacy_request
     digest = hashlib.sha256(json.dumps(proof, sort_keys=True, ensure_ascii=False,
                                       separators=(',', ':')).encode()).hexdigest()
-    return {'title': doc['title'], 'document': doc, 'body': replacement,
+    return {'title': doc['title'], 'document': doc, 'body': replacement, 'privacy_override': plan.privacy_override,
             'diff': ''.join(difflib.unified_diff(doc['body'].splitlines(True), replacement.splitlines(True),
                                                fromfile=doc['path'], tofile=doc['path'])),
             'confirmation': dict(task_id=row['task_id'], artifact_id=plan.target_artifact_id,
-                project_id=row['project_id'], base_head=row['project_commit'], body=replacement, approval_digest=digest, approved=True)}
+                project_id=row['project_id'], base_head=row['project_commit'], body=replacement, approval_digest=digest, approved=True,
+                **privacy_request)}
 
 
 def preview(service, request):
-    require(isinstance(request, dict) and set(request) in ({'project_id', 'task_id'}, {'project_id', 'task_id', 'body'}), 'Invalid file edit preview')
+    require(isinstance(request, dict) and {'project_id', 'task_id'} <= request.keys() <= {
+        'project_id', 'task_id', 'body', 'privacy', 'authorize_privacy_relaxation'}, 'Invalid file edit preview')
     _, row, plan = _row(service, request['task_id'])
     require(request['project_id'] == row['project_id'], 'File edit belongs to another project')
     require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch', 'markdown-patch'}, 'File edit is closed')
@@ -156,7 +184,12 @@ def preview(service, request):
     if pending is not None:
         require(pending.get('kind') == 'file-edit-approval' and pending['request']['body'] == replacement,
                 'Resume the original approved file edit before editing again')
-    result = _preview(service, row, plan, replacement, current=pending is None)
+    privacy_request = {k: request[k] for k in ('privacy', 'authorize_privacy_relaxation') if k in request}
+    if pending is not None:
+        pinned = {k: pending['request'][k] for k in ('privacy', 'authorize_privacy_relaxation') if k in pending['request']}
+        require(not privacy_request or privacy_request == pinned, 'Resume the original approved privacy selection')
+        privacy_request = pinned
+    result = _preview(service, row, plan, replacement, current=pending is None, privacy_request=privacy_request)
     result['pending_confirmation'] = pending is not None
     if pending is not None:
         result['confirmation'] = pending['request']
@@ -164,8 +197,8 @@ def preview(service, request):
 
 
 def confirm(service, request, *, checkpoint=lambda stage: None):
-    require(isinstance(request, dict) and set(request) == {
-        'project_id', 'task_id', 'artifact_id', 'operation_id', 'base_head', 'body', 'approval_digest', 'approved'}
+    required = {'project_id', 'task_id', 'artifact_id', 'operation_id', 'base_head', 'body', 'approval_digest', 'approved'}
+    require(isinstance(request, dict) and required <= request.keys() <= required | {'privacy', 'authorize_privacy_relaxation'}
         and request['approved'] is True, 'Invalid file edit confirmation')
     for key in ('task_id', 'artifact_id', 'operation_id'): uuid(request[key])
     body(request['body'])
@@ -174,13 +207,16 @@ def confirm(service, request, *, checkpoint=lambda stage: None):
     require(request['artifact_id'] == plan.target_artifact_id, 'File edit targets a different document')
     if row['state'] == 'completed':
         result = row['result']
+        require(result.get('privacy_selection', {}) == {k: request[k] for k in ('privacy', 'authorize_privacy_relaxation') if k in request},
+                'File edit was completed with a different privacy selection')
         require(result.get('kind') == 'artifact-link' and all(result.get(k) == request[k]
                 for k in ('artifact_id', 'operation_id', 'approval_digest', 'base_head'))
                 and result.get('body_sha256') == hashlib.sha256(request['body'].encode()).hexdigest(),
                 'File edit was completed differently')
         return row['projection']
     require(row['state'] == 'prepared' and row['outcome']['kind'] in {'artifact-draft', 'artifact-patch', 'markdown-patch'}, 'File edit is closed')
-    expected = _preview(service, row, plan, request['body'], current=row['result'] is None)
+    privacy_request = {k: request[k] for k in ('privacy', 'authorize_privacy_relaxation') if k in request}
+    expected = _preview(service, row, plan, request['body'], current=row['result'] is None, privacy_request=privacy_request)
     require(all(request[k] == v for k, v in expected['confirmation'].items()),
             'Confirmation does not match the exact file edit preview')
     store.bind_file_edit_approval(row['task_id'], row['node_id'], row['user_id'], request)
@@ -191,14 +227,16 @@ def confirm(service, request, *, checkpoint=lambda stage: None):
             'kind': 'file-edit-approval', 'request': request}, 'File edit approval was cancelled or changed')
     receipt = Artifacts(service.node_path).save(dict(project_id=row['project_id'],
         artifact_id=plan.target_artifact_id, base_head=row['project_commit'], title=expected['title'],
-        body=request['body'], new=False), request['operation_id'], checkpoint=checkpoint,
-        transformation={key: row[key] for key in ('task_id', 'run_id', 'manifest_id')}, before_write=still_approved)
+        body=request['body'], new=False, **privacy_request), request['operation_id'], checkpoint=checkpoint,
+        transformation={key: row[key] for key in ('task_id', 'run_id', 'manifest_id')}, before_write=still_approved,
+        privacy_override=plan.privacy_override)
     checkpoint('file-edit-before-outcome')
     result = dict(schema_version=1, kind='artifact-link', artifact_id=plan.target_artifact_id,
                   title=expected['title'], project_commit=receipt['commit_id'],
                   operation_id=request['operation_id'], approval_digest=request['approval_digest'],
                   base_head=row['project_commit'], body_sha256=hashlib.sha256(request['body'].encode()).hexdigest(),
                   run_id=row['run_id'], manifest_id=row['manifest_id'])
+    if privacy_request: result['privacy_selection'] = privacy_request
     return store.finish(row['task_id'], row['node_id'], row['user_id'], 'completed', result=result)['projection']
 
 

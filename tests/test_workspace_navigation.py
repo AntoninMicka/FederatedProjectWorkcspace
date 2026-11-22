@@ -94,7 +94,7 @@ const editorLeaveDialog={open:false,addEventListener:(type,fn)=>handlers.set(typ
 const document={querySelector:()=>({textContent:''})};
 let editorLeavePending=false;
 let artifactEditorView={hidden:false},artifactEditorDirty=false,artifactEditorAttempt=null,artifactEditorItem={id:'doc'},artifactEditorTaskEdit=null;
-const artifactEditorForm={elements:Object.fromEntries(['title','filename','description','tags'].map(name=>[name,{disabled:false}]))};
+const artifactEditorForm={elements:Object.fromEntries(['title','filename','description','tags','privacy'].map(name=>[name,{disabled:false}]))};
 const artifactRawWidget={readOnly:false,setDisabled(value){this.readOnly=value;}};
 let juliaEditor={hidden:false},juliaEditorDirty=false,juliaEditorAttempt=null,juliaEditorModel={};
 let presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorView={},presentationEditorDeck={},presentationEditorWorkspace={hidden:false},presentationRawPanel={hidden:true};

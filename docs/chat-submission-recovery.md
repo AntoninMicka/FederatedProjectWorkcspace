@@ -30,6 +30,16 @@ se rozpozná podle přesného otisku pouze při čtení, bez přepisování rece
 Generovaný návrh se nadále ukládá až po kontrole ve společném editoru
 a výslovném potvrzení diffu.
 
+Na následný výslovný požadavek uživatele byla doplněna i druhá možnost:
+**Provést i přes omezení**. Po samostatném souhlasu spustí nové zpracování
+se všemi vybranými podklady a výjimku připne k přesnému plánu; změna vstupů
+ji zneplatní. Klasifikace původních podkladů se nemění. Finální uložení
+výsledku má nadále vlastní potvrzení, které ukáže ochranu cíle a výjimku.
+Editory dokumentů, plánu/položek a prezentací nyní umožňují měnit ochranu
+celého souboru; Julia používá potvrzovanou volbu pro celý svůj balík.
+Snížení vyžaduje souhlas a zůstává v auditu. Podrobnosti a obnova:
+[ADR 0089](adr/0089-explicit-document-privacy-review.md).
+
 Při čtení a reprodukci byly ověřeny samostatné mezery: formulář má limit
 16 000 znaků, ačkoli backend přijímá až 1 MiB; úspěšná odpověď bezpodmínečně
 maže i text rozepsaný během běhu; odmítnutí před `TaskOutcomes.prepare`

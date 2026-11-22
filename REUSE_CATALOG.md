@@ -5,6 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Ochrana souborů a výslovná výjimka AI úpravy **adaptují** stávající
+`Artifacts.save`, `PlanItems.save`, Julia/presentation writery a
+`Workspace.transact(allow_privacy_relaxation=...)` z původního importního
+průchodu. **Reuse:** stejné metadata třídy, Context Manifest, task plan digest,
+potvrzení diffu, CAS a journal recovery. **Reject:** globální bypass,
+automatická reklasifikace zdrojů a druhý persistentní store. Důvod a crash
+boundaries: [ADR 0089](docs/adr/0089-explicit-document-privacy-review.md).
+
 CHAT-SUBMISSION-RECOVERY-01 **adapt**: existující soukromý `TaskOutcomes`
 SQLite journal doplněný o typovanou evidenci před dispatch, nikoli nový
 projektový store. **Reuse:** SQLite ownership, `TaskWork` identita/přístup,

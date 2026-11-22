@@ -202,6 +202,7 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             'artifact_ids', 'title', 'privacy', 'julia_code', 'project_toml',
             'manifest_toml', 'parameters', 'outputs', 'execution_policy')}
         request['operation_id'] = str(uuid4())
+        request['privacy'] = 'confidential'
         saved = service.editor_save(request, user_id=self.author)
         self.assertEqual(self.git.head(), saved['commit_id'])
         catalog = service.definitions(self.project_id, self.git.head())
@@ -211,6 +212,7 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
         opened = service.editor_open(self.project_id, self.git.head(),
                                      saved['definition_path'])
         self.assertFalse(opened['new'])
+        self.assertEqual(opened['privacy'], 'confidential')
         self.assertEqual(template['artifact_ids'], opened['artifact_ids'])
         old_blob = catalog['definitions'][0]['computation']['entrypoint']['git_blob']
 
@@ -220,6 +222,10 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             'artifact_ids', 'title', 'privacy', 'julia_code', 'project_toml',
             'manifest_toml', 'parameters', 'outputs', 'execution_policy')}
         update['operation_id'] = str(uuid4())
+        update['privacy'] = 'project'
+        with self.assertRaisesRegex(ValueError, 'výslovné potvrzení'):
+            service.editor_save(update, user_id=self.author)
+        update['authorize_privacy_relaxation'] = True
         service.editor_save(update, user_id=self.author)
         catalog = service.definitions(self.project_id, self.git.head())
         self.assertEqual(1, len(catalog['definitions']))

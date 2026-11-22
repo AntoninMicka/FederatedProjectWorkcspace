@@ -230,7 +230,7 @@ class JuliaWorkspaceService:
         required = {'operation_id', 'project_id', 'base_head', 'new', 'artifact_ids',
                     'title', 'privacy', 'julia_code', 'project_toml', 'manifest_toml',
                     'parameters', 'outputs', 'execution_policy'}
-        require(isinstance(request, dict) and set(request) == required,
+        require(isinstance(request, dict) and required <= request.keys() <= required | {'authorize_privacy_relaxation'},
                 'Invalid Julia editor request')
         uuid(request['operation_id']); uuid(request['project_id'])
         require(type(request['new']) is bool and isinstance(request['base_head'], str),
@@ -244,6 +244,8 @@ class JuliaWorkspaceService:
         require(title and '\n' not in title and '\r' not in title, 'Invalid Julia title')
         require(request['privacy'] in {'public', 'project', 'confidential', 'local-only'},
                 'Invalid Julia privacy')
+        from spikes.document_privacy import selection, audit
+        selection(request, network=self.projects.network)
         code = self._editor_text(request['julia_code'], 'Julia code').encode()
         project_raw = self._editor_text(request['project_toml'], 'Julia Project.toml').encode()
         manifest_raw = self._editor_text(request['manifest_toml'], 'Julia Manifest.toml').encode()
@@ -283,6 +285,7 @@ class JuliaWorkspaceService:
                                       ('manifest', 'Manifest.toml'),
                                       ('definition', 'computation.json')):
                     self._artifact(files, entities, ids[key], filename)
+                    selection(request, entities[ids[key]]['privacy'], network=self.projects.network)
             model_oid = ws.git.run('hash-object', '--stdin', binary=True, input=code).stdout.decode().strip()
             computation = {'schema': 'fpw-julia-computation-v1',
                 'computation_id': ids['definition'], 'title': title,
@@ -315,10 +318,10 @@ class JuliaWorkspaceService:
                     sort_keys=True, indent=2) + '\n').encode()
             candidate = dict(files); candidate.update(changes); validate_snapshot(candidate)
             return changes, 'Workspace Julia editor', actor + '@local.invalid', (
-                'Create Julia computation' if request['new'] else 'Update Julia computation')
+                'Create Julia computation' if request['new'] else 'Update Julia computation'+audit(entities[ids['definition']]['privacy'], request['privacy']))
 
         receipt = workspace.transact(request['operation_id'], request, prepare,
-                                     expected_head=request['base_head'])
+                                     expected_head=request['base_head'], allow_privacy_relaxation=request.get('authorize_privacy_relaxation') is True)
         return {'schema': 'fpw-julia-editor-result-v1', 'project_id': request['project_id'],
                 'definition_path': definition_path,
                 'commit_id': receipt.get('commit_id') or receipt.get('result', {}).get('commit_id')}

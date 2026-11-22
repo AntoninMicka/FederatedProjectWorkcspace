@@ -68,7 +68,7 @@ document.querySelector('#task-edit-target').addEventListener('change',()=>{pendi
 
 function resetTaskFileEditEditor(){
  artifactEditorTaskEdit=null;
- for(const name of ['title','filename','description','tags'])artifactEditorForm.elements[name].disabled=false;
+ for(const name of ['title','filename','description','tags','privacy'])artifactEditorForm.elements[name].disabled=false;
  artifactRawWidget.setDisabled(false);
 }
 async function openTaskFileEditEditor(projection){
@@ -86,6 +86,7 @@ async function openTaskFileEditEditor(projection){
   artifactEditorDirty=true;
   for(const name of ['title','filename','description','tags'])artifactEditorForm.elements[name].disabled=true;
   if(preview.pending_confirmation){artifactRawWidget.setDisabled(true);artifactEditorAttempt={file_edit:true,request:preview.confirmation};}
+  if(preview.pending_confirmation){artifactEditorForm.elements.privacy.value=preview.confirmation.privacy||preview.document.metadata.privacy;artifactEditorForm.elements.privacy.disabled=true;}
   artifactEditorStatus.textContent=preview.pending_confirmation?'Dokončete původní potvrzené uložení; návrh je připnutý.':'Návrh úpravy vstupu. Uložit nejprve zobrazí porovnání a vyžádá potvrzení.';
   closeMobileSidebar();closeCompactSidebarMenu();artifactEditorForm.elements.body.focus();syncPageLayout();
  }catch(error){chatOperationStatus.textContent=error.message;}
@@ -94,6 +95,8 @@ async function askTaskFileEditApproval(preview){
  const dialog=document.querySelector('#task-file-edit-dialog'),check=document.querySelector('#task-file-edit-approved'),save=dialog.querySelector('[data-file-edit-choice=save]');
  document.querySelector('#task-file-edit-target').textContent=`${preview.title} · ${preview.confirmation.artifact_id} · revize ${preview.confirmation.base_head.slice(0,12)}. Původ změn bude zaznamenán jako transformace pomocí LLM.`;
  document.querySelector('#task-file-edit-diff').textContent=preview.diff||'Obsah se nemění; potvrzení zaznamená původ transformace.';
+ document.querySelector('#task-file-edit-target').textContent+=' Ochrana výsledku: '+documentPrivacyLabels[preview.confirmation.privacy||preview.document.metadata.privacy]+'.';
+ if(preview.privacy_override)document.querySelector('#task-file-edit-target').textContent+=' Výslovná výjimka: použití '+documentPrivacyLabels[preview.privacy_override.context_privacy]+' vstupů v méně chráněném cíli.';
  check.checked=false;save.disabled=true;
  return new Promise(resolve=>{
   const finish=value=>{dialog.removeEventListener('click',click);dialog.removeEventListener('cancel',cancel);check.removeEventListener('change',change);dialog.close();resolve(value);};
@@ -110,11 +113,12 @@ async function saveTaskFileEditEditor(navigate=true){
  try{
   if(!context.confirmation){
    if(!await artifactRawWidget.validate())return false;
-   const preview=await projectRequest('/v1/tasks/file-edit/preview',{project_id:project.id,task_id:context.task_id,body:artifactEditorForm.elements.body.value});
+   const classification=editorPrivacyRequest(artifactEditorForm.elements.privacy,artifactEditorOriginalPrivacy);if(!classification)return false;
+   const preview=await projectRequest('/v1/tasks/file-edit/preview',{project_id:project.id,task_id:context.task_id,body:artifactEditorForm.elements.body.value,...classification});
    if(activeProject!==project||artifactEditorTaskEdit!==context)return false;
    if(!await askTaskFileEditApproval(preview)){artifactEditorStatus.textContent='Uložení zrušeno; návrh zůstává v editoru.';return false;}
    context.confirmation={...preview.confirmation,operation_id:crypto.randomUUID()};
-   artifactEditorAttempt={file_edit:true,request:context.confirmation};artifactRawWidget.setDisabled(true);
+   artifactEditorAttempt={file_edit:true,request:context.confirmation};artifactRawWidget.setDisabled(true);artifactEditorForm.elements.privacy.disabled=true;
   }
   artifactEditorStatus.textContent='Ukládám potvrzenou úpravu vstupu…';
   const result=await projectRequest('/v1/tasks/file-edit/confirm',context.confirmation,120000);
