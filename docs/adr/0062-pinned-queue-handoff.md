@@ -157,7 +157,7 @@ způsobilým úkolem nebo důkazem přijetí původní zprávy.
 
 Crash boundaries: fronta se pouze čte pod existujícím zámkem. Nový snapshot
 mappingu a balíček se zapisují společnou bridge SQLite transakcí, která
-znovu kontroluje mapping, rodičovské připojení, HEAD a pending review. Pád
+znovu kontroluje mapping, rodičovské připojení, HEAD a prepared review. Pád
 po změně snapshotu před insertem obojí rollbackne; po commitu lze výsledek
 dohledat a další poll jej znovu nepublikuje. Nezapisuje se projektový Git,
 projektový index ani journal a není slibována atomicita s jejich souběžnou
@@ -272,7 +272,35 @@ Review obnoví plánovou část místo úplného projektu.
 Ruční předání používá existující bound mapping s již povoleným exportem;
 starší plánový HEAD jej nevyřazuje. Publikace adaptuje stávající atomickou
 obnovu snapshotu a packetu (`publish(automatic=True)`). Owner, připojení,
-exportní oprávnění, HEAD, revize fronty a pending human review se ověřují dál.
+exportní oprávnění, HEAD, revize fronty a prepared review se ověřují dál.
 Nemění se cílový repozitář ani oprávnění a nic se automaticky nepřijímá.
 Crash boundaries zůstávají podle tohoto ADR: snapshot a packet se zveřejní
 jednou bridge transakcí; neznámé projektové operace se slepě neopakují.
+
+
+### Obnova exportu při doručeném reportu — 21. 11. 2026
+
+Nevyřízený doručený report už nezadržuje nový snapshot ani generaci fronty.
+Původní zpráva a packet zůstávají neměnné, report zůstává bez lidského rozhodnutí
+v `pending_review` u položky. Nová generace jej neakceptuje ani nepřipíše
+completed flag. Pouze připravený review intent dál blokuje publikaci, dokud
+se jeho nativní operace neobnoví nebo bezpečně neuzavře.
+
+Review doručené zprávy i jeho tlačítko se ověřují proti původnímu packetu
+zprávy, nynějším oprávněním, přesnému HEAD a podmínkám úkolu. Nepoužívají
+shodu s nejnovějším packet ID nebo revizí nového snapshotu. Nové reporty
+ze starého packetu se dál odmítají. Nativní prepare používá stejný původní
+packet; dodatečná kontrola nejnovější generace by znovu vytvořila deadlock.
+
+Návaznost HEAD zahrnuje přesné přijaté nativní receipts stejného mapování,
+i když report pochází z dřívější generace: po exportu B může člověk přijmout
+report C z původního packetu. Vyžaduje se existence původního packetu,
+shoda nativního operation/commit ID a přesný rodič commitu. Libovolný jiný
+HEAD se za akceptaci nevydává. Další generace tak zachová ověřený user flag
+C bez ručního odebírání dokončené položky.
+
+Crash boundaries se nemění: snapshot a packet jsou v jediné bridge transakci,
+review má vlastní intent a nativní journal. Cílené testy zahrnují refresh před
+review, funkční review tlačítko, přijetí původní zprávy, následné flags i
+odmítnutí nového stale reportu. Oprava zdroje sama nedokládá načtení do již
+běžícího desktopového backendu.

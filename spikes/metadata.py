@@ -557,6 +557,8 @@ def _validate_snapshot(files, *, metadata_cache=None):
     from spikes.reference_schema import references, shares
     references(files, entities)
     shares(files, entities)
+    from spikes.task_record_schema import records as task_records
+    task_records(files, entities)
     return entities
 
 
@@ -575,6 +577,8 @@ def _validate_transition(base_files, candidate_files, base, candidate, *,
     immutable_transition(base_files, candidate_files, base, candidate, _record_cache=_record_cache)
     from spikes.reference_schema import transition
     transition(base_files, candidate_files, base, candidate)
+    from spikes.task_record_schema import transition as task_record_transition
+    task_record_transition(base_files, candidate_files, base, candidate)
     privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
     immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file',
                  'generation', 'computation')

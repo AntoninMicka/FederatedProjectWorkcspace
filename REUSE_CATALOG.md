@@ -5,6 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Obnova task-work F **adaptuje** původní `TaskActivities.finish` a lokální
+finalizaci `TaskRecords`; **reuse:** `Workspace.receipt`, validovaný Git
+snapshot, `ChatThreads.get_turn`, capability a nativní operační zámky.
+Request-local observer před `Workspace.transact` uloží pouze otisk skutečného
+nativního požadavku; nezakládá druhý journal. **Reject:** opakování provideru,
+úspěch podle samotného UUID, automatické potvrzení nabídky a nový projektový
+commit během čtení stavu. Rozsah a hranice: [ADR 0088](docs/adr/0088-task-work-context.md).
+
 Oprava souběhu IDE discovery **adaptuje** existující action-based HTTP/browser
 admission a transport rozšíření. **Reuse:** `Projects.plan_view`, nativní
 projektové/SQLite zámky, původní kontrola credentials a přesný pre-dispatch
@@ -146,6 +154,65 @@ Zahajitelnost závislých úkolů **adaptuje** stejný graf, `assess`, přesuny 
 náhled odebrání referencí i `progress` review. Čistý sdílený výpočet odděluje
 zahájení od potvrzení dokončení. **Reject:** vlastní pravidla jen v IDE,
 automatické zaškrtávání vyřešených předpokladů a druhé úložiště stavů.
+
+Pracovní kontext úkolu (`PLAN-TASK-WORK-01-A/B/C/D`, implementované řezy)
+**reuse/adaptuje** `Projects.plan_view`, `dependency_start_blockers`, scoped
+`PlanItems`, nativní Workspace journal a stejnou sémantiku progress zápisu
+původně v `ide_bridge_panel._changes`. Lokální identita okna/relace je oddělená od
+projektového stavu. `TaskWork` používá existující SQLite ownership helpery
+a nativní transakci; `plan_progress.mark_in_progress` sdílí přesnou úpravu
+bloku s IDE bridge, bez kopírování writeru či falešné IDE session.
+Pravý panel B adaptuje existující `renderMarkdown`, stavové badge, guards
+neuloženého editoru a lifecycle API. Výběr checklistu používá stejný lokální
+CAS/replay store; nevzniká druhý writer splnění ani nový renderer.
+Evidence C adaptuje tabulku operací TaskWork pomocí typovaných záznamů,
+stabilních event UUID a původních nativních receiptů. Sdílený HTTP wrapper
+připojuje kontext před účinkem; NDJSON zachovává jeden event pro celý běh.
+Nový writer artefaktů, druhý run journal a ukládání kopií textů jsou odmítnuté.
+Záznamy D adaptují tentýž lokální store, operation flock, sidecar artefakty,
+`Workspace.transact` a omezený `artifact_preview`. Samostatný JSON kontrakt
+používá existující snapshot/transition validaci a zachovává historii revizí.
+Nový projektový writer, kopie výsledků do roadmapy a druhý task store jsou
+odmítnuté. Nabídka zůstává oddělená od potvrzeného Git artefaktu i task acceptance.
+Potvrzený zápis do textu úkolu **adaptuje** stejný `TaskRecords.run`, scoped
+`item_span` a jedinou Workspace transakci pro text, sidecar a record JSON.
+**Reject:** zápis bez potvrzení, kopírování obsahu výsledků a samostatný writer.
+Přesná projekce validovaného záznamu nemění pracovní signature zadání;
+ručně přidaný marker tuto výjimku nezískává. Recovery popisuje ADR 0088.
+Připojení existujícího artefaktu **adaptuje** validovaný projektový snapshot,
+`TaskRecords.run`, stejný potvrzovací tok a `artifact_preview`. Server odvozuje
+output pin z uložených bajtů; událost má vlastní druh `artifact-attach`.
+**Reject:** falešná save činnost, kopie souboru a druhý writer příloh. Hranice
+pádu zůstávají v původním D a jsou upřesněné v ADR 0088.
+Odkazy příloh mezi projekty **reuse/adaptují** `CrossReferences.resolve_input`,
+živé granty ADR 0086 a existující `openAttachDialog`. Záznam drží původní pin
+místního deskriptoru; skutečný obsah a efektivní privacy určuje resolver.
+Renderer přebírá source project ID. **Reject:** druhé URI schéma, prosté cizí
+UUID interpretované v cílovém projektu, kopie podkladu a obcházení sdílení.
+HTTP(S) odkazy používají inertní DOM a uživatelskou Qt navigační událost.
+Řez E **adaptuje** scoped `TaskWork._pin`, původní checklist a explicitní
+rozepsanou zprávu. Stávající Context Manifest zahrne přesné bajty jako ad-hoc
+vstup s privacy; HTTP activity wrapper ověří digest a zdrojové oprávnění před
+dispatchem. `ChatRecords` zůstává autoritou file/thread/turn/run/manifest
+provenance. Připojení výsledku přebírá jen doložená ID z tohoto native výstupu.
+**Reject:** automatické přidání celého plánu, druhý task/run store, spuštění
+modelu při přípravě zadání a nový pokus po unknown. Kontrakt: ADR 0088.
+Oprava restartu adaptuje existující vlastněné relace a autentizaci pomocí
+readonly historie a explicitního CAS převzetí; neukládá další plaintext
+credential ani nezavádí persistentní browser profil. Přímé lidské dokončení
+reuse/adaptuje čistý formatter `ide_bridge_panel._changes` a stejný TaskWork
+intent/native writer/recovery. Fake IDE report a automatické zaškrtnutí
+checklistu jsou odmítnuté.
+Roadmapa reuse/adaptuje stejný renderer potvrzených záznamů, validovaný Git
+kontrakt, native receipt/diff piny a `artifact_preview`. Read-only projekce podle
+projektu/tasku nevyžaduje aktivní relaci; vlastní lokální evidence zůstává
+oddělená a její nedostupnost nezakrývá Git záznamy. Nové kopie souborů, task
+store, zápisové API nebo automatické převzetí okna jsou odmítnuté.
+Pro E/F se přebírají ContextBuilder, chat/run journal a TaskOutcomes jako
+autority jednotlivých účinků. **Reject:** druhý plán/stav dokončení, falešná
+IDE session pro přímý UI start, připsání pozdního výsledku aktuálně vybranému
+tasku a automatické zahájení při synchronizaci. Kontrakt, hranice pádu a rozdíl
+návrhu od implementace: [ADR 0088](docs/adr/0088-task-work-context.md).
 
 Stavy plánu a SUM (`NEW-B7B56C4A0B-TASK-1`) **adaptují** `task_graph.py`,
 scoped `PlanItems.save`, sdílený desktop/web shell a projekce obou front.

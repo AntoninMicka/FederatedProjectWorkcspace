@@ -76,14 +76,14 @@ class QueuePacketTests(unittest.TestCase):
         self.assertEqual(packet['manifest']['session_id'],self.record['session_id'])
         self.assertEqual(Projects(self.node).repository(self.project).head(),self.head)
 
-    def test_http_publish_never_refreshes_over_pending_human_review(self):
+    def test_http_publish_refreshes_export_without_accepting_pending_human_report(self):
         packet=self.packet();self.send(self.message(packet))
         self.head=self.save(self.body+'- [ ] [TASK-04] New unrelated task\n')
         request=self.request|dict(expected_head=self.head,queue_revision=self.qstatus()['revision'])
         code,result=self.http_publish(request)
-        self.assertEqual(code,422,result)
-        self.assertIn('human review',result['error'])
-        self.assertEqual(load(self.service,self.record['session_id'])['packet_id'],packet['packet_id'])
+        self.assertEqual(code,200,result)
+        self.assertNotEqual(load(self.service,self.record['session_id'])['packet_id'],packet['packet_id'])
+        with self.service.database() as db:self.assertIsNone(db.execute('SELECT 1 FROM reviews').fetchone())
         self.assertEqual(Projects(self.node).repository(self.project).head(),self.head)
     def message(self,packet,task='TASK-01'):
         return dict(message_id=str(uuid4()),task_id=task,kind='completed',body='Implemented and inspected.',
@@ -237,21 +237,23 @@ class QueuePacketTests(unittest.TestCase):
         self.assertTrue(items[0]['user_confirmed']);self.assertFalse(items[1]['user_confirmed'])
         self.assertEqual('accepted',items[0]['reports'][0]['outcome']);self.assertFalse(items[0]['reports'][0]['acceptable'])
 
-    def test_queue_selection_change_does_not_deadlock_durable_report_review(self):
+    def test_queue_selection_refresh_preserves_review_of_durable_superseded_report(self):
         packet = self.packet(); message = self.message(packet); self.send(message)
         preview = self.act('remove-single-preview', 'TASK-03')
         self.act('remove-single', 'TASK-03', preview_sha256=preview['preview_sha256'])
         waiting = self.poll()
-        self.assertIn('human review', waiting['queue_refresh_error'])
-        self.assertEqual('waiting_review', waiting['queue_refresh_state'])  # typed state, K6
+        self.assertIsNone(waiting['queue_refresh_error'])
+        self.assertIsNone(waiting['queue_refresh_state'])
+        self.assertNotEqual(packet['packet_id'],load(self.service,self.record['session_id'])['packet_id'])
         self.assertTrue(self.qstatus()['items'][0]['reports'][0]['acceptable'])
-        with self.assertRaisesRegex(ValueError, 'Working queue changed') as stale:
+        with self.assertRaisesRegex(ValueError, 'Working queue changed|Packet superseded|Wrong source revision') as stale:
             self.send(self.message(packet))
         self.assertEqual('stale_report', stale.exception.code)
         self.assertEqual('accepted', self.review(message)['outcome'])
         settled = self.poll()
         self.assertIsNone(settled['queue_refresh_error']); self.assertIsNone(settled['queue_refresh_state'])
         self.assertEqual(['TASK-01', 'TASK-02'], self.qstatus()['task_ids'])
+        self.assertTrue(status(self.service,self.record)['items'][0]['user_confirmed'])
 
     def test_prepared_review_survives_selection_change_before_native_write(self):
         packet = self.packet(); message = self.message(packet); self.send(message)
@@ -634,8 +636,8 @@ assert.ok(!q.startable(null,'A'));
     def test_refresh_preserves_review_and_verified_acceptance_across_generations(self):
         packet = self.packet(); message = self.message(packet); self.send(message)
         self.head = self.save(self.body.replace('Third', 'Changed third'))
-        self.assertIn('human review', self.poll()['queue_refresh_error'])
-        self.assertEqual(packet, load(self.service, self.record['session_id']))
+        self.assertIsNone(self.poll()['queue_refresh_error'])
+        self.assertNotEqual(packet['packet_id'], load(self.service, self.record['session_id'])['packet_id'])
         self.review(message, decision='rejected')
         self.assertIsNone(self.poll()['queue_refresh_error'])
         self.poll(); current = load(self.service, self.record['session_id'])
@@ -676,9 +678,11 @@ assert.ok(!q.startable(null,'A'));
     def test_review_blocker_identifies_task_and_message(self):
         packet = self.packet(); message = self.message(packet); self.send(message)
         self.head = self.save(self.body.replace('Third', 'Changed third'))
-        reason = self.poll()['queue_refresh_error']
-        self.assertIn(message['task_id'], reason)
-        self.assertIn(message['message_id'], reason)
+        result=self.poll();self.assertIsNone(result['queue_refresh_error'])
+        current=load(self.service,self.record['session_id'])
+        value=status(self.service,self.record,current)
+        self.assertEqual(value['items'][0]['pending_review'][0]['message_id'],message['message_id'])
+        self.assertEqual(load(self.service,self.record['session_id'],packet['packet_id']),packet)
 
     def test_human_acceptance_is_reflected_by_next_idle_poll_without_stale_snapshot(self):
         packet = self.packet(); message = self.message(packet); self.send(message)

@@ -2388,7 +2388,7 @@ async function projectRequest(path,body,timeout=60000){
   path==='/v1/google-drive/status' || path.startsWith('/v1/backend-metrics/');
  try{
   let response,result;
-  try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+  try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(typeof taskWorkActivityHeaders==='function'?taskWorkActivityHeaders(path,body):{})},
    body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
    result=await response.json();
   }catch(error){if(error?.phase==='admission'||error?.phase==='transport')throw error;
@@ -2402,7 +2402,7 @@ async function projectRequest(path,body,timeout=60000){
    error.status=response.status;error.diagnostic=result.diagnostic;
    error.outcome=result.outcome;error.retry=result.retry;throw error;}
   return result;
- }finally{if(!monitorRequest)scheduleBackendStateRefresh();}
+ }finally{if(!monitorRequest)scheduleBackendStateRefresh();if(typeof taskWorkActivityFinished==='function')taskWorkActivityFinished(path);}
 }
 const sourceImportForm=document.querySelector('#source-import-form');
 const sourceImportStatus=document.querySelector('#source-import-status');
@@ -2795,6 +2795,13 @@ async function openPlanItemEditor(task){
  planEditorReturn=capturePlanPosition();
  const project=activeProject,item={id:task.source.artifact_id,kind:'document',planItem:true};artifactEditorItem=item;
  try{
+  const view=await projectRequest('/v1/projects/open',{project_id:project.id,scope:'plan'});
+  if(activeProject!==project||artifactEditorItem!==item)return;
+  if(view.read_only)throw Error('Projekt je pouze pro čtení.');
+  project.head=view.commit_id;installTaskPlanViews(view);
+  const current=taskPlanProjection?.nodes.find(node=>node.id===task.id);
+  if(!current?.source?.artifact_id)throw Error('Položka již není v aktuálním plánu.');
+  task=current;item.id=current.source.artifact_id;
   const result=await projectRequest('/v1/artifacts/editor/plan-item/open',{project_id:project.id,artifact_id:item.id,task_id:task.id,expected_head:project.head});
   if(activeProject!==project||artifactEditorItem!==item)return;
   item.planItem=result;hideArtifactDeletion();fillArtifactEditor({title:result.title,body:result.body},false,{rawOnly:true});
@@ -4514,6 +4521,7 @@ function showTaskPlanDetail(item){
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
  const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;planDetailId=null;document.querySelector('#plan-graph').focus();});detail.append(close);
  if(!item.checked){const add=document.createElement('button'),message=document.createElement('p'),reason=planQueueAddBlocker(item);add.type='button';add.textContent='Přidat do fronty';add.dataset.planAdd=item.id;add.disabled=Boolean(reason);add.title=reason;message.id='plan-queue-add-reason';message.setAttribute('role','status');message.textContent=reason;add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add,message);}
+ if(typeof appendTaskWorkStart==='function')appendTaskWorkStart(detail,item);
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title,planStatusBadge(item));
  if(taskPlanProjection?.profile==='software-development/v1'&&['batch','milestone'].includes(item.type)){const children=taskPlanProjection.nodes.filter(node=>node.parent_id===item.id),open=document.createElement('button');open.type='button';open.dataset.planOpenChildren=item.id;open.textContent=(item.type==='batch'?'Zobrazit úkoly':'Zobrazit dávky')+' ('+children.length+')';open.addEventListener('click',()=>openTaskPlan({kind:item.type,id:item.id,parent_id:item.parent_id,title:item.title}));detail.append(open);}
  if(item.parent_id){const up=document.createElement('button');up.type='button';up.dataset.planParent=item.parent_id;up.textContent='O úroveň výš · '+item.parent_id;up.addEventListener('click',()=>openTaskPlan(planParentSelection(item)));detail.append(up);}
@@ -4522,6 +4530,7 @@ function showTaskPlanDetail(item){
  for(const [name,value] of [['Typ',item.type||'obecný uzel'],['Popis',item.description||'bez popisu'],['Podmínky splnění',checklist||'bez samostatných podmínek'],['Nadřazená položka',item.parent_id||'kořen'],['Stav',(item.status_mode==='sum'?'SUM · ':'')+planStatusLabels[planStatus(item)]],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Další vztahy',relations.join(', ')||'žádné'],['Kritická cesta',item.critical?'ano':'ne']]){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;if(name==='Popis')renderPlanDescription(description,item);else appendProjectArtifactLinks(description,value);list.append(term,description);}detail.append(list);appendPlanChildren(detail,item);
  if(activeProject&&!activeProject.readOnly&&item.source?.artifact_id){const edit=document.createElement('button');edit.type='button';edit.textContent='Upravit tuto položku';edit.addEventListener('click',()=>openPlanItemEditor(item));detail.append(edit);appendPlanItemActions(detail,item);}
  if(item.source?.artifact_id){const open=document.createElement('button');open.type='button';open.textContent='Otevřít zdrojový seznam';open.addEventListener('click',()=>openPreview(item.source.artifact_id));detail.append(open);}
+ if(typeof appendTaskPlanRecords==='function')appendTaskPlanRecords(detail,item);
 }
 function planDependencyPicker(selected,excluded){
  const root=document.createElement('fieldset'),legend=document.createElement('legend'),filter=document.createElement('input'),list=document.createElement('select');
@@ -4670,7 +4679,7 @@ function updateTaskPlanTreeSelection(queueOpen=false){for(const button of docume
 async function openTaskPlan(selection=null){if(!activeProject||!await canLeaveWorkspaceEditors())return false;if(document.body?.dataset?.runtime==='desktop'){try{const view=await projectRequest('/v1/projects/open',{project_id:activeProject.id});if(view.commit_id!==activeProject.head)throw Error('Projekt se změnil; otevřete jej znovu.');installTaskPlanViews(view);if(view.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=view.plan_draft_error;}catch(error){document.querySelector('#plan-status').textContent=error.message;return false;}}showWorkspacePage(projectView);selectSidebarTab(document.querySelector('#plan-tab'));taskPlanSelection=selection;document.querySelector('#plan-detail').hidden=true;updateTaskPlanTreeSelection();selectMainTab(document.querySelector('#plan-main-tab'));renderTaskPlan();loadTaskQueue();return true;}
 async function openTaskQueue(){if(!await canLeaveWorkspaceEditors())return;selectSidebarTab(document.querySelector('#assigned-queue-tab'));showWorkspacePage(document.querySelector('#assigned-queue-view'));closeMobileSidebar();closeCompactSidebarMenu();await loadOwnerQueue();if(activeProject)await loadTaskQueue();}
 document.querySelector('#open-task-queue').addEventListener('click',openTaskQueue);
-function installTaskPlanViews(result,options){renderTaskPlanSidebar(result.plan,options);}
+function installTaskPlanViews(result,options){renderTaskPlanSidebar(result.plan,options);if(typeof scheduleTaskWorkRefresh==='function')scheduleTaskWorkRefresh();}
 function renderTaskPlanSidebar(value,{loadQueue=true,renderGraph=true}={}){
  if(loadQueue){taskQueueView=null;loadTaskQueue();}
  taskPlanProjection=value;taskPlanSelection=null;const hierarchy=document.querySelector('#sidebar-plan-hierarchy'),list=document.querySelector('#sidebar-plan-list'),status=document.querySelector('#sidebar-plan-status');hierarchy.replaceChildren();list.replaceChildren();document.querySelector('#plan-subgraphs').hidden=!value?.subgraphs?.length;document.querySelector('#plan-detail').hidden=true;
@@ -4991,14 +5000,25 @@ document.querySelector('#artifact-git-confirm').addEventListener('click',commitP
 document.querySelector('#artifact-git-close').addEventListener('click',()=>document.querySelector('#artifact-git-dialog').close());
 artifactEditorForm.addEventListener('input',syncArtifactGitButtons);
 function addConflictLineClasses(element,lineClasses,index){for(const name of lineClasses?.get(index)||[])element.classList.add(name);}
-function appendProjectArtifactLinks(target,text){
- const links=/\\[([^\\]\\n]+)\\]\\((artifacts\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\/[^\\s()?#]+)\\)/g;
+function appendProjectArtifactLinks(target,text,projectId=activeProject?.id){
+ const links=/\\[((?:\\\\.|[^\\]\\\\\\n])+)\\]\\((artifacts\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\/[^()\\n]+|https?:\\/\\/[^\\s()]+)\\)/g;
  let offset=0;for(const match of String(text).matchAll(links)){
   target.append(document.createTextNode(text.slice(offset,match.index)));
-  const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=match[1];button.title='Otevřít projektový podklad';button.addEventListener('click',()=>openPreview(match[3]));target.append(button);offset=match.index+match[0].length;
+  const label=match[1].replace(/\\\\([\\\\`*_{}\\[\\]()<>!|])/g,'$1');
+  if(match[3]){
+   const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=label;button.title='Otevřít podklad ve zdrojovém projektu';button.addEventListener('click',()=>openLinkedProjectArtifact(projectId,match[3]));target.append(button);
+  }else{
+   const link=document.createElement('a');link.textContent=label;link.href=match[2];link.target='_blank';link.rel='noopener noreferrer';target.append(link);
+  }
+  offset=match.index+match[0].length;
  }target.append(document.createTextNode(text.slice(offset)));
 }
-function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false){
+async function openLinkedProjectArtifact(projectId,artifactId){
+ if(!projectId||activeProject?.id===projectId)return openPreview(artifactId);
+ await openRegisteredProject(projectId);
+ if(activeProject?.id===projectId)return openPreview(artifactId);
+}
+function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false,linkProjectId=activeProject?.id){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
  let fence=null,code=null,lists=[],lineIndex=0;
  for(const line of text.split('\\n')){
@@ -5018,13 +5038,13 @@ function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLink
    if(!lists.length||lists.at(-1).indent<indent){
     const list=document.createElement('ul');(lists.at(-1)?.item||target).append(list);lists.push({indent,list,item:null});
    }
-   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2]);else item.textContent=bullet[2];
+   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2],linkProjectId);else item.textContent=bullet[2];
    addConflictLineClasses(item,lineClasses,lineIndex);lists.at(-1).list.append(item);lists.at(-1).item=item;lineIndex++;continue;
   }
   // A blank line separates list paragraphs, not the batch from its children.
   if(!line.trim()){lineIndex++;continue;}
   lists=[];const element=document.createElement(heading?'h'+heading[1].length:'p');
-  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
+  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line,linkProjectId);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
  }
 }
 const projectConflicts=document.querySelector('#project-conflicts');
@@ -5241,6 +5261,7 @@ async function saveConflictEditor(navigate=true){
 }
 projectConflictPublish.addEventListener('click',()=>{if(projectConflictConfirm.checked)saveConflictEditor();});
 async function openPreview(id,page=1){
+ if(activeProject&&currentArtifacts.some(item=>item.id===id&&item.sharing==='reference'))return openSharedReference(id);
  if(!activeProject||!await canLeaveWorkspaceEditors())return;
  showWorkspacePage(projectView);
  const project=activeProject;
@@ -5251,6 +5272,8 @@ async function openPreview(id,page=1){
  try{
   const result=await projectRequest('/v1/artifacts/preview',{
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
+  if(request!==previewRequest||activeProject!==project)return;
+  if(result.metadata.tags?.some(tag=>/^fpw-artifact-reference-v[0-9]+$/.test(tag)))return openSharedReference(id);
   const gitState=await loadArtifactGitState(project,id,page);if(gitState?.working_preview)Object.assign(result,gitState.working_preview);if(gitState?.notice)result.message=(result.message||'')+' '+gitState.notice;if(gitState?.can_commit&&gitState.working_after_stage)result.message=(result.message||'')+' Stage obsahuje jinou verzi než soubor na disku; Commit použije staged verzi.';
   if(request!==previewRequest || activeProject!==project)return;
   selectedPreviewMetadata={...result.metadata,id};document.querySelector('#preview-title').textContent=result.metadata.title;document.querySelector('#preview-panel').dataset.fileFormat=result.format;
@@ -5608,7 +5631,7 @@ function threadWritable(){return !activeThread || (activeThread.status==='active
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
 async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=>{}){
  const response=await fetch(path,{method:'POST',
-  headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
+  headers:{'Content-Type':'application/json',...(typeof taskWorkActivityHeaders==='function'?taskWorkActivityHeaders(path,request):{})},body:JSON.stringify(request)});
  if(!response.ok){let value;try{value=await response.json();}catch(error){throw Object.assign(new Error('Odpověď streamu nelze potvrdit; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});}
   throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,phase:'response'});}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
@@ -5625,7 +5648,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
  }catch(error){if(error.status!==undefined)throw error;
   throw Object.assign(new Error('Stream skončil bez potvrzeného výsledku; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});
- }finally{reader.releaseLock();}
+ }finally{reader.releaseLock();if(typeof taskWorkActivityFinished==='function')taskWorkActivityFinished(path);}
 }
 async function externalStreamRequest(request,onDelta){
  return streamRequest('/v1/external/send-stream',request,onDelta);
@@ -5762,6 +5785,7 @@ function buildChatTimeline(thread,projections,workflows=[]){
 }
 function renderThreadMessage(item,thread){
   const message=document.createElement('div');message.className='chat-message '+item.role;
+  message.dataset.messageId=item.message_id;
   message.textContent=item.content;
   const turn=(thread?.turns || []).find(value=>value.assistant_message_id===item.message_id);
   const languageDetail=turn?.response_language ?
@@ -8411,7 +8435,12 @@ HTML = HTML.replace('<div id="sidebar-projects"', '<div id="sidebar-sources" rol
 HTML = HTML.replace('<main>', '<main>'+SOURCES_HTML, 1)
 CSS += SOURCES_CSS
 JS = SOURCES_JS + JS
-JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + PAGE_LAYOUT_JS
+from spikes.task_work_ui import TASK_WORK_HTML, TASK_WORK_CSS, TASK_WORK_JS
+HTML = HTML.replace('</main>', '</main>'+TASK_WORK_HTML, 1)
+CSS += TASK_WORK_CSS
+from spikes.task_record_roadmap_ui import JS as TASK_RECORD_ROADMAP_JS
+JS += TASK_RECORD_ROADMAP_JS
+JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
@@ -8527,7 +8556,7 @@ class DesktopHandler(Handler):
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
         '/v1/document-patterns',
-        '/v1/roadmap/graph', '/v1/task-queue', '/v1/ide-queue/publish',
+        '/v1/roadmap/graph', '/v1/task-queue', '/v1/task-work', '/v1/ide-queue/publish',
         '/v1/roadmap-refinement/list', '/v1/roadmap-refinement/detail',
         '/v1/roadmap-refinement/decide', '/v1/roadmap-refinement/decide-all',
         '/v1/roadmap-refinement/reconcile/preview', '/v1/roadmap-refinement/apply',
@@ -8702,7 +8731,70 @@ class DesktopHandler(Handler):
     def request_owner_id(self):
         return None
 
+    def task_work_service(self):
+        from spikes.task_work import TaskWork
+        network = getattr(self.server.projects, 'network', False)
+        actor = getattr(self, 'actor', {}) or {}
+        return TaskWork(self.server.projects.node_path, actor.get('id'), network=network,
+            chat_state_dir=self.server.chat_service.state_dir,
+            can_read=(lambda pid: self.server.administration.allowed(self.actor, pid)) if network else None,
+            can_write=self._can_write if network else None)
+
+    def finish_task_activity(self, code, payload):
+        activity = getattr(self, '_task_activity', None)
+        if activity:
+            # Clear before finalization: an error reply must not re-enter the recorder.
+            self._task_activity = None
+            service, identifier = activity
+            try:
+                service.finish(identifier, code, payload)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                # The native receipt remains authoritative; its successful response
+                # must not become a retry invitation because bookkeeping failed.
+                import logging
+                logging.getLogger(__name__).warning('task_activity_finalization_unknown event_id=%s', identifier)
+
+    def send_error(self, code, message=None, explain=None):
+        self.finish_task_activity(code, {'outcome': 'unknown' if code == 409 else 'failed'})
+        return super().send_error(code, message, explain)
+
+    def reply(self, code, payload):
+        self.finish_task_activity(code, payload)
+        return super().reply(code, payload)
+
     def dispatch(self, request):
+        return self.dispatch_task_activity(request, self.dispatch_workspace)
+
+    def dispatch_task_activity(self, request, dispatch):
+        from spikes.task_activities import TaskActivities, ROUTES
+        self._task_activity = None
+        header = self.single('X-FPW-Task-Work')
+        if header and self.path in ROUTES:
+            try:
+                envelope = json.loads(header)
+                required={'window_id','window_token','context_revision'}
+                if not isinstance(envelope, dict) or not required<=set(envelope)<=required|{'task_input_sha256'}:
+                    raise ValueError('Invalid task activity context')
+                service = TaskActivities(self.task_work_service())
+                handle = {k: envelope[k] for k in ('window_id', 'window_token')}
+                identifier = service.begin(handle, envelope['context_revision'], self.path, request)
+                self._task_activity = (service, identifier)
+                from spikes.task_analysis import BEGIN,validate_input
+                if 'task_input_sha256' in envelope or (isinstance(request.get('content'),str) and BEGIN in request['content']):
+                    validate_input(service,identifier,request,envelope.get('task_input_sha256'))
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, PendingOperation) as exc:
+                return self.reply(422, {'error': str(exc), 'outcome': 'not-started', 'retry': 'read-context'})
+        try:
+            if self._task_activity:
+                service,identifier=self._task_activity
+                with service.observe(identifier):
+                    return dispatch(request)
+            return dispatch(request)
+        finally:
+            # A crash/uncaught exception/stream disconnect leaves the durable unknown intent.
+            self._task_activity = None
+
+    def dispatch_workspace(self, request):
         if self.path.startswith('/v1/x-sources/'):
             if hasattr(self,'actor') and not self.server.administration.is_admin(self.actor):return self.send_error(403)
             from spikes.x_connector import XService
@@ -8938,6 +9030,18 @@ class DesktopHandler(Handler):
                 return self.reply(200, publish(IdeBridge(self.server.projects.node_path, network=getattr(self.server.projects, 'network', False)), getattr(self, 'actor', None), request, automatic=True))
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
                 return self.reply(422, {'error': str(exc)})
+        if self.path == '/v1/task-work':
+            try:
+                from spikes.administration import AccessDenied
+                service = self.task_work_service()
+                if isinstance(request,dict) and str(request.get('action','')).startswith('record-'):
+                    from spikes.task_records import TaskRecords
+                    return self.reply(200,TaskRecords(service).execute(request))
+                return self.reply(200, service.execute(request))
+            except AccessDenied as exc:
+                return self.reply(403, {'error': str(exc)})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, PendingOperation) as exc:
+                return self.reply(422, {'error': str(exc), 'retry': 'read-context'})
         if self.path == '/v1/task-queue':
             try:
                 from spikes.task_queue import TaskQueue
@@ -9395,6 +9499,10 @@ class DesktopHandler(Handler):
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 def emit(value):
+                    if value.get('type') == 'result':
+                        self.finish_task_activity(200, value.get('result'))
+                    elif value.get('type') == 'error':
+                        self.finish_task_activity(value.get('status', 500), dict(value, outcome='unknown') if value.get('status') == 409 else value)
                     self.wfile.write(json.dumps(value, ensure_ascii=False,
                         separators=(',', ':')).encode() + b'\n'); self.wfile.flush()
                 def emit_error(status, message):
@@ -9509,6 +9617,10 @@ class DesktopHandler(Handler):
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 def emit(value):
+                    if value.get('type') == 'result':
+                        self.finish_task_activity(200, value.get('result'))
+                    elif value.get('type') == 'error':
+                        self.finish_task_activity(value.get('status', 500), dict(value, outcome='unknown') if value.get('status') == 409 else value)
                     self.wfile.write(json.dumps(value, ensure_ascii=False,
                         separators=(',', ':')).encode() + b'\n'); self.wfile.flush()
                 def emit_error(status, message):

@@ -255,6 +255,10 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
         if self.path == '/v1/ide-queue/publish':
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')): return self.send_error(403)
             return super().dispatch(request)
+        if self.path == '/v1/task-work':
+            # Window ownership is authenticated here; project rights are checked
+            # from the stored session as well as the requested target by TaskWork.
+            return super().dispatch(request)
         if self.path == '/v1/task-queue':
             if not isinstance(request, dict): return self.send_error(400)
             if request.get('action') == 'owner-status':
@@ -508,7 +512,7 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
                 return self.send_error(403)
             return super().dispatch(request)
         if self.path == '/v1/sources/import':
-            return self._import_source(request)
+            return self.dispatch_task_activity(request, self._import_source)
         # Desktop calls retain the node-local author. Network requests bind the
         # authenticated account only for this request, including streamed chat.
         project_ids = ({item['id'] for item in self.server.projects.catalog()}

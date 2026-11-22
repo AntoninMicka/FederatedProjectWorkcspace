@@ -14,7 +14,7 @@ import unittest
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from spikes.desktop import (google_authorization_url, native_action_name, native_action_request, notebooklm_target_error,
+from spikes.desktop import (external_link_url, google_authorization_url, native_action_name, native_action_request, notebooklm_target_error,
                             presentation_pdf_js_request, presentation_pdf_paths, provider_key_url,
                             publish_presentation_pdf,
                             repairable_target_mode, request_policy)
@@ -1282,6 +1282,22 @@ async function projectRequest(url){
         ]:
             with self.subTest(url=url, initiator=initiator):
                 self.assertEqual(request_policy(url, initiator, method, origin), 'block')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST')=='1','Requires Qt/WebEngine')
+    def test_clicked_external_link_opens_system_browser_without_workspace_navigation(self):
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,str(root/'tests/ui/desktop_external_link_smoke.py')],
+            cwd=root,env={**os.environ,'PYTHONPATH':str(root)},capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('desktop external link browser OK',result.stdout)
+
+    def test_external_links_require_user_click_and_http_without_credentials(self):
+        for value in ['https://example.com/path?q=one#part','http://example.com/']:
+            self.assertEqual(external_link_url(value,True),value)
+            self.assertIsNone(external_link_url(value,False))
+        for value in ['javascript:alert(1)','file:///etc/passwd','data:text/html,bad',
+                      'https://user:secret@example.com/','https://','https://example.com/\n']:
+            self.assertIsNone(external_link_url(value,True))
 
     def test_provider_key_onboarding_uses_only_exact_system_browser_url(self):
         approved = 'https://platform.openai.com/api-keys'

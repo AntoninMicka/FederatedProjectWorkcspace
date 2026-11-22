@@ -268,28 +268,8 @@ def _changes(files, project_id, head, message):
                 lines.insert(index+1, indent+'  - status: sum'+(newline if terminated else ''))
         candidate[path] = prefix + ''.join(lines).encode()
     if message['kind'] == 'progress' and task.get('status_mode') != 'sum':
-        # Reuse the exact scoped block; no additional persistent status store.
-        from spikes.plan_item_editor import item_span, _fence_after
-        from spikes.task_graph import RELATION
-        body = ''.join(lines)
-        start, end = item_span(body, task['id'])
-        block = body[start:end].splitlines(keepends=True)
-        newline = '\r\n' if block[0].endswith('\r\n') else '\n'
-        fence, found = None, False
-        for index in range(1, len(block)):
-            visible = fence is None
-            fence = _fence_after(block[index], fence)
-            relation = RELATION.match(block[index].rstrip('\r\n')) if visible and fence is None else None
-            if relation and relation[2].strip().lower() == 'status':
-                ending = newline if block[index].endswith(('\n', '\r')) else ''
-                block[index] = relation[1]+'- status: in progress'+ending
-                found = True
-        if not found:
-            terminated = block[0].endswith(('\n', '\r'))
-            if not terminated: block[0] += newline
-            indent = re.match(r'^\s*', block[0])[0]
-            block.insert(1, indent+'  - status: in progress'+(newline if terminated else ''))
-        candidate[path] = prefix + (body[:start]+''.join(block)+body[end:]).encode()
+        from spikes.plan_progress import mark_in_progress
+        candidate[path] = prefix + mark_in_progress(''.join(lines), task['id']).encode()
     validate_transition(files, candidate)
     require(project_task_graph(candidate, validate_snapshot(candidate), project_id, head)['status'] == 'ready',
             'Review produces invalid task graph')
@@ -380,8 +360,11 @@ def review(service, actor, request, *, checkpoint=lambda stage: None):
             authorize(service, record)
             from spikes.ide_queue import validate_completion
             validate_completion(service, record, message, current_head=view['commit_id'])
+            from spikes.ide_queue import load as load_packet
+            packet=load_packet(service,record['session_id'],message['queue_packet_id']) if message.get('queue_packet_id') else None
+            review_revision=packet['manifest']['revision'] if packet else record['snapshot']['revision']
             require((message.get('queue_packet_id') or record['snapshot']['commit_id'] == view['commit_id'])
-                    and message['revision'] == record['snapshot']['revision'],
+                    and message['revision'] == review_revision,
                     'Stale proposal must be reviewed again')
             require(_changes(workspace.git.snapshot(view['commit_id']), request['project_id'],
                              view['commit_id'], message), 'Proposal produces no project change')

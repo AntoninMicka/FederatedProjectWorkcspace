@@ -519,20 +519,28 @@ const crypto={randomUUID:()=>String(calls.length)};
 function resetTaskFileEditEditor(){}function artifactEditorState(){return artifactEditorForm.elements.body.value;}function configureTaskPlanEditor(){}
 function configurePlanStatusEditor(){}function hideArtifactDeletion(){}function showWorkspacePage(v){v.hidden=false;}async function canLeaveWorkspaceEditors(){return allow;}
 const model={project_id:'p',artifact_id:'a',task_id:'TASK-01',expected_head:'h',fragment_sha256:'digest',body:'one item',title:'Title'};
-async function projectRequest(path,request){calls.push({path,request});if(path.endsWith('/open'))return model;if(failed)throw Error('unknown');return {project_id:'p',commit_id:'new'};}
+function installTaskPlanViews(view){taskPlanProjection=view.plan;}
+async function projectRequest(path,request){calls.push({path,request});if(path==='/v1/projects/open')return {commit_id:'fresh',plan:{nodes:[{id:'TASK-01',source:{artifact_id:'moved'}}]}};if(path.endsWith('/open')){assert.equal(request.expected_head,'fresh');assert.equal(request.artifact_id,'moved');return {...model,artifact_id:'moved',expected_head:'fresh'};}if(failed)throw Error('unknown');return {project_id:'p',commit_id:'new'};}
 '''
         checks = r'''
 (async()=>{
 const task={id:'TASK-01',source:{artifact_id:'a'}};
 await openPlanItemEditor(task);assert.equal(calls.length,0,'dirty guard cancellation');
-allow=true;await openPlanItemEditor(task);assert.equal(calls.length,1);assert.equal(artifactEditorForm.elements.body.value,'one item');
+allow=true;await openPlanItemEditor(task);assert.equal(calls.length,2);assert.equal(activeProject.head,'fresh');assert.equal(artifactEditorForm.elements.body.value,'one item');
 assert.equal(artifactEditorForm.elements.title.disabled,true);assert.equal(artifactEditorForm.elements.title.label.hidden,true);
+assert.equal(artifactEditorItem.id,'moved','use current source after a plan relocation');
+
 artifactEditorForm.elements.body.value='draft';artifactEditorDirty=true;
 assert.equal(await savePlanItemEditor(false),false);const attempt=artifactEditorAttempt;
 assert.equal(artifactEditorForm.elements.body.value,'draft');assert(artifactEditorDirty);assert.equal(button.disabled,false);assert.equal(artifactEditorForm.elements.body.readOnly,false);
 assert.equal(await savePlanItemEditor(false),false);assert.equal(artifactEditorAttempt,attempt);assert.equal(calls.at(-1).request.operation_id,attempt.operation_id);
 failed=false;assert.equal(await savePlanItemEditor(false),true);assert.equal(activeProject.head,'new');assert.equal(artifactEditorDirty,false);
 fillArtifactEditor({title:'Whole document',body:'content'});assert.equal(artifactEditorForm.elements.title.disabled,false);assert.equal(artifactEditorForm.elements.title.label.hidden,false);
+const requestsBefore=calls.length;
+await openPlanItemEditor({id:'REMOVED',source:{artifact_id:'old'}});
+assert.equal(calls.length,requestsBefore+1,'removed task must not request an editor fragment');
+assert.equal(artifactEditorItem,null);assert.match(document.querySelector('#plan-status').textContent,/aktuálním plánu/);
+
 })().catch(error=>{console.error(error);process.exit(1);});
 '''
         result = subprocess.run(['node', '-e', harness+fill+controls+checks], capture_output=True, text=True)

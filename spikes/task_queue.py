@@ -286,7 +286,7 @@ class TaskQueue:
         require(action == 'status' or not view.get('read_only'), 'Projekt je pouze pro čtení.')
         from spikes.ide_queue import completion_reports, queue_projection
         projection = queue_projection(self.node, project_id, actor_id, view)
-        reports = completion_reports(self.node, project_id, actor_id)
+        reports = completion_reports(self.node, project_id, actor_id,view=view)
         eligible = {i['id'] for i in (projection['items'] + projection['linked_items'] if projection else ())
                     if i['eligible']}
 
@@ -297,9 +297,7 @@ class TaskQueue:
             for current in ids:
                 ids += [n['id'] for n in nodes.values() if n['parent_id'] == current]
             # Acceptance is revalidated by the review itself; this only drives the button.
-            return [dict(report, acceptable=bool(projection and report['outcome'] is None
-                                                 and report['queue_packet_id'] == projection['packet_id']
-                                                 and report['task_id'] in (startable if report['kind'] == 'progress' else eligible)))
+            return [dict(report, acceptable=bool(report['outcome'] is None and report.get('reviewable')))
                     for i in ids for report in reports.get(i, [])]
         accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)

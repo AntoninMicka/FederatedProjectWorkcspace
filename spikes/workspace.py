@@ -152,6 +152,8 @@ class Workspace:
         require(type(adopt_staged) is bool, 'Invalid staged adoption mode')
         if adopt_staged:request=dict(request, workspace_mode='adopt-staged-v1')
         digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        from spikes.operation_observer import observe_native
+        observe_native(self.git.root, operation_id, digest)
         with self.journal.lock(), self.journal.connect() as db:
             self._writable()
             row = db.execute('SELECT record, done FROM operations WHERE id=?', (operation_id,)).fetchone()

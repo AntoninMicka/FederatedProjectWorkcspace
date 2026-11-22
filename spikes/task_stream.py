@@ -155,6 +155,12 @@ def serve(handler, request):
     handler.end_headers()
     output_lock = threading.Lock()
     def emit(value):
+        finish = getattr(handler, 'finish_task_activity', None)
+        if finish and value.get('type') in {'result', 'error'}:
+            code = 200 if value['type'] == 'result' else value.get('status', 500)
+            payload = value.get('result', value)
+            if code == 409: payload = dict(payload, outcome='unknown')
+            finish(code, payload)
         with output_lock:
             handler.wfile.write(json.dumps(value, ensure_ascii=False).encode()+b'\n')
             handler.wfile.flush()

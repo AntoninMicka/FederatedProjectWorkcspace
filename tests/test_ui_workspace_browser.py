@@ -81,6 +81,11 @@ class SidebarTests(UiFlowCase):
 class ResourceMonitorTests(UiFlowCase):
     def test_monitor_dialog_shows_six_resources_from_node_telemetry(self):
         page = self.start(configure_search=False)
+        page.click('#resource-monitor-open')
+        page.wait(lambda: {'all', 'capacity'} <= {
+            item['body'].get('group') for item in self.requests('/v1/node-telemetry/status')},
+            'full telemetry after opening the monitor')
+        page.wait_idle()
         groups = {item['body'].get('group') for item in self.requests('/v1/node-telemetry/status')}
         self.assertTrue({'all', 'capacity'} <= groups, groups)
         rows = page.evaluate("[...document.querySelectorAll('.resource-mini-row')].map(x=>x.textContent.trim())")
@@ -88,7 +93,6 @@ class ResourceMonitorTests(UiFlowCase):
                          ['CPU', 'GPU', 'RAM', 'VRAM', 'DISK', 'NET'])
         self.assertEqual(len(rows), 6)
         self.assertTrue(all(len(row) > 3 for row in rows), 'Every resource shows a value or "neznámé"')
-        page.click('#resource-monitor-open')
         self.assertTrue(page.evaluate("document.querySelector('#resource-monitor-dialog').open"))
         self.assertIn('živý vzorek tohoto workspace uzlu', page.text('#resource-monitor-dialog'))
 
