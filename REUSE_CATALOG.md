@@ -36,6 +36,18 @@ výslovné zúžení formuláře na cíl a zadání. **Reuse:** společný edito
 kontrola roadmapy a původní potvrzený nativní writer. **Reject:** automatické
 snížení privacy, přeznačení cíle, tiché odebrání vstupů a automatický retry.
 
+PROJECT-RELATIONS-01-A **reuse/adapt — návrh**: `Projects`,
+`CrossReferences.authorize/live`, `reference_schema` (source pin, purpose output),
+`ArtifactSharing`, `Administration`, Workspace/journal a Context Manifest.
+Existující runtime vyžaduje oprávnění ke zdroji a explicitní per-artifact
+share; nenaplňuje implicitní projektovou hierarchii. **Reject:** generování
+share pro každý soubor, kopie zdrojů v indexu příjemce, vypnutí zdrojové
+autorizace, neorientovaný průchod celou komponentou a druhý projektový writer.
+Nový řízený registr, souhlasy obou konců a odvozená větev resolveru jsou
+navrženy v [ADR 0089](docs/adr/0089-project-relations-and-derived-read-access.md),
+jejich implementace zůstává B–F. Ověřená lokální inventura nedává důvod
+k převzetí externí komponenty; nevzniká nová závislost.
+
 Obnova task-work F **adaptuje** původní `TaskActivities.finish` a lokální
 finalizaci `TaskRecords`; **reuse:** `Workspace.receipt`, validovaný Git
 snapshot, `ChatThreads.get_turn`, capability a nativní operační zámky.

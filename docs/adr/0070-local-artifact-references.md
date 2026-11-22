@@ -11,6 +11,10 @@ Doplněno 21. 11. 2026: nová reference vyžaduje explicitní sdílení ve zdroj
 (`fpw-artifact-reference-v2`) podle [ADR 0086](0086-cross-project-artifact-sharing.md).
 Reference v1 zůstávají čitelné; ostatní pravidla tohoto ADR platí dál.
 
+Návrh 22. 11. 2026: [ADR 0089](0089-project-relations-and-derived-read-access.md)
+definuje další zdroj autorizace přes projektové vztahy. Jde o designed
+kontrakt PROJECT-RELATIONS-01-A; nynější resolver a piny v1/v2 tím nemění.
+
 ## Rozhodnutí
 
 `fpw-artifact-reference-v1` je dokument s kanonickým `reference.json`.
