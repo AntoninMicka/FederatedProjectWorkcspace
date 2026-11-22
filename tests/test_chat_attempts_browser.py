@@ -17,7 +17,6 @@ class ChatAttemptBrowserTests(UiFlowCase):
         from spikes.artifacts import Artifacts
         from spikes.projects import Projects
         from spikes.markdown_documents import main_todo_id
-        from spikes.markdown_patch import scan, KIND
         from spikes.metadata import validate_snapshot
         git = Projects(self.node).repository(self.project_id)
         target = main_todo_id(self.project_id)
@@ -33,8 +32,12 @@ class ChatAttemptBrowserTests(UiFlowCase):
         addition = ('  - [ ] [AGENT-BATCH] Správa uzlu\n    - type: batch\n'
             '    - [ ] [AGENT-DESIGN] Navrhnout agenta\n      - type: task\n'
             '    - [ ] [AGENT-IMPL] Implementovat agenta\n      - type: task\n')
-        page = self.start(answers=[dict(kind=KIND, changes=[dict(block_id=scan(original)[-1].id,
-            action='insert_after', destination_id=None, content=addition)])])
+        from spikes.roadmap_additions import OUTPUT
+        proposal = dict(kind=OUTPUT, additions=[dict(parent_id='MILESTONE-DEV', batch_id='AGENT-BATCH',
+            batch_title='Správa uzlu', batch_description='', tasks=[
+                dict(id='AGENT-DESIGN',title='Navrhnout agenta',description='',depends_on=[]),
+                dict(id='AGENT-IMPL',title='Implementovat agenta',description='',depends_on=[])])])
+        page = self.start(answers=[proposal])
         self.open_project_chat(); page.fill('#task-output-kind', 'file-edit')
         page.fill('#task-edit-target', target); page.fill('#task-edit-format', 'blocks')
         page.wait_js('taskFileEditScopeKey!==null', 'Markdown scope loaded')
@@ -87,7 +90,7 @@ class ChatAttemptBrowserTests(UiFlowCase):
         page.click('#task-file-edit-approved'); page.click('[data-file-edit-choice=save]')
         page.wait(lambda:git.head()!=before, 'native reviewed save'); page.wait_idle()
         files = git.snapshot(git.head())
-        self.assertEqual(files[f'artifacts/{target}/content.md'].decode(), original+addition)
+        self.assertEqual(files[f'artifacts/{target}/content.md'].decode(), original.replace('  - type: milestone\n','  - type: milestone\n'+addition))
         self.assertEqual(validate_snapshot(files)[target]['privacy'], 'project')
         self.assertEqual(files[f'artifacts/{secret}/content.md'].decode(), 'PRIVATE CONTEXT')
         self.assert_no_page_errors()

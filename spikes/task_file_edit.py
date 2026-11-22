@@ -106,6 +106,11 @@ def validate_patch_proposal(service, request, outcome):
         from spikes.markdown_patch import MarkdownPatchError
         raise MarkdownPatchError('Návrh vytváří neplatnou roadmapu: ' + graph.get('error', ''))
     require(graph['status'] in {'ready', 'missing'}, 'Patch leaves an invalid roadmap: ' + graph.get('error', ''))
+    if request.get('roadmap_additions'):
+        from spikes.roadmap_additions import preserve_existing
+        original = service.projects.repository(request['project_id']).snapshot(request['expected_head'])
+        before = project_task_graph(original, validate_snapshot(original), request['project_id'], request['expected_head'])
+        preserve_existing(before, graph)
     if outcome['kind'] != 'markdown-patch' and request.get('file_edit_context') is not None:
         from spikes.roadmap_append_context import build, validate
         original = service.projects.repository(request['project_id']).snapshot(request['expected_head'])

@@ -1585,15 +1585,29 @@ class ChatService:
         from spikes.document_patch import requires_patch, instruction as patch_instruction
         from spikes.markdown_patch import ROLE as MARKDOWN_ROLE, SCHEMA as MARKDOWN_SCHEMA, build as markdown_context, instruction_v3 as markdown_instruction
         block_edit = edit_target is not None and plan.edit_format == 'blocks'
+        from spikes.roadmap_additions import ROLE as ADDITIONS_ROLE, parents as addition_parents
+        from spikes.roadmap_append_context import requests_new_tasks, build as append_context, instruction as append_instruction, SCHEMA as APPEND_SCHEMA
+        additions = False
+        if block_edit and requests_new_tasks(request['content']):
+            from spikes.task_graph import project_task_graph
+            from spikes.markdown_patch import context as block_context
+            snapshot = workspace.git.snapshot(request['expected_head'])
+            graph = project_task_graph(snapshot, validate_snapshot(snapshot), request['project_id'], request['expected_head'])
+            additions = (graph['status'] == 'ready' and graph.get('profile') == 'software-development/v1'
+                and any(n.get('source', {}).get('artifact_id') == plan.target_artifact_id for n in graph['nodes']))
+            if additions:
+                require(bool(addition_parents(block_context(edit_target['body'], plan.edit_block_ids, schema=MARKDOWN_SCHEMA))),
+                    'Pro doplnění úkolů vyberte milník, dávku nebo celý dokument. Samotný task nemůže mít podúkoly.')
         patch_edit = edit_target is not None and not block_edit and (plan.edit_format == 'patch' or requires_patch(edit_target['body']))
         role_revision = MARKDOWN_ROLE if block_edit else 'task-output-file-edit-patch-v5' if patch_edit else plan.role_revision
-        from spikes.roadmap_append_context import requests_new_tasks, build as append_context, instruction as append_instruction, SCHEMA as APPEND_SCHEMA
+        if additions: role_revision = ADDITIONS_ROLE
         append_projection = None
         if patch_edit and requests_new_tasks(request['content']):
             snapshot = workspace.git.snapshot(request['expected_head'])
             append_projection = append_context(snapshot, validate_snapshot(snapshot), request['project_id'],
                 request['expected_head'], plan.target_artifact_id, request['run_id'])
         stored_request = dict(request)
+        if additions: stored_request['roadmap_additions'] = ADDITIONS_ROLE
         if history:
             stored_request['task_history'] = history
         if block_edit:
@@ -1611,6 +1625,9 @@ class ChatService:
                        if patch_edit else task_output_instruction(plan, request['created_at']))
         if append_projection is not None:
             instruction += '\n' + append_instruction()
+        if additions:
+            from spikes.roadmap_additions import instruction as additions_instruction
+            instruction = additions_instruction()
         conversation = (ConversationSelection(request['thread_id'], (thread or {}).get('revision', 0),
             tuple(item['message_id'] for item in prior), tuple(item['role'] for item in prior))
             if prior else None)
@@ -1700,7 +1717,10 @@ class ChatService:
                 if not plan.search_compose:
                     raise ValidationError('Model returned invalid explicit task JSON') from exc
                 value = None
-            if block_edit and isinstance(value, dict) and value.get('kind') == 'markdown-patch':
+            if additions:
+                from spikes.roadmap_additions import materialize
+                value = materialize(value, edit_target['body'], plan.edit_block_ids)
+            elif block_edit and isinstance(value, dict) and value.get('kind') == 'markdown-patch':
                 from spikes.markdown_patch import complete as complete_markdown
                 value = complete_markdown(value, edit_target['body'], plan.edit_block_ids)
             if plan.search_on_demand:

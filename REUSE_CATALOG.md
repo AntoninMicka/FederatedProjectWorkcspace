@@ -5,6 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Strukturované doplnění roadmapy **adaptuje** detekci `roadmap_append_context`
+pro české formulace a blokový průchod. **Reuse:** autorizovaný Markdown
+Context Manifest v2, registr rolí, kanonický `markdown_patch`, validátor grafu,
+náhled a potvrzený nativní writer. Aplikace serializuje typy a odsazení nových
+položek z uzavřených modelových dat. **Reject:** odhadování typů v neplatném
+textu, přepis původních úkolů při doplňování a automatický modelový retry.
+Rozsah a recovery: [doplnění úkolů](docs/roadmap-task-additions.md).
+
 Ochrana souborů a výslovná výjimka AI úpravy **adaptují** stávající
 `Artifacts.save`, `PlanItems.save`, Julia/presentation writery a
 `Workspace.transact(allow_privacy_relaxation=...)` z původního importního
