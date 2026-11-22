@@ -30,6 +30,11 @@ try:
   receipt=Artifacts(fixture.node).save(request['document'],request['operation_id']);TaskActivities(work).finish(event,200,receipt)
   state=TaskActivities(work).for_session(handle,sid)[0]
   TaskRecords(work).execute(dict(handle,action='record-offer',operation_id=str(uuid4()),work_session_id=sid,event_ids=[event],offer_revisions=[state['offer']['revision']],comment='Saved draft before restart',selected_checklist=0,state='deferred'))
+  # Native save completed, but the process lost its activity finalization.
+  second=dict(operation_id=str(uuid4()),document=dict(request['document'],new=False,
+      base_head=work.projects.repository(fixture.pid).head(),body='# Revised inventory after lost response\n'))
+  lost=TaskActivities(work).begin(handle,work.status(handle)['context_revision'],'/v1/artifacts/editor/save',second)
+  with TaskActivities(work).observe(lost):Artifacts(fixture.node).save(second['document'],second['operation_id'])
  with running_api('http',handler=DesktopHandler,projects=Projects(fixture.node)) as server:
   assert old_origin!=server.origin
   server.chat_service=ChatService(fixture.node,server.projects)
@@ -47,7 +52,7 @@ try:
   current="taskWorkView?.sessions.find(s=>s.work_session_id==="+json.dumps(sid)+")"
   checks={
    0:"typeof taskWorkSavedSessions!=='undefined'&&taskWorkSavedSessions.some(s=>s.work_session_id==="+json.dumps(sid)+")&&!document.querySelector('#task-work-controls').hidden&&sessionStorage.getItem(taskWorkStorageKey)===null",
-   1:"!taskWorkBusy&&taskWorkView?.active_session_id==="+json.dumps(sid)+"&&("+current+")?.selected_checklist===0&&("+current+")?.activities[0].offer.comment==='Saved draft before restart'",
+   1:"!taskWorkBusy&&taskWorkView?.active_session_id==="+json.dumps(sid)+"&&("+current+")?.selected_checklist===0&&("+current+")?.activities[0].offer.comment==='Saved draft before restart'&&("+current+")?.activities.length===2&&("+current+")?.activities[1].outcome==='succeeded'&&("+current+")?.activities[1].offer.state==='pending'&&("+current+")?.task_records.length===0",
    2:"window.editorReady&&artifactEditorDirty&&!document.querySelector('#task-work-complete').disabled",
    3:"!taskWorkBusy&&taskWorkView?.active_session_id===null&&("+current+")?.current_task.checked&&("+current+")?.state==='closed'&&artifactEditorDirty&&artifactEditorForm.elements.body.value==='UNSAVED EDITOR'&&document.querySelector('#task-work-status').textContent.includes('Úkol byl dokončen')",
   }

@@ -41,12 +41,13 @@ def digest(value):
 
 class TaskWork:
     def __init__(self, node, user_id=None, *, network=False, can_read=None,
-                 can_write=None):
+                 can_write=None, chat_state_dir=None):
         self.node = Path(node).absolute()
         self.node_id = parse_node(read_config(self.node), location=self.node)['id']
         self.user_id = user_id or ProjectCreation(self.node).author_id(); uuid(self.user_id)
         self.projects = Projects(self.node, network=network)
         self.network = network
+        self.chat_state_dir = Path(chat_state_dir) if chat_state_dir else self.node.parent / ('.' + self.node.name + '.chat')
         # A network adapter must supply its authenticated project policy.
         self.can_read = can_read if can_read is not None else (lambda pid: not network)
         self.can_write = can_write if can_write is not None else (lambda pid: not network)
@@ -223,6 +224,10 @@ class TaskWork:
             return dict(safe, blocked=str(exc), title=None)
 
     def status(self, handle):
+        from spikes.task_activities import TaskActivities
+        TaskActivities(self).reconcile(handle)
+        from spikes.task_records import TaskRecords
+        TaskRecords(self).reconcile(handle)
         with self._db() as db:
             state = self._window(db, handle)
             rows = db.execute('SELECT doc FROM sessions WHERE window_id=? AND user_id=? ORDER BY rowid DESC LIMIT 50',

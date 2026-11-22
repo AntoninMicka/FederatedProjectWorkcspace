@@ -5,6 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Obnova task-work F **adaptuje** původní `TaskActivities.finish` a lokální
+finalizaci `TaskRecords`; **reuse:** `Workspace.receipt`, validovaný Git
+snapshot, `ChatThreads.get_turn`, capability a nativní operační zámky.
+Request-local observer před `Workspace.transact` uloží pouze otisk skutečného
+nativního požadavku; nezakládá druhý journal. **Reject:** opakování provideru,
+úspěch podle samotného UUID, automatické potvrzení nabídky a nový projektový
+commit během čtení stavu. Rozsah a hranice: [ADR 0088](docs/adr/0088-task-work-context.md).
+
 Oprava souběhu IDE discovery **adaptuje** existující action-based HTTP/browser
 admission a transport rozšíření. **Reuse:** `Projects.plan_view`, nativní
 projektové/SQLite zámky, původní kontrola credentials a přesný pre-dispatch

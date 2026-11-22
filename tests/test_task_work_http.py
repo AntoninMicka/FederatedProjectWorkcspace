@@ -157,7 +157,7 @@ class TaskWorkHTTPTests(unittest.TestCase):
         new=next(s for s in current['sessions'] if s['work_session_id']==current['active_session_id'])
         self.assertEqual(new['task_id'],'TASK-X');self.assertEqual(new['activities'],[])
 
-    def test_failed_activity_finalization_preserves_native_success_and_unknown_intent(self):
+    def test_failed_activity_finalization_preserves_native_success_and_status_recovers_receipt(self):
         from unittest.mock import patch
         handle={k:v for k,v in self.post({'action':'window'}).items() if k.startswith('window_')}
         pin=self.post(dict(handle,action='inspect',project_id=self.pid,task_id='TASK-A',expected_head=self.head))
@@ -169,8 +169,11 @@ class TaskWorkHTTPTests(unittest.TestCase):
         with patch('spikes.task_activities.TaskActivities.finish',side_effect=OSError('disk unavailable')):
             code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
             self.assertEqual(code,200,data)
+            current=self.post(dict(handle,action='status'))
+            self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'unknown')
         committed=json.loads(data)['commit_id']
-        current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'unknown')
+        current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')
+        self.assertEqual(self.f.server.projects.repository(self.pid).head(),committed)
         code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
         self.assertEqual(code,200,data);self.assertEqual(json.loads(data)['commit_id'],committed)
         current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')

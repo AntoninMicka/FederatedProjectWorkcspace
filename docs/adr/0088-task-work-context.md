@@ -566,7 +566,7 @@ nevytváří modelový účinek. Po C intentu a před native/run receiptem zůst
 výsledek unknown. Chat/run journal rozhoduje o běhu a ChatRecords/Workspace
 o publikaci souboru; D atomicky uloží provenance a task text. E z těchto
 journalů nedělá kopii, nerebasuje stale záměr a neopakuje placený účinek.
-Společná reconciliace přes všechny tyto hranice je nadále F.
+Navazující řez F níže doplňuje reconciliaci doložených výsledků.
 
 Důkazy: scoped zadání bez sourozenců, vybraný bod, zachování Git HEAD při
 přípravě, digest/permission/privacy guard před dispatchem, zákaz local-only
@@ -575,3 +575,47 @@ publikovaný soubor a potvrzený záznam s původním run ID. Qt scénář prov�
 přípravu bez běhu, odeslání do fake modelu, save odpovědi, potvrzení přílohy
 a návrat k původní konverzaci. Nenahrazuje živé přijetí G ani plnou závěrečnou
 bránu celé dávky.
+
+## F — reconciliace hotového účinku při obnovení stavu
+
+`status` nejprve ověří původní window capability a pro vlastní okno/uživatele
+prověří nejvýše 100 nejnovějších lokálních operací. Neaktivuje relaci, nemění
+checklist ani stav úkolu. Příjem synchronizovaného záznamu nezakládá lokální
+operaci nebo relaci a tuto obnovu nespouští.
+
+Před nativní transakcí request-local observer uloží SHA-256 skutečného
+nativního požadavku do již existujícího eventu. Scope se vždy resetuje ve
+`finally`; nelze jej přenést do jiného souběžného HTTP requestu. Ověří stejné
+operation ID a kořen cílového projektu. Pád před touto lokální transakcí
+nedovolí projektový účinek; pád po ní ponechá unknown. Pro editor dokumentů
+je známý přesný otisk uložen již při `begin`. Observer nezapisuje obsah.
+
+Po dokončeném nativním receiptu se musí shodovat request digest a commit musí
+zůstat předkem aktuálního HEAD s validním snapshotem. Teprve pak se obnoví
+metadata činnosti, nikoli soubor. Nedokončený projektový journal musí nejprve
+obnovit jeho původní vlastník; task-work jej nepřepisuje ani nerebasuje.
+U chatové činnosti se čte vlastní thread/turn journal a ověřuje projekt,
+thread/turn/run ID a privacy zpráv. Pouze completed/failed poskytuje konečný
+doklad; prepared/run-bound/unknown se nikdy nepřevádí na úspěch. Jiné modelové,
+vyhledávací a mediální běhy bez takového dokladu zůstávají unknown a používají
+původní diagnostiku. Žádný provider se při této obnově nevolá.
+
+Po explicitním potvrzení a projektovém commitu záznamu se pod původním
+operačním zámkem přečte dokončený receipt a ověří přesný uložený record v jeho
+commitu i dosažitelnost historie. Jediná lokální SQLite transakce pak dokončí
+rezervované nabídky a výsledek operace. Opakované nebo souběžné obnovení
+je idempotentní; nevytváří další Git commit. Je-li potvrzení pouze připravené
+a nativní receipt neexistuje, zůstává výslovné `Obnovit zápis`/zrušení podle D.
+Odložené, odmítnuté a nepotvrzené nabídky se nepublikují.
+
+Oprávnění a trust boundary se kontrolují znovu; ztráta oprávnění či historie
+ponechá záměr uložený. Změna zadání blokuje nové dispatch operace, nikoli
+připsání již doloženého výsledku původní relaci. Smazaný úkol nebo artefakt
+nedává obnově oprávnění jej znovu vytvořit. Nedostupný výsledek nadále
+obsluhuje stávající náhled a jeho explicitní informace o nedostupnosti.
+
+Důkazy F/G zahrnují skutečné ukončení procesu po nativním uložení, souběžný
+refresh po přepnutí úkolu, nesprávný digest, odebraná práva, chybějící receipt,
+chatový journal a hranici commit/finalizace záznamu. Qt restart používá nový
+backendový origin a nový off-the-record profil; obnoví také save bez lokálního
+receiptu a zachová odložený komentář. To není lidská akceptace běžného profilu.

@@ -109,6 +109,7 @@ class Element{
 }
 const document={createElement:tag=>new Element(tag),createTextNode:text=>{const e=new Element('#text');e.textContent=text;return e;}};
 const previewContent=new Element('main');
+const activeProject=null;
 function openPreview(){}
 '''+source+'\nconst markdown='+json.dumps(ROADMAP)+r''';
 renderMarkdown(markdown,previewContent,new Map([[18,['diff-added']]]));

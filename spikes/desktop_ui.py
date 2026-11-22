@@ -8736,6 +8736,7 @@ class DesktopHandler(Handler):
         network = getattr(self.server.projects, 'network', False)
         actor = getattr(self, 'actor', {}) or {}
         return TaskWork(self.server.projects.node_path, actor.get('id'), network=network,
+            chat_state_dir=self.server.chat_service.state_dir,
             can_read=(lambda pid: self.server.administration.allowed(self.actor, pid)) if network else None,
             can_write=self._can_write if network else None)
 
@@ -8784,6 +8785,10 @@ class DesktopHandler(Handler):
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError, PendingOperation) as exc:
                 return self.reply(422, {'error': str(exc), 'outcome': 'not-started', 'retry': 'read-context'})
         try:
+            if self._task_activity:
+                service,identifier=self._task_activity
+                with service.observe(identifier):
+                    return dispatch(request)
             return dispatch(request)
         finally:
             # A crash/uncaught exception/stream disconnect leaves the durable unknown intent.

@@ -329,8 +329,15 @@ class TaskRecords:
         receipt=ws.transact(op['native_operation_id'],dict(action='task-record-publish',record=record,base_head=op['base_head']),prepare,
             expected_head=op['base_head'],checkpoint=checkpoint)
         checkpoint('task-record-after-project')
+        self.finalize(handle,op,receipt,checkpoint)
+
+    def finalize(self,handle,op,receipt,checkpoint=lambda stage:None):
+        record=op['record']
         with self.work._db(write=True) as db:
             self.work._window(db,handle)
+            current=self.work._operation(db,handle['operation_id'],handle['window_id'])
+            require(current is not None,'Unknown record operation')
+            if json.loads(current['doc'])['state']=='completed':return
             for identifier in op['events']:
                 event=json.loads(self.work._operation(db,identifier,handle['window_id'])['doc'])
                 state=event['offer'];require(state.get('pending_operation_id')==handle['operation_id'],'Offer reservation changed')
@@ -339,6 +346,30 @@ class TaskRecords:
             op.update(state='completed',result=dict(record_id=record['id'],commit_id=receipt['commit_id']))
             self.work._save_operation(db,handle['operation_id'],op);checkpoint('task-record-before-finalize')
         checkpoint('task-record-after-finalize')
+
+    def reconcile(self,handle):
+        """Finish only local bookkeeping for an already committed confirmation."""
+        with self.work._db() as db:
+            self.work._window(db,handle)
+            rows=db.execute('SELECT id,doc FROM operations WHERE user_id=? AND window_id=? ORDER BY rowid DESC LIMIT 100',
+                (self.work.user_id,handle['window_id'])).fetchall()
+        for row in rows:
+            op=json.loads(row['doc'])
+            if op.get('record_type')!='task-record-publish' or op['state']!='prepared':continue
+            try:
+                with self.work._operation_lock(row['id']):
+                    record=op['record'];pid=record['context']['project_id'];self.work._authorize(pid)
+                    if not self.readable(record):continue
+                    workspace=self.work.projects.workspace(pid,for_snapshot=True)
+                    receipt=workspace.receipt(op['native_operation_id'])
+                    if not receipt:continue
+                    commit=receipt['commit_id']
+                    if workspace.git.run('merge-base','--is-ancestor',commit,workspace.git.head(),check=False).returncode:continue
+                    files=workspace.git.snapshot(commit)
+                    if records(files,validate_snapshot(files)).get(record['id'])!=record:continue
+                    self.finalize(dict(handle,operation_id=row['id']),op,receipt)
+            except (ValueError,OSError,sqlite3.Error,subprocess.SubprocessError):
+                continue
 
     def cancel(self,handle,op):
         require(op['record_type']=='task-record-publish' and op['state']=='prepared','Record operation cannot be cancelled')

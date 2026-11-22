@@ -266,9 +266,36 @@ Cílené ověření:
 
 ```sh
 python3 -m unittest tests.test_task_records tests.test_task_activities tests.test_task_work tests.test_task_work_http tests.test_ide_bridge_panel -v
+python3 -m unittest tests.test_task_recovery -v
 M0_DESKTOP_TEST=1 QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS='--no-sandbox --disable-gpu' python3 -m unittest tests.test_task_work_browser -v
 ```
 
 Testy s dočasnými projekty a skutečným Qt/HTTPS nedokládají instalaci ani
 lidskou akceptaci běžného profilu. Celá závěrečná sada se spouští před předáním
 celé dávky podle AGENTS, nikoli po každé její dílčí změně.
+
+Při obnovení panelu se dokončené nativní uložení spáruje s původní činností
+podle operation ID a přesného otisku požadavku. Dokončený chat se ověří vůči
+jeho původnímu journalu. Panel nepouští model znovu; chybějící nebo nejednoznačný
+doklad zůstává unknown. Potvrzený záznam již zapsaný v Gitu se dokončí místně
+bez duplicitního commitu. Pokud projektový zápis nezačal nebo ještě potřebuje
+nativní recovery, zůstává ovládání obnovy. Samotné uložení souboru stále
+vyžaduje `Potvrdit a připojit`, aby se záznam dostal do textu úkolu.
+
+Živá akceptace G se provádí v běžném desktopovém i webovém profilu:
+
+1. Zahájit inventární úkol, vybrat či ručně doplnit checklist, uložit inventář,
+   nabídku odložit a znovu otevřít. Potvrdit stručný komentář s odkazem; otevřít
+   editor úkolu a ověřit jediný záznam bez kopie obsahu. Upravit inventář
+   a komentář, porovnat původní a současnou verzi i historii.
+2. U analytického úkolu připravit zadání, vědomě zvolit nakonfigurovaný model,
+   odeslat, uložit odpověď a potvrdit připojení. Ze záznamu otevřít soubor,
+   původní konverzaci a run; ověřit task/project/checklist a provenance.
+3. Přepnout úkol při pozdním výsledku a restartovat backend i profil; pokračovat
+   výslovně v původní relaci. Ověřit zachovaný komentář, žádné automatické
+   dokončení úkolu, žádnou duplicitu ani nové modelové volání. Zopakovat
+   s neuloženým editorem, odmítnutou nabídkou a nedostupným výstupem.
+
+Konkrétní výsledek, projekt/task ID, revize, zvolený backend a případné chyby
+patří do kanonického Workspace úkolu G. Tento postup je ověřovací návod,
+nikoli druhý aktuální plán nebo potvrzení, že živá akceptace proběhla.
