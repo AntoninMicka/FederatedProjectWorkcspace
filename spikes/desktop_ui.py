@@ -1182,7 +1182,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="metadata-publish" type="button">Použít vybrané změny</button></div></div></div>
 <section id="prompt-widget" aria-label="Prompt"><form id="chat-composer">
 <label class="prompt-draft-control" for="chat-draft"><span>Zadání</span>
-<textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete zpracovat?"></textarea></label>
+<textarea id="chat-draft" rows="2" placeholder="Co chcete zpracovat?"></textarea></label>
 <div class="prompt-toolbar">
 <label class="prompt-control" for="chat-mode"><span>Režim</span><select id="chat-mode"><option value="orchestration">Úkol</option><option value="brainstorming">Volná konverzace</option></select></label>
 <div id="task-routing" class="prompt-routing-controls">
@@ -1225,6 +1225,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
+<details id="chat-failed-inputs" hidden><summary>Neúspěšná a neověřená zadání</summary>
+<p>Obnovení vrátí pouze text do formuláře; model znovu nespustí.</p><div id="chat-failed-input-list"></div></details>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
@@ -2343,7 +2345,7 @@ function clearProject(){
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  resetTaskFileEditEditor();document.querySelector('#task-edit-target').value='';
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
- clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
+ clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';renderChatAttempts([]);
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();clearJulia();clearRoadmapReview();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  hideSearchRecovery();
@@ -5575,6 +5577,50 @@ const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 const responseLanguageState=document.querySelector('#response-language-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevision=0;
+function clearSubmittedChatDraft(request){
+ if(request&&request.project_id===activeProject?.id&&
+  (!activeTaskThreadId||activeTaskThreadId===request.thread_id)&&draft.value.trim()===request.content)draft.value='';
+}
+function renderChatAttempts(attempts){
+ const panel=document.querySelector('#chat-failed-inputs'),list=document.querySelector('#chat-failed-input-list');
+ list.replaceChildren();const items=(attempts||[]).filter(item=>item.project_id===activeProject?.id);
+ panel.hidden=!items.length;
+ for(const item of items){
+  const row=document.createElement('section'),text=document.createElement('pre'),status=document.createElement('p');
+  text.textContent=item.preview||item.content||'';
+  status.textContent=(item.state==='unknown'?'Výsledek není ověřený. Před novým během ověřte původní operaci. ':'Odmítnuté zadání. ')+
+   (item.diagnostic?.message||'')+` · Záznam ${item.id}`;
+  const restore=document.createElement('button');restore.type='button';restore.textContent='Obnovit text zadání';
+  restore.addEventListener('click',async()=>{
+   if(item.project_id!==activeProject?.id)return;
+   restore.disabled=true;
+   try{const saved=await projectRequest('/v1/tasks/list',{project_id:item.project_id,attempt_id:item.id});
+    const restored=saved.attempts?.find(value=>value.id===item.id);
+    if(item.project_id!==activeProject?.id)return;
+    if(!restored||typeof restored.content!=='string')throw Error('Uložené zadání už není dostupné.');
+    if(draft.value&&draft.value!==restored.content&&!confirm('Nahradit nynější rozepsané zadání uloženým textem?'))return;
+    const privacy=document.querySelector('#chat-privacy'),levels={'public':0,'project':1,'confidential':2,'local-only':3};
+    if(levels[restored.privacy]>levels[privacy.value]){privacy.value=restored.privacy;privacy.dispatchEvent(new Event('change',{bubbles:true}));}
+    draft.value=restored.content;draft.dispatchEvent(new Event('input',{bubbles:true}));draft.focus();
+    chatOperationStatus.textContent='Text zadání byl obnoven se zachovaným soukromím. Zpracování nebylo spuštěno. Zkontrolujte vybrané vstupy.';
+   }catch(error){chatOperationStatus.textContent=error.message;}
+   finally{restore.disabled=false;}
+  });
+  const discard=document.createElement('button');discard.type='button';discard.textContent='Smazat uložený text';
+  discard.addEventListener('click',async()=>{
+   if(item.project_id!==activeProject?.id||!confirm('Smazat tento uložený text zadání? Běžící model tím nebude zastaven.'))return;
+   discard.disabled=true;
+   try{await projectRequest('/v1/tasks/cancel',{project_id:item.project_id,attempt_id:item.id});
+    await refreshChatAttempts(item.project_id);
+   }catch(error){chatOperationStatus.textContent=error.message;discard.disabled=false;}
+  });row.append(status,text,restore,discard);list.append(row);
+ }
+}
+async function refreshChatAttempts(projectId){
+ try{const value=await projectRequest('/v1/tasks/list',{project_id:projectId});
+  if(activeProject?.id===projectId)renderChatAttempts(value.attempts||[]);
+ }catch(_error){} // Preserve the original error and the composer on recovery failure.
+}
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
 function chatScrollOwner(){
@@ -5943,7 +5989,7 @@ function refreshCurrentFileSource(){
  const title=document.querySelector('#task-source-current-file-title');
  if(!label||!input||!title)return;
  const item=currentArtifacts.find(value=>value.id===selectedArtifact);
- const external=document.querySelector('#chat-run-adapter')?.value==='openai-responses';
+ const external=document.querySelector('#chat-run-adapter')?.value!=='ollama';
  label.hidden=!item;input.disabled=!item||external;
  if(!item||external)input.checked=false;
  input.value=item?.id || '';title.textContent=item?`Aktuální soubor: ${item.title}`:'Aktuální soubor';
@@ -7148,6 +7194,7 @@ async function loadChat(){
  if(selectionRevision!==chatSelectionRevision)return;
  if(tasksState.status==='fulfilled'){
   const tasks=tasksState.value;
+  renderChatAttempts(tasks.attempts||[]);
   taskOutcomes=restored&&Array.isArray(tasks.outcomes)?tasks.outcomes.filter(item=>item.thread_id===restored.thread_id):[];
   if(!Array.isArray(tasks.outcomes))warnings.push('navázané úlohy mají neplatnou projekci');
  }else{taskOutcomes=[];warnings.push('navázané úlohy nejsou dostupné');}
@@ -7608,6 +7655,10 @@ document.querySelector('#external-confirm').addEventListener('click',async event
 });
 document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
+ const submittedProjectId=activeProject.id;
+ if(new TextEncoder().encode(draft.value).byteLength>1024*1024){
+  chatOperationStatus.textContent='Zadání překračuje limit 1 MiB. Text zůstal ve formuláři; část přesuňte do podkladu.';return;
+ }
  if(!threadWritable()){
   chatOperationStatus.textContent='Archivované vlákno nebo vlákno jiného projektu je pouze pro čtení.';return;
  }
@@ -7668,10 +7719,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
     liveProgress.set(`${providerLabel} generuje odpověď…`);chatStream.textContent+=delta;keepChatStreamVisible();}) :
    await projectRequest('/v1/external/send',pendingChatRequest,EXTERNAL_CLIENT_TIMEOUT_MS);
-   activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
+   clearSubmittedChatDraft(pendingChatRequest);activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
     {enabled:providerStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
-   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=providerStreaming ?
+   chatStream.hidden=true;draft.focus();chatOperationStatus.textContent=providerStreaming ?
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
    preserveRejectedExternalStream();
@@ -7681,7 +7732,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    chatOperationStatus.textContent=error.message+(staleSelection?
     ' Nabídka byla obnovena; backend a model vyberte znovu.':'');
   }finally{liveProgress.stop();chatStream.hidden=true;
-   finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();}
+   finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();refreshChatAttempts(submittedProjectId);}
   return;
  }
  if(mode==='brainstorming' && adapter==='ollama'){
@@ -7712,9 +7763,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
      chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
      liveProgress.set(streamStates[status] || 'Probíhá lokální AI běh…');}) :
     await projectRequest('/v1/chat/send',pendingChatRequest,210000);
-   activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
+   clearSubmittedChatDraft(pendingChatRequest);activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
-    {enabled:ollamaStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;draft.value='';draft.focus();
+    {enabled:ollamaStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;draft.focus();
    chatOperationStatus.textContent=(ollamaStreaming ?
     `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí. ` : 'Odpověď je připravena. ')+
     runtimeEvidenceText(result.runtime_evidence);
@@ -7728,7 +7779,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
   }finally{clearTimeout(thinking);liveProgress.stop();
    submit.disabled=!activeProject || !draft.value.trim();chatStream.hidden=true;
-   finishChatAutoFollow();}
+   finishChatAutoFollow();refreshChatAttempts(submittedProjectId);}
   return;
  }
  if(!pendingChatRequest){
@@ -7791,7 +7842,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    delta=>appendTaskStreamDelta(delta),
    status=>liveProgress.set(status==='connecting'?'Připojuji se k Ollamě…':'Model zpracovává úlohu…'),
    deadline=>updateTaskRunDeadline(deadline,pendingChatRequest)) : await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
-  replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
+  clearSubmittedChatDraft(pendingChatRequest);replaceTaskProjection(result.projection);pendingChatRequest=null;draft.focus();
   chatOperationStatus.textContent=result.projection.temporary ?
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
  }catch(error){
@@ -7810,7 +7861,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
  }
  finally{clearTaskRunDeadline();chatStream.hidden=true;clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
-  finishChatAutoFollow();}
+  finishChatAutoFollow();refreshChatAttempts(submittedProjectId);}
 });
 async function assignActiveThread(){
  if(!activeProject || !activeThread)throw new Error('Nejprve vytvořte chatové vlákno.');
@@ -8741,6 +8792,14 @@ class DesktopHandler(Handler):
             can_write=self._can_write if network else None)
 
     def finish_task_activity(self, code, payload):
+        attempt = getattr(self, '_chat_attempt', None)
+        if attempt:
+            self._chat_attempt = None
+            try:
+                attempt[0].finish(attempt[1], code, payload)
+            except (ValueError, OSError, sqlite3.Error):
+                import logging
+                logging.getLogger(__name__).warning('chat_attempt_finalization_unknown id=%s', attempt[1])
         activity = getattr(self, '_task_activity', None)
         if activity:
             # Clear before finalization: an error reply must not re-enter the recorder.
@@ -8759,8 +8818,24 @@ class DesktopHandler(Handler):
         return super().send_error(code, message, explain)
 
     def reply(self, code, payload):
+        attempt = getattr(self, '_chat_attempt', None)
+        if attempt and code >= 400 and isinstance(payload, dict):
+            payload = dict(payload, request_id=attempt[1], prompt_saved=True)
         self.finish_task_activity(code, payload)
         return super().reply(code, payload)
+
+    def record_chat_exception(self, exc):
+        attempt = getattr(self, '_chat_attempt', None)
+        if attempt:
+            try:
+                attempt[0].error(attempt[1], exc)
+            except (ValueError, OSError, sqlite3.Error):
+                pass  # Initial prompt remains durable; never replace the native result.
+
+    def chat_attempts(self):
+        from spikes.chat_attempts import ChatAttempts
+        self.server.chat_service._root()
+        return ChatAttempts(self.task_work_service())
 
     def dispatch(self, request):
         return self.dispatch_task_activity(request, self.dispatch_workspace)
@@ -8768,6 +8843,16 @@ class DesktopHandler(Handler):
     def dispatch_task_activity(self, request, dispatch):
         from spikes.task_activities import TaskActivities, ROUTES
         self._task_activity = None
+        self._chat_attempt = None
+        from spikes.chat_attempts import ROUTES as CHAT_ROUTES
+        if self.path.removesuffix('-stream') in CHAT_ROUTES:
+            try:
+                attempts = self.chat_attempts()
+                identifier = attempts.begin(self.path, request)
+                if identifier:
+                    self._chat_attempt = (attempts, identifier)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+                return self.reply(422, {'error': 'Zadání se nepodařilo místně uložit. Zpracování nebylo spuštěno; text ponechte ve formuláři.', 'outcome': 'not-started'})
         header = self.single('X-FPW-Task-Work')
         if header and self.path in ROUTES:
             try:
@@ -8793,6 +8878,7 @@ class DesktopHandler(Handler):
         finally:
             # A crash/uncaught exception/stream disconnect leaves the durable unknown intent.
             self._task_activity = None
+            self._chat_attempt = None
 
     def dispatch_workspace(self, request):
         if self.path.startswith('/v1/x-sources/'):
@@ -9518,7 +9604,8 @@ class DesktopHandler(Handler):
                     try: emit({'type': 'error', 'status': 502,
                                **external_response_failure(exc)})
                     except OSError: pass
-                except (ValueError, OSError, sqlite3.Error):
+                except (ValueError, OSError, sqlite3.Error) as exc:
+                    self.record_chat_exception(exc)
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
                 return
             if self.path == '/v1/external/request' and isinstance(request, dict):
@@ -9538,10 +9625,13 @@ class DesktopHandler(Handler):
             if self.path == '/v1/tasks/route' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_route(request))
             if (self.path == '/v1/tasks/list' and isinstance(request, dict)
-                    and set(request) in ({'project_id'}, {'project_id', 'thread_id'})):
-                return self.reply(200, {'outcomes': self.server.chat_service.task_outcomes(
-                    project_id=request['project_id'], thread_id=request.get('thread_id'))})
+                    and set(request) in ({'project_id'}, {'project_id', 'thread_id'}, {'project_id', 'attempt_id'})):
+                return self.reply(200, {'outcomes': [] if 'attempt_id' in request else self.server.chat_service.task_outcomes(
+                    project_id=request['project_id'], thread_id=request.get('thread_id')),
+                    'attempts': self.chat_attempts().list(request['project_id'],request.get('attempt_id'))})
             if self.path == '/v1/tasks/cancel' and isinstance(request, dict):
+                if set(request)=={'project_id','attempt_id'}:
+                    return self.reply(200, self.chat_attempts().discard(request['project_id'],request['attempt_id']))
                 return self.reply(200, self.server.chat_service.task_cancel(request))
             if self.path == '/v1/tasks/artifact' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_publish_artifact(request))
@@ -9636,7 +9726,8 @@ class DesktopHandler(Handler):
                                'původní run automaticky neopakujte.')
                 except OllamaResponseError:
                     emit_error(502, 'Ollama stream nevrátil bezpečně použitelný výsledek.')
-                except (ValueError, OSError, sqlite3.Error):
+                except (ValueError, OSError, sqlite3.Error) as exc:
+                    self.record_chat_exception(exc)
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
                 return
             if self.path == '/v1/chat/send' and isinstance(request, dict) \
@@ -9931,6 +10022,7 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt právě používá jiná zapisující operace. '
                                    'Po jejím dokončení spusťte novou kontrolu.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+            self.record_chat_exception(exc)
             from spikes.chat_service import InvalidSearchEvaluation
             from spikes.presentation_proposals import InvalidPresentationProposal
             from spikes.cross_references import ReferenceUnavailable

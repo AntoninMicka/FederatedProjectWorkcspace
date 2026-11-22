@@ -5,6 +5,16 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+CHAT-SUBMISSION-RECOVERY-01 **adapt**: existující soukromý `TaskOutcomes`
+SQLite journal doplněný o typovanou evidenci před dispatch, nikoli nový
+projektový store. **Reuse:** SQLite ownership, `TaskWork` identita/přístup,
+privacy gate `TaskActivities`, stávající `/v1/tasks/list` a inertní renderer.
+**Reject:** automatické opakování modelu, zvýšení tokenového rozpočtu,
+browser-only persistence závislá na originu, raw výjimky v logu a mazání
+nového promptu pozdní odpovědí. Oprava nepřidává obecné externí čtení
+projektových artefaktů. Hranice a ověření:
+[obnova odeslaného zadání](docs/chat-submission-recovery.md).
+
 Obnova task-work F **adaptuje** původní `TaskActivities.finish` a lokální
 finalizaci `TaskRecords`; **reuse:** `Workspace.receipt`, validovaný Git
 snapshot, `ChatThreads.get_turn`, capability a nativní operační zámky.
