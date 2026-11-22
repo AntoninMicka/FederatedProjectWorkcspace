@@ -43,6 +43,25 @@ class ChatAttemptHTTPTests(unittest.TestCase):
                 self.assertEqual(error['outcome'], 'not-started')
                 self.assertNotIn('prompt_saved', error)
 
+    def test_privacy_conflict_has_same_actionable_payload_in_http_and_stream(self):
+        from spikes.task_file_edit import FileEditPrivacyConflict
+        target = str(uuid4())
+        conflict = FileEditPrivacyConflict(target, 'project', 'confidential')
+        for path in ['/v1/tasks/route', '/v1/tasks/route-stream']:
+            with self.subTest(path=path), patch.object(self.f.server.chat_service,
+                    'task_route', side_effect=conflict):
+                code, raw, _ = self.f.request(path=path, body=json.dumps(dict(
+                    project_id=self.pid, task_id=str(uuid4()), run_id=str(uuid4()), content='Update target', privacy='project')))
+                if path.endswith('-stream'):
+                    self.assertEqual(code, 200)
+                    result = next(item for item in map(json.loads, raw.decode().splitlines()) if item['type']=='error')
+                else:
+                    self.assertEqual(code, 422); result = json.loads(raw)
+                self.assertEqual(result['diagnostic'], conflict.code)
+                self.assertEqual(result['privacy_conflict'], conflict.details)
+                self.assertEqual(result['outcome'], 'not-started')
+                self.assertIn('Důvěrné', result['error'])
+
     def test_authenticated_member_cannot_read_another_users_failed_prompt(self):
         owner_task = str(uuid4())
         self.request('/v1/tasks/route', dict(project_id=self.pid, task_id=owner_task,

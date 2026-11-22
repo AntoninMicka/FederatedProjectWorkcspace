@@ -84,6 +84,27 @@ class FileEditTests(unittest.TestCase):
         result = service.task_cancel(dict(task_id=request['task_id']))
         self.assertEqual('cancelled', result['state']); self.assertEqual(before, self.git.head())
 
+    def test_confidential_sources_refuse_before_model_and_explicit_narrowing_can_save(self):
+        from spikes.task_file_edit import FileEditPrivacyConflict
+        target = self.create_document()
+        secret = self.create_document('CONFIDENTIAL SOURCE', privacy='confidential')
+        service, request, calls = self.generate(target)
+        request['selected_artifact_ids'].append(secret)
+        before = self.git.head()
+        with self.assertRaises(FileEditPrivacyConflict) as raised:
+            service.task_route(request)
+        self.assertEqual(raised.exception.details, dict(artifact_id=target,
+            target_privacy='project', context_privacy='confidential'))
+        self.assertEqual([], calls); self.assertEqual(before, self.git.head())
+        service, request, calls = self.generate(target)
+        service.task_route(request)
+        self.assertNotIn('CONFIDENTIAL SOURCE', calls[0]['prompt'])
+        result = service.task_confirm_file_edit(self.confirmation(self.preview(service, request)))
+        self.assertEqual('completed', result['state'])
+        files = self.git.snapshot(self.git.head())
+        self.assertEqual('project', validate_snapshot(files)[target]['privacy'])
+        self.assertEqual('CONFIDENTIAL SOURCE', files[f'artifacts/{secret}/content.md'].decode())
+
     def test_target_must_be_selected_supported_writable_and_not_downgrade_context(self):
         service, request, calls = self.generate()
         foreign = str(uuid4())

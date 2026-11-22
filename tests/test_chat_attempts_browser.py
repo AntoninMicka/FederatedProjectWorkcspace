@@ -7,6 +7,70 @@ from tests.ui_flow_case import UiFlowCase, require_browser
 
 @require_browser
 class ChatAttemptBrowserTests(UiFlowCase):
+    def test_privacy_conflict_explicit_target_only_recovery_and_reviewed_roadmap_save(self):
+        from spikes.artifacts import Artifacts
+        from spikes.projects import Projects
+        from spikes.markdown_documents import main_todo_id
+        from spikes.markdown_patch import scan, KIND
+        from spikes.metadata import validate_snapshot
+        git = Projects(self.node).repository(self.project_id)
+        target = main_todo_id(self.project_id)
+        original = ('<!-- fpw-plan-profile: software-development/v1 -->\n'
+            '- [ ] [MILESTONE-DEV] Vývoj\n  - type: milestone\n'
+            '  - [ ] [EXISTING-BATCH] Původní dávka\n    - type: batch\n')
+        Artifacts(self.node).save(dict(project_id=self.project_id, artifact_id=target,
+            new=True, base_head=git.head(), title='Hlavní seznam úkolů', body=original), str(uuid4()))
+        secret = str(uuid4())
+        Artifacts(self.node).save(dict(project_id=self.project_id, artifact_id=secret,
+            new=True, base_head=git.head(), title='Důvěrný podklad', body='PRIVATE CONTEXT'),
+            str(uuid4()), privacy='confidential')
+        addition = ('  - [ ] [AGENT-BATCH] Správa uzlu\n    - type: batch\n'
+            '    - [ ] [AGENT-DESIGN] Navrhnout agenta\n      - type: task\n'
+            '    - [ ] [AGENT-IMPL] Implementovat agenta\n      - type: task\n')
+        page = self.start(answers=[dict(kind=KIND, changes=[dict(block_id=scan(original)[-1].id,
+            action='insert_after', destination_id=None, content=addition)])])
+        self.open_project_chat(); page.fill('#task-output-kind', 'file-edit')
+        page.fill('#task-edit-target', target); page.fill('#task-edit-format', 'blocks')
+        page.wait_js('taskFileEditScopeKey!==null', 'Markdown scope loaded')
+        page.evaluate("document.querySelector('#task-source-artifacts').checked=true;"
+            "document.querySelectorAll('#task-artifact-list input').forEach(i=>i.checked=true)")
+        prompt = 'doplň seznam úkolů o úkoly pro návrh a implementaci sw agenta pro správu sw a nastavení uzlu sítě'
+        before = git.head(); self.submit_prompt(prompt)
+        page.wait_js("!document.querySelector('#chat-edit-privacy').hidden", 'specific privacy conflict')
+        self.assertIn('Důvěrné', page.text('#chat-edit-privacy'))
+        self.assertEqual(self.ollama.requests, []); self.assertEqual(before, git.head())
+        page.fill('#chat-privacy', 'confidential')
+        self.submit_prompt(prompt)
+        page.wait_js("!document.querySelector('#chat-edit-privacy').hidden", 'private prompt refusal')
+        self.assertTrue(page.evaluate("document.querySelector('#chat-edit-target-only').disabled"))
+        self.assertEqual(self.ollama.requests, [])
+        page.fill('#chat-privacy', 'project')
+        self.submit_prompt(prompt)
+        page.wait_js("!document.querySelector('#chat-edit-privacy').hidden", 'source-only refusal again')
+        page.click('#chat-edit-target-only'); page.wait_idle()
+        self.assertEqual(self.ollama.requests, [])
+        self.assertEqual(page.evaluate("document.querySelector('#chat-draft').value"), prompt)
+        self.assertEqual(page.evaluate("document.querySelector('#chat-privacy').value"), 'project')
+        self.assertFalse(page.evaluate("document.querySelector('#task-source-conversation').checked"))
+        self.assertEqual(page.evaluate("[...document.querySelectorAll('#task-artifact-list input:checked')].map(i=>i.value)"), [target])
+        self.submit_prompt(prompt)
+        self.assertEqual(len(self.ollama.requests), 1)
+        self.assertNotIn('PRIVATE CONTEXT', self.ollama.requests[0]['prompt'])
+        self.assertIn('Zkontrolovat úpravy ve společném editoru', self.buttons(),
+            page.text('#chat-operation-status'))
+        self.click_text('Zkontrolovat úpravy ve společném editoru')
+        page.wait_js('artifactEditorTaskEdit!==null', 'review editor')
+        page.evaluate("document.querySelector('#artifact-editor-form').requestSubmit()")
+        page.wait_js("document.querySelector('#task-file-edit-dialog').open", 'explicit save approval')
+        self.assertEqual(before, git.head())
+        page.click('#task-file-edit-approved'); page.click('[data-file-edit-choice=save]')
+        page.wait(lambda:git.head()!=before, 'native reviewed save'); page.wait_idle()
+        files = git.snapshot(git.head())
+        self.assertEqual(files[f'artifacts/{target}/content.md'].decode(), original+addition)
+        self.assertEqual(validate_snapshot(files)[target]['privacy'], 'project')
+        self.assertEqual(files[f'artifacts/{secret}/content.md'].decode(), 'PRIVATE CONTEXT')
+        self.assert_no_page_errors()
+
     def test_long_multiline_task_reaches_model_and_publishes_reviewed_document(self):
         from spikes.projects import Projects
         body = '# Postup\n\n1. Zpracovat podklady.\n2. Zkontrolovat výsledek.\n'

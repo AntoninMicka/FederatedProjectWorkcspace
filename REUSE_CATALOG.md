@@ -14,6 +14,11 @@ browser-only persistence závislá na originu, raw výjimky v logu a mazání
 nového promptu pozdní odpovědí. Oprava nepřidává obecné externí čtení
 projektových artefaktů. Hranice a ověření:
 [obnova odeslaného zadání](docs/chat-submission-recovery.md).
+Navazující konflikt privacy **adaptuje** původní pre-dispatch a potvrzovací
+kontroly `task_file_edit`: typovaný důvod, společná HTTP/stream odpověď a
+výslovné zúžení formuláře na cíl a zadání. **Reuse:** společný editor,
+kontrola roadmapy a původní potvrzený nativní writer. **Reject:** automatické
+snížení privacy, přeznačení cíle, tiché odebrání vstupů a automatický retry.
 
 Obnova task-work F **adaptuje** původní `TaskActivities.finish` a lokální
 finalizaci `TaskRecords`; **reuse:** `Workspace.receipt`, validovaný Git

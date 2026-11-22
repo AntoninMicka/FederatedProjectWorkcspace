@@ -1516,7 +1516,7 @@ class ChatService:
                 'Project changed before routed task')
         edit_target = None
         if plan.output_kind == 'file-edit':
-            from spikes.task_file_edit import target_document
+            from spikes.task_file_edit import target_document, FileEditPrivacyConflict
             edit_target, _, _ = target_document(self, request['project_id'], plan.target_artifact_id,
                                                  request['expected_head'])
         root = self._root(); node_id, user_id = self._identity()
@@ -1640,8 +1640,8 @@ class ChatService:
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
         if edit_target is not None:
-            require(PRIVACY_ORDER[edit_target['metadata']['privacy']] >= PRIVACY_ORDER[strongest],
-                    'File edit cannot lower the privacy of its context')
+            if PRIVACY_ORDER[edit_target['metadata']['privacy']] < PRIVACY_ORDER[strongest]:
+                raise FileEditPrivacyConflict(plan.target_artifact_id, edit_target['metadata']['privacy'], strongest)
         # Refuse before the model runs: its query could only end in a search this data forbids.
         require(not plan.search_compose or strongest != 'local-only',
                 'local-only data cannot be sent to web search')

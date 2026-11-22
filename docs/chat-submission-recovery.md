@@ -10,6 +10,26 @@ Uživatel 22. 11. 2026 ohlásil odmítnutí posledního zadání obecnou zprávo
 záznam se nepodařilo dohledat. Příčina konkrétního odmítnutí není potvrzená.
 Starší providerové chyby nejsou důkazem příčiny nového případu.
 
+Následný konkrétní případ ze snímku už byl dohledán v zachyceném pokusu:
+„doplň seznam úkolů o úkoly pro návrh a implementaci sw agenta pro správu
+sw a nastavení uzlu sítě“. Při úpravě projektového seznamu byly vybrané
+také důvěrné vstupy. Kontrola `File edit cannot lower the privacy of its
+context` odmítla požadavek ještě před spuštěním modelu. Nešlo o velikost
+dokumentu ani o neplatný modelový výstup. Toto zjištění nedokládá příčinu
+původního nedochovaného zadání.
+
+Konflikt nyní vrací stejný typovaný důvod v HTTP i streamu a ukáže úroveň
+soukromí cílového souboru a vstupů. Nabídka **Použít jen cílový soubor a
+zadání** výslovně odebere ostatní soubory, konverzaci a veřejné zdroje.
+Text zadání, cílový soubor a jejich soukromí zachová. Model nespustí;
+uživatel zkontroluje vstupy a znovu stiskne Zpracovat. Pokud je samotné
+zadání citlivější než cíl, tato nabídka není dostupná. Změněný kontext
+se před použitím znovu kontroluje. Ochrana před snížením privacy zůstává
+v backendu i při pozdějším náhledu a potvrzení. Starší uložený obecný důvod
+se rozpozná podle přesného otisku pouze při čtení, bez přepisování receiptů.
+Generovaný návrh se nadále ukládá až po kontrole ve společném editoru
+a výslovném potvrzení diffu.
+
 Při čtení a reprodukci byly ověřeny samostatné mezery: formulář má limit
 16 000 znaků, ačkoli backend přijímá až 1 MiB; úspěšná odpověď bezpodmínečně
 maže i text rozepsaný během běhu; odmítnutí před `TaskOutcomes.prepare`
@@ -90,6 +110,8 @@ journalu i po reloadu a restartu; limit 50 je limit přehledu, nikoli mazání.
 Platí původní autority [ADR 0003](adr/0003-coordinated-operation.md) a
 [ADR 0088](adr/0088-task-work-context.md). Nativní projektový zápis ani
 providerový journal se nezaměňuje za evidenci pokusu.
+Zúžení vstupů mění jen formulář; nepřidává persistentní vrstvu. Následná
+úprava používá původní CAS, potvrzení a nativní journal podle těchto ADR.
 
 | Hranice | Chování |
 | --- | --- |
@@ -114,3 +136,9 @@ backendu s novým originem i prohlížečovým profilem. Obnovení nezavolá mod
 Další průchod ponechá nový text zapsaný během starého běhu. Modely jsou
 loopback testovací náhrady; původní uživatelská chyba ani živá akceptace
 tohoto opravného řezu tím nejsou prokázané.
+
+Navazující test konfliktu soukromí používá stejné české zadání a ověřuje
+odmítnutí před modelem, výslovné zúžení vstupů, jeden následný modelový běh,
+kontrolu v editoru a potvrzené rozšíření validní roadmapy. Původní ID,
+soukromí cíle a obsah důvěrného podkladu zůstávají zachované. HTTP/stream
+mají shodný důvod; čtení starší diagnostiky nemění uložený receipt.

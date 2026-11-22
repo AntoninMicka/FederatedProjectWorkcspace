@@ -84,6 +84,23 @@ os._exit(79)
         self.assertIsNone(self.service.begin('/v1/tasks/route', dict(self.request, privacy=[])))
         self.assertIsNone(self.service.begin('/v1/tasks/route', dict(self.request, project_id='bad')))
 
+    def test_older_generic_privacy_refusal_is_explained_without_rewriting_receipt(self):
+        import hashlib
+        from spikes.task_file_edit import FileEditPrivacyConflict
+        identifier = self.begin()
+        with self.service.store.connect() as db:
+            row = db.execute('SELECT doc FROM chat_attempts').fetchone()[0]
+            doc = json.loads(row)
+            doc['diagnostic'] = dict(code='request-rejected', message='Generic',
+                reason_sha256=hashlib.sha256(FileEditPrivacyConflict.reason.encode()).hexdigest())
+            raw = json.dumps(doc)
+            db.execute('UPDATE chat_attempts SET doc=?', (raw,))
+            db.commit()
+        result = self.service.list(self.f.f.pid, identifier)[0]
+        self.assertEqual(result['diagnostic']['code'], FileEditPrivacyConflict.code)
+        with self.service.store.connect() as db:
+            self.assertEqual(db.execute('SELECT doc FROM chat_attempts').fetchone()[0], raw)
+
     def test_discard_removes_text_and_late_finalization_cannot_revive_it(self):
         identifier = self.begin()
         self.service.discard(self.f.f.pid, identifier)

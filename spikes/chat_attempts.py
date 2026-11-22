@@ -13,10 +13,12 @@ from spikes.sqlite_ownership import store_connection
 from spikes.task_activities import TaskActivities, privacy_of
 from spikes.task_outcomes import TaskOutcomes
 from spikes.task_work import canonical
+from spikes.task_file_edit import FileEditPrivacyConflict
 
 
 ROUTES = {'/v1/tasks/route', '/v1/chat/send', '/v1/external/send'}
 REASONS = {
+    FileEditPrivacyConflict.reason: (FileEditPrivacyConflict.code, FileEditPrivacyConflict.public_message),
     'Project changed before routed task': ('project-changed', 'Projekt se změnil; obnovte jej a zkontrolujte výběr vstupů.'),
     'External task execution cannot include project artifacts': ('external-project-input', 'Zvolený režim externí úlohy nepodporuje přímo vybrané projektové podklady.'),
     'Search on demand requires a conversation task': ('search-output-conflict', 'Akce Promyslet s případným hledáním vyžaduje výsledek Konverzace. Pro soubor zvolte jinou akci.'),
@@ -96,6 +98,8 @@ class ChatAttempts:
                   if '/spikes/' in frame.filename and frame.name != 'require']
         diagnostic = dict(code=code, message=message, exception_type=type(exc).__name__,
                           reason_sha256=hashlib.sha256(str(exc).encode()).hexdigest())
+        if isinstance(exc, FileEditPrivacyConflict):
+            diagnostic['privacy_conflict'] = exc.details
         if frames:
             diagnostic.update(module=frames[-1].filename.rsplit('/', 1)[-1], line=frames[-1].lineno)
         with self.store.connect() as db:
@@ -139,6 +143,11 @@ class ChatAttempts:
             result = []
             for row in rows:
                 doc = json.loads(row[0])
+                diagnostic = doc.get('diagnostic', {})
+                if (diagnostic.get('code') == 'request-rejected'
+                        and diagnostic.get('reason_sha256') == hashlib.sha256(FileEditPrivacyConflict.reason.encode()).hexdigest()):
+                    doc['diagnostic'] = dict(diagnostic, code=FileEditPrivacyConflict.code,
+                                             message=FileEditPrivacyConflict.public_message)
                 if doc['state'] not in {'completed', 'discarded'} and (not self.work.network or doc['privacy'] != 'local-only'):
                     doc['content_bytes'] = len(doc['content'].encode())
                     if identifier is None:

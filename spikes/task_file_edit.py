@@ -7,11 +7,26 @@ import json
 
 from spikes.artifacts import Artifacts
 from spikes.markdown_documents import MAX_EDITOR, document
-from spikes.metadata import require, uuid, validate_snapshot
+from spikes.metadata import require, uuid, validate_snapshot, ValidationError
 from spikes.presentation_documents import is_presentation_document
 from spikes.task_graph import project_task_graph
 from spikes.task_outcomes import TaskOutcomes
 from spikes.task_plan import ExplicitTaskPlan
+
+
+class FileEditPrivacyConflict(ValidationError):
+    code = 'file-edit-privacy-conflict'
+    reason = 'File edit cannot lower the privacy of its context'
+    public_message = 'Vstupy jsou citlivější než cílový soubor. Vyberte méně citlivé vstupy nebo odpovídající cílový dokument.'
+
+    def __init__(self, artifact_id, target_privacy, context_privacy):
+        super().__init__(self.reason)
+        self.details = dict(artifact_id=artifact_id, target_privacy=target_privacy, context_privacy=context_privacy)
+
+    def payload(self):
+        labels = {'public':'Veřejné','project':'V rámci projektu','confidential':'Důvěrné','local-only':'Jen na tomto počítači'}
+        return dict(error='Cílový soubor: '+labels[self.details['target_privacy']]+'. Vstupy: '+labels[self.details['context_privacy']]+'. '+self.public_message,
+                    diagnostic=self.code, privacy_conflict=self.details)
 
 
 def body(value):
@@ -44,8 +59,8 @@ def target_document(service, project_id, target, base_head, *, privacy=None, cur
     require(not is_presentation_document(doc['body']), 'Presentation editing uses its dedicated editor')
     if privacy is not None:
         from spikes.chat_service import PRIVACY_ORDER
-        require(PRIVACY_ORDER[doc['metadata']['privacy']] >= PRIVACY_ORDER[privacy],
-                'File edit cannot lower the privacy of its context')
+        if PRIVACY_ORDER[doc['metadata']['privacy']] < PRIVACY_ORDER[privacy]:
+            raise FileEditPrivacyConflict(target, doc['metadata']['privacy'], privacy)
     return doc, files, entities
 
 

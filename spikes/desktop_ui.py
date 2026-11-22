@@ -1225,6 +1225,11 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
+<section id="chat-edit-privacy" hidden aria-label="Soukromí úpravy souboru">
+<p id="chat-edit-privacy-message"></p>
+<button id="chat-edit-target-only" type="button">Použít jen cílový soubor a zadání</button>
+<small>Vybrané ostatní podklady, konverzace a veřejné zdroje se odeberou ze vstupů. Model se tím nespustí.</small>
+</section>
 <details id="chat-failed-inputs" hidden><summary>Neúspěšná a neověřená zadání</summary>
 <p>Obnovení vrátí pouze text do formuláře; model znovu nespustí.</p><div id="chat-failed-input-list"></div></details>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
@@ -2345,7 +2350,7 @@ function clearProject(){
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  resetTaskFileEditEditor();document.querySelector('#task-edit-target').value='';
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
- clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';renderChatAttempts([]);
+ clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';renderChatAttempts([]);resetFilePrivacyRecovery();
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();clearJulia();clearRoadmapReview();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  hideSearchRecovery();
@@ -2401,7 +2406,7 @@ async function projectRequest(path,body,timeout=60000){
    }throw error;}
   if(path==='/v1/projects/open'&&result&&typeof result==='object'&&response.fpwAdmissionTiming)try{Object.defineProperty(result,'fpwAdmissionTiming',{value:response.fpwAdmissionTiming});}catch(error){}
   if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
-   error.status=response.status;error.diagnostic=result.diagnostic;
+   error.status=response.status;error.diagnostic=result.diagnostic;error.privacyConflict=result.privacy_conflict;
    error.outcome=result.outcome;error.retry=result.retry;throw error;}
   return result;
  }finally{if(!monitorRequest)scheduleBackendStateRefresh();if(typeof taskWorkActivityFinished==='function')taskWorkActivityFinished(path);}
@@ -5577,6 +5582,38 @@ const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 const responseLanguageState=document.querySelector('#response-language-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevision=0;
+let filePrivacyRecovery=null;
+function resetFilePrivacyRecovery(){filePrivacyRecovery=null;document.querySelector('#chat-edit-privacy').hidden=true;}
+function offerFilePrivacyRecovery(error,request){
+ if(error?.diagnostic!=='file-edit-privacy-conflict'||request?.project_id!==activeProject?.id||
+    request?.task_plan?.output_kind!=='file-edit'||draft.value.trim()!==request.content)return;
+ const targetId=request.task_plan.target_artifact_id;
+ if(selectedTaskFileEditTarget()!==targetId)return;
+ const targetPrivacy=error.privacyConflict?.target_privacy||currentArtifacts.find(item=>item.id===targetId)?.privacy;
+ const levels={'public':0,'project':1,'confidential':2,'local-only':3};
+ filePrivacyRecovery={projectId:request.project_id,targetId,prompt:request.content,targetPrivacy};
+ document.querySelector('#chat-edit-privacy-message').textContent=error.message;
+ document.querySelector('#chat-edit-target-only').disabled=!(targetPrivacy in levels)||
+   !(document.querySelector('#chat-privacy').value in levels)||levels[document.querySelector('#chat-privacy').value]>levels[targetPrivacy];
+ document.querySelector('#chat-edit-privacy').hidden=false;
+}
+document.querySelector('#chat-edit-target-only').addEventListener('click',()=>{
+ const saved=filePrivacyRecovery,levels={'public':0,'project':1,'confidential':2,'local-only':3};
+ if(!saved||saved.projectId!==activeProject?.id||draft.value.trim()!==saved.prompt||
+    document.querySelector('#task-output-kind').value!=='file-edit'||selectedTaskFileEditTarget()!==saved.targetId||
+    document.querySelector('#chat-run-adapter').value!=='ollama'||!(saved.targetPrivacy in levels)||
+    !(document.querySelector('#chat-privacy').value in levels)||
+    levels[document.querySelector('#chat-privacy').value]>levels[saved.targetPrivacy]){
+  resetFilePrivacyRecovery();chatOperationStatus.textContent='Kontext se změnil; zkontrolujte soukromí a vybrané vstupy.';return;
+ }
+ let targetInList=false;
+ for(const input of document.querySelectorAll('#task-artifact-list input')){input.checked=input.value===saved.targetId;if(input.checked)targetInList=true;}
+ document.querySelector('#task-source-artifacts').checked=targetInList;
+ for(const id of ['task-source-conversation','task-source-public','task-source-current-file-input'])document.getElementById(id).checked=false;
+ for(const input of document.querySelectorAll('#task-public-source-list input'))input.checked=false;
+ pendingChatRequest=null;resetFilePrivacyRecovery();refreshChatModeControls();
+ chatOperationStatus.textContent='Vybrán jen cílový soubor a aktuální zadání. Zkontrolujte vstupy a stiskněte Zpracovat; model zatím nebyl spuštěn.';
+});
 function clearSubmittedChatDraft(request){
  if(request&&request.project_id===activeProject?.id&&
   (!activeTaskThreadId||activeTaskThreadId===request.thread_id)&&draft.value.trim()===request.content)draft.value='';
@@ -5679,7 +5716,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=
  const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json',...(typeof taskWorkActivityHeaders==='function'?taskWorkActivityHeaders(path,request):{})},body:JSON.stringify(request)});
  if(!response.ok){let value;try{value=await response.json();}catch(error){throw Object.assign(new Error('Odpověď streamu nelze potvrdit; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});}
-  throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,phase:'response'});}
+  throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,diagnostic:value.diagnostic,privacyConflict:value.privacy_conflict,phase:'response'});}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
  try{while(true){const part=await reader.read();buffer+=decoder.decode(part.value || new Uint8Array(),{stream:!part.done});
   let newline;while((newline=buffer.indexOf('\\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);
@@ -5688,7 +5725,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=
    else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
    else if(event.type==='deadline')onDeadline(event);
    else if(event.type==='result')result=event.result;
-   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status,outcome:event.outcome,retry:event.retry,phase:'response'});
+   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status,outcome:event.outcome,retry:event.retry,diagnostic:event.diagnostic,privacyConflict:event.privacy_conflict,phase:'response'});
    else throw new Error('Neplatná událost streamu.');}
   if(part.done)break;}
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
@@ -7656,6 +7693,7 @@ document.querySelector('#external-confirm').addEventListener('click',async event
 document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
  const submittedProjectId=activeProject.id;
+ resetFilePrivacyRecovery();
  if(new TextEncoder().encode(draft.value).byteLength>1024*1024){
   chatOperationStatus.textContent='Zadání překračuje limit 1 MiB. Text zůstal ve formuláři; část přesuňte do podkladu.';return;
  }
@@ -7847,6 +7885,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
  }catch(error){
   appendChatOperationNotice(error);
+  offerFilePrivacyRecovery(error,pendingChatRequest);
   const staleSelection=await refreshStaleRunSelection(error);
   const failed=pendingChatRequest;
   try{
@@ -10023,6 +10062,11 @@ class DesktopHandler(Handler):
                                    'Po jejím dokončení spusťte novou kontrolu.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
             self.record_chat_exception(exc)
+            from spikes.task_file_edit import FileEditPrivacyConflict
+            if isinstance(exc, FileEditPrivacyConflict):
+                payload = exc.payload()
+                if self.path == '/v1/tasks/route': payload['outcome'] = 'not-started'
+                return self.reply(422, payload)
             from spikes.chat_service import InvalidSearchEvaluation
             from spikes.presentation_proposals import InvalidPresentationProposal
             from spikes.cross_references import ReferenceUnavailable
