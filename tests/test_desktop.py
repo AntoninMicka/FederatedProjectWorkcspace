@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from types import SimpleNamespace
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -30,6 +31,16 @@ from spikes.public_source import (PublicSourceRejected, PublicSourceUnknown,
                                   PublicSourceUnsupported)
 from spikes.project_creation import ProjectCreation
 from tests import test_local_api
+
+
+class TransportDesktopHandler(DesktopHandler):
+    """Isolate transport/diagnostics from storage in tests with a fake service.
+
+    Durable capture and fail-closed dispatch use the real handler in
+    test_chat_attempts_http; these fixtures have no node or project storage.
+    """
+    def chat_attempts(self):
+        return SimpleNamespace(begin=lambda *_args: None)
 
 
 class DesktopTests(unittest.TestCase):
@@ -191,7 +202,7 @@ raise SystemExit(app.exec())
                 def send(self, **_request):
                     raise ValidationError(reason)
             with self.subTest(reason=reason), running_api(
-                    'http', handler=DesktopHandler) as server:
+                    'http', handler=TransportDesktopHandler) as server:
                 server.chat_service = Service()
                 response = driver.request(server, path='/v1/chat/send',
                                           body=json.dumps(request).encode())
@@ -265,7 +276,7 @@ raise SystemExit(app.exec())
             def task_route(self, _request):
                 raise InvalidPresentationProposal('Invalid presentation slide proposal')
         driver = test_local_api.LocalAPITests()
-        with running_api('http', handler=DesktopHandler) as server:
+        with running_api('http', handler=TransportDesktopHandler) as server:
             server.chat_service = Service()
             response = driver.request(server, path='/v1/tasks/route', body=b'{}')
         head, body = response.split(b'\r\n\r\n', 1)
@@ -279,7 +290,7 @@ raise SystemExit(app.exec())
             def task_route(self, _request):
                 raise ReferenceUnavailable('share-revoked')
         driver = test_local_api.LocalAPITests()
-        with running_api('http', handler=DesktopHandler) as server:
+        with running_api('http', handler=TransportDesktopHandler) as server:
             server.chat_service = Service()
             response = driver.request(server, path='/v1/tasks/route', body=b'{}')
         head, body = response.split(b'\r\n\r\n', 1)
@@ -661,7 +672,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
                 return {'thread': {'messages': []}, 'state': 'succeeded'}
 
         driver = test_local_api.LocalAPITests()
-        with running_api('http', handler=DesktopHandler) as server:
+        with running_api('http', handler=TransportDesktopHandler) as server:
             server.chat_service = Service()
             response = driver.request(server, path='/v1/external/send-stream',
                                       body=b'{"run_id":"test-run"}')
@@ -674,7 +685,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
             {'type': 'result', 'result': {
                 'thread': {'messages': []}, 'state': 'succeeded'}}])
         self.assertEqual(server.chat_service.request, {'run_id': 'test-run'})
-        with running_api('http', handler=DesktopHandler) as server:
+        with running_api('http', handler=TransportDesktopHandler) as server:
             server.chat_service = Service()
             request = {'project_id': 'project', 'expected_head': 'head',
                 'thread_id': 'thread', 'turn_id': 'turn', 'message_id': 'message',
@@ -708,7 +719,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
             'content': 'text', 'privacy': 'project', 'created_at': 'now'}
         body = json.dumps(request).encode()
         try:
-            with running_api('http', handler=DesktopHandler) as server:
+            with running_api('http', handler=TransportDesktopHandler) as server:
                 server.chat_service = Service()
                 client = socket.create_connection(server.server_address, timeout=2)
                 self.addCleanup(client.close)
@@ -1068,7 +1079,7 @@ const thread={thread_id:'thread',project_id:'project',status:'active',classifica
 const renderModelSelection=()=>{},renderChatRunSelectors=()=>{},fillBinding=()=>{},fillSearchBinding=()=>{},
  applyOllamaStreamingStatus=()=>{},applyResponseLanguageStatus=()=>{},renderThreadList=()=>{},
  renderTaskPublicSources=()=>{},refreshChatModeControls=()=>{},fillExternalModels=()=>{},fillAtlasCloudOffers=()=>{},
- refreshChatOllamaCatalog=()=>{},
+ refreshChatOllamaCatalog=()=>{},renderChatAttempts=()=>{},
  loadDirectProviders=()=>{};
 function renderChat(value){rendered.push(value);}
 async function loadAutonomyQueue(){return true;}

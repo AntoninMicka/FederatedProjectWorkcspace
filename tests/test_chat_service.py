@@ -3254,7 +3254,7 @@ class ChatServiceTests(unittest.TestCase):
                                       body=json.dumps({'project_id': ENTITY}).encode())
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
-            self.assertEqual(json.loads(body), {'outcomes': []})
+            self.assertEqual(json.loads(body), {'outcomes': [], 'attempts': []})
             request = json.dumps(self.request()).encode()
             response = driver.request(server, path='/v1/chat/send', body=request)
             head, body = response.split(b'\r\n\r\n', 1)
