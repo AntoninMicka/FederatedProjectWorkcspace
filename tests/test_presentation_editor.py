@@ -51,6 +51,7 @@ class PresentationEditorTests(unittest.TestCase):
 
     def test_edit_links_both_directions_save_reopen_and_explicit_use(self):
         emitted = []; self.dialog.selected.connect(emitted.append)
+        self.dialog.privacy.setCurrentIndex(self.dialog.privacy.findData('confidential'))
         self.dialog.deck_title.setText('Edited deck')
         self.dialog.title.setText('First')
         self.dialog.bullets.setPlainText('Point one\nPoint two')

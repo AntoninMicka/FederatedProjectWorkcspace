@@ -382,6 +382,12 @@ dialog.close(); app.processEvents()
         self.assertEqual(self.service.open(self.id)['documents'][0]['metadata'],
                          dict(meta, title='Edited', **patch))
         self.assertEqual(list(self.git.snapshot(self.git.head())), [f'artifacts/{id_}/note.md'])
+        relaxed = self.request(id_=id_, body=body, title='Edited', new=False) | {
+            'privacy': 'project', 'authorize_privacy_relaxation': True}
+        self.service.save(relaxed, str(uuid4()))
+        doc = self.service.open(self.id)['documents'][0]
+        self.assertEqual(doc['metadata'], dict(meta, title='Edited', **patch, privacy='project'))
+        self.assertEqual(doc['body'], body)
 
     def test_process_crashes_and_native_open_recover_exactly_once(self):
         script = '''

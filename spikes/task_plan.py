@@ -34,6 +34,7 @@ class ExplicitTaskPlan:
     search_on_demand: bool = False
     search_compose: bool = False
     provider_web_search: bool = False
+    privacy_override: dict | None = None
 
     @classmethod
     def parse(cls, value):
@@ -46,6 +47,8 @@ class ExplicitTaskPlan:
             fields.add('edit_block_ids')
         if editing and 'edit_format' in value:
             fields.add('edit_format')
+        if editing and 'privacy_override' in value:
+            fields.add('privacy_override')
         on_demand = isinstance(value, dict) and 'search_on_demand' in value
         compose = isinstance(value, dict) and 'search_compose' in value
         if on_demand:
@@ -116,9 +119,14 @@ class ExplicitTaskPlan:
             uuid(target)
             require('artifacts' in sources and value['execution'] == 'local-ollama',
                     'File editing requires an explicit project input and Ollama execution')
+        override = value.get('privacy_override')
+        if 'privacy_override' in value:
+            from spikes.task_file_edit import validate_privacy_override
+            validate_privacy_override(override, override.get('target_privacy') if isinstance(override, dict) else None,
+                                      override.get('context_privacy') if isinstance(override, dict) else None)
         return cls(tuple(sources), value['output_kind'], value['execution'], query,
                    tuple(runs), target, edit_format, tuple(block_ids) if block_ids is not None else None,
-                   on_demand, compose, provider_search)
+                   on_demand, compose, provider_search, override)
 
     @property
     def acquiring_public_web(self):
@@ -152,6 +160,8 @@ class ExplicitTaskPlan:
             result['provider_web_search'] = True
         if self.output_kind == 'file-edit':
             result['target_artifact_id'] = self.target_artifact_id
+            if self.privacy_override is not None:
+                result['privacy_override'] = dict(self.privacy_override)
             if self.edit_format is not None:
                 result['edit_format'] = self.edit_format
             if self.edit_block_ids is not None:

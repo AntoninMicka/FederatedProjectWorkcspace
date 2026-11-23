@@ -5,6 +5,37 @@ SPDX-License-Identifier: MPL-2.0
 
 # Veřejný katalog reuse
 
+Strukturované doplnění roadmapy **adaptuje** detekci `roadmap_append_context`
+pro české formulace a blokový průchod. **Reuse:** autorizovaný Markdown
+Context Manifest v2, registr rolí, kanonický `markdown_patch`, validátor grafu,
+náhled a potvrzený nativní writer. Aplikace serializuje typy a odsazení nových
+položek z uzavřených modelových dat. **Reject:** odhadování typů v neplatném
+textu, přepis původních úkolů při doplňování a automatický modelový retry.
+Rozsah a recovery: [doplnění úkolů](docs/roadmap-task-additions.md).
+
+Ochrana souborů a výslovná výjimka AI úpravy **adaptují** stávající
+`Artifacts.save`, `PlanItems.save`, Julia/presentation writery a
+`Workspace.transact(allow_privacy_relaxation=...)` z původního importního
+průchodu. **Reuse:** stejné metadata třídy, Context Manifest, task plan digest,
+potvrzení diffu, CAS a journal recovery. **Reject:** globální bypass,
+automatická reklasifikace zdrojů a druhý persistentní store. Důvod a crash
+boundaries: [ADR 0089](docs/adr/0089-explicit-document-privacy-review.md).
+
+CHAT-SUBMISSION-RECOVERY-01 **adapt**: existující soukromý `TaskOutcomes`
+SQLite journal doplněný o typovanou evidenci před dispatch, nikoli nový
+projektový store. **Reuse:** SQLite ownership, `TaskWork` identita/přístup,
+privacy gate `TaskActivities`, stávající `/v1/tasks/list` a inertní renderer.
+**Reject:** automatické opakování modelu, zvýšení tokenového rozpočtu,
+browser-only persistence závislá na originu, raw výjimky v logu a mazání
+nového promptu pozdní odpovědí. Oprava nepřidává obecné externí čtení
+projektových artefaktů. Hranice a ověření:
+[obnova odeslaného zadání](docs/chat-submission-recovery.md).
+Navazující konflikt privacy **adaptuje** původní pre-dispatch a potvrzovací
+kontroly `task_file_edit`: typovaný důvod, společná HTTP/stream odpověď a
+výslovné zúžení formuláře na cíl a zadání. **Reuse:** společný editor,
+kontrola roadmapy a původní potvrzený nativní writer. **Reject:** automatické
+snížení privacy, přeznačení cíle, tiché odebrání vstupů a automatický retry.
+
 Obnova task-work F **adaptuje** původní `TaskActivities.finish` a lokální
 finalizaci `TaskRecords`; **reuse:** `Workspace.receipt`, validovaný Git
 snapshot, `ChatThreads.get_turn`, capability a nativní operační zámky.

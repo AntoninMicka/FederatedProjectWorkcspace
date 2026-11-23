@@ -605,8 +605,9 @@ class OllamaAdapter:
                 require(selected_ids == [item['message_id'] for item in conversation],
                         'Task conversation does not match input order')
             from spikes.markdown_patch import ROLE as BLOCK_ROLE, ROLES as BLOCK_ROLES, SCHEMA as BLOCK_SCHEMA, render_prompt
-            block_task = task['role_revision'] in BLOCK_ROLES
-            if task['role_revision'] == BLOCK_ROLE:
+            from spikes.roadmap_additions import ROLE as ADDITIONS_ROLE
+            block_task = task['role_revision'] in BLOCK_ROLES or task['role_revision'] == ADDITIONS_ROLE
+            if task['role_revision'] in {BLOCK_ROLE, ADDITIONS_ROLE}:
                 rendered = []
                 for input_id, content, projection in decoded:
                     try:
@@ -653,6 +654,9 @@ class OllamaAdapter:
             if dependency_task:
                 sections.append('Required result: return only the JSON object with decision, reason and '
                     'prerequisites for the focus task. Prerequisites must be finished BEFORE the focus task.')
+            elif task['role_revision'] == ADDITIONS_ROLE:
+                sections.append('Required result: return only typed roadmap-additions JSON. The application renders '
+                    'the Markdown and type metadata. Preserve every existing task; add only the requested new items.')
             elif block_task and task['role_revision'] == BLOCK_ROLE:
                 sections.append('Required Markdown result: implement the User edit request using only JSON block operations. '
                     'Use block IDs from the <<marker>> lines. Do not regenerate unchanged blocks.')
@@ -740,9 +744,10 @@ class OllamaAdapter:
             elif role is not None and role.role_id == 'task-output':
                 from spikes.markdown_patch import (output_schema, output_schema_v3, ROLE as BLOCK_ROLE,
                                                    SCHEMA as MARKDOWN_SCHEMA, SCHEMA_V1 as MARKDOWN_SCHEMA_V1)
+                from spikes.roadmap_additions import ROLE as ADDITIONS_ROLE, output_schema as additions_schema
                 markdown_schema = None
-                if role.revision in {'task-output-markdown-patch-v2', BLOCK_ROLE}:
-                    wanted = MARKDOWN_SCHEMA if role.revision == BLOCK_ROLE else MARKDOWN_SCHEMA_V1
+                if role.revision in {'task-output-markdown-patch-v2', BLOCK_ROLE, ADDITIONS_ROLE}:
+                    wanted = MARKDOWN_SCHEMA if role.revision in {BLOCK_ROLE, ADDITIONS_ROLE} else MARKDOWN_SCHEMA_V1
                     scopes = []
                     for part in json.loads(handoff.payload).get('inputs', []):
                         try:
@@ -752,9 +757,14 @@ class OllamaAdapter:
                         if isinstance(value, dict) and value.get('schema') == wanted:
                             scopes.append(value)
                     require(len(scopes) == 1, 'Markdown output requires exactly one pinned block context')
-                    markdown_schema = (output_schema_v3(scopes[0]) if role.revision == BLOCK_ROLE
-                                       else output_schema(scopes[0]))
+                    if role.revision == ADDITIONS_ROLE:
+                        markdown_schema = additions_schema(scopes[0])
+                    elif role.revision == BLOCK_ROLE:
+                        markdown_schema = output_schema_v3(scopes[0])
+                    else:
+                        markdown_schema = output_schema(scopes[0])
                 body['format'] = {
+                    ADDITIONS_ROLE: markdown_schema,
                     BLOCK_ROLE: markdown_schema,
                     'task-output-markdown-patch-v2': markdown_schema,
                     'task-output-markdown-patch-v1': output_schema(),
@@ -784,14 +794,14 @@ class OllamaAdapter:
             body['options'] = {'num_predict': DEPENDENCY_PREDICT, 'temperature': 0, 'num_ctx': window}
             body['think'] = False
             body = {key: body[key] for key in sorted(body)}
-        ordered_patch = role is not None and role.revision in {'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5', 'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2', 'task-output-markdown-patch-v3'}
+        ordered_patch = role is not None and role.revision in {'task-output-file-edit-patch-v4', 'task-output-file-edit-patch-v5', 'task-output-markdown-patch-v1', 'task-output-markdown-patch-v2', 'task-output-markdown-patch-v3', 'task-output-roadmap-additions-v1'}
         if ordered_patch:
             task = json.loads(handoff.payload).get('task', {})
             require(task.get('role_revision') == role.revision and task.get('role_id') == role.role_id,
                     'Patch role differs from the authorized task')
             body['system'] = task['instruction']
             body['options'] = {'num_predict': 4096, 'temperature': 0}
-            if role.revision == 'task-output-markdown-patch-v3':
+            if role.revision in {'task-output-markdown-patch-v3', 'task-output-roadmap-additions-v1'}:
                 from spikes.markdown_patch import MarkdownPatchError, context_window
                 window = context_window(body['prompt'], body['system'])
                 if window is None:

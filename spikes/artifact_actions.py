@@ -57,6 +57,9 @@ class ArtifactActions:
                     markdown_requires_scope_choice=requires_patch(result['after']['body']))
 
     def save(self, request, operation_id):
+        from spikes.document_privacy import selection
+        # Validate only the requested trust boundary here; the writer checks the old classification.
+        selection(request, network=self.projects.network)
         # The read validates current network privacy before any web mutation.
         workspace = self.artifacts.workspace(request.get('project_id'))
         if workspace.receipt(operation_id) is None:

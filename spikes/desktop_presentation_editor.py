@@ -96,6 +96,13 @@ class PresentationEditorDialog(QDialog):
         self.deck_title = QLineEdit(); self.deck_title.setMaxLength(200)
         content.addWidget(QLabel('Název prezentace'))
         content.addWidget(self.deck_title)
+        self.privacy = QComboBox()
+        for value, label in [('public','Veřejné'),('project','V rámci projektu'),('confidential','Důvěrné'),('local-only','Jen na tomto počítači')]:
+            self.privacy.addItem(label, value)
+        self.original_privacy = 'project'
+        self.privacy.setCurrentIndex(1)
+        content.addWidget(QLabel('Ochrana souboru')); content.addWidget(self.privacy)
+        self.privacy.currentIndexChanged.connect(lambda: self.changed() if not self.loading else None)
         split = QSplitter()
         left = QWidget(); left_layout = QVBoxLayout(left)
         self.slides = QListWidget(); left_layout.addWidget(self.slides)
@@ -214,6 +221,8 @@ class PresentationEditorDialog(QDialog):
                             if self.deck else 'Vybranou prezentaci nelze načíst; dokument zůstal beze změny.')
 
     def install(self, document):
+        self.original_privacy = document.get('metadata', {}).get('privacy', 'project')
+        self.privacy.blockSignals(True); self.privacy.setCurrentIndex(self.privacy.findData(self.original_privacy)); self.privacy.blockSignals(False)
         self.deck = copy.deepcopy(document.get('deck'))
         self.artifact_id = document['id']; self.new = False; self.pending = None; self.dirty = False
         self.slide_id = None
@@ -231,6 +240,8 @@ class PresentationEditorDialog(QDialog):
             self.documents.setCurrentIndex(self.documents.findData(self.artifact_id))
 
     def create_unchecked(self):
+        self.original_privacy = 'project'
+        self.privacy.blockSignals(True); self.privacy.setCurrentIndex(1); self.privacy.blockSignals(False)
         self.deck = new_deck(); self.artifact_id = str(uuid4()); self.new = True
         self.pending = None; self.dirty = True; self.slide_id = self.deck['slides'][0]['id']
         self.documents.setCurrentIndex(-1); self.refresh(); self.update_enabled()
@@ -394,6 +405,13 @@ class PresentationEditorDialog(QDialog):
                 self.status.setText(str(exc)); return
             self.pending = (dict(project_id=self.project_id, artifact_id=self.artifact_id,
                                  base_head=self.view['commit_id'], new=self.new, deck=copy.deepcopy(self.deck)), str(uuid4()))
+            from spikes.document_privacy import LEVELS
+            privacy = self.privacy.currentData()
+            if not self.new and LEVELS[privacy] < LEVELS[self.original_privacy]:
+                if QMessageBox.question(self, 'Snížit ochranu souboru', 'Potvrdit snížení ochrany celého souboru? Historie Git zůstane zachovaná.') != QMessageBox.Yes:
+                    self.pending = None; return
+                self.pending[0]['authorize_privacy_relaxation'] = True
+            self.pending[0]['privacy'] = privacy
         request, operation = self.pending
         def action():
             self.service.save(request, operation)

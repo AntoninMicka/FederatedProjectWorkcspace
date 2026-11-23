@@ -174,11 +174,15 @@ class PlanItems:
             return dict(project_id=project_id, artifact_id=artifact_id, task_id=task_id,
                         expected_head=expected_head, title=node['title'], body=body,
                         parent_id=node['parent_id'], type=node['type'],
+                        privacy=doc['metadata']['privacy'],
                         fragment_sha256=hashlib.sha256(body.encode()).hexdigest())
 
     def save(self, request, operation_id, *, checkpoint=lambda stage: None):
-        require(isinstance(request, dict) and set(request) == {
-            'project_id', 'artifact_id', 'task_id', 'expected_head', 'fragment_sha256', 'body'}, 'Invalid plan item request')
+        required = {'project_id', 'artifact_id', 'task_id', 'expected_head', 'fragment_sha256', 'body'}
+        require(isinstance(request, dict) and required <= request.keys() <= required | {
+            'privacy', 'authorize_privacy_relaxation'}, 'Invalid plan item request')
+        from spikes.document_privacy import selection, changes, audit
+        selection(request, network=self.network)
         uuid(request['project_id']); uuid(request['artifact_id']); commit_id(request['expected_head'])
         require(isinstance(request['body'], str) and '\0' not in request['body']
                 and 0 < len(request['body'].encode()) <= MAX_EDITOR, 'Invalid or oversized item draft')
@@ -200,7 +204,9 @@ class PlanItems:
             raw = files[doc['path']]; suffix = doc['body'].encode()
             require(raw.endswith(suffix), 'Nepodporované hranice dokumentu.')
             prefix = raw[:len(raw)-len(suffix)]
-            candidate = dict(files, **{doc['path']: prefix + body.encode()})
+            privacy = selection(request, doc['metadata']['privacy'], network=self.network)
+            edited = changes(doc, body, privacy) if privacy != doc['metadata']['privacy'] else {doc['path']: prefix + body.encode()}
+            candidate = dict(files, **edited)
             updated = project_task_graph(candidate, validate_snapshot(candidate), request['project_id'], head)
             require(updated['status'] == 'ready', updated.get('error', 'Plán není platný.'))
             before = {n['id']: n for n in plan['nodes']}; after = {n['id']: n for n in updated['nodes']}
@@ -210,10 +216,11 @@ class PlanItems:
                 if identifier != node['id']:
                     fields += ['title', 'checked', 'status_mode', 'description', 'relations', 'checklist']
                 require(all(prior.get(k) == after[identifier].get(k) for k in fields), 'Změna zasahuje jinou položku nebo hierarchii.')
-            return {doc['path']: candidate[doc['path']]}, 'Local workspace author', author+'@local.invalid', 'Edit selected plan item'
+            return edited, 'Local workspace author', author+'@local.invalid', 'Edit selected plan item'+audit(doc['metadata']['privacy'], privacy)
 
         receipt = workspace.transact(operation_id, dict(action='edit-plan-item', **request), prepare,
-                                     expected_head=request['expected_head'], checkpoint=checkpoint)
+                                     expected_head=request['expected_head'], checkpoint=checkpoint,
+                                     allow_privacy_relaxation=request.get('authorize_privacy_relaxation') is True)
         return dict(project_id=request['project_id'], artifact_id=request['artifact_id'],
                     task_id=request['task_id'], commit_id=receipt['commit_id'])
 

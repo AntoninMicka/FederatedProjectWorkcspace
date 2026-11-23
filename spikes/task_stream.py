@@ -145,6 +145,7 @@ def serve(handler, request):
     from spikes.ollama_backend import UnknownRun, OllamaResponseError
     from spikes.document_patch import PatchValidationError
     from spikes.markdown_patch import MarkdownPatchError
+    from spikes.task_file_edit import FileEditPrivacyConflict
     require(isinstance(request, dict), 'Invalid streamed task request')
     key(handler.server.chat_service, request)
     handler.close_connection = True
@@ -170,9 +171,14 @@ def serve(handler, request):
                 on_delta=lambda delta: emit(dict(type='delta',delta=delta)),
                 on_status=lambda status: emit(dict(type='status',status=status)), control=control)
             emit(dict(type='result',result=result))
+        except FileEditPrivacyConflict as exc:
+            getattr(handler, 'record_chat_exception', lambda error: None)(exc)
+            emit(dict(type='error', status=422, outcome='not-started', **exc.payload()))
         except (PatchValidationError, MarkdownPatchError) as exc:
+            getattr(handler, 'record_chat_exception', lambda error: None)(exc)
             emit(dict(type='error', status=422, error=str(exc), diagnostic=exc.code, outcome='invalid-proposal'))
         except OllamaResponseError as exc:
+            getattr(handler, 'record_chat_exception', lambda error: None)(exc)
             messages = {
                 'stream-frame-too-large': 'Ollama vrátila příliš velký rámec průběžného přenosu.',
                 'stream-too-large': 'Odpověď Ollamy překročila celkový limit průběžného přenosu.',
@@ -182,6 +188,7 @@ def serve(handler, request):
             emit(dict(type='error', status=422, error=message + ' Původní běh automaticky neopakujte.',
                       diagnostic=exc.code, outcome='provider-error'))
         except (UnknownRun, ValueError, OSError) as exc:
+            getattr(handler, 'record_chat_exception', lambda error: None)(exc)
             control.stop(control.reason or 'stream-failed')
             try: emit(dict(type='error',status=409 if isinstance(exc, UnknownRun) or control.reason in {
                 'user-stopped','hard-timeout'} else 422,

@@ -63,6 +63,16 @@ class PlanItemTests(unittest.TestCase):
         self.assertEqual(before[path].replace(model['body'].encode(), request['body'].encode(), 1), after[path])
         with self.assertRaises(ValidationError): self.editor.save(request | {'body': request['body']+'\n'}, operation)
 
+    def test_item_editor_changes_source_file_privacy_with_confirmation(self):
+        self.assertEqual(self.opened()['privacy'], 'project')
+        result = self.editor.save(self.request(privacy='confidential'), str(uuid4()))
+        self.head = result['commit_id']
+        self.assertEqual(self.opened()['privacy'], 'confidential')
+        with self.assertRaisesRegex(ValueError, 'výslovné potvrzení'):
+            self.editor.save(self.request(privacy='project'), str(uuid4()))
+        result = self.editor.save(self.request(privacy='project', authorize_privacy_relaxation=True), str(uuid4()))
+        self.head = result['commit_id']; self.assertEqual(self.opened()['privacy'], 'project')
+
     def test_invalid_scope_ids_dependencies_hierarchy_and_stale_revision_do_not_write(self):
         model = self.opened(); before = Projects(self.node).repository(self.project).snapshot(self.head)
         for changes in [dict(fragment_sha256='0'*64), dict(expected_head='0'*40),
@@ -510,7 +520,8 @@ const assert=require('node:assert/strict');
 const field=()=>({value:'',disabled:false,readOnly:false,label:{hidden:false},closest(){return this.label;},focus(){}});
 const elements=new Map(),button={disabled:false};
 const document={querySelector(id){if(!elements.has(id))elements.set(id,{textContent:'',remove(){}});return elements.get(id);}};
-const artifactEditorForm={elements:Object.fromEntries(['body','title','filename','description','tags'].map(n=>[n,field()])),querySelector:()=>button};
+const artifactEditorForm={elements:Object.fromEntries(['body','title','filename','description','tags','privacy'].map(n=>[n,field()])),querySelector:()=>button};
+let artifactEditorOriginalPrivacy='project';function editorPrivacyRequest(select){return {privacy:select.value};}
 let activeProject={id:'p',head:'h',mainTodoId:'main',readOnly:false},artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false;
 let planEditorReturn=null;function capturePlanPosition(){return null;}
 let allow=false,failed=true,calls=[],filled=[],artifactEditorView={hidden:true},taskPlanProjection={nodes:[]};

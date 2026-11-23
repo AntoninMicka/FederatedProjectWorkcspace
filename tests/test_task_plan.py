@@ -8,6 +8,20 @@ from spikes.task_plan import ExplicitTaskPlan, task_output_instruction
 
 
 class ExplicitTaskPlanTests(unittest.TestCase):
+    def test_privacy_override_is_typed_file_edit_only_and_changes_plan_digest(self):
+        target = str(uuid4())
+        base = dict(source_kinds=['artifacts'], output_kind='file-edit', target_artifact_id=target)
+        original = self.plan(**base)
+        review = dict(approved=True, target_privacy='project', context_privacy='confidential')
+        reviewed = self.plan(**base, privacy_override=review)
+        self.assertEqual(reviewed.serialize()['privacy_override'], review)
+        self.assertNotEqual(original.digest(), reviewed.digest())
+        for value in [True, {}, review | {'approved':False}, review | {'extra':True},
+                      review | {'target_privacy':'local-only'}, review | {'context_privacy':[]}]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.plan(**base, privacy_override=value)
+        with self.assertRaises(ValueError): self.plan(privacy_override=review)
+
     def plan(self, **changes):
         value = {'schema_version': 1, 'source_kinds': ['conversation'],
                  'output_kind': 'conversation', 'execution': 'local-ollama',

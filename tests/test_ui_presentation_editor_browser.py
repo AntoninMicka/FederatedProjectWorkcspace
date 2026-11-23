@@ -28,6 +28,28 @@ def native_bridge_functions():
 
 @require_browser
 class PresentationEditorTests(UiFlowCase):
+    def test_privacy_shared_by_visual_and_raw_editor_and_explicit_relaxation(self):
+        from spikes.projects import Projects
+        from spikes.metadata import validate_snapshot
+        page = self.open_editor()
+        page.fill('#presentation-editor-privacy', 'confidential')
+        self.save_new_deck('Důvěrná prezentace')
+        git = Projects(self.node).repository(self.project_id)
+        aid = self.requests('/v1/presentations/save')[0]['body']['document']['artifact_id']
+        self.assertEqual(validate_snapshot(git.snapshot(git.head()))[aid]['privacy'], 'confidential')
+        page.click('#presentation-editor-mode-raw'); page.wait_idle()
+        self.assertTrue(page.visible('#presentation-editor-privacy'))
+        self.assertEqual(page.evaluate("document.querySelector('#presentation-editor-privacy').value"), 'confidential')
+        page.fill('#presentation-editor-privacy', 'project')
+        before = git.head(); page.dialog_answers.append(False)
+        page.click('#presentation-editor-save'); page.wait_idle()
+        self.assertEqual(before, git.head())
+        page.click('#presentation-editor-save')
+        page.wait(lambda:git.head()!=before, 'explicit privacy save'); page.wait_idle()
+        self.assertEqual(validate_snapshot(git.snapshot(git.head()))[aid]['privacy'], 'project')
+        self.assertTrue(self.requests('/v1/presentations/save')[-1]['body']['document']['authorize_privacy_relaxation'])
+        self.assert_no_page_errors()
+
     def open_editor(self):
         page = self.start(configure_search=False)
         page.evaluate("[...document.querySelectorAll('#sidebar-project-list button')]"

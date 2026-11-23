@@ -854,6 +854,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
+<label>Ochrana souboru <select id="artifact-editor-privacy" name="privacy" data-document-privacy></select><small id="artifact-editor-privacy-hint">Platí pro celý soubor, ve všech režimech editoru.</small></label>
 <section id="task-plan-editor" class="task-plan-editor" hidden aria-label="Strukturovaný editor plánu">
 <div class="task-plan-mode" role="tablist" aria-label="Režim editoru plánu"><button id="task-plan-mode-structured" type="button" role="tab" aria-selected="true">Kostky</button><button id="task-plan-mode-raw" type="button" role="tab" aria-selected="false">Raw text</button><button id="task-plan-mode-preview" type="button" role="tab" aria-selected="false" aria-controls="task-plan-preview">Náhled</button></div>
 <p id="task-plan-editor-status" role="status" aria-live="polite"></p>
@@ -1150,6 +1151,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="presentation-panel" role="tabpanel" aria-labelledby="presentation-tab" hidden>
 <div class="presentation-editor-head"><div><h2>Prezentace</h2><p>Editor, náhled i spuštění používají stejný deck otevřeného projektu.</p></div>
 <div class="form-actions"><div class="editor-mode-switch" role="group" aria-label="Režim editoru prezentace"><button id="presentation-editor-mode-special" type="button" aria-pressed="true">Vizuální</button><button id="presentation-editor-mode-raw" class="secondary-button" type="button" aria-pressed="false">Raw</button></div><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
+<label>Ochrana souboru <select id="presentation-editor-privacy" data-document-privacy></select></label>
 <div id="presentation-editor-workspace" class="presentation-editor-workspace" hidden>
 <section class="presentation-editor-slides"><label>Název prezentace <input id="presentation-deck-title" maxlength="200"></label><h3>Slidy</h3><ol id="presentation-slide-list"></ol>
 <div class="form-actions"><button id="presentation-add-main" type="button">+ Hlavní</button><button id="presentation-add-backup" type="button">+ Backup</button><button id="presentation-delete-slide" class="danger-button" type="button">Odstranit</button></div>
@@ -1182,7 +1184,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="metadata-publish" type="button">Použít vybrané změny</button></div></div></div>
 <section id="prompt-widget" aria-label="Prompt"><form id="chat-composer">
 <label class="prompt-draft-control" for="chat-draft"><span>Zadání</span>
-<textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete zpracovat?"></textarea></label>
+<textarea id="chat-draft" rows="2" placeholder="Co chcete zpracovat?"></textarea></label>
 <div class="prompt-toolbar">
 <label class="prompt-control" for="chat-mode"><span>Režim</span><select id="chat-mode"><option value="orchestration">Úkol</option><option value="brainstorming">Volná konverzace</option></select></label>
 <div id="task-routing" class="prompt-routing-controls">
@@ -1225,6 +1227,14 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
+<section id="chat-edit-privacy" hidden aria-label="Soukromí úpravy souboru">
+<p id="chat-edit-privacy-message"></p>
+<button id="chat-edit-target-only" type="button">Použít jen cílový soubor a zadání</button>
+<button id="chat-edit-override" type="button">Provést i přes omezení…</button>
+<small>Volba „Použít jen cílový soubor a zadání“ odebere ostatní vstupy a model nespustí. „Provést i přes omezení“ po potvrzení spustí nové zpracování se všemi vybranými vstupy.</small>
+</section>
+<details id="chat-failed-inputs" hidden><summary>Neúspěšná a neověřená zadání</summary>
+<p>Obnovení vrátí pouze text do formuláře; model znovu nespustí.</p><div id="chat-failed-input-list"></div></details>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
@@ -2343,7 +2353,7 @@ function clearProject(){
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  resetTaskFileEditEditor();document.querySelector('#task-edit-target').value='';
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
- clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
+ clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';renderChatAttempts([]);resetFilePrivacyRecovery();filePrivacyOverride=null;
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();clearJulia();clearRoadmapReview();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  hideSearchRecovery();
@@ -2399,7 +2409,7 @@ async function projectRequest(path,body,timeout=60000){
    }throw error;}
   if(path==='/v1/projects/open'&&result&&typeof result==='object'&&response.fpwAdmissionTiming)try{Object.defineProperty(result,'fpwAdmissionTiming',{value:response.fpwAdmissionTiming});}catch(error){}
   if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
-   error.status=response.status;error.diagnostic=result.diagnostic;
+   error.status=response.status;error.diagnostic=result.diagnostic;error.privacyConflict=result.privacy_conflict;
    error.outcome=result.outcome;error.retry=result.retry;throw error;}
   return result;
  }finally{if(!monitorRequest)scheduleBackendStateRefresh();if(typeof taskWorkActivityFinished==='function')taskWorkActivityFinished(path);}
@@ -2706,6 +2716,21 @@ document.querySelector('#task-plan-mode-preview').addEventListener('click',()=>{
 for(const button of document.querySelectorAll('[data-task-pattern]'))button.addEventListener('click',()=>{const textarea=artifactEditorForm.elements.body,parsed=parseTaskPlanDraft(textarea.value),target=document.querySelector('#task-plan-insert-position').value,task=parsed.safe?parsed.tasks.find(item=>item.parts[4]===target):null,offset=task?parsed.lines.slice(0,task.line).join('\\n').length+(task.line?1:0):textarea.value.length;document.querySelector('#artifact-raw-widget [data-raw-insertion-position]').value='cursor';textarea.setSelectionRange(offset,offset);if(artifactRawWidget.insert(button.dataset.taskPattern))renderTaskPlanEditor();});
 artifactEditorForm.elements.body.addEventListener('input',()=>{if(!taskPlanEditor.hidden&&taskPlanMode!=='raw')renderTaskPlanEditor();});
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
+const documentPrivacyLevels={'public':0,'project':1,'confidential':2,'local-only':3};
+const documentPrivacyLabels={'public':'Veřejné','project':'V rámci projektu','confidential':'Důvěrné','local-only':'Jen na tomto počítači'};
+for(const select of document.querySelectorAll('[data-document-privacy]')){
+ for(const [value,label] of Object.entries(documentPrivacyLabels)){const option=new Option(label,value);option.disabled=value==='local-only'&&document.body.dataset.runtime!=='desktop';select.append(option);}
+ select.value='project';
+}
+function editorPrivacyRequest(select,previous,isNew=false){
+ const privacy=select.value,result={privacy};
+ if(!isNew&&documentPrivacyLevels[privacy]<documentPrivacyLevels[previous]){
+  if(!confirm(`Snížit ochranu celého souboru z „${documentPrivacyLabels[previous]}“ na „${documentPrivacyLabels[privacy]}“? Změna umožní širší použití obsahu. Historie Git zůstává zachovaná.`))return null;
+  result.authorize_privacy_relaxation=true;
+ }
+ return result;
+}
+let artifactEditorOriginalPrivacy='project';
 function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
 const editorLeaveDialog=document.querySelector('#editor-leave-dialog');
 let editorLeavePending=false;
@@ -2741,7 +2766,7 @@ async function canLeaveWorkspaceEditors(){
 function fillArtifactEditor(doc,isNew=false,{rawOnly=false}={}){
  resetTaskFileEditEditor();document.querySelector('#plan-item-status-control')?.remove();
  for(const name of ['title','filename','description','tags']){const field=artifactEditorForm.elements[name];field.disabled=Boolean(artifactEditorItem?.planItem||doc.working_draft);const label=field.closest?.('label');if(label)label.hidden=field.disabled;}
- const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
+ const meta=doc.metadata||{};artifactEditorOriginalPrivacy=meta.privacy||'project';artifactEditorForm.elements.privacy.value=artifactEditorOriginalPrivacy;artifactEditorForm.elements.privacy.disabled=Boolean(doc.working_draft);document.querySelector('#artifact-editor-privacy-hint').textContent=artifactEditorItem?.planItem?'Ochrana platí pro celý zdrojový soubor, včetně ostatních úkolů.':'Platí pro celý soubor, ve všech režimech editoru.';document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
  document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
@@ -2804,7 +2829,7 @@ async function openPlanItemEditor(task){
   task=current;item.id=current.source.artifact_id;
   const result=await projectRequest('/v1/artifacts/editor/plan-item/open',{project_id:project.id,artifact_id:item.id,task_id:task.id,expected_head:project.head});
   if(activeProject!==project||artifactEditorItem!==item)return;
-  item.planItem=result;hideArtifactDeletion();fillArtifactEditor({title:result.title,body:result.body},false,{rawOnly:true});
+  item.planItem=result;hideArtifactDeletion();fillArtifactEditor({title:result.title,body:result.body,metadata:{privacy:result.privacy}},false,{rawOnly:true});
   configurePlanStatusEditor(task);
   showWorkspacePage(artifactEditorView);
   document.querySelector('#artifact-editor-heading').textContent=`Upravit položku ${task.id}`;
@@ -2817,6 +2842,7 @@ async function savePlanItemEditor(navigate=true){
  const item=artifactEditorItem,project=activeProject,model=item?.planItem;
  if(!project||!model||model===true||project.readOnly)return false;
  const request={project_id:model.project_id,artifact_id:model.artifact_id,task_id:model.task_id,expected_head:model.expected_head,fragment_sha256:model.fragment_sha256,body:artifactEditorForm.elements.body.value};
+ const classification=editorPrivacyRequest(artifactEditorForm.elements.privacy,artifactEditorOriginalPrivacy);if(!classification)return false;Object.assign(request,classification);
  const signature=JSON.stringify(request);
  if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),item:request};
  const attempt=artifactEditorAttempt,button=artifactEditorForm.querySelector('button[type="submit"]'),body=artifactEditorForm.elements.body;
@@ -2856,6 +2882,7 @@ async function saveArtifactEditor(navigate=true){
  if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return false;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return false;}}}
  if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return false;}const fields=new FormData(artifactEditorForm);
  const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
+ const classification=editorPrivacyRequest(artifactEditorForm.elements.privacy,artifactEditorOriginalPrivacy,Boolean(artifactEditorItem.new));if(!classification)return false;Object.assign(request,classification);
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
  try{const id=artifactEditorItem.id,projectId=activeProject.id;const result=await projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document},120000);artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem.new=false;artifactEditorItem=null;activeProject.head=result.commit_id;artifactEditorView.hidden=true;if(navigate){const position=planEditorReturn;planEditorReturn=null;await openRegisteredProject(projectId);if(!await restorePlanPosition(position)){await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}}return true;}
@@ -3671,6 +3698,7 @@ async function saveJuliaEditor(navigate=true){
  if(!activeProject||!juliaEditorModel||!juliaEditor.reportValidity())return false;const fields=new FormData(juliaEditor),button=juliaEditor.querySelector('button[type="submit"]');
  try{
   const draft={project_id:activeProject.id,base_head:juliaEditorModel.base_head,new:juliaEditorModel.new,artifact_ids:juliaEditorModel.artifact_ids,title:String(fields.get('title')).trim(),privacy:String(fields.get('privacy')),julia_code:String(fields.get('julia_code')),project_toml:String(fields.get('project_toml')),manifest_toml:String(fields.get('manifest_toml')),parameters:JSON.parse(String(fields.get('parameters'))),outputs:JSON.parse(String(fields.get('outputs'))),execution_policy:JSON.parse(String(fields.get('execution_policy')))};
+  const classification=editorPrivacyRequest(juliaEditor.elements.privacy,juliaEditorModel.privacy,juliaEditorModel.new);if(!classification)return false;Object.assign(draft,classification);
   const signature=JSON.stringify(draft);if(!juliaEditorAttempt||juliaEditorAttempt.signature!==signature)juliaEditorAttempt={signature,request:{operation_id:crypto.randomUUID(),...draft}};const request=juliaEditorAttempt.request;
   button.disabled=true;juliaEditorStatus.textContent='Ukládám atomickou revizi Julia modelu…';
   const result=await projectRequest('/v1/julia/editor/save',request,120000);juliaEditorDirty=false;juliaEditorAttempt=null;juliaEditor.hidden=true;juliaEditorModel.new=false;juliaEditorModel.definition_path=result.definition_path;juliaEditorModel=null;
@@ -3906,9 +3934,12 @@ const presentationSessionStatus=document.querySelector('#presentation-session-st
 const presentationRawPanel=document.querySelector('#presentation-raw-panel');
 let presentationEditorView=null,presentationEditorDeck=null,presentationEditorArtifact=null,presentationEditorSlide=null;
 let presentationEditorNew=false,presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorLoading=false;
-let presentationEditorMode='special',presentationEditorBaseline=null;
+let presentationEditorMode='special',presentationEditorBaseline=null,presentationOriginalPrivacy='project';
+const presentationPrivacy=document.querySelector('#presentation-editor-privacy');
+function presentationPrivacyDirty(){return presentationPrivacy.value!==presentationOriginalPrivacy;}
+presentationPrivacy.addEventListener('change',()=>{presentationEditorAttempt=null;presentationEditorDirty=true;updatePresentationEditorEnabled();});
 let presentationPrintPlan=null,presentationPrintTarget=null;
-const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=presentationRawWidget.dirty||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
+const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=presentationRawWidget.dirty||presentationPrivacyDirty()||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
 function setPresentationEditorMode(mode){
  presentationEditorMode=mode;const raw=mode==='raw';presentationEditorWorkspace.hidden=raw||!presentationEditorDeck;presentationRawPanel.hidden=!raw||!presentationEditorDeck;
  document.querySelector('#presentation-editor-mode-special').setAttribute('aria-pressed',String(!raw));document.querySelector('#presentation-editor-mode-raw').setAttribute('aria-pressed',String(raw));updatePresentationEditorEnabled();
@@ -3921,7 +3952,7 @@ async function openPresentationRawEditor(){
 async function applyPresentationRaw(){
  const result=await presentationRawWidget.validate();if(!result)return false;
  if(!result.lossless){presentationEditorStatus.textContent='Raw obsah nelze beze změny převést do vizuálního editoru. Použijte kanonický formát z validace.';return false;}
- presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
+ presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=presentationPrivacyDirty()||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
 }
 function presentationNewSlide(kind='main',layout='content'){
  const template=presentationEditorDeck?.templates?.find(item=>item.id===layout)||presentationEditorView?.layout_presets?.find(item=>item.id===layout)||{background:'#102b36',foreground:'#ffffff'};
@@ -3954,7 +3985,7 @@ function updatePresentationEditorEnabled(){
  presentationRawWidget.setDisabled(frozen||readOnly||!ready);document.querySelector('#presentation-editor-mode-special').disabled=frozen||!ready;document.querySelector('#presentation-editor-mode-raw').disabled=frozen||!ready;
 }
 function presentationEditorChanged(rerender=true){
- if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;
+ if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=presentationPrivacyDirty()||JSON.stringify(presentationEditorDeck)!==presentationEditorBaseline;presentationEditorAttempt=null;
  if(rerender)renderPresentationEditor();else{renderSlideVisual(document.querySelector('#presentation-editor-preview'),presentationVisualSlide(presentationCurrentSlide()));const selected=document.querySelector('#presentation-slide-list button[aria-current="true"]');if(selected)selected.textContent=(presentationCurrentSlide().kind==='backup'?'Backup · ':'')+presentationCurrentSlide().title;updatePresentationEditorEnabled();}
 }
 function renderPresentationTemplateForm(preferred=null){
@@ -4018,6 +4049,7 @@ function presentationPdfExportFinished(result){if(!presentationPrintPlan||result
 document.querySelector('#presentation-print-confirm').addEventListener('change',event=>{document.querySelector('#presentation-print-run').disabled=!(event.currentTarget.checked&&presentationPrintTarget&&presentationPrintPlan?.pages.length);});
 document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
+ presentationOriginalPrivacy=document.metadata?.privacy||'project';presentationPrivacy.value=presentationOriginalPrivacy;presentationPrivacy.disabled=Boolean(activeProject?.readOnly);
  presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
  if(typeof renderPresentationReportLink==='function')renderPresentationReportLink();
 }
@@ -4087,7 +4119,7 @@ async function openPresentationEditor(preferred=null){
 }
 async function createPresentationDocument(confirmDiscard=true){
  document.querySelector('#presentation-report-link')?.remove();
- if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
+ if(confirmDiscard&&!await canLeavePresentationEditor())return;presentationOriginalPrivacy='project';presentationPrivacy.value='project';presentationPrivacy.disabled=false;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
 presentationEditorDocuments.addEventListener('change',async()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(await canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
 document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
@@ -4118,9 +4150,9 @@ document.querySelector('#presentation-slide-up').addEventListener('click',()=>mo
 document.querySelector('#presentation-clear-wallpaper').addEventListener('click',()=>{presentationCurrentSlide().wallpaper='';presentationEditorChanged();});
 document.querySelector('#presentation-slide-wallpaper').addEventListener('change',async event=>{const file=event.currentTarget.files[0];event.currentTarget.value='';if(!file)return;if(file.type!=='image/png'||file.size>190000){presentationEditorStatus.textContent='Vyberte PNG do 190 KiB.';return;}const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});if(String(value).length>262144){presentationEditorStatus.textContent='Zakódovaná tapeta překračuje limit 256 KiB.';return;}presentationCurrentSlide().wallpaper=String(value);presentationEditorChanged();});
 async function savePresentationEditor(navigate=true){
- if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return false;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return false;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
+ if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return false;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return false;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};const classification=editorPrivacyRequest(presentationPrivacy,presentationOriginalPrivacy,presentationEditorNew);if(!classification)return false;Object.assign(document,classification);presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
  updatePresentationEditorEnabled();presentationEditorStatus.textContent='Ukládám potvrzenou podobu prezentace do projektu…';
- try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationRawWidget.markClean();activeProject.head=result.commit_id;presentationEditorView.commit_id=result.commit_id;const saved=presentationEditorView.documents.find(item=>item.id===id);if(saved){saved.deck=structuredClone(presentationEditorDeck);saved.title=presentationEditorDeck.title;}else presentationEditorView.documents.push({id,title:presentationEditorDeck.title,deck:structuredClone(presentationEditorDeck)});if(navigate){await openRegisteredProject(projectId);await openPresentationEditor(id);}presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;return true;}
+ try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;presentationOriginalPrivacy=presentationPrivacy.value;presentationEditorBaseline=JSON.stringify(presentationEditorDeck);presentationRawWidget.markClean();activeProject.head=result.commit_id;presentationEditorView.commit_id=result.commit_id;const saved=presentationEditorView.documents.find(item=>item.id===id);if(saved){saved.deck=structuredClone(presentationEditorDeck);saved.title=presentationEditorDeck.title;saved.metadata={...saved.metadata,privacy:presentationPrivacy.value};}else presentationEditorView.documents.push({id,title:presentationEditorDeck.title,deck:structuredClone(presentationEditorDeck),metadata:{privacy:presentationPrivacy.value}});if(navigate){await openRegisteredProject(projectId);await openPresentationEditor(id);}presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;return true;}
  catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();return false;}
 }
 presentationEditorSave.addEventListener('click',()=>savePresentationEditor());
@@ -5575,6 +5607,95 @@ const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 const responseLanguageState=document.querySelector('#response-language-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevision=0;
+let filePrivacyRecovery=null,filePrivacyOverride=null;
+function filePrivacySignature(request){return JSON.stringify({project_id:request.project_id,expected_head:request.expected_head,
+ thread_id:request.selected_message_ids?.length?request.thread_id:null,content:request.content,privacy:request.privacy,task_plan:request.task_plan,
+ selected_artifact_ids:request.selected_artifact_ids,selected_message_ids:request.selected_message_ids,
+ run_choice:request.run_choice,response_language:request.response_language});}
+function resetFilePrivacyRecovery(){filePrivacyRecovery=null;document.querySelector('#chat-edit-privacy').hidden=true;}
+function offerFilePrivacyRecovery(error,request){
+ if(error?.diagnostic!=='file-edit-privacy-conflict'||request?.project_id!==activeProject?.id||
+    request?.task_plan?.output_kind!=='file-edit'||draft.value.trim()!==request.content)return;
+ const targetId=request.task_plan.target_artifact_id;
+ if(selectedTaskFileEditTarget()!==targetId)return;
+ const targetPrivacy=error.privacyConflict?.target_privacy||currentArtifacts.find(item=>item.id===targetId)?.privacy;
+ const levels={'public':0,'project':1,'confidential':2,'local-only':3};
+ filePrivacyRecovery={projectId:request.project_id,targetId,prompt:request.content,targetPrivacy,
+   contextPrivacy:error.privacyConflict?.context_privacy,signature:filePrivacySignature(request)};
+ document.querySelector('#chat-edit-privacy-message').textContent=error.message;
+ document.querySelector('#chat-edit-target-only').disabled=!(targetPrivacy in levels)||
+   !(document.querySelector('#chat-privacy').value in levels)||levels[document.querySelector('#chat-privacy').value]>levels[targetPrivacy];
+ document.querySelector('#chat-edit-privacy').hidden=false;
+}
+document.querySelector('#chat-edit-override').addEventListener('click',()=>{
+ const saved=filePrivacyRecovery;
+ if(!saved||saved.projectId!==activeProject?.id||saved.prompt!==draft.value.trim()||
+    selectedTaskFileEditTarget()!==saved.targetId||!saved.contextPrivacy){resetFilePrivacyRecovery();return;}
+ if(!confirm(`Provést tuto úpravu s vybranými podklady i přes omezení ochrany? Vstupy: ${documentPrivacyLabels[saved.contextPrivacy]}. Cílový soubor: ${documentPrivacyLabels[saved.targetPrivacy]}. Výsledek může obsahovat citlivější informace. Výjimka platí jen pro toto zadání a vybrané vstupy; uložení výsledku ještě potvrdíte.`))return;
+ filePrivacyOverride={signature:saved.signature,value:{approved:true,target_privacy:saved.targetPrivacy,context_privacy:saved.contextPrivacy}};
+ pendingChatRequest=null;document.querySelector('#chat-composer').requestSubmit();
+});
+document.querySelector('#chat-edit-target-only').addEventListener('click',()=>{
+ const saved=filePrivacyRecovery,levels={'public':0,'project':1,'confidential':2,'local-only':3};
+ if(!saved||saved.projectId!==activeProject?.id||draft.value.trim()!==saved.prompt||
+    document.querySelector('#task-output-kind').value!=='file-edit'||selectedTaskFileEditTarget()!==saved.targetId||
+    document.querySelector('#chat-run-adapter').value!=='ollama'||!(saved.targetPrivacy in levels)||
+    !(document.querySelector('#chat-privacy').value in levels)||
+    levels[document.querySelector('#chat-privacy').value]>levels[saved.targetPrivacy]){
+  resetFilePrivacyRecovery();chatOperationStatus.textContent='Kontext se změnil; zkontrolujte soukromí a vybrané vstupy.';return;
+ }
+ let targetInList=false;
+ for(const input of document.querySelectorAll('#task-artifact-list input')){input.checked=input.value===saved.targetId;if(input.checked)targetInList=true;}
+ document.querySelector('#task-source-artifacts').checked=targetInList;
+ for(const id of ['task-source-conversation','task-source-public','task-source-current-file-input'])document.getElementById(id).checked=false;
+ for(const input of document.querySelectorAll('#task-public-source-list input'))input.checked=false;
+ pendingChatRequest=null;resetFilePrivacyRecovery();refreshChatModeControls();
+ chatOperationStatus.textContent='Vybrán jen cílový soubor a aktuální zadání. Zkontrolujte vstupy a stiskněte Zpracovat; model zatím nebyl spuštěn.';
+});
+function clearSubmittedChatDraft(request){
+ if(request&&request.project_id===activeProject?.id&&
+  (!activeTaskThreadId||activeTaskThreadId===request.thread_id)&&draft.value.trim()===request.content)draft.value='';
+}
+function renderChatAttempts(attempts){
+ const panel=document.querySelector('#chat-failed-inputs'),list=document.querySelector('#chat-failed-input-list');
+ list.replaceChildren();const items=(attempts||[]).filter(item=>item.project_id===activeProject?.id);
+ panel.hidden=!items.length;
+ for(const item of items){
+  const row=document.createElement('section'),text=document.createElement('pre'),status=document.createElement('p');
+  text.textContent=item.preview||item.content||'';
+  status.textContent=(item.state==='unknown'?'Výsledek není ověřený. Před novým během ověřte původní operaci. ':'Odmítnuté zadání. ')+
+   (item.diagnostic?.message||'')+` · Záznam ${item.id}`;
+  const restore=document.createElement('button');restore.type='button';restore.textContent='Obnovit text zadání';
+  restore.addEventListener('click',async()=>{
+   if(item.project_id!==activeProject?.id)return;
+   restore.disabled=true;
+   try{const saved=await projectRequest('/v1/tasks/list',{project_id:item.project_id,attempt_id:item.id});
+    const restored=saved.attempts?.find(value=>value.id===item.id);
+    if(item.project_id!==activeProject?.id)return;
+    if(!restored||typeof restored.content!=='string')throw Error('Uložené zadání už není dostupné.');
+    if(draft.value&&draft.value!==restored.content&&!confirm('Nahradit nynější rozepsané zadání uloženým textem?'))return;
+    const privacy=document.querySelector('#chat-privacy'),levels={'public':0,'project':1,'confidential':2,'local-only':3};
+    if(levels[restored.privacy]>levels[privacy.value]){privacy.value=restored.privacy;privacy.dispatchEvent(new Event('change',{bubbles:true}));}
+    draft.value=restored.content;draft.dispatchEvent(new Event('input',{bubbles:true}));draft.focus();
+    chatOperationStatus.textContent='Text zadání byl obnoven se zachovaným soukromím. Zpracování nebylo spuštěno. Zkontrolujte vybrané vstupy.';
+   }catch(error){chatOperationStatus.textContent=error.message;}
+   finally{restore.disabled=false;}
+  });
+  const discard=document.createElement('button');discard.type='button';discard.textContent='Smazat uložený text';
+  discard.addEventListener('click',async()=>{
+   if(item.project_id!==activeProject?.id||!confirm('Smazat tento uložený text zadání? Běžící model tím nebude zastaven.'))return;
+   discard.disabled=true;
+   try{await projectRequest('/v1/tasks/cancel',{project_id:item.project_id,attempt_id:item.id});
+    await refreshChatAttempts(item.project_id);
+   }catch(error){chatOperationStatus.textContent=error.message;discard.disabled=false;}
+  });row.append(status,text,restore,discard);list.append(row);
+ }
+}
+async function refreshChatAttempts(projectId){
+ try{const value=await projectRequest('/v1/tasks/list',{project_id:projectId});
+  if(activeProject?.id===projectId)renderChatAttempts(value.attempts||[]);
+ }catch(_error){} // Preserve the original error and the composer on recovery failure.
+}
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
 function chatScrollOwner(){
@@ -5633,7 +5754,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=
  const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json',...(typeof taskWorkActivityHeaders==='function'?taskWorkActivityHeaders(path,request):{})},body:JSON.stringify(request)});
  if(!response.ok){let value;try{value=await response.json();}catch(error){throw Object.assign(new Error('Odpověď streamu nelze potvrdit; obnovte stav původní operace.'),{status:408,outcome:'unknown',retry:'same-operation',phase:'response',cause:error});}
-  throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,phase:'response'});}
+  throw Object.assign(new Error(value.error||'Streamovaný požadavek byl odmítnut.'),{status:response.status,outcome:value.outcome,retry:value.retry,diagnostic:value.diagnostic,privacyConflict:value.privacy_conflict,phase:'response'});}
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
  try{while(true){const part=await reader.read();buffer+=decoder.decode(part.value || new Uint8Array(),{stream:!part.done});
   let newline;while((newline=buffer.indexOf('\\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);
@@ -5642,7 +5763,7 @@ async function streamRequest(path,request,onDelta,onStatus=()=>{},onDeadline=()=
    else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
    else if(event.type==='deadline')onDeadline(event);
    else if(event.type==='result')result=event.result;
-   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status,outcome:event.outcome,retry:event.retry,phase:'response'});
+   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status,outcome:event.outcome,retry:event.retry,diagnostic:event.diagnostic,privacyConflict:event.privacy_conflict,phase:'response'});
    else throw new Error('Neplatná událost streamu.');}
   if(part.done)break;}
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
@@ -5943,7 +6064,7 @@ function refreshCurrentFileSource(){
  const title=document.querySelector('#task-source-current-file-title');
  if(!label||!input||!title)return;
  const item=currentArtifacts.find(value=>value.id===selectedArtifact);
- const external=document.querySelector('#chat-run-adapter')?.value==='openai-responses';
+ const external=document.querySelector('#chat-run-adapter')?.value!=='ollama';
  label.hidden=!item;input.disabled=!item||external;
  if(!item||external)input.checked=false;
  input.value=item?.id || '';title.textContent=item?`Aktuální soubor: ${item.title}`:'Aktuální soubor';
@@ -7148,6 +7269,7 @@ async function loadChat(){
  if(selectionRevision!==chatSelectionRevision)return;
  if(tasksState.status==='fulfilled'){
   const tasks=tasksState.value;
+  renderChatAttempts(tasks.attempts||[]);
   taskOutcomes=restored&&Array.isArray(tasks.outcomes)?tasks.outcomes.filter(item=>item.thread_id===restored.thread_id):[];
   if(!Array.isArray(tasks.outcomes))warnings.push('navázané úlohy mají neplatnou projekci');
  }else{taskOutcomes=[];warnings.push('navázané úlohy nejsou dostupné');}
@@ -7608,6 +7730,11 @@ document.querySelector('#external-confirm').addEventListener('click',async event
 });
 document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
+ const submittedProjectId=activeProject.id;
+ resetFilePrivacyRecovery();
+ if(new TextEncoder().encode(draft.value).byteLength>1024*1024){
+  chatOperationStatus.textContent='Zadání překračuje limit 1 MiB. Text zůstal ve formuláři; část přesuňte do podkladu.';return;
+ }
  if(!threadWritable()){
   chatOperationStatus.textContent='Archivované vlákno nebo vlákno jiného projektu je pouze pro čtení.';return;
  }
@@ -7668,10 +7795,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
     liveProgress.set(`${providerLabel} generuje odpověď…`);chatStream.textContent+=delta;keepChatStreamVisible();}) :
    await projectRequest('/v1/external/send',pendingChatRequest,EXTERNAL_CLIENT_TIMEOUT_MS);
-   activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
+   clearSubmittedChatDraft(pendingChatRequest);activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
     {enabled:providerStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
-   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=providerStreaming ?
+   chatStream.hidden=true;draft.focus();chatOperationStatus.textContent=providerStreaming ?
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
    preserveRejectedExternalStream();
@@ -7681,7 +7808,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    chatOperationStatus.textContent=error.message+(staleSelection?
     ' Nabídka byla obnovena; backend a model vyberte znovu.':'');
   }finally{liveProgress.stop();chatStream.hidden=true;
-   finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();}
+   finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();refreshChatAttempts(submittedProjectId);}
   return;
  }
  if(mode==='brainstorming' && adapter==='ollama'){
@@ -7712,9 +7839,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
      chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
      liveProgress.set(streamStates[status] || 'Probíhá lokální AI běh…');}) :
     await projectRequest('/v1/chat/send',pendingChatRequest,210000);
-   activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
+   clearSubmittedChatDraft(pendingChatRequest);activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
-    {enabled:ollamaStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;draft.value='';draft.focus();
+    {enabled:ollamaStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;draft.focus();
    chatOperationStatus.textContent=(ollamaStreaming ?
     `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí. ` : 'Odpověď je připravena. ')+
     runtimeEvidenceText(result.runtime_evidence);
@@ -7728,7 +7855,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
   }finally{clearTimeout(thinking);liveProgress.stop();
    submit.disabled=!activeProject || !draft.value.trim();chatStream.hidden=true;
-   finishChatAutoFollow();}
+   finishChatAutoFollow();refreshChatAttempts(submittedProjectId);}
   return;
  }
  if(!pendingChatRequest){
@@ -7777,6 +7904,13 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     catch(error){pendingChatRequest=null;chatOperationStatus.textContent=error.message;return;}
    }
   }
+  if(filePrivacyOverride){
+   const reviewed=filePrivacyOverride;filePrivacyOverride=null;
+   if(reviewed.signature!==filePrivacySignature(pendingChatRequest)){
+    pendingChatRequest=null;chatOperationStatus.textContent='Vstupy se změnily. Výjimka se nepoužila; zpracování nebylo spuštěno.';return;
+   }
+   pendingChatRequest.task_plan.privacy_override=reviewed.value;
+  }
  }
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
  const liveProgress=startChatProgress(adapter==='ollama'?
@@ -7791,11 +7925,12 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    delta=>appendTaskStreamDelta(delta),
    status=>liveProgress.set(status==='connecting'?'Připojuji se k Ollamě…':'Model zpracovává úlohu…'),
    deadline=>updateTaskRunDeadline(deadline,pendingChatRequest)) : await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
-  replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
+  clearSubmittedChatDraft(pendingChatRequest);replaceTaskProjection(result.projection);pendingChatRequest=null;draft.focus();
   chatOperationStatus.textContent=result.projection.temporary ?
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
  }catch(error){
   appendChatOperationNotice(error);
+  offerFilePrivacyRecovery(error,pendingChatRequest);
   const staleSelection=await refreshStaleRunSelection(error);
   const failed=pendingChatRequest;
   try{
@@ -7810,7 +7945,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
  }
  finally{clearTaskRunDeadline();chatStream.hidden=true;clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
-  finishChatAutoFollow();}
+  finishChatAutoFollow();refreshChatAttempts(submittedProjectId);}
 });
 async function assignActiveThread(){
  if(!activeProject || !activeThread)throw new Error('Nejprve vytvořte chatové vlákno.');
@@ -8741,6 +8876,14 @@ class DesktopHandler(Handler):
             can_write=self._can_write if network else None)
 
     def finish_task_activity(self, code, payload):
+        attempt = getattr(self, '_chat_attempt', None)
+        if attempt:
+            self._chat_attempt = None
+            try:
+                attempt[0].finish(attempt[1], code, payload)
+            except (ValueError, OSError, sqlite3.Error):
+                import logging
+                logging.getLogger(__name__).warning('chat_attempt_finalization_unknown id=%s', attempt[1])
         activity = getattr(self, '_task_activity', None)
         if activity:
             # Clear before finalization: an error reply must not re-enter the recorder.
@@ -8759,8 +8902,24 @@ class DesktopHandler(Handler):
         return super().send_error(code, message, explain)
 
     def reply(self, code, payload):
+        attempt = getattr(self, '_chat_attempt', None)
+        if attempt and code >= 400 and isinstance(payload, dict):
+            payload = dict(payload, request_id=attempt[1], prompt_saved=True)
         self.finish_task_activity(code, payload)
         return super().reply(code, payload)
+
+    def record_chat_exception(self, exc):
+        attempt = getattr(self, '_chat_attempt', None)
+        if attempt:
+            try:
+                attempt[0].error(attempt[1], exc)
+            except (ValueError, OSError, sqlite3.Error):
+                pass  # Initial prompt remains durable; never replace the native result.
+
+    def chat_attempts(self):
+        from spikes.chat_attempts import ChatAttempts
+        self.server.chat_service._root()
+        return ChatAttempts(self.task_work_service())
 
     def dispatch(self, request):
         return self.dispatch_task_activity(request, self.dispatch_workspace)
@@ -8768,6 +8927,16 @@ class DesktopHandler(Handler):
     def dispatch_task_activity(self, request, dispatch):
         from spikes.task_activities import TaskActivities, ROUTES
         self._task_activity = None
+        self._chat_attempt = None
+        from spikes.chat_attempts import ROUTES as CHAT_ROUTES
+        if self.path.removesuffix('-stream') in CHAT_ROUTES:
+            try:
+                attempts = self.chat_attempts()
+                identifier = attempts.begin(self.path, request)
+                if identifier:
+                    self._chat_attempt = (attempts, identifier)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+                return self.reply(422, {'error': 'Zadání se nepodařilo místně uložit. Zpracování nebylo spuštěno; text ponechte ve formuláři.', 'outcome': 'not-started'})
         header = self.single('X-FPW-Task-Work')
         if header and self.path in ROUTES:
             try:
@@ -8793,6 +8962,7 @@ class DesktopHandler(Handler):
         finally:
             # A crash/uncaught exception/stream disconnect leaves the durable unknown intent.
             self._task_activity = None
+            self._chat_attempt = None
 
     def dispatch_workspace(self, request):
         if self.path.startswith('/v1/x-sources/'):
@@ -9518,7 +9688,8 @@ class DesktopHandler(Handler):
                     try: emit({'type': 'error', 'status': 502,
                                **external_response_failure(exc)})
                     except OSError: pass
-                except (ValueError, OSError, sqlite3.Error):
+                except (ValueError, OSError, sqlite3.Error) as exc:
+                    self.record_chat_exception(exc)
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
                 return
             if self.path == '/v1/external/request' and isinstance(request, dict):
@@ -9538,10 +9709,13 @@ class DesktopHandler(Handler):
             if self.path == '/v1/tasks/route' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_route(request))
             if (self.path == '/v1/tasks/list' and isinstance(request, dict)
-                    and set(request) in ({'project_id'}, {'project_id', 'thread_id'})):
-                return self.reply(200, {'outcomes': self.server.chat_service.task_outcomes(
-                    project_id=request['project_id'], thread_id=request.get('thread_id'))})
+                    and set(request) in ({'project_id'}, {'project_id', 'thread_id'}, {'project_id', 'attempt_id'})):
+                return self.reply(200, {'outcomes': [] if 'attempt_id' in request else self.server.chat_service.task_outcomes(
+                    project_id=request['project_id'], thread_id=request.get('thread_id')),
+                    'attempts': self.chat_attempts().list(request['project_id'],request.get('attempt_id'))})
             if self.path == '/v1/tasks/cancel' and isinstance(request, dict):
+                if set(request)=={'project_id','attempt_id'}:
+                    return self.reply(200, self.chat_attempts().discard(request['project_id'],request['attempt_id']))
                 return self.reply(200, self.server.chat_service.task_cancel(request))
             if self.path == '/v1/tasks/artifact' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_publish_artifact(request))
@@ -9636,7 +9810,8 @@ class DesktopHandler(Handler):
                                'původní run automaticky neopakujte.')
                 except OllamaResponseError:
                     emit_error(502, 'Ollama stream nevrátil bezpečně použitelný výsledek.')
-                except (ValueError, OSError, sqlite3.Error):
+                except (ValueError, OSError, sqlite3.Error) as exc:
+                    self.record_chat_exception(exc)
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
                 return
             if self.path == '/v1/chat/send' and isinstance(request, dict) \
@@ -9931,6 +10106,12 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt právě používá jiná zapisující operace. '
                                    'Po jejím dokončení spusťte novou kontrolu.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+            self.record_chat_exception(exc)
+            from spikes.task_file_edit import FileEditPrivacyConflict
+            if isinstance(exc, FileEditPrivacyConflict):
+                payload = exc.payload()
+                if self.path == '/v1/tasks/route': payload['outcome'] = 'not-started'
+                return self.reply(422, payload)
             from spikes.chat_service import InvalidSearchEvaluation
             from spikes.presentation_proposals import InvalidPresentationProposal
             from spikes.cross_references import ReferenceUnavailable

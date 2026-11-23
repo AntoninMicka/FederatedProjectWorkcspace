@@ -15,7 +15,9 @@ SCHEMA = 'fpw-roadmap-append-context-v1'
 
 def requests_new_tasks(text):
     plain=''.join(c for c in unicodedata.normalize('NFKD',text.lower()) if not unicodedata.combining(c))
-    return bool(re.match(r'^\s*(?:vytvor|dopln|pridej|create|add)\s+(?:(?:nove|novy|nova|new)\s+)?(?:ukol\w*|tasks?)\b',plain))
+    return bool(re.match(r'^\s*(?:vytvor(?:it)?|dopln(?:it)?|pridej|pridat|create|add)\s+'
+        r'(?:(?:do\s+)?(?:seznamu?|planu?|roadmap(?:u|y)?)\s+(?:ukol\w*\s+)?(?:o\s+)?)?'
+        r'(?:(?:nove|novy|nova|new)\s+)?(?:ukol\w*|tasks?)\b',plain))
 
 
 def build(files, entities, project_id, head, target, run_id):

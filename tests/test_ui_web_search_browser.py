@@ -209,6 +209,9 @@ class PublicSourceFlowTests(UiFlowCase):
         page.click('#public-source-confirm-check')
         page.click('#public-source-confirm')
         page.wait_js("!document.querySelector('#public-source-result').hidden", 'source result')
+        page.wait_js("document.querySelector('#chat-operation-status').textContent === "
+                     "'Veřejný zdroj byl načten jako inertní nedůvěryhodný text.'",
+                     'source projection refresh to finish')
         confirmed = self.requests('/v1/tasks/public-source/confirm', before)[0]['body']
         self.assertEqual((confirmed['approved'], confirmed['preview_sha256'], confirmed['run_id']),
                          (True, 'a' * 64, planned['run_id']))

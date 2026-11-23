@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from spikes.backend_contract import BackendResponseError, external_response_failure
-from spikes.desktop_ui import DesktopHandler, JS
+from spikes.desktop_ui import JS
 from spikes.local_api import running_api
 from spikes.openai_backend import OpenAIAdapter
+from tests.test_desktop import TransportDesktopHandler
 from tests import test_local_api
 
 
@@ -34,7 +35,7 @@ class ExternalResponseFailureTests(unittest.TestCase):
                 on_delta('užitečný neúplný text')
                 raise BackendResponseError('Claude response was truncated by max_tokens')
         driver = test_local_api.LocalAPITests()
-        with running_api('http', handler=DesktopHandler) as server:
+        with running_api('http', handler=TransportDesktopHandler) as server:
             server.chat_service = Service()
             response = driver.request(server, path='/v1/external/send-stream', body=b'{}')
         events = [json.loads(line) for line in response.split(b'\r\n\r\n', 1)[1].splitlines()]
