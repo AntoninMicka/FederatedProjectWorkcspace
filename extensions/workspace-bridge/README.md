@@ -208,3 +208,12 @@ Odpověď `503 resource busy` se u čtení opakuje. Projekt se pak označí jako
 pokus se odloží až na 60 s. Rozhodnutí a hranice popisuje
 [ADR 0090](../../docs/adr/0090-ide-unified-queue-and-window-coordination.md).
 Sloučené pořadí vyžaduje také aktualizovaný backend Workspace.
+
+## Ikony stavů od verze 0.6.1
+
+Strom **Úkoly** a **Fronta úkolů** odlišují pracovní stav z plánu ikonou
+v barvách motivu: Plánováno ○, Probíhá ▶ (modrá), Vyřešeno ✓ (zelená),
+Dokončeno ✔ (plná, zelená), Selhalo ✕ (červená), Odloženo ‖ (šedá).
+Neznámý stav má otazník, nikdy ikonu Plánováno. Ve frontě mají přednost
+problém hierarchie (varování), přijetí uživatelem (Dokončeno) a pozastavení
+(‖, žlutá). Textový popis stavu zůstává u položky beze změny.

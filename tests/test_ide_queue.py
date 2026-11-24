@@ -299,15 +299,26 @@ class QueuePacketTests(unittest.TestCase):
         self.review(waiting)
         self.assertNotIn(waiting['message_id'],[r['message_id'] for r in OwnerTaskQueue(self.node).status(self.owner)['other_reports']])
 
-    def test_unacceptable_report_explains_why_and_plain_report_stays_reviewable(self):
-        # ADR 0090: no silent disabled button; the reason travels with the report.
+    def test_roadmap_change_outside_packet_does_not_block_only_missing_task_does(self):
+        # User decision (ADR 0090): the packet lineage only checks the task still exists.
         packet=self.packet();m=self.message(packet,'TASK-01');self.send(m)
         report=lambda:next(r for r in self.qstatus()['items'][0]['reports'] if r['message_id']==m['message_id'])
         self.assertTrue(report()['acceptable']);self.assertEqual(report()['review_blockers'],[])
         self.head=self.save(self.body+'- [ ] [TASK-04] Added directly in Workspace\n')
-        blocked=report()
-        self.assertFalse(blocked['acceptable'])
-        self.assertTrue(any('Roadmapa se od připnutého balíčku změnila' in b for b in blocked['review_blockers']),blocked['review_blockers'])
+        self.assertTrue(report()['acceptable'],report()['review_blockers'])
+        late=self.message(packet,'TASK-01');self.send(late)  # delivery is not rejected as stale either
+        self.assertEqual(self.review(m)['outcome'],'accepted')
+        self.assertTrue(next(i for i in self.qstatus()['items'] if i['id']=='TASK-01')['user_confirmed'])
+        # A task that disappeared from the roadmap cannot be accepted, and says so.
+        other=self.message(packet,'TASK-02');self.send(other)
+        self.head=Projects(self.node).repository(self.project).head()
+        body=self.body.replace('- [ ] [TASK-02] Second\n  - depends_on: TASK-01\n','').replace('  - depends_on: TASK-02\n','')
+        self.head=self.save(body.replace('- [ ] [TASK-01]','- [x] [TASK-01]')+'- [ ] [TASK-04] Added directly in Workspace\n')
+        from spikes.ide_queue import completion_reports
+        missing=next(r for r in completion_reports(self.node,self.project,self.owner,view=Projects(self.node).plan_view(self.project))['TASK-02'] if r['message_id']==other['message_id'])
+        self.assertFalse(missing['reviewable'])
+        self.assertTrue(any('již není v roadmapě' in b for b in missing['review_blockers']),missing['review_blockers'])
+
     def test_plain_report_of_unqueued_task_is_reviewable_in_the_queue(self):
         from spikes.owner_task_queue import OwnerTaskQueue
         for task in ('TASK-03','TASK-01'):
@@ -560,9 +571,9 @@ assert.ok(!q.startable(null,'A'));
         with self.assertRaises(ValueError):self.send(self.message(p))
         self.assertEqual(self.head,Projects(self.node).repository(self.project).head())
         self.head=self.save(self.body+'\nExternal edit.\n')
+        # Visible, but not blocking (user decision, ADR 0090): the task still exists.
         self.assertFalse(status(self.service,self.record)['current'])
-        with self.assertRaisesRegex(ValueError, 'Roadmap changed'):
-            self.review(m)
+        self.assertEqual(self.review(m)['outcome'],'accepted')
 
     def test_repair_retains_original_packet_and_new_packet_has_complete_selection(self):
         original=self.packet()

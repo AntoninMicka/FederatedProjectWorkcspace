@@ -160,6 +160,30 @@ dostupné jen po přepnutí projektu.
   nevyřízené zprávy limitem 5 na úkol ani limitem 500 posledních zpráv;
   limity platí jen pro rozhodnutou historii.
 
+## Změna roadmapy mimo balíček neblokuje (rozhodnutí uživatele 24. 11. 2026)
+
+Dosud blokovala zprávy připnutého balíčku podmínka „Roadmap changed outside
+accepted packet results“. Projektový HEAD musel být přesně dosažitelný řetězcem
+přijatých výsledků balíčku. Jakákoli jiná úprava roadmapy, třeba agentův
+záznam přímo do úkolu, tak znemožnila přijetí zprávy, doručení hlášení
+i čtení podkladů. Uživatel podmínku označil za nadbytečnou: má sloužit
+nanejvýš ke kontrole existence úkolu a nemá blokovat.
+
+- Blokátor byl odstraněn. Každá položka se dál posuzuje proti aktuální
+  roadmapě. Neexistující úkol dostane „Položka již není v roadmapě“
+  a zprávu k němu nelze přijmout; důvod se zobrazí. Zůstávají předpoklady,
+  otevřené podúkoly, dokončenost, pozastavení, nahrazení balíčku a změna
+  pracovní fronty.
+- Řetězec přijatých výsledků dál určuje informativní příznak `current`. Přijetí
+  s ověřeným nativním potvrzením se započítá do „Přijato uživatelem“ i mimo
+  tento řetězec. Projekce fronty už nevyžaduje `current`.
+- Přijetí zapisuje jediný nativní writer proti aktuálnímu HEAD z požadavku.
+  Hranice pádu a obnova připraveného review se nemění (ADR 0062). Mění se
+  pouze to, že platná zpráva se po nesouvisející úpravě roadmapy neoznačí
+  za zastaralou.
+- Zpráva bez připnutého balíčku je v jedné frontě posouditelná. Nedokončené
+  závislosti se u ní uvedou předem jako důvod.
+
 ## Omezení
 
 - Nesynchronizují se lease a pořadí mezi profily ani mezi stroji. Každý profil

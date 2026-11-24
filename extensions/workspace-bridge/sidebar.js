@@ -13,6 +13,15 @@ const idPattern = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/;
 const kinds={message:'Zpráva',clarification:'Dotaz',progress:'Probíhá',completed:'Návrh dokončení'};
 
 const statusLabels={'planned':'Plánováno','in progress':'Probíhá','resolved':'Vyřešeno','failed':'Selhalo','completed':'Dokončeno','deferred':'Odloženo'};
+// One icon per plan work state, so the tree reads at a glance (themed colours).
+const STATUS_ICONS={'planned':['circle-large-outline',null],'in progress':['play-circle','charts.blue'],
+  'resolved':['check','charts.green'],'completed':['pass-filled','testing.iconPassed'],
+  'failed':['error','testing.iconFailed'],'deferred':['debug-pause','disabledForeground']};
+function statusIcon(task){
+  if(Object.hasOwn(STATUS_ICONS,task?.status))return STATUS_ICONS[task.status];
+  if(task&&Object.hasOwn(task,'status')&&task.status)return ['question','editorWarning.foreground'];
+  return task?.checked?STATUS_ICONS.completed:STATUS_ICONS.planned;
+}
 const statusLabel=task=>(task.status_mode==='sum'?'SUM · ':'')+(statusLabels[task.status]||(Object.hasOwn(task,'status')?'Stav neznámý':task.checked?'Dokončeno':'Plánováno'));
 
 function validateSnapshot(snapshot) {
@@ -209,7 +218,7 @@ function createSidebar(vscode, context, hooks) {
       result.iconPath = new vscode.ThemeIcon('list-tree'); result.contextValue = 'queueAll';
       return result;
     }
-    const project = find(item); let label, description = '', icon = 'file-text', collapsed = vscode.TreeItemCollapsibleState.None, command;
+    const project = find(item); let label, description = '', icon = 'file-text', color = null, collapsed = vscode.TreeItemCollapsibleState.None, command;
     if (item.kind === 'project') {
       label = project.snapshot.project_title; description = project.error ? (project.state?.busy ? 'Zaneprázdněné · poslední známý stav' : 'Nedostupné · uložený export') : project.state?.stale || project.panel?.stale ? 'Zastaralé' : project.snapshot.commit_id.slice(0,8);
       if(item.view==='queue')description=`${(project.queue?.items||[]).length} ve frontě · ${description}`;
@@ -222,12 +231,17 @@ function createSidebar(vscode, context, hooks) {
       label=(item.index===undefined?'':(item.index+1)+'. ')+item.entry.title;
       description=flags.map(f=>f.label).join(' · ')+(known.problems.length?' · Neúplná hierarchie':'')+(item.repeated?' · Opakovaný odkaz':'');
       if(item.group==='all'&&item.index!==undefined)description=project.snapshot.project_title+' · '+description+(item.unordered?' · mimo společné pořadí':'');
-      icon=item.entry.user_confirmed&&!stale?'pass':known.problems.length?'warning':known.rows.length?'folder':'list-ordered';command='workspaceBridge.showQueueTask';
+      // Problems and holds first; otherwise the plan work state of the item.
+      if(known.problems.length)[icon,color]=['warning','editorWarning.foreground'];
+      else if(item.entry.user_confirmed&&!stale)[icon,color]=STATUS_ICONS.completed;
+      else if(item.entry.held)[icon,color]=['debug-pause','charts.yellow'];
+      else [icon,color]=statusIcon(item.entry);
+      command='workspaceBridge.showQueueTask';
       if(!item.repeated&&(project.queue?.manifest.hierarchy?.[item.taskId]||completionReports(project,item.taskId).length))collapsed=vscode.TreeItemCollapsibleState.Collapsed;
     } else if(item.kind==='queueMissing'){
       label=(item.index===undefined?'':(item.index+1)+'. ')+item.taskId;description=item.reason?project.snapshot.project_title+' · '+item.reason:'Chybějící nebo neúplný odkaz';icon='warning';
     } else if (item.kind === 'task') {
-      const task = taskOf(item); label = task.title; description = task.id+' · '+statusLabel(task); icon = task.checked ? 'pass' : 'circle-outline';
+      const task = taskOf(item); label = task.title; description = task.id+' · '+statusLabel(task); [icon,color] = statusIcon(task);
       if (project.snapshot.tasks.some(t => t.parent_id===task.id)) collapsed = vscode.TreeItemCollapsibleState.Collapsed;
       command = 'workspaceBridge.showTask';
     } else if (item.kind === 'document') {
@@ -243,7 +257,7 @@ function createSidebar(vscode, context, hooks) {
     } else if (item.kind === 'localRule') {label = item.rule.title; description = 'Lokální · '+JSON.stringify(item.rule.scope); icon = 'law'; command = 'workspaceBridge.showLocalRule';}
     else {label = 'INSTRUCTIONS.md'; description = 'Pokyny připojení'; icon = 'law'; command = 'workspaceBridge.showInstructions';}
     const result = new vscode.TreeItem(label, collapsed); result.id = `${item.projectId}:${item.kind}:${item.taskId || item.doc?.artifact_id || item.rule?.relative || item.entry?.message?.message_id || ''}:${item.parentRef || ''}:${item.view || ''}:${item.group || ''}`;
-    result.description = description; result.tooltip = label+'\n'+description; result.iconPath = new vscode.ThemeIcon(icon); result.contextValue = item.kind;
+    result.description = description; result.tooltip = label+'\n'+description; result.iconPath = color && vscode.ThemeColor ? new vscode.ThemeIcon(icon, new vscode.ThemeColor(color)) : new vscode.ThemeIcon(icon); result.contextValue = item.kind;
     if(item.kind==='queueTask'){
      const unavailable=project.error||project.state?.stale||project.panel?.stale||project.queue?.blockers.length;
      result.contextValue=unavailable?'queueBlocked':item.entry.eligible===true?'queueTask':item.entry.startable===true?'queueStartable':'queueBlocked';
@@ -449,4 +463,4 @@ function createSidebar(vscode, context, hooks) {
   });
   return {refresh,clear,children,treeItem,projects:()=>projects,active};
 }
-module.exports={createSidebar,validateSnapshot,detailHTML,references,localFile,localRules};
+module.exports={statusIcon,STATUS_ICONS,createSidebar,validateSnapshot,detailHTML,references,localFile,localRules};

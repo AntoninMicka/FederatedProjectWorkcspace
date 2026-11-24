@@ -305,3 +305,37 @@ test('a sync requested during a run gets one follow-up run; busy projects are la
   const marker = JSON.parse(await fs.readFile(path.join(storage, 'sync-state.json'), 'utf8'));
   assert.equal(marker.status, statusItems[0].text, 'other windows get the same status text');
 });
+
+test('plan work states have distinct themed icons in tasks and queue', async t => {
+  const {statusIcon, STATUS_ICONS} = require('../extensions/workspace-bridge/sidebar');
+  assert.deepEqual(statusIcon({status: 'in progress'}), ['play-circle', 'charts.blue']);
+  assert.deepEqual(statusIcon({status: 'completed'}), ['pass-filled', 'testing.iconPassed']);
+  assert.deepEqual(statusIcon({status: 'failed'}), ['error', 'testing.iconFailed']);
+  assert.deepEqual(statusIcon({status: 'resolved'}), ['check', 'charts.green']);
+  assert.deepEqual(statusIcon({status: 'deferred'}), ['debug-pause', 'disabledForeground']);
+  assert.deepEqual(statusIcon({status: 'novel'}), ['question', 'editorWarning.foreground'], 'an unknown state is never shown as planned');
+  assert.deepEqual(statusIcon({checked: true}), STATUS_ICONS.completed);
+  assert.deepEqual(statusIcon({checked: false}), STATUS_ICONS.planned);
+  assert.equal(new Set(Object.values(STATUS_ICONS).map(([icon]) => icon)).size, 6);
+  // Rendered tree items carry the icon and its theme colour.
+  const {base} = await privateDir(t);
+  const alpha = await project(base, 'Alpha', ['TASK-01', 'TASK-02']);
+  const value = JSON.parse(await fs.readFile(path.join(alpha.root, 'queue.json'), 'utf8'));
+  value.items[0].status = 'in progress'; value.items[1].held = true;
+  await bridge.atomic(path.join(alpha.root, 'queue.json'), JSON.stringify(value));
+  alpha.snapshot.tasks[0].status = 'in progress';
+  class Emitter { event = () => ({dispose() {}}); fire() {} dispose() {} }
+  const vscode = {EventEmitter: Emitter, ThemeIcon: class { constructor(id, color) { this.id = id; this.color = color; } },
+    ThemeColor: class { constructor(id) { this.id = id; } },
+    TreeItem: class { constructor(label, state) { this.label = label; this.collapsibleState = state; } },
+    TreeItemCollapsibleState: {None: 0, Collapsed: 1, Expanded: 2}, commands: {registerCommand: () => ({dispose() {}})},
+    workspace: {isTrusted: true, workspaceFolders: []},
+    window: {createTreeView: (id, options) => ({visible: false, onDidChangeVisibility: () => ({dispose() {}}), dispose() {}})}};
+  const sidebar = createSidebar(vscode, {subscriptions: []}, {projects: async () => [{...alpha}], request: async () => ({}), synchronize: async () => {}});
+  await sidebar.refresh(false);
+  const [running, held] = sidebar.children('queue').map(sidebar.treeItem);
+  assert.deepEqual([running.iconPath.id, running.iconPath.color.id], ['play-circle', 'charts.blue']);
+  assert.deepEqual([held.iconPath.id, held.iconPath.color.id], ['debug-pause', 'charts.yellow']);
+  const task = sidebar.children('tasks', {kind: 'project', projectId: alpha.snapshot.project_id}).map(sidebar.treeItem)[0];
+  assert.deepEqual([task.iconPath.id, task.iconPath.color.id], ['play-circle', 'charts.blue']);
+});

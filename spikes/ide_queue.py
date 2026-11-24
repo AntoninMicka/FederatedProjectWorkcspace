@@ -257,6 +257,13 @@ def lineage(service, record, packet, view):
         require(workspace.git.run('rev-parse', result['commit_id']+'^').stdout.strip() == head, 'Queue commit lineage differs')
         if message['kind'] == 'completed': accepted.add(message['task_id'])
         head = result['commit_id']
+    # Acceptance after a roadmap change outside the chain still counts when its
+    # native receipt is verified (ADR 0090); the chain only decides `current`.
+    for message, review in reviews:
+        if message['kind'] != 'completed' or message['task_id'] in accepted: continue
+        receipt = workspace.receipt(review['request']['operation_id'])
+        if receipt and receipt['commit_id'] == (review.get('result') or {}).get('commit_id'):
+            accepted.add(message['task_id'])
     return head == view['commit_id'], accepted
 
 
@@ -269,7 +276,9 @@ def status(service, record, packet=None, *, view=None, check_queue=True):
     accepted.update(packet['manifest'].get('accepted_task_ids', []))
     blockers = list(packet['manifest']['blockers'])
     if not record.get('export_documents'): blockers.append('Document export is disabled')
-    if not current: blockers.append('Roadmap changed outside accepted packet results')
+    # A roadmap change outside the packet's accepted results does not block
+    # (user decision, ADR 0090): every item is judged against the current
+    # roadmap below, so a task that no longer exists cannot be accepted.
     if check_queue and latest['packet_id'] != packet['packet_id']: blockers.append('Packet superseded')
     if check_queue:
         queue = TaskQueue(service.node, network=service.network)
@@ -376,9 +385,6 @@ def validate_completion(service, record, message, *, current_head=None):
 
 
 REVIEW_BLOCKERS = {
-    'Roadmap changed outside accepted packet results':
-        'Roadmapa se od připnutého balíčku změnila mimo přijaté výsledky (například přímou úpravou úkolu ve Workspace). '
-        'Zprávu proto nelze bezpečně přijmout; dokončete úkol v roadmapě a zprávu uzavřete.',
     'Document export is disabled': 'Export podkladů pro toto přiřazení IDE je vypnutý.',
     'Original report packet is unavailable': 'Původní balíček zprávy už není dostupný.',
 }
@@ -422,7 +428,9 @@ def queue_projection(node, project_id, actor_id, view):
         try:
             authorize(service, record)
             value = status(service, record, packet, view=view, check_queue=False)
-            if value['current'] and not value['blockers']: return value
+            # Newest packet without blockers; a roadmap change outside its
+            # accepted results does not hide its flags (ADR 0090).
+            if not value['blockers']: return value
         except ValueError: continue
     return None
 
