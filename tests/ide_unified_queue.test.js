@@ -114,6 +114,20 @@ test('merged queue follows owner order, keeps unknown refs visible and never add
     assert.throws(() => unified.validateOwner(bad, connection), /Neplatn/);
 });
 
+test('owner-ordered items without a packet name the real cause instead of advising a sync', () => {
+  const id = crypto.randomUUID(), connection = crypto.randomUUID();
+  const owner = unified.validateOwner({connection_id: connection, revision: 1, sessions: {}, order: [[id, 'M-1']]}, connection);
+  // Document export disabled: Workspace never publishes a packet, a sync cannot help.
+  const disabled = {snapshot: {project_id: id}, queue: null, panel: {export_documents: false}};
+  const [row] = unified.merge([disabled], owner).rows;
+  assert.equal(row.missing, true);
+  assert.match(unified.missingReason(row.project), /export podkladů/);
+  assert.doesNotMatch(unified.missingReason(row.project), /balíčku projektu/);
+  assert.match(unified.missingReason({queue: null, panel: {export_documents: true}}), /zatím nemá .* balíček fronty/);
+  assert.match(unified.missingReason({queue: null, panel: null}), /zatím nemá .* balíček fronty/);
+  assert.match(unified.missingReason({queue: {items: []}, panel: {export_documents: true}}), /Není v připnutém balíčku/);
+});
+
 test('active project prefers the explicit choice, then the open folder or workspace file', () => {
   const a = {snapshot: {project_id: 'a'}, repository: '/work/a', editor_workspace: '/work/a.code-workspace'};
   const b = {snapshot: {project_id: 'b'}, repository: '/work/b', editor_workspace: '/work/b'};

@@ -49,6 +49,16 @@ function merge(projects, owner) {
   return {rows, ordered, projects: new Set(rows.map(row => row.project.snapshot.project_id)).size};
 }
 
+// Why an owner-ordered item has no entry in its project's pinned packet. Only
+// a missing packet entry with a current packet can be fixed by a new handoff;
+// without document export Workspace never publishes a packet for the project.
+function missingReason(project) {
+  if (project.queue) return 'Není v připnutém balíčku projektu; synchronizujte nebo frontu ve Workspace předejte znovu.';
+  if (project.panel && project.panel.export_documents === false)
+    return 'Projekt nemá ve Workspace zapnutý export podkladů, proto nemá balíček fronty; zapněte jej v nastavení projektu.';
+  return 'Projekt zatím nemá ve Workspace předaný balíček fronty; synchronizujte nebo frontu ve Workspace předejte.';
+}
+
 // The project of this window: explicit choice first, then the open folder or
 // .code-workspace file. 'all' shows the merged list without a project focus.
 function activeProject(projects, choice, {folders = [], workspaceFile = null} = {}) {
@@ -61,4 +71,4 @@ function activeProject(projects, choice, {folders = [], workspaceFile = null} = 
   return match ? match.snapshot.project_id : null;
 }
 
-module.exports = {validateOwner, merge, activeProject};
+module.exports = {validateOwner, merge, missingReason, activeProject};
