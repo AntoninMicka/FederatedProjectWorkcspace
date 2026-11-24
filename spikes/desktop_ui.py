@@ -4302,12 +4302,7 @@ function renderOwnerQueue(){
   row.dataset.queueKey=ownerQueueKey(item);row.draggable=!ownerQueueBusy&&!item.read_only&&!item.unavailable;
   open.type=project.type='button';open.textContent=`${item.id} · ${item.title}${item.held?' · Pozastaveno':''}${item.agent_confirmed?' · Agent hlásí splnění':''}${item.user_confirmed?' · Přijato uživatelem':''}`;
   open.className='owner-queue-task';open.disabled=ownerQueueBusy||item.unavailable;
-  open.addEventListener('click',async()=>{
-   if(!await canLeaveWorkspaceEditors())return;
-   if(activeProject?.id!==item.project_id)await openRegisteredProject(item.project_id);
-   if(activeProject?.id!==item.project_id)return;
-   const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);
-  });
+  open.addEventListener('click',()=>openOwnerQueueTask(item.project_id,item.id));
   project.textContent=item.project_title;project.className='owner-queue-project';project.disabled=ownerQueueBusy||item.unavailable;
   project.title='Otevřít roadmapu projektu';
   project.addEventListener('click',async()=>{
@@ -4345,6 +4340,13 @@ function renderOwnerQueue(){
 }
 // Management of one row in place. The item's own project scope supplies the
 // revision and HEAD; the server revalidates every write (ADR 0087/0090).
+// Opens a task's roadmap detail, where its state can also be edited directly.
+async function openOwnerQueueTask(projectId,taskId){
+ if(!await canLeaveWorkspaceEditors())return;
+ if(activeProject?.id!==projectId)await openRegisteredProject(projectId);
+ if(activeProject?.id!==projectId)return;
+ const node=taskPlanProjection?.nodes.find(n=>n.id===taskId);if(node&&await openTaskPlan())showTaskPlanDetail(node);
+}
 function ownerQueueScope(item){return (ownerQueueView?.projects||[]).find(scope=>scope.project_id===item.project_id&&!scope.unavailable)||null;}
 function appendOwnerQueueManagement(row,item){
  const scope=ownerQueueScope(item),locked=ownerQueueBusy||item.read_only||item.unavailable||!scope;
@@ -4375,14 +4377,26 @@ function appendOwnerQueueReport(target,item,report,locked){
  const text=document.createElement('p');
  text.textContent=`${report.task_id===item.id?'':report.task_id+' · '}${report.kind==='progress'?'Probíhá · ':''}${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\\n${report.body}${report.evidence?`\\nTesty: ${report.evidence.tests}\\nDiff: ${report.evidence.diff}`:''}`;
  text.style.whiteSpace='pre-wrap';target.append(text);
+ if(!report.outcome&&report.acceptable!==true)return appendOwnerQueueBlockedReport(target,item,report,locked);
  for(const decision of report.outcome==='prepared'?['resume']:report.outcome?[]:['accepted','rejected']){
   const button=document.createElement('button');button.type='button';
   button.textContent=decision==='resume'?'Dokončit připravené review':decision==='rejected'?'Odmítnout':report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit úkol';
   button.ariaLabel=`${button.textContent}: ${report.task_id} (${report.message_id})`;
-  button.disabled=locked||(decision==='accepted'&&report.acceptable!==true);
-  if(decision==='accepted'&&report.acceptable!==true)button.title='Zpráva je ze staré generace fronty nebo má úkol nesplněné předpoklady; nelze ji přijmout.';
+  button.disabled=locked;
   button.addEventListener('click',()=>reviewOwnerQueueReport(item,report,decision));target.append(button);
  }
+}
+// A waiting report that cannot be accepted says why and offers the two real
+// ways forward: finish the task in the roadmap, then close the report.
+function appendOwnerQueueBlockedReport(target,item,report,locked){
+ const reason=document.createElement('p');reason.className='owner-queue-review-blocked';reason.setAttribute('role','note');
+ reason.textContent='Nelze přijmout: '+((report.review_blockers||[]).join(' ')||'zpráva neodpovídá aktuálnímu stavu fronty nebo úkolu.');target.append(reason);
+ const open=document.createElement('button');open.type='button';open.textContent='Otevřít úkol v roadmapě';open.ariaLabel=`Otevřít úkol v roadmapě: ${report.task_id} (${report.message_id})`;
+ open.disabled=ownerQueueBusy;open.addEventListener('click',()=>openOwnerQueueTask(item.project_id,report.task_id));
+ const close=document.createElement('button');close.type='button';close.textContent='Uzavřít zprávu bez přijetí';close.ariaLabel=`Uzavřít zprávu bez přijetí: ${report.task_id} (${report.message_id})`;
+ close.title='Zprávu označí jako vyřízenou bez změny úkolu; stav úkolu nastavte v roadmapě.';close.disabled=locked;
+ close.addEventListener('click',()=>reviewOwnerQueueReport(item,report,'rejected',{note:'Uzavřeno bez přijetí: '+((report.review_blockers||[])[0]||'zpráva neodpovídá aktuálnímu stavu.'),label:'Uzavřít zprávu bez přijetí'}));
+ target.append(open,close);
 }
 // Waiting reports of tasks no longer queued stay visible and reviewable here.
 function renderOwnerQueueOtherReports(){
@@ -4447,17 +4461,17 @@ async function repairOwnerQueueProject(scope){
  });
 }
 // Same review endpoint as the IDE messages page: the server revalidates everything.
-async function reviewOwnerQueueReport(item,report,decision){
+async function reviewOwnerQueueReport(item,report,decision,{note:defaultNote='',label=''}={}){
  const scope=ownerQueueScope(item);if(!scope||item.read_only)return;
  let request=report.review_request;
  if(!request){
-  const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
-  if(!window.confirm(`${decision==='accepted'?(report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit'):'Odmítnout'} ${report.task_id} (${item.project_title})?\\n${report.body}\\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
+  const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):',defaultNote);if(note===null)return;
+  if(!window.confirm(`${label||(decision==='accepted'?(report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit'):'Odmítnout')} ${report.task_id} (${item.project_title})?\\n${report.body}\\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
   request={project_id:item.project_id,session_id:report.session_id,message_id:report.message_id,decision,note,expected_head:scope.expected_head,operation_id:crypto.randomUUID()};
  }
  await runOwnerQueueWrite('Zapisuji posouzení…',async()=>{
   try{const result=await projectRequest('/v1/ide-bridge/review',request,120000);await ownerQueueProjectChanged(item.project_id,result.result?.commit_id);
-   return decision==='rejected'?'Zpráva odmítnuta.':'Posouzení zapsáno.';}
+   return decision==='rejected'?(label?'Zpráva uzavřena bez přijetí.':'Zpráva odmítnuta.'):'Posouzení zapsáno.';}
   catch(error){throw Error(error.message+' Připravené review lze bezpečně dokončit.');}
  });
 }

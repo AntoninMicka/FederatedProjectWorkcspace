@@ -128,6 +128,7 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #assigned-queue-view #owner-queue-other-reports{max-height:none;overflow:visible;padding:0;list-style:none}
 #owner-queue-other-reports>li{display:block;padding:10px;border:1px solid #e0b252;border-radius:8px;background:#fff8e6}
 #owner-queue-other-reports>li p{margin:6px 0}
+#assigned-queue-view .owner-queue-review-blocked{padding:6px 10px;border-left:4px solid #c27b00;background:#fff8e6}
 #owner-queue-list .owner-queue-more summary,#owner-queue-list .task-queue-reports summary{cursor:pointer}
 #plan-panel>.workspace-page-header{padding:12px 16px 10px;gap:6px}
 #plan-panel>.workspace-page-header .workspace-page-title{font-size:22px!important}

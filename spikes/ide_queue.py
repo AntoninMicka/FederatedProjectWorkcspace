@@ -375,17 +375,50 @@ def validate_completion(service, record, message, *, current_head=None):
             or 'Queue item is blocked, stale or already accepted')
 
 
+REVIEW_BLOCKERS = {
+    'Roadmap changed outside accepted packet results':
+        'Roadmapa se od připnutého balíčku změnila mimo přijaté výsledky (například přímou úpravou úkolu ve Workspace). '
+        'Zprávu proto nelze bezpečně přijmout; dokončete úkol v roadmapě a zprávu uzavřete.',
+    'Document export is disabled': 'Export podkladů pro toto přiřazení IDE je vypnutý.',
+    'Original report packet is unavailable': 'Původní balíček zprávy už není dostupný.',
+}
+_SESSION_RECORDS = {}
+
+
+def session_records(db, ids=None):
+    """Decoded session records by ID, each decoded once per content (ADR 0090).
+
+    A session record carries the whole pinned snapshot (hundreds of KiB); decoding
+    it per message or packet made the owner queue take seconds. Read-only use:
+    callers must not mutate the returned records."""
+    query = 'SELECT id,record FROM sessions'
+    rows = db.execute(query).fetchall() if ids is None else [
+        row for row in db.execute(query) if row[0] in ids]
+    result = {}
+    for identifier, raw in rows:
+        cached = _SESSION_RECORDS.get(identifier)
+        if cached is None or cached[0] != raw:
+            cached = (raw, json.loads(raw)); _SESSION_RECORDS[identifier] = cached
+        result[identifier] = cached[1]
+    while len(_SESSION_RECORDS) > 256:
+        _SESSION_RECORDS.pop(next(iter(_SESSION_RECORDS)))
+    return result
+
+
 def queue_projection(node, project_id, actor_id, view):
     """Rebuild queue flags from reviewed native receipts, without another persistent writer."""
     from spikes.ide_bridge import IdeBridge
     service = IdeBridge(node, network=True)
     if not (service.root/'bridge.sqlite').exists(): return None
     with service.database() as db:
-        rows = list(db.execute('SELECT s.record,p.record FROM queue_packets p JOIN sessions s ON p.session=s.id '
+        rows = list(db.execute('SELECT p.session,p.record FROM queue_packets p JOIN sessions s ON p.session=s.id '
                                'WHERE s.revoked=0 ORDER BY p.rowid DESC'))
-    for raw_record, raw_packet in rows:
-        record, packet = json.loads(raw_record), json.loads(raw_packet)
-        if record['project_id'] != project_id or packet['manifest']['owner_id'] != actor_id: continue
+        records = session_records(db, {row[0] for row in rows})
+    for session_id, raw_packet in rows:
+        record = records[session_id]
+        if record['project_id'] != project_id: continue
+        packet = json.loads(raw_packet)
+        if packet['manifest']['owner_id'] != actor_id: continue
         try:
             authorize(service, record)
             value = status(service, record, packet, view=view, check_queue=False)
@@ -402,19 +435,31 @@ def completion_reports(node, project_id, actor_id, *, per_task=5, view=None):
     with service.database() as db:
         # Recent history is bounded, but a report still waiting for a human
         # decision is never cut off (ADR 0090): it must stay reviewable.
-        rows = list(db.execute('SELECT m.record,s.record,r.record FROM messages m JOIN sessions s ON s.id=m.session '
+        rows = list(db.execute('SELECT m.record,m.session,r.record FROM messages m JOIN sessions s ON s.id=m.session '
                                'LEFT JOIN reviews r ON r.session=m.session AND r.id=m.id '
                                "WHERE r.id IS NULL OR json_extract(r.record,'$.state')!='completed' "
                                'OR m.rowid IN (SELECT rowid FROM messages ORDER BY rowid DESC LIMIT 500) '
                                'ORDER BY m.rowid DESC'))
+        records = session_records(db, {row[1] for row in rows})
     reports = {}; assessments={}
-    for raw_message, raw_record, raw_review in rows:
-        message, record = json.loads(raw_message), json.loads(raw_record)
+    for raw_message, session_id, raw_review in rows:
+        record = records[session_id]
+        if record['project_id'] != project_id: continue
+        message = json.loads(raw_message)
         if (record['project_id'] != project_id or message['kind'] not in {'completed', 'progress'}
                 or owner(record, node) != actor_id):
             continue
         review = json.loads(raw_review) if raw_review else None
-        reviewable=False
+        reviewable=False; blockers=[]
+        # A report outside any queue packet is reviewed like any IDE message;
+        # the review itself revalidates revision and HEAD (ADR 0090).
+        if review is None and not message.get('queue_packet_id'):
+            reviewable=True
+            nodes={n['id']:n for n in (view or {}).get('plan',{}).get('nodes',[])}
+            if message['kind']=='completed' and message['task_id'] in nodes:
+                open_deps=[d for d in nodes[message['task_id']].get('depends_on',[]) if not nodes.get(d,{}).get('checked')]
+                if open_deps:
+                    reviewable=False;blockers=['Úkol zatím nelze dokončit: nejprve musí být potvrzené závislosti '+', '.join(open_deps)+'.']
         if review is None and message.get('queue_packet_id'):
             key=(record['session_id'],message['queue_packet_id'])
             try:
@@ -424,12 +469,20 @@ def completion_reports(node, project_id, actor_id, *, per_task=5, view=None):
                     require(pinned_packet is not None,'Original report packet is unavailable')
                     assessments[key]=(pinned_packet,status(service,record,pinned_packet,view=view,check_queue=False))
                 pinned_packet,value=assessments[key];item=scoped_item(value,message['task_id'])
-                reviewable=not value['blockers'] and message['revision']==pinned_packet['manifest']['revision'] and item['startable' if message['kind']=='progress' else 'eligible']
-            except (ValueError,OSError):pass
+                ready=item['startable' if message['kind']=='progress' else 'eligible']
+                reviewable=not value['blockers'] and message['revision']==pinned_packet['manifest']['revision'] and ready
+                # Say why a waiting report cannot be accepted instead of hiding it.
+                blockers=[REVIEW_BLOCKERS.get(b,b) for b in value['blockers']]
+                if message['revision']!=pinned_packet['manifest']['revision']:blockers.append('Zpráva je z jiné revize než její balíček.')
+                if not ready and not value['blockers']:
+                    blockers.append('Úkol zatím nelze '+('zahájit' if message['kind']=='progress' else 'dokončit')+(': '+'; '.join(item.get('blocked_by') or []) if item.get('blocked_by') else ' (nesplněné předpoklady nebo otevřené podúkoly).'))
+            except (ValueError,OSError) as exc:
+                blockers=[REVIEW_BLOCKERS.get(str(exc),'Původní balíček zprávy není dostupný nebo oprávnění se změnilo.')]
         entries = reports.setdefault(message['task_id'], [])
         decided = sum(1 for entry in entries if entry['outcome'] not in (None, 'prepared'))
         if review is None or review['state'] != 'completed' or decided < per_task:
-            entries.append(dict(reviewable=bool(reviewable),message_id=message['message_id'], task_id=message['task_id'],
+            entries.append(dict(reviewable=bool(reviewable),review_blockers=[] if reviewable else blockers,
+                                message_id=message['message_id'], task_id=message['task_id'],
                                 session_id=record['session_id'], kind=message['kind'], body=message['body'][:2000],
                                 reported_by=message.get('reported_by'), queue_packet_id=message.get('queue_packet_id'),
                                 evidence=message.get('evidence'), repository_commit=message['repository_commit'],

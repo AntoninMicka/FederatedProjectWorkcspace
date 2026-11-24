@@ -299,6 +299,30 @@ class QueuePacketTests(unittest.TestCase):
         self.review(waiting)
         self.assertNotIn(waiting['message_id'],[r['message_id'] for r in OwnerTaskQueue(self.node).status(self.owner)['other_reports']])
 
+    def test_unacceptable_report_explains_why_and_plain_report_stays_reviewable(self):
+        # ADR 0090: no silent disabled button; the reason travels with the report.
+        packet=self.packet();m=self.message(packet,'TASK-01');self.send(m)
+        report=lambda:next(r for r in self.qstatus()['items'][0]['reports'] if r['message_id']==m['message_id'])
+        self.assertTrue(report()['acceptable']);self.assertEqual(report()['review_blockers'],[])
+        self.head=self.save(self.body+'- [ ] [TASK-04] Added directly in Workspace\n')
+        blocked=report()
+        self.assertFalse(blocked['acceptable'])
+        self.assertTrue(any('Roadmapa se od připnutého balíčku změnila' in b for b in blocked['review_blockers']),blocked['review_blockers'])
+    def test_plain_report_of_unqueued_task_is_reviewable_in_the_queue(self):
+        from spikes.owner_task_queue import OwnerTaskQueue
+        for task in ('TASK-03','TASK-01'):
+            self.act('remove-single',task,preview_sha256=self.act('remove-single-preview',task)['preview_sha256'])
+        plain=lambda task:dict(message_id=str(uuid4()),task_id=task,kind='completed',body='Done outside the queue.',
+            revision=self.record['snapshot']['revision'],repository_commit='b'*40)
+        waiting,plain=plain('TASK-03'),plain('TASK-01');self.send(waiting);self.send(plain)
+        others={r['message_id']:r for r in OwnerTaskQueue(self.node).status(self.owner)['other_reports']}
+        self.assertFalse(others[waiting['message_id']]['acceptable'])
+        self.assertIn('TASK-02',others[waiting['message_id']]['review_blockers'][0],'open dependencies are named')
+        entry=others[plain['message_id']]
+        self.assertTrue(entry['acceptable']);self.assertEqual(entry['review_blockers'],[])
+        self.assertEqual(self.review(plain)['outcome'],'accepted')
+        self.assertNotIn(plain['message_id'],[r['message_id'] for r in OwnerTaskQueue(self.node).status(self.owner)['other_reports']])
+
     def test_owner_queue_manages_items_in_place_across_projects(self):
         # One queue (ADR 0090): row actions use their own project scope, no project switch.
         import shutil
@@ -309,7 +333,7 @@ class QueuePacketTests(unittest.TestCase):
 const assert=require('node:assert/strict');
 const crypto={randomUUID:()=>'op'};let confirmed=true,noted='ok',calls=[],loads=0,plans=0,queueLoads=0,fail=false;
 const window={prompt:()=>noted,confirm:()=>confirmed};
-function element(){return {children:[],dataset:{},style:{},disabled:false,textContent:'',append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
+function element(){return {children:[],dataset:{},style:{},disabled:false,textContent:'',className:'',setAttribute(){},append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
 const document={createElement:element,querySelector:()=>element()};
 let ownerQueueBusy=false,ownerQueueMessage='',taskQueueView={},activeProject={id:'pB',head:'hB'};
 const scopeA={project_id:'pA',project_title:'A',revision:3,expected_head:'hA',valid:true,read_only:false,task_ids:['T1'],issues:[]};
@@ -351,9 +375,19 @@ async function projectRequest(path,body){calls.push([path,body]);if(fail)throw E
  assert.equal(ownerQueueBusy,false,'a failed write releases the queue');assert.equal(loads,1,'and reloads it for recovery');
  // Row rendering: labels, hold audit and invalid-scope blocking.
  fail=false;ownerQueueView.projects[0].flag_audit=[{task_id:'T1',old:false,new:true,actor_id:'reviewer',at:1,revision:1}];
- const row=element();appendOwnerQueueManagement(row,{...itemA,held:false,reports:[{task_id:'T1',message_id:'r1',body:'b',outcome:null,acceptable:false,kind:'completed'}]});
+ const row=element();appendOwnerQueueManagement(row,{...itemA,held:false,reports:[{task_id:'T1',message_id:'r1',session_id:'s',body:'b',outcome:null,acceptable:false,kind:'completed',review_blockers:['Roadmapa se změnila.']}]});
  assert.equal(row.children[0].ariaLabel,'Pozastavit: T1');assert.equal(row.children[0].disabled,false);assert.equal(row.children[1].ariaLabel,'Odebrat: T1');
- const reportButtons=row.children[2].children.filter(c=>c.textContent==='Přijmout a dokončit úkol');assert.equal(reportButtons[0].disabled,true,'a stale report cannot be accepted');
+ // A report that cannot be accepted says why and offers the real ways forward.
+ const blocked=row.children[2].children;
+ assert.ok(!blocked.some(c=>c.textContent==='Přijmout a dokončit úkol'||c.textContent==='Odmítnout'));
+ assert.equal(blocked.find(c=>c.className==='owner-queue-review-blocked').textContent,'Nelze přijmout: Roadmapa se změnila.');
+ assert.ok(blocked.some(c=>c.textContent==='Otevřít úkol v roadmapě'));
+ const closeButton=blocked.find(c=>c.textContent==='Uzavřít zprávu bez přijetí');assert.equal(closeButton.disabled,false);
+ let prompted='';window.prompt=(_text,value)=>{prompted=value;return value;};calls.length=0;
+ await reviewOwnerQueueReport(itemA,{task_id:'T1',message_id:'r1',session_id:'s',body:'b',review_request:null,review_blockers:['Roadmapa se změnila.']},'rejected',{note:'Uzavřeno bez přijetí: Roadmapa se změnila.',label:'Uzavřít zprávu bez přijetí'});
+ assert.equal(prompted,'Uzavřeno bez přijetí: Roadmapa se změnila.');assert.equal(calls[0][1].decision,'rejected');assert.equal(calls[0][1].note,prompted);
+ const ok=element();appendOwnerQueueManagement(ok,{...itemA,held:false,reports:[{task_id:'T1',message_id:'r2',body:'b',outcome:null,acceptable:true,kind:'completed'}]});
+ assert.deepEqual(ok.children[2].children.filter(c=>c.type==='button').map(c=>[c.textContent,c.disabled]),[['Přijmout a dokončit úkol',false],['Odmítnout',false]]);
  assert.match(row.children.at(-1).children.map(c=>c.textContent).join(' '),/reviewer.*Ne → Ano/);
  const invalid=element();appendOwnerQueueManagement(invalid,{id:'T2',project_id:'pB',project_title:'B',held:false});assert.equal(invalid.children[0].disabled,true,'hold needs a valid queue');
  const readOnly=element();appendOwnerQueueManagement(readOnly,{...itemA,read_only:true,held:false});assert.ok(readOnly.children.filter(c=>c.type==='button').every(c=>c.disabled));
