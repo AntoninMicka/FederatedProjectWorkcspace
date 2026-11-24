@@ -186,7 +186,8 @@ class IdeBridge:
         manifest = json.loads((EXTENSION / 'package.json').read_text())
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'queue.js', 'updater.js', 'workspace.svg', 'README.md', 'LICENSE'):
+            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'queue.js', 'updater.js',
+                         'coordination.js', 'unified.js', 'workspace.svg', 'README.md', 'LICENSE'):
                 archive.writestr('extension/' + name, (EXTENSION / name).read_bytes())
             if pairing is not None:
                 archive.writestr('extension/pairing.json', canonical(pairing))
@@ -375,6 +376,33 @@ class IdeBridge:
             require(actor is not None, 'Workspace account access revoked')
             return actor
 
+    def owner_queue(self, parent, actor):
+        """Owner working order limited to this connection's bound projects (ADR 0090).
+
+        Only the owner bundle order is read under its shared lock; item state,
+        eligibility and actions stay in the pinned per-project packets. Unmapped
+        projects are not propagated to the IDE. Nothing is written."""
+        from spikes.ide_queue import owner
+        from spikes.owner_task_queue import OwnerTaskQueue
+        sessions = {}
+        with self.database() as db:
+            live = db.execute('SELECT revoked FROM connections WHERE id=?', (parent['connection_id'],)).fetchone()
+            require(live and not live['revoked'], 'Workspace connection revoked')
+            for row in db.execute('SELECT id,record FROM sessions WHERE revoked=0 ORDER BY rowid'):
+                record = json.loads(row['record'])
+                if record.get('connection_id') == parent['connection_id'] and record.get('bound'):
+                    sessions[record['project_id']] = row['id']
+        visible = {pid: sid for pid, sid in sessions.items() if Administration.is_admin(actor)
+                   or (actor or {}).get('memberships', {}).get(pid) in {'editor', 'project-admin'}}
+        queue = OwnerTaskQueue(self.node, network=self.network)
+        owner_id = owner(parent, self.node)
+        with queue._lock(None, owner_id, shared=True) as path:
+            bundle = queue._bundle(path, owner_id)
+        registered = {b['project_id'] for b in queue.projects._bindings()}
+        order = [[pid, task] for pid, task in bundle['order'] if pid in visible and pid in registered]
+        return dict(revision=bundle['revision'], order=order,
+                    sessions={pid: sid for pid, sid in visible.items() if pid in registered})
+
     @staticmethod
     def require_editor(actor, project_id):
         require(Administration.is_admin(actor) or bool(actor and actor.get('memberships', {}).get(
@@ -558,6 +586,8 @@ class IdeBridge:
             return dict(connection_id=parent['connection_id'], name=parent['name'],
                         projects=projects, mappings=self.connection_mappings(parent['connection_id'], actor,
                             eligible={p['project_id'] for p in projects}))
+        if action == 'owner-queue' and set(request) == {'connection_id', 'action'}:
+            return self.owner_queue(parent, actor)
         if action == 'map' and set(request) == {'connection_id', 'action', 'mapping'}:
             mapping = request['mapping']
             require(isinstance(mapping, dict) and mapping.get('connection_id') == parent['connection_id'], 'Wrong connection mapping')

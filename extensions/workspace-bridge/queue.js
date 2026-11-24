@@ -137,12 +137,16 @@ async function synchronize(project,request){
  project.queue=value;
  if(value&&!value.blockers.length){
   const root=path.join(project.root,'packets',value.packet_id),cache=path.join(project.root,'queue-cache');
-  try{const old=JSON.parse(await bridge.read(path.join(root,'manifest.json')));if(hash(Buffer.from(stable(old)))!==value.packet_id)throw Error('Manifest byl změněn.');}catch(error){if(error.code!=='ENOENT')throw error;}
+  // A generation already published with all verified documents needs no
+  // second live check: nothing new is prepared or pointed to (ADR 0090).
+  let prepared=false;
+  try{const old=JSON.parse(await bridge.read(path.join(root,'manifest.json')));if(hash(Buffer.from(stable(old)))!==value.packet_id)throw Error('Manifest byl změněn.');}catch(error){if(error.code!=='ENOENT')throw error;prepared=true;}
   await sourceRepository(project);
   for(const doc of value.manifest.documents){
    if(!/^[a-f0-9]{64}$/.test(doc.sha256))throw Error('Neplatný digest podkladu.');
    const target=path.join(root,'documents',doc.sha256+'.txt');
    try{await verified(target,doc.sha256,cache);continue;}catch(error){if(error.code!=='ENOENT')throw error;}
+   prepared=true;
    let source=path.join(cache,doc.sha256+'.txt');
    try{await verified(source,doc.sha256,cache);}catch(error){if(error.code!=='ENOENT')throw error;
     const result=await request(project,'queue-document',{packet_id:value.packet_id,artifact_id:doc.artifact_id});
@@ -152,15 +156,18 @@ async function synchronize(project,request){
    await link(source,target,doc.sha256,cache);
   }
   // Recheck live eligibility before publishing any pointer to a prepared generation.
-  const current=validate((await request(project,'queue',{})).queue,project);
+  const current=prepared?validate((await request(project,'queue',{})).queue,project):value;
   if(!current||current.packet_id!==value.packet_id||current.blockers.length)throw Error('Balíček se během exportu změnil.');
-  await bridge.atomic(path.join(root,'manifest.json'),stable(value.manifest));
-  await bridge.atomic(path.join(root,'AGENT.md'),'# Předání fronty\n\n'+value.manifest.instructions+'\n\nManifest: manifest.json\nAktuální stav: ../../queue.json (pouze poslední známý stav; před odesláním synchronizujte).\n'
+  if(prepared)await bridge.atomic(path.join(root,'manifest.json'),stable(value.manifest));
+  const agent='# Předání fronty\n\n'+value.manifest.instructions+'\n\nManifest: manifest.json\nAktuální stav: ../../queue.json (pouze poslední známý stav; před odesláním synchronizujte).\n'
    +'Probíhá: ../../inbox/<UUID>.json se stejnými identifikátory, kind="progress", reported_by="agent"; checklist a evidence nejsou pro zahájení povinné. Workspace zahájení bez checklistu přijme automaticky (Probíhá); ověřte receipts a stav. U SUM skupiny zahajte konkrétní podúkol.\n'
    +'Completion: ../../inbox/<UUID>.json; fields: message_id, task_id, kind="completed", body, revision=manifest.revision, repository_commit=actual HEAD, queue_packet_id, reported_by="agent", evidence={tests,diff}.\n'
    +'Přiložte i přesné checklist změny, pokud úkol má checklist. Zprávu publikujte přes dočasný soubor a rename; stejné UUID nikdy nepoužijte s jinými bajty.\n'
    +'Dávka v hierarchy je jedna feature větev a jeden PR; manifest.linked_tasks jsou její podúkoly, hlaste je jednotlivě. Dávku lze nahlásit až po přijetí všech podúkolů.\n'
-   +'Pravidla z manifestu a místní AGENTS.md načtěte explicitně; rozpory sami nepřekrývejte. Hlášení není lidská akceptace.\n');
+   +'Pravidla z manifestu a místní AGENTS.md načtěte explicitně; rozpory sami nepřekrývejte. Hlášení není lidská akceptace.\n';
+  // Unchanged instructions are not rewritten (and fsynced) on every poll.
+  let written=null;try{written=await bridge.read(path.join(root,'AGENT.md'));}catch(error){if(error.code!=='ENOENT')throw error;}
+  if(written!==agent)await bridge.atomic(path.join(root,'AGENT.md'),agent);
   project.queue=current;
  }
  await bridge.atomic(path.join(project.root,'queue.json'),JSON.stringify(project.queue));

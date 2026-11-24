@@ -44,9 +44,15 @@ async function read(file) {
 async function atomic(file, data) {
   await safeDirectory(path.dirname(file));
   const temporary = path.join(path.dirname(file), '.' + crypto.randomUUID() + '.tmp');
-  const handle = await fs.open(temporary, 'wx', 0o600);
-  try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
-  await fs.rename(temporary, file);
+  try {
+    const handle = await fs.open(temporary, 'wx', 0o600);
+    try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
+    await fs.rename(temporary, file);
+  } catch (error) {
+    // An orphan temporary is never an authority; do not leave it behind.
+    await fs.rm(temporary, {force: true}).catch(() => {});
+    throw error;
+  }
   if (process.platform !== 'win32') {
     const directory = await fs.open(path.dirname(file), 'r');
     try {await directory.sync();} finally {await directory.close();}
@@ -54,6 +60,12 @@ async function atomic(file, data) {
 }
 // Extension–backend protocol (ADR 0060, contract K7); independent of the package version.
 const BRIDGE_PROTOCOL = 1;
+// Connection actions without a server-side write. A 'resource busy' answer to
+// them may be repeated; writes repeat only when the server reports not-started.
+const READ_ACTIONS = new Set(['status', 'extension-update', 'owner-queue', 'panel', 'queue', 'queue-document', 'document']);
+function readOnly(route, body) {
+  return route === '/v1/ide-bridge/connection/exchange' && READ_ACTIONS.has(body?.action);
+}
 const PAIRING_VERSIONS = [1, 2];
 function validatePairing(pairing) {
   if (pairing && Number.isInteger(pairing.schema_version) && pairing.schema_version > Math.max(...PAIRING_VERSIONS))
@@ -131,17 +143,25 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
       response.on('end', () => {try {
         const text = Buffer.concat(chunks).toString('utf8');
         // This response is emitted before dispatch: replay cannot repeat a write.
-        let busy = false;
+        let busy = false, resourceBusy = false;
         if (response.statusCode === 503) {
           // Typed code first (K6); the text covers backends older than the code.
-          try { const value = JSON.parse(text); busy = value.code === 'server_busy' || (value.code === undefined && value.error === 'server busy'); } catch (_) { /* other 503 */ }
+          try {
+            const value = JSON.parse(text);
+            busy = value.code === 'server_busy' || (value.code === undefined && value.error === 'server busy');
+            // A held project/queue lock (ProjectBusy). Retry only a read or a
+            // request the server reports as not started (ADR 0090).
+            resourceBusy = !busy && value.error === 'resource busy';
+            if (resourceBusy && (value.outcome === 'not-started' || readOnly(route, body))) busy = true;
+          } catch (_) { /* other 503 */ }
         }
         if (busy && attempt < 3) {
           setTimeout(() => httpRequest(pairing, route, body, ca, attempt + 1).then(resolve, reject),
             250 * (2 ** attempt));
           return;
         }
-        if (busy) throw new Error('Workspace je zaneprázdněný. Synchronizaci zkuste znovu za chvíli (503).');
+        if (busy) throw Object.assign(new Error('Workspace je zaneprázdněný. Synchronizaci zkuste znovu za chvíli (503).'),
+          {status: 503, busy: true});
         if (response.statusCode !== 200) {
           let reason='', staleReport=false;
           try {
@@ -157,6 +177,8 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
           const error=new Error(`Workspace odmítl synchronizaci (${response.statusCode})${reason?': '+reason:'.'}`);
           error.status=response.statusCode;
           error.staleReport=staleReport;
+          // Transient lock contention: last known state stays, no quarantine.
+          error.busy=resourceBusy;
           throw error;
         }
         resolve(JSON.parse(text));
@@ -171,7 +193,7 @@ async function httpRequest(pairing, route, body, ca, attempt = 0) {
 // own backend lanes and no longer wait behind sync (AUDIT-B2-T2, A08).
 // Retain ownership through response EOF and the existing pre-dispatch retries.
 const requestQueues = new Map();
-const READ_LANES = Object.freeze({status: 'ide_status', 'extension-update': 'ide_update'});
+const READ_LANES = Object.freeze({status: 'ide_status', 'extension-update': 'ide_update', 'owner-queue': 'ide_status'});
 function transportLane(route, body) {
   return route === '/v1/ide-bridge/connection/exchange' && Object.hasOwn(READ_LANES, body?.action)
     ? READ_LANES[body.action] : 'ide_queue';

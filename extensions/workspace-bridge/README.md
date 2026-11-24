@@ -177,3 +177,34 @@ Probíhá ve zprávách i pro hlášení agenta. Pokud zahájení nejde přijmou
 třeba kvůli mezitím změněným závislostem, IDE to ohlásí a zpráva čeká
 na posouzení ve Workspace. Dokončení, částečný checklist a dotazy dál
 potvrzuje člověk.
+
+## Jedna fronta a projekty v IDE od verze 0.6.0
+
+Pohled **Fronta úkolů** ukazuje frontu projektu otevřeného v tomto okně
+a pod ní položku **Všechny úkoly ve frontě**. Ta obsahuje jeden sloučený
+seznam úkolů ze všech přiřazených projektů ve společném pořadí, které spravuje
+Workspace. Každý řádek uvádí projekt a nabízí jeho akce (▶ zahájení,
+✓ ruční žádost, předání agentovi). Ty se vždy odesílají v rámci připnutého
+balíčku daného projektu. Pořadí se v IDE nemění. Starší Workspace bez
+společného pořadí řadí položky po projektech a v popisu to uvádí.
+
+**Workspace: Přepnout projekt** (ikona ⇄ v záhlaví pohledů) vybere projekt
+pro panel tohoto okna. Volba **Všechny projekty** zobrazí jen sloučený seznam.
+Volba **Podle otevřené složky** vrátí automatický výběr. U projektu otevřeného
+jinde nabídne jeho otevření zde nebo v novém okně.
+
+**Workspace: Vytvořit projekt v IDE k projektu Workspace** vytvoří lokální
+projekt k existujícímu projektu Workspace. Nabídne klon Git repozitáře
+do nové složky, výběr existující složky nebo `.code-workspace`, nebo nový
+prázdný repozitář. Klon nečeká na interaktivní zadání hesla. Pro soukromý
+repozitář použijte credential helper nebo SSH agenta. Po potvrzení se projekt
+přiřadí, synchronizuje a nabídne se jeho otevření.
+
+Při více otevřených oknech synchronizuje na pozadí jen jedno z nich. Ostatní
+okna zobrazují jím uložené soubory a stav. Ruční **Obnovit** funguje v každém
+okně, a pokud synchronizace právě běží, počká na její výsledek.
+Odpověď `503 resource busy` se u čtení opakuje. Projekt se pak označí jako
+**Zaneprázdněné · poslední známý stav**, nikoli jako nedostupný, a další
+pokus se odloží až na 60 s. Rozhodnutí a hranice popisuje
+[ADR 0090](../../docs/adr/0090-ide-unified-queue-and-window-coordination.md).
+Sloučené pořadí vyžaduje také aktualizovaný backend Workspace.

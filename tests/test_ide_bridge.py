@@ -430,3 +430,10 @@ bridge.sync(input.mailbox, input.pairing, input.repo).then(result => {
         result = subprocess.run(['node', '--test', 'tests/ide_bridge.test.js'],
                                 capture_output=True, text=True, timeout=40)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required for extension coordination tests')
+    def test_extension_window_lease_busy_and_merged_queue(self):
+        # ADR 0090: one poller per profile, bounded busy retry, owner-ordered merged queue.
+        result = subprocess.run(['node', '--test', 'tests/ide_unified_queue.test.js'],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)

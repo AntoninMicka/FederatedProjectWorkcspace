@@ -223,6 +223,8 @@ ACTION_LANES = {
     # publication/review state. Project/index and SQLite owners still apply.
     '/v1/ide-bridge/connection/exchange': {
         'status': 'ide_status', 'extension-update': 'ide_update',
+        # Owner order only (ADR 0090); the shared queue-file lock still applies.
+        'owner-queue': 'ide_status',
     },
 }
 
@@ -232,7 +234,7 @@ DIAGNOSTIC_ACTIONS = {
         'revalidate', 'repair-preview', 'repair', 'remove-single-preview',
         'remove-single', 'move', 'set-flag', 'owner-status', 'owner-move'}),
     '/v1/ide-bridge/connection/exchange': frozenset({'status', 'extension-update',
-        'map', 'bind', 'exchange', 'panel', 'document', 'queue', 'queue-document'}),
+        'map', 'bind', 'exchange', 'panel', 'document', 'queue', 'queue-document', 'owner-queue'}),
 }
 
 # Julia owns its worker/error maps and durable run journal independently of

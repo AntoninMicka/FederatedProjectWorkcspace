@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const bridge = require('./bridge');
 const queueBridge = require('./queue');
+const unified = require('./unified');
 const hash = data => crypto.createHash('sha256').update(data).digest('hex');
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const idPattern = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/;
@@ -77,7 +78,20 @@ function createSidebar(vscode, context, hooks) {
   // Keep the transport usable in hosts that only expose the command surface.
   if (!vscode.window.createTreeView) return {refresh: async () => {}};
   let projects = [], selected = null, openOnly = false, loading = null, detail = null, generation = 0, loadingGeneration = 0;
-  const views = [], events = [];
+  let owner = null, choice = context.workspaceState?.get('activeProject');
+  const views = [], events = [], panelFetched = new Map();
+  const PANEL_INTERVAL = 20000;
+  // The project of this window (explicit choice or open folder); null = all.
+  function active() {
+    const file = vscode.workspace.workspaceFile?.scheme === 'file' ? vscode.workspace.workspaceFile.fsPath : null;
+    return unified.activeProject(projects, choice, {folders: (vscode.workspace.workspaceFolders || []).map(folder => folder.uri.fsPath), workspaceFile: file});
+  }
+  // A last known order is shown with its time, never as a confirmed current one.
+  function ownerAge() {
+    const at = Date.parse(owner?.fetched_at || '');
+    return Number.isFinite(at) && Date.now() - at > 60000 ? ' · pořadí z ' + new Date(at).toLocaleTimeString() : '';
+  }
+  const focused = () => { const id = active(); return projects.filter(project => !id || project.snapshot.project_id === id); };
   const find = item => projects.find(p => p.snapshot.project_id === item?.projectId);
   const taskOf = item => find(item)?.snapshot.tasks.find(t => t.id === item?.taskId);
   function row(project, kind, value = {}) {return {kind, projectId: project.snapshot.project_id, ...value};}
@@ -89,9 +103,11 @@ function createSidebar(vscode, context, hooks) {
     generation++;projects=[];if(!keepSelection)selected=null;refreshEvents();
     if(detail)detail.webview.html=keepSelection?'<p>Načítám aktuální přiřazení…</p>':'<p>Workspace je odpojený.</p>';
   }
-  async function refresh(remote = true) {
+  // queue:false after a sync that already exported the queue; throttle:true for
+  // background/visibility refreshes, which reuse a recent panel read.
+  async function refresh(remote = true, {queue = true, throttle = false} = {}) {
     if (!vscode.workspace.isTrusted) {projects=[];refreshEvents();return;}
-    if (loading) return loadingGeneration===generation ? loading : loading.then(()=>refresh(remote));
+    if (loading) return loadingGeneration===generation && throttle ? loading : loading.then(()=>refresh(remote,{queue,throttle}));
     const version=generation;loadingGeneration=version;
     loading = (async () => {
       try {
@@ -104,19 +120,22 @@ function createSidebar(vscode, context, hooks) {
             project.panel = JSON.parse(await bridge.read(path.join(project.root, 'panel.json')));
             if (project.panel.session_id !== project.session || project.panel.revision !== project.snapshot.revision) project.panel = null;
           } catch (_) {project.panel = null;}
-          if (remote && !project.error && views.some(view => view.visible) && !project.legacy) {
+          const recent = throttle && project.panel && Date.now() - (panelFetched.get(project.session) || 0) < PANEL_INTERVAL;
+          if (remote && !recent && !project.error && views.some(view => view.visible) && !project.legacy) {
             try {
               const value = await hooks.request(project, 'panel', {});
               if(version!==generation)return;
               if (value.session_id !== project.session || value.project_id !== project.snapshot.project_id
                   || value.revision !== project.snapshot.revision || !Array.isArray(value.documents) || !Array.isArray(value.messages))
                 throw Error('Neshoda projektového panelu.');
-              await queueBridge.synchronize(project,hooks.request);
+              if (queue) await queueBridge.synchronize(project,hooks.request);
+              panelFetched.set(project.session, Date.now());
               project.panel = value;
               await bridge.atomic(path.join(project.root, 'panel.json'), JSON.stringify(value));
             } catch (error) {project.error = error.message;}
           }
         }
+        owner = await hooks.ownerQueue?.() ?? null;
       } catch (error) {
         projects = []; hooks.error?.(error.message);
       }
@@ -134,15 +153,30 @@ function createSidebar(vscode, context, hooks) {
     for(const entry of project.pending||[])if(!entries.has(entry.message.message_id))entries.set(entry.message.message_id,entry);
     return [...entries.values()].filter(entry=>entry.message.task_id===taskId&&['completed','progress'].includes(entry.message.kind));
   }
+  // Rows of the merged queue keep their own project; group makes tree IDs unique.
+  function mergedRows() {
+    return unified.merge(projects, owner).rows.map(r => r.missing
+      ? row(r.project,'queueMissing',{taskId:r.taskId,index:r.index,group:'all',
+          reason:'Není v připnutém balíčku projektu; synchronizujte nebo frontu ve Workspace předejte znovu.'})
+      : row(r.project,'queueTask',{entry:r.entry,taskId:r.taskId,index:r.index,group:'all',unordered:r.unordered}));
+  }
   function children(kind, item) {
-    if (!item) return projects.map(project => row(project, 'project', {view: kind}));
+    if (!item) {
+      if (kind === 'queue') {
+        const id = active(), project = projects.find(p => p.snapshot.project_id === id);
+        // One merged list; with a project of this window first, as its own node.
+        return project ? [row(project, 'project', {view: kind}), {kind: 'queueAll'}] : mergedRows();
+      }
+      return focused().map(project => row(project, 'project', {view: kind}));
+    }
+    if (item.kind === 'queueAll') return mergedRows();
     const project = find(item); if (!project) return [];
     if(kind==='queue'){
      if(item.kind==='queueTask'){
-      const known=queueBridge.scope(project.queue,item.taskId);
-      return [...known.rows.filter(r=>r.depth===1).map(r=>row(project,r.entry?'queueTask':'queueMissing',{entry:r.entry,taskId:r.id,parentRef:item.taskId,repeated:r.repeated})),
-       ...known.problems.filter(p=>!p.startsWith('Chybí odkaz')).map(problem=>row(project,'queueMissing',{taskId:problem,parentRef:item.taskId})),
-       ...completionReports(project,item.taskId).map(entry=>row(project,'message',{entry,parentRef:item.taskId}))];
+      const known=queueBridge.scope(project.queue,item.taskId),group=item.group;
+      return [...known.rows.filter(r=>r.depth===1).map(r=>row(project,r.entry?'queueTask':'queueMissing',{entry:r.entry,taskId:r.id,parentRef:item.taskId,repeated:r.repeated,group})),
+       ...known.problems.filter(p=>!p.startsWith('Chybí odkaz')).map(problem=>row(project,'queueMissing',{taskId:problem,parentRef:item.taskId,group})),
+       ...completionReports(project,item.taskId).map(entry=>row(project,'message',{entry,parentRef:item.taskId,group}))];
      }
      return (project.queue?.items||[]).map((entry,index)=>row(project,'queueTask',{entry,taskId:entry.id,index}));
     }
@@ -166,9 +200,20 @@ function createSidebar(vscode, context, hooks) {
       .map(doc => row(project, 'document', {doc}));
   }
   function treeItem(item) {
+    if (item.kind === 'queueAll') {
+      const merged = unified.merge(projects, owner), result = new vscode.TreeItem('Všechny úkoly ve frontě', vscode.TreeItemCollapsibleState.Collapsed);
+      result.id = 'queueAll';
+      result.description = `${merged.rows.length} položek · ${merged.projects} projektů` + (merged.ordered ? ownerAge() : ' · pořadí po projektech');
+      result.tooltip = merged.ordered ? 'Společné pořadí vlastníka z Workspace; stav a akce každé položky patří jejímu projektu.'
+        : 'Workspace zatím společné pořadí nenabízí; položky jsou seřazené po projektech.';
+      result.iconPath = new vscode.ThemeIcon('list-tree'); result.contextValue = 'queueAll';
+      return result;
+    }
     const project = find(item); let label, description = '', icon = 'file-text', collapsed = vscode.TreeItemCollapsibleState.None, command;
     if (item.kind === 'project') {
-      label = project.snapshot.project_title; description = project.error ? 'Nedostupné · uložený export' : project.state?.stale || project.panel?.stale ? 'Zastaralé' : project.snapshot.commit_id.slice(0,8);
+      label = project.snapshot.project_title; description = project.error ? (project.state?.busy ? 'Zaneprázdněné · poslední známý stav' : 'Nedostupné · uložený export') : project.state?.stale || project.panel?.stale ? 'Zastaralé' : project.snapshot.commit_id.slice(0,8);
+      if(item.view==='queue')description=`${(project.queue?.items||[]).length} ve frontě · ${description}`;
+      if(active()===project.snapshot.project_id)description='Aktuální projekt · '+description;
       if(item.view==='messages'&&project.panel?.history_truncated)description+=' · poslední zprávy';
       icon = project.error || project.state?.stale || project.panel?.stale ? 'warning' : 'project'; collapsed = vscode.TreeItemCollapsibleState.Expanded;
     } else if(item.kind==='queueTask'){
@@ -176,10 +221,11 @@ function createSidebar(vscode, context, hooks) {
       const flags=queueBridge.flags(item.entry,{stale,blockers}),known=queueBridge.scope(project.queue,item.taskId);
       label=(item.index===undefined?'':(item.index+1)+'. ')+item.entry.title;
       description=flags.map(f=>f.label).join(' · ')+(known.problems.length?' · Neúplná hierarchie':'')+(item.repeated?' · Opakovaný odkaz':'');
+      if(item.group==='all'&&item.index!==undefined)description=project.snapshot.project_title+' · '+description+(item.unordered?' · mimo společné pořadí':'');
       icon=item.entry.user_confirmed&&!stale?'pass':known.problems.length?'warning':known.rows.length?'folder':'list-ordered';command='workspaceBridge.showQueueTask';
       if(!item.repeated&&(project.queue?.manifest.hierarchy?.[item.taskId]||completionReports(project,item.taskId).length))collapsed=vscode.TreeItemCollapsibleState.Collapsed;
     } else if(item.kind==='queueMissing'){
-      label=item.taskId;description='Chybějící nebo neúplný odkaz';icon='warning';
+      label=(item.index===undefined?'':(item.index+1)+'. ')+item.taskId;description=item.reason?project.snapshot.project_title+' · '+item.reason:'Chybějící nebo neúplný odkaz';icon='warning';
     } else if (item.kind === 'task') {
       const task = taskOf(item); label = task.title; description = task.id+' · '+statusLabel(task); icon = task.checked ? 'pass' : 'circle-outline';
       if (project.snapshot.tasks.some(t => t.parent_id===task.id)) collapsed = vscode.TreeItemCollapsibleState.Collapsed;
@@ -196,7 +242,7 @@ function createSidebar(vscode, context, hooks) {
       icon = 'mail'; command = 'workspaceBridge.showMessage';
     } else if (item.kind === 'localRule') {label = item.rule.title; description = 'Lokální · '+JSON.stringify(item.rule.scope); icon = 'law'; command = 'workspaceBridge.showLocalRule';}
     else {label = 'INSTRUCTIONS.md'; description = 'Pokyny připojení'; icon = 'law'; command = 'workspaceBridge.showInstructions';}
-    const result = new vscode.TreeItem(label, collapsed); result.id = `${item.projectId}:${item.kind}:${item.taskId || item.doc?.artifact_id || item.rule?.relative || item.entry?.message?.message_id || ''}:${item.parentRef || ''}:${item.view || ''}`;
+    const result = new vscode.TreeItem(label, collapsed); result.id = `${item.projectId}:${item.kind}:${item.taskId || item.doc?.artifact_id || item.rule?.relative || item.entry?.message?.message_id || ''}:${item.parentRef || ''}:${item.view || ''}:${item.group || ''}`;
     result.description = description; result.tooltip = label+'\n'+description; result.iconPath = new vscode.ThemeIcon(icon); result.contextValue = item.kind;
     if(item.kind==='queueTask'){
      const unavailable=project.error||project.state?.stale||project.panel?.stale||project.queue?.blockers.length;
@@ -211,7 +257,7 @@ function createSidebar(vscode, context, hooks) {
     const event = new vscode.EventEmitter(); events.push(event); context.subscriptions.push(event);
     const view = vscode.window.createTreeView('workspaceBridge.'+kind, {treeDataProvider: {
       onDidChangeTreeData: event.event, getTreeItem: treeItem, getChildren: item => children(kind,item)}});
-    views.push(view); context.subscriptions.push(view, view.onDidChangeVisibility(() => refresh()));
+    views.push(view); context.subscriptions.push(view, view.onDidChangeVisibility(() => refresh(true, {throttle: true})));
   }
   function register(name, action) {
     context.subscriptions.push(vscode.commands.registerCommand('workspaceBridge.'+name, async item => {
@@ -255,6 +301,17 @@ function createSidebar(vscode, context, hooks) {
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument({content:text,language:'plaintext'}));
   });
   register('filterOpen',async()=>{openOnly=!openOnly;refreshEvents();});
+  // Focus of this window's panel; opening the project elsewhere stays a choice.
+  register('switchProject',async()=>{
+    const id=active();
+    const items=[{label:'$(list-tree) Všechny projekty',description:'jedna sloučená fronta a všechny projekty',choice:'all'},
+      ...projects.map(project=>({label:project.snapshot.project_title,description:(project.snapshot.project_id===id?'aktuální · ':'')+(project.editor_workspace||project.repository||''),choice:project.snapshot.project_id,project})),
+      {label:'$(target) Podle otevřené složky',description:'automatický výběr v tomto okně',choice:undefined}];
+    const picked=await vscode.window.showQuickPick(items,{placeHolder:'Projekt Workspace pro panel a frontu v tomto okně'});
+    if(!picked)return;
+    choice=picked.choice;await context.workspaceState?.update('activeProject',choice);refreshEvents();
+    if(picked.project)await hooks.open?.(picked.project.editor_workspace||picked.project.repository,picked.project.snapshot.project_title);
+  });
   register('allDocuments',async()=>{selected=null;refreshEvents();});
   register('showQueueTask',async item=>{
     const project=find(item);if(!project||!project.queue)return;
@@ -390,6 +447,6 @@ function createSidebar(vscode, context, hooks) {
     await vscode.env.clipboard.writeText(`Úkol ${task.id}: ${task.title}\nPřipnutý Context Manifest: ${file}\n${manifest.notice}`);
     await vscode.window.showInformationMessage((project.panel.export_documents?'Připnuté zadání, podklady a pravidla jsou připravené.':'Export podkladů je vypnutý; připravené je pouze zadání a místní instrukce/pravidla.')+' Předání zkopírováno; běžící agent jej musí výslovně načíst.');
   });
-  return {refresh,clear,children,treeItem,projects:()=>projects};
+  return {refresh,clear,children,treeItem,projects:()=>projects,active};
 }
 module.exports={createSidebar,validateSnapshot,detailHTML,references,localFile,localRules};

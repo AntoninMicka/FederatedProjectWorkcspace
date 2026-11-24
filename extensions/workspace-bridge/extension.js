@@ -5,14 +5,17 @@ const vscode = require('vscode');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {execFile} = require('node:child_process');
 const bridge = require('./bridge');
 const queueBridge = require('./queue');
 const {createSidebar} = require('./sidebar');
 const {createUpdater} = require('./updater');
+const coordination = require('./coordination');
+const unified = require('./unified');
 
 async function activate(context) {
   if (vscode.env.remoteName) { vscode.window.showWarningMessage('Workspace bridge zatím vyžaduje lokální IDE bez Remote SSH/WSL.'); return; }
-  let busy = false;
+  let running = null, queued = null, ownerUnsupportedUntil = 0;
   const output = vscode.window.createOutputChannel('Workspace bridge');
   context.subscriptions.push(output);
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
@@ -23,8 +26,49 @@ async function activate(context) {
   context.subscriptions.push(status);
   const privateRoot = path.join(context.globalStorageUri.fsPath, 'bridge-private');
   const mailbox = session => path.join(privateRoot, 'sessions', session);
+  // One background poller per profile; other windows render its files (ADR 0090).
+  const lease = coordination.createLease(privateRoot), backoff = coordination.createBackoff();
+  context.subscriptions.push({dispose: () => { void lease.release().catch(() => {}); }});
+  const reported = new Set();
+  function reportOnce(key, text) { if (!reported.has(key)) { reported.add(key); output.appendLine(text); } }
   const sidebar = createSidebar(vscode, context, {projects: panelProjects, request: panelRequest,
-    synchronize: () => synchronize(true), error: text => output.appendLine(text)});
+    synchronize: () => synchronize(true), error: text => output.appendLine(text), ownerQueue: readOwnerQueue,
+    open: (target, title) => offerOpen(target, title)});
+  // Opening another project is always the user's choice, never automatic.
+  async function offerOpen(target, title) {
+    if (!target) return;
+    const here = (vscode.workspace.workspaceFolders || []).some(folder => folder.uri.fsPath === target)
+      || (vscode.workspace.workspaceFile?.scheme === 'file' && vscode.workspace.workspaceFile.fsPath === target);
+    if (here) return;
+    const choice = await vscode.window.showInformationMessage(`Projekt ${title} je v IDE přiřazený k ${target}.`, 'Otevřít v novém okně', 'Otevřít zde');
+    if (choice) await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(target), {forceNewWindow: choice === 'Otevřít v novém okně'});
+  }
+  async function readOwnerQueue() {
+    const parent = context.globalState.get('connection');
+    if (!parent) return null;
+    try { return unified.validateOwner(JSON.parse(await bridge.read(path.join(privateRoot, 'owner-queue.json'))), parent); }
+    catch (error) { if (error.code !== 'ENOENT') reportOnce('owner:' + error.message, 'Společné pořadí fronty: ' + error.message); return null; }
+  }
+  async function refreshOwnerQueue(config) {
+    if (Date.now() < ownerUnsupportedUntil) return;
+    const file = path.join(privateRoot, 'owner-queue.json'), connection_id = config.pairing.connection_id;
+    try {
+      const value = await bridge.connectionRequest(config.pairing, {action: 'owner-queue'}, config.ca);
+      const owner = {revision: value.revision, order: value.order, sessions: value.sessions,
+        connection_id, fetched_at: new Date().toISOString()};
+      unified.validateOwner(owner, connection_id);
+      await bridge.atomic(file, JSON.stringify(owner));
+    } catch (error) {
+      if (error.status === 422 && /Unsupported connection action/.test(error.message)) {
+        // Older Workspace: rows keep the order of each project (ADR 0090).
+        ownerUnsupportedUntil = Date.now() + 600000;
+        await bridge.atomic(file, JSON.stringify({unsupported: true, connection_id}));
+        return;
+      }
+      // The last known order stays and is labelled with its time in the panel.
+      output.appendLine('Společné pořadí fronty: ' + error.message);
+    }
+  }
   async function panelProjects() {
     if (!(context.globalState.get('connection') || context.globalState.get('session'))) return [];
     const config = await configuration(), result = [];
@@ -53,9 +97,14 @@ async function activate(context) {
             }
           }
         }
-        result.push({session,root,repository:local.repository,identity:identity.repository,snapshot,state,pending,
+        result.push({session,root,repository:local.repository,editor_workspace:local.editor_workspace,identity:identity.repository,snapshot,state,pending,
           legacy:config.legacy,error:state.error || (config.legacy?'Původní spojení: pro plný panel připojte Workspace schema-v2.':null)});
-      } catch (error) {output.appendLine('Panel '+session+': '+error.message);}
+      } catch (error) {
+        // A mapping without its first local export (or an inactive one) is
+        // reported once per window, not on every refresh.
+        if (error.code === 'ENOENT') reportOnce('panel:' + session, 'Panel ' + session + ': projekt zatím nemá lokální export (čeká na první synchronizaci nebo přiřazení již není aktivní).');
+        else output.appendLine('Panel '+session+': '+error.message);
+      }
     }
     return result;
   }
@@ -67,7 +116,7 @@ async function activate(context) {
   }
   async function unavailable(session, error) {
     try {await bridge.atomic(path.join(mailbox(session),'STATUS.json'),JSON.stringify({stale:true,error:error.message,
-      failed_at:new Date().toISOString()}));} catch (_) { /* original error is reported */ }
+      ...(error.busy?{busy:true}:{}),failed_at:new Date().toISOString()}));} catch (_) { /* original error is reported */ }
   }
   async function configuration() {
     const parent = context.globalState.get('connection');
@@ -105,10 +154,18 @@ async function activate(context) {
     return {...config, repository: config.mappings[item.session_id].repository,
       root: mailbox(item.session_id), pairing: {...config.pairing, ...item}};
   }
-  async function synchronize(quiet = false) {
-    if (busy || !vscode.workspace.isTrusted || !(context.globalState.get('connection') || context.globalState.get('session'))) return;
-    busy = true;
+  // A run in flight may have read the inbox before this request: callers wait
+  // for exactly one follow-up run instead of returning silently (ADR 0090).
+  function synchronize(quiet = false) {
+    if (!vscode.workspace.isTrusted || !(context.globalState.get('connection') || context.globalState.get('session'))) return Promise.resolve();
+    if (!running) { running = runSynchronize(quiet).finally(() => { running = null; }); return running; }
+    queued ||= running.catch(() => {}).then(() => { queued = null; return synchronize(quiet); });
+    return queued;
+  }
+  async function runSynchronize(quiet) {
     status.command = 'workspaceBridge.sync';
+    status.text = '$(sync~spin) ' + status.text.replace(/^\$\([^)]*\) /, '');
+    let contention = false;
     try {
       const config = await configuration();
       let summary, warning = false;
@@ -119,7 +176,7 @@ async function activate(context) {
         summary = result.stale ? 'Zadání je zastaralé. Pro aktuální revizi použijte Workspace: Nastavení projektů.' : 'Workspace synchronizován: 1 projekt.';
       } else {
         const current = await catalog(config);
-        let count = 0, stale = 0, failed = 0, waitingReview = 0;
+        let count = 0, stale = 0, failed = 0, waitingReview = 0, busyProjects = 0;
         for (const [session, local] of Object.entries(config.mappings || {})) {
           let mapping = current.mappings.find(item => item.session_id === session);
           if (!mapping && !local.refresh) {
@@ -166,6 +223,9 @@ async function activate(context) {
               continue;
             }
             if (result.queue_refresh_error) throw Error(result.queue_refresh_error);
+            // No packet: clear the last pointer here instead of a second request.
+            if (result.has_queue === false)
+              await bridge.atomic(path.join(mailbox(mapping.session_id), 'queue.json'), 'null');
             // Export queue/context even when the sidebar views are closed.
             if (result.has_queue) {
               const project = {root: mailbox(mapping.session_id), session: mapping.session_id,
@@ -175,11 +235,17 @@ async function activate(context) {
               if (queue?.blockers.length) throw Error(queue.blockers.join('; '));
             }
             count++; if (result.stale) stale++;
-          } catch (error) { failed++; await unavailable(mapping?.session_id || session,error); output.appendLine((mapping?.title || local.refresh?.title || session) + ': ' + error.message); }
+          } catch (error) {
+            if (error.busy) busyProjects++; else failed++;
+            await unavailable(mapping?.session_id || session,error); output.appendLine((mapping?.title || local.refresh?.title || session) + ': ' + error.message);
+          }
         }
-        status.text = `${current.name}: ${count} projektů` + (stale ? ` · ${stale} zastaralých` : '') + (waitingReview ? ` · ${waitingReview} čeká na posouzení` : '') + (failed ? ` · ${failed} chyb` : '');
-        warning = Boolean(stale || failed || !count);
+        if (Object.keys(config.mappings || {}).length) await refreshOwnerQueue(config);
+        contention = busyProjects > 0;
+        status.text = `${current.name}: ${count} projektů` + (stale ? ` · ${stale} zastaralých` : '') + (waitingReview ? ` · ${waitingReview} čeká na posouzení` : '') + (busyProjects ? ` · ${busyProjects} zaneprázdněných` : '') + (failed ? ` · ${failed} chyb` : '');
+        warning = Boolean(stale || failed || busyProjects || !count);
         summary = `Synchronizace Workspace: ${count} projektů, ${stale} zastaralých, ${failed} chyb.`;
+        if (busyProjects) summary += ` ${busyProjects} projektů je ve Workspace právě zaneprázdněných; zobrazuje se poslední známý stav a pokus se zopakuje automaticky.`;
         if (waitingReview) summary += ` ${waitingReview} projektů čeká na posouzení výsledků ve Workspace.`;
         if (stale) summary += ' Obnova zadání se zopakuje automaticky; nevyřízené zprávy zůstávají zachované.';
         if (!count && !failed) summary += ' Použijte Workspace: Nastavení projektů.';
@@ -190,15 +256,33 @@ async function activate(context) {
         else vscode.window.showInformationMessage(summary);
       }
     } catch (error) {
+      contention = Boolean(error.busy);
       try {const config=await configuration();for(const session of config.legacy?[config.pairing.session_id]:Object.keys(config.mappings||{}))await unavailable(session,error);}catch(reportError){output.appendLine(`Hlášení nedostupnosti do Workspace selhalo: ${reportError.message}`);}
-      status.text = error.code === 'ECONNREFUSED' ? 'Workspace: čeká na spuštění' : 'Workspace: chyba spojení';
+      status.text = error.code === 'ECONNREFUSED' ? 'Workspace: čeká na spuštění' : error.busy ? 'Workspace: zaneprázdněný · poslední známý stav' : 'Workspace: chyba spojení';
       output.appendLine(error.message);
       if (!quiet) vscode.window.showErrorMessage(error.message);
     } finally {
-      try { await sidebar.refresh(); }
+      if (contention) backoff.failure(); else backoff.success();
+      status.text = status.text.replace(/^\$\(sync~spin\) /, '');
+      // The queue was exported above; the panel only adds its own reads.
+      try { await sidebar.refresh(true, {queue: false, throttle: quiet}); }
       catch (error) { output.appendLine('Panel: ' + error.message); }
-      finally { busy = false; }
+      try { await lease.publish({status: status.text}); }
+      catch (error) { reportOnce('lease:' + error.message, 'Koordinace oken: ' + error.message); }
     }
+  }
+  // Background tick: the lease holder polls Workspace; other windows only
+  // re-render when the holder has published a new local generation.
+  async function tick() {
+    if (!vscode.workspace.isTrusted || !(context.globalState.get('connection') || context.globalState.get('session'))) return;
+    let leader;
+    try { leader = await lease.acquire(); }
+    catch (error) { reportOnce('lease:' + error.message, 'Koordinace oken: ' + error.message); leader = true; }
+    if (leader) { if (backoff.due()) await synchronize(true); return; }
+    const marker = await lease.changed().catch(() => null);
+    if (!marker) return;
+    if (typeof marker.status === 'string') status.text = marker.status;
+    await sidebar.refresh(true, {queue: false, throttle: true});
   }
   async function hasPendingMessages(session) {
     const root = mailbox(session);
@@ -292,7 +376,10 @@ async function activate(context) {
     }
   }
   async function assignProject(config, current, project) {
-    const target = await chooseLocalProject(); if (!target) return;
+    const target = await chooseLocalProject(); if (!target) return false;
+    return assignTarget(config, current, project, target);
+  }
+  async function assignTarget(config, current, project, target) {
     let identity = target.repository;
     try { identity = await bridge.git(target.repository, 'remote', 'get-url', 'origin'); } catch (_) { /* local repository */ }
     const existing = current.mappings.find(item => item.project_id === project.project_id);
@@ -300,8 +387,77 @@ async function activate(context) {
       try { await bridge.repository(target.repository, existing.repository); identity = existing.repository; } catch (_) { /* explicit reassignment below */ }
     }
     await bridge.repository(target.repository, identity);
-    if (await vscode.window.showWarningMessage(`Přiřadit ${project.title} k ${target.editor_workspace}?\nRepozitář: ${identity}`, {modal: true}, 'Přiřadit') !== 'Přiřadit') return;
+    const previous = existing?.editor_workspace && existing.editor_workspace !== target.editor_workspace ? `\nDosavadní projekt v IDE: ${existing.editor_workspace}` : '';
+    if (await vscode.window.showWarningMessage(`Přiřadit ${project.title} k ${target.editor_workspace}?\nRepozitář: ${identity}${previous}`, {modal: true}, 'Přiřadit') !== 'Přiřadit') return false;
     await mapProject(config, current, project, true, {...target, identity});
+    return true;
+  }
+  // Long Git operations never wait for an interactive credential prompt.
+  function gitLong(args, cwd) {
+    const env = {...process.env, GIT_TERMINAL_PROMPT: '0'};
+    env.GIT_SSH_COMMAND ||= 'ssh -o BatchMode=yes';
+    return new Promise((resolve, reject) => execFile('git', args, {cwd, env, timeout: 600000, maxBuffer: 1 << 20},
+      (error, stdout, stderr) => error ? reject(new Error('Git: ' + (String(stderr || '').trim().split('\n').slice(-3).join(' ') || error.message))) : resolve(stdout)));
+  }
+  function folderName(text) {
+    return String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/^[-._]+|[-._]+$/g, '').slice(0, 80) || 'workspace-project';
+  }
+  async function newFolder(suggestion) {
+    const parent = await vscode.window.showOpenDialog({canSelectMany: false, canSelectFiles: false, canSelectFolders: true, openLabel: 'Nadřazená složka projektu'});
+    if (!parent?.length) return null;
+    const name = await vscode.window.showInputBox({prompt: 'Název nové složky projektu v IDE', value: folderName(suggestion), ignoreFocusOut: true,
+      validateInput: value => /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value) ? null : 'Použijte písmena bez diakritiky, číslice, tečku, pomlčku nebo podtržítko.'});
+    if (!name) return null;
+    const root = path.join(await fs.realpath(parent[0].fsPath), name);
+    try { await fs.lstat(root); } catch (error) { if (error.code === 'ENOENT') return root; throw error; }
+    throw new Error('Složka již existuje: ' + root + '. Pro existující repozitář zvolte Použít existující složku.');
+  }
+  // Creates (or reuses) the local folder of an existing Workspace project and
+  // binds it through the ordinary map/bind lifecycle (ADR 0090).
+  async function createProject() {
+    const config = await configuration();
+    if (config.legacy) throw new Error('Nejprve připojte Workspace z nové stránky nastavení.');
+    config.mappings ||= {};
+    const current = await catalog(config);
+    if (!current.projects.length) throw new Error('Workspace nenabízí žádný projekt, který můžete upravovat.');
+    const picked = await vscode.window.showQuickPick(current.projects.map(project => {
+      const existing = current.mappings.find(item => item.project_id === project.project_id);
+      return {label: project.title, description: existing?.editor_workspace ? 'v IDE: ' + existing.editor_workspace : 'bez projektu v IDE', project, existing};
+    }), {placeHolder: 'Projekt Workspace, ke kterému vytvořit projekt v IDE'});
+    if (!picked) return;
+    const method = await vscode.window.showQuickPick([
+      {label: '$(repo-clone) Naklonovat Git repozitář do nové složky', method: 'clone'},
+      {label: '$(folder-opened) Použít existující složku nebo .code-workspace', method: 'existing'},
+      {label: '$(new-folder) Vytvořit nový prázdný Git repozitář', method: 'init'}], {placeHolder: 'Projekt v IDE pro ' + picked.project.title});
+    if (!method) return;
+    let target;
+    if (method.method === 'existing') {
+      target = await chooseLocalProject(); if (!target) return;
+    } else {
+      let url = null;
+      if (method.method === 'clone') {
+        url = await vscode.window.showInputBox({prompt: 'Adresa Git repozitáře (HTTPS, SSH nebo lokální cesta)',
+          value: picked.existing?.repository || '', ignoreFocusOut: true,
+          validateInput: value => !value || value.startsWith('-') || /[\u0000-\u001f\u007f]/.test(value) ? 'Zadejte platnou adresu repozitáře.' : null});
+        if (!url) return;
+      }
+      const root = await newFolder(url ? path.basename(url.replace(/[\\/]+$/, '')).replace(/\.git$/, '') : picked.project.title);
+      if (!root) return;
+      const work = async () => {
+        // git clone removes its own incomplete target; init leaves an empty repository.
+        if (url) await gitLong(['clone', '--', url, root], path.dirname(root));
+        else { await fs.mkdir(root); await gitLong(['init', '--quiet', '--', root], path.dirname(root)); }
+      };
+      if (vscode.window.withProgress) await vscode.window.withProgress({location: vscode.ProgressLocation?.Notification ?? 15,
+        title: url ? 'Workspace: klonuji ' + url : 'Workspace: vytvářím repozitář'}, work);
+      else await work();
+      const real = await fs.realpath(root);
+      target = {repository: real, editor_workspace: real};
+    }
+    if (!await assignTarget(config, current, picked.project, target)) return;
+    await synchronize();
+    await offerOpen(target.editor_workspace, picked.project.title);
   }
   command('configure', async () => {
     const config = await configuration();
@@ -333,6 +489,7 @@ async function activate(context) {
     const selected = await vscode.window.showQuickPick(current.projects.map(project => ({label: project.title, project})), {placeHolder: 'Projekt pro přiřazení nebo změnu cíle'});
     if (selected) { await assignProject(config, current, selected.project); await synchronize(); }
   });
+  command('createProject', createProject);
   command('connect', async () => {
     let pairing;
     try { pairing = JSON.parse(await fs.readFile(path.join(context.extensionPath, 'pairing.json'), 'utf8')); }
@@ -406,11 +563,17 @@ async function activate(context) {
   context.subscriptions.push({dispose: () => clearInterval(updateTimer)});
   void checkUpdates();
   const timer = setInterval(() => {
-    if (vscode.workspace.getConfiguration('workspaceBridge').get('autoSync', true)) synchronize(true);
+    if (vscode.workspace.getConfiguration('workspaceBridge').get('autoSync', true))
+      tick().catch(error => output.appendLine(error.message));
   }, 10000);
   context.subscriptions.push({dispose: () => clearInterval(timer)});
-  if (context.globalState.get('connection') || context.globalState.get('session')) await synchronize(true);
-  else {
+  if (context.globalState.get('connection') || context.globalState.get('session')) {
+    // A newly opened window does not start a second poll of the same profile.
+    let leader = true;
+    try { leader = await lease.acquire(); } catch (error) { reportOnce('lease:' + error.message, 'Koordinace oken: ' + error.message); }
+    if (leader) await synchronize(true);
+    else { const marker = await lease.changed().catch(() => null); if (typeof marker?.status === 'string') status.text = marker.status; }
+  } else {
     try {
       await fs.access(path.join(context.extensionPath, 'pairing.json'));
       // Startup activation must finish even while the invitation remains open.
@@ -419,7 +582,8 @@ async function activate(context) {
         .catch(error => output.appendLine(error.message));
     } catch (_) { /* generic package without pairing */ }
   }
-  await sidebar.refresh();
+  // The startup run (or the lease holder) already exported the queue.
+  await sidebar.refresh(true, {queue: false, throttle: true});
   return {sidebar};
 }
 module.exports = {activate};
