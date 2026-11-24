@@ -100,7 +100,13 @@ class TaskActivities:
             with self.work._db(write=True) as db:
                 row = db.execute('SELECT doc FROM operations WHERE id=? AND user_id=?',
                                  (identifier, self.work.user_id)).fetchone()
-                require(row is not None, 'Unknown activity')
+                if row is None:
+                    # An already archived replay has its native receipt; the
+                    # observer must not resurrect a finished SQLite intent.
+                    from spikes.task_activity_text import ActivityText
+                    prior = ActivityText(self.work).lookup(identifier)
+                    require(prior is not None, 'Unknown activity')
+                    return
                 event = json.loads(row[0])
                 if operation_id != event['operation_id']:
                     return
@@ -181,8 +187,7 @@ class TaskActivities:
         if payload.get('retry') == 'same-operation' and code >= 400:
             outcome = 'unknown' if outcome != 'failed' else outcome
         with self.work._db(write=True) as db:
-            row = db.execute('SELECT * FROM operations WHERE id=? AND user_id=?',
-                             (identifier, self.work.user_id)).fetchone()
+            row = self.work._operation(db, identifier, None)
             require(row is not None, 'Unknown activity')
             doc = json.loads(row['doc'])
             require(doc.get('record_type') == 'task-activity', 'Not an activity')
@@ -196,6 +201,22 @@ class TaskActivities:
             doc.update(outcome=outcome, response_code=code, updated_at=time.time(),
                        result_references=references(payload))
             self.work._save_operation(db, identifier, doc)
+        from spikes.task_activity_text import ActivityText
+        pid = doc['context']['project_id']
+        if self.work.can_read(pid) and self.work.can_write(pid):
+            ActivityText(self.work).drain({identifier})
+
+    def history_rows(self, pid, window_id=None):
+        from spikes.task_activity_text import ActivityText
+        result = {key: row for key, row in ActivityText(self.work).read(pid).items()
+            if row['user_id'] == self.work.user_id and (window_id is None or row['window_id'] == window_id)}
+        with self.work._db() as db:
+            pending = db.execute('SELECT * FROM operations WHERE user_id=?', (self.work.user_id,)).fetchall() if db else []
+        for row in pending:
+            op = json.loads(row['doc'])
+            if op.get('record_type') == 'task-activity' and op['context']['project_id'] == pid and (window_id is None or row['window_id'] == window_id):
+                result[row['id']] = dict(row)
+        return list(result.values())
 
     def _readable(self, pid):
         if not self.work.can_read(pid):
@@ -215,8 +236,22 @@ class TaskActivities:
             self.work._window(db, handle)
             rows = db.execute('SELECT doc FROM operations WHERE user_id=? AND window_id=? ORDER BY rowid DESC LIMIT 100',
                               (self.work.user_id, handle['window_id'])).fetchall()
+            sessions = db.execute('SELECT doc FROM sessions WHERE user_id=? AND window_id=?',
+                (self.work.user_id, handle['window_id'])).fetchall()
+        from spikes.task_activity_text import ActivityText
+        archived = {}
+        for pid in dict.fromkeys(json.loads(s[0])['project_id'] for s in sessions):
+            if not self.work.can_read(pid): continue
+            try: stored = ActivityText(self.work).read(pid)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError): continue
+            for identifier, row in stored.items():
+                if row['user_id'] == self.work.user_id and row['window_id'] == handle['window_id']:
+                    archived[identifier] = json.loads(row['doc'])
+        events = {key: value for key, value in archived.items() if value.get('record_type') == 'task-activity'}
         for row in rows:
             event = json.loads(row[0])
+            if event.get('record_type') == 'task-activity': events[event['event_id']] = event
+        for event in sorted(events.values(), key=lambda e: e['updated_at'], reverse=True)[:100]:
             if event.get('record_type') != 'task-activity' or event['outcome'] != 'unknown':
                 continue
             # Model/run identifiers are not project transaction identifiers.
@@ -249,6 +284,11 @@ class TaskActivities:
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 # Native recovery or restored permissions must precede reconciliation.
                 continue
+        # Retry publication after a crash between receipt persistence and task
+        # text. The outbox remains intact if project access/recovery is blocked.
+        for identifier in events:
+            try: ActivityText(self.work).drain({identifier})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError): continue
 
     def reconcile_turn(self, event, pid):
         from spikes.chat_threads import ChatThreads
@@ -287,8 +327,7 @@ class TaskActivities:
         with self.work._db() as db:
             self.work._window(db, handle)
             session = self.work._session(db, session_id, handle['window_id'])
-            rows = db.execute('SELECT doc FROM operations WHERE user_id=? AND window_id=? ORDER BY rowid',
-                              (self.work.user_id, handle['window_id'])).fetchall()
+        rows = self.history_rows(session['project_id'], handle['window_id'])
         # Read permission and trust boundary now, not merely when the event was captured.
         self.work._authorize(session['project_id'])
         result = []
@@ -297,7 +336,7 @@ class TaskActivities:
             if pid not in readable_cache: readable_cache[pid] = self._readable(pid)
             return readable_cache[pid]
         for row in rows:
-            doc = json.loads(row[0])
+            doc = json.loads(row['doc'])
             if doc.get('record_type') != 'task-activity' or doc['context']['work_session_id'] != session_id:
                 continue
             target = doc['target_project_id']
@@ -317,12 +356,10 @@ class TaskActivities:
 
     def for_task(self,pid,task_id):
         require(self.work.can_read(pid),'Právo číst úkol bylo odebráno.')
-        with self.work._db() as db:
-            if db is None:return []
-            rows=db.execute('SELECT doc FROM operations WHERE user_id=? ORDER BY rowid DESC',(self.work.user_id,)).fetchall()
+        rows = list(reversed(self.history_rows(pid)))
         result=[]
         for row in rows:
-            event=json.loads(row[0])
+            event=json.loads(row['doc'])
             if event.get('record_type')!='task-activity' or event['context']['project_id']!=pid or event['context']['task_id']!=task_id:continue
             if self.work.network and (event.get('local_capture',True) or event.get('privacy','local-only')=='local-only'):continue
             projects={r['project_id'] for r in event['request_references']+event['result_references'] if 'project_id' in r}

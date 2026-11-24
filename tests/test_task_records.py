@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import json
+import base64
 import unittest
 from uuid import uuid4
 from copy import deepcopy
@@ -8,7 +9,7 @@ from spikes.artifacts import Artifacts
 from spikes.metadata import validate_snapshot,validate_transition
 from spikes.task_activities import TaskActivities
 from spikes.task_records import TaskRecords
-from spikes.task_record_schema import encoded,records
+from spikes.task_record_schema import encoded,records,INLINE
 from tests import test_task_work as fixtures
 
 
@@ -19,7 +20,14 @@ class TaskRecordTests(unittest.TestCase):
         self.view=self.work.execute(self.f.start_request());self.sid=self.view['active_session_id']
         self.service=TaskRecords(self.work);self.activity=TaskActivities(self.work)
         self.aid=str(uuid4());self.events=[]
-        self.saved('# Original inventory\n',True)
+        self.original_receipt=self.saved('# Original inventory\n',True)
+
+    def replace_inline(self, files, record):
+        path=record['context']['definition_pin']['source']['path']
+        body=files[path].decode()
+        match=next(m for m in INLINE.finditer(body) if json.loads(base64.b64decode(m[1]))['id']==record['id'])
+        marker='  > <!-- fpw-task-record-data:'+base64.b64encode(encoded(record)).decode()+' -->'
+        return dict(files,**{path:(body[:match.start()]+marker+body[match.end():]).encode()})
 
     def saved(self,body,new=False):
         pid=self.f.f.pid;head=self.work.projects.repository(pid).head()
@@ -53,6 +61,9 @@ class TaskRecordTests(unittest.TestCase):
         self.assertFalse(self.f.active()['blocked'])
         self.assertFalse(self.f.active()['current_task']['checked'])
         record=self.record();marker='<!-- fpw-task-record:'+record['id']+' -->'
+        self.assertNotIn('artifacts/'+record['id']+'/task-work.json',current)
+        with self.work._db() as db:
+            self.assertFalse(db.execute('SELECT 1 FROM operations WHERE id=?',(request['operation_id'],)).fetchone())
         self.assertEqual(body.count(marker),1)
         head=git.head();self.service.execute(request);self.assertEqual(git.head(),head)
         self.assertEqual(set(before)-set(current),set())
@@ -67,14 +78,14 @@ class TaskRecordTests(unittest.TestCase):
         self.saved('# Next saved output\n')
         self.assertEqual(len(self.activity.for_session(self.handle,self.sid)),2)
 
-    def test_task_text_does_not_disclose_more_private_comment_and_fake_marker_cannot_hide_edits(self):
+    def test_task_text_preserves_private_comment_with_stricter_classification_and_fake_marker_cannot_hide_edits(self):
         from spikes.markdown_documents import document,main_todo_id
         self.service.execute(self.request(privacy='confidential',comment='SECRET PRIVATE COMMENT'))
         git=self.work.projects.repository(self.f.f.pid);head=git.head()
         files=git.snapshot(head);entities=validate_snapshot(files)
         doc=document(files,entities,main_todo_id(self.f.f.pid))
-        self.assertNotIn('SECRET PRIVATE COMMENT',doc['body'])
-        self.assertIn('Připojen záznam práce',doc['body'])
+        self.assertIn('SECRET PRIVATE COMMENT',doc['body'])
+        self.assertEqual(entities[doc['id']]['privacy'],'confidential')
         self.assertFalse(self.f.active()['blocked'])
         edited=doc['body'].replace('  - status: in progress','  - status: in progress\n  - Changed requirements <!-- fpw-task-record:'+str(uuid4())+' -->',1)
         self.assertNotEqual(edited,doc['body'])
@@ -123,7 +134,10 @@ class TaskRecordTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):self.service.execute(request,checkpoint=stop)
         head=self.work.projects.repository(self.f.f.pid).head()
         self.service.execute(dict(self.handle,action='record-recover',operation_id=request['operation_id']))
-        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),head)
+        git=self.work.projects.repository(self.f.f.pid)
+        self.assertEqual(git.run('diff',head,git.head(),'--','artifacts/'+self.aid+'/content.md').stdout,'')
+        replay_head=git.head();self.service.execute(dict(self.handle,action='record-recover',operation_id=request['operation_id']))
+        self.assertEqual(git.head(),replay_head)
         self.assertEqual(len(self.service.for_session(self.handle,self.sid)[0]),1)
 
     def shared_reference(self):
@@ -178,7 +192,7 @@ class TaskRecordTests(unittest.TestCase):
         self.assertEqual(self.service.for_session(self.handle,self.sid)[0],[])
 
     def test_confirm_group_exact_outputs_replay_amend_and_immutable_history(self):
-        first=self.work.projects.repository(self.f.f.pid).head();self.saved('# Revised inventory\n')
+        first=self.original_receipt['commit_id'];self.saved('# Revised inventory\n')
         request=self.request();view=self.service.execute(request)
         self.assertEqual(view['operation']['state'],'completed');record=self.record()
         self.assertEqual(len(record['events']),2);self.assertEqual(len(record['outputs']),2)
@@ -193,10 +207,10 @@ class TaskRecordTests(unittest.TestCase):
         self.assertEqual(current['outputs'],record['outputs'])
         git=self.work.projects.repository(self.f.f.pid);files=git.snapshot(git.head());bad=dict(files)
         value=deepcopy(records(files,validate_snapshot(files))[record['id']]);value['revisions'][0]['comment']='Rewrite'
-        bad['artifacts/'+record['id']+'/task-work.json']=encoded(value)
+        bad=self.replace_inline(files,value)
         with self.assertRaises(ValueError):validate_transition(files,bad)
 
-    def test_offer_draft_defer_dismiss_reopen_and_cas_survive_refresh_without_git_write(self):
+    def test_offer_draft_defer_dismiss_reopen_and_cas_persist_in_task_text(self):
         before=self.work.projects.repository(self.f.f.pid).head()
         for state in ['draft','deferred','dismissed','draft']:
             request=self.request(action='record-offer',state=state,comment='Rozepsaný komentář')
@@ -205,7 +219,9 @@ class TaskRecordTests(unittest.TestCase):
             event=self.activity.for_session(self.handle,self.sid)[0]
             self.assertEqual(event['offer']['state'],state);self.assertEqual(event['offer']['comment'],request['comment'])
             with self.assertRaises(ValueError):self.service.execute(dict(request,operation_id=str(uuid4())))
-        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),before)
+        self.assertNotEqual(self.work.projects.repository(self.f.f.pid).head(),before)
+        with self.work._db() as db:
+            self.assertFalse(db.execute("SELECT 1 FROM operations WHERE doc LIKE '%task-record-offer%'").fetchone())
 
     def test_original_and_current_preview_after_edit_and_delete(self):
         self.service.execute(self.request());record=self.record();self.saved('# New version\n')
@@ -228,7 +244,8 @@ class TaskRecordTests(unittest.TestCase):
         self.assertEqual(len(self.service.for_session(self.handle,self.sid)[1]),1)
         with self.assertRaises(ValueError):self.service.execute(dict(self.handle,action='record-cancel',operation_id=request['operation_id']))
         self.service.execute(dict(self.handle,action='record-recover',operation_id=request['operation_id']))
-        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(),committed)
+        git=self.work.projects.repository(self.f.f.pid)
+        self.assertEqual(git.run('diff',committed,git.head(),'--','artifacts/'+self.aid+'/content.md').stdout,'')
         self.assertEqual(self.activity.for_session(self.handle,self.sid)[0]['offer']['state'],'confirmed')
 
     def test_cancel_before_native_write_keeps_draft_and_blocks_duplicate_reservation(self):
@@ -289,11 +306,11 @@ service.execute(json.loads(sys.argv[2]),checkpoint=stop)
 
     def test_closed_schema_rejects_completion_state_duplicate_events_and_unknown_version(self):
         self.service.execute(self.request());record=self.record();git=self.work.projects.repository(self.f.f.pid)
-        files=git.snapshot(git.head());path='artifacts/'+record['id']+'/task-work.json'
+        files=git.snapshot(git.head())
         base=records(files,validate_snapshot(files))[record['id']]
         for change in [lambda r:r.update(checked=True),lambda r:r['events'].append(deepcopy(r['events'][0])),
                        lambda r:r.update(schema='fpw-task-record-v99'),lambda r:r['outputs'][0].update(path='../secret')]:
-            candidate=deepcopy(base);change(candidate);bad=dict(files);bad[path]=encoded(candidate)
+            candidate=deepcopy(base);change(candidate);bad=self.replace_inline(files,candidate)
             with self.assertRaises(ValueError):validate_snapshot(bad)
 
     def test_invalid_offer_input_does_not_reserve_event_or_write_project(self):

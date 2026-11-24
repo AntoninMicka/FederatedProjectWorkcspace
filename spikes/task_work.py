@@ -146,7 +146,10 @@ class TaskWork:
 
     def _operation(self, db, identifier, window_id):
         row = db.execute('SELECT * FROM operations WHERE id=?', (identifier,)).fetchone() if db else None
-        require(row is None or (row['user_id'] == self.user_id and row['window_id'] == window_id),
+        if row is None:
+            from spikes.task_activity_text import ActivityText
+            row = ActivityText(self).lookup(identifier, window_id)
+        require(row is None or (row['user_id'] == self.user_id and (window_id is None or row['window_id'] == window_id)),
                 'Operation ID belongs to another owner/window')
         return row
 
@@ -159,9 +162,16 @@ class TaskWork:
         db.execute('INSERT INTO sessions VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET doc=excluded.doc',
                    (session['work_session_id'], session['user_id'], session['window_id'], canonical(session)))
 
-    @staticmethod
-    def _save_operation(db, identifier, doc):
-        db.execute('UPDATE operations SET doc=? WHERE id=?', (canonical(doc), identifier))
+    def _save_operation(self, db, identifier, doc):
+        changed = db.execute('UPDATE operations SET doc=? WHERE id=?', (canonical(doc), identifier)).rowcount
+        if not changed:
+            from spikes.task_activity_text import ActivityText
+            prior = ActivityText(self).lookup(identifier)
+            require(prior is not None, 'Unknown operation')
+            # A changed archived receipt becomes an outbox intent until its new
+            # task text is committed and verified. Never silently discard it.
+            db.execute('INSERT INTO operations VALUES(?,?,?,?,?)',
+                (identifier, prior['user_id'], prior['window_id'], prior['request'], canonical(doc)))
 
     def _authorize(self, pid):
         uuid(pid)

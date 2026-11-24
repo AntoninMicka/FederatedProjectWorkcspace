@@ -619,3 +619,23 @@ refresh po přepnutí úkolu, nesprávný digest, odebraná práva, chybějící
 chatový journal a hranici commit/finalizace záznamu. Qt restart používá nový
 backendový origin a nový off-the-record profil; obnoví také save bez lokálního
 receiptu a zachová odložený komentář. To není lidská akceptace běžného profilu.
+
+## Oprava ukládání historie — 24. 11. 2026
+
+Na výslovný požadavek uživatele nahrazuje trvalou lokální evidenci C/D text
+příslušného úkolu. Automaticky dokončené činnosti, uložené nabídky i celé
+komentované záznamy včetně revizí a provenance se ukládají do jeho Markdownu.
+Nové `task-work.json` artefakty nevznikají; původní zůstávají kompatibilní.
+Viditelný komentář doprovází strojově čitelná provenance v témže textu.
+Klasifikace dokumentu se podle potřeby pouze zpřísní. Stav úkolu ani jeho
+akceptace se touto opravou nemění.
+
+SQLite pracovního kontextu zůstává journalem záměrů a relací. Před projektovým
+commitem zůstává původní řádek v DB. Po commitu se přesně porovná textový
+záznam s původním řádkem a teprve potom se provede CAS delete se secure_delete.
+Pád mezi commitem a delete ponechá dočasně obě kopie; opakování ověří text,
+obnoví původní Workspace transakci a dokončí úklid bez duplicit. Pád během
+SQLite delete vrátí tuto transakci. Rozpracované operace bez konečné odpovědi
+a rezervace čekající na publikaci se nemažou. Nejasná konečná odpověď si
+zachovává stav unknown, nikdy se nepřevádí na úspěch ani znovu nespouští model.
+Historie a replay se čtou z task textu; změna nabídky použije dočasný outbox.
