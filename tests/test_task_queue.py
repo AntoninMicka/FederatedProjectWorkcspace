@@ -477,7 +477,7 @@ class QueueBrowserLogicTests(unittest.TestCase):
         import shutil
         from spikes.desktop_ui import JS
         if not shutil.which('node'):self.skipTest('Node required')
-        source=JS[JS.index('async function loadTaskQueue(){'):JS.index('async function changeTaskQueue(')]
+        source=JS[JS.index('async function loadTaskQueue(){'):JS.index('function renderPlanDescription(')]
         script=r'''
 const assert=require('node:assert/strict');
 let activeProject={id:'p',head:'h1'},taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='',taskQueueLoading=null;
@@ -553,35 +553,16 @@ async function projectRequest(path,body){calls.push(body);if(reject)throw new Er
 (async()=>{
 response={project_id:'project',expected_head:'head',valid:true,issues:[],revision:1,following:['TASK-B'],task_ids:['TASK-A'],items:[{id:'TASK-A',title:'A'}]};
 await loadTaskQueue();assert(taskPlanMatches({id:'TASK-B'},'following'));assert(!taskPlanMatches({id:'TASK-X'},'following'));
-taskQueueView.flag_audit=[{task_id:'TASK-A',old:false,new:true,actor_id:'reviewer',at:1,revision:1}];
-renderTaskQueue();
-let row=document.querySelector('#task-queue-list').children[0];
-assert.equal(row.children[3].ariaLabel,'Pozastavit: TASK-A');
-assert.match(row.children[5].children[1].textContent,/reviewer.*Ne → Ano/);
-taskQueueView.valid=false;renderTaskQueue();assert(document.querySelector('#task-queue-list').children[0].children[3].disabled);
-taskQueueView.valid=true;
-response={removed_ids:['TASK-A','TASK-B'],preview_sha256:'digest'};
-await changeTaskQueue('remove','TASK-A');assert.equal(calls.filter(c=>c.action==='remove').length,0);
-response={project_id:'project',expected_head:'head',valid:true,issues:[],revision:2,following:[],task_ids:[],items:[]};confirm=true;
-// Return a preview and a different final status.
-let original=projectRequest;
-projectRequest=async(path,body)=>{if(body.action==='remove-preview'){calls.push(body);return {removed_ids:['TASK-A'],preview_sha256:'digest'};}return original(path,body);};
-await changeTaskQueue('remove','TASK-A');assert.equal(calls.filter(c=>c.action==='remove').length,1);assert.equal(calls.at(-1).preview_sha256,'digest');
-taskQueueView={project_id:'project',expected_head:'head',valid:false,issues:['missing dependency'],revision:3,task_ids:['TASK-A'],items:[{id:'TASK-A',title:'A',can_move_up:true}]};
-renderTaskQueue();assert(!document.querySelector('#task-queue-repair').disabled);
-assert(!document.querySelector('#task-queue-list').children[0].children[2].children[0].disabled);
-projectRequest=async(path,body)=>{
- if(body.action==='repair-preview'){calls.push(body);return {task_ids:['TASK-X','TASK-A'],added_ids:['TASK-X'],removed_ids:['DONE-01','DONE-02','DONE-03','DONE-04','DONE-05'],issues:[],preview_sha256:'repair-digest'};}
- return original(path,body);
-};
-confirm=false;await changeTaskQueue('repair');assert.equal(calls.filter(c=>c.action==='repair').length,0);assert(confirmationText.includes('DONE-01, DONE-02, DONE-03, DONE-04, DONE-05'));
-confirm=true;await changeTaskQueue('repair');assert.equal(calls.filter(c=>c.action==='repair').length,1);assert.equal(calls.at(-1).preview_sha256,'repair-digest');
-reject=true;await changeTaskQueue('add','TASK-X');assert.equal(taskQueueView,null);assert(document.querySelector('#task-queue-status').textContent.includes('unknown'));
-let count=calls.length;await changeTaskQueue('add','TASK-X');assert.equal(calls.length,count);
+// Row management lives in the one owner queue (ADR 0090); the plan keeps adding.
+taskQueueView={...response,task_ids:['TASK-A'],following:[],revision:4};
+response={project_id:'project',expected_head:'head',valid:true,issues:[],revision:5,following:[],task_ids:['TASK-A','TASK-X'],items:[]};
+await addTaskToQueue('TASK-X');assert.deepEqual(calls.at(-1),{project_id:'project',action:'add',task_id:'TASK-X',revision:4,expected_head:'head'});assert.equal(taskQueueView.revision,5);
+reject=true;await addTaskToQueue('TASK-Y');assert.equal(taskQueueView,null);assert.match(taskQueueMessage,/unknown/);
+let count=calls.length;await addTaskToQueue('TASK-Y');assert.equal(calls.length,count,'an unknown outcome is not retried');
 reject=false;taskQueueView={project_id:'project',expected_head:'head',valid:true,issues:[],revision:9,task_ids:['TASK-A'],items:[]};
-let release,moveRequest;projectRequest=(path,body)=>{moveRequest=body;return new Promise(resolve=>{release=resolve;});};
-const moving=changeTaskQueue('move','TASK-A',0);await Promise.resolve();assert.equal(moveRequest.target_index,0);assert.equal(moveRequest.revision,9);
-activeProject={id:'other-project',head:'other-head'};taskQueueView=null;release(response);await moving;assert.equal(taskQueueView,null);
+let release,addRequest;projectRequest=(path,body)=>{addRequest=body;return new Promise(resolve=>{release=resolve;});};
+const adding=addTaskToQueue('TASK-Z');await Promise.resolve();assert.equal(addRequest.revision,9);
+activeProject={id:'other-project',head:'other-head'};taskQueueView=null;release(response);await adding;assert.equal(taskQueueView,null);
 })().catch(e=>{console.error(e);process.exit(1);});
 '''
         result = subprocess.run(['node', '-e', prelude+PLAN_STATUS_JS+source+checks], capture_output=True, text=True, timeout=20)

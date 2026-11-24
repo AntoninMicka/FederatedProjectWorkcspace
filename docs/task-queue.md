@@ -25,9 +25,17 @@ závislosti, ale všechny tyto přímé předpoklady už jsou ve frontě. Úkol 
 nesplněných závislostí patří mezi Připravené. Přidává se na konec; předpoklady
 které stále blokují zahájení, proto předcházejí závislým položkám. Pořadí lze upravit tlačítky
 **Posunout nahoru / Posunout dolů** nebo přetažením řádku na stránce Fronta úloh.
-Seznam zobrazuje všechny oprávněné projekty v jednom pořadí. Tlačítko projektu
-nebo **Správa a zprávy** otevře projektovou správu ve stejné sekci; zde zůstává
-předání projektového výřezu do IDE, příznaky, přijetí výsledků a oprava fronty.
+Seznam zobrazuje všechny oprávněné projekty v jednom pořadí a je jediným místem
+správy fronty (ADR 0090). Každý řádek nabízí přímo **Pozastavit/Uvolnit**,
+**Odebrat** s náhledem a v **Další správa** volbu **Vyřadit jen tento odkaz**
+a historii příznaku. Zprávy o splnění lze přijmout, odmítnout nebo dokončit
+připravené review přímo pod úkolem. Čekající zprávy úkolů, které už ve frontě
+nejsou, ukazuje sekce **Zprávy čekající na posouzení mimo frontu**; nevyřízená
+zpráva se neořezává limitem historie. Neplatná fronta projektu má nad seznamem
+akci **Opravit pořadí a předpoklady…**. **Předat frontu do IDE** připraví
+balíček pro každý upravitelný projekt s platnou frontou. Tlačítko projektu
+otevře jeho roadmapu. Každá akce používá revizi a HEAD svého projektu a server
+ji znovu ověří.
 Filtr respektuje
 vybranou úroveň roadmapy jako ostatní pohledy; dávky vidíte na úrovni milníků,
 jejich tasky po otevření dávky.
@@ -87,8 +95,8 @@ zmizelo, staré vztahy se nevymýšlejí; případné zbývající chyby jsou v�
 uvedené a fronta zůstává neplatná, dokud nejsou vyřešené.
 
 Po chybě či timeoutu mutace nejprve obnovte stav. Klient mutaci automaticky
-neopakuje. Při změně projektu globální fronta zůstává stejná; projektová správa nesmí
-zobrazovat výřez předchozího projektu jako aktuální.
+neopakuje. Při změně projektu globální fronta zůstává stejná; roadmapa nesmí
+zobrazovat stav fronty předchozího projektu jako aktuální.
 
 ## Úložiště, oprávnění a recovery
 
@@ -181,7 +189,7 @@ projektový výřez pro IDE, migraci starých souborů, stale rozsah/oprávněn�
 nepřístupný projekt, souběh a chyby před/po replace i při fsync.
 `tests.test_task_queue_browser.OwnerQueueBrowserTests` je opt-in Qt/WebEngine
 průchod bez otevřeného projektu: skutečné drag/drop eventy proti izolovanému
-API, šipky/fokus, projektová správa, chyba bez retry, reload a mobilní šířka.
+API, šipky/fokus, správa přímo v řádku, chyba bez retry, reload a mobilní šířka.
 Živá lidská akceptace běžného profilu zůstává samostatná.
 
 Cílené testy: `python3 -m unittest tests.test_task_queue

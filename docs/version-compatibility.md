@@ -152,6 +152,9 @@ Shrnutí:
   zprávy vyžaduje novou protokolovou verzi.
 - Akce `extension-update` zůstává přijímaná pro každý protokol od 1 výš,
   aby se i nekompatibilní starší rozšíření mohlo aktualizovat.
+- Nová čtecí akce spojení (např. `owner-queue`, ADR 0090) protokol nezvyšuje.
+  Starší backend ji odmítne jako nepodporovanou akci a rozšíření zobrazí
+  viditelný degradovaný stav. Pole zpráv se nemění.
 - Neznámá novější `schema_version` souboru pairing vede v rozšíření k hlášce,
   že propojení vytvořil novější Workspace a rozšíření je třeba aktualizovat.
   Není to „neplatné nebo expirované propojení“.

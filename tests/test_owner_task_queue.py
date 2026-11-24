@@ -157,3 +157,43 @@ class OwnerQueueTests(unittest.TestCase):
             result=self.move(self.pid,'TASK-X',0,view)
             self.assertEqual([i['id'] for i in result['items']],['TASK-X','TASK-A'])
         self.assertEqual(self.refs(self.status())[-1],(self.other,'TASK-A'))
+
+    def test_ide_connection_reads_owner_order_of_bound_projects_without_writes(self):
+        # ADR 0090: the IDE gets only the order of projects bound to its connection.
+        from spikes.ide_bridge import IdeBridge
+        self.owner = ProjectCreation(self.node).author_id()
+        self.add(self.pid,'TASK-A');self.add(self.other,'TASK-X');self.add(self.pid,'TASK-X')
+        self.move(self.other,'TASK-X',0)
+        bridge = IdeBridge(self.node)
+        created = bridge.connection_create({'name': 'IDE'}, None, 'http://127.0.0.1:9999')
+        parent = bridge.connection(created['pairing']['token'])
+        request = dict(connection_id=parent['connection_id'], action='owner-queue')
+
+        def bind(pid):
+            head = Projects(self.node).plan_view(pid)['commit_id']
+            mapped = bridge.configure_mapping(None, dict(connection_id=parent['connection_id'], project_id=pid,
+                enabled=True, expected_head=head, repository=str(self.fixture.root/'repo'), editor_workspace='',
+                instructions='', expected_mapping=None))
+            bridge.connection_exchange(parent, dict(connection_id=parent['connection_id'], action='bind',
+                session_id=mapped['session_id'], repository=str(self.fixture.root/'repo'), editor_workspace=str(self.fixture.root)))
+            return mapped['session_id']
+
+        self.assertEqual(bridge.connection_exchange(parent, request)['order'], [])  # nothing bound yet
+        session = bind(self.pid)
+        files = sorted(p.name for p in OwnerTaskQueue(self.node).root.iterdir())
+        heads = [Projects(self.node).plan_view(p)['commit_id'] for p in (self.pid, self.other)]
+        result = bridge.connection_exchange(parent, request)
+        self.assertEqual(result['order'], [[self.pid,'TASK-A'],[self.pid,'TASK-X']])
+        self.assertEqual(result['sessions'], {self.pid: session})
+        self.assertEqual(result['revision'], self.status()['revision'])
+        bind(self.other)
+        self.assertEqual(bridge.connection_exchange(parent, request)['order'],
+                         [[self.other,'TASK-X'],[self.pid,'TASK-A'],[self.pid,'TASK-X']])
+        # A read never creates/changes queue files or project HEADs.
+        self.assertEqual(sorted(p.name for p in OwnerTaskQueue(self.node).root.iterdir()), files)
+        self.assertEqual([Projects(self.node).plan_view(p)['commit_id'] for p in (self.pid, self.other)], heads)
+        with self.assertRaises(ValueError):
+            bridge.connection_exchange(parent, dict(request, extra=True))
+        bridge.connection_revoke(None, parent['connection_id'])
+        with self.assertRaises(ValueError):
+            bridge.connection_exchange(parent, request)

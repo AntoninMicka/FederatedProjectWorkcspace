@@ -37,14 +37,15 @@ try:
   commands={
    1:'window.nativeFetch=fetch;window.queueCalls=[];window.fetch=(url,opts={})=>{opts.headers={...opts.headers,Authorization:'+json.dumps('Bearer '+server.token)+'};if(opts.body)queueCalls.push(JSON.parse(opts.body));return nativeFetch(url,opts)};openRegisteredProject('+json.dumps(f.pid)+').then(()=>window.opened=true)',
    2:'openTaskQueue()',
-   3:"window.previewText='';window.confirm=text=>{window.previewText=text;return false};document.querySelector('#task-queue-repair').click()",
-   4:"window.confirm=text=>{window.previewText=text;return true};document.querySelector('#task-queue-repair').click()"}
+   3:"window.previewText='';window.confirm=text=>{window.previewText=text;return false};document.querySelector('#owner-queue-projects button').click()",
+   4:"window.confirm=text=>{window.previewText=text;return true};document.querySelector('#owner-queue-projects button').click()"}
   checks={
    0:"typeof openTaskQueue==='function'",
    1:"window.opened&&activeProject",
-   2:"!document.querySelector('#assigned-queue-view').hidden&&!document.querySelector('#task-queue-panel').hidden&&taskQueueView&&!taskQueueBusy&&!taskQueueView.valid&&!document.querySelector('#task-queue-repair').disabled",
-   3:"!taskQueueBusy&&window.previewText.includes('TASK-X')&&window.previewText.includes('TASK-A')&&window.previewText.includes('vyřazení')&&!taskQueueView.valid&&queueCalls.filter(c=>c.action==='repair').length===0&&taskQueueView.task_ids.length===3",
-   4:"!taskQueueBusy&&taskQueueView?.valid&&JSON.stringify(taskQueueView.task_ids)===JSON.stringify(['TASK-X','TASK-B','TASK-C'])&&taskQueueView.items.find(i=>i.id==='TASK-B').held&&queueCalls.filter(c=>c.action==='repair').length===1"}
+   # Repair is offered in the one queue, without a project panel.
+   2:"!document.querySelector('#assigned-queue-view').hidden&&!document.querySelector('#task-queue-panel')&&ownerQueueView&&!ownerQueueBusy&&!ownerQueueView.projects[0].valid&&document.querySelector('#owner-queue-projects button')&&!document.querySelector('#owner-queue-projects button').disabled",
+   3:"!ownerQueueBusy&&ownerQueueView&&window.previewText.includes('TASK-X')&&window.previewText.includes('TASK-A')&&window.previewText.includes('vyřazení')&&!ownerQueueView.projects[0].valid&&queueCalls.filter(c=>c.action==='repair').length===0&&ownerQueueView.projects[0].task_ids.length===3",
+   4:"!ownerQueueBusy&&ownerQueueView?.projects[0].valid&&JSON.stringify(ownerQueueView.projects[0].task_ids)===JSON.stringify(['TASK-X','TASK-B','TASK-C'])&&ownerQueueView.items.find(i=>i.id==='TASK-B').held&&queueCalls.filter(c=>c.action==='repair').length===1&&!taskQueueBusy&&taskQueueView?.valid"}
   def received(value):
    global phase,busy
    busy=False
@@ -59,7 +60,7 @@ try:
   timer=QTimer();timer.timeout.connect(poll);timer.start(150);page.setUrl(QUrl(server.origin+'/'))
   def timeout():
    print('timeout phase',phase,flush=True)
-   page.runJavaScript("JSON.stringify({status:document.querySelector('#task-queue-status')?.textContent,view:taskQueueView})",lambda value:(print(value,flush=True),app.exit(2)))
+   page.runJavaScript("JSON.stringify({status:document.querySelector('#owner-queue-status')?.textContent,owner:ownerQueueView,view:taskQueueView})",lambda value:(print(value,flush=True),app.exit(2)))
   QTimer.singleShot(45000,timeout);result=app.exec();page.deleteLater();profile.deleteLater();raise SystemExit(result)
 finally:f.doCleanups()
 '''

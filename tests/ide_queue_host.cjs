@@ -49,5 +49,9 @@ async function post(endpoint,route,body,token){return new Promise((resolve,rejec
  assert.ok(refreshed.items.every(i=>i.user_confirmed));
  assert.equal(await fs.readFile(context.manifest,'utf8'),manifestBefore);
  assert.equal((await bridge.sync(project.root,pairing,project.repository)).snapshot.commit_id,changed.snapshot.commit_id);
+ // ADR 0090: the merged IDE queue reads only the owner order of bound projects.
+ const owner=await bridge.connectionRequest(f.pairing,{action:'owner-queue'});
+ assert.deepEqual(owner.order,refreshed.items.map(i=>[f.record.project_id,i.id]));
+ assert.deepEqual(owner.sessions,{[f.record.project_id]:project.session});
  console.log('queue HTTP/filesystem: automatic initial publication and selection refresh, immutable manifests, hardlinks, agent inbox, human review, replay and A/B/C progression OK');
 })().catch(e=>{console.error(e);process.exit(1);});

@@ -276,36 +276,137 @@ class QueuePacketTests(unittest.TestCase):
         report=self.qstatus()['items'][0]['reports'][0]
         self.assertEqual('BATCH-01-A',report['task_id']);self.assertTrue(report['acceptable'])
 
-    def test_queue_review_button_logic(self):
+    def test_waiting_reports_outside_queue_stay_visible_and_are_never_truncated(self):
+        # ADR 0090: a report waiting for a human stays reviewable even when its task
+        # left the queue or newer reports exist.
+        from spikes.owner_task_queue import OwnerTaskQueue
+        from spikes.ide_queue import completion_reports
+        packet=self.packet();waiting=self.message(packet,'TASK-01');self.send(waiting)
+        for _ in range(6):
+            m=self.message(packet,'TASK-01');m['kind']='progress';m.pop('evidence');m['reported_by']='agent';self.send(m)
+        reports=completion_reports(self.node,self.project,self.owner)['TASK-01']
+        self.assertIn(waiting['message_id'],[r['message_id'] for r in reports])
+        self.assertEqual(self.qstatus()['other_reports'],[],'a queued task shows its reports on its row')
+        self.act('remove-single','TASK-01',preview_sha256=self.act('remove-single-preview','TASK-01')['preview_sha256'])
+        view=OwnerTaskQueue(self.node).status(self.owner)
+        other=[r for r in view['other_reports'] if r['message_id']==waiting['message_id']]
+        self.assertEqual(len(other),1)
+        self.assertEqual((other[0]['task_id'],other[0]['project_id'],other[0]['title']),('TASK-01',self.project,'First'))
+        self.assertEqual(other[0]['outcome'],None);self.assertEqual(other[0]['expected_head'],self.qstatus()['expected_head'])
+        pending=[r['message_id'] for r in completion_reports(self.node,self.project,self.owner)['TASK-01'] if r['outcome'] in (None,'prepared')]
+        self.assertGreater(len(pending),5,'more waiting reports than the per-task history limit')
+        self.assertEqual(sorted(r['message_id'] for r in view['other_reports'] if r['task_id']=='TASK-01'),sorted(pending),'every waiting report is listed')
+        self.review(waiting)
+        self.assertNotIn(waiting['message_id'],[r['message_id'] for r in OwnerTaskQueue(self.node).status(self.owner)['other_reports']])
+
+    def test_roadmap_change_outside_packet_does_not_block_only_missing_task_does(self):
+        # User decision (ADR 0090): the packet lineage only checks the task still exists.
+        packet=self.packet();m=self.message(packet,'TASK-01');self.send(m)
+        report=lambda:next(r for r in self.qstatus()['items'][0]['reports'] if r['message_id']==m['message_id'])
+        self.assertTrue(report()['acceptable']);self.assertEqual(report()['review_blockers'],[])
+        self.head=self.save(self.body+'- [ ] [TASK-04] Added directly in Workspace\n')
+        self.assertTrue(report()['acceptable'],report()['review_blockers'])
+        late=self.message(packet,'TASK-01');self.send(late)  # delivery is not rejected as stale either
+        self.assertEqual(self.review(m)['outcome'],'accepted')
+        self.assertTrue(next(i for i in self.qstatus()['items'] if i['id']=='TASK-01')['user_confirmed'])
+        # A task that disappeared from the roadmap cannot be accepted, and says so.
+        other=self.message(packet,'TASK-02');self.send(other)
+        self.head=Projects(self.node).repository(self.project).head()
+        body=self.body.replace('- [ ] [TASK-02] Second\n  - depends_on: TASK-01\n','').replace('  - depends_on: TASK-02\n','')
+        self.head=self.save(body.replace('- [ ] [TASK-01]','- [x] [TASK-01]')+'- [ ] [TASK-04] Added directly in Workspace\n')
+        from spikes.ide_queue import completion_reports
+        missing=next(r for r in completion_reports(self.node,self.project,self.owner,view=Projects(self.node).plan_view(self.project))['TASK-02'] if r['message_id']==other['message_id'])
+        self.assertFalse(missing['reviewable'])
+        self.assertTrue(any('již není v roadmapě' in b for b in missing['review_blockers']),missing['review_blockers'])
+
+    def test_plain_report_of_unqueued_task_is_reviewable_in_the_queue(self):
+        from spikes.owner_task_queue import OwnerTaskQueue
+        for task in ('TASK-03','TASK-01'):
+            self.act('remove-single',task,preview_sha256=self.act('remove-single-preview',task)['preview_sha256'])
+        plain=lambda task:dict(message_id=str(uuid4()),task_id=task,kind='completed',body='Done outside the queue.',
+            revision=self.record['snapshot']['revision'],repository_commit='b'*40)
+        waiting,plain=plain('TASK-03'),plain('TASK-01');self.send(waiting);self.send(plain)
+        others={r['message_id']:r for r in OwnerTaskQueue(self.node).status(self.owner)['other_reports']}
+        self.assertFalse(others[waiting['message_id']]['acceptable'])
+        self.assertIn('TASK-02',others[waiting['message_id']]['review_blockers'][0],'open dependencies are named')
+        entry=others[plain['message_id']]
+        self.assertTrue(entry['acceptable']);self.assertEqual(entry['review_blockers'],[])
+        self.assertEqual(self.review(plain)['outcome'],'accepted')
+        self.assertNotIn(plain['message_id'],[r['message_id'] for r in OwnerTaskQueue(self.node).status(self.owner)['other_reports']])
+
+    def test_owner_queue_manages_items_in_place_across_projects(self):
+        # One queue (ADR 0090): row actions use their own project scope, no project switch.
         import shutil
         from spikes.desktop_ui import JS
         if not shutil.which('node'):self.skipTest('Node required')
-        start=JS.index('async function reviewQueueReport(');end=JS.index('async function loadTaskQueue(){')
-        install=JS[JS.index('function installTaskPlanViews('):JS.index('function renderTaskPlanSidebar(')]
+        start=JS.index('function ownerQueueScope(');end=JS.index("document.querySelector('#owner-queue-publish').addEventListener")
         harness=r"""
 const assert=require('node:assert/strict');
-const crypto={randomUUID:()=>'op'};let confirmed=true,noted='',calls=[],fail=false,loaded=0,plans=0;
+const crypto={randomUUID:()=>'op'};let confirmed=true,noted='ok',calls=[],loads=0,plans=0,queueLoads=0,fail=false;
 const window={prompt:()=>noted,confirm:()=>confirmed};
-let taskQueueBusy=false,taskQueueView={expected_head:'h1'},taskQueueMessage='';let activeProject={id:'p',head:'h1',readOnly:false};
-const queueIsCurrent=()=>true,renderTaskQueue=()=>{},renderTaskPlanSidebar=()=>{plans++;},loadTaskQueue=async()=>{loaded++;};
-const document={querySelector:()=>({hidden:true})};
-async function projectRequest(path,body){if(path==='/v1/projects/open')return {commit_id:'h2',plan:{}};calls.push(body);if(fail)throw Error('stale');return body.decision==='rejected'?{result:null}:{result:{commit_id:'h2'}};}
+function element(){return {children:[],dataset:{},style:{},disabled:false,textContent:'',className:'',setAttribute(){},append(...nodes){this.children.push(...nodes);},addEventListener(){}};}
+const document={createElement:element,querySelector:()=>element()};
+let ownerQueueBusy=false,ownerQueueMessage='',taskQueueView={},activeProject={id:'pB',head:'hB'};
+const scopeA={project_id:'pA',project_title:'A',revision:3,expected_head:'hA',valid:true,read_only:false,task_ids:['T1'],issues:[]};
+const scopeB={project_id:'pB',project_title:'B',revision:7,expected_head:'hB',valid:false,read_only:false,task_ids:['T2'],issues:['bad order']};
+let ownerQueueView={projects:[scopeA,scopeB],items:[]};
+const shown=[],renderOwnerQueue=()=>{shown.push(ownerQueueMessage);},loadOwnerQueue=async()=>{loads++;},loadTaskQueue=async()=>{queueLoads++;},installTaskPlanViews=()=>{plans++;};
+async function projectRequest(path,body){calls.push([path,body]);if(fail)throw Error('stale');
+ if(path==='/v1/projects/open')return {commit_id:'hB2',plan:{}};
+ if(path==='/v1/ide-bridge/status')return {sessions:body.project_id==='pA'?[{session_id:'s1',connection_id:'c',bound:true,export_documents:true,revoked:false,expires_at:Date.now()/1000+100}]:[]};
+ if(path==='/v1/ide-queue/publish')return {packet_id:'abcdef1234567890',blockers:[]};
+ if(body.action&&body.action.endsWith('-preview'))return {removed_ids:['T1'],preview_sha256:'sha',issues:[],added_ids:[],task_ids:['T2']};
+ if(path==='/v1/ide-bridge/review')return {result:body.decision==='accepted'?{commit_id:'hB2'}:null};
+ return {};}
 """
         checks=r"""
 (async()=>{
- const report={task_id:'T',body:'b',session_id:'s',message_id:'m',review_request:null};
- confirmed=false;await reviewQueueReport(report,'accepted');assert.equal(calls.length,0,'cancel sends nothing');
- noted=null;confirmed=true;await reviewQueueReport(report,'accepted');assert.equal(calls.length,0,'dismissed note sends nothing');
- noted='ok';await reviewQueueReport(report,'accepted');
- assert.deepEqual(calls[0],{project_id:'p',session_id:'s',message_id:'m',decision:'accepted',note:'ok',expected_head:'h1',operation_id:'op'});
- assert.equal(activeProject.head,'h2');assert.equal(plans,1);assert.equal(loaded,0);
- calls.length=0;await reviewQueueReport(report,'rejected');assert.equal(calls[0].decision,'rejected');assert.equal(plans,1,'rejection keeps the plan');assert.equal(loaded,1);
- const prepared={...report,review_request:{operation_id:'original'}};calls.length=0;window.prompt=()=>{throw Error('no prompt');};
- await reviewQueueReport(prepared,'resume');assert.deepEqual(calls[0],{operation_id:'original'});
- fail=true;await reviewQueueReport(prepared,'resume');assert.equal(taskQueueView,null);assert.match(taskQueueMessage,/stale/);assert.equal(taskQueueBusy,false);
+ const itemA={id:'T1',project_id:'pA',project_title:'A'},itemB={id:'T2',project_id:'pB',project_title:'B'};
+ await changeOwnerQueueItem(itemA,'set-flag',{flag:'held',value:true});
+ assert.deepEqual(calls[0],['/v1/task-queue',{project_id:'pA',action:'set-flag',revision:3,expected_head:'hA',task_id:'T1',flag:'held',value:true}]);
+ assert.equal(queueLoads,0,'another project does not reload the open project queue');assert.equal(loads,1);assert.equal(ownerQueueBusy,false);
+ calls.length=0;confirmed=false;await changeOwnerQueueItem(itemA,'remove');
+ assert.deepEqual(calls.map(c=>c[1].action),['remove-preview'],'cancelled removal writes nothing');
+ calls.length=0;confirmed=true;await changeOwnerQueueItem(itemB,'remove-single');
+ assert.deepEqual(calls.map(c=>c[1].action),['remove-single-preview','remove-single']);assert.equal(calls[1][1].preview_sha256,'sha');assert.equal(calls[1][1].revision,7);
+ assert.equal(queueLoads,1,'the open project follows its own change');
+ calls.length=0;await reviewOwnerQueueReport(itemB,{task_id:'T2',body:'done',session_id:'s',message_id:'m',review_request:null},'accepted');
+ assert.deepEqual(calls[0],['/v1/ide-bridge/review',{project_id:'pB',session_id:'s',message_id:'m',decision:'accepted',note:'ok',expected_head:'hB',operation_id:'op'}]);
+ assert.equal(activeProject.head,'hB2');assert.equal(plans,1);
+ calls.length=0;noted=null;await reviewOwnerQueueReport(itemA,{task_id:'T1',body:'b',session_id:'s',message_id:'m2',review_request:null},'rejected');
+ assert.equal(calls.length,0,'dismissed note sends nothing');
+ calls.length=0;await reviewOwnerQueueReport(itemA,{task_id:'T1',review_request:{operation_id:'original'}},'resume');
+ assert.deepEqual(calls[0][1],{operation_id:'original'});
+ calls.length=0;await publishOwnerQueue();
+ assert.deepEqual(calls.map(c=>c[0]),['/v1/ide-bridge/status','/v1/ide-queue/publish'],'only the valid project is published');
+ assert.deepEqual(calls[1][1],{project_id:'pA',session_id:'s1',expected_head:'hA',queue_revision:3,repository_commit:null});
+ calls.length=0;await repairOwnerQueueProject(scopeB);
+ assert.deepEqual(calls.map(c=>c[1].action),['repair-preview','repair']);assert.equal(calls[1][1].preview_sha256,'sha');
+ fail=true;loads=0;await changeOwnerQueueItem(itemA,'set-flag',{flag:'held',value:false});
+ assert.equal(ownerQueueBusy,false,'a failed write releases the queue');assert.equal(loads,1,'and reloads it for recovery');
+ // Row rendering: labels, hold audit and invalid-scope blocking.
+ fail=false;ownerQueueView.projects[0].flag_audit=[{task_id:'T1',old:false,new:true,actor_id:'reviewer',at:1,revision:1}];
+ const row=element();appendOwnerQueueManagement(row,{...itemA,held:false,reports:[{task_id:'T1',message_id:'r1',session_id:'s',body:'b',outcome:null,acceptable:false,kind:'completed',review_blockers:['Roadmapa se změnila.']}]});
+ assert.equal(row.children[0].ariaLabel,'Pozastavit: T1');assert.equal(row.children[0].disabled,false);assert.equal(row.children[1].ariaLabel,'Odebrat: T1');
+ // A report that cannot be accepted says why and offers the real ways forward.
+ const blocked=row.children[2].children;
+ assert.ok(!blocked.some(c=>c.textContent==='Přijmout a dokončit úkol'||c.textContent==='Odmítnout'));
+ assert.equal(blocked.find(c=>c.className==='owner-queue-review-blocked').textContent,'Nelze přijmout: Roadmapa se změnila.');
+ assert.ok(blocked.some(c=>c.textContent==='Otevřít úkol v roadmapě'));
+ const closeButton=blocked.find(c=>c.textContent==='Uzavřít zprávu bez přijetí');assert.equal(closeButton.disabled,false);
+ let prompted='';window.prompt=(_text,value)=>{prompted=value;return value;};calls.length=0;
+ await reviewOwnerQueueReport(itemA,{task_id:'T1',message_id:'r1',session_id:'s',body:'b',review_request:null,review_blockers:['Roadmapa se změnila.']},'rejected',{note:'Uzavřeno bez přijetí: Roadmapa se změnila.',label:'Uzavřít zprávu bez přijetí'});
+ assert.equal(prompted,'Uzavřeno bez přijetí: Roadmapa se změnila.');assert.equal(calls[0][1].decision,'rejected');assert.equal(calls[0][1].note,prompted);
+ const ok=element();appendOwnerQueueManagement(ok,{...itemA,held:false,reports:[{task_id:'T1',message_id:'r2',body:'b',outcome:null,acceptable:true,kind:'completed'}]});
+ assert.deepEqual(ok.children[2].children.filter(c=>c.type==='button').map(c=>[c.textContent,c.disabled]),[['Přijmout a dokončit úkol',false],['Odmítnout',false]]);
+ assert.match(row.children.at(-1).children.map(c=>c.textContent).join(' '),/reviewer.*Ne → Ano/);
+ const invalid=element();appendOwnerQueueManagement(invalid,{id:'T2',project_id:'pB',project_title:'B',held:false});assert.equal(invalid.children[0].disabled,true,'hold needs a valid queue');
+ const readOnly=element();appendOwnerQueueManagement(readOnly,{...itemA,read_only:true,held:false});assert.ok(readOnly.children.filter(c=>c.type==='button').every(c=>c.disabled));
+ shown.length=0;fail=true;await reviewOwnerQueueReport(itemA,{task_id:'T1',review_request:{operation_id:'original'}},'resume');
+ assert.match(shown.at(-1),/stale.*Připravené review lze bezpečně dokončit/,'a failed review stays visible and resumable');assert.equal(ownerQueueBusy,false);
 })().catch(error=>{console.error(error);process.exit(1);});
 """
-        result=subprocess.run(['node','-e',harness+install+JS[start:end]+checks],capture_output=True,text=True)
+        result=subprocess.run(['node','-e',harness+JS[start:end]+checks],capture_output=True,text=True)
         self.assertEqual(0,result.returncode,result.stderr)
 
     def test_manual_request_from_stale_packet_is_refused(self):
@@ -470,9 +571,9 @@ assert.ok(!q.startable(null,'A'));
         with self.assertRaises(ValueError):self.send(self.message(p))
         self.assertEqual(self.head,Projects(self.node).repository(self.project).head())
         self.head=self.save(self.body+'\nExternal edit.\n')
+        # Visible, but not blocking (user decision, ADR 0090): the task still exists.
         self.assertFalse(status(self.service,self.record)['current'])
-        with self.assertRaisesRegex(ValueError, 'Roadmap changed'):
-            self.review(m)
+        self.assertEqual(self.review(m)['outcome'],'accepted')
 
     def test_repair_retains_original_packet_and_new_packet_has_complete_selection(self):
         original=self.packet()

@@ -2,7 +2,7 @@
   "name": "workspace-file-bridge",
   "displayName": "Workspace",
   "description": "Tasks, messages, documents and agent rules for Federated Workspace",
-  "version": "0.5.11",
+  "version": "0.6.1",
   "publisher": "federated-workspace",
   "license": "MPL-2.0",
   "engines": {
@@ -53,6 +53,16 @@
       {
         "command": "workspaceBridge.assign",
         "title": "Workspace: Přiřadit projekt v IDE"
+      },
+      {
+        "command": "workspaceBridge.createProject",
+        "title": "Workspace: Vytvořit projekt v IDE k projektu Workspace",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "workspaceBridge.switchProject",
+        "title": "Workspace: Přepnout projekt",
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "workspaceBridge.refreshPanel",
@@ -155,6 +165,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "workspaceBridge.switchProject",
+          "when": "view =~ /^workspaceBridge\\./",
+          "group": "navigation@0"
+        },
+        {
           "command": "workspaceBridge.refreshPanel",
           "when": "view =~ /^workspaceBridge\\./",
           "group": "navigation@1"
@@ -178,6 +193,11 @@
           "command": "workspaceBridge.configure",
           "when": "view == workspaceBridge.tasks",
           "group": "navigation@3"
+        },
+        {
+          "command": "workspaceBridge.createProject",
+          "when": "view == workspaceBridge.queue || view == workspaceBridge.tasks",
+          "group": "1_project@1"
         }
       ],
       "view/item/context": [

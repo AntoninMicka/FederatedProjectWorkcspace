@@ -299,6 +299,16 @@ class TaskQueue:
             # Acceptance is revalidated by the review itself; this only drives the button.
             return [dict(report, acceptable=bool(report['outcome'] is None and report.get('reviewable')))
                     for i in ids for report in reports.get(i, [])]
+        def other_reports(nodes, state):
+            # Waiting reports of tasks outside the queue stay reviewable in it (ADR 0090).
+            covered = list(state['task_ids'])
+            for current in covered:
+                covered += [n['id'] for n in nodes.values() if n['parent_id'] == current]
+            covered = set(covered)
+            return [dict(report, acceptable=bool(report['outcome'] is None and report.get('reviewable')),
+                         title=nodes[task]['title'] if task in nodes else 'Nedostupná položka')
+                    for task, entries in reports.items() if task not in covered
+                    for report in entries if report['outcome'] in (None, 'prepared')]
         accepted = {i['id'] for i in projection['items'] if i['user_confirmed']} if projection else set()
         workspace = self.projects.workspace(project_id, blocking=False)
         reader = action == 'status'
@@ -419,6 +429,7 @@ class TaskQueue:
                         stale=stale, valid=not stale and not issues, issues=issues,
                         task_ids=state['task_ids'], flag_audit=state['flag_audit'][-20:],
                         editable_flags=sorted(EDITABLE_FLAGS), following=following,
+                        other_reports=other_reports(nodes, state),
                         items=[dict(id=i, status=nodes[i].get('status', 'planned') if i in nodes else None,
                                     status_mode=nodes[i].get('status_mode') if i in nodes else None,
                                     status_counts=nodes[i].get('status_counts', {}) if i in nodes else {},

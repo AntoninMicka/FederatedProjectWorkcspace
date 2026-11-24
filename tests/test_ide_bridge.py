@@ -183,6 +183,22 @@ const input=JSON.parse(fs.readFileSync(0,'utf8'));
             enabled=True, expected_head=self.head, repository='', editor_workspace='',
             instructions='Use focused tests.', expected_mapping=None), **changes)
 
+    def test_vsix_ships_every_required_extension_module(self):
+        # ADR 0090: 0.6.0 from a hand-kept list lacked ./unified and failed to activate.
+        import re, zipfile
+        from spikes.ide_bridge import EXTENSION, extension_files
+        with zipfile.ZipFile(io.BytesIO(self.service.package())) as archive:
+            shipped = {n.removeprefix('extension/') for n in archive.namelist() if n.startswith('extension/')}
+            for name in sorted(n for n in shipped if n.endswith('.js')):
+                for module in re.findall(r"""require\(\s*['"]\./([^'"]+)['"]\s*\)""", archive.read('extension/' + name).decode()):
+                    self.assertIn(module if Path(module).suffix else module + '.js', shipped, name)
+        self.assertEqual(shipped, set(extension_files()))
+        self.assertTrue({p.name for p in EXTENSION.glob('*.js')} <= shipped)
+        broken = self.root / 'broken-extension'; broken.mkdir()
+        (broken / 'extension.js').write_text("require('./missing');\n")
+        with self.assertRaisesRegex(ValidationError, 'missing'):
+            extension_files(broken)
+
     def test_extension_update_is_credential_free_and_preserves_project_state(self):
         created, parent = self.parent()
         request = dict(connection_id=parent['connection_id'], action='extension-update', download=False)
@@ -429,4 +445,11 @@ bridge.sync(input.mailbox, input.pairing, input.repo).then(result => {
     def test_extension_files_recovery_and_transport(self):
         result = subprocess.run(['node', '--test', 'tests/ide_bridge.test.js'],
                                 capture_output=True, text=True, timeout=40)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required for extension coordination tests')
+    def test_extension_window_lease_busy_and_merged_queue(self):
+        # ADR 0090: one poller per profile, bounded busy retry, owner-ordered merged queue.
+        result = subprocess.run(['node', '--test', 'tests/ide_unified_queue.test.js'],
+                                capture_output=True, text=True, timeout=60)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
