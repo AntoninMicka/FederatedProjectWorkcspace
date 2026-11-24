@@ -38,12 +38,17 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  let writes=0,queueItems=[{id:'TASK-1',title:'Queued task'}],queueRevision=1,queueMoves=0,rejectQueueMove=false;
  projectRequest=async(path,request)=>{
   if(path==='/v1/task-queue'){
-   if(request.action==='owner-status')return {revision:queueRevision,view_revision:'scope',issues:[],projects:[],items:queueItems.map(item=>({...item,project_id:activeProject.id,project_title:activeProject.title,expected_head:activeProject.head,read_only:!!activeProject.readOnly}))};
-   if(request.action==='move'){
-    queueMoves++;check(request.revision===queueRevision&&request.expected_head===activeProject.head,'Move lacks current revision/head');
+   const ownerView=()=>{const scope={project_id:activeProject.id,project_title:activeProject.title,revision:queueRevision,expected_head:activeProject.head,valid:true,read_only:!!activeProject.readOnly,issues:[],flag_audit:[],task_ids:queueItems.map(item=>item.id)};
+    const other_reports=[{task_id:'TASK-OLD',title:'Old task',message_id:'m-old',session_id:'s',kind:'completed',body:'Done outside queue',reported_by:'agent',outcome:null,acceptable:true,project_id:activeProject.id,project_title:activeProject.title,read_only:!!activeProject.readOnly,expected_head:activeProject.head}];
+    return {revision:queueRevision,view_revision:'scope',issues:[],projects:[scope],other_reports,items:queueItems.map((item,index)=>({...item,project_id:activeProject.id,project_title:activeProject.title,expected_head:activeProject.head,read_only:!!activeProject.readOnly,queue_revision:queueRevision,can_move_up:index>0,can_move_down:index+1<queueItems.length}))};};
+   if(request.action==='owner-status')return ownerView();
+   if(request.action==='owner-move'){
+    queueMoves++;check(request.revision===queueRevision&&request.view_revision==='scope'&&request.expected_head===activeProject.head,'Move lacks current revision/head');
     if(rejectQueueMove)throw Error('Queue changed during move');
     const index=queueItems.findIndex(item=>item.id===request.task_id);check(index>=0,'Unknown moved item');const [item]=queueItems.splice(index,1);queueItems.splice(request.target_index,0,item);queueRevision++;
-   }else check(request.action==='status','Page navigation changed queue');
+    return ownerView();
+   }
+   check(request.action==='status','Page navigation changed queue');
    return {project_id:activeProject.id,expected_head:activeProject.head,valid:true,issues:[],revision:queueRevision,following:[],task_ids:queueItems.map(item=>item.id),items:queueItems.map((item,index)=>({...item,can_move_up:index>0,can_move_down:index+1<queueItems.length}))};
   }
   if(path==='/v1/artifacts/preview'){
@@ -63,11 +68,14 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  const queueNode={id:'TASK-1',title:'Queued task',type:'task',depth:0,checked:false,ready:true,depends_on:[],relations:{},checklist:[]};
  const plan={status:'ready',nodes:[queueNode],subgraphs:[],ready:['TASK-1'],blocked:[],revision:'head',svg:''};
  renderTaskPlanSidebar(plan);await tick();await openTaskQueue();await tick();
- const queuePanel=document.querySelector('#assigned-queue-view'),queueLayout=workspacePageLayouts.get(queuePanel);document.querySelector('#owner-queue-project-tools').open=true;
- check(!queuePanel.hidden&&queueLayout.header.contains(document.querySelector('#owner-queue-refresh'))&&!projectView.contains(queuePanel),'Queue has no independent page with actions');
- check(!document.querySelector('#plan-panel').contains(document.querySelector('#task-queue-list'))&&document.querySelector('#task-queue-list li'),'Queue remains in roadmap or has no items');
+ const queuePanel=document.querySelector('#assigned-queue-view'),queueLayout=workspacePageLayouts.get(queuePanel);
+ check(!queuePanel.hidden&&queueLayout.header.contains(document.querySelector('#owner-queue-refresh'))&&queueLayout.header.contains(document.querySelector('#owner-queue-publish'))&&!projectView.contains(queuePanel),'Queue has no independent page with actions');
+ check(!document.querySelector('#plan-panel').contains(document.querySelector('#owner-queue-list'))&&document.querySelector('#owner-queue-list li')&&!document.querySelector('#task-queue-list')&&!queuePanel.textContent.includes('Správa a zprávy'),'Queue remains in roadmap, has no items or a second project queue');
+ check(document.querySelector('#owner-queue-list li button[aria-label="Pozastavit: TASK-1"]')&&!document.querySelector('#owner-queue-list li button[aria-label="Odebrat: TASK-1"]').disabled&&!document.querySelector('#owner-queue-publish').disabled,'Queue row lacks in-place management');
+ const otherReports=document.querySelector('#owner-queue-other-reports');
+ check(!otherReports.hidden&&otherReports.textContent.includes('TASK-OLD')&&otherReports.textContent.includes('Done outside queue')&&!otherReports.querySelector('button[aria-label^="Přijmout a dokončit úkol: TASK-OLD"]').disabled&&!otherReports.querySelector('button[aria-label^="Odmítnout: TASK-OLD"]').disabled,'Waiting report outside the queue is hidden or not reviewable');
  check(!document.querySelector('#sidebar-plan').textContent.includes('Podgrafy')&&document.querySelector('#plan-subgraphs').hidden,'Obsolete sidebar subgraphs remain');
- document.querySelector('#task-queue-list li button').click();await tick();check(!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-detail').textContent.includes('Queued task'),'Queue item did not open roadmap detail');
+ document.querySelector('#owner-queue-list li .owner-queue-task').click();await tick();check(!document.querySelector('#plan-panel').hidden&&document.querySelector('#plan-detail').textContent.includes('Queued task'),'Queue item did not open roadmap detail');
  const planPanel=document.querySelector('#plan-panel'),planLayout=workspacePageLayouts.get(planPanel),graph=document.querySelector('#plan-graph'),detail=document.querySelector('#plan-detail');
  check(planLayout.header.contains(document.querySelector('#plan-status-filter'))&&planLayout.header.contains(document.querySelector('#plan-export'))&&planLayout.header.contains(document.querySelector('#plan-status')),'Plan controls waste content space');
  taskPlanProjection={...plan,profile:'software-development/v1',nodes:[{id:'M',title:'Milestone',type:'milestone',depends_on:[]},...Array.from({length:120},(_,index)=>({id:'B-'+index,title:'Batch '+index,type:'batch',parent_id:'M',dependency_depth:index%8,checked:false,ready:true,depends_on:[]}))]};renderTaskPlan();
@@ -81,17 +89,16 @@ const check=(value,message)=>{if(!value)throw Error(message);};
  check(graph.getBoundingClientRect().height>=document.querySelector('.plan-layout').clientHeight-1,'Closing detail does not return space to graph');
  taskPlanProjection=plan;renderTaskPlan();
  await openTaskQueue();check(queueLayout.closeButton===null,'Independent queue section has a project-bound close action');await openTaskPlan();
- activeProject.readOnly=true;await openTaskQueue();check(document.querySelector('#task-queue-publish').disabled&&document.querySelector('#task-queue-list li button:last-child').disabled,'Read-only queue exposes write actions');activeProject.readOnly=false;
+ activeProject.readOnly=true;await openTaskQueue();check(document.querySelector('#owner-queue-publish').disabled&&[...document.querySelectorAll('#owner-queue-list li button:not(.owner-queue-task):not(.owner-queue-project)')].every(button=>button.disabled),'Read-only queue exposes write actions');activeProject.readOnly=false;
  queueItems=[{id:'TASK-1',title:'Queued task'},{id:'TASK-FREE',title:'Independent task'}];await openTaskQueue();
- const queueList=document.querySelector('#task-queue-list'),moveDown=queueList.querySelector('.task-queue-move-down');
- check(queueList.querySelector('.task-queue-move-up').disabled&&!moveDown.disabled&&moveDown.getAttribute('aria-label').includes('TASK-1'),'Move controls lack limits or accessible labels');
- moveDown.focus();moveDown.click();await tick();
- check(queueItems[1].id==='TASK-1'&&queueMoves===1&&taskQueueView.revision===queueRevision&&document.activeElement.value==='TASK-1','Move did not persist order/revision or lost keyboard focus');
- activeProject.readOnly=true;renderTaskQueue();check([...queueList.querySelectorAll('.task-queue-order-controls button')].every(button=>button.disabled),'Read-only queue exposes move controls');activeProject.readOnly=false;renderTaskQueue();
- rejectQueueMove=true;queueList.children[1].querySelector('.task-queue-move-up').click();await tick();await tick();
- check(queueMoves===2&&taskQueueView===null&&document.querySelector('#task-queue-status').textContent.includes('Queue changed during move')&&document.activeElement.id==='task-queue-refresh','Rejected move retries, hides error or loses recovery focus');rejectQueueMove=false;await loadTaskQueue();
- const queueTransport=projectRequest;projectRequest=async()=>{throw Error('Queue unavailable');};await openTaskQueue();check(!document.querySelector('#task-queue-list li')&&document.querySelector('#task-queue-status').textContent==='Queue unavailable','Queue failure displays stale items');projectRequest=queueTransport;
- queueItems=[];await openTaskQueue();check(!document.querySelector('#task-queue-list li')&&document.querySelector('#task-queue-status').textContent.includes('0'),'Empty queue is not represented');
+ const queueList=document.querySelector('#owner-queue-list'),moves=()=>queueList.children[0].querySelectorAll('.task-queue-order-controls button');
+ check(moves()[0].disabled&&!moves()[1].disabled&&moves()[1].getAttribute('aria-label').includes('TASK-1'),'Move controls lack limits or accessible labels');
+ moves()[1].focus();moves()[1].click();await tick();await tick();
+ check(queueItems[1].id==='TASK-1'&&queueMoves===1&&ownerQueueView.revision===queueRevision&&document.activeElement.classList.contains('owner-queue-task')&&document.activeElement.textContent.startsWith('TASK-1'),'Move did not persist order/revision or lost keyboard focus');
+ rejectQueueMove=true;queueList.children[1].querySelector('.task-queue-order-controls button').click();await tick();await tick();
+ check(queueMoves===2&&ownerQueueView===null&&document.querySelector('#owner-queue-status').textContent.includes('Queue changed during move'),'Rejected move retries or hides error');rejectQueueMove=false;await loadOwnerQueue();
+ const queueTransport=projectRequest;projectRequest=async()=>{throw Error('Queue unavailable');};await openTaskQueue();check(!document.querySelector('#owner-queue-list li')&&document.querySelector('#owner-queue-status').textContent==='Queue unavailable','Queue failure displays stale items');projectRequest=queueTransport;
+ queueItems=[];await openTaskQueue();check(!document.querySelector('#owner-queue-list li')&&document.querySelector('#owner-queue-status').textContent.includes('0'),'Empty queue is not represented');
  plan.subgraphs=[{id:'slice',title:'Legacy slice',task_ids:['TASK-1']}];renderTaskPlanSidebar(plan);await tick();check(!document.querySelector('#plan-subgraphs').hidden,'Existing subgraphs became inaccessible');
  document.querySelector('#sidebar-plan-list button').click();await tick();check(taskPlanSelection?.id==='slice'&&!document.querySelector('#plan-panel').hidden,'Legacy subgraph no longer opens');
  await navigateSidebarTab(document.querySelector('#projects-tab'));check(activeProject.id==='project','Queue navigation closed project');

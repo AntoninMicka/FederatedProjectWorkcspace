@@ -20,7 +20,8 @@ class OwnerTaskQueue(TaskQueue):
         scopes = {}
         issues = []
         registered = {b['project_id'] for b in self.projects._bindings()}
-        for pid in dict.fromkeys(ref[0] for ref in order):
+        # Projects with an (even empty) queue also expose their waiting reports.
+        for pid in dict.fromkeys([ref[0] for ref in order] + list(bundle['projects'])):
             if pid not in registered or not can_read(pid):
                 continue
             try:
@@ -52,8 +53,12 @@ class OwnerTaskQueue(TaskQueue):
                               queue_revision=scope.get('revision')))
         view_revision = hashlib.sha256(canonical([revision, [
             [i['project_id'], i['id'], i['expected_head'], i['read_only']] for i in items]])).hexdigest()
+        other_reports = [dict(report, project_id=pid, project_title=scope['project_title'],
+                              read_only=scope['read_only'], expected_head=scope.get('expected_head'))
+                         for pid, scope in scopes.items() if not scope.get('unavailable')
+                         for report in scope.get('other_reports', [])]
         return dict(revision=revision, view_revision=view_revision, items=items, issues=issues,
-                    projects=list(scopes.values()))
+                    projects=list(scopes.values()), other_reports=other_reports)
 
     def move(self, request, actor_id, *, can_read=lambda pid: True,
              can_write=lambda pid: True, checkpoint=lambda stage: None):

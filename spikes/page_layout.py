@@ -124,12 +124,11 @@ main>#prompt-widget{flex:none;max-height:48vh;min-height:0;margin-top:15px;borde
 #owner-queue-list>li.queue-dragging{opacity:.5}
 #owner-queue-list>li[data-drop=before]{border-top:3px solid #176b60}
 #owner-queue-list>li[data-drop=after]{border-bottom:3px solid #176b60}
-#owner-queue-project-tools{margin-top:20px}
-#task-queue-panel .task-queue-list{max-height:none;overflow:visible;margin:0;padding-left:22px}
-#task-queue-panel .task-queue-list li{flex-wrap:wrap}
-#task-queue-panel .task-queue-list li button:first-child{flex:1;min-width:0}
-#task-queue-panel .task-queue-order-controls{display:flex;flex:none;gap:4px}
-#task-queue-panel .task-queue-order-controls button{flex:none;min-width:36px;min-height:36px;padding:6px 10px;margin:0}
+#owner-queue-projects .owner-queue-project-issue{padding:8px 10px;border:1px solid #e0b252;border-radius:8px;background:#fff8e6}
+#assigned-queue-view #owner-queue-other-reports{max-height:none;overflow:visible;padding:0;list-style:none}
+#owner-queue-other-reports>li{display:block;padding:10px;border:1px solid #e0b252;border-radius:8px;background:#fff8e6}
+#owner-queue-other-reports>li p{margin:6px 0}
+#owner-queue-list .owner-queue-more summary,#owner-queue-list .task-queue-reports summary{cursor:pointer}
 #plan-panel>.workspace-page-header{padding:12px 16px 10px;gap:6px}
 #plan-panel>.workspace-page-header .workspace-page-title{font-size:22px!important}
 #plan-panel .roadmap-controls{padding:0;gap:8px}
@@ -345,18 +344,18 @@ function initializeWorkspacePageLayout(){
  get('#julia-model-detail-close').textContent='Zavřít';
  const modelEdit=document.createElement('button');modelEdit.type='button';modelEdit.textContent='Editovat';modelEdit.id='julia-model-detail-edit';modelEdit.addEventListener('click',()=>openJuliaEditor(false,juliaModelDetail.dataset.definitionPath));workspacePageLayouts.get(juliaModelDetail).row.append(modelEdit);
 const toolsList=document.createElement('ul');toolsList.id='tools-overview-list';toolsList.className='workspace-file-list';get('#tools-panel').prepend(toolsList);
- const panelSections={'project-overview-panel':'projects-tab','plan-panel':'plan-tab','task-queue-panel':'plan-tab','preview-panel':'artifacts-tab','chat-panel':'chats-tab','tools-panel':'tools-tab','outputs-overview-panel':'presentations-tab','presentation-panel':'presentations-tab'};
+ const panelSections={'project-overview-panel':'projects-tab','plan-panel':'plan-tab','preview-panel':'artifacts-tab','chat-panel':'chats-tab','tools-panel':'tools-tab','outputs-overview-panel':'presentations-tab','presentation-panel':'presentations-tab'};
  const roots=new Set(['project-overview-panel','plan-panel','chat-panel','tools-panel','outputs-overview-panel']);
  for(const panel of mainTabs.map(tab=>document.getElementById(tab.getAttribute('aria-controls'))).filter(panel=>panel?.parentElement===get('#main-panel-content'))){
   if(workspacePageLayouts.has(panel))continue;
   const tab=mainTabs.find(tab=>tab.getAttribute('aria-controls')===panel.id),heading=panel.querySelector('h1,h2');
-  const actions=panel.id==='presentation-panel'?take(panel,['.presentation-editor-head>.form-actions','#presentation-editor-save','#presentation-editor-print','#presentation-editor-use','#presentation-editor-presenter']):panel.id==='project-overview-panel'?take(panel,['#project-overview-edit-todo','#project-conflicts-open']):panel.id==='task-queue-panel'?take(panel,['#task-queue-publish','#task-queue-refresh']):panel.id==='plan-panel'?take(panel,['.roadmap-controls','#plan-status']):[];
-  const layout=mountWorkspacePage(panel,{title:tab?.textContent||'Stránka',heading,actions,section:panelSections[panel.id]||'tools-tab',close:!roots.has(panel.id),onClose:panel.id==='presentation-panel'?closePresentationEditorPage:null,closeLabel:panel.id==='presentation-panel'?'Zavřít editor':'Zavřít',kind:panel.id==='presentation-panel'?'editor':roots.has(panel.id)||panel.id==='task-queue-panel'?'list':'page',chat:tab?.dataset.promptDefault==='visible'?'full':'hidden'});
+  const actions=panel.id==='presentation-panel'?take(panel,['.presentation-editor-head>.form-actions','#presentation-editor-save','#presentation-editor-print','#presentation-editor-use','#presentation-editor-presenter']):panel.id==='project-overview-panel'?take(panel,['#project-overview-edit-todo','#project-conflicts-open']):panel.id==='plan-panel'?take(panel,['.roadmap-controls','#plan-status']):[];
+  const layout=mountWorkspacePage(panel,{title:tab?.textContent||'Stránka',heading,actions,section:panelSections[panel.id]||'tools-tab',close:!roots.has(panel.id),onClose:panel.id==='presentation-panel'?closePresentationEditorPage:null,closeLabel:panel.id==='presentation-panel'?'Zavřít editor':'Zavřít',kind:panel.id==='presentation-panel'?'editor':roots.has(panel.id)?'list':'page',chat:tab?.dataset.promptDefault==='visible'?'full':'hidden'});
 
  }
  for(const root of [...document.querySelectorAll('main>div')]){
   if(root===projectView||root===artifactEditorView||root===presenterView)continue;
-  const heading=root.querySelector('h1,h2'),actions=root.id==='assigned-queue-view'?take(root,['#owner-queue-refresh']):[];
+  const heading=root.querySelector('h1,h2'),actions=root.id==='assigned-queue-view'?take(root,['#owner-queue-refresh','#owner-queue-publish']):[];
   mountWorkspacePage(root,{title:heading?.textContent||'Stránka',heading,actions,close:!['project-home','assigned-queue-view'].includes(root.id),kind:['project-home','assigned-queue-view'].includes(root.id)?'list':'page',section:({'settings-view':'settings-sidebar-tab','federation-view':'federation-tab','federation-network-view':'federation-tab','federation-deployment-view':'federation-tab','source-import-view':'artifacts-tab','history-view':'artifacts-tab','assigned-queue-view':'assigned-queue-tab'})[root.id]||'projects-tab'});
  }
  for(const label of document.querySelectorAll('.eyebrow,.badge,.dashboard-kicker,#artifact-editor-mode'))if(label.closest('.workspace-page')&&!label.closest('#preview-content'))label.classList.add('layout-label');

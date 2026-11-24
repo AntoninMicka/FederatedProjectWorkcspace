@@ -328,15 +328,12 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button value="cancel" class="secondary-button">Zrušit</button><button id="project-registration-remove-confirm" type="button" class="danger">Odebrat registraci</button></div>
 </form></dialog>
 <main><div id="assigned-queue-view" hidden><h1>Fronta úloh</h1>
-<p>Pořadí úkolů ze všech projektů změníte přetažením nebo tlačítky se šipkami. Předpoklady musí zůstat před navazujícími úkoly.</p>
-<button id="owner-queue-refresh" type="button">Obnovit frontu</button><p id="owner-queue-status" role="status" aria-live="polite"></p>
+<p>Jedna fronta úkolů ze všech projektů. Pořadí změníte přetažením nebo šipkami, předpoklady musí zůstat před navazujícími úkoly. Pozastavení, odebrání, zprávy o splnění, opravu i předání do IDE spravujete přímo zde.</p>
+<button id="owner-queue-refresh" type="button">Obnovit frontu</button><button id="owner-queue-publish" type="button" disabled>Předat frontu do IDE</button>
+<p id="owner-queue-status" role="status" aria-live="polite"></p><div id="owner-queue-projects" aria-label="Stav front projektů"></div>
 <ol id="owner-queue-list" class="task-queue-list" aria-label="Úkoly ze všech projektů"></ol>
-<details id="owner-queue-project-tools" hidden><summary id="owner-queue-project-label">Správa projektu</summary><div id="task-queue-panel" aria-label="Projektová správa fronty" hidden>
-<h2>Projektová správa fronty</h2><button id="task-queue-publish" type="button" disabled>Předat frontu do IDE</button>
-<button id="task-queue-refresh" type="button">Obnovit frontu</button>
-<button id="task-queue-repair" type="button" disabled>Opravit pořadí a předpoklady…</button>
-<p id="task-queue-status" role="status"></p><ol id="task-queue-list" class="task-queue-list"></ol></div>
-</details></div><div id="manuals-view" hidden><h1 id="manual-title">Manuály</h1><p id="manual-source"></p><article id="manual-content" class="manual-document" aria-labelledby="manual-title"><p>V levém panelu vyberte okruh a manuál.</p></article></div><div id="project-home">
+<ul id="owner-queue-other-reports" class="task-queue-list" aria-label="Zprávy čekající na posouzení mimo frontu" hidden></ul>
+</div><div id="manuals-view" hidden><h1 id="manual-title">Manuály</h1><p id="manual-source"></p><article id="manual-content" class="manual-document" aria-labelledby="manual-title"><p>V levém panelu vyberte okruh a manuál.</p></article></div><div id="project-home">
 <header><span class="badge">Pracovní prostor</span></header>
 <div class="home-heading"><h1>Přehled</h1></div>
 <p id="project-status" class="visually-hidden" role="status" aria-live="polite">Načítám přehled…</p>
@@ -4307,20 +4304,23 @@ function renderOwnerQueue(){
   open.className='owner-queue-task';open.disabled=ownerQueueBusy||item.unavailable;
   open.addEventListener('click',async()=>{
    if(!await canLeaveWorkspaceEditors())return;
-   await openRegisteredProject(item.project_id);
+   if(activeProject?.id!==item.project_id)await openRegisteredProject(item.project_id);
    if(activeProject?.id!==item.project_id)return;
    const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);
   });
   project.textContent=item.project_title;project.className='owner-queue-project';project.disabled=ownerQueueBusy||item.unavailable;
-  project.title='Otevřít projektovou správu, předání do IDE a zprávy';
-  project.addEventListener('click',()=>openQueueProject(item.project_id));
+  project.title='Otevřít roadmapu projektu';
+  project.addEventListener('click',async()=>{
+   if(!await canLeaveWorkspaceEditors())return;
+   if(activeProject?.id!==item.project_id)await openRegisteredProject(item.project_id);
+   if(activeProject?.id===item.project_id)await openTaskPlan();
+  });
   moves.className='task-queue-order-controls';
   for(const [label,offset,symbol] of [['Posunout nahoru',-1,'↑'],['Posunout dolů',1,'↓']]){
    const button=document.createElement('button');button.type='button';button.textContent=symbol;button.ariaLabel=`${label}: ${item.id}`;
    button.disabled=ownerQueueBusy||item.read_only||item.unavailable||index+offset<0||index+offset>=ownerQueueView.items.length;
    button.addEventListener('click',()=>moveOwnerQueue(item,index+offset));moves.append(button);
   }
-  const manage=document.createElement('button');manage.type='button';manage.textContent='Správa a zprávy';manage.disabled=ownerQueueBusy||item.unavailable;manage.addEventListener('click',()=>openQueueProject(item.project_id));
   row.addEventListener('dragstart',event=>{
    if(!row.draggable){event.preventDefault();return;}
    ownerQueueDrag={key:ownerQueueKey(item),revision:ownerQueueView.revision};event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('application/x-workspace-task',ownerQueueDrag.key);row.classList.add('queue-dragging');
@@ -4339,12 +4339,150 @@ function renderOwnerQueue(){
    if(source>=0&&drag.revision===ownerQueueView.revision&&event.dataTransfer.getData('application/x-workspace-task')===drag.key)moveOwnerQueue(ownerQueueView.items[source],target);
   });
   row.addEventListener('dragend',()=>{ownerQueueDrag=null;row.classList.remove('queue-dragging');for(const node of list.children)delete node.dataset.drop;});
-  row.append(project,open,planStatusBadge(item),moves,manage);list.append(row);
+  row.append(project,open,planStatusBadge(item),moves);appendOwnerQueueManagement(row,item);list.append(row);
  }
- const tools=document.querySelector('#owner-queue-project-tools');
- document.querySelector('#owner-queue-project-label').textContent=activeProject?`Správa projektu · ${activeProject.title||activeProject.id}`:'Správa projektu';
- tools.hidden=!activeProject;document.querySelector('#task-queue-panel').hidden=!activeProject;
+ renderOwnerQueueProjects();
 }
+// Management of one row in place. The item's own project scope supplies the
+// revision and HEAD; the server revalidates every write (ADR 0087/0090).
+function ownerQueueScope(item){return (ownerQueueView?.projects||[]).find(scope=>scope.project_id===item.project_id&&!scope.unavailable)||null;}
+function appendOwnerQueueManagement(row,item){
+ const scope=ownerQueueScope(item),locked=ownerQueueBusy||item.read_only||item.unavailable||!scope;
+ const hold=document.createElement('button');hold.type='button';hold.textContent=item.held?'Uvolnit':'Pozastavit';hold.ariaLabel=`${hold.textContent}: ${item.id}`;
+ hold.title='Pozastavená položka se nepředává agentovi. Příznak nemění roadmapu ani přijetí.';hold.disabled=locked||!scope.valid;
+ hold.addEventListener('click',()=>changeOwnerQueueItem(item,'set-flag',{flag:'held',value:!item.held}));
+ const remove=document.createElement('button');remove.type='button';remove.textContent='Odebrat';remove.ariaLabel=`Odebrat: ${item.id}`;remove.disabled=locked;
+ remove.title='Odebere úkol z fronty; náhled ukáže i navazující položky.';remove.addEventListener('click',()=>changeOwnerQueueItem(item,'remove'));
+ row.append(hold,remove);
+ if(item.reports?.length){
+  const reports=document.createElement('details'),summary=document.createElement('summary');reports.className='task-queue-reports';
+  const waiting=item.reports.filter(report=>!report.outcome||report.outcome==='prepared').length;
+  summary.textContent=`Zprávy o splnění (${item.reports.length}${waiting?`, ${waiting} čeká`:''})`;reports.append(summary);reports.open=waiting>0;
+  for(const report of item.reports)appendOwnerQueueReport(reports,item,report,locked);
+  row.append(reports);
+ }
+ const more=document.createElement('details'),summary=document.createElement('summary');more.className='task-queue-reports owner-queue-more';
+ summary.textContent='Další správa';more.append(summary);
+ const single=document.createElement('button');single.type='button';single.textContent='Vyřadit jen tento odkaz';single.disabled=locked;
+ single.title='Zachová ostatní položky včetně následníků.';single.addEventListener('click',()=>changeOwnerQueueItem(item,'remove-single'));more.append(single);
+ for(const entry of (scope?.flag_audit||[]).filter(entry=>entry.task_id===item.id)){
+  const text=document.createElement('p');text.textContent=`Pozastaveno · revize ${entry.revision} · ${entry.actor_id} · ${new Date(entry.at*1000).toLocaleString()} · ${entry.old?'Ano':'Ne'} → ${entry.new?'Ano':'Ne'}`;more.append(text);
+ }
+ row.append(more);
+}
+function appendOwnerQueueReport(target,item,report,locked){
+ const outcomes={accepted:'Přijato',rejected:'Odmítnuto',stale:'Zastaralé, neaplikováno',prepared:'Review připraveno'};
+ const text=document.createElement('p');
+ text.textContent=`${report.task_id===item.id?'':report.task_id+' · '}${report.kind==='progress'?'Probíhá · ':''}${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\\n${report.body}${report.evidence?`\\nTesty: ${report.evidence.tests}\\nDiff: ${report.evidence.diff}`:''}`;
+ text.style.whiteSpace='pre-wrap';target.append(text);
+ for(const decision of report.outcome==='prepared'?['resume']:report.outcome?[]:['accepted','rejected']){
+  const button=document.createElement('button');button.type='button';
+  button.textContent=decision==='resume'?'Dokončit připravené review':decision==='rejected'?'Odmítnout':report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit úkol';
+  button.ariaLabel=`${button.textContent}: ${report.task_id} (${report.message_id})`;
+  button.disabled=locked||(decision==='accepted'&&report.acceptable!==true);
+  if(decision==='accepted'&&report.acceptable!==true)button.title='Zpráva je ze staré generace fronty nebo má úkol nesplněné předpoklady; nelze ji přijmout.';
+  button.addEventListener('click',()=>reviewOwnerQueueReport(item,report,decision));target.append(button);
+ }
+}
+// Waiting reports of tasks no longer queued stay visible and reviewable here.
+function renderOwnerQueueOtherReports(){
+ const target=document.querySelector('#owner-queue-other-reports');target.replaceChildren();
+ const reports=ownerQueueView?.other_reports||[];target.hidden=!reports.length;if(!reports.length)return;
+ const heading=document.createElement('h2');heading.textContent=`Zprávy čekající na posouzení mimo frontu (${reports.length})`;target.append(heading);
+ for(const report of reports){
+  const item={id:report.task_id,project_id:report.project_id,project_title:report.project_title,read_only:report.read_only};
+  const row=document.createElement('li'),title=document.createElement('strong');row.className='owner-queue-other-report';
+  title.textContent=`${report.project_title} · ${report.task_id} · ${report.title}`;row.append(title);
+  appendOwnerQueueReport(row,item,report,ownerQueueBusy||report.read_only||!ownerQueueScope(item));target.append(row);
+ }
+}
+function renderOwnerQueueProjects(){
+ renderOwnerQueueOtherReports();
+ const target=document.querySelector('#owner-queue-projects');target.replaceChildren();
+ const scopes=(ownerQueueView?.projects||[]).filter(scope=>!scope.unavailable);
+ document.querySelector('#owner-queue-publish').disabled=ownerQueueBusy||!scopes.some(scope=>scope.valid&&!scope.read_only&&scope.task_ids?.length);
+ for(const scope of scopes.filter(scope=>!scope.valid)){
+  const row=document.createElement('p'),repair=document.createElement('button');row.className='owner-queue-project-issue';
+  row.textContent=`${scope.project_title}: fronta vyžaduje opravu · ${scope.issues.join('; ')} `;
+  repair.type='button';repair.textContent='Opravit pořadí a předpoklady…';repair.disabled=ownerQueueBusy||scope.read_only;
+  repair.addEventListener('click',()=>repairOwnerQueueProject(scope));row.append(repair);target.append(row);
+ }
+}
+// After a write the project's own views (plan, add-to-queue state) follow too.
+async function ownerQueueProjectChanged(projectId,commitId){
+ if(activeProject?.id!==projectId)return;
+ if(commitId){const view=await projectRequest('/v1/projects/open',{project_id:projectId,scope:'plan'});if(activeProject?.id===projectId){activeProject.head=view.commit_id;installTaskPlanViews(view);}}
+ else{taskQueueView=null;await loadTaskQueue();}
+}
+async function runOwnerQueueWrite(label,work){
+ if(ownerQueueBusy)return;
+ ownerQueueBusy=true;ownerQueueMessage=label;renderOwnerQueue();let message='';
+ try{message=(await work())||'';}
+ catch(error){message=error.message+' Obnovte frontu před dalším zápisem.';}
+ finally{ownerQueueBusy=false;}
+ await loadOwnerQueue();if(message){ownerQueueMessage=message;renderOwnerQueue();ownerQueueMessage='';}
+}
+async function changeOwnerQueueItem(item,action,extra={}){
+ const scope=ownerQueueScope(item);if(!scope||item.read_only)return;
+ await runOwnerQueueWrite('Ukládám změnu fronty…',async()=>{
+  const request={project_id:item.project_id,action,revision:scope.revision,expected_head:scope.expected_head,task_id:item.id,...extra};
+  if(action==='remove'||action==='remove-single'){
+   const preview=await projectRequest('/v1/task-queue',{...request,action:action+'-preview'});
+   if(!window.confirm(`${item.project_title}: odebrat z fronty ${preview.removed_ids.join(', ')}?${action==='remove-single'?' Ostatní odkazy zůstanou zachované.':''}`))return 'Odebrání zrušeno.';
+   request.preview_sha256=preview.preview_sha256;
+  }
+  await projectRequest('/v1/task-queue',request);await ownerQueueProjectChanged(item.project_id);
+  return action==='set-flag'?(extra.value?'Položka pozastavena.':'Položka uvolněna.'):'Položka odebrána z fronty.';
+ });
+}
+async function repairOwnerQueueProject(scope){
+ if(scope.read_only)return;
+ await runOwnerQueueWrite('Připravuji opravu fronty…',async()=>{
+  const request={project_id:scope.project_id,action:'repair',revision:scope.revision,expected_head:scope.expected_head};
+  const preview=await projectRequest('/v1/task-queue',{...request,action:'repair-preview'});
+  if(preview.issues.length)return `${scope.project_title}: opravu zatím nelze dokončit: ${preview.issues.join('; ')}. Chybné odkazy vyřaďte jednotlivě v Další správa.`;
+  if(!window.confirm(`${scope.project_title}: opravit frontu se zachováním nedokončených položek?\\nDokončené odkazy k vyřazení: ${(preview.removed_ids||[]).join(', ')||'žádné'}\\nDoplněné předpoklady: ${preview.added_ids.join(', ')||'žádné'}\\nVýsledné pořadí:\\n${preview.task_ids.join('\\n')}`))return 'Oprava zrušena.';
+  await projectRequest('/v1/task-queue',{...request,preview_sha256:preview.preview_sha256});await ownerQueueProjectChanged(scope.project_id);
+  return `${scope.project_title}: fronta opravena.`;
+ });
+}
+// Same review endpoint as the IDE messages page: the server revalidates everything.
+async function reviewOwnerQueueReport(item,report,decision){
+ const scope=ownerQueueScope(item);if(!scope||item.read_only)return;
+ let request=report.review_request;
+ if(!request){
+  const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
+  if(!window.confirm(`${decision==='accepted'?(report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit'):'Odmítnout'} ${report.task_id} (${item.project_title})?\\n${report.body}\\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
+  request={project_id:item.project_id,session_id:report.session_id,message_id:report.message_id,decision,note,expected_head:scope.expected_head,operation_id:crypto.randomUUID()};
+ }
+ await runOwnerQueueWrite('Zapisuji posouzení…',async()=>{
+  try{const result=await projectRequest('/v1/ide-bridge/review',request,120000);await ownerQueueProjectChanged(item.project_id,result.result?.commit_id);
+   return decision==='rejected'?'Zpráva odmítnuta.':'Posouzení zapsáno.';}
+  catch(error){throw Error(error.message+' Připravené review lze bezpečně dokončit.');}
+ });
+}
+// One action for the whole queue: every editable project with items gets its
+// immutable IDE packet through its bound mapping with document export.
+async function publishOwnerQueue(){
+ const scopes=(ownerQueueView?.projects||[]).filter(scope=>!scope.unavailable&&scope.valid&&!scope.read_only&&scope.task_ids?.length);
+ if(!scopes.length)return;
+ await runOwnerQueueWrite('Předávám frontu do IDE…',async()=>{
+  const results=[];
+  for(const scope of scopes){
+   try{
+    const state=await projectRequest('/v1/ide-bridge/status',{project_id:scope.project_id});
+    const choices=state.sessions.filter(s=>s.connection_id&&!s.revoked&&s.bound&&s.export_documents&&s.expires_at*1000>Date.now());
+    if(!choices.length){results.push(`${scope.project_title}: nastavte přiřazení v Nastavení → IDE a povolte export podkladů`);continue;}
+    const selected=choices.length===1?choices[0]:choices.find(s=>s.session_id===window.prompt(`${scope.project_title} – vyberte ID mapování: `+choices.map(s=>s.session_id+' '+s.repository).join('; ')));
+    if(!selected){results.push(`${scope.project_title}: přeskočeno`);continue;}
+    const result=await projectRequest('/v1/ide-queue/publish',{project_id:scope.project_id,session_id:selected.session_id,expected_head:scope.expected_head,queue_revision:scope.revision,repository_commit:null});
+    results.push(`${scope.project_title}: `+(result.blockers.length?'balíček je neúplný: '+result.blockers.join('; '):'balíček '+result.packet_id.slice(0,12)+' připraven'));
+   }catch(error){results.push(`${scope.project_title}: ${error.message}`);}
+  }
+  return results.join(' · ')+'. Synchronizujte IDE.';
+ });
+}
+document.querySelector('#owner-queue-publish').addEventListener('click',publishOwnerQueue);
 async function loadOwnerQueue(){
  if(ownerQueueBusy)return;
  const generation=++ownerQueueGeneration;ownerQueueView=null;ownerQueueBusy=true;ownerQueueMessage='Načítám frontu…';renderOwnerQueue();
@@ -4367,12 +4505,6 @@ async function moveOwnerQueue(item,targetIndex){
   if(activeProject)await loadTaskQueue();
  }
 }
-async function openQueueProject(projectId){
- if(ownerQueueBusy||!await canLeaveWorkspaceEditors())return;
- if(activeProject?.id!==projectId)await openRegisteredProject(projectId);
- if(activeProject?.id!==projectId)return;
- await openTaskQueue();document.querySelector('#owner-queue-project-tools').open=true;
-}
 document.querySelector('#owner-queue-refresh').addEventListener('click',loadOwnerQueue);
 
 const roadmapSvg='http://www.w3.org/2000/svg';
@@ -4381,81 +4513,19 @@ let taskPlanProjection=null,taskPlanSelection=null;
 let taskQueueView=null,taskQueueBusy=false,taskQueueGeneration=0,taskQueueMessage='',taskQueueLoading=null;
 function queueIsCurrent(){return taskQueueView&&activeProject&&taskQueueView.project_id===activeProject.id&&taskQueueView.expected_head===activeProject.head;}
 function taskPlanMatches(item,mode){return !mode||(mode==='following'?Boolean(queueIsCurrent()&&taskQueueView.valid&&taskQueueView.following.includes(item.id)):['ready','blocked'].includes(mode)?Boolean(item[mode]):planStatus(item)===mode);}
-function renderTaskQueue(){
- syncPlanQueueAddState();
- const list=document.querySelector('#task-queue-list'),status=document.querySelector('#task-queue-status');list.replaceChildren();document.querySelector('#task-queue-refresh').disabled=taskQueueBusy;
- document.querySelector('#task-queue-publish').disabled=taskQueueBusy||!queueIsCurrent()||!taskQueueView?.valid||Boolean(activeProject?.readOnly);
- document.querySelector('#task-queue-repair').disabled=taskQueueBusy||!queueIsCurrent()||Boolean(activeProject?.readOnly);
- if(!queueIsCurrent()){status.textContent=taskQueueMessage||'Načtěte aktuální frontu.';return;}
- status.textContent=taskQueueMessage||(taskQueueView.valid?`${taskQueueView.task_ids.length} položek ve frontě`:`Fronta vyžaduje opravu. ${taskQueueView.issues.join('; ')}`);
- for(const [index,item] of taskQueueView.items.entries()){
-  const row=document.createElement('li'),open=document.createElement('button'),remove=document.createElement('button'),moves=document.createElement('span');
-  open.type=remove.type='button';open.value=item.id;open.textContent=`${item.id} · ${item.title}${item.held?' · Pozastaveno':''}${item.children?.length?` · Dávka: ${item.children.length} podúkolů`:''}${item.agent_confirmed?' · Agent hlásí splnění':''}${item.user_requested?' · Ruční žádost z IDE':''}${item.user_confirmed?' · Přijato uživatelem':''}`;
-  open.addEventListener('click',async()=>{const node=taskPlanProjection?.nodes.find(n=>n.id===item.id);if(node&&await openTaskPlan())showTaskPlanDetail(node);});
-  moves.className='task-queue-order-controls';
-  for(const [direction,offset,symbol,label] of [['up',-1,'↑','Posunout nahoru'],['down',1,'↓','Posunout dolů']]){
-   const button=document.createElement('button');button.type='button';button.className='task-queue-move-'+direction;button.textContent=symbol;button.ariaLabel=`${label}: ${item.id}`;button.title=button.ariaLabel+(item['move_'+direction+'_reason']?' — '+item['move_'+direction+'_reason']:'');
-   button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||item['can_move_'+direction]!==true;
-   button.addEventListener('click',async()=>{
-    const projectAtClick=activeProject;await changeTaskQueue('move',item.id,index+offset);
-    if(activeProject!==projectAtClick||document.querySelector('#task-queue-panel').hidden)return;
-    if(!queueIsCurrent()){document.querySelector('#task-queue-refresh').focus();return;}
-    const currentRow=[...list.children].find(row=>row.firstElementChild?.value===item.id),next=currentRow?.querySelector('.task-queue-move-'+direction);
-    (next&&!next.disabled?next:currentRow?.firstElementChild)?.focus();
-   });
-   moves.append(button);
-  }
-  const hold=document.createElement('button');hold.type='button';hold.textContent=item.held?'Uvolnit':'Pozastavit';hold.title='Pozastavená položka se nepředává agentovi. Příznak nemění roadmapu ani přijetí.';
-  hold.ariaLabel=`${hold.textContent}: ${item.id}`;
-  hold.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||!taskQueueView.valid;hold.addEventListener('click',()=>changeTaskQueue('set-flag',item.id,{flag:'held',value:!item.held}));
-  remove.textContent='Odebrat';remove.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);remove.addEventListener('click',()=>changeTaskQueue('remove',item.id));row.append(open,planStatusBadge(item),moves,hold,remove);
-  const audit=(taskQueueView.flag_audit||[]).filter(entry=>entry.task_id===item.id);
-  if(audit.length){
-   const history=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Změny příznaku Pozastaveno';history.append(summary);
-   for(const entry of audit){const text=document.createElement('p');text.textContent=`Revize ${entry.revision} · ${entry.actor_id} · ${new Date(entry.at*1000).toLocaleString()} · ${entry.old?'Ano':'Ne'} → ${entry.new?'Ano':'Ne'}`;history.append(text);}
-   row.append(history);
-  }
-  if(item.reports?.length){
-   const reports=document.createElement('details'),summary=document.createElement('summary');reports.className='task-queue-reports';
-   summary.textContent=`Zprávy o splnění (${item.reports.length})`;reports.append(summary);
-   const outcomes={accepted:'Přijato',rejected:'Odmítnuto',stale:'Zastaralé, neaplikováno',prepared:'Review připraveno'};
-   for(const report of item.reports){const text=document.createElement('p');
-    text.textContent=`${report.task_id===item.id?'':report.task_id+' · '}${report.kind==='progress'?'Probíhá · ':''}${report.reported_by==='agent'?'Agent':report.reported_by==='user'?'Ruční žádost':'Zpráva'} · ${outcomes[report.outcome]||'Čeká na posouzení'}\n${report.body}${report.evidence?`\nTesty: ${report.evidence.tests}\nDiff: ${report.evidence.diff}`:''}${report.note?`\nOdpověď: ${report.note}`:''}`;reports.append(text);
-    const decisions=report.outcome==='prepared'?['resume']:report.outcome?[]:['accepted','rejected'];
-    for(const decision of decisions){const button=document.createElement('button');button.type='button';
-     button.textContent=decision==='resume'?'Dokončit připravené review':decision==='rejected'?'Odmítnout':report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit úkol';
-     button.disabled=taskQueueBusy||Boolean(activeProject?.readOnly)||(decision==='accepted'&&report.acceptable!==true);
-     if(decision==='accepted'&&report.acceptable!==true)button.title='Zpráva je ze staré generace fronty nebo má úkol nesplněné předpoklady; nelze ji přijmout.';
-     button.addEventListener('click',()=>reviewQueueReport(report,decision));reports.append(button);}
-   }
-   row.append(reports);
-  }
-  const single=document.createElement('button');single.type='button';single.textContent='Vyřadit jen tento odkaz';
-  single.title='Zachová ostatní položky včetně následníků. Zbývající předpoklady lze opravit bez vyprázdnění fronty.';
-  single.disabled=taskQueueBusy||Boolean(activeProject?.readOnly);single.addEventListener('click',()=>changeTaskQueue('remove-single',item.id));row.append(single);
-  list.append(row);
- }
-}
-// Same review endpoint as the IDE messages page: the server revalidates everything.
-async function reviewQueueReport(report,decision){
+// The queue is managed in the one owner queue (ADR 0090); the project view only
+// keeps the roadmap's add-to-queue state current.
+function renderTaskQueue(){syncPlanQueueAddState();}
+// Adding from the roadmap detail; the server revalidates revision, HEAD and prerequisites.
+async function addTaskToQueue(taskId){
  if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
- const project=activeProject;let request=report.review_request;
- if(!request){
-  const note=window.prompt('Odpověď nebo odůvodnění pro IDE (volitelné):','');if(note===null)return;
-  if(!window.confirm(`${decision==='accepted'?(report.kind==='progress'?'Přijmout stav Probíhá':'Přijmout a dokončit'):'Odmítnout'} ${report.task_id}?\n${report.body}\n${decision==='accepted'?'Změna se zapíše do projektového Gitu.':'Stav úkolu se nezmění.'}`))return;
-  request={project_id:project.id,session_id:report.session_id,message_id:report.message_id,decision,note,expected_head:taskQueueView.expected_head,operation_id:crypto.randomUUID()};
- }
- taskQueueBusy=true;renderTaskQueue();
+ const project=activeProject,view=taskQueueView;taskQueueBusy=true;syncPlanQueueAddState();
  try{
-  const result=await projectRequest('/v1/ide-bridge/review',request,120000);
-  if(activeProject!==project)return;
-  taskQueueBusy=false;
-  // Reload in place: the user stays on the queue and the plan shows the new state.
-  if(result.result?.commit_id){const view=await projectRequest('/v1/projects/open',{project_id:project.id,scope:'plan'});
-   if(activeProject!==project)return;project.head=view.commit_id;installTaskPlanViews(view);}
-  else await loadTaskQueue();
- }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu; připravené review lze bezpečně dokončit.';}}
- finally{taskQueueBusy=false;renderTaskQueue();if(!document.querySelector('#assigned-queue-view').hidden)await loadOwnerQueue();}
+  const result=await projectRequest('/v1/task-queue',{project_id:project.id,action:'add',task_id:taskId,revision:view.revision,expected_head:view.expected_head});
+  if(activeProject!==project)return;taskQueueView=result;taskQueueMessage='';renderTaskPlan();
+  document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
+ }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskPlan();}}
+ finally{taskQueueBusy=false;syncPlanQueueAddState();if(!document.querySelector('#assigned-queue-view').hidden)await loadOwnerQueue();}
 }
 async function loadTaskQueue(){
  if(taskQueueBusy)return;
@@ -4482,35 +4552,6 @@ async function loadTaskQueue(){
  })().finally(()=>{if(taskQueueLoading===pending)taskQueueLoading=null;});
  taskQueueLoading=pending;return pending.promise;
 }
-async function changeTaskQueue(action,taskId,targetIndex){
- if(taskQueueBusy||!queueIsCurrent()||activeProject.readOnly)return;
- const project=activeProject,view=taskQueueView;taskQueueBusy=true;renderTaskQueue();
- try{const request={project_id:project.id,action,revision:view.revision,expected_head:view.expected_head};if(taskId)request.task_id=taskId;
- if(action==='move')request.target_index=targetIndex;
- if(action==='set-flag')Object.assign(request,targetIndex);
- if(action==='remove'||action==='remove-single'){const preview=await projectRequest('/v1/task-queue',{...request,action:action+'-preview'});if(activeProject!==project||!window.confirm(`Odebrat z fronty tyto položky? ${preview.removed_ids.join(', ')}${action==='remove-single'?' · Ostatní odkazy zůstanou zachované.':''}`))return;request.preview_sha256=preview.preview_sha256;}
- if(action==='repair'){
-  const preview=await projectRequest('/v1/task-queue',{...request,action:'repair-preview'});if(activeProject!==project)return;
-  if(preview.issues.length){taskQueueMessage='Opravu zatím nelze dokončit: '+preview.issues.join('; ')+'. Chybné odkazy můžete vyřadit jednotlivě; ostatní položky zůstanou.';return;}
-  if(!window.confirm(`Opravit frontu se zachováním nedokončených položek?\nDokončené odkazy k vyřazení: ${(preview.removed_ids||[]).join(', ')||'žádné'}\nDoplněné předpoklady: ${preview.added_ids.join(', ')||'žádné'}\nVýsledné pořadí:\n${preview.task_ids.join('\\n')}`))return;
-  request.preview_sha256=preview.preview_sha256;
- }
- const result=await projectRequest('/v1/task-queue',request);if(activeProject!==project)return;taskQueueView=result;taskQueueMessage='';renderTaskQueue();renderTaskPlan();document.querySelector('#plan-detail').replaceChildren();document.querySelector('#plan-detail').hidden=true;
- }catch(error){if(activeProject===project){taskQueueView=null;taskQueueMessage=error.message+' Obnovte frontu před dalším zápisem.';renderTaskQueue();renderTaskPlan();}}
- finally{taskQueueBusy=false;renderTaskQueue();if(!document.querySelector('#assigned-queue-view').hidden)await loadOwnerQueue();}
-}
-document.querySelector('#task-queue-publish').addEventListener('click',async()=>{
- if(!queueIsCurrent()||!taskQueueView.valid||activeProject.readOnly||taskQueueBusy)return;
- const project=activeProject,view=taskQueueView,target=document.querySelector('#task-queue-status');
- try{const state=await projectRequest('/v1/ide-bridge/status',{project_id:project.id});
- const choices=state.sessions.filter(s=>s.connection_id&&!s.revoked&&s.bound&&s.export_documents&&s.expires_at*1000>Date.now());if(!choices.length)throw Error('Nastavte aktuální přiřazení projektu v Nastavení → IDE a povolte export podkladů.');
- const selected=choices.length===1?choices[0]:choices.find(s=>s.session_id===window.prompt('Vyberte ID mapování: '+choices.map(s=>s.session_id+' '+s.repository).join('; ')));if(!selected)return;
- const result=await projectRequest('/v1/ide-queue/publish',{project_id:project.id,session_id:selected.session_id,expected_head:project.head,queue_revision:view.revision,repository_commit:null});
- if(activeProject!==project)return;target.textContent=result.blockers.length?'Balíček je neúplný: '+result.blockers.join('; '):'Balíček '+result.packet_id.slice(0,12)+' připraven. Synchronizujte VSCodium.';
- }catch(error){if(activeProject===project)target.textContent=error.message;}
-});
-document.querySelector('#task-queue-refresh').addEventListener('click',loadTaskQueue);
-document.querySelector('#task-queue-repair').addEventListener('click',()=>changeTaskQueue('repair'));
 
 function renderPlanDescription(target,item){
  if(item.description_markdown)renderMarkdown(item.description_markdown,target,null,true);
@@ -4552,7 +4593,7 @@ function showTaskPlanDetail(item){
  planDetailId=item.id;planDetailMode='item';
  const detail=document.querySelector('#plan-detail');detail.replaceChildren();detail.hidden=false;
  const close=document.createElement('button');close.type='button';close.className='secondary-button';close.textContent='Zavřít detail';close.addEventListener('click',()=>{detail.hidden=true;planDetailId=null;document.querySelector('#plan-graph').focus();});detail.append(close);
- if(!item.checked){const add=document.createElement('button'),message=document.createElement('p'),reason=planQueueAddBlocker(item);add.type='button';add.textContent='Přidat do fronty';add.dataset.planAdd=item.id;add.disabled=Boolean(reason);add.title=reason;message.id='plan-queue-add-reason';message.setAttribute('role','status');message.textContent=reason;add.addEventListener('click',()=>changeTaskQueue('add',item.id));detail.append(add,message);}
+ if(!item.checked){const add=document.createElement('button'),message=document.createElement('p'),reason=planQueueAddBlocker(item);add.type='button';add.textContent='Přidat do fronty';add.dataset.planAdd=item.id;add.disabled=Boolean(reason);add.title=reason;message.id='plan-queue-add-reason';message.setAttribute('role','status');message.textContent=reason;add.addEventListener('click',()=>addTaskToQueue(item.id));detail.append(add,message);}
  if(typeof appendTaskWorkStart==='function')appendTaskWorkStart(detail,item);
  const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title,planStatusBadge(item));
  if(taskPlanProjection?.profile==='software-development/v1'&&['batch','milestone'].includes(item.type)){const children=taskPlanProjection.nodes.filter(node=>node.parent_id===item.id),open=document.createElement('button');open.type='button';open.dataset.planOpenChildren=item.id;open.textContent=(item.type==='batch'?'Zobrazit úkoly':'Zobrazit dávky')+' ('+children.length+')';open.addEventListener('click',()=>openTaskPlan({kind:item.type,id:item.id,parent_id:item.parent_id,title:item.title}));detail.append(open);}

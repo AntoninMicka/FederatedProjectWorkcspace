@@ -136,6 +136,30 @@ scripts.ide_bridge_smoke`) ověřuje aktivaci a registraci nových příkazů.
 Rozšíření se aktualizuje z běžícího backendu: po změně modulů je nutné
 restartovat backend a v IDE znovu načíst okno.
 
+## Jediná fronta ve Workspace (doplnění 24. 11. 2026)
+
+Uživatel požaduje jednu frontu s kompletní správou. Projektová fronta
+otevíraná tlačítkem **Správa a zprávy** byla druhým místem správy. Akce se
+dostupné jen po přepnutí projektu.
+
+- Řádek Fronty úloh nabízí přímo Pozastavit/Uvolnit, Odebrat (náhled),
+  Vyřadit jen tento odkaz, historii příznaku a posouzení zpráv (přijmout,
+  odmítnout, dokončit připravené review). Nad seznamem je oprava neplatné
+  fronty projektu a **Předat frontu do IDE** pro všechny upravitelné projekty
+  s platnou frontou. Projektový panel byl odstraněn. Roadmapa si ponechává jen
+  načtení stavu fronty pro **Přidat do fronty**.
+- Každá akce posílá dosavadní projektové API (`/v1/task-queue`,
+  `/v1/ide-bridge/review`, `/v1/ide-queue/publish`) s revizí a HEAD výřezu
+  svého projektu z `owner-status`. Nevzniká nové API ani nový zapisovač.
+  Hranice pádu zůstávají podle ADR 0062/0087; po chybě se fronta načte znovu
+  a připravené review lze dokončit stejnou operací.
+- Zprávy úkolů mimo frontu: `owner-status` vrací `other_reports`. Jde o
+  nevyřízené nebo připravené zprávy úkolů, které nejsou ve frontě ani pod jejími
+  položkami, u projektů s frontou vlastníka. Na živých datech 24. 11. bylo
+  takto skrytých 6 ze 7 čekajících zpráv. `completion_reports` již neořezává
+  nevyřízené zprávy limitem 5 na úkol ani limitem 500 posledních zpráv;
+  limity platí jen pro rozhodnutou historii.
+
 ## Omezení
 
 - Nesynchronizují se lease a pořadí mezi profily ani mezi stroji. Každý profil

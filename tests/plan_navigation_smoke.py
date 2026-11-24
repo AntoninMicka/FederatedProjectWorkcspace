@@ -44,7 +44,8 @@ try:
  const savedQueue=taskQueueView;
  taskQueueView={project_id:activeProject.id,expected_head:activeProject.head,valid:false,stale:true,task_ids:[],following:[],issues:['MON-06: nesplněný předpoklad chybí před položkou: MON-08']};
  syncPlanQueueAddState();check(!document.querySelector('[data-plan-add]').disabled&&!document.querySelector('#plan-queue-add-reason').textContent,'unrelated queue issue blocks ready task');
- check(document.querySelector('#task-queue-publish').disabled,'invalid queue must not publish');
+ // Publishing is an action of the one owner queue; an invalid project scope is skipped there.
+ check(!document.querySelector('#task-queue-publish'),'a second project queue reappeared');
  taskQueueView={...taskQueueView,valid:true,stale:false,issues:[]};syncPlanQueueAddState();
  check(!document.querySelector('[data-plan-add]').disabled&&!document.querySelector('#plan-queue-add-reason').textContent,'detail button did not refresh with queue');
  taskQueueView=savedQueue;syncPlanQueueAddState();

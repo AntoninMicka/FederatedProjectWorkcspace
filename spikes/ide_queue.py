@@ -400,8 +400,13 @@ def completion_reports(node, project_id, actor_id, *, per_task=5, view=None):
     service = IdeBridge(node, network=True)
     if not (service.root/'bridge.sqlite').exists(): return {}
     with service.database() as db:
+        # Recent history is bounded, but a report still waiting for a human
+        # decision is never cut off (ADR 0090): it must stay reviewable.
         rows = list(db.execute('SELECT m.record,s.record,r.record FROM messages m JOIN sessions s ON s.id=m.session '
-                               'LEFT JOIN reviews r ON r.session=m.session AND r.id=m.id ORDER BY m.rowid DESC LIMIT 500'))
+                               'LEFT JOIN reviews r ON r.session=m.session AND r.id=m.id '
+                               "WHERE r.id IS NULL OR json_extract(r.record,'$.state')!='completed' "
+                               'OR m.rowid IN (SELECT rowid FROM messages ORDER BY rowid DESC LIMIT 500) '
+                               'ORDER BY m.rowid DESC'))
     reports = {}; assessments={}
     for raw_message, raw_record, raw_review in rows:
         message, record = json.loads(raw_message), json.loads(raw_record)
@@ -422,7 +427,8 @@ def completion_reports(node, project_id, actor_id, *, per_task=5, view=None):
                 reviewable=not value['blockers'] and message['revision']==pinned_packet['manifest']['revision'] and item['startable' if message['kind']=='progress' else 'eligible']
             except (ValueError,OSError):pass
         entries = reports.setdefault(message['task_id'], [])
-        if len(entries) < per_task:
+        decided = sum(1 for entry in entries if entry['outcome'] not in (None, 'prepared'))
+        if review is None or review['state'] != 'completed' or decided < per_task:
             entries.append(dict(reviewable=bool(reviewable),message_id=message['message_id'], task_id=message['task_id'],
                                 session_id=record['session_id'], kind=message['kind'], body=message['body'][:2000],
                                 reported_by=message.get('reported_by'), queue_packet_id=message.get('queue_packet_id'),

@@ -12,8 +12,9 @@ Fronta patří aktuálnímu vlastníkovi (stávající lokální autor / přihl�
 nikoli otevřenému projektu. Identita položky je dvojice project ID / task ID.
 Kanonické definice, závislosti a dokončení zůstávají v projektovém Gitu.
 UI má vlastní sekci Fronta úloh dostupnou i bez otevřeného projektu. Každý řádek
-uvádí projekt, nabízí detail úkolu a projektovou správu: příznaky, opravy,
-zprávy a předání do IDE. Pořadí lze měnit přetažením nebo klávesnicí přes šipky.
+uvádí projekt, nabízí detail úkolu a správu přímo v řádku: příznaky, opravy,
+zprávy a předání do IDE (od doplnění v ADR 0090 bez samostatné projektové
+fronty). Pořadí lze měnit přetažením nebo klávesnicí přes šipky.
 
 Jeden privátní JSON schema 2 obsahuje celkové `order`, revizi a mapu
 `projects` s původními projektovými stavy a revizemi. Název je SHA-256
