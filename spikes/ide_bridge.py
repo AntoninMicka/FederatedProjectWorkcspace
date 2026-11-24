@@ -29,6 +29,22 @@ MAX_MESSAGE = 16384
 # Match the IDE file reader's budget and leave room in its 4 MiB HTTP response.
 MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024
 EXTENSION = Path(__file__).resolve().parent.parent / 'extensions' / 'workspace-bridge'
+EXTENSION_SUFFIXES = frozenset({'.js', '.json', '.svg', '.md'})
+
+
+def extension_files(root=EXTENSION):
+    """Every shipped extension file, never a hand-kept list (ADR 0090).
+
+    A VSIX whose module requires a sibling it does not contain fails to activate
+    in the IDE; refuse to build such a package instead."""
+    names = sorted(p.name for p in Path(root).iterdir() if p.is_file() and not p.is_symlink()
+                   and p.name != 'pairing.json' and (p.suffix in EXTENSION_SUFFIXES or p.name == 'LICENSE'))
+    for name in names:
+        if name.endswith('.js'):
+            for module in re.findall(r"""require\(\s*['"]\./([^'"]+)['"]\s*\)""", (Path(root) / name).read_text()):
+                require((module if Path(module).suffix else module + '.js') in names,
+                        'Extension module missing from package: ' + module)
+    return names
 
 
 def canonical(value):
@@ -186,8 +202,7 @@ class IdeBridge:
         manifest = json.loads((EXTENSION / 'package.json').read_text())
         output = io.BytesIO()
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for name in ('package.json', 'extension.js', 'bridge.js', 'sidebar.js', 'queue.js', 'updater.js',
-                         'coordination.js', 'unified.js', 'workspace.svg', 'README.md', 'LICENSE'):
+            for name in extension_files():
                 archive.writestr('extension/' + name, (EXTENSION / name).read_bytes())
             if pairing is not None:
                 archive.writestr('extension/pairing.json', canonical(pairing))

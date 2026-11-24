@@ -23,6 +23,12 @@ ROOT = Path(__file__).resolve().parents[1]
 NAME = 'federated-workspace-poc'
 
 
+def extension_files(directory):
+    """All extension modules and assets; the desktop builds its VSIX from them."""
+    return sorted(p.name for p in Path(directory).iterdir() if p.is_file() and not p.is_symlink()
+                  and p.name != 'pairing.json' and (p.suffix in {'.js', '.json', '.svg', '.md'} or p.name == 'LICENSE'))
+
+
 def archive_prefix(version):
     return NAME + '-' + validate_version(version)
 
@@ -37,8 +43,8 @@ def sources(root):
              'docs/project-chat-sync.md', 'docs/julia-runner.md')]
     paths.append(root / 'docs/roadmap-graph.json')
     paths.append(root / 'docs/ide-file-bridge.md')
-    paths.extend(root / 'extensions/workspace-bridge' / name for name in
-                 ('package.json', 'extension.js', 'bridge.js', 'README.md', 'LICENSE'))
+    paths.extend(root / 'extensions/workspace-bridge' / name
+                 for name in extension_files(root / 'extensions/workspace-bridge'))
     paths.extend(root / 'tests' / name for name in ('ide_bridge.test.js', 'ide_bridge_host.cjs'))
     for directory, pattern in [('spikes', '*.py'), ('scripts', '*.py'), ('tests', '*.py'), ('docs/adr', '*.md')]:
         paths.extend(sorted((root / directory).glob(pattern)))

@@ -15,11 +15,15 @@ exports.run = async function () {
   assert.ok(commands.includes('workspaceBridge.connect'));
   assert.ok(commands.includes('workspaceBridge.configure'));
   assert.ok(commands.includes('workspaceBridge.assign'));
-  for (const command of ['compose','handoff','refreshPanel','filterOpen','allDocuments','queueHandoff','queueConfirm','queueStart','showQueueTask'])
+  for (const command of ['compose','handoff','refreshPanel','filterOpen','allDocuments','queueHandoff','queueConfirm','queueStart','showQueueTask',
+      'switchProject','createProject'])
     assert.ok(commands.includes('workspaceBridge.' + command));
   assert.ok(extension.exports.sidebar, 'native sidebar must activate');
   await vscode.commands.executeCommand('workbench.view.extension.workspaceBridge');
   await extension.exports.sidebar.refresh();
+  // ADR 0090: every packaged module loaded; the queue view renders without a mapping.
+  assert.deepEqual(extension.exports.sidebar.children('queue'), []);
+  await vscode.commands.executeCommand('workspaceBridge.refreshPanel');
 
   const os = require('node:os');
   const originalHome = os.homedir;

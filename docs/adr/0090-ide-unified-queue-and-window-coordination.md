@@ -119,6 +119,23 @@ dosavadní obnova mapování (ADR 0060). Po selhání `git init` zůstane prázd
 složka a chyba se ohlásí. Žádná z těchto hranic nemění projektový Git,
 index ani journal Workspace.
 
+## Úplnost balíčku rozšíření (oprava 24. 11. 2026)
+
+První automatická aktualizace na 0.6.0 se nainstalovala z backendu, který běžel
+se starým ručně vedeným seznamem souborů VSIX. Balíček obsahoval nový
+`extension.js`, ale ne `unified.js` a `coordination.js`. Aktivace selhala
+(`Cannot find module './unified'`) a žádný příkaz se nezaregistroval
+(`workspaceBridge.refreshPanel not found`).
+
+VSIX, `.deb` i zdrojový archiv proto balí všechny soubory rozšíření podle
+přípony (`*.js`, `*.json`, `*.svg`, `*.md`, `LICENSE`), ne podle ručního
+seznamu. Backend odmítne sestavit VSIX, jehož modul načítá relativní
+`require('./…')` bez souboru v balíčku. Test ověřuje skutečně sestavený
+archiv. Smoke test v izolovaném profilu VSCodia (`python3 -m
+scripts.ide_bridge_smoke`) ověřuje aktivaci a registraci nových příkazů.
+Rozšíření se aktualizuje z běžícího backendu: po změně modulů je nutné
+restartovat backend a v IDE znovu načíst okno.
+
 ## Omezení
 
 - Nesynchronizují se lease a pořadí mezi profily ani mezi stroji. Každý profil

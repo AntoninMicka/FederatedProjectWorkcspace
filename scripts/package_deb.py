@@ -10,9 +10,11 @@ import tempfile
 
 if __package__:
     from .license_files import license_files
+    from .package_desktop import extension_files
     from .release_version import read_version, validate_version
 else:
     from license_files import license_files
+    from package_desktop import extension_files
     from release_version import read_version, validate_version
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +35,8 @@ def build(output, version=None):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             path.chmod(mode)
-        for name in ('package.json', 'extension.js', 'bridge.js', 'README.md', 'LICENSE'):
+        # All extension modules: the desktop builds its VSIX from this directory.
+        for name in extension_files(ROOT / 'extensions/workspace-bridge'):
             write(f'usr/lib/{NAME}/extensions/workspace-bridge/{name}',
                   (ROOT / 'extensions/workspace-bridge' / name).read_bytes())
         for source in sorted((ROOT / 'spikes').glob('*.py')):
