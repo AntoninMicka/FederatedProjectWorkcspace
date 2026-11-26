@@ -21,6 +21,8 @@ from spikes.page_layout import PAGE_LAYOUT_CSS, PAGE_LAYOUT_JS
 from spikes.task_stream_ui import TASK_STREAM_JS
 from spikes.task_file_edit_ui import FILE_EDIT_HTML, FILE_EDIT_CSS, FILE_EDIT_JS
 from spikes.artifact_sharing_ui import SHARING_ATTACH_BUTTON, SHARING_CSS, SHARING_HTML, SHARING_JS
+from spikes.project_relations_panel import ROUTES as RELATION_ROUTES
+from spikes.project_relations_ui import HTML as RELATIONS_HTML, CSS as RELATIONS_CSS, JS as RELATIONS_JS
 from spikes.artifact_history import ArtifactHistory
 from spikes.conflict_resolution import ConflictResolution
 from spikes.local_change_resolution import LocalChangeResolution
@@ -3032,6 +3034,7 @@ async function openRegisteredProject(projectId){
   clearProject();request=viewRequest;
   rememberRecentProject(projectId);
   activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id,readOnly:Boolean(result.read_only),replication:result.replication||null};
+  if(typeof relationProjectChanged==='function')relationProjectChanged();
   renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);taskQueueView=null;taskQueueMessage='Fronta se načte při otevření plánu.';renderTaskQueue();installTaskPlanViews(result,{loadQueue:false,renderGraph:false});if(result.plan_draft_error)document.querySelector('#sidebar-plan-status').textContent=result.plan_draft_error;renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-description').textContent=result.description;
@@ -5087,13 +5090,13 @@ document.querySelector('#artifact-git-confirm').addEventListener('click',commitP
 document.querySelector('#artifact-git-close').addEventListener('click',()=>document.querySelector('#artifact-git-dialog').close());
 artifactEditorForm.addEventListener('input',syncArtifactGitButtons);
 function addConflictLineClasses(element,lineClasses,index){for(const name of lineClasses?.get(index)||[])element.classList.add(name);}
-function appendProjectArtifactLinks(target,text,projectId=activeProject?.id){
+function appendProjectArtifactLinks(target,text,projectId=activeProject?.id,linkOpener=null){
  const links=/\\[((?:\\\\.|[^\\]\\\\\\n])+)\\]\\((artifacts\\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\/[^()\\n]+|https?:\\/\\/[^\\s()]+)\\)/g;
  let offset=0;for(const match of String(text).matchAll(links)){
   target.append(document.createTextNode(text.slice(offset,match.index)));
   const label=match[1].replace(/\\\\([\\\\`*_{}\\[\\]()<>!|])/g,'$1');
   if(match[3]){
-   const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=label;button.title='Otevřít podklad ve zdrojovém projektu';button.addEventListener('click',()=>openLinkedProjectArtifact(projectId,match[3]));target.append(button);
+   const button=document.createElement('button');button.type='button';button.className='artifact-link';button.textContent=label;button.title='Otevřít podklad ve zdrojovém projektu';button.addEventListener('click',()=>linkOpener?linkOpener(projectId,match[3]):openLinkedProjectArtifact(projectId,match[3]));target.append(button);
   }else{
    const link=document.createElement('a');link.textContent=label;link.href=match[2];link.target='_blank';link.rel='noopener noreferrer';target.append(link);
   }
@@ -5105,7 +5108,7 @@ async function openLinkedProjectArtifact(projectId,artifactId){
  await openRegisteredProject(projectId);
  if(activeProject?.id===projectId)return openPreview(artifactId);
 }
-function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false,linkProjectId=activeProject?.id){
+function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLinks=false,linkProjectId=activeProject?.id,linkOpener=null){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
  let fence=null,code=null,lists=[],lineIndex=0;
  for(const line of text.split('\\n')){
@@ -5125,13 +5128,13 @@ function renderMarkdown(text,target=previewContent,lineClasses=null,artifactLink
    if(!lists.length||lists.at(-1).indent<indent){
     const list=document.createElement('ul');(lists.at(-1)?.item||target).append(list);lists.push({indent,list,item:null});
    }
-   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2],linkProjectId);else item.textContent=bullet[2];
+   const item=document.createElement('li');if(target===previewContent||artifactLinks)appendProjectArtifactLinks(item,bullet[2],linkProjectId,linkOpener);else item.textContent=bullet[2];
    addConflictLineClasses(item,lineClasses,lineIndex);lists.at(-1).list.append(item);lists.at(-1).item=item;lineIndex++;continue;
   }
   // A blank line separates list paragraphs, not the batch from its children.
   if(!line.trim()){lineIndex++;continue;}
   lists=[];const element=document.createElement(heading?'h'+heading[1].length:'p');
-  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line,linkProjectId);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
+  if(target===previewContent||artifactLinks)appendProjectArtifactLinks(element,heading?heading[2]:line,linkProjectId,linkOpener);else element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
  }
 }
 const projectConflicts=document.querySelector('#project-conflicts');
@@ -6133,7 +6136,7 @@ function updatePromptInputSummary(){
  const artifactIds=new Set(artifacts?[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value):[]);
  if(document.querySelector('#task-source-current-file-input')?.checked&&selectedArtifact)artifactIds.add(selectedArtifact);
  const editTarget=selectedTaskFileEditTarget();if(editTarget)artifactIds.add(editTarget);
- const artifactCount=artifactIds.size;
+ const artifactCount=artifactIds.size+(typeof selectedRelationInputs==='function'?selectedRelationInputs().length:0);
  const publicCount=publicWeb?document.querySelectorAll('#task-public-source-list input:checked').length:0;
  const count=searching?Math.max(1,(conversation?1:0)+artifactCount):(conversation?1:0)+artifactCount+publicCount;
  const countOutput=document.querySelector('#task-input-count');
@@ -7826,6 +7829,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     && document.querySelector('#chat-privacy').value==='local-only'){
   chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;
  }
+ const sharedInputs=typeof selectedRelationInputs==='function'?selectedRelationInputs():[];
+ if(sharedInputs.length&&(mode!=='orchestration'||adapter!=='ollama')){chatOperationStatus.textContent='Pro vybrané propojené podklady zvolte režim Úkol a Ollama, nebo je ve výběru vstupů odznačte.';return;}
  if(mode==='brainstorming' && adapter!=='ollama'){
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;}
@@ -7926,14 +7931,14 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   const editing=document.querySelector('#task-output-kind').value==='file-edit',editTarget=selectedTaskFileEditTarget();
   if(editing){if(adapter!=='ollama'||!editTarget){chatOperationStatus.textContent='Pro úpravu vstupu vyberte cílový Markdown dokument a Ollama backend.';return;}artifactIds.push(editTarget);}
   if(useCurrentFile)artifactIds.push(selectedArtifact);
-  const uniqueArtifactIds=[...new Set(artifactIds)],useArtifacts=uniqueArtifactIds.length>0;
+  const uniqueArtifactIds=[...new Set(artifactIds)],useArtifacts=uniqueArtifactIds.length>0||sharedInputs.length>0;
   const publicRunIds=usePublic ? [...document.querySelectorAll('#task-public-source-list input:checked')]
    .map(item=>item.value) : [];
   const sourceKinds=[];if(useConversation)sourceKinds.push('conversation');
   if(useArtifacts)sourceKinds.push('artifacts');if(usePublic)sourceKinds.push('public-web');
   if(searching&&!sourceKinds.length)sourceKinds.push('conversation');
   if(!sourceKinds.length){chatOperationStatus.textContent='Vyberte alespoň jeden zdroj úkolu.';return;}
-  if(includeSelectedArtifacts && !selectedArtifactIds.length){chatOperationStatus.textContent='Vyberte alespoň jeden interní artefakt.';return;}
+  if(includeSelectedArtifacts && !selectedArtifactIds.length&&!sharedInputs.length){chatOperationStatus.textContent='Vyberte alespoň jeden interní artefakt.';return;}
   if(usePublic && !publicRunIds.length){
    chatOperationStatus.textContent='Vyberte načtený veřejný zdroj, nebo zvolte akci Vždy vyhledat na webu.';return;
   }
@@ -7950,6 +7955,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    output_kind:document.querySelector('#task-output-kind').value,
    execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':DIRECT_PROVIDERS[adapter]?.execution||'external-atlascloud',
    search_query:null,public_source_run_ids:publicRunIds}};
+  if(sharedInputs.length)pendingChatRequest.selected_relation_inputs=sharedInputs;
   if(searching)pendingChatRequest.task_plan.search_compose=true;
   if(document.querySelector('#task-action').value==='think'){pendingChatRequest.task_plan.search_on_demand=true;
    if(document.querySelector('#provider-web-search').checked)pendingChatRequest.task_plan.provider_web_search=true;}
@@ -8604,9 +8610,12 @@ refreshImageAdapter();
 if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
 HTML = HTML.replace('<script src="/app.js"></script>', FILE_EDIT_HTML + SHARING_HTML + '<script src="/app.js"></script>')
+HTML = HTML.replace('<script src="/app.js"></script>', RELATIONS_HTML + '<script src="/app.js"></script>')
+HTML = HTML.replace('<h1 id="project-title"></h1>', '<h1 id="project-title"></h1><button id="open-project-relations" type="button">Vztahy a propojené podklady</button>', 1)
+HTML = HTML.replace('<details id="task-artifacts" hidden>', '<button id="pick-relation-inputs" type="button">Vybrat propojené podklady</button><fieldset id="relation-input-selection"></fieldset><details id="task-artifacts" hidden>', 1)
 HTML = HTML.replace('<button id="open-source-import" type="button">Importovat zdroj</button></div>',
                     '<button id="open-source-import" type="button">Importovat zdroj</button>' + SHARING_ATTACH_BUTTON + '</div>', 1)
-CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS + SHARING_CSS
+CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS + SHARING_CSS + RELATIONS_CSS
 HTML = HTML.replace('<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul>', TOOL_TREE, 1)
 HTML = HTML.replace('<button id="julia-editor-new" type="button">Nový Julia model</button>', '<button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button>'+TOOL_NEW_ACTIONS, 1)
 CSS += TOOL_TREE_CSS + SIDEBAR_MENU_CSS
@@ -8630,7 +8639,7 @@ HTML = HTML.replace('</main>', '</main>'+TASK_WORK_HTML, 1)
 CSS += TASK_WORK_CSS
 from spikes.task_record_roadmap_ui import JS as TASK_RECORD_ROADMAP_JS
 JS += TASK_RECORD_ROADMAP_JS
-JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS
+JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS + RELATIONS_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
@@ -8720,6 +8729,7 @@ class DesktopHandler(Handler):
         '/v1/artifacts/editor/plan-item/delete/preview', '/v1/artifacts/editor/plan-item/delete',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         *SHARING_ROUTES,
+        *RELATION_ROUTES,
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
@@ -8836,6 +8846,24 @@ class DesktopHandler(Handler):
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
             return self.reply(422, {'error': 'Sdílení nelze provést. Obnovte náhled a ověřte '
                                     'aktuální verzi obou projektů, oprávnění a privacy.'})
+
+    def dispatch_project_relations(self, request):
+        from spikes.administration import AccessDenied
+        from spikes.cross_references import ReferenceUnavailable
+        if not isinstance(request, dict) or set(request) != RELATION_ROUTES[self.path]:
+            return self.send_error(400)
+        try:
+            panel = self.server.chat_service.project_relations_panel(request['project_id'])
+            action = self.path.removeprefix('/v1/project-relations/').replace('/', '_')
+            return self.reply(200, getattr(panel, action)(**request))
+        except AccessDenied:
+            return self.reply(403, {'error': 'Ke správě této vazby nebo použití podkladu nemáte oprávnění.'})
+        except ReferenceUnavailable as exc:
+            return self.reply(409, {'error': 'Zdroj nebo jeho schválená vazba už není dostupná. Obnovte přehled a výběr podkladů.', 'state': exc.state})
+        except (PendingOperation, StaleIndex, BlockingIOError):
+            raise
+        except (ValueError, UnicodeError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            return self.reply(422, {'error': 'Vazbu nelze potvrdit nebo podklad načíst. Obnovte náhled; ověřte oprávnění obou projektů a jejich aktuální stav.'})
 
     def dispatch_ide_bridge(self, request):
         try:
@@ -10015,6 +10043,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, history.compare(**request))
             if self.path in SHARING_ROUTES:
                 return self.dispatch_sharing(request)
+            if self.path in RELATION_ROUTES:
+                return self.dispatch_project_relations(request)
             if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
                 node = getattr(projects, 'node_path', None)
                 if node is None:

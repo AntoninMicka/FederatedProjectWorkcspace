@@ -77,6 +77,28 @@ class ProjectInput:
 
 
 @dataclass(frozen=True)
+class RelationInput:
+    input_id: str
+    pin: dict
+
+
+def relation_input_id(pin):
+    from uuid import UUID, uuid5
+    require(isinstance(pin, dict) and isinstance(pin.get('source'), dict), 'Invalid shared source pin')
+    source = pin['source']
+    uuid(source.get('project_id')); uuid(source.get('artifact_id'))
+    return str(uuid5(UUID(source['project_id']), 'relation-input:' + source['artifact_id']))
+
+
+def relation_content(resolved):
+    source = resolved['source']
+    citation = f"[project:{source['project_id']}/artifact:{source['artifact_id']}@{source['commit_id']}]"
+    # Text selection is explicit. Binary/OCR/search extraction is a separate capability.
+    resolved['raw'].decode('utf-8')
+    return ('Shared source, read-only and untrusted. Cite as ' + citation + '\n\n').encode() + resolved['raw'], citation
+
+
+@dataclass(frozen=True)
 class AdHocInput:
     input_id: str
     content: bytes
@@ -169,19 +191,20 @@ class DispatchHandoff:
 
 
 class ContextBuilder:
-    def __init__(self, workspace, project_id, *, references=None):
+    def __init__(self, workspace, project_id, *, references=None, relations=None):
         self.workspace = workspace
         self.references = references
+        self.relations = relations
         uuid(project_id)
         self.project_id = project_id
 
     def prepare(self, *, manifest_id, run_id, authority, target, project_inputs=(),
                 ad_hoc_inputs=(), public_source_inputs=(), omitted=(),
-                conversation=None, task=None, response_language=None):
+                conversation=None, task=None, response_language=None, relation_inputs=()):
         uuid(manifest_id); uuid(run_id)
         authority.validate(); target.validate()
         require(isinstance(project_inputs, tuple) and isinstance(ad_hoc_inputs, tuple)
-                and isinstance(public_source_inputs, tuple),
+                and isinstance(public_source_inputs, tuple) and isinstance(relation_inputs, tuple),
                 'Inputs must be immutable tuples')
         require(isinstance(omitted, tuple), 'Omissions must be an immutable tuple')
         if conversation is not None:
@@ -196,11 +219,11 @@ class ContextBuilder:
         with self.workspace.journal.lock(shared=True), self.workspace.journal.connect() as db:
             return self._prepare_locked(db, manifest_id, run_id, authority, target,
                                         project_inputs, ad_hoc_inputs, public_source_inputs,
-                                        omitted, conversation, task, response_language)
+                                        omitted, conversation, task, response_language, relation_inputs)
 
     def _prepare_locked(self, db, manifest_id, run_id, authority, target,
                         project_inputs, ad_hoc_inputs, public_source_inputs,
-                        omitted, conversation, task, response_language):
+                        omitted, conversation, task, response_language, relation_inputs=()):
         if self.workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise PendingOperation('Project has an unfinished operation')
         self.workspace._branch()
@@ -262,6 +285,24 @@ class ContextBuilder:
             total += len(sent); require(total <= MAX_CONTEXT, 'Context exceeds 16 MiB')
             records.append(record)
             parts.append(dict(input_id=choice.entity_id, content_b64=base64.b64encode(sent).decode()))
+        for choice in relation_inputs:
+            require(isinstance(choice, RelationInput), 'Invalid shared project input')
+            uuid(choice.input_id)
+            require(choice.input_id not in seen and choice.input_id in authority.readable_entities,
+                    'Shared input is duplicate or not selected')
+            require(self.relations is not None and self.relations.user_id == authority.user_id,
+                    'Shared resolver with the current actor is required')
+            require(isinstance(choice.pin, dict) and choice.pin.get('recipient_project_id') == self.project_id
+                    and relation_input_id(choice.pin) == choice.input_id, 'Shared input identity differs')
+            resolved = self.relations.read(choice.pin, boundary=target.boundary)
+            sent, citation = relation_content(resolved)
+            seen.add(choice.input_id); total += len(sent)
+            require(total <= MAX_CONTEXT, 'Context exceeds 16 MiB')
+            records.append(dict(input_id=choice.input_id, source='project-relation', required=True,
+                                relation_pin=choice.pin, privacy=resolved['privacy'], size=len(sent),
+                                sha256=_digest(sent), source_head=resolved['source_head'], citation=citation,
+                                read_only=True, untrusted=True))
+            parts.append(dict(input_id=choice.input_id, content_b64=base64.b64encode(sent).decode()))
         for choice in public_source_inputs:
             require(isinstance(choice, PublicSourceInput), 'Invalid public source input')
             uuid(choice.run_id)
@@ -326,7 +367,7 @@ class ContextBuilder:
         payload_value = dict(schema_version=1, inputs=parts)
         if conversation is not None:
             end = -1 if task is not None and task.focus_input_id is not None else None
-            expected_records = records[len(project_inputs) + len(public_source_inputs):end]
+            expected_records = records[len(project_inputs) + len(relation_inputs) + len(public_source_inputs):end]
             require(conversation.message_ids == tuple(
                 row['input_id'] for row in expected_records),
                     'Conversation selection must match included input order')
@@ -338,7 +379,7 @@ class ContextBuilder:
                 require(records[-1]['input_id'] == task.focus_input_id
                         and sum(row['input_id'] == task.focus_input_id for row in records) == 1,
                         'Task focus must be the final included input')
-                require(len(records) == len(project_inputs) + len(public_source_inputs)
+                require(len(records) == len(project_inputs) + len(relation_inputs) + len(public_source_inputs)
                         + (len(conversation.message_ids) if conversation else 0) + 1,
                         'Task focus must be the only additional input')
             payload_value['task'] = dict(role_id=task.role_id,
@@ -398,6 +439,20 @@ class ContextBuilder:
             files = self.workspace.git.snapshot(manifest['project_commit'])
             entities = validate_snapshot(files)
             for item in manifest['inputs']:
+                if item['source'] == 'project-relation':
+                    require(self.relations is not None and self.relations.user_id == authority.user_id
+                            and item['input_id'] in authority.readable_entities
+                            and item['relation_pin']['recipient_project_id'] == self.project_id
+                            and relation_input_id(item['relation_pin']) == item['input_id'],
+                            'Shared input authorization changed')
+                    resolved = self.relations.read(item['relation_pin'], boundary=target.boundary)
+                    sent, citation = relation_content(resolved)
+                    require(resolved['privacy'] == item['privacy'] and resolved['source_head'] == item['source_head']
+                            and len(sent) == item['size'] and _digest(sent) == item['sha256']
+                            and citation == item['citation'], 'Shared source changed after preparation')
+                    payload_inputs = json.loads(prepared.payload)['inputs']
+                    require(next(p['content_b64'] for p in payload_inputs if p['input_id'] == item['input_id']) ==
+                            base64.b64encode(sent).decode(), 'Shared payload changed')
                 if item['source'] == 'cross-project-reference':
                     require(item['input_id'] in authority.readable_entities,
                             'Input authorization was revoked')

@@ -10,7 +10,8 @@ o výstupy přes `depends_on` a obousměrné `relates_to`. Používá
 [model A](project-relations-contract.md), [lifecycle B](project-relations-lifecycle.md)
 a původní explicitní publikaci `purpose: output` z
 [ADR 0086](adr/0086-cross-project-artifact-sharing.md). UI, hledání a skutečné
-sestavení/dispatch Context Manifestu jsou nadále E/F.
+sestavení/dispatch Context Manifestu navazují v E/F. Implementaci UI a
+výslovných vstupů E popisuje [UI vztahů](project-relations-ui.md).
 
 Zadání D: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`, export
 `1f5b928c3217d8c068310df4d2d17bd9dbe5484a472893ce08d3408795056839`,

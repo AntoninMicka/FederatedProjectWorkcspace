@@ -1959,3 +1959,14 @@ titulek/tag či dokončený model jako publikace, obecný import JSON jako souhl
 rozšíření outputs přes hierarchii, automatická náhrada připnutého důvodu
 a druhý publikační writer. Externí komponenta ani nové úložiště nejsou třeba.
 Scope a recovery: [výstupový pohled](docs/project-relations-outputs.md).
+
+
+PROJECT-RELATIONS-01-E **reuse/adapt — UI a výslovné vstupy**: společné
+webové/desktopové UI, lifecycle B, resolver C/D, původní markdown preview,
+ContextBuilder, task route a jeho modelová/privátní omezení. Přidává fasádu,
+read-only náhled s odkazy a explicitní pin do manifestu, nikoli druhý writer.
+**Reject:** rozšiřování členství zdroje, kopie zdrojů do příjemce, implicitní
+vkládání celého projektu do promptu a nový fulltext místo plánovaného
+PROJECT-SEARCH-01. Pro tento budoucí nástroj poskytuje stejný autorizovaný
+catalog/pin/read kontrakt. Externí komponenta se nepřebírala. Použití,
+persistence a recovery: [UI vztahů](docs/project-relations-ui.md).
