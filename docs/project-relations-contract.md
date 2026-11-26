@@ -5,11 +5,12 @@ SPDX-License-Identifier: MPL-2.0
 
 # Kontrakt projektových vztahů — PROJECT-RELATIONS-01-A
 
-**Model A; nativní lifecycle B je implementován samostatně.** Rozhodnutí a hranice
+**Model A; lifecycle B a čtecí hierarchie C mají vlastní implementace.** Rozhodnutí a hranice
 obnovy: [ADR 0089](adr/0089-project-relations-and-derived-read-access.md).
 Místní zápis, souhlasy, odvolání a jejich omezení popisuje
-[nativní lifecycle](project-relations-lifecycle.md); tento kontrakt sám
-nedokládá implementaci odvozeného resolveru ani dokončení celé dávky.
+[nativní lifecycle](project-relations-lifecycle.md); data podprojektů řeší
+[čtecí hierarchie C](project-relations-hierarchy.md). Tento kontrakt sám
+nedokládá dokončení výstupového resolveru, UI ani celé dávky.
 Kanonický rozsah drží Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,
 exportní revize `52283563eac876420c6d0841d06530c2eaafe815ff6819a9b8af06449f363e45`,
 projektový HEAD `53c668738cfdce9a3311b2f6261799249729f9ae`.
@@ -228,6 +229,6 @@ Kontrakt vyžaduje ověření všech řádků tabulky dostupnosti, zejména:
   nebo přesně doložená aktivní revize; žádný automatický modelový účinek.
 
 Jde o předané akceptační případy celé dávky, nikoli hlášení jejich úspěšného
-provedení. Nativní lifecycle B má vlastní cílené ověření. Čtení obsahu napříč
-projekty nadále poskytuje původní explicitní XREF; odvozený resolver C–F
-zde není deklarován jako implementovaný.
+provedení. Nativní lifecycle B a čtecí hierarchie C mají vlastní cílené
+ověření; vedle nich zůstává původní explicitní XREF. Výstupový pohled D,
+integrace E a federované ověření autority F zde nejsou deklarované jako hotové.

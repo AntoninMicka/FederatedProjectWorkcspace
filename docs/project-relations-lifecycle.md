@@ -13,6 +13,9 @@ místní návrh, potvrzení, změnu typu/směru a odvolání vztahu podle
 čtení cizího obsahu ani UI; odvozený resolver a federation authority patří
 navazujícím řezům C–F. Souhlas autorizuje politiku `typed-paths-v1`, nikoli
 jednotlivé per-artifact shares. Žádné share záznamy se nevyrábějí na pozadí.
+Místní čtení schválených podprojektů nyní dodává samostatný
+[resolver C](project-relations-hierarchy.md); federované ověření a UI zůstávají
+navazujícími řezy.
 
 Zadání B: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,
 export `6df4f1fdb20310a328a5ac40166e0f1debcccfcd46f55b102b646562c663892c`,

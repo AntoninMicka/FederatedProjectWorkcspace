@@ -1941,3 +1941,12 @@ writer, distribuovaný commit, JSON author jako grant a automatické per-artifac
 shares. Místní receipt dokládá nativní souhlas; synchronizovaný JSON bez
 ověřené autority nezískává práva. Externí komponenta se nepřebírala.
 Hranice a API: [nativní lifecycle](docs/project-relations-lifecycle.md).
+
+PROJECT-RELATIONS-01-C **reuse/adapt — čtecí hierarchie**: místní aktivní
+projekce a souhlasy B, `CrossReferences.authorize`, validované Workspace/Git
+snapshoty, metadata a jejich registry i původní source pin/digest encoder.
+Přidává společný read-only katalog a přesný pin cesty; **reject:** kopie
+zdrojových bajtů v rodiči, individuální share pro každý podklad, rozšíření
+členství a automatické procházení cizí reference. Není třeba externí
+komponenta ani nové úložiště. Scope a recovery:
+[čtecí hierarchie](docs/project-relations-hierarchy.md).
