@@ -166,7 +166,7 @@ function createSidebar(vscode, context, hooks) {
   function mergedRows() {
     return unified.merge(projects, owner).rows.map(r => r.missing
       ? row(r.project,'queueMissing',{taskId:r.taskId,index:r.index,group:'all',
-          reason:'Není v připnutém balíčku projektu; synchronizujte nebo frontu ve Workspace předejte znovu.'})
+          reason:unified.missingReason(r.project)})
       : row(r.project,'queueTask',{entry:r.entry,taskId:r.taskId,index:r.index,group:'all',unordered:r.unordered}));
   }
   function children(kind, item) {

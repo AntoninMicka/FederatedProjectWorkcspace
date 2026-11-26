@@ -3,10 +3,12 @@
 """Git-backed task annotations; these records never carry task completion state."""
 import json
 import re
+import base64
 from spikes.metadata import require, uuid, timestamp, parse_json, UnsupportedVersion
 
 SCHEMA = 'fpw-task-record-v1'
 PRIVACY = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
+INLINE = re.compile(r'(?m)^[ \t]*> <!-- fpw-task-record-data:([A-Za-z0-9+/=]+) -->\r?$')
 
 
 def encoded(value):
@@ -78,6 +80,36 @@ def records(files, entities):
             require(event['event_id'] not in events,'Activity already belongs to another record')
             events.add(event['event_id'])
         result[identifier]=value
+    # New records are self-contained in the owning task's text. Legacy JSON
+    # artifacts remain readable, but no longer have to exist for new records.
+    from spikes.plan_item_editor import item_span
+    inline_ids=set()
+    for identifier, meta in entities.items():
+        if meta['kind'] != 'document' or not meta.get('file', '').endswith('.md'): continue
+        path='artifacts/'+identifier+'/'+meta['file']
+        raw=files[path]
+        # Unrelated documents and imported source bytes need not be UTF-8.
+        if b'fpw-task-record-data:' not in raw: continue
+        body=raw.decode('utf-8')
+        for match in INLINE.finditer(body):
+            value=parse_json(base64.b64decode(match[1],validate=True),maximum=1024*1024)
+            validate(value)
+            require(value['id'] not in inline_ids,'Duplicate inline task record')
+            inline_ids.add(value['id'])
+            require(value['context']['definition_pin']['source']['artifact_id']==identifier,
+                'Task record belongs to another document')
+            start,end=item_span(body,value['context']['task_id'])
+            require(start<=match.start()<match.end()<=end,'Task record belongs to another task')
+            require(PRIVACY[meta['privacy']]>=PRIVACY[value['privacy']],'Task text privacy is too low')
+            prior=result.get(value['id'])
+            if prior:
+                require({k:v for k,v in prior.items() if k!='revisions'}=={k:v for k,v in value.items() if k!='revisions'}
+                    and value['revisions'][:len(prior['revisions'])]==prior['revisions'], 'Task record history differs')
+                for event in prior['events']: events.remove(event['event_id'])
+            for event in value['events']:
+                require(event['event_id'] not in events,'Activity already belongs to another record')
+                events.add(event['event_id'])
+            result[value['id']]=value
     return result
 
 

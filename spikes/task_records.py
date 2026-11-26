@@ -244,6 +244,8 @@ class TaskRecords:
                 op=self.prepare(request,body,checkpoint)
             if action=='record-cancel':self.cancel(request,op)
             elif op['record_type']=='task-record-publish' and op['state']=='prepared':self.run(request,op,checkpoint)
+        from spikes.task_activity_text import ActivityText
+        ActivityText(self.work).drain({request['operation_id'], *op.get('events', [])}, checkpoint=checkpoint)
         result=self.work.status(request)
         with self.work._db() as db:op=json.loads(self.work._operation(db,request['operation_id'],request['window_id'])['doc'])
         result['operation']=dict(operation_id=request['operation_id'],state=op['state'],result=op.get('result'))
@@ -261,7 +263,7 @@ class TaskRecords:
             require(type(request['record_revision']) is int and len(record['revisions'])==request['record_revision'],'Záznam se změnil.')
             self.comment(request,record['context'])
             record['revisions'].append(dict(comment=request['comment'],selected_checklist=request['selected_checklist'],author_id=self.work.user_id,created_at=now()))
-            meta=dict(entities[record['id']])
+            meta={}
         else:
             attachment=request['action']=='record-attach'
             if attachment:
@@ -321,10 +323,8 @@ class TaskRecords:
                 else:source_git,_,_,_=self.snapshot(output['project_id'],write=False)
                 pinned=source_git.snapshot(output['commit_id']);resolved=self.reference(output['project_id'],output['artifact_id'],pinned,validate_snapshot(pinned))
                 if resolved:require(PRIVACY[record['privacy']]>=PRIVACY[resolved[1]['privacy']],'Soukromí zdroje se změnilo; obnovte výběr.')
-            prefix='artifacts/'+record['id']+'/'
             from spikes.task_record_notes import changes as note_changes
             changes=note_changes(workspace.git.snapshot(workspace.git.head()),pid,workspace.git.head(),record)
-            changes.update({prefix+'metadata.json':encoded(op['metadata']),prefix+'task-work.json':encoded(record)})
             return changes,'Workspace user',self.work.user_id+'@local.invalid','Record work on '+record['context']['task_id']
         receipt=ws.transact(op['native_operation_id'],dict(action='task-record-publish',record=record,base_head=op['base_head']),prepare,
             expected_head=op['base_head'],checkpoint=checkpoint)
@@ -368,6 +368,8 @@ class TaskRecords:
                     files=workspace.git.snapshot(commit)
                     if records(files,validate_snapshot(files)).get(record['id'])!=record:continue
                     self.finalize(dict(handle,operation_id=row['id']),op,receipt)
+                from spikes.task_activity_text import ActivityText
+                ActivityText(self.work).drain({row['id'], *op.get('events', [])})
             except (ValueError,OSError,sqlite3.Error,subprocess.SubprocessError):
                 continue
 

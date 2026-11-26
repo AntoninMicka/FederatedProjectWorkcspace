@@ -173,12 +173,15 @@ předá systémovému prohlížeči.
 V pravém panelu pod **Přidat záznam k úkolu** vyberte jednu nebo více
 činností stejné původní relace. Upravte předvyplněný komentář, případný bod
 původního checklistu a privacy. **Uložit rozepsané**, **Odložit** a **Odmítnout**
-uchovají nabídku lokálně bez projektového commitu. **Otevřít nabídku** ji
+uchovají nabídku přímo v textu příslušného úkolu. **Otevřít nabídku** ji
 znovu načte; pravidelné obnovení panelu neotevírá žádný modal a nepřepisuje
 právě psaný komentář. Neuložený editor podkladu zůstává samostatný.
 
-**Potvrdit a připojit** uloží stručný komentář a odkazy přímo do textu původního úkolu a současně vytvoří verzovaný projektový artefakt s komentářem,
-původními event/operation/run referencemi a připnutými souborovými výsledky.
+**Potvrdit a připojit** uloží komentář, odkazy a úplnou provenance přímo do
+textu původního úkolu. Nový samostatný JSON artefakt již nevzniká; starší
+artefakty zůstávají čitelné. Uložené nabídky i automatické dokončené činnosti
+se také zapisují do textu úkolu. Neuložený formulář zůstává pouze draftem.
+Při vyšší privacy záznamu se ochrana dokumentu úkolu zvýší, nikdy nesníží.
 Výsledky určuje nativní receipt a změněné artefakty v jeho Git commitu;
 vstupní podklady se samy nestávají výsledky.
 Obsah inventáře či analýzy se do roadmapy nekopíruje. Bod checklistu zůstává
@@ -191,10 +194,17 @@ převzetí pracovního okna. Čte potvrzené záznamy z projektového Gitu, vče
 záznamů jiných autorů při současném právu číst projekt. Pod nimi je oddělená
 **Automatická evidence na tomto uzlu** s vlastními nepřipojenými činnostmi,
 rozepsanými/odloženými komentáři a odkazy na vzniklé soubory. Lokální evidence
-se tím nepublikuje ani nesynchronizuje. Čtenář projektu má přístup k potvrzeným
+se nyní ukládá do projektového textu a může se synchronizovat; přehled činností
+nadále filtruje vlastní účet a hranici desktop/web. Čtenář projektu má přístup k potvrzeným
 záznamům, nikoli k lokální činnosti jiného účtu. **Obnovit záznamy** provede
 nové čtení. Není-li lokální store dostupný, Git záznamy zůstanou zobrazené
 s výslovnou informací o nedostupné lokální evidenci.
+
+SQLite drží jen rozpracované záměry, relace a jejich ověření. Dokončený
+záznam se z ní odstraní až po projektovém commitu a přesném zpětném porovnání
+textu. Kontrolu a jednorázový převod poskytuje
+`scripts/migrate_task_history_text.py --node PATH --audit /tmp/task-history-audit.json`;
+stejný příkaz s `--apply` ověří nezměněné vstupy a provede převod.
 
 Potvrzené záznamy jsou chronologické. **Původní verze** otevře přesné uložené
 bajty a commit výsledku, **Aktuální artefakt** jeho nynější verzi. Při odstranění

@@ -126,13 +126,18 @@ os._exit(28)
         self.assertEqual(result.returncode,28)
         committed=Projects(self.f.f.node).repository(self.f.f.pid).head()
         self.assertEqual(self.events()[0]['outcome'],'unknown')
-        # Only an explicit native replay reconciles the receipt. The recorder never writes Git.
+        # Replaying the native effect retains its receipt. History has a separate
+        # task-text commit and never rewrites the native output.
         identifier=self.begin(request)
         receipt=Artifacts(self.f.f.node).save(request['document'],request['operation_id'])
         self.assertEqual(receipt['commit_id'],committed)
         self.service.finish(identifier,200,receipt)
         self.assertEqual(self.events()[0]['outcome'],'succeeded')
-        self.assertEqual(Projects(self.f.f.node).repository(self.f.f.pid).head(),committed)
+        git=Projects(self.f.f.node).repository(self.f.f.pid)
+        path='artifacts/'+request['document']['artifact_id']+'/content.md'
+        self.assertEqual(git.run('diff',committed,git.head(),'--',path).stdout,'')
+        with self.work._db() as db:
+            self.assertFalse(db.execute('SELECT 1 FROM operations WHERE id=?',(identifier,)).fetchone())
 
     def test_registry_contains_only_existing_native_routes_and_search_rounds_are_separate(self):
         from spikes.desktop_ui import DesktopHandler

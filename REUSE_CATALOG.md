@@ -205,9 +205,12 @@ Záznamy D adaptují tentýž lokální store, operation flock, sidecar artefakt
 používá existující snapshot/transition validaci a zachovává historii revizí.
 Nový projektový writer, kopie výsledků do roadmapy a druhý task store jsou
 odmítnuté. Nabídka zůstává oddělená od potvrzeného Git artefaktu i task acceptance.
-Potvrzený zápis do textu úkolu **adaptuje** stejný `TaskRecords.run`, scoped
-`item_span` a jedinou Workspace transakci pro text, sidecar a record JSON.
-**Reject:** zápis bez potvrzení, kopírování obsahu výsledků a samostatný writer.
+Zápis do textu úkolu **adaptuje** stejný `TaskRecords.run`, scoped `item_span`
+a Workspace transakci. Nové komentované záznamy včetně provenance jsou přímo
+v textu; původní JSON artefakty zůstávají čitelné pro kompatibilitu.
+`task_activity_text.py` adaptuje tentýž writer pro automatické činnosti,
+uložené nabídky a replay receipts; SQLite je pouze outbox nedokončeného zápisu.
+**Reject:** druhý writer, druhá trvalá databáze historie a kopírování obsahu výsledků.
 Přesná projekce validovaného záznamu nemění pracovní signature zadání;
 ručně přidaný marker tuto výjimku nezískává. Recovery popisuje ADR 0088.
 Připojení existujícího artefaktu **adaptuje** validovaný projektový snapshot,
