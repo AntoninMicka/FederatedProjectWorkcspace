@@ -111,7 +111,7 @@ class TaskWorkHTTPTests(unittest.TestCase):
         self.assertEqual(active['activities'][0]['kind'],'source-import')
         self.assertTrue(any(ref.get('artifact_id')==source['artifact_id'] for ref in active['activities'][0]['request_references']))
         self.assertEqual(active['task_records'],[])
-        head=json.loads(data)['commit_id']
+        head=active['validated_head']
         code,data,_=self.f.request(path='/v1/artifacts/delete/preview',body=json.dumps(dict(project_id=self.pid,artifact_id=artifact,expected_head=head)))
         self.assertEqual(code,200,data);preview=json.loads(data)
         code,data,_=self.f.request(path='/v1/artifacts/delete/confirm',body=json.dumps(dict(project_id=self.pid,artifact_id=artifact,
@@ -173,10 +173,15 @@ class TaskWorkHTTPTests(unittest.TestCase):
             self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'unknown')
         committed=json.loads(data)['commit_id']
         current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')
-        self.assertEqual(self.f.server.projects.repository(self.pid).head(),committed)
+        git=self.f.server.projects.repository(self.pid); history_head=git.head()
+        self.assertNotEqual(history_head,committed)
+        path='artifacts/'+request['document']['artifact_id']+'/content.md'
+        self.assertEqual(git.snapshot(history_head)[path],git.snapshot(committed)[path])
         code,data,_=self.f.request(path='/v1/artifacts/editor/save',body=json.dumps(request),headers=headers)
         self.assertEqual(code,200,data);self.assertEqual(json.loads(data)['commit_id'],committed)
         current=self.post(dict(handle,action='status'));self.assertEqual(current['sessions'][0]['activities'][0]['outcome'],'succeeded')
+        self.assertEqual(git.head(),history_head)
+        self.assertEqual(len(current['sessions'][0]['activities']),1)
 
     def test_explicit_task_input_checks_digest_scope_and_privacy_before_model_dispatch(self):
         from unittest.mock import patch

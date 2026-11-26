@@ -33,6 +33,20 @@ class TaskRecoveryTests(unittest.TestCase):
     def events(self, view):
         return next(s for s in view['sessions'] if s['work_session_id'] == self.view['active_session_id'])['activities']
 
+    def assert_history_recovered(self, git, native_head, request):
+        from spikes.task_activity_text import ActivityText
+        head = git.head()
+        path = 'artifacts/'+request['document']['artifact_id']+'/content.md'
+        self.assertNotEqual(head, native_head)
+        self.assertEqual(git.snapshot(head)[path], git.snapshot(native_head)[path])
+        rows = ActivityText(self.work).read(self.f.f.pid)
+        matches = [json.loads(row['doc']) for row in rows.values()
+                   if json.loads(row['doc']).get('operation_id') == request['operation_id']]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['outcome'], 'succeeded')
+        self.work.status(self.handle)
+        self.assertEqual(git.head(), head)
+
     def test_process_death_after_native_save_recovers_original_session_once(self):
         request = self.save_request(); event = self.begin(request)
         script = '''import json,os,sys
@@ -56,7 +70,7 @@ os._exit(79)
             self.assertNotIn('není potvrzen', recovered['offer']['comment'])
             self.assertNotIn('PRIVATE', json.dumps(recovered))
             self.assertEqual(restarted.status(self.handle), view)
-        self.assertEqual(git.head(), head)
+        self.assert_history_recovered(git, head, request)
         self.assertFalse(view['sessions'][0]['current_task']['checked'])
 
     def test_wrong_native_digest_and_missing_receipt_remain_unknown(self):
@@ -90,7 +104,7 @@ os._exit(79)
             self.assertEqual(self.events(view)[0]['context']['task_id'], 'TASK-A')
             self.assertEqual(self.events(view)[0]['outcome'], 'succeeded')
             self.assertEqual(next(s for s in view['sessions'] if s['work_session_id']==switched['active_session_id'])['activities'], [])
-        self.assertEqual(self.work.projects.repository(self.f.f.pid).head(), head)
+        self.assert_history_recovered(self.work.projects.repository(self.f.f.pid), head, request)
 
     def test_revocation_and_other_window_do_not_reconcile_local_receipt(self):
         request = self.save_request(); self.begin(request)
@@ -128,7 +142,9 @@ os._exit(79)
         self.assertEqual(self.events(recovered)[0]['offer']['state'], 'confirmed')
         self.assertEqual(len(recovered['sessions'][0]['task_records']), 1)
         self.assertEqual(recovered['sessions'][0]['record_pending'], [])
-        self.work.status(self.handle); self.assertEqual(git.head(), head)
+        stable = git.head()
+        self.work.status(self.handle); self.assertEqual(git.head(), stable)
+        self.assertNotEqual(stable, head)
 
     def test_completed_chat_is_read_from_journal_unknown_is_not_retried(self):
         from spikes.chat_threads import ChatThreads

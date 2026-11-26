@@ -85,9 +85,12 @@ def records(files, entities):
     from spikes.plan_item_editor import item_span
     inline_ids=set()
     for identifier, meta in entities.items():
-        if not meta.get('file', '').endswith('.md'): continue
+        if meta['kind'] != 'document' or not meta.get('file', '').endswith('.md'): continue
         path='artifacts/'+identifier+'/'+meta['file']
-        body=files[path].decode('utf-8')
+        raw=files[path]
+        # Unrelated documents and imported source bytes need not be UTF-8.
+        if b'fpw-task-record-data:' not in raw: continue
+        body=raw.decode('utf-8')
         for match in INLINE.finditer(body):
             value=parse_json(base64.b64decode(match[1],validate=True),maximum=1024*1024)
             validate(value)

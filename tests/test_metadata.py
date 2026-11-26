@@ -18,6 +18,12 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(set(result), {ENTITY, OTHER})
         self.assertEqual(files[f'artifacts/{ENTITY}/original.md'], original)
 
+    def test_source_task_record_markers_remain_untrusted_bytes(self):
+        original = b'> <!-- fpw-task-record-data:AAAA -->\n\xff'
+        files = source(original, 'original.md')
+        self.assertEqual(set(validate_snapshot(files)), {ENTITY})
+        self.assertEqual(files[f'artifacts/{ENTITY}/original.md'], original)
+
     def test_duplicate_keys_json_yaml_and_nested(self):
         for data in [b'{"title":"A","title":"B"}', b'{"x":{"a":1,"a":2}}']:
             with self.assertRaises(ValidationError):
