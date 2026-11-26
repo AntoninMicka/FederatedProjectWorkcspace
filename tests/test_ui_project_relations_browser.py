@@ -28,6 +28,9 @@ class ProjectRelationsBrowserTests(UiFlowCase):
         self.page.wait_js(f'activeProject?.id==={json.dumps(pid)}','open project');self.page.wait_idle()
 
     def dialog(self):
+        self.page.evaluate("navigateMainTab(document.querySelector('#project-overview-tab'))")
+        self.page.wait_idle()
+        self.assertTrue(self.page.visible('#open-project-relations'))
         self.page.click('#open-project-relations')
         self.page.wait_js('relationOverview?.project_id===activeProject.id&&relationCatalog?.project_id===activeProject.id','relation overview')
         self.page.wait_idle()
@@ -83,7 +86,10 @@ class ProjectRelationsBrowserTests(UiFlowCase):
         route=[r for r in sent if r['path'].startswith('/v1/tasks/route')][-1]
         self.assertEqual(page.status(route),200,page.response_json(route))
         self.assertEqual(route['body']['selected_relation_inputs'],[selected])
-        page.wait_js("document.querySelector('#chat-messages').textContent.includes('Nosnost je 12 tun.')",'completed cited answer')
+        try:
+            page.wait_js("document.querySelector('#chat-messages').textContent.includes('Nosnost je 12 tun.')",'completed cited answer')
+        except AssertionError:
+            self.fail(str((page.text('#chat-operation-status'),page.response_json(route),page.exceptions)))
         self.assertIn('Nosnost je 12 tun.',page.text('#chat-messages'))
         self.assertIn(selected['pin']['source']['commit_id'],page.text('#chat-messages'))
         prompt=self.ollama.requests[-1]['prompt']
