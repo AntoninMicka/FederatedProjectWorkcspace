@@ -1932,3 +1932,12 @@ zmrazený intent, schvalovací otisk, signed report-outcome, evidenci a ochranu.
 Přidává metadata mezer a aplikační upozornění do částečné syntézy; nový
 writer, úložiště ani automatický modelový retry nevzniká. Neověřené piny
 a konfliktní opravy se nadále odmítají. Viz [kontrakt](docs/monitoring-report-chains.md).
+
+PROJECT-RELATIONS-01-B **reuse/adapt — nativní lifecycle**: `Projects`,
+`CrossReferences` (registrace a request scope), `Administration`, původní
+Workspace CAS/journal/receipts a snapshot validace. Přidává typovaný řízený
+sidecar, dva nezávislé souhlasy a auditované odvolání; **reject:** druhý
+writer, distribuovaný commit, JSON author jako grant a automatické per-artifact
+shares. Místní receipt dokládá nativní souhlas; synchronizovaný JSON bez
+ověřené autority nezískává práva. Externí komponenta se nepřebírala.
+Hranice a API: [nativní lifecycle](docs/project-relations-lifecycle.md).

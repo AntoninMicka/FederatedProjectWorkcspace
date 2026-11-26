@@ -6,8 +6,10 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0089 — Projektové vztahy a odvozený přístup ke zdrojům
 
 Datum: 22. 11. 2026. Úkol **PROJECT-RELATIONS-01-A**.
-Stav: **designed, k review**. Kontrakt není implementací resolveru, zápisu,
-oprávnění ani synchronizace. Cílová úroveň celé dávky je PoC validated.
+Stav modelu: **designed**. Nativní místní zápis a lifecycle B popisuje
+[implementační kontrakt](../project-relations-lifecycle.md). Odvozený resolver,
+federované ověření autority a akceptace celé dávky zůstávají samostatné.
+Cílová úroveň celé dávky je PoC validated.
 
 ## Potřeba a změna dosavadního rozhodnutí
 
