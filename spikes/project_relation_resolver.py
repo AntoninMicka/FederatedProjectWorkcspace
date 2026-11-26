@@ -1,24 +1,25 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""Read-only hierarchy projection over native relation evidence (PROJECT-RELATIONS-01-C).
+"""Read-only typed projection over native relation evidence (PROJECT-RELATIONS-01-C/D).
 
 No source copies, persistent cache, memberships, writes or provider dispatch.
-Output-only relationships are deliberately outside this slice's coverage.
+Every output-only edge narrows the remainder of its path to published outputs.
 """
 from collections import deque
 
-from spikes.administration import AccessDenied
 from spikes.configuration import committed_project
 from spikes.context_builder import BOUNDARIES
 from spikes.cross_references import ReferenceUnavailable
 from spikes.metadata import STATES, require, safe_path, uuid, validate_snapshot
 from spikes.project_relations import ProjectRelations
 from spikes.project_relation_schema import APPROVAL, evidence_id
+from spikes.project_output_publication import publications, model_ready
 from spikes.reference_schema import SHARE, references, _version
 from spikes.reporting_schema import PRIVACY, digest, encoded, fields, hex_id
 from spikes.workspace import PendingOperation
 
 SCHEMA = 'fpw-project-relation-input-v1'
+OUTPUT_SCHEMA = 'fpw-project-relation-input-v2'
 MAX_DEPTH = 16
 MAX_PATHS = 1024
 MAX_ITEMS = 10000
@@ -76,24 +77,50 @@ class ProjectRelationResolver:
         graph = {}
         for row in context['projection'].values():
             p = row['proposal']
-            if row['state'] == 'active' and p['type'] == 'parent_of':
-                graph.setdefault(p['source_project_id'], []).append(row)
+            if row['state'] == 'active':
+                graph.setdefault(p['source_project_id'], []).append((p['target_project_id'], row))
+                if p['type'] == 'relates_to':
+                    graph.setdefault(p['target_project_id'], []).append((p['source_project_id'], row))
         for rows in graph.values():
-            rows.sort(key=lambda r: r['proposal']['id'])
+            rows.sort(key=lambda r: (r[1]['proposal']['id'], r[0]))
         root = context['recipient']
         paths, todo, count = {root: [[]]}, deque([(root, [], (root,))]), 1
         while todo:
             pid, path, visited = todo.popleft()
-            for row in graph.get(pid, ()):
-                target = row['proposal']['target_project_id']
+            for target, row in graph.get(pid, ()):
                 if not self._source_in_scope(target):
                     continue  # No count, name or existence of the excluded subtree leaks.
-                if target in visited or len(path) >= MAX_DEPTH or count >= MAX_PATHS:
+                if target in visited:
+                    continue  # Symmetric relationships intentionally have cycles.
+                if len(path) >= MAX_DEPTH or count >= MAX_PATHS:
                     raise RelationViewUnavailable('coverage-limit')
                 next_path = path + [self._proof(row, context)]
                 paths.setdefault(target, []).append(next_path)
                 todo.append((target, next_path, visited + (target,))); count += 1
         return paths
+
+    @staticmethod
+    def _path_scope(path):
+        return 'outputs' if any(e['type'] != 'parent_of' for e in path) else 'data'
+
+    def _publications(self, pid, head, files, entities):
+        ws = self.references.artifacts.workspace(pid)
+        with ws.journal.lock(shared=True), ws.journal.connect() as db:
+            ws._read_shared(db)
+            if ws.git.head() != head:
+                raise RelationViewUnavailable('snapshot-changed')
+            values = publications(ws, db, pid, head, files, entities)
+        result = {}
+        for id_, proofs in values.items():
+            if self._controlled(entities[id_]):
+                continue
+            try:
+                _, raw, meta = self._content(files, entities, id_)
+            except RelationViewUnavailable:
+                continue
+            if model_ready(meta, raw):
+                result[id_] = proofs
+        return result
 
     def _snapshot(self, project_id, head, *, historical=False):
         try:
@@ -172,16 +199,23 @@ class ProjectRelationResolver:
         for pid in sorted(paths):
             head = context['heads'][pid]
             project, files, entities = self._snapshot(pid, head)
+            scopes = {self._path_scope(p) for p in paths[pid]}
+            published = self._publications(pid, head, files, entities) if 'outputs' in scopes else {}
             source_row = dict(project_id=pid, title=project['title'], commit_id=head,
-                              inherited=pid != project_id, paths=paths[pid])
+                              inherited=pid != project_id, paths=paths[pid], scopes=sorted(scopes))
             sources.append(source_row)
             refs = references(files, entities)
             for id_, meta in sorted(entities.items()):
                 if self._controlled(meta) or (meta['privacy'] == 'local-only' and boundary != 'same-node'):
                     continue
+                if 'data' not in scopes and id_ not in published:
+                    continue
                 row = dict(artifact_id=id_, source_project_id=pid, commit_id=head, title=meta['title'],
                            kind=meta['kind'], privacy=meta['privacy'], inherited=pid != project_id,
-                           read_only=True, available=id_ not in refs)
+                           read_only=True, available=id_ not in refs,
+                           scopes=(['data'] if 'data' in scopes else []) + (['outputs'] if id_ in published else []))
+                if id_ in published:
+                    row['publications'] = published[id_]
                 if id_ in refs:
                     row.update(source=None, reason='xref-resolution-required')
                 else:
@@ -191,7 +225,7 @@ class ProjectRelationResolver:
                 if len(items) > MAX_ITEMS:
                     raise RelationViewUnavailable('coverage-limit')
         result = dict(project_id=project_id, commit_id=context['heads'][project_id], revision=context['revision'],
-                      sources=sources, items=items, complete=True, coverage=['own', 'parent_of'],
+                      sources=sources, items=items, complete=True, coverage=['own', 'parent_of', 'depends_on', 'relates_to'],
                       boundary=boundary, privacy_filtered=boundary != 'same-node')
         if len(encoded(result)) > MAX_CATALOG_BYTES:
             raise RelationViewUnavailable('coverage-limit')
@@ -207,21 +241,33 @@ class ProjectRelationResolver:
             paths = [p for p in paths if [e['relation_id'] for e in p] == list(relation_ids)]
         if not paths:
             raise RelationViewUnavailable('not-authorized')
-        path = paths[0]
         head = context['heads'][source_project_id]
         _, files, entities = self._snapshot(source_project_id, head)
         name, raw, meta = self._content(files, entities, artifact_id)
         self._boundary(boundary, meta['privacy'])
-        value = dict(schema=SCHEMA, recipient_project_id=project_id,
+        # A wider alternative never widens an explicitly selected output path.
+        paths = sorted(paths, key=lambda p: self._path_scope(p) != 'data')
+        path = paths[0]; scope = self._path_scope(path)
+        publication = None
+        if scope == 'outputs':
+            proofs = self._publications(source_project_id, head, files, entities).get(artifact_id)
+            if not proofs:
+                raise RelationViewUnavailable('not-published')
+            publication = proofs[0]
+        value = dict(schema=OUTPUT_SCHEMA if publication else SCHEMA, recipient_project_id=project_id,
                      source=self._source(source_project_id, head, name, raw, meta),
-                     authorization=dict(kind='project-relation' if path else 'project', scope='data',
+                     authorization=dict(kind='project-relation' if path else 'project', scope=scope,
                                         recipient_access_revision=context['access'], path=path))
+        if publication:
+            value['authorization']['publication'] = publication
         self._finish(context)
         return value
 
     def _verify_path(self, authorization, source_project_id, context):
-        fields(authorization, 'kind scope recipient_access_revision path')
-        require(authorization['scope'] == 'data', 'Unsupported relation input scope')
+        require(isinstance(authorization, dict) and authorization.get('scope') in {'data', 'outputs'},
+                'Unsupported relation input scope')
+        fields(authorization, 'kind scope recipient_access_revision path' +
+               (' publication' if authorization['scope'] == 'outputs' else ''))
         if authorization['recipient_access_revision'] != context['access']:
             raise RelationViewUnavailable('authority-changed')
         path = authorization['path']; pid = context['recipient']; seen = {pid}
@@ -231,7 +277,7 @@ class ProjectRelationResolver:
             require(isinstance(edge, dict), 'Invalid relation proof')
             uuid(edge.get('relation_id'))
             row = context['projection'].get(edge.get('relation_id'))
-            if not row or row['state'] != 'active' or row['proposal']['type'] != 'parent_of':
+            if not row or row['state'] != 'active':
                 raise RelationViewUnavailable('relation-unavailable')
             expected = self._proof(row, context)
             require(set(edge) == set(expected), 'Invalid relation proof fields')
@@ -247,25 +293,43 @@ class ProjectRelationResolver:
             _, owner_files, _ = self._snapshot(expected['owner_project_id'], edge['proposal_commit'], historical=True)
             if digest(owner_files.get(f"artifacts/{expected['relation_id']}/relation.json", b'')) != expected['proposal_sha256']:
                 raise RelationViewUnavailable('invalid-pin')
-            target = expected['target_project_id']
-            if expected['source_project_id'] != pid or target in seen or not self._source_in_scope(target):
+            if expected['type'] == 'relates_to' and expected['target_project_id'] == pid:
+                target = expected['source_project_id']
+            elif expected['source_project_id'] == pid:
+                target = expected['target_project_id']
+            else:
+                raise RelationViewUnavailable('not-authorized')
+            if target in seen or not self._source_in_scope(target):
                 raise RelationViewUnavailable('not-authorized')
             pid = target; seen.add(pid)
         if pid != source_project_id or not self._source_in_scope(source_project_id):
             raise RelationViewUnavailable('not-authorized')
+        require(authorization['scope'] == self._path_scope(path), 'Pinned path cannot widen its scope')
 
     def read(self, pin, *, boundary='same-node'):
         """Read pinned bytes after live reauthorization; never repin or switch paths."""
         fields(pin, 'schema recipient_project_id source authorization')
-        _version(pin['schema'], 'fpw-project-relation-input-', (1,), 'project-relation-input')
+        version = _version(pin['schema'], 'fpw-project-relation-input-', (1, 2), 'project-relation-input')
         context = self._context(pin['recipient_project_id'])
         self._validate_source(pin['source']); source = pin['source']; pid = source['project_id']
         self._verify_path(pin['authorization'], pid, context)
+        output_only = pin['authorization']['scope'] == 'outputs'
+        require(version == (2 if output_only else 1), 'Relation input version/scope differs')
         head = context['heads'][pid]
         _, current_files, current_entities = self._snapshot(pid, head)
         current_path, current_raw, current_meta = self._content(current_files, current_entities, source['artifact_id'])
+        if output_only:
+            proof = pin['authorization']['publication']
+            proofs = self._publications(pid, head, current_files, current_entities).get(source['artifact_id'], ())
+            if proof not in proofs:
+                raise RelationViewUnavailable('publication-unavailable')
+            ws = self.references.artifacts.workspace(pid)
+            if ws.git.run('merge-base', '--is-ancestor', proof['commit_id'], source['commit_id'], check=False).returncode:
+                raise RelationViewUnavailable('invalid-publication-pin')
         _, files, entities = self._snapshot(pid, source['commit_id'], historical=True)
         path, raw, meta = self._content(files, entities, source['artifact_id'])
+        if output_only and not model_ready(meta, raw):
+            raise RelationViewUnavailable('not-published')
         require(self._source(pid, source['commit_id'], path, raw, meta) == source, 'Pinned source differs')
         privacy = max(source['privacy'], current_meta['privacy'], key=PRIVACY.get)
         self._boundary(boundary, privacy)

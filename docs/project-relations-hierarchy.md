@@ -13,8 +13,9 @@ Navazuje na [lifecycle B](project-relations-lifecycle.md),
 [ADR 0089](adr/0089-project-relations-and-derived-read-access.md).
 Jde o nativní Python API pro pozdější společné použití v aplikaci. Zapojení
 UI, hledání a Context Manifestu zůstává E/F; C neodesílá data providerovi.
-Výstupové hrany `depends_on`/`relates_to` jsou samostatný řez D, nikoli další
-cesta k interním datům v nynějším pohledu.
+Tento dokument zachycuje řez C. Společný resolver nyní rozšiřuje
+[výstupový pohled D](project-relations-outputs.md) o `depends_on`/`relates_to`;
+tyto hrany nejsou další cestou k interním datům.
 
 Zadání: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`,
 export `6df4f1fdb20310a328a5ac40166e0f1debcccfcd46f55b102b646562c663892c`,
@@ -126,9 +127,9 @@ snapshot různých Git repozitářů. Čte se vždy uložený commit, ne dirty s
 Přehled má limity 16 hran cesty, 1 024 cest včetně vlastní prázdné cesty,
 10 000 výsledných entit a 8 MiB serializovaného katalogu; navíc platí limity
 grafu B. Překročení vrací `coverage-limit` bez částečného výsledku. `complete`
-se vztahuje pouze k deklarované `coverage=['own', 'parent_of']` a boundary,
-nikoli k dosud neimplementovanému výstupovému pohledu D nebo obsahu cizích
-referencí. Piny, bajty ani doklady se neukládají do cache nebo rodičova Gitu.
+se vztahuje pouze k deklarované coverage a boundary, nikoli k obsahu cizích
+referencí. Původní rozsah C je own/parent_of; D přidává výstupové hrany podle
+svého kontraktu. Piny, bajty ani doklady se neukládají do cache nebo rodičova Gitu.
 
 Ověřovací scénáře jsou v
 [test_project_relation_resolver.py](../tests/test_project_relation_resolver.py).

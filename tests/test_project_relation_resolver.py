@@ -149,9 +149,9 @@ class HierarchyResolverTests(unittest.TestCase):
         self.relation(self.a, self.x, 'depends_on'); self.relation(self.x, self.c)
         self.save(self.x, 'Interní cizí podklad'); self.save(self.c, 'Nepřípustné rozšíření výstupové cesty')
         view = self.resolver.catalog(self.a)
-        self.assertEqual(view['coverage'], ['own', 'parent_of'])
-        self.assertEqual({s['project_id'] for s in view['sources']}, {self.a, self.b})
-        self.assertNotIn(self.x, repr(view)); self.assertNotIn(self.c, repr(view))
+        self.assertEqual(view['coverage'], ['own', 'parent_of', 'depends_on', 'relates_to'])
+        self.assertTrue({r['source_project_id'] for r in view['items']} <= {self.a, self.b})
+        self.assertTrue(all(s['scopes'] == ['outputs'] for s in view['sources'] if s['project_id'] in {self.x, self.c}))
 
     def test_request_scope_is_not_widened_by_derived_access(self):
         self.nested(); id_ = self.save(self.c, 'Mimo scope requestu')
@@ -259,7 +259,7 @@ class HierarchyResolverTests(unittest.TestCase):
         bad = deepcopy(pin); bad['source']['sha256'] = '0' * 64
         with self.assertRaises(ValidationError):
             self.resolver.read(bad)
-        bad = deepcopy(pin); bad['schema'] = 'fpw-project-relation-input-v2'
+        bad = deepcopy(pin); bad['schema'] = 'fpw-project-relation-input-v3'
         with self.assertRaises(UnsupportedVersion):
             self.resolver.read(bad)
         bad = deepcopy(pin); bad['authorization']['path'] = []; bad['authorization']['kind'] = 'project'

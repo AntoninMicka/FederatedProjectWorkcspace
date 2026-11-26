@@ -1950,3 +1950,12 @@ zdrojových bajtů v rodiči, individuální share pro každý podklad, rozší�
 členství a automatické procházení cizí reference. Není třeba externí
 komponenta ani nové úložiště. Scope a recovery:
 [čtecí hierarchie](docs/project-relations-hierarchy.md).
+
+PROJECT-RELATIONS-01-D **reuse/adapt — publikované výstupy**: společný resolver
+C a důkazy B, `reference_schema.shares`, původní potvrzený
+`CrossReferences.share_write`, Workspace receipts a původní request digest.
+Rozšiřuje typovaný průchod o outputs a pin konkrétní publikace. **Reject:**
+titulek/tag či dokončený model jako publikace, obecný import JSON jako souhlas,
+rozšíření outputs přes hierarchii, automatická náhrada připnutého důvodu
+a druhý publikační writer. Externí komponenta ani nové úložiště nejsou třeba.
+Scope a recovery: [výstupový pohled](docs/project-relations-outputs.md).

@@ -9,8 +9,8 @@ Datum: 22. 11. 2026. Úkol **PROJECT-RELATIONS-01-A**.
 Stav modelu: **designed**. Nativní místní zápis a lifecycle B popisuje
 [implementační kontrakt](../project-relations-lifecycle.md), místní čtení
 schválené hierarchie C má [vlastní kontrakt](../project-relations-hierarchy.md).
-Výstupový pohled D, integrace E, federované ověření autority F a akceptace celé
-dávky zůstávají samostatné.
+Výstupový pohled D má [vlastní kontrakt](../project-relations-outputs.md).
+Integrace E, federované ověření autority F a akceptace celé dávky zůstávají samostatné.
 Cílová úroveň celé dávky je PoC validated.
 
 ## Potřeba a změna dosavadního rozhodnutí
