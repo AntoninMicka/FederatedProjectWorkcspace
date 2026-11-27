@@ -63,6 +63,8 @@ SHEETS = [
     sheet("project", "Projekt — vytvoření a bezpečná akce",
           ("#create-project", "#project-delete-panel", "#project-registration-remove-dialog"),
           ("create-project",), scale=.82),
+    sheet("project-relations", "Projekty — vztahy a potvrzení",
+          ("#relations-editor", "#relations-review"), ("relations-editor",), scale=.8),
     sheet("ide-bridge", "Nastavení — IDE a editory", ("#ide-bridge-panel",),
           ("ide-bridge-form",), scale=.85),
     sheet("notebooklm", "Import celého projektu z NotebookLM", ("#notebooklm-import",), scale=.72),
