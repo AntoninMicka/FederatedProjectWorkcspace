@@ -50,6 +50,9 @@ async function openProjectRelations(){
 }
 async function refreshProjectRelations(){
  const root=activeProject?.id,epoch=++relationEpoch;if(!root)return;
+ relationOverview=null;relationCatalog=null;
+ document.querySelector('#relations-list').replaceChildren();document.querySelector('#relations-sources').replaceChildren();
+ document.querySelector('#relations-create').disabled=true;
  try{
   // The two requests are sequential: the backend owns the shared application lane.
   const overview=await relRequest('overview',{}),catalog=await relRequest('sources',{query:''});

@@ -5,11 +5,13 @@ import json
 from pathlib import Path
 import re
 from uuid import uuid4
+from unittest.mock import patch
 
 from spikes.artifacts import Artifacts
 from spikes.project_creation import ProjectCreation
 from spikes.project_relations import ProjectRelations
 from tests.ui_flow_case import UiFlowCase, require_browser
+from tests.browser_harness import Reply
 
 
 @require_browser
@@ -51,6 +53,12 @@ class ProjectRelationsBrowserTests(UiFlowCase):
             citation=re.search(r'\[project:[^\]]+\]',request['prompt']).group(0)
             return dict(schema_version=1,kind='direct-answer',content='Nosnost je 12 tun. '+citation)
         page=self.start(configure_search=False,answers=[answer])
+        route_errors=[];original_route=page.server.chat_service.task_route
+        def capture_route(*args,**kwargs):
+            try: return original_route(*args,**kwargs)
+            except Exception as error:
+                route_errors.append(repr(error));raise
+        self.stack.enter_context(patch.object(page.server.chat_service,'task_route',side_effect=capture_route))
         self.open(self.project_id);self.dialog()
         page.click('#relations-create');page.fill('#relations-other',self.child)
         page.fill('#relations-reason','Dítě dodává podklady mostu')
@@ -80,6 +88,7 @@ class ProjectRelationsBrowserTests(UiFlowCase):
         page.wait_js("!document.querySelector('#relations-dialog').open&&selectedRelationInputs().length===1",'explicit shared input')
         self.assertEqual(page.evaluate("document.querySelector('#chat-draft').value"),'Rozepsané zadání zůstává')
         page.wait_js("document.querySelector('#chat-run-adapter option[value=\"ollama\"]')",'Ollama selector')
+        page.wait_js('!chatCatalogRefreshing','completed model discovery before explicit selection');page.wait_idle()
         page.fill('#chat-run-adapter','ollama');page.fill('#chat-run-model','aggregate:ollama/'+self.ollama.model)
         selected=page.evaluate('selectedRelationInputs()[0]')
         sent=self.submit_prompt('Jaká je nosnost mostu podle vybraného podkladu?')
@@ -89,7 +98,7 @@ class ProjectRelationsBrowserTests(UiFlowCase):
         try:
             page.wait_js("document.querySelector('#chat-messages').textContent.includes('Nosnost je 12 tun.')",'completed cited answer')
         except AssertionError:
-            self.fail(str((page.text('#chat-operation-status'),page.response_json(route),page.exceptions)))
+            self.fail(str((page.text('#chat-operation-status'),page.response_json(route),page.exceptions,route_errors)))
         self.assertIn('Nosnost je 12 tun.',page.text('#chat-messages'))
         self.assertIn(selected['pin']['source']['commit_id'],page.text('#chat-messages'))
         prompt=self.ollama.requests[-1]['prompt']
@@ -123,6 +132,7 @@ class ProjectRelationsBrowserTests(UiFlowCase):
         page=self.start(configure_search=False);self.open(self.project_id);self.dialog()
         page.fill('#relations-query','Zadání mostu');self.click_text('Použít v zadání',f'#relations-sources [data-artifact-id="{self.source}"]')
         page.wait_js('selectedRelationInputs().length===1','shared selection');page.wait_idle()
+        page.wait_js('!chatCatalogRefreshing','completed model discovery before explicit selection');page.wait_idle()
         page.fill('#chat-run-adapter','ollama');page.fill('#chat-run-model','aggregate:ollama/'+self.ollama.model)
         op=str(uuid4());e=lifecycle.evidence_preview(owner,rid,self.child,op,revoke=True,reason='Vazba odebrána')
         lifecycle.confirm(e['preview'],e['sha256'],op,confirm=True)
@@ -171,4 +181,20 @@ class ProjectRelationsBrowserTests(UiFlowCase):
         page.evaluate(f"document.querySelector('.relation-graph-edge[data-relation-id=\"{rid}\"]').dispatchEvent(new KeyboardEvent('keydown',{{key:'Enter',bubbles:true}}))")
         self.click_text('Detail a správa vztahů','#relation-graph-detail')
         page.wait_js("document.querySelector('#relations-dialog').open&&relationOverview?.relations.length===1",'existing relation actions')
+        self.assert_no_page_errors()
+
+    def test_failed_refresh_removes_old_rows_and_management_actions(self):
+        lifecycle=ProjectRelations(self.node)
+        e=lifecycle.proposal_preview(self.project_id,self.child,'parent_of','Čekající spolupráce')
+        lifecycle.confirm(e['preview'],e['sha256'],str(uuid4()),confirm=True)
+        page=self.start(configure_search=False);self.open(self.project_id);self.dialog()
+        self.assertEqual(page.evaluate("document.querySelectorAll('#relations-list article').length"),1)
+        self.assertFalse(page.evaluate("document.querySelector('#relations-create').disabled"))
+        page.api.route('/v1/project-relations/overview',Reply({'error':'Oprávnění bylo odvoláno.'},status=403))
+        page.click('#relations-refresh')
+        page.wait_js("document.querySelector('#relations-status').textContent.includes('Oprávnění bylo odvoláno')",'failed refresh notice')
+        self.assertEqual(page.evaluate("document.querySelector('#relations-list').children.length"),0)
+        self.assertEqual(page.evaluate("document.querySelector('#relations-sources').children.length"),0)
+        self.assertTrue(page.evaluate('relationOverview===null&&relationCatalog===null'))
+        self.assertTrue(page.evaluate("document.querySelector('#relations-create').disabled"))
         self.assert_no_page_errors()

@@ -10,7 +10,10 @@ Stav modelu: **designed**. Nativní místní zápis a lifecycle B popisuje
 [implementační kontrakt](../project-relations-lifecycle.md), místní čtení
 schválené hierarchie C má [vlastní kontrakt](../project-relations-hierarchy.md).
 Výstupový pohled D má [vlastní kontrakt](../project-relations-outputs.md).
-Integrace E, federované ověření autority F a akceptace celé dávky zůstávají samostatné.
+Integraci E popisuje [UI kontrakt](../project-relations-ui.md). Bezpečnost,
+odvolání a recovery F shrnuje [bezpečnostní kontrakt](../project-relations-security.md).
+Pozitivní federovaná delegace souhlasů a živá akceptace celé dávky nejsou
+tímto prokázané; neověřené importované souhlasy zůstávají nedostupné.
 Cílová úroveň celé dávky je PoC validated.
 
 ## Potřeba a změna dosavadního rozhodnutí
@@ -100,3 +103,30 @@ A dodává tento kontrakt k review. B implementuje nativní lifecycle,
 C/D dostupnost dat/výstupů, E UI a integraci hledání, F bezpečnost a recovery,
 G skutečné integrační testy a lidskou akceptaci. Není tím aktivována samostatná
 dávka PROJECT-SEARCH-01 ani automaticky dokončen některý Workspace úkol.
+
+## Doplnění F — 27. 11. 2026: známá historie souhlasů a revokací
+
+Konkrétní adversariální test ukázal, že pouhý návrat lokálního HEAD na commit
+před odvoláním dokázal obnovit starou aktivní projekci: původní souhlasy byly
+stále v jeho historii. Nestačí proto kontrolovat jen důkazy přítomné v právě
+čteném snapshotu. Nativní receipt už v B prokazuje místní udělení souhlasu;
+F používá stejnou místní evidenci také k zákazu návratu před známé rozhodnutí.
+
+`ProjectRelations._scan` nyní vyžaduje, aby všechny hotové místní operace
+s interním `relation_lifecycle` receipt a commit ID patřily do historie
+aktuálního HEAD příslušného projektu. Stejná kontrola platí uvnitř native
+writeru při přípravě další operace. Starší nebo divergující větev nesmí
+skrýt známé odvolání, novou revizi ani souhlas. Nejde o porovnání ancestry
+zdrojového programu; týká se výhradně projektových vztahových dokladů.
+
+Chybějící známá historie znamená nedostupný vztahový pohled. Obnova vyžaduje
+vrátit či sémanticky sloučit příslušnou projektovou historii, nikoli smazat
+journal nebo přegenerovat souhlasy z indexu. Index nadále zůstává projekcí;
+žádná nová databáze ani synchronizace journalu se nezavádí. Pending intent
+řídí původní recovery; do této kontroly vstupují jen hotové nativní operace.
+
+Uzel bez těchto místních dokladů nezískává grant z pouhých Git kopií JSON.
+Bez pozitivně ověřené federované autority zůstává taková vazba nedostupná.
+To neprokazuje globální aktuálnost revokace, kterou daný uzel nikdy neviděl;
+pozitivní federovaná delegace stále vyžaduje definovaný důkaz autority a
+aktuálnosti podle [bezpečnostního kontraktu F](../project-relations-security.md).

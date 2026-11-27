@@ -1978,3 +1978,14 @@ vrací pouze dostupnou topologii. **Reject:** nový graph engine či databáze,
 kopie roadmapového task modelu a další editor vztahů. Graf odkazuje na
 stávající správu a podklady. Externí inventura se beze změny zdrojů neopakuje.
 Použití a hranice: [graf vztahů](docs/project-relations-ui.md#graf-v-levé-záložce-projekty).
+
+PROJECT-RELATIONS-01-F **reuse/adapt — přístup, odvolání a recovery**:
+`Administration`/`CrossReferences` pro živou roli a request scope, resolver
+C/D a ContextBuilder pro cestu/publikaci/privacy, původní Workspace intent a
+receipts pro obnovu. Hotové nativní receipts navíc chrání před návratem HEAD před známé
+odvolání. Přehled a graf nově dokončují autorizaci celé odpovědi;
+UI po neplatném obnovení zahodí staré řádky. **Reject:** import journalu jako
+grantu, záměna podpisu sync bundle za projektový souhlas, automatické
+přepnutí odvolané cesty a druhá obsahová cache. Externí komponenta ani nová
+persistentní vrstva není třeba. Hranice a důkazy:
+[bezpečnost vztahů](docs/project-relations-security.md).

@@ -6,6 +6,7 @@ from spikes.artifact_preview import preview as present
 from spikes.configuration import committed_project
 from spikes.context_builder import relation_input_id, relation_content
 from spikes.metadata import require
+from spikes.project_relation_resolver import RelationViewUnavailable
 from spikes.project_relation_schema import PROPOSAL
 from spikes.reporting_schema import digest, encoded
 
@@ -37,11 +38,26 @@ class ProjectRelationsPanel:
         ws = self.lifecycle.artifacts.workspace(pid)
         with ws.journal.lock(shared=True), ws.journal.connect() as db:
             ws._read_shared(db)
-            require(ws.git.head() == head, 'Project changed while reading relationships')
+            if ws.git.head() != head:
+                raise RelationViewUnavailable('snapshot-changed')
             return committed_project(ws.git, head, pid)['title']
 
+    def _finish_view(self, heads, projection, access):
+        # Titles and action flags must not outlive the authority/topology sampled
+        # before presentation. No old view is returned after a concurrent revoke.
+        for pid, revision in access.items():
+            if self.lifecycle._authorize(pid) != revision:
+                raise RelationViewUnavailable('access-changed')
+        fresh_heads, fresh_states = self.lifecycle._scan()
+        fresh = self.lifecycle._projection(fresh_states)
+        if heads != fresh_heads or projection != fresh:
+            raise RelationViewUnavailable('snapshot-changed')
+        for pid, revision in access.items():
+            if self.lifecycle._authorize(pid) != revision:
+                raise RelationViewUnavailable('access-changed')
+
     def overview(self, project_id):
-        self.lifecycle._authorize(project_id)
+        access = {project_id: self.lifecycle._authorize(project_id)}
         catalog = self.resolver.catalog(project_id, boundary=self.boundary)
         heads, states = self.lifecycle._scan(); projection = self.lifecycle._projection(states)
         require(catalog['revision'] == digest(encoded(dict(heads=heads, projection=projection))),
@@ -69,6 +85,7 @@ class ProjectRelationsPanel:
                 can_edit=ends <= managed, can_approve=(project_id in managed and readable_both
                     and row['state'] == 'pending' and project_id not in row['approved_projects']),
                 can_revoke=(project_id in managed and readable_both and row['state'] in {'pending', 'active'})))
+        self._finish_view(heads, projection, access)
         return dict(project_id=project_id, commit_id=heads[project_id],
                     can_create=project_id in managed,
                     candidates=[dict(id=pid, title=titles[pid]) for pid in sorted(managed - {project_id})],
@@ -76,11 +93,17 @@ class ProjectRelationsPanel:
 
     def graph(self, project_id=None):
         """Authorized topology only; no source content or persistent graph cache."""
-        if project_id is not None:
-            self.lifecycle._authorize(project_id)
+        access = {project_id: self.lifecycle._authorize(project_id)} if project_id is not None else {}
         heads, states = self.lifecycle._scan()
         projection = self.lifecycle._projection(states)
-        direct = {pid for pid in heads if self._allowed(pid)}
+        direct = set()
+        for pid in heads:
+            try:
+                revision = self.lifecycle._authorize(pid)
+            except AccessDenied:
+                continue
+            direct.add(pid)
+            access.setdefault(pid, revision)
         roots = direct if project_id is None else {project_id}
         visible = set(direct)
         for pid in sorted(roots):
@@ -105,9 +128,10 @@ class ProjectRelationsPanel:
                 connected = expanded
             visible &= connected
             edges = [e for e in edges if {e['source'], e['target']} <= visible]
-        return dict(project_id=project_id,
-                    nodes=[dict(id=pid, title=self._title(pid, heads[pid]), navigable=pid in direct,
-                                current=pid == project_id) for pid in sorted(visible)],
+        nodes = [dict(id=pid, title=self._title(pid, heads[pid]), navigable=pid in direct,
+                      current=pid == project_id) for pid in sorted(visible)]
+        self._finish_view(heads, projection, access)
+        return dict(project_id=project_id, nodes=nodes,
                     edges=sorted(edges, key=lambda e: e['id']),
                     revision=digest(encoded(dict(heads=heads, projection=projection))))
 

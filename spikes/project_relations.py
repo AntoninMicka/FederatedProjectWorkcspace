@@ -57,6 +57,20 @@ class ProjectRelations:
         # A pre-existing unrelated receipt cannot authenticate injected evidence.
         return path in receipt['paths'] and workspace.git.snapshot(commit).get(path) == encoded(value)
 
+    @staticmethod
+    def _known_history(workspace, db, head):
+        # Completed native receipts already authenticate local relation evidence.
+        # A stale branch must not hide a known revocation or newer proposal.
+        known = set()
+        for row in db.execute("SELECT record FROM operations WHERE done=1 AND record LIKE '%\"relation_lifecycle\"%'"):
+            receipt = json.loads(row[0])
+            if receipt.get('relation_lifecycle') is True and receipt.get('commit_id'):
+                hex_id(receipt['commit_id'], True)
+                known.add(receipt['commit_id'])
+        if known:
+            reachable = set(workspace.git.run('rev-list', head).stdout.splitlines())
+            require(known <= reachable, 'Known relation evidence is outside current project history')
+
     def _scan(self, *, local=None):
         """Internal topology validation returns no user content or hidden names."""
         ids = sorted(self.references.registered_projects())
@@ -66,6 +80,7 @@ class ProjectRelations:
         for pid in ids:
             if local and pid == local[0]:
                 _, ws, db, head, files = local
+                self._known_history(ws, db, head)
                 entities = validate_snapshot(files)
                 values = records(files, entities)
                 trusted = {i for i, v in values.items() if self._local_evidence(ws, db, i, v, head)}
@@ -73,6 +88,7 @@ class ProjectRelations:
                 ws = self.artifacts.workspace(pid); ws.repair_index()
                 with ws.journal.lock(shared=True), ws.journal.connect() as db:
                     ws._read_shared(db); head = ws.git.head(); committed_project(ws.git, head, pid)
+                    self._known_history(ws, db, head)
                     files = ws.git.snapshot(head); values = records(files, validate_snapshot(files))
                     trusted = {i for i, v in values.items() if self._local_evidence(ws, db, i, v, head)}
                     require(ws.git.head() == head, 'Relation graph changed while reading')

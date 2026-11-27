@@ -114,3 +114,6 @@ Tato uživatelem vyžádaná úprava rozšiřuje UI E na zdrojovém základu
 akceptace nemění. Používá společný page shell a SVG helper roadmapy,
 původní lifecycle a resolver. Nepřidává databázi, graph knihovnu, modelový
 nástroj ani persistentní cache; platné crash/recovery hranice výše se nemění.
+
+Přístup, invalidaci při změně práv a recovery podrobně vymezuje
+[bezpečnostní kontrakt F](project-relations-security.md).

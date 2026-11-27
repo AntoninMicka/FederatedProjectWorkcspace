@@ -98,8 +98,10 @@ hotový receipt nativního relation lifecycle, správný operation ID, totožné
 bajty v jeho commitu a tento commit v historii aktuálního HEAD. Oba souhlasy
 musí mířit na aktuální digest návrhu. Přijaté vztahové souhlasy ze sítě zatím
 bez této místní autority zůstávají `unavailable`; journal se nekopíruje.
-Federované ověření autority bez místního receipt je povinnost navazujícího
-F, nikoli důvod přijmout obyčejný importovaný JSON jako grant.
+Navazující [bezpečnostní kontrakt F](project-relations-security.md) vymezuje
+podmínky federované autority a ověřuje tento zákaz na druhém uzlu. Pozitivní
+federovaná delegace bez místního receipt implementovaná není; obyčejný
+importovaný JSON ani podpis přenosu se za projektový grant nepovažuje.
 
 Náhled ukazuje odebrané a potenciálně nově dostupné směrované cesty s limitem
 `data`/`outputs`; není to načtení artefaktů ani seznam jejich bajtů. Zahrnuje
@@ -144,3 +146,8 @@ ověřuje na deseti checkpoints nativního writeru i skutečným `os._exit`
 v samostatném procesu před ref a po ref. Regrese XREF/Workspace se ověřují
 odděleně. B nedokládá běh UI, sdílení obsahu C/D, federovanou akceptaci ani
 splnění celé dávky G.
+
+F navíc kontroluje, že aktuální HEAD obsahuje historii všech místně známých
+hotových nativních vztahových operací. Návrat na starší větev nesmí skrýt již
+známé odvolání. Při nesouladu se vrací nedostupnost; řešením je zachovat a
+obnovit/sloučit projektovou historii, nikoli smazat journal. Viz doplnění ADR 0089.
