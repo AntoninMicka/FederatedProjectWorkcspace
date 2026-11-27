@@ -524,7 +524,7 @@ class WebHandler(NodeManagementRoutes, DesktopHandler):
                   if role in {'editor', 'project-admin'}})
         with self.server.chat_service.as_user(
                 self.actor.get('id'), project_ids=project_ids,
-                writable_project_ids=writable_project_ids):
+                writable_project_ids=writable_project_ids, derive_project_relations=True):
             return super().dispatch(request)
 
     def _do_GET(self):

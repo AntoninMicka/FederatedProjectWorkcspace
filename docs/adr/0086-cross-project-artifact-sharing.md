@@ -9,6 +9,12 @@ Datum: 2026-11-21. Úkol XREF-02-A. Stav: **implemented** (kontrakt, služba
 a CLI), čeká na review. Doplňuje [ADR 0070](0070-local-artifact-references.md),
 které zůstává platné.
 
+Navazující [ADR 0089](0089-project-relations-and-derived-read-access.md)
+rozšiřuje model o schvalované projektové vztahy a odvozené čtení včetně
+budoucích dat/výstupů. Místní implementace B–D koexistují s tímto explicitním
+sdílením; [výstupový pohled D](../project-relations-outputs.md) používá potvrzené
+purpose output jako důkaz publikace. Původní target kontroly XREF se nemění.
+
 ## Kontext
 
 XREF-01 dovoluje vytvořit připnutou referenci každému, kdo smí číst zdroj

@@ -133,7 +133,7 @@ class Workspace:
 
     def transact(self, operation_id, request, prepare, *, expected_head=None,
                  allow_privacy_relaxation=False, additional_parents=(), adopt_staged=False,
-                 checkpoint=lambda stage: None):
+                 checkpoint=lambda stage: None, _relation_write=None):
         """Bind a native request to one durable operation, including lost-response retries.
 
         prepare runs under the writer lock, only for a new request, and returns
@@ -167,11 +167,13 @@ class Workspace:
             return self._apply_locked(db, changes, name, email, message, checkpoint,
                                       operation_id=operation_id, request_digest=digest, expected_head=expected_head,
                                       allow_privacy_relaxation=allow_privacy_relaxation,
-                                      additional_parents=additional_parents, adopt_staged=adopt_staged)
+                                      additional_parents=additional_parents, adopt_staged=adopt_staged,
+                                      _relation_write=_relation_write)
 
     def _apply_locked(self, db, changes, author_name, author_email, message, checkpoint,
                       *, operation_id=None, request_digest=None, expected_head=None,
-                      allow_privacy_relaxation=False, additional_parents=(), adopt_staged=False):
+                      allow_privacy_relaxation=False, additional_parents=(), adopt_staged=False,
+                      _relation_write=None):
         for value in (author_name, author_email):
             require(isinstance(value, str) and value.strip() == value and bool(value)
                     and not any(c in value for c in '\n\r\0<>'), 'Explicit Git identity required')
@@ -209,6 +211,9 @@ class Workspace:
                 candidate_files[path] = data
         entities = validate_transition(base_files, candidate_files,
                                        allow_privacy_relaxation=allow_privacy_relaxation)
+        from spikes.project_relation_schema import protect
+        if any(path.endswith('/relation.json') for path in base_files.keys() | candidate_files.keys()):
+            protect(base_files, candidate_files, validate_snapshot(base_files), entities, _relation_write)
         from spikes.reporting_schema import validate_git
         validate_git(self.git, candidate_files, entities, base_files)
         if adopt_staged:
@@ -229,6 +234,10 @@ class Workspace:
                       message=message, state='prepared', commit_id=None, request_digest=request_digest,
                       allow_privacy_relaxation=allow_privacy_relaxation,
                       additional_parents=list(additional_parents))
+        if _relation_write is not None:
+            from spikes.project_relation_schema import _WRITE
+            require(_relation_write is _WRITE, 'Invalid native relation capability')
+            record['relation_lifecycle'] = True
         if adopt_staged:record.update(kind='staged-artifact-commit',index_tree=index_tree,file_modes={path:self.git.run('ls-tree',index_tree,'--',path).stdout.split()[0] for path in paths})
         db.execute('INSERT INTO operations(id, record) VALUES (?, ?)',
                    (record['operation_id'], json.dumps(record)))

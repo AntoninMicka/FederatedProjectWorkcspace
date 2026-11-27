@@ -36,6 +36,18 @@ výslovné zúžení formuláře na cíl a zadání. **Reuse:** společný edito
 kontrola roadmapy a původní potvrzený nativní writer. **Reject:** automatické
 snížení privacy, přeznačení cíle, tiché odebrání vstupů a automatický retry.
 
+PROJECT-RELATIONS-01-A **reuse/adapt — návrh**: `Projects`,
+`CrossReferences.authorize/live`, `reference_schema` (source pin, purpose output),
+`ArtifactSharing`, `Administration`, Workspace/journal a Context Manifest.
+Existující runtime vyžaduje oprávnění ke zdroji a explicitní per-artifact
+share; nenaplňuje implicitní projektovou hierarchii. **Reject:** generování
+share pro každý soubor, kopie zdrojů v indexu příjemce, vypnutí zdrojové
+autorizace, neorientovaný průchod celou komponentou a druhý projektový writer.
+Nový řízený registr, souhlasy obou konců a odvozená větev resolveru jsou
+navrženy v [ADR 0089](docs/adr/0089-project-relations-and-derived-read-access.md),
+jejich implementace zůstává B–F. Ověřená lokální inventura nedává důvod
+k převzetí externí komponenty; nevzniká nová závislost.
+
 Obnova task-work F **adaptuje** původní `TaskActivities.finish` a lokální
 finalizaci `TaskRecords`; **reuse:** `Workspace.receipt`, validovaný Git
 snapshot, `ChatThreads.get_turn`, capability a nativní operační zámky.
@@ -1920,3 +1932,60 @@ zmrazený intent, schvalovací otisk, signed report-outcome, evidenci a ochranu.
 Přidává metadata mezer a aplikační upozornění do částečné syntézy; nový
 writer, úložiště ani automatický modelový retry nevzniká. Neověřené piny
 a konfliktní opravy se nadále odmítají. Viz [kontrakt](docs/monitoring-report-chains.md).
+
+PROJECT-RELATIONS-01-B **reuse/adapt — nativní lifecycle**: `Projects`,
+`CrossReferences` (registrace a request scope), `Administration`, původní
+Workspace CAS/journal/receipts a snapshot validace. Přidává typovaný řízený
+sidecar, dva nezávislé souhlasy a auditované odvolání; **reject:** druhý
+writer, distribuovaný commit, JSON author jako grant a automatické per-artifact
+shares. Místní receipt dokládá nativní souhlas; synchronizovaný JSON bez
+ověřené autority nezískává práva. Externí komponenta se nepřebírala.
+Hranice a API: [nativní lifecycle](docs/project-relations-lifecycle.md).
+
+PROJECT-RELATIONS-01-C **reuse/adapt — čtecí hierarchie**: místní aktivní
+projekce a souhlasy B, `CrossReferences.authorize`, validované Workspace/Git
+snapshoty, metadata a jejich registry i původní source pin/digest encoder.
+Přidává společný read-only katalog a přesný pin cesty; **reject:** kopie
+zdrojových bajtů v rodiči, individuální share pro každý podklad, rozšíření
+členství a automatické procházení cizí reference. Není třeba externí
+komponenta ani nové úložiště. Scope a recovery:
+[čtecí hierarchie](docs/project-relations-hierarchy.md).
+
+PROJECT-RELATIONS-01-D **reuse/adapt — publikované výstupy**: společný resolver
+C a důkazy B, `reference_schema.shares`, původní potvrzený
+`CrossReferences.share_write`, Workspace receipts a původní request digest.
+Rozšiřuje typovaný průchod o outputs a pin konkrétní publikace. **Reject:**
+titulek/tag či dokončený model jako publikace, obecný import JSON jako souhlas,
+rozšíření outputs přes hierarchii, automatická náhrada připnutého důvodu
+a druhý publikační writer. Externí komponenta ani nové úložiště nejsou třeba.
+Scope a recovery: [výstupový pohled](docs/project-relations-outputs.md).
+
+
+PROJECT-RELATIONS-01-E **reuse/adapt — UI a výslovné vstupy**: společné
+webové/desktopové UI, lifecycle B, resolver C/D, původní markdown preview,
+ContextBuilder, task route a jeho modelová/privátní omezení. Přidává fasádu,
+read-only náhled s odkazy a explicitní pin do manifestu, nikoli druhý writer.
+**Reject:** rozšiřování členství zdroje, kopie zdrojů do příjemce, implicitní
+vkládání celého projektu do promptu a nový fulltext místo plánovaného
+PROJECT-SEARCH-01. Pro tento budoucí nástroj poskytuje stejný autorizovaný
+catalog/pin/read kontrakt. Externí komponenta se nepřebírala. Použití,
+persistence a recovery: [UI vztahů](docs/project-relations-ui.md).
+
+Graf projektových vztahů (rozšíření UI E) **reuse/adapt**: nativní projekce
+B/C/D a autorizace panelu, společný `mountWorkspacePage`/navigační guard,
+SVG helper `roadmapElement` a vzor zoomu 50–200 %. Samostatný čtecí endpoint
+vrací pouze dostupnou topologii. **Reject:** nový graph engine či databáze,
+kopie roadmapového task modelu a další editor vztahů. Graf odkazuje na
+stávající správu a podklady. Externí inventura se beze změny zdrojů neopakuje.
+Použití a hranice: [graf vztahů](docs/project-relations-ui.md#graf-v-levé-záložce-projekty).
+
+PROJECT-RELATIONS-01-F **reuse/adapt — přístup, odvolání a recovery**:
+`Administration`/`CrossReferences` pro živou roli a request scope, resolver
+C/D a ContextBuilder pro cestu/publikaci/privacy, původní Workspace intent a
+receipts pro obnovu. Hotové nativní receipts navíc chrání před návratem HEAD před známé
+odvolání. Přehled a graf nově dokončují autorizaci celé odpovědi;
+UI po neplatném obnovení zahodí staré řádky. **Reject:** import journalu jako
+grantu, záměna podpisu sync bundle za projektový souhlas, automatické
+přepnutí odvolané cesty a druhá obsahová cache. Externí komponenta ani nová
+persistentní vrstva není třeba. Hranice a důkazy:
+[bezpečnost vztahů](docs/project-relations-security.md).

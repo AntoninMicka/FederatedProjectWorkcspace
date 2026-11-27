@@ -77,6 +77,8 @@ class CrossReferences:
     @staticmethod
     def content(files, entities, artifact_id):
         require(artifact_id in entities, 'Source artifact is unavailable')
+        require(not any(t.startswith('fpw-project-relation-') for t in entities[artifact_id].get('tags', [])),
+                'Relation control evidence cannot be shared as artifact content')
         require(artifact_id not in references(files, entities), 'Reference chains are outside XREF-01')
         prefix = f'artifacts/{artifact_id}/'
         paths = [p for p in files if p.startswith(prefix) and not p.endswith('/metadata.json')]
