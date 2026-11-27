@@ -538,7 +538,8 @@ class ChatService:
         refs = self.cross_references()
         lifecycle = ProjectRelations(self.node_path, user_id=refs.user_id, allowed_projects=refs.allowed_projects,
                                      writable_projects=refs.writable_projects)
-        return ProjectRelationsPanel(lifecycle, self.project_source_provider(project_id),
+        return ProjectRelationsPanel(lifecycle, self.project_source_provider(project_id) if project_id is not None
+                                     else self._relations_for_request(),
                                      network=getattr(self.projects, 'network', False))
 
     def project_source_provider(self, project_id):

@@ -10,6 +10,7 @@ from spikes.project_relation_schema import PROPOSAL
 from spikes.reporting_schema import digest, encoded
 
 ROUTES = {
+    '/v1/project-relations/graph': {'project_id'},
     '/v1/project-relations/overview': {'project_id'},
     '/v1/project-relations/sources': {'project_id', 'query'},
     '/v1/project-relations/source/view': {'project_id', 'source_project_id', 'artifact_id'},
@@ -72,6 +73,43 @@ class ProjectRelationsPanel:
                     can_create=project_id in managed,
                     candidates=[dict(id=pid, title=titles[pid]) for pid in sorted(managed - {project_id})],
                     relations=sorted(rows, key=lambda r: (r['other_title'], r['relation_id'])))
+
+    def graph(self, project_id=None):
+        """Authorized topology only; no source content or persistent graph cache."""
+        if project_id is not None:
+            self.lifecycle._authorize(project_id)
+        heads, states = self.lifecycle._scan()
+        projection = self.lifecycle._projection(states)
+        direct = {pid for pid in heads if self._allowed(pid)}
+        roots = direct if project_id is None else {project_id}
+        visible = set(direct)
+        for pid in sorted(roots):
+            if visible == set(heads): break  # Direct access already covers every registered project.
+            catalog = self.resolver.catalog(pid, boundary=self.boundary)
+            require(catalog['revision'] == digest(encoded(dict(heads=heads, projection=projection))),
+                    'Project relationships changed; refresh the graph')
+            visible.update(source['project_id'] for source in catalog['sources'])
+        edges = []
+        for row in projection.values():
+            p = row['proposal']; ends = {p['source_project_id'], p['target_project_id']}
+            if not ends <= visible or (row['state'] != 'active' and not ends <= direct):
+                continue
+            edges.append(dict(id=p['id'], source=p['source_project_id'], target=p['target_project_id'],
+                              type=p['type'], state=row['state'], revision=p['revision'], reason=p['reason']))
+        if project_id is not None:
+            connected = {project_id}
+            while True:
+                expanded = connected | {end for e in edges if e['source'] in connected or e['target'] in connected
+                                        for end in (e['source'], e['target'])}
+                if expanded == connected: break
+                connected = expanded
+            visible &= connected
+            edges = [e for e in edges if {e['source'], e['target']} <= visible]
+        return dict(project_id=project_id,
+                    nodes=[dict(id=pid, title=self._title(pid, heads[pid]), navigable=pid in direct,
+                                current=pid == project_id) for pid in sorted(visible)],
+                    edges=sorted(edges, key=lambda e: e['id']),
+                    revision=digest(encoded(dict(heads=heads, projection=projection))))
 
     def sources(self, project_id, query=''):
         self.lifecycle._authorize(project_id)

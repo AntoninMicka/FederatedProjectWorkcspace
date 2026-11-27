@@ -75,3 +75,42 @@ Zadání E: Workspace projekt `c898b941-8eb0-4406-8dad-6e2b96c06d59`, export
 `668a6bc034beb694f2e7b3fc7a5116ef951f5b74c259c30c911889c6f490f1bd`,
 Workspace HEAD `4e3ac6d1ed77a15fcf14981ae665f883ce81b960`, zdrojový základ
 `0b327cc`. Jde o identifikaci zadání, nikoli nový živý plán.
+
+## Graf v levé záložce Projekty
+
+Tlačítko **Graf** v levém panelu **Projekty** otevírá samostatnou stránku,
+nikoli dialog. S otevřeným projektem začne jeho propojenou částí grafu;
+bez otevřeného projektu zobrazí všechny dostupné projekty. Přepínač
+**Aktuální projekt / Všechny dostupné projekty** mění rozsah. Druhý pohled
+zahrnuje i samostatné projekty bez vazeb. První zahrnuje dostupnou propojenou
+komponentu, tedy také více rodičů a vnořené podprojekty, nejen jednu úroveň.
+
+Uzly mají názvy projektů. Hrany označují typ a směr deklarované vazby:
+rodič → podprojekt, závislý → poskytovatel výstupů, souvislost obousměrně.
+Nejde o jednotný směr toku dat: u hierarchie jsou data dostupná rodiči.
+Plná čára znamená aktivní vazbu, přerušovaná čekající a tečkovaná ukončenou
+nebo nedostupnou. Detail ukazuje skutečný stav a důvod; rozlišení nespoléhá
+jen na barvu. Uzly i hrany lze vybrat myší nebo klávesou Enter/mezerník.
+Zoom je 50–200 %, větší graf lze posouvat. **Obnovit** načte aktuální stav.
+
+Výběr projektu nabídne jeho otevření nebo přechod do stávajícího panelu
+vztahů a podkladů. Výběr hrany ukáže oba konce, důvod a stav a nabídne správu
+přes původní panel. Každý přechod respektuje ochranu rozepsaných editorů;
+graf sám žádný vztah nezapisuje. Dostupnost přes vztah neznamená oprávnění
+otevřít celý zdrojový projekt: takový uzel přímou navigaci nenabídne.
+
+`POST /v1/project-relations/graph` přijímá pouze `project_id` (UUID pro
+aktuální projekt, `null` pro všechny dostupné). Vrací autorizované názvy,
+topologii a revizi. Rozsah všech projektů vychází z přímých oprávnění a ze
+stejného resolveru odvozeného přístupu. Nepřístupné projekty a jejich
+vztahy se nevracejí; čekající či odvolané vztahy mezi nepřímo dostupnými
+projekty se nezveřejňují. Samotné zobrazení grafu žádný přístup neuděluje.
+Při chybě obnovení se starý graf odstraní a zobrazí se důvod selhání.
+Otevření projektu znovu ověřuje současná oprávnění. Graf je snímek, nikoli
+živý odběr změn práv na jiném uzlu.
+
+Tato uživatelem vyžádaná úprava rozšiřuje UI E na zdrojovém základu
+`87abd97a51f96465b8503f93270fa9e11440a9fe`; autoritativní plán ani stav
+akceptace nemění. Používá společný page shell a SVG helper roadmapy,
+původní lifecycle a resolver. Nepřidává databázi, graph knihovnu, modelový
+nástroj ani persistentní cache; platné crash/recovery hranice výše se nemění.

@@ -53,6 +53,12 @@ class RelationsWebTests(unittest.TestCase):
         self.assertEqual(code,200,pin);self.assertEqual(pin['pin']['source']['project_id'],b)
         code,view=self.post('/v1/project-relations/overview',dict(project_id=a),key)
         self.assertEqual(code,200,view);self.assertFalse(view['can_create']);self.assertFalse(view['relations'][0]['can_edit'])
+        code,graph=self.post('/v1/project-relations/graph',dict(project_id=None),key)
+        self.assertEqual(code,200,graph)
+        self.assertEqual({n['id'] for n in graph['nodes']},{a,b})
+        self.assertEqual({n['id'] for n in graph['nodes'] if n['navigable']},{a})
+        self.assertEqual(self.post('/v1/project-relations/graph',dict(project_id=b),key)[0],403)
+
         self.assertEqual(self.post('/v1/project-relations/proposal/preview',dict(project_id=a,source_project_id=a,
             target_project_id=b,relation_type='depends_on',reason='Nepovolené',relation_id=rid),key)[0],403)
         self.assertEqual(self.post('/v1/project-relations/source/view',dict(project_id=a,source_project_id=b,artifact_id=local),key)[0],409)

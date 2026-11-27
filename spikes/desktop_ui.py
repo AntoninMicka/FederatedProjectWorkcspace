@@ -22,6 +22,7 @@ from spikes.task_stream_ui import TASK_STREAM_JS
 from spikes.task_file_edit_ui import FILE_EDIT_HTML, FILE_EDIT_CSS, FILE_EDIT_JS
 from spikes.artifact_sharing_ui import SHARING_ATTACH_BUTTON, SHARING_CSS, SHARING_HTML, SHARING_JS
 from spikes.project_relations_panel import ROUTES as RELATION_ROUTES
+from spikes.project_relations_graph_ui import HTML as RELATION_GRAPH_HTML, CSS as RELATION_GRAPH_CSS, JS as RELATION_GRAPH_JS
 from spikes.project_relations_ui import HTML as RELATIONS_HTML, CSS as RELATIONS_CSS, JS as RELATIONS_JS
 from spikes.artifact_history import ArtifactHistory
 from spikes.conflict_resolution import ConflictResolution
@@ -8615,7 +8616,9 @@ HTML = HTML.replace('<h1 id="project-title"></h1>', '<h1 id="project-title"></h1
 HTML = HTML.replace('<details id="task-artifacts" hidden>', '<button id="pick-relation-inputs" type="button">Vybrat propojené podklady</button><fieldset id="relation-input-selection"></fieldset><details id="task-artifacts" hidden>', 1)
 HTML = HTML.replace('<button id="open-source-import" type="button">Importovat zdroj</button></div>',
                     '<button id="open-source-import" type="button">Importovat zdroj</button>' + SHARING_ATTACH_BUTTON + '</div>', 1)
-CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS + SHARING_CSS + RELATIONS_CSS
+HTML = HTML.replace('</main>', RELATION_GRAPH_HTML + '</main>', 1)
+HTML = HTML.replace('<h2>Projekty</h2>', '<h2>Projekty</h2><button id="sidebar-project-graph" type="button">Graf</button>', 1)
+CSS += FILE_EDIT_CSS + PAGE_LAYOUT_CSS + SHARING_CSS + RELATIONS_CSS + RELATION_GRAPH_CSS
 HTML = HTML.replace('<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul>', TOOL_TREE, 1)
 HTML = HTML.replace('<button id="julia-editor-new" type="button">Nový Julia model</button>', '<button id="julia-editor-new" type="button" role="menuitem">Nový Julia model</button>'+TOOL_NEW_ACTIONS, 1)
 CSS += TOOL_TREE_CSS + SIDEBAR_MENU_CSS
@@ -8639,7 +8642,7 @@ HTML = HTML.replace('</main>', '</main>'+TASK_WORK_HTML, 1)
 CSS += TASK_WORK_CSS
 from spikes.task_record_roadmap_ui import JS as TASK_RECORD_ROADMAP_JS
 JS += TASK_RECORD_ROADMAP_JS
-JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS + RELATIONS_JS
+JS += ADMIN_JS + FILE_EDIT_JS + SHARING_JS + TASK_STREAM_JS + TASK_WORK_JS + PAGE_LAYOUT_JS + RELATIONS_JS + RELATION_GRAPH_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;

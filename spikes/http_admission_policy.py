@@ -392,6 +392,7 @@ RESERVED_ROUTES = (PROVIDER_CONTROL_ROUTES | MONITORING_CONTROL_ROUTES | frozens
 # XREF-02 sharing reads/writes two projects per request, so no single project
 # owner covers it; it stays in the conservative serialized application domain.
 APPLICATION_ROUTES = frozenset({
+    '/v1/project-relations/graph',
     '/v1/project-relations/overview', '/v1/project-relations/sources',
     '/v1/project-relations/source/view', '/v1/project-relations/source/pin',
     '/v1/project-relations/proposal/preview', '/v1/project-relations/evidence/preview',

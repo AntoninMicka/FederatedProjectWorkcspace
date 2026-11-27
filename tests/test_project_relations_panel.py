@@ -123,3 +123,36 @@ class RelationsPanelTests(unittest.TestCase):
         builder, prepared, authority, target=self.prepare_context(self.resolver.pin(self.a,self.b,id_))
         revoke=refs.revoke_preview(self.b,offer['share_id']);refs.revoke(revoke,str(uuid4()),digest(encoded(revoke)),confirm=True)
         with self.assertRaises(RelationViewUnavailable):builder.authorize_for_dispatch(prepared,authority=authority,target=target)
+
+    def test_graph_current_component_and_all_projects_include_isolated_nodes(self):
+        self.nested()
+        current = self.panel().graph(self.a)
+        self.assertEqual({n['id'] for n in current['nodes']}, {self.a,self.b,self.c})
+        self.assertEqual(len(current['edges']),2)
+        all_projects = self.panel().graph()
+        self.assertEqual({n['id'] for n in all_projects['nodes']},{self.a,self.b,self.c,self.x})
+        self.assertTrue(all(n['navigable'] for n in all_projects['nodes']))
+
+    def test_graph_does_not_disclose_unrelated_projects_or_pending_foreign_relations(self):
+        self.nested()
+        envelope=self.lifecycle.proposal_preview(self.b,self.x,'depends_on','Skrytý důvod vztahu')
+        self.lifecycle.confirm(envelope['preview'],envelope['sha256'],str(uuid4()),confirm=True)
+        _,_,uid=self.member({self.a:'reader'})
+        service=ChatService(self.node,Projects(self.node))
+        with service.as_user(uid,project_ids=[self.a],writable_project_ids=[],derive_project_relations=True):
+            graph=service.project_relations_panel(None).graph()
+            self.assertEqual({n['id'] for n in graph['nodes']},{self.a,self.b,self.c})
+            self.assertNotIn(self.x,repr(graph));self.assertNotIn('Skrytý důvod',repr(graph))
+            self.assertEqual({n['id'] for n in graph['nodes'] if n['navigable']},{self.a})
+            with self.assertRaises(AccessDenied):service.project_relations_panel(self.x).graph(self.x)
+        with service.as_user(uid,project_ids=[],writable_project_ids=[],derive_project_relations=True):
+            self.assertEqual(service.project_relations_panel(None).graph()['nodes'],[])
+
+    def test_graph_retains_pending_and_revoked_states_without_granting_access(self):
+        e=self.lifecycle.proposal_preview(self.a,self.b,'parent_of','Navržená hierarchie')
+        self.lifecycle.confirm(e['preview'],e['sha256'],str(uuid4()),confirm=True)
+        self.assertEqual(self.panel().graph(self.a)['edges'][0]['state'],'pending')
+        rid=e['preview']['record']['id'];op=str(uuid4())
+        revoke=self.lifecycle.evidence_preview(min(self.a,self.b),rid,self.a,op,revoke=True,reason='Ukončeno')
+        self.lifecycle.confirm(revoke['preview'],revoke['sha256'],op,confirm=True)
+        self.assertEqual(self.panel().graph(self.a)['edges'][0]['state'],'revoked')

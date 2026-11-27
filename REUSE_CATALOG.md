@@ -1970,3 +1970,11 @@ vkládání celého projektu do promptu a nový fulltext místo plánovaného
 PROJECT-SEARCH-01. Pro tento budoucí nástroj poskytuje stejný autorizovaný
 catalog/pin/read kontrakt. Externí komponenta se nepřebírala. Použití,
 persistence a recovery: [UI vztahů](docs/project-relations-ui.md).
+
+Graf projektových vztahů (rozšíření UI E) **reuse/adapt**: nativní projekce
+B/C/D a autorizace panelu, společný `mountWorkspacePage`/navigační guard,
+SVG helper `roadmapElement` a vzor zoomu 50–200 %. Samostatný čtecí endpoint
+vrací pouze dostupnou topologii. **Reject:** nový graph engine či databáze,
+kopie roadmapového task modelu a další editor vztahů. Graf odkazuje na
+stávající správu a podklady. Externí inventura se beze změny zdrojů neopakuje.
+Použití a hranice: [graf vztahů](docs/project-relations-ui.md#graf-v-levé-záložce-projekty).
