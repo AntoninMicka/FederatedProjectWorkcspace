@@ -310,3 +310,42 @@ Rozhodnutí:
 
 Hranice pádu se nemění: odložený pokus nezapsal nic, uložená operace
 v `outbound` zůstává autoritou pro další pokus.
+
+### Doplnění 2026-11-27: dokončený přenos a odložená čtecí kontrola
+
+Matice přepisovala `idle` / `Content synchronized` na „Stav neověřen“, pokud
+poslední nezávislá automatická kontrola měla `unavailable`. V ověřeném
+lokálním journalu bylo všech 11 přenosů dokončeno a žádný outbound nečekal;
+UI přesto ukazovalo starší `ProjectBusy` jako hlavní výsledek ručního přenosu.
+
+Rozhodnutí:
+
+- U `idle` s nedostupnou nebo odloženou kontrolou UI uvádí **Synchronizace
+  dokončena** a odděleně stav současného ověření změn. Neprohlašuje tím
+  aktuální shodu obsahu. Diagnostika posledního přenosu, stáří automatické
+  kontroly i její typ chyby zůstávají viditelné. Nedokončený či chybový
+  přenos se takto neoznačuje.
+- `ProjectBusy` při přípravě probe nebo čtení potvrzení či místního fingerprintu je
+  pozorování `deferred`. Žádný přenos při tom nezačal, a proto se pro tuto
+  čtecí kolizi nezavádí exponenciální odklad opakování. Další běžné kolo
+  plánovače kontrolu zopakuje. Nevzniká vnitřní retry smyčka ani fallback
+  na neověřený přenos.
+- Pozorování přenáší pouze typ výjimky a allowlistovaný `busy_resource`;
+  žádnou cestu, endpoint nebo text výjimky. Odložený probe má INFO událost
+  `content_state_deferred`, skutečné selhání dál `content_state_failed`.
+- Timeout, chybějící platný snapshot a problém během skutečného pokusu
+  o přenos zůstávají `unavailable` podle původních pravidel. Zejména
+  `ProjectBusy` po vstupu do synchronizace není automaticky čtecím odkladem.
+  Přesné payloady a operation ID pro recovery se nemění.
+
+Hranice pádu se nemění: pozorování automatické kontroly je pouze omezený
+procesní slovník. Neuděluje grant, nepotvrzuje obsah a po restartu se ztratí.
+Trvalý journal přenosů, potvrzené otisky, CAS a příjem/publikace používají
+původní writer a recovery. Žádné časové limity, zámky, privacy či ověření
+podepsaných výsledků se neuvolňují. Ruční přenos bez nového podepsaného
+baseline může nadále vyžadovat běžné konzervativní potvrzovací kolo.
+
+Regrese v `test_sync_fingerprint` zahrnuje skutečný ruční přenos mezi dvěma
+TLS uzly, kolizi čtecí kontroly bez failure backoff, následné ověření,
+skutečný timeout a busy během přenosu. Chromium test stránky sdílení
+rozlišuje dokončený přenos od neověřené shody i od chybového přenosu.

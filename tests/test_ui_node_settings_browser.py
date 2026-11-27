@@ -144,6 +144,37 @@ class SettingsNavigationTests(UiFlowCase):
         self.assertEqual((status['endpoint'], status['model']), (self.ollama.endpoint, 'gemma3'))
 
 
+    def test_completed_manual_sync_keeps_its_result_when_automatic_check_is_unavailable(self):
+        page=self.start(configure_search=False)
+        page.evaluate("openFederationSharing()");page.wait_idle()
+        state=page.evaluate('administrationState');peer=str(uuid4())
+        state['peers']=[dict(id=peer,name='Testovací protistrana',fingerprint='a'*64,
+                            endpoint='https://peer.invalid',trust='approved',sharing_level='same-team',
+                            relationship_type='p2p',local_role='peer')]
+        state['content_sync_statuses']={peer+':'+self.project_id:dict(state='idle',detail='Content synchronized',
+            chat_summary=dict(active_mappings=1,shared=2,received=1),
+            automatic_check=dict(state='unavailable',age_seconds=337,error_type='ProjectBusy'),
+            diagnostic=dict(state='finished',phase='local-publication-pool-apply',elapsed_ms=5800,error_type=None))}
+        page.evaluate(f'administrationState={json.dumps(state)};renderAdministration()')
+        self.assertTrue(page.visible('.admin-sync-action'))
+        text=page.text('.admin-sync-action')
+        self.assertIn('Synchronizace dokončena',text)
+        self.assertIn('Aktuální shoda zatím není ověřená',text)
+        self.assertIn('ProjectBusy',text);self.assertIn('dokončena za 5.8 s',text)
+        self.assertNotIn('Stav neověřen',text)
+        self.assertNotIn('Obsah aktuální',text)
+        check=state['content_sync_statuses'][peer+':'+self.project_id]['automatic_check']
+        check['state']='deferred'
+        page.evaluate(f'administrationState={json.dumps(state)};renderAdministration()')
+        self.assertIn('Kontrola změn počká na uvolnění uzlu',page.text('.admin-sync-action'))
+        self.assertIn('kontrola odložena',page.text('.admin-sync-action'))
+        for outcome in ('needed','error','conflict'):
+            state['content_sync_statuses'][peer+':'+self.project_id]['state']=outcome
+            page.evaluate(f'administrationState={json.dumps(state)};renderAdministration()')
+            self.assertNotIn('Synchronizace dokončena',page.text('.admin-sync-action').split('Poslední synchronizace')[0])
+        self.assert_no_page_errors()
+
+
 @require_browser
 class PublicationCmsTests(UiFlowCase):
     def setUp(self):

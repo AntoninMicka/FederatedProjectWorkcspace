@@ -1989,3 +1989,11 @@ grantu, záměna podpisu sync bundle za projektový souhlas, automatické
 přepnutí odvolané cesty a druhá obsahová cache. Externí komponenta ani nová
 persistentní vrstva není třeba. Hranice a důkazy:
 [bezpečnost vztahů](docs/project-relations-security.md).
+
+Ruční synchronizace versus automatické ověření: **adapt/reuse** existující
+runtime řádky, `sync_fingerprint` observations, `ProjectBusy`, allowlist
+prostředků a původní retry pacing. Čtecí kolize před přenosem je `deferred`,
+dokončený ruční výsledek zůstává v UI oddělený od aktuálnosti kontroly.
+**Reject:** nový journal/stavová databáze, přeznačení neověřeného obsahu na
+aktuální, uvolnění zámků či timeoutů a opakování skutečného přenosu kvůli
+kolizi jeho předběžné kontroly. Hranice: doplnění ADR 0042 z 2026-11-27.
