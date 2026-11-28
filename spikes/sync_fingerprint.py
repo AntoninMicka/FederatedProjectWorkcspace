@@ -22,7 +22,7 @@ from spikes.http_request_budget import RequestReadTimeout
 from spikes.metadata import require
 from spikes.peer_transport import CONTENT_STATE_TIMEOUT, private_peer_endpoint
 from spikes.project_replication import _signature, _verify
-from spikes.request_ownership import ProjectBusy, bounded_project_requests
+from spikes.request_ownership import ProjectBusy, bounded_project_requests, safe_busy_resource
 
 _log = logging.getLogger(__name__)
 # A content state answer slower than this is logged: the sender gives up at
@@ -51,6 +51,8 @@ def note(node, peer, project, outcome, error=None):
     with _check_lock:
         _checks[key] = dict(state=outcome, checked=time.monotonic(),
                             error_type=type(error).__name__ if error is not None else None)
+        if isinstance(error, ProjectBusy):
+            _checks[key]['busy_resource'] = safe_busy_resource(error.busy_resource)
         _checks.move_to_end(key)
         while len(_checks) > 128: _checks.popitem(last=False)
 
@@ -60,7 +62,8 @@ def observation(node, peer, project):
         value = _checks.get((str(Path(node).absolute()), peer, project))
         if value is None: return None
         return dict(state=value['state'], age_seconds=max(0, int(time.monotonic()-value['checked'])),
-                    error_type=value['error_type'])
+                    error_type=value['error_type'],
+                    **({'busy_resource': value['busy_resource']} if 'busy_resource' in value else {}))
 
 
 def observations(node):

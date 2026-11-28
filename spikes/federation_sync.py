@@ -1516,16 +1516,24 @@ class ContentSyncControl:
                         **({'cancelled': cancelled} if cancelled is not None else {}))
                 except Exception as exc:
                     probe_errors[peer_id] = exc
-                    # Type and duration only: no endpoint, path or exception text.
-                    logging.getLogger(__name__).warning(
-                        'content_state_failed error_type=%s elapsed_ms=%d',
-                        type(exc).__name__, round((time.monotonic() - probe_started) * 1000))
+                    # Bounded type/resource/timing only: no endpoint, path or exception text.
+                    logger = logging.getLogger(__name__)
+                    if isinstance(exc, ProjectBusy):
+                        logger.info('content_state_deferred error_type=%s busy_resource=%s elapsed_ms=%d',
+                            type(exc).__name__, safe_busy_resource(exc.busy_resource),
+                            round((time.monotonic() - probe_started) * 1000))
+                    else:
+                        logger.warning('content_state_failed error_type=%s elapsed_ms=%d',
+                            type(exc).__name__, round((time.monotonic() - probe_started) * 1000))
                     # Unknown/offline is not permission to start expensive fallback.
                     manifests[peer_id] = False
             manifest = manifests[peer_id]
             if manifest is False:
-                note(self.node, peer_id, project_id, 'unavailable', probe_errors[peer_id])
+                error = probe_errors[peer_id]
+                note(self.node, peer_id, project_id,
+                     'deferred' if isinstance(error, ProjectBusy) else 'unavailable', error)
                 continue
+            dispatch_started = False
             try:
                 if manifest is not None:
                     if project_id in manifest and manifest[project_id] is None:
@@ -1545,6 +1553,7 @@ class ContentSyncControl:
                 # manual sync started meanwhile owns the send lane first.
                 if _MANUAL_SYNCS.any_active(self.node): break
                 attempted += 1
+                dispatch_started = True
                 try:
                     self.synchronize(peer_id, project_id, defer_when_busy=True,
                                      **({'cancelled': cancelled} if cancelled is not None else {}),
@@ -1556,7 +1565,12 @@ class ContentSyncControl:
                     break
                 note(self.node, peer_id, project_id, 'legacy' if manifest is None else 'changed')
                 automatic_retry.succeeded(key)
-            except (TimeoutError, SyncBusy, ProjectBusy) as exc:
+            except ProjectBusy as exc:
+                # Reading the journal/fingerprint has not started a transfer.
+                note(self.node, peer_id, project_id,
+                     'unavailable' if dispatch_started else 'deferred', exc)
+                if dispatch_started: automatic_retry.failed(key)
+            except (TimeoutError, SyncBusy) as exc:
                 note(self.node, peer_id, project_id, 'unavailable', exc)
                 automatic_retry.failed(key)
             except Exception as exc:

@@ -313,3 +313,69 @@ class SyncFingerprintTests(unittest.TestCase):
             state.receive(self.services[1], _signature(self.services[0].root, request, self.node_ids[0], 'state_request'))
         envelope['signature'] = 'x'
         with self.assertRaises(ValueError): state.receive(self.services[1], envelope)
+
+    def test_busy_read_after_manual_success_is_deferred_without_backoff(self):
+        from spikes.request_ownership import ProjectBusy
+        from spikes.sync_retry import automatic_retry
+        self.server();control=ContentSyncControl(self.nodes[0],deployment='web')
+        self.assertEqual(control.run_automatic()['attempted'],1)
+        control.synchronize(self.node_ids[1],self.project_id)
+        key=(str(control.node),self.node_ids[1],self.project_id)
+        with patch('spikes.sync_fingerprint.collect',side_effect=ProjectBusy('private text',resource='node-registry')), \
+                patch('spikes.federation_sync._prepare',side_effect=AssertionError('No transfer for a busy read')):
+            self.assertEqual(control.run_automatic()['attempted'],0)
+        status=control.statuses()[self.node_ids[1]+':'+self.project_id]
+        self.assertEqual(status['state'],'idle')
+        self.assertEqual(status['automatic_check']['state'],'deferred')
+        self.assertEqual(status['automatic_check']['busy_resource'],'node-registry')
+        self.assertNotIn('private text',repr(status))
+        self.assertEqual(automatic_retry.remaining(key),0)
+        # A manual legacy exchange may require one normal signed-baseline round.
+        # There is no failure backoff blocking that next scheduled check.
+        self.assertLessEqual(control.run_automatic()['attempted'],1)
+        with patch('spikes.federation_sync._prepare',side_effect=AssertionError('Unchanged content')):
+            self.assertEqual(control.run_automatic()['attempted'],0)
+        self.assertEqual(control.statuses()[self.node_ids[1]+':'+self.project_id]['automatic_check']['state'],'unchanged')
+
+    def test_busy_probe_is_deferred_but_a_real_probe_failure_stays_unavailable(self):
+        from spikes.request_ownership import ProjectBusy
+        control=ContentSyncControl(self.nodes[0],deployment='web')
+        with patch('spikes.sync_fingerprint.probe',side_effect=ProjectBusy('private resource path',resource='node-registry')), \
+                patch.object(control,'synchronize',side_effect=AssertionError('No transfer')):
+            self.assertEqual(control.run_automatic()['attempted'],0)
+        check=state.observation(self.nodes[0],self.node_ids[1],self.project_id)
+        self.assertEqual(check['state'],'deferred');self.assertEqual(check['busy_resource'],'node-registry')
+        self.assertNotIn('private resource path',repr(check))
+        with patch('spikes.sync_fingerprint.probe',side_effect=TimeoutError('private URL')), \
+                patch.object(control,'synchronize',side_effect=AssertionError('No unverified fallback')):
+            self.assertEqual(control.run_automatic()['attempted'],0)
+        check=state.observation(self.nodes[0],self.node_ids[1],self.project_id)
+        self.assertEqual(check['state'],'unavailable');self.assertEqual(check['error_type'],'TimeoutError')
+        self.assertNotIn('busy_resource',check)
+
+    def test_busy_after_transfer_attempt_is_not_treated_as_a_deferred_read(self):
+        from spikes.request_ownership import ProjectBusy
+        from spikes.sync_retry import automatic_retry
+        control=ContentSyncControl(self.nodes[0],deployment='web')
+        with patch('spikes.sync_fingerprint.probe',return_value=None), \
+                patch.object(control,'synchronize',side_effect=ProjectBusy('After dispatch',resource='project-journal')):
+            self.assertEqual(control.run_automatic()['attempted'],1)
+        check=state.observation(self.nodes[0],self.node_ids[1],self.project_id)
+        self.assertEqual(check['state'],'unavailable')
+        self.assertGreater(automatic_retry.remaining((str(control.node),self.node_ids[1],self.project_id)),0)
+
+
+    def test_busy_preflight_journal_is_deferred_before_fingerprint_collection(self):
+        from spikes.request_ownership import ProjectBusy
+        from spikes.sync_retry import automatic_retry
+        control=ContentSyncControl(self.nodes[0],deployment='web')
+        candidate=dict(peer_id=self.node_ids[1],project_id=self.project_id,eligible=True)
+        with patch.object(control,'settings',return_value={'automatic_enabled':True}), \
+                patch.object(control,'candidates',return_value=[candidate]), \
+                patch('spikes.sync_fingerprint.probe',return_value={self.project_id:{'fingerprint':'a'*64,'policy':'b'*64}}), \
+                patch('spikes.federation_sync._database',side_effect=ProjectBusy('Private journal path',resource='sync-journal')), \
+                patch.object(control,'synchronize',side_effect=AssertionError('No transfer')):
+            self.assertEqual(control.run_automatic()['attempted'],0)
+        check=state.observation(self.nodes[0],self.node_ids[1],self.project_id)
+        self.assertEqual(check['state'],'deferred');self.assertEqual(check['busy_resource'],'sync-journal')
+        self.assertEqual(automatic_retry.remaining((str(control.node),self.node_ids[1],self.project_id)),0)
